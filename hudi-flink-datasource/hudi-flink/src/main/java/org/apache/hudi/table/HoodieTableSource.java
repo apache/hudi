@@ -353,6 +353,7 @@ public class HoodieTableSource extends FileIndexReader implements
         .maxCompactionMemoryInBytes(conf.get(FlinkOptions.COMPACTION_MAX_MEMORY))
         .maxPendingSplits(conf.get(FlinkOptions.READ_SPLITS_LIMIT))
         .partitionPruner(partitionPruner)
+        .columnStatsProbe(columnStatsProbe)
         .isStreaming(conf.get(FlinkOptions.READ_AS_STREAMING))
         .limit(limit)
         .build();

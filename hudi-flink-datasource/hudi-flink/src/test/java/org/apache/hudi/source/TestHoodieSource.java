@@ -36,6 +36,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.HoodieSchemaConverter;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -221,13 +222,12 @@ public class TestHoodieSource {
 
   @Test
   public void testCreateBatchHoodieSplitsWithColumnStatsPruner() throws Exception {
-    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
     conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
     conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
     conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
 
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    metaClient.reloadActiveTimeline();
+    metaClient = StreamerUtil.createMetaClient(conf);
 
     // Create column stats probe with uuid > 'id5' filter
     ColumnStatsProbe columnStatsProbe = ColumnStatsProbe.newInstance(Arrays.asList(
@@ -249,10 +249,19 @@ public class TestHoodieSource {
             .columnStatsProbe(columnStatsProbe)
             .build();
 
-    HoodieSource<RowData> source = createHoodieSourceWithPruner(conf, metaClient, partitionPruner);
-    List<HoodieSourceSplit> splits = source.createBatchHoodieSplits();
+    // get full splits
+    HoodieSource<RowData> source1 = createHoodieSourceWithPruner(conf, metaClient, null, null);
+    List<HoodieSourceSplit> fullSplits = source1.createBatchHoodieSplits();
 
-    assertNotNull(splits, "Splits should not be null with column stats pruner");
+    // pruned by partition stats
+    HoodieSource<RowData> source2 = createHoodieSourceWithPruner(conf, metaClient, partitionPruner, null);
+    List<HoodieSourceSplit> splits2 = source2.createBatchHoodieSplits();
+    assertTrue(splits2.size() < fullSplits.size());
+
+    // pruned by column stats
+    HoodieSource<RowData> source3 = createHoodieSourceWithPruner(conf, metaClient, null, columnStatsProbe);
+    List<HoodieSourceSplit> splits3 = source3.createBatchHoodieSplits();
+    assertTrue(splits3.size() < fullSplits.size());
   }
 
   @Test
@@ -395,6 +404,14 @@ public class TestHoodieSource {
       Configuration conf,
       HoodieTableMetaClient metaClient,
       PartitionPruners.PartitionPruner partitionPruner) {
+    return createHoodieSourceWithPruner(conf, metaClient, partitionPruner, null);
+  }
+
+  private HoodieSource<RowData> createHoodieSourceWithPruner(
+      Configuration conf,
+      HoodieTableMetaClient metaClient,
+      PartitionPruners.PartitionPruner partitionPruner,
+      ColumnStatsProbe columnStatsProbe) {
     RowType rowType = TestConfigurations.ROW_TYPE;
     HoodieScanContext scanContext = HoodieScanContext.builder()
         .conf(conf)
@@ -410,6 +427,7 @@ public class TestHoodieSource {
         .cdcEnabled(conf.get(FlinkOptions.CDC_ENABLED))
         .isStreaming(conf.get(FlinkOptions.READ_AS_STREAMING))
         .partitionPruner(partitionPruner)
+        .columnStatsProbe(columnStatsProbe)
         .build();
     HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
     HadoopStorageConfiguration hadoopConf = new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));

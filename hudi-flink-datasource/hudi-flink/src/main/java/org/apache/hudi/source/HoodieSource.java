@@ -212,6 +212,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
         .conf(this.scanContext.getConf())
         .rowType(scanContext.getRowType())
         .metaClient(metaClient)
+        .columnStatsProbe(scanContext.getColumnStatsProbe())
         .partitionPruner(scanContext.getPartitionPruner())
         .build();
   }

@@ -19,6 +19,7 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 
 import lombok.AllArgsConstructor;
@@ -60,6 +61,8 @@ public class HoodieScanContext implements Serializable {
   private final boolean isStreaming;
   // Partition pruner
   private final PartitionPruners.PartitionPruner partitionPruner;
+  // Column stats probe
+  private final ColumnStatsProbe columnStatsProbe;
   private final long limit;
 
   public Duration getScanInterval() {
