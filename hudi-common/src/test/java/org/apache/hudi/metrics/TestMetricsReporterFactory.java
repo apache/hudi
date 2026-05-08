@@ -96,23 +96,60 @@ class TestMetricsReporterFactory {
 
   @Test
   void metricsReporterFactoryShouldReturnUserDefinedReporter() {
-    when(metricsConfig.getMetricReporterClassName()).thenReturn(DummyMetricsReporter.class.getName());
-
     TypedProperties props = new TypedProperties();
     props.setProperty("testKey", "testValue");
 
-    when(metricsConfig.getProps()).thenReturn(props);
-    MetricsReporter reporter = MetricsReporterFactory.createReporter(metricsConfig, registry).get();
+    HoodieMetricsConfig config = HoodieMetricsConfig.newBuilder()
+        .fromProperties(props)
+        .withReporterType(MetricsReporterType.CUSTOM.name())
+        .withReporterClass(DummyMetricsReporter.class.getName())
+        .build();
+
+    MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry).get();
     assertTrue(reporter instanceof CustomizableMetricsReporter);
-    assertEquals(props, ((DummyMetricsReporter) reporter).getProps());
+    assertEquals("testValue", ((DummyMetricsReporter) reporter).getProps().getProperty("testKey"));
     assertEquals(registry, ((DummyMetricsReporter) reporter).getRegistry());
   }
 
   @Test
   void metricsReporterFactoryShouldThrowExceptionWhenMetricsReporterClassIsIllegal() {
-    when(metricsConfig.getMetricReporterClassName()).thenReturn(IllegalTestMetricsReporter.class.getName());
-    when(metricsConfig.getProps()).thenReturn(new TypedProperties());
-    assertThrows(HoodieException.class, () -> MetricsReporterFactory.createReporter(metricsConfig, registry));
+    HoodieMetricsConfig config = HoodieMetricsConfig.newBuilder()
+        .withReporterType(MetricsReporterType.CUSTOM.name())
+        .withReporterClass(IllegalTestMetricsReporter.class.getName())
+        .build();
+    assertThrows(HoodieException.class, () -> MetricsReporterFactory.createReporter(config, registry));
+  }
+
+  @Test
+  void customTypeWithoutClassNameThrows() {
+    HoodieMetricsConfig config = HoodieMetricsConfig.newBuilder()
+        .withReporterType(MetricsReporterType.CUSTOM.name())
+        .build();
+    HoodieException ex = assertThrows(HoodieException.class,
+        () -> MetricsReporterFactory.createReporter(config, registry));
+    assertTrue(ex.getMessage().contains(HoodieMetricsConfig.METRICS_REPORTER_CLASS_NAME.key()));
+  }
+
+  @Test
+  void customReporterWithConfigConstructorIsLoaded() {
+    HoodieMetricsConfig config = HoodieMetricsConfig.newBuilder()
+        .withReporterType(MetricsReporterType.CUSTOM.name())
+        .withReporterClass(ConfigConstructorReporter.class.getName())
+        .build();
+    MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry).get();
+    assertTrue(reporter instanceof ConfigConstructorReporter);
+    assertSame(config, ((ConfigConstructorReporter) reporter).getConfig());
+    assertSame(registry, ((ConfigConstructorReporter) reporter).getRegistry());
+  }
+
+  @Test
+  void customReporterWithNoArgConstructorIsLoaded() {
+    HoodieMetricsConfig config = HoodieMetricsConfig.newBuilder()
+            .withReporterType(MetricsReporterType.CUSTOM.name())
+            .withReporterClass(NoArgConstructorReporter.class.getName())
+        .build();
+    MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry).get();
+    assertTrue(reporter instanceof NoArgConstructorReporter);
   }
 
   public static class DummyMetricsReporter extends CustomizableMetricsReporter {
@@ -140,6 +177,54 @@ class TestMetricsReporterFactory {
   public static class IllegalTestMetricsReporter {
 
     public IllegalTestMetricsReporter(Properties props, MetricRegistry registry) {
+    }
+  }
+
+  /** Uses the (HoodieMetricsConfig, MetricRegistry) constructor — no Properties constructor. */
+  public static class ConfigConstructorReporter extends MetricsReporter {
+
+    private final HoodieMetricsConfig config;
+    private final MetricRegistry registry;
+
+    public ConfigConstructorReporter(HoodieMetricsConfig config, MetricRegistry registry) {
+      this.config = config;
+      this.registry = registry;
+    }
+
+    public HoodieMetricsConfig getConfig() {
+      return config;
+    }
+
+    public MetricRegistry getRegistry() {
+      return registry;
+    }
+
+    @Override
+    public void start() {
+    }
+
+    @Override
+    public void report() {
+    }
+
+    @Override
+    public void stop() {
+    }
+  }
+
+  /** Uses no-arg constructor — no Properties or HoodieMetricsConfig constructor. */
+  public static class NoArgConstructorReporter extends MetricsReporter {
+
+    @Override
+    public void start() {
+    }
+
+    @Override
+    public void report() {
+    }
+
+    @Override
+    public void stop() {
     }
   }
 }

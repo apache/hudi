@@ -23,7 +23,6 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
 import org.apache.hudi.metrics.datadog.DatadogMetricsReporter;
 import org.apache.hudi.metrics.m3.M3MetricsReporter;
 import org.apache.hudi.metrics.prometheus.PrometheusReporter;
@@ -41,18 +40,6 @@ import java.util.Properties;
 public class MetricsReporterFactory {
 
   public static Option<MetricsReporter> createReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
-    String reporterClassName = metricsConfig.getMetricReporterClassName();
-
-    if (!StringUtils.isNullOrEmpty(reporterClassName)) {
-      Object instance = ReflectionUtils.loadClass(
-          reporterClassName, new Class<?>[] {Properties.class, MetricRegistry.class}, metricsConfig.getProps(), registry);
-      if (!(instance instanceof CustomizableMetricsReporter)) {
-        throw new HoodieException(metricsConfig.getMetricReporterClassName()
-            + " is not a subclass of CustomizableMetricsReporter");
-      }
-      return Option.of((MetricsReporter) instance);
-    }
-
     MetricsReporterType type = metricsConfig.getMetricsReporterType();
     MetricsReporter reporter = null;
     if (type == null) {
@@ -93,10 +80,35 @@ public class MetricsReporterFactory {
       case SLF4J:
         reporter = new Slf4jMetricsReporter(registry);
         break;
+      case CUSTOM:
+        String reporterClassName = metricsConfig.getMetricReporterClassName();
+        if (!StringUtils.isNullOrEmpty(reporterClassName)) {
+          return Option.of(loadCustomReporter(reporterClassName, metricsConfig, registry));
+        } else {
+          throw new HoodieException(MetricsReporterType.CUSTOM + " reporter type requires "
+                  + HoodieMetricsConfig.METRICS_REPORTER_CLASS_NAME.key() + " to be set");
+        }
       default:
         log.error("Reporter type[" + type + "] is not supported.");
         break;
     }
     return Option.ofNullable(reporter);
+  }
+
+  private static MetricsReporter loadCustomReporter(String className, HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
+    Object instance;
+    if (ReflectionUtils.hasConstructor(className, new Class<?>[] {Properties.class, MetricRegistry.class})) {
+      instance = ReflectionUtils.loadClass(className,
+          new Class<?>[] {Properties.class, MetricRegistry.class}, metricsConfig.getProps(), registry);
+    } else if (ReflectionUtils.hasConstructor(className, new Class<?>[] {HoodieMetricsConfig.class, MetricRegistry.class})) {
+      instance = ReflectionUtils.loadClass(className,
+          new Class<?>[] {HoodieMetricsConfig.class, MetricRegistry.class}, metricsConfig, registry);
+    } else {
+      instance = ReflectionUtils.loadClass(className);
+    }
+    if (!(instance instanceof MetricsReporter)) {
+      throw new HoodieException(className + " is not a subclass of MetricsReporter");
+    }
+    return (MetricsReporter) instance;
   }
 }

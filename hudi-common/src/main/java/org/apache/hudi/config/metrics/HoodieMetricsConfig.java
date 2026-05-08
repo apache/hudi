@@ -73,7 +73,10 @@ public class HoodieMetricsConfig extends HoodieConfig {
       .defaultValue("")
       .markAdvanced()
       .sinceVersion("0.6.0")
-      .withDocumentation("");
+      .withDocumentation("Fully qualified class name of a custom MetricsReporter implementation. "
+          + "The class must extend MetricsReporter and support one of these constructors (tried in order): "
+          + "(Properties, MetricRegistry), (HoodieMetricsConfig, MetricRegistry), or no-arg. "
+          + "Set reporter.type=CUSTOM or leave it unset when using this option.");
 
   public static final ConfigProperty<String> METRICS_REPORTER_PREFIX = ConfigProperty
       .key(METRIC_PREFIX + ".reporter.metricsname.prefix")
