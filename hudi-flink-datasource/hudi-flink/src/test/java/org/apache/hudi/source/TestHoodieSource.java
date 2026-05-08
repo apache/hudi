@@ -26,6 +26,8 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.reader.HoodieRecordEmitter;
@@ -61,6 +63,7 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -265,6 +268,28 @@ public class TestHoodieSource {
   }
 
   @Test
+  public void testCreateBatchHoodieSplitsWithBucketPruner() throws Exception {
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient = StreamerUtil.createMetaClient(conf);
+
+    HoodieSource<RowData> source1 = createHoodieSourceWithPruner(conf, metaClient, null, null);
+    List<HoodieSourceSplit> fullSplits = source1.createBatchHoodieSplits();
+
+    int targetBucketId = 1;
+    String targetBucketIdStr = BucketIdentifier.bucketIdStr(targetBucketId);
+    HoodieSource<RowData> source = createHoodieSourceWithPruner(
+        conf, metaClient, null, null, partitionPath -> targetBucketId);
+    List<HoodieSourceSplit> prunedSplits = source.createBatchHoodieSplits();
+
+    assertTrue(prunedSplits.size() < fullSplits.size());
+    prunedSplits.forEach(split -> assertTrue(
+        split.getFileId().contains(targetBucketIdStr),
+        "Pruned split should belong to bucket " + targetBucketId));
+  }
+
+  @Test
   public void testGetOrBuildFileIndexInternal() throws Exception {
     metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
     conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
@@ -412,6 +437,15 @@ public class TestHoodieSource {
       HoodieTableMetaClient metaClient,
       PartitionPruners.PartitionPruner partitionPruner,
       ColumnStatsProbe columnStatsProbe) {
+    return createHoodieSourceWithPruner(conf, metaClient, partitionPruner, columnStatsProbe, null);
+  }
+
+  private HoodieSource<RowData> createHoodieSourceWithPruner(
+      Configuration conf,
+      HoodieTableMetaClient metaClient,
+      PartitionPruners.PartitionPruner partitionPruner,
+      ColumnStatsProbe columnStatsProbe,
+      Function<String, Integer> partitionBucketIdFunc) {
     RowType rowType = TestConfigurations.ROW_TYPE;
     HoodieScanContext scanContext = HoodieScanContext.builder()
         .conf(conf)
@@ -428,6 +462,7 @@ public class TestHoodieSource {
         .isStreaming(conf.get(FlinkOptions.READ_AS_STREAMING))
         .partitionPruner(partitionPruner)
         .columnStatsProbe(columnStatsProbe)
+        .partitionBucketIdFunc(partitionBucketIdFunc)
         .build();
     HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
     HadoopStorageConfiguration hadoopConf = new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));

@@ -32,6 +32,7 @@ import org.apache.hudi.storage.StoragePath;
 
 import java.io.Serializable;
 import java.time.Duration;
+import java.util.function.Function;
 
 /**
  * Hudi source scan context for finding completed commits for streaming and incremental read.
@@ -63,6 +64,8 @@ public class HoodieScanContext implements Serializable {
   private final PartitionPruners.PartitionPruner partitionPruner;
   // Column stats probe
   private final ColumnStatsProbe columnStatsProbe;
+  // Partition bucket id function for bucket pruning
+  private final Function<String, Integer> partitionBucketIdFunc;
   private final long limit;
 
   public Duration getScanInterval() {

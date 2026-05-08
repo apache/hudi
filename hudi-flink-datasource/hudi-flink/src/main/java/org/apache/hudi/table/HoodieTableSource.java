@@ -354,6 +354,8 @@ public class HoodieTableSource extends FileIndexReader implements
         .maxPendingSplits(conf.get(FlinkOptions.READ_SPLITS_LIMIT))
         .partitionPruner(partitionPruner)
         .columnStatsProbe(columnStatsProbe)
+        .partitionBucketIdFunc(PartitionBucketIdFunc.create(this.dataBucketFunc,
+            this.metaClient, conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)))
         .isStreaming(conf.get(FlinkOptions.READ_AS_STREAMING))
         .limit(limit)
         .build();
