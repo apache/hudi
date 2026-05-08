@@ -93,6 +93,8 @@ object HoodieProcedures {
       ,(ShowTablePropertiesProcedure.NAME, ShowTablePropertiesProcedure.builder)
       ,(HelpProcedure.NAME, HelpProcedure.builder)
       ,(ArchiveCommitsProcedure.NAME, ArchiveCommitsProcedure.builder)
+      ,(ShowInflightCommitsProcedure.NAME, ShowInflightCommitsProcedure.builder)
+      ,(CleanupStaleInflightCommitsProcedure.NAME, CleanupStaleInflightCommitsProcedure.builder)
       ,(RunTimelineCompactionProcedure.NAME, RunTimelineCompactionProcedure.builder)
       ,(RunTTLProcedure.NAME, RunTTLProcedure.builder)
       ,(DropPartitionProcedure.NAME, DropPartitionProcedure.builder)
