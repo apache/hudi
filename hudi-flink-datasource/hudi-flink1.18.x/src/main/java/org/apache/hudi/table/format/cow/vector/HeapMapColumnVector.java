@@ -20,6 +20,7 @@ package org.apache.hudi.table.format.cow.vector;
 
 import lombok.Getter;
 import org.apache.flink.table.data.MapData;
+import org.apache.flink.table.data.columnar.ColumnarMapData;
 import org.apache.flink.table.data.columnar.vector.ColumnVector;
 import org.apache.flink.table.data.columnar.vector.MapColumnVector;
 import org.apache.flink.table.data.columnar.vector.heap.AbstractHeapVector;
@@ -27,6 +28,14 @@ import org.apache.flink.table.data.columnar.vector.writable.WritableColumnVector
 
 /**
  * This class represents a nullable heap map column vector.
+ *
+ * <p>Mirrors {@code org.apache.flink.table.data.columnar.vector.heap.HeapMapVector} from
+ * Flink 2.1 (FLINK-35702). One deliberate divergence from upstream is preserved for backward
+ * compatibility: the {@code keys} / {@code values} fields are typed
+ * {@link WritableColumnVector} rather than upstream's {@link ColumnVector}, so the existing
+ * Lombok-generated {@code getKeys()} / {@code getValues()} accessors keep their original
+ * signature. Callers wanting the Flink-2.1 contract (a {@code ColumnVector}) use
+ * {@link #getKeyColumnVector()} / {@link #getValueColumnVector()}.
  */
 public class HeapMapColumnVector extends AbstractHeapVector
     implements WritableColumnVector, MapColumnVector {
@@ -38,10 +47,8 @@ public class HeapMapColumnVector extends AbstractHeapVector
 
   // ---------------------------------------------------------------------------------------------
   // Flink 2.1 Dremel-style state. Populated by {@link
-  // org.apache.hudi.table.format.cow.vector.reader.NestedColumnReader} (FLINK-35702 port). The
-  // legacy {@link #getMap(int)} implementation below continues to use {@code ColumnarGroupMapData}
-  // — wiring it through these offsets/lengths happens in a follow-up PR that switches the read
-  // path. Left here so the new readers can compile against the additive surface.
+  // org.apache.hudi.table.format.cow.vector.reader.NestedColumnReader} (FLINK-35702 port) and
+  // consumed by {@link #getMap(int)}.
   // ---------------------------------------------------------------------------------------------
   private long[] offsets;
   private long[] lengths;
@@ -102,6 +109,8 @@ public class HeapMapColumnVector extends AbstractHeapVector
 
   @Override
   public MapData getMap(int rowId) {
-    return new ColumnarGroupMapData(keys, values, rowId);
+    long offset = offsets[rowId];
+    long length = lengths[rowId];
+    return new ColumnarMapData(keys, values, (int) offset, (int) length);
   }
 }
