@@ -74,12 +74,9 @@ public abstract class HoodieReadHandle<T, I, K, O> extends HoodieIOHandle<T, I, 
   }
 
   protected HoodieFileReader createNewFileReader(HoodieBaseFile hoodieBaseFile) throws IOException {
-    String extension = hoodieBaseFile.getStoragePath().getFileExtension();
-    HoodieFileFormat format = HoodieFileFormat.fromFileExtensionOrNull(extension);
-    HoodieRecord.HoodieRecordType mergerRecordType = this.config.getRecordMerger().getRecordType();
-    HoodieRecord.HoodieRecordType recordType = format != null
-        ? format.resolveRecordType(mergerRecordType)
-        : mergerRecordType;
+    HoodieRecord.HoodieRecordType recordType = HoodieFileFormat.resolveRecordTypeForExtension(
+        hoodieBaseFile.getStoragePath().getFileExtension(),
+        this.config.getRecordMerger().getRecordType());
     return HoodieIOFactory.getIOFactory(hoodieTable.getStorage())
         .getReaderFactory(recordType)
         .getFileReader(config, hoodieBaseFile.getStoragePath());

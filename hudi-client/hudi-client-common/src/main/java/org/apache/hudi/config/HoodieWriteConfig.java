@@ -2389,6 +2389,9 @@ public class HoodieWriteConfig extends HoodieConfig {
   public long getMaxFileSize(HoodieFileFormat format) {
     switch (format) {
       case PARQUET:
+      case LANCE:
+        // Lance is a columnar format conceptually similar to Parquet at the sizing layer;
+        // reuse the Parquet limit until a dedicated Lance sizing config is introduced.
         return getParquetMaxFileSize();
       case HFILE:
         return getHFileMaxFileSize();
