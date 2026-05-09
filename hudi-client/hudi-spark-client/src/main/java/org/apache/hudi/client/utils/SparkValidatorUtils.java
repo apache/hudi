@@ -31,6 +31,7 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTablePreCommitFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -94,9 +95,10 @@ public class SparkValidatorUtils {
                     + "it will be invoked by SparkStreamerValidatorUtils instead.", validatorClass);
                 return Stream.empty();
               }
-              SparkPreCommitValidator validator = (SparkPreCommitValidator)
-                  clazz.getDeclaredConstructor(HoodieSparkTable.class, HoodieEngineContext.class, HoodieWriteConfig.class)
-                      .newInstance(table, context, config);
+              SparkPreCommitValidator validator = (SparkPreCommitValidator) ReflectionUtils.loadClass(
+                  validatorClass,
+                  new Class<?>[] {HoodieSparkTable.class, HoodieEngineContext.class, HoodieWriteConfig.class},
+                  table, context, config);
               return Stream.of(validator);
             } catch (ClassNotFoundException e) {
               throw new HoodieValidationException("Cannot find validator class: " + validatorClass, e);
