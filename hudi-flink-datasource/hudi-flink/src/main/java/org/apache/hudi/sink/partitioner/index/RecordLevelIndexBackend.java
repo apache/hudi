@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.partitioner.index;
 
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
@@ -28,7 +29,9 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metrics.FlinkMetricsUtils;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -42,6 +45,8 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /**
  * An implementation of {@link IndexBackend} based on the record level index in metadata table.
@@ -54,6 +59,8 @@ public class RecordLevelIndexBackend implements MinibatchIndexBackend {
   private final Configuration conf;
   private final HoodieTableMetaClient metaClient;
   private HoodieTableMetadata metadataTable;
+  private MetricGroup metricGroup;
+  private Map<String, AtomicReference<Supplier<Object>>> metricsHandles;
 
   public RecordLevelIndexBackend(Configuration conf, long initCheckpointId) {
     this.metaClient = StreamerUtil.createMetaClient(conf);
@@ -118,6 +125,7 @@ public class RecordLevelIndexBackend implements MinibatchIndexBackend {
     recordIndexCache.markAsEvictable(inflightInstants.keySet().stream().min(Long::compareTo).orElse(completedCheckpointID));
     this.metaClient.reloadActiveTimeline();
     reloadMetadataTable();
+    registerMetricsInternal();
   }
 
   private void reloadMetadataTable() {
@@ -138,6 +146,19 @@ public class RecordLevelIndexBackend implements MinibatchIndexBackend {
       this.metadataTable.close();
     } catch (Exception e) {
       throw new HoodieException("Exception happened during close metadata table.", e);
+    }
+  }
+
+  @Override
+  public void registerMetrics(MetricGroup metricGroup) {
+    this.metricGroup = metricGroup;
+    registerMetricsInternal();
+  }
+
+  private void registerMetricsInternal() {
+    if (metadataTable instanceof HoodieBackedTableMetadata) {
+      this.metricsHandles = FlinkMetricsUtils.registerMetadataTableMetrics(
+          (HoodieBackedTableMetadata) metadataTable, metricGroup, this.metricsHandles);
     }
   }
 }

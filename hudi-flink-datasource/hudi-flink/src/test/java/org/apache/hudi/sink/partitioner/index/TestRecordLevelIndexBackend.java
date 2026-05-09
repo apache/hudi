@@ -28,6 +28,7 @@ import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.MetricGroup;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,7 +46,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -185,6 +189,16 @@ public class TestRecordLevelIndexBackend {
       assertEquals("par1", recordLevelIndexBackend.get("id2_0").getPartitionPath());
       assertEquals("par1", recordLevelIndexBackend.get("id3_0").getPartitionPath());
       assertEquals("par1", recordLevelIndexBackend.get("id4_0").getPartitionPath());
+    }
+  }
+
+  @Test
+  void testRegisterMetricsIsNoOpWhenMetricsDisabled() throws Exception {
+    // Default test config has metadata metrics disabled; registerMetrics() should not register any gauges.
+    try (RecordLevelIndexBackend backend = new RecordLevelIndexBackend(conf, -1)) {
+      MetricGroup metricGroup = mock(MetricGroup.class);
+      backend.registerMetrics(metricGroup);
+      verify(metricGroup, never()).gauge(any(), any());
     }
   }
 }
