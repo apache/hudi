@@ -20,33 +20,26 @@ package org.apache.hudi.sink.partitioner.index;
 
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 
-import org.apache.flink.api.common.state.ValueState;
-
 import java.io.IOException;
 
 /**
- * An implementation of {@link GlobalIndexBackend} based on flink keyed value state.
+ * Index backend for managing global record location mappings keyed by record key.
  */
-public class FlinkStateIndexBackend implements GlobalIndexBackend {
+public interface GlobalIndexBackend extends IndexBackend {
 
-  private final ValueState<HoodieRecordGlobalLocation> indexState;
+  /**
+   * Retrieves the global location of a record based on its key.
+   *
+   * @param recordKey the unique key identifying the record
+   * @return the global location of the record, or null if the record is not found in the index
+   */
+  HoodieRecordGlobalLocation get(String recordKey) throws IOException;
 
-  public FlinkStateIndexBackend(ValueState<HoodieRecordGlobalLocation> indexState) {
-    this.indexState = indexState;
-  }
-
-  @Override
-  public HoodieRecordGlobalLocation get(String recordKey) throws IOException {
-    return indexState.value();
-  }
-
-  @Override
-  public void update(String recordKey, HoodieRecordGlobalLocation recordGlobalLocation) throws IOException {
-    this.indexState.update(recordGlobalLocation);
-  }
-
-  @Override
-  public void close() throws IOException {
-    // do nothing.
-  }
+  /**
+   * Updates the global location of a record in the index.
+   *
+   * @param recordKey the unique key identifying the record
+   * @param recordGlobalLocation the new global location of the record
+   */
+  void update(String recordKey, HoodieRecordGlobalLocation recordGlobalLocation) throws IOException;
 }

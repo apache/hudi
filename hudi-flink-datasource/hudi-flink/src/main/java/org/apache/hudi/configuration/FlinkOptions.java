@@ -309,6 +309,15 @@ public class FlinkOptions extends HoodieConfig {
           + "average memory size of caches for historical checkpoints.");
 
   @AdvancedConfig
+  public static final ConfigOption<Integer> INDEX_RLI_CACHE_CONCURRENT_PARTITIONS_NUM = ConfigOptions
+      .key("index.rli.cache.concurrent.partitions.num")
+      .intType()
+      .defaultValue(2)
+      .withDescription("Expected number of partitions whose partitioned RLI caches are updated concurrently. "
+          + "Used to infer the initial memory size for each partition cache as INDEX_RLI_CACHE_SIZE / concurrency "
+          + "when historical cache usage is unavailable.");
+
+  @AdvancedConfig
   public static final ConfigOption<Integer> INDEX_RLI_LOOKUP_MINIBATCH_SIZE = ConfigOptions
       .key("index.rli.lookup.minibatch.size")
       .intType()

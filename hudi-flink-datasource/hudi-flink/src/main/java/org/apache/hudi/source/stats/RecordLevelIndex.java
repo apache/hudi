@@ -39,6 +39,7 @@ import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.source.ExpressionEvaluators;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.DecimalType;
@@ -59,6 +60,7 @@ import java.util.stream.Collectors;
 /**
  * An index support implementation that leverages Record Level Index to prune file slices.
  */
+@Slf4j
 public class RecordLevelIndex implements FlinkMetadataIndex {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(RecordLevelIndex.class);
@@ -107,16 +109,20 @@ public class RecordLevelIndex implements FlinkMetadataIndex {
     if (!isIndexAvailable()) {
       return fileSlices;
     }
-    HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
-        getMetadataTable().readRecordIndexLocationsWithKeys(HoodieListData.eager(hoodieKeysFromFilter));
+    HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData = null;
     try {
+      recordIndexData =
+          getMetadataTable().readRecordIndexLocationsWithKeys(HoodieListData.eager(hoodieKeysFromFilter));
       List<Pair<String, HoodieRecordGlobalLocation>> recordIndexLocations = HoodieDataUtils.dedupeAndCollectAsList(recordIndexData);
       Set<String> fileIds = recordIndexLocations.stream()
           .map(pair -> pair.getValue().getFileId()).collect(Collectors.toSet());
       return fileSlices.stream().filter(fileSlice -> fileIds.contains(fileSlice.getFileId())).collect(Collectors.toList());
+    } catch (Throwable e) {
+      log.error("Failed to read metadata index: {} for data skipping", getIndexPartitionName(), e);
+      return fileSlices;
     } finally {
       // Clean up the RDD to avoid memory leaks
-      recordIndexData.unpersistWithDependencies();
+      Option.ofNullable(recordIndexData).ifPresent(HoodiePairData::unpersistWithDependencies);
     }
   }
 

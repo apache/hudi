@@ -56,11 +56,14 @@ import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketIndexPartitioner;
+import org.apache.hudi.sink.partitioner.DynamicBucketAssignFunction;
+import org.apache.hudi.sink.partitioner.DynamicBucketAssignOperator;
 import org.apache.hudi.sink.partitioner.MiniBatchBucketAssignOperator;
+import org.apache.hudi.sink.partitioner.MinibatchBucketAssignFunction;
 import org.apache.hudi.sink.partitioner.RecordIndexPartitioner;
+import org.apache.hudi.sink.partitioner.GlobalRecordIndexPartitioner;
 import org.apache.hudi.sink.partitioner.index.IndexRowUtils;
 import org.apache.hudi.sink.partitioner.index.IndexWriteOperator;
-import org.apache.hudi.sink.partitioner.MinibatchBucketAssignFunction;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
 import org.apache.hudi.table.format.FilePathUtils;
 
@@ -126,6 +129,10 @@ public class Pipelines {
     final int PARALLELISM_VALUE = conf.get(FlinkOptions.WRITE_TASKS);
     final boolean isBucketIndexType = OptionsResolver.isBucketIndexType(conf);
 
+    if (OptionsResolver.isRecordLevelIndex(conf)) {
+      throw new HoodieException(
+          "Record level index does not work with bulk insert using FLINK engine.");
+    }
     if (isBucketIndexType) {
       // TODO support bulk insert for consistent bucket index
       if (OptionsResolver.isConsistentHashingBucketIndexType(conf)) {
@@ -285,7 +292,7 @@ public class Pipelines {
     DataStream<HoodieFlinkInternalRow> dataStream1 = rowDataToHoodieRecord(conf, rowType, dataStream);
 
     if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || bounded) {
-      boolean isRliBootstrap = OptionsResolver.isRecordLevelIndex(conf);
+      boolean isRliBootstrap = OptionsResolver.isGlobalRecordLevelIndex(conf);
       dataStream1 = dataStream1
           .transform(
               "index_bootstrap",
@@ -424,7 +431,11 @@ public class Pipelines {
       if (isStreamingIndexWriteEnabled) {
         // index writing pipeline
         SingleOutputStreamOperator<RowData> indexWriteDatastream = writeDatastream
-            .partitionCustom(new RecordIndexPartitioner(conf), IndexRowUtils::getHoodieKey)
+            .partitionCustom(
+                OptionsResolver.isRecordLevelIndex(conf)
+                    ? new RecordIndexPartitioner(conf)
+                    : new GlobalRecordIndexPartitioner(conf),
+                IndexRowUtils::getHoodieKey)
             .transform(
                 opName("index_write", conf),
                 TypeInformation.of(RowData.class),
@@ -450,13 +461,21 @@ public class Pipelines {
   private static DataStream<HoodieFlinkInternalRow> createBucketAssignStream(
       DataStream<HoodieFlinkInternalRow> inputStream, Configuration conf, RowType rowType, String writeOperatorUid) {
     String assignerOperatorName = "bucket_assigner";
-    if (OptionsResolver.isRecordLevelIndex(conf) && !conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
+    if (OptionsResolver.isGlobalRecordLevelIndex(conf) && !conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       return inputStream
-          .partitionCustom(new RecordIndexPartitioner(conf), row -> new HoodieKey(row.getRecordKey(), row.getPartitionPath()))
           .transform(
               assignerOperatorName,
               new HoodieFlinkInternalRowTypeInfo(rowType),
               new MiniBatchBucketAssignOperator(new MinibatchBucketAssignFunction(conf), OperatorIDGenerator.fromUid(writeOperatorUid)))
+          .uid(opUID(assignerOperatorName, conf))
+          .setParallelism(conf.get(FlinkOptions.BUCKET_ASSIGN_TASKS));
+    } else if (OptionsResolver.isRecordLevelIndex(conf)) {
+      return inputStream
+          .keyBy(HoodieFlinkInternalRow::getRecordKey)
+          .transform(
+              assignerOperatorName,
+              new HoodieFlinkInternalRowTypeInfo(rowType),
+              new DynamicBucketAssignOperator(new DynamicBucketAssignFunction(conf), OperatorIDGenerator.fromUid(writeOperatorUid)))
           .uid(opUID(assignerOperatorName, conf))
           .setParallelism(conf.get(FlinkOptions.BUCKET_ASSIGN_TASKS));
     } else {
