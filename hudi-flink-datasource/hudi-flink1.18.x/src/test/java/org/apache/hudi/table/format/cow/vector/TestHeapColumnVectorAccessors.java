@@ -35,8 +35,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
  *
  * <p>The accessors are wrappers over the existing public fields so legacy callers continue to
  * work. These tests exist solely to pin down that wrapper contract — runtime correctness of the
- * Dremel-style read path is exercised end-to-end by integration tests once
- * {@code ParquetSplitReaderUtil} is wired up to {@code NestedColumnReader} in a follow-up PR.
+ * Dremel-style read path is exercised end-to-end by integration tests in
+ * {@code ITTestHoodieDataSource} (testParquetComplexTypes / testParquetComplexNestedRowTypes /
+ * testParquetArrayMapOfRowTypes / testParquetNullChildColumnsRowTypes).
  */
 class TestHeapColumnVectorAccessors {
 

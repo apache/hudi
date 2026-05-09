@@ -71,8 +71,8 @@ import static org.apache.parquet.column.ValuesType.VALUES;
  * and the Hudi-local {@link ParquetDecimalVector} / {@link LevelDelegation} / {@link IntArrayList}
  * imports are changed; the algorithm is untouched. The companion Hudi-specific {@code
  * Int64TimestampColumnReader} / {@code FixedLenBytesColumnReader} behaviours stay at the leaf-
- * reader creation boundary in {@code ParquetSplitReaderUtil} (lands in a follow-up PR), not inside
- * this class — keeping it a faithful copy of upstream.
+ * reader creation boundary in {@code ParquetSplitReaderUtil}, not inside this class — keeping it
+ * a faithful copy of upstream.
  */
 public class NestedPrimitiveColumnReader implements ColumnReader<WritableColumnVector> {
   private static final Logger LOG = LoggerFactory.getLogger(NestedPrimitiveColumnReader.class);

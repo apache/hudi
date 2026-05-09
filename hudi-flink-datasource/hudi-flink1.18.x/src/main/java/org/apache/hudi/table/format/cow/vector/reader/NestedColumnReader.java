@@ -114,9 +114,8 @@ public class NestedColumnReader implements ColumnReader<WritableColumnVector> {
       ParquetField child = children.get(i);
       if (child == null) {
         // Hudi schema-evolution: the logical field is not present in the Parquet file. The slot
-        // vector is expected to be pre-populated with nulls by the caller (lands in a follow-up
-        // PR that rewires ParquetSplitReaderUtil); keep it as is and skip contributing to the
-        // level stream.
+        // vector was pre-populated with nulls by ParquetSplitReaderUtil#createWritableColumnVector
+        // (ROW branch); keep it as is and skip contributing to the level stream.
         finalChildrenVectors[i] = childrenVectors[i];
         continue;
       }
@@ -148,11 +147,11 @@ public class NestedColumnReader implements ColumnReader<WritableColumnVector> {
       setFieldNullFlag(rowPosition.getIsNull(), heapRowVector);
     }
 
-    // Hudi-specific: collapse a present row whose every child is null into a null row. The
-    // legacy RowColumnReader did this so that a SQL value like `row(null, null)` round-trips
-    // to NULL on read; preserve it here for backward compatibility. Diverges from Flink 2.1,
-    // which would surface it as Row(null, null). Mirrored by the integration test
-    // ITTestHoodieDataSource#testParquetNullChildColumnsRowTypes.
+    // Hudi-specific: collapse a present row whose every child is null into a null row, so that a
+    // SQL value like `row(null, null)` round-trips to NULL on read. This was the behaviour of the
+    // legacy RowColumnReader (deleted alongside the Dremel rewire) and existing Hudi tables rely
+    // on it. Diverges from Flink 2.1, which would surface it as Row(null, null). Pinned by the
+    // integration test ITTestHoodieDataSource#testParquetNullChildColumnsRowTypes.
     int rowCount = rowPosition.getPositionsCount();
     for (int j = 0; j < rowCount; j++) {
       if (heapRowVector.isNullAt(j)) {
