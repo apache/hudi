@@ -207,6 +207,7 @@ public class ParquetSchemaConverter {
    * {@code VariantLogicalTypeAnnotation} class (< 1.15.2).
    */
   private static boolean hasVariantAnnotation(LogicalTypeAnnotation logicalType) {
+    // needs to ensure the writer attach the variant annotation in 1.3.
     return logicalType != null
         && logicalType.getClass().getSimpleName().equals("VariantLogicalTypeAnnotation");
   }

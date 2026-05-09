@@ -225,14 +225,7 @@ public class AvroToRowDataConverters {
   private static AvroToRowDataConverter createVariantConverter() {
     return avroObject -> {
       IndexedRecord record = (IndexedRecord) avroObject;
-      byte[] metadata = convertToBytes(record.get(0));
-      byte[] value = convertToBytes(record.get(1));
-
-      try {
-        return DataTypeAdapter.createVariant(value, metadata);
-      } catch (Exception e) {
-        throw new RuntimeException("Failed to create Flink BinaryVariant via reflection.", e);
-      }
+      return DataTypeAdapter.createVariant(convertToBytes(record.get(1)), convertToBytes(record.get(0)));
     };
   }
 

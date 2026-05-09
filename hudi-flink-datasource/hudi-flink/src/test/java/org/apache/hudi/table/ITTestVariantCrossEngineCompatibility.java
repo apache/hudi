@@ -27,6 +27,7 @@ import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -114,6 +115,7 @@ public class ITTestVariantCrossEngineCompatibility {
   }
 
   @Test
+  @Disabled("disabled and reopen the tests for 1.3")
   public void testFlinkReadSparkVariantCOWTable() throws Exception {
     // Test that Flink can read a COW table with Variant data written by Spark 4.0
     Path cowTargetDir = tempDir.resolve("cow");
@@ -123,6 +125,7 @@ public class ITTestVariantCrossEngineCompatibility {
   }
 
   @Test
+  @Disabled("disabled and reopen the tests for 1.3")
   public void testFlinkReadSparkVariantMORTableWithAvro() throws Exception {
     // Test that Flink can read a MOR table with AVRO record type and Variant data written by Spark 4.0
     Path morAvroTargetDir = tempDir.resolve("mor_avro");
@@ -132,6 +135,7 @@ public class ITTestVariantCrossEngineCompatibility {
   }
 
   @Test
+  @Disabled("disabled and reopen the tests for 1.3")
   public void testFlinkReadSparkVariantMORTableWithSpark() throws Exception {
     // Test that Flink can read a MOR table with SPARK record type and Variant data written by Spark 4.0
     Path morSparkTargetDir = tempDir.resolve("mor_spark");

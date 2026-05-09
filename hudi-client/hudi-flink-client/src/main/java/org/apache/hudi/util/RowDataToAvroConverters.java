@@ -379,8 +379,8 @@ public class RowDataToAvroConverters {
       @Override
       public Object convert(HoodieSchema schema, Object object) {
         final GenericRecord record = new GenericData.Record(schema.toAvroSchema());
-        record.put("metadata", ByteBuffer.wrap(DataTypeAdapter.getVariantMetadata(object)));
-        record.put("value", ByteBuffer.wrap(DataTypeAdapter.getVariantValue(object)));
+        record.put(HoodieSchema.Variant.VARIANT_METADATA_FIELD, ByteBuffer.wrap(DataTypeAdapter.getVariantMetadata(object)));
+        record.put(HoodieSchema.Variant.VARIANT_VALUE_FIELD, ByteBuffer.wrap(DataTypeAdapter.getVariantValue(object)));
         return record;
       }
     };
