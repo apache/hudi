@@ -132,6 +132,7 @@ import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_ASYNC;
 import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_ASYNC_THREAD_NUMBER;
 import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_JOIN_CACHE_TTL;
 import static org.apache.hudi.configuration.HadoopConfigurations.getParquetConf;
+import static org.apache.hudi.util.DataTypeUtils.validateReaderSupportedDataTypes;
 import static org.apache.hudi.util.ExpressionUtils.filterSimpleCallExpression;
 import static org.apache.hudi.util.ExpressionUtils.splitExprByPartitionCall;
 
@@ -168,6 +169,8 @@ public class HoodieTableSource extends FileIndexReader implements
   private ColumnStatsProbe columnStatsProbe;
   private PartitionPruners.PartitionPruner partitionPruner;
   private Option<Function<Integer, Integer>> dataBucketFunc; // numBuckets -> bucketId
+
+  private transient HoodieSchema tableSchema;
 
   public HoodieTableSource(
       SerializableSchema schema,
@@ -222,9 +225,11 @@ public class HoodieTableSource extends FileIndexReader implements
 
       @Override
       public DataStream<RowData> produceDataStream(StreamExecutionEnvironment execEnv) {
+        DataType dataType = getProducedDataType();
         @SuppressWarnings("unchecked")
         TypeInformation<RowData> typeInfo =
-            (TypeInformation<RowData>) TypeInfoDataTypeConverter.fromDataTypeToTypeInfo(getProducedDataType());
+            (TypeInformation<RowData>) TypeInfoDataTypeConverter.fromDataTypeToTypeInfo(dataType);
+        validateReaderSupportedDataTypes(getTableSchema(), dataType);
         OptionsInference.setupSourceTasks(conf, execEnv.getParallelism());
 
         if (conf.get(FlinkOptions.READ_SOURCE_V2_ENABLED)) {
@@ -719,14 +724,18 @@ public class HoodieTableSource extends FileIndexReader implements
 
   @VisibleForTesting
   public HoodieSchema getTableSchema() {
+    if (tableSchema != null) {
+      return tableSchema;
+    }
     try {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-      return schemaResolver.getTableSchema();
+      tableSchema = schemaResolver.getTableSchema();
     } catch (Throwable e) {
       // table exists but has no written data
       log.warn("Unable to resolve schema from table, using schema from the DDL", e);
-      return inferSchemaFromDdl();
+      tableSchema = inferSchemaFromDdl();
     }
+    return tableSchema;
   }
 
   @VisibleForTesting
