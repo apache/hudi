@@ -58,9 +58,6 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private final LogFileCreationCallback fileCreationHook;
   private boolean closed = false;
   private transient Thread shutdownThread = null;
-  // NOTE: For 1.x, we should set this parameter to false by default.
-  // However, since some unit tests simulate the behavior of the block appending in 0.x, this parameter needs to be used to provide the logic for calling `hsync` during flush
-  private final boolean syncDuringFlush;
 
   public HoodieLogFormatWriter(
       HoodieStorage storage,
@@ -69,8 +66,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       Short replication,
       Long sizeThreshold,
       String rolloverLogWriteToken,
-      LogFileCreationCallback fileCreationHook,
-      boolean syncDuringFlush) {
+      LogFileCreationCallback fileCreationHook) {
     this.storage = storage;
     this.logFile = logFile;
     this.sizeThreshold = sizeThreshold;
@@ -78,7 +74,6 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     this.replication = replication != null ? replication : storage.getDefaultReplication(logFile.getPath().getParent());
     this.rolloverLogWriteToken = rolloverLogWriteToken;
     this.fileCreationHook = fileCreationHook;
-    this.syncDuringFlush = syncDuringFlush;
     addShutDownHook();
   }
 
@@ -184,9 +179,10 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       }
       sizeWritten +=  outputStream.size() - startSize;
     }
-    // Flush all blocks
-    // Only the stream flush, not guarantee that the data has been thoroughly persisted
-    flush();
+    // No flush/hsync here: append-time visibility is not part of the contract.
+    // Downstream readers only need commit-level visibility, which is provided
+    // when the writer is closed (see closeStream) or when callers explicitly
+    // invoke sync().
 
     AppendResult result = new AppendResult(logFile, startPos, sizeWritten);
     // roll over if size is past the threshold
@@ -242,28 +238,24 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private void closeStream() throws IOException {
     if (output != null) {
-      // Call flush and `FSDataOutputStream#hsync` to persist all the data to DataNodes
-      flush(true);
+      // Persist all buffered data to DataNodes before closing so downstream
+      // readers can observe a fully-written log file at commit-level visibility.
+      sync();
       output.close();
       output = null;
       closed = true;
     }
   }
 
-  private void flush() throws IOException {
-    flush(syncDuringFlush);
-  }
-
-  private void flush(boolean sync) throws IOException {
+  @Override
+  public void sync() throws IOException {
     if (output == null) {
       return; // Presume closed
     }
     output.flush();
-    if (sync) {
-      // NOTE : the following API call makes sure that the data is flushed to disk on DataNodes (akin to POSIX fsync())
-      // See more details here : https://issues.apache.org/jira/browse/HDFS-744
-      output.hsync();
-    }
+    // NOTE: the following API call makes sure that the data is flushed to disk on DataNodes (akin to POSIX fsync())
+    // See more details here: https://issues.apache.org/jira/browse/HDFS-744
+    output.hsync();
   }
 
   @Override
