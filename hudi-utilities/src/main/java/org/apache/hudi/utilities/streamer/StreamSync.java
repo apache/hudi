@@ -74,6 +74,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
+import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -876,24 +877,30 @@ public class StreamSync implements Serializable, Closeable {
           totalSuccessfulRecords);
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
 
-      // Cache the RDD if not already persisted, so both validators (collect) and
-      // writeClient.commit() share the same materialized result without re-evaluation.
-      // shouldUnpersist is true when we created the cache here (storage level was NONE),
-      // so the finally block knows to release it.
-      boolean shouldUnpersist = writeStatusRDD.getStorageLevel().equals(StorageLevel.NONE());
+      // Cache the RDD only when pre-commit validators are configured. Validators collect the RDD
+      // before commit, so without caching the same DAG would re-evaluate inside writeClient.commit().
+      // When no validators are configured, commit consumes the RDD once and caching adds no value.
+      // shouldUnpersist is true only when we created the cache here (validators present and storage
+      // level was NONE), so the finally block knows to release it.
+      boolean validatorsConfigured = !StringUtils.isNullOrEmpty(props.getString(
+          HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES.key(),
+          HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES.defaultValue()));
+      boolean shouldUnpersist = validatorsConfigured && writeStatusRDD.getStorageLevel().equals(StorageLevel.NONE());
       if (shouldUnpersist) {
         writeStatusRDD.cache();
       }
       boolean success;
       try {
-        List<WriteStatus> writeStatuses = writeStatusRDD.collect();
+        if (validatorsConfigured) {
+          List<WriteStatus> writeStatuses = writeStatusRDD.collect();
 
-        // Run pre-commit streaming offset validators (if configured).
-        // Placement before writeClient.commit() is intentional: offset validation is a stronger
-        // guard than commitOnErrors — if offset deviation indicates potential data loss, the commit
-        // must be prevented regardless of the commitOnErrors policy.
-        SparkStreamerValidatorUtils.runValidators(props, instantTime, writeStatuses,
-            checkpointCommitMetadata, metaClient);
+          // Run pre-commit streaming offset validators (if configured).
+          // Placement before writeClient.commit() is intentional: offset validation is a stronger
+          // guard than commitOnErrors — if offset deviation indicates potential data loss, the commit
+          // must be prevented regardless of the commitOnErrors policy.
+          SparkStreamerValidatorUtils.runValidators(props, instantTime, writeStatuses,
+              checkpointCommitMetadata, metaClient);
+        }
 
         success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty(),
             Option.of(writeStatusValidator));
