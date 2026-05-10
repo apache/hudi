@@ -74,13 +74,35 @@ public enum HoodieFileFormat {
     return extension;
   }
 
+  public boolean requiresSparkRecordType() {
+    return this == LANCE;
+  }
+
+  public HoodieRecord.HoodieRecordType resolveRecordType(HoodieRecord.HoodieRecordType fallback) {
+    return requiresSparkRecordType() ? HoodieRecord.HoodieRecordType.SPARK : fallback;
+  }
+
+  public static HoodieRecord.HoodieRecordType resolveRecordTypeForExtension(
+      String extension, HoodieRecord.HoodieRecordType fallback) {
+    HoodieFileFormat format = fromFileExtensionOrNull(extension);
+    return format == null ? fallback : format.resolveRecordType(fallback);
+  }
+
   public static HoodieFileFormat fromFileExtension(String extension) {
+    HoodieFileFormat format = fromFileExtensionOrNull(extension);
+    if (format != null) {
+      return format;
+    }
+    throw new IllegalArgumentException("Unknown file extension :" + extension);
+  }
+
+  public static HoodieFileFormat fromFileExtensionOrNull(String extension) {
     for (HoodieFileFormat format : HoodieFileFormat.values()) {
       if (format.getFileExtension().equals(extension)) {
         return format;
       }
     }
-    throw new IllegalArgumentException("Unknown file extension :" + extension);
+    return null;
   }
 
   public static HoodieFileFormat getValue(String fileFormat) {
