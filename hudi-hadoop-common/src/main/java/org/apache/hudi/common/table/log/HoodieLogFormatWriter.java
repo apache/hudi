@@ -179,8 +179,10 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       }
       sizeWritten +=  outputStream.size() - startSize;
     }
-    // Flush all blocks to disk
-    flush();
+    // No flush/hsync here: append-time visibility is not part of the contract.
+    // Downstream readers only need commit-level visibility, which is provided
+    // when the writer is closed (see closeStream) or when callers explicitly
+    // invoke sync().
 
     AppendResult result = new AppendResult(logFile, startPos, sizeWritten);
     // roll over if size is past the threshold
@@ -236,20 +238,23 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private void closeStream() throws IOException {
     if (output != null) {
-      flush();
+      // Persist all buffered data to DataNodes before closing so downstream
+      // readers can observe a fully-written log file at commit-level visibility.
+      sync();
       output.close();
       output = null;
       closed = true;
     }
   }
 
-  private void flush() throws IOException {
+  @Override
+  public void sync() throws IOException {
     if (output == null) {
       return; // Presume closed
     }
     output.flush();
-    // NOTE : the following API call makes sure that the data is flushed to disk on DataNodes (akin to POSIX fsync())
-    // See more details here : https://issues.apache.org/jira/browse/HDFS-744
+    // NOTE: the following API call makes sure that the data is flushed to disk on DataNodes (akin to POSIX fsync())
+    // See more details here: https://issues.apache.org/jira/browse/HDFS-744
     output.hsync();
   }
 
