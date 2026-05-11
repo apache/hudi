@@ -19,6 +19,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.adapter.DataTypeAdapter;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -222,6 +223,10 @@ public class HoodieSchemaConverter {
 
       case RAW:
       default:
+        if (DataTypeAdapter.isVariantType(logicalType)) {
+          schema = HoodieSchema.createVariant();
+          break;
+        }
         throw new UnsupportedOperationException(
             "Unsupported type for HoodieSchema conversion: " + logicalType);
     }
@@ -413,6 +418,8 @@ public class HoodieSchemaConverter {
         return convertUnion(hoodieSchema);
       case VARIANT:
         return convertVariant(hoodieSchema);
+      case VECTOR:
+        return convertVector(hoodieSchema);
       default:
         throw new IllegalArgumentException("Unsupported HoodieSchemaType: " + type);
     }
@@ -467,6 +474,27 @@ public class HoodieSchemaConverter {
     HoodieSchema.Time timeSchema = (HoodieSchema.Time) schema;
     int flinkPrecision = (timeSchema.getPrecision() == HoodieSchema.TimePrecision.MILLIS) ? 3 : 6;
     return DataTypes.TIME(flinkPrecision).notNull();
+  }
+
+  private static DataType convertVector(HoodieSchema schema) {
+    if (!(schema instanceof HoodieSchema.Vector)) {
+      throw new IllegalStateException("Expected HoodieSchema.Vector but got: " + schema.getClass());
+    }
+    HoodieSchema.Vector vectorSchema = (HoodieSchema.Vector) schema;
+    return DataTypes.ARRAY(convertVectorElementType(vectorSchema.getVectorElementType())).notNull();
+  }
+
+  private static DataType convertVectorElementType(HoodieSchema.Vector.VectorElementType elementType) {
+    switch (elementType) {
+      case FLOAT:
+        return DataTypes.FLOAT().notNull();
+      case DOUBLE:
+        return DataTypes.DOUBLE().notNull();
+      case INT8:
+        return DataTypes.TINYINT().notNull();
+      default:
+        throw new IllegalArgumentException("Unsupported VECTOR element type: " + elementType);
+    }
   }
 
   private static DataType createBlob() {
@@ -553,23 +581,24 @@ public class HoodieSchemaConverter {
   }
 
   /**
-   * Converts a Variant schema to Flink's ROW type.
-   * Variant is represented as ROW<`metadata` BYTES, `value` BYTES> in Flink.
+   * Converts a Variant HoodieSchema to the native Flink {@code VariantType} DataType.
+   * Requires Flink 2.1+ at runtime; throws {@link UnsupportedOperationException} on older versions.
    *
    * @param schema HoodieSchema to convert (must be a VARIANT type)
-   * @return DataType representing the Variant as a ROW with binary fields
+   * @return native VariantType DataType
+   * @throws UnsupportedOperationException if Flink runtime is pre-2.1 or variant is shredded
    */
   private static DataType convertVariant(HoodieSchema schema) {
     if (schema.getType() != HoodieSchemaType.VARIANT) {
       throw new IllegalStateException("Expected HoodieSchema.Variant but got: " + schema.getClass());
     }
 
-    // Variant is stored as a struct with two binary fields: metadata and value.
-    // Field order follows the Parquet spec and Iceberg convention (metadata first, value second).
-    return DataTypes.ROW(
-        DataTypes.FIELD("metadata", DataTypes.BYTES().notNull()),
-        DataTypes.FIELD("value", DataTypes.BYTES().notNull())
-    ).notNull();
+    if (((HoodieSchema.Variant) schema).isShredded()) {
+      throw new UnsupportedOperationException(
+          "Shredded Variant is not yet supported in Flink. Use unshredded Variant instead.");
+    }
+
+    return DataTypeAdapter.createVariantType().notNull();
   }
 
   /**

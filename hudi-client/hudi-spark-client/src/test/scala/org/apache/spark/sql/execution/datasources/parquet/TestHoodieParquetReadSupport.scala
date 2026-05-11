@@ -69,7 +69,8 @@ class TestHoodieParquetReadSupport {
 
   /**
    * Validate that when at least one child field of a nested struct/array/map field matches between the
-   * requested schema and the actual file schema, the entire struct/array/map field is retained.
+   * requested schema and the actual file schema, the group is retained with only the matching child
+   * fields. Non-matching fields are excluded; Spark's schema evolution fills them with null.
    */
   @Test
   def testSchemaTrimming_atLeastOneFieldMatches(): Unit = {
@@ -98,7 +99,19 @@ class TestHoodieParquetReadSupport {
 
     val trimmedSchema = HoodieParquetReadSupport.trimParquetSchema(requiredSchema, dataSchema)
 
-    Assertions.assertEquals(requiredSchema, trimmedSchema)
+    // Only nested_b (present in both schemas) is retained; nested_a (only in requested)
+    // is excluded from the Parquet read schema. Spark schema evolution fills it with null.
+    val matchingNestedField = Types.requiredGroup().addField(Types.required(PrimitiveTypeName.INT32).named("nested_b"))
+    val expectedArrayField = Types.requiredList().optionalGroupElement().addField(matchingNestedField.named("element")).named("list")
+    val expectedMapField = Types.requiredMap().key(PrimitiveTypeName.BINARY).value(matchingNestedField.named("value")).named("key_value")
+    val expectedSchema = Types.buildMessage()
+        .addField(Types.required(PrimitiveTypeName.BINARY).named("a"))
+        .addField(matchingNestedField.named("b"))
+        .addField(expectedArrayField)
+        .addField(expectedMapField)
+        .addField(Types.required(PrimitiveTypeName.BINARY).named("e"))
+        .named("required")
+    Assertions.assertEquals(expectedSchema, trimmedSchema)
   }
 
   /**

@@ -86,6 +86,45 @@ public class HoodieStorageConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Target file size in bytes for Lance base files.");
 
+  public static final ConfigProperty<String> LANCE_WRITE_ALLOCATOR_SIZE_BYTES = ConfigProperty
+      .key("hoodie.lance.write.allocator.size.bytes")
+      .defaultValue(String.valueOf(256 * 1024 * 1024))
+      .markAdvanced()
+      .withDocumentation("Maximum size in bytes of the Arrow child allocator used by the Lance "
+          + "writer for buffering in-flight batch data. Must be large enough that the Arrow "
+          + "BaseLargeVariableWidthVector's power-of-2 doubling growth never requests a buffer "
+          + "exceeding this cap, otherwise writes fail with OutOfMemoryException. The default of "
+          + "256MB clears the 128MB doubling step with headroom; pair with "
+          + "hoodie.lance.write.flush.byte.watermark to bound in-flight memory regardless of "
+          + "blob size or row count.");
+
+  public static final ConfigProperty<String> LANCE_WRITE_FLUSH_BYTE_WATERMARK = ConfigProperty
+      .key("hoodie.lance.write.flush.byte.watermark")
+      .defaultValue(String.valueOf(96 * 1024 * 1024))
+      .markAdvanced()
+      .withDocumentation("Byte-size watermark on the Lance writer's in-flight Arrow buffers; "
+          + "the writer flushes the current batch when the sum of FieldVector buffer sizes "
+          + "reaches this value, in addition to the row-count batch threshold. Keeps the data "
+          + "buffer below the next power-of-2 doubling step so reallocation cannot exceed "
+          + "hoodie.lance.write.allocator.size.bytes. Default is roughly 3/8 of the allocator "
+          + "size, leaving room for offset/validity buffers.");
+
+  public static final ConfigProperty<String> LANCE_READ_ALLOCATOR_SIZE_BYTES = ConfigProperty
+      .key("hoodie.lance.read.allocator.size.bytes")
+      .defaultValue(String.valueOf(256 * 1024 * 1024))
+      .markAdvanced()
+      .withDocumentation("Maximum size in bytes of the Arrow child allocator used by the Lance "
+          + "reader for the per-read data buffers. Raise this for files with very wide rows or "
+          + "large blob columns.");
+
+  public static final ConfigProperty<String> LANCE_READ_METADATA_ALLOCATOR_SIZE_BYTES = ConfigProperty
+      .key("hoodie.lance.read.metadata.allocator.size.bytes")
+      .defaultValue(String.valueOf(8 * 1024 * 1024))
+      .markAdvanced()
+      .withDocumentation("Maximum size in bytes of the Arrow child allocator used by the Lance "
+          + "reader for footer/metadata operations (schema, bloom filter). Independent of the "
+          + "data allocator since metadata allocations are small and short-lived.");
+
   public static final ConfigProperty<Boolean> HFILE_WRITER_TO_ALLOW_DUPLICATES = ConfigProperty
       .key("hoodie.hfile.writes.allow.duplicates")
       .defaultValue(false)

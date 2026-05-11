@@ -108,6 +108,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   static final String PROPS_FILENAME_TEST_PARQUET = "test-parquet-dfs-source.properties";
   static final String PROPS_FILENAME_TEST_ORC = "test-orc-dfs-source.properties";
   static final String PROPS_FILENAME_TEST_JSON_KAFKA = "test-json-kafka-dfs-source.properties";
+  static final String PROPS_FILENAME_TEST_JSON_KINESIS = "test-json-kinesis-dfs-source.properties";
   static final String PROPS_FILENAME_TEST_AVRO_KAFKA = "test-avro-kafka-dfs-source.properties";
   static final String PROPS_FILENAME_TEST_SQL_SOURCE = "test-sql-source-source.properties";
   static final String PROPS_FILENAME_TEST_MULTI_WRITER = "test-multi-writer.properties";
@@ -116,10 +117,12 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   static String PARQUET_SOURCE_ROOT;
   static String ORC_SOURCE_ROOT;
   static String JSON_KAFKA_SOURCE_ROOT;
+  static String JSON_KINESIS_SOURCE_ROOT;
   static final int PARQUET_NUM_RECORDS = 5;
   static final int ORC_NUM_RECORDS = 5;
   static final int CSV_NUM_RECORDS = 3;
   static final int JSON_KAFKA_NUM_RECORDS = 5;
+  static final int JSON_KINESIS_NUM_RECORDS = 5;
   static final int SQL_SOURCE_NUM_RECORDS = 1000;
   String kafkaCheckpointType = "string";
   // Required fields
@@ -167,6 +170,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     PARQUET_SOURCE_ROOT = basePath + "parquetFiles";
     ORC_SOURCE_ROOT = basePath + "orcFiles";
     JSON_KAFKA_SOURCE_ROOT = basePath + "jsonKafkaFiles";
+    JSON_KINESIS_SOURCE_ROOT = basePath + "jsonKinesisFiles";
     testUtils = new KafkaTestUtils().setup();
   }
 

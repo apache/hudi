@@ -38,10 +38,14 @@ fi
 
 declare -a ALL_VERSION_OPTS=(
 # For Spark 4.0, Scala 2.13:
-# hudi-spark4-common
 # hudi-spark4.0.x_2.13
 # hudi-spark4.0-bundle_2.13
-"-T 1C -Djava17 -Djava.version=17 -Dscala-2.13 -Dspark4.0 -pl hudi-spark-datasource/hudi-spark4-common,hudi-spark-datasource/hudi-spark4.0.x,packaging/hudi-spark-bundle -am"
+"-T 1C -Djava17 -Djava.version=17 -Dscala-2.13 -Dspark4.0 -pl hudi-spark-datasource/hudi-spark4.0.x,packaging/hudi-spark-bundle -am"
+# For Spark 4.1, Scala 2.13:
+# hudi-spark4-common
+# hudi-spark4.1.x_2.13
+# hudi-spark4.1-bundle_2.13
+"-T 1C -Djava17 -Djava.version=17 -Dscala-2.13 -Dspark4.1 -pl hudi-spark-datasource/hudi-spark4-common,hudi-spark-datasource/hudi-spark4.1.x,packaging/hudi-spark-bundle -am"
 )
 printf -v joined "'%s'\n" "${ALL_VERSION_OPTS[@]}"
 

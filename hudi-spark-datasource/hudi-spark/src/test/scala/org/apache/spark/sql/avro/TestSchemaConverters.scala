@@ -97,12 +97,8 @@ class TestSchemaConverters extends SparkAdapterSupport {
       StructField(HoodieSchema.Blob.INLINE_DATA_FIELD, DataTypes.BinaryType, nullable = true)
     ))
 
-    val metadata = new MetadataBuilder()
-      .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.BLOB.name())
-      .build()
-
     val exception = assertThrows(classOf[IllegalArgumentException], () => {
-      HoodieSparkSchemaConverters.toHoodieType(invalidStruct, nullable = false, metadata = metadata)
+      HoodieSparkSchemaConverters.validateCustomTypeStructures(wrapBlob(invalidStruct))
     })
     assertTrue(exception.getMessage.startsWith("Invalid blob schema structure"))
   }
@@ -285,13 +281,23 @@ class TestSchemaConverters extends SparkAdapterSupport {
   }
 
   private def assertInvalidVariantSchema(invalidStruct: StructType): Unit = {
-    val metadata = new MetadataBuilder()
-      .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.VARIANT.name())
-      .build()
     val exception = assertThrows(classOf[IllegalArgumentException], () => {
-      HoodieSparkSchemaConverters.toHoodieType(invalidStruct, metadata = metadata)
+      HoodieSparkSchemaConverters.validateCustomTypeStructures(wrapVariant(invalidStruct))
     })
     assertTrue(exception.getMessage.startsWith("Invalid variant schema structure"))
+  }
+
+  private def wrapBlob(inner: StructType): StructType = wrapWithCustomType(inner, HoodieSchemaType.BLOB)
+
+  private def wrapVariant(inner: StructType): StructType = wrapWithCustomType(inner, HoodieSchemaType.VARIANT)
+
+  private def wrapWithCustomType(inner: StructType, customType: HoodieSchemaType): StructType = {
+    val fieldMetadata = new MetadataBuilder()
+      .putString(HoodieSchema.TYPE_METADATA_FIELD, customType.name())
+      .build()
+    new StructType(Array[StructField](
+      StructField("payload", inner, nullable = false, metadata = fieldMetadata)
+    ))
   }
 
   @Test
@@ -346,24 +352,26 @@ class TestSchemaConverters extends SparkAdapterSupport {
 
   /**
    * Validates the content of the blob fields to ensure the fields match our expectations.
+   *
+   * BLOB is projected as nullable-everywhere at the Spark type layer (see the BLOB case in
+   * HoodieSparkSchemaConverters.toSqlType). RFC-100 non-null invariants are enforced at the
+   * physical-schema write boundary via HoodieSchema.Blob#createBlob, not here.
+   *
    * @param dataType the StructType containing the blob fields to validate
    */
   private def validateBlobFields(dataType: StructType): Unit = {
-    // storage_type is a non-null string field
     val storageTypeField = dataType.fields.find(_.name == HoodieSchema.Blob.TYPE).get
     assertEquals(DataTypes.StringType, storageTypeField.dataType)
-    assertFalse(storageTypeField.nullable)
-    // data is a nullable binary field
+    assertTrue(storageTypeField.nullable)
     val dataField = dataType.fields.find(_.name == HoodieSchema.Blob.INLINE_DATA_FIELD).get
     assertEquals(DataTypes.BinaryType, dataField.dataType)
     assertTrue(dataField.nullable)
-    // reference is a nullable struct field
     val referenceField = dataType.fields.find(_.name == HoodieSchema.Blob.EXTERNAL_REFERENCE).get
     assertEquals(new StructType(Array[StructField](
-      StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH, DataTypes.StringType, nullable = false),
+      StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH, DataTypes.StringType, nullable = true),
       StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET, DataTypes.LongType, nullable = true),
       StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH, DataTypes.LongType, nullable = true),
-      StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, DataTypes.BooleanType, nullable = false)
+      StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, DataTypes.BooleanType, nullable = true)
     )), referenceField.dataType)
     assertTrue(referenceField.nullable)
   }

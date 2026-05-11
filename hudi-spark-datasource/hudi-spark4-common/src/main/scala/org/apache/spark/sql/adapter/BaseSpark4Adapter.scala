@@ -17,12 +17,9 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.hudi.{DefaultSource, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSchemaConversionUtils, Spark4HoodiePartitionCDCFileGroupMapping, Spark4HoodiePartitionFileSliceMapping}
-import org.apache.hudi.client.model.{HoodieInternalRow, Spark4HoodieInternalRow}
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieSchemaConversionUtils}
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark.internal.ReflectUtil
 import org.apache.hudi.storage.StorageConfiguration
@@ -32,7 +29,7 @@ import org.apache.parquet.schema.Type.Repetition
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{AnalysisException, Column, DataFrame, DataFrameUtil, ExpressionColumnNodeWrapper, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark4DataFrameUtil, Spark4HoodieUnsafeUtils, Spark4HoodieUTF8StringFactory, SparkSession, SQLContext}
+import org.apache.spark.sql.{Column, DataFrame, DataFrameUtil, Dataset, Encoder, ExpressionColumnNodeWrapper, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark4DataFrameUtil, Spark4HoodieUnsafeUtils, Spark4HoodieUTF8StringFactory, SparkSession, SQLContext}
 import org.apache.spark.sql.FileFormatUtilsForFileGroupReader.applyFiltersToPlan
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
@@ -41,7 +38,6 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredica
 import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.classic.ColumnConversions
 import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
@@ -133,29 +129,6 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
 
   override def getUTF8StringFactory: HoodieUTF8StringFactory = Spark4HoodieUTF8StringFactory
-
-  override def createInternalRow(metaFields: Array[UTF8String],
-                                 sourceRow: InternalRow,
-                                 sourceContainsMetaFields: Boolean): HoodieInternalRow = {
-    new Spark4HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields)
-  }
-
-  override def createPartitionCDCFileGroupMapping(partitionValues: InternalRow,
-                                                  fileSplits: List[HoodieCDCFileSplit]): HoodiePartitionCDCFileGroupMapping = {
-    new Spark4HoodiePartitionCDCFileGroupMapping(partitionValues, fileSplits)
-  }
-
-  override def createPartitionFileSliceMapping(values: InternalRow,
-                                               slices: Map[String, FileSlice]): HoodiePartitionFileSliceMapping = {
-    new Spark4HoodiePartitionFileSliceMapping(values, slices)
-  }
-
-  override def newParseException(command: Option[String],
-                                 exception: AnalysisException,
-                                 start: Origin,
-                                 stop: Origin): ParseException = {
-    new ParseException(command, start, stop, exception.getErrorClass, exception.getMessageParameters.asScala.toMap)
-  }
 
   override def splitFiles(sparkSession: SparkSession,
                           partitionDirectory: PartitionDirectory,

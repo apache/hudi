@@ -28,6 +28,7 @@ import org.apache.spark.sql.types.{ArrayType, BinaryType, DataType, DataTypes, M
 import org.scalatest.{FunSuite, Matchers}
 
 import java.nio.ByteBuffer
+import java.time.LocalDate
 import java.util.Objects
 
 class TestAvroConversionUtils extends FunSuite with Matchers {
@@ -455,5 +456,31 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
     the[HoodieSchemaException] thrownBy {
       HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(struct, "SchemaName", "SchemaNS")
     } should have message "Duplicate field name in record SchemaNS.SchemaName: name type:UNION pos:2 and name type:UNION pos:1."
+  }
+
+  test("Logical type: date") {
+    val dateSchema = s"""
+      {
+        "namespace": "logical",
+        "type": "record",
+        "name": "test",
+        "fields": [
+          {"name": "date", "type": {"type": "int", "logicalType": "date"}}
+        ]
+      }
+    """
+
+    val dateInputData = Seq(7, 365, 0) // one week, one year, epoch
+    val schema = HoodieSchema.parse(dateSchema)
+    val converter = AvroConversionUtils.createConverterToRow(schema, HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema))
+
+    val dateOutputData = dateInputData.map(x => {
+      val record = new GenericData.Record(schema.toAvroSchema) {{ put("date", x) }}
+      converter(record).get(0)
+    })
+
+    assert(dateOutputData(0).toString === LocalDate.ofEpochDay(dateInputData(0)).toString)
+    assert(dateOutputData(1).toString === LocalDate.ofEpochDay(dateInputData(1)).toString)
+    assert(dateOutputData(2).toString === LocalDate.ofEpochDay(dateInputData(2)).toString)
   }
 }

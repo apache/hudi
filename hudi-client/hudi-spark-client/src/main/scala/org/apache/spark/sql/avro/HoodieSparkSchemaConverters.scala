@@ -24,8 +24,11 @@ import org.apache.hudi.common.schema.HoodieSchema.TimePrecision
 import org.apache.hudi.internal.schema.HoodieSchemaException
 
 import org.apache.spark.annotation.DeveloperApi
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.types.Decimal.minBytesForPrecision
+
+import java.util.Locale
 
 import scala.collection.JavaConverters._
 
@@ -64,6 +67,42 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
   }
 
   /**
+   * Walks a user-supplied StructType and rejects any field tagged with
+   * {@code hudi_type=BLOB} or {@code hudi_type=VARIANT} whose inner Spark shape does not
+   * match the canonical layout.
+   *
+   * Intended for the ingest/write boundary only. {@link #toHoodieTypeNested} is shared
+   * with the read/prune path and must stay permissive so that Spark's nested-schema
+   * pruning (which can strip sibling fields while preserving the outer {@code hudi_type}
+   * metadata) does not crash projections. Validation is therefore hoisted up to the
+   * writer, which always sees the user's full, unpruned schema.
+   *
+   * @throws IllegalArgumentException if any tagged field has a non-canonical inner shape
+   */
+  def validateCustomTypeStructures(structType: StructType): Unit =
+    validateCustomTypeStructuresRecursive(structType)
+
+  private def validateCustomTypeStructuresRecursive(dataType: DataType): Unit = dataType match {
+    case s: StructType =>
+      s.fields.foreach { f =>
+        if (f.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD)) {
+          val descriptorType = HoodieSchema
+            .parseTypeDescriptor(f.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+            .getType
+          (descriptorType, f.dataType) match {
+            case (HoodieSchemaType.BLOB, st: StructType) => validateBlobStructure(st)
+            case (HoodieSchemaType.VARIANT, st: StructType) => validateVariantStructure(st)
+            case _ =>
+          }
+        }
+        validateCustomTypeStructuresRecursive(f.dataType)
+      }
+    case ArrayType(elementType, _) => validateCustomTypeStructuresRecursive(elementType)
+    case MapType(_, valueType, _) => validateCustomTypeStructuresRecursive(valueType)
+    case _ =>
+  }
+
+  /**
    * Converts a Spark DataType to a HoodieSchema, tracking how deeply nested the current type is
    * relative to the top-level table schema. This depth is used to enforce that VECTOR columns can
    * only appear as direct fields of the root record — not inside nested structs, arrays, or maps.
@@ -73,11 +112,11 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
    * at depth≥2 (VECTOR not allowed).
    */
   private def toHoodieTypeNested(catalystType: DataType,
-                                  nullable: Boolean,
-                                  recordName: String,
-                                  nameSpace: String,
-                                  metadata: Metadata,
-                                  depth: Int): HoodieSchema = {
+                                 nullable: Boolean,
+                                 recordName: String,
+                                 nameSpace: String,
+                                 metadata: Metadata,
+                                 depth: Int): HoodieSchema = {
     val schema = catalystType match {
       // Primitive types
       case BooleanType => HoodieSchema.create(HoodieSchemaType.BOOLEAN)
@@ -102,8 +141,8 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
 
       // Complex types
       case ArrayType(elementSparkType, containsNull)
-          if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
-            HoodieSchema.parseTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)).getType == HoodieSchemaType.VECTOR =>
+        if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
+          HoodieSchema.parseTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)).getType == HoodieSchemaType.VECTOR =>
         if (depth > 1) {
           throw new HoodieSchemaException(
             s"VECTOR column '$recordName' must be a top-level field. Nested VECTOR columns (inside STRUCT, ARRAY, or MAP) are not supported.")
@@ -137,14 +176,18 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
         HoodieSchema.createMap(valueSchema)
 
       case blobStruct: StructType if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
-        HoodieSchema.parseTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)).getType == HoodieSchemaType.BLOB =>
-        // Validate blob structure before accepting
-        validateBlobStructure(blobStruct)
+        HoodieSchema.parseTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)).getType == HoodieSchemaType.BLOB &&
+        isCanonicalBlobStruct(blobStruct) =>
+        // Canonical RFC-100 BLOB layout. Pruned BLOB structs (Spark 3.3/3.4 keeps the
+        // hudi_type=BLOB metadata on the outer StructField while dropping sibling inner
+        // fields during nested schema pruning) fall through to the plain RECORD branch
+        // below; HoodieSchemaUtils.pruneDataSchema then restores the full BLOB from the
+        // data schema.
         HoodieSchema.createBlob()
 
       case variantStruct: StructType if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
-        HoodieSchema.parseTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)).getType == HoodieSchemaType.VARIANT =>
-        validateVariantStructure(variantStruct)
+        HoodieSchema.parseTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)).getType == HoodieSchemaType.VARIANT &&
+        isCanonicalVariantStruct(variantStruct) =>
         HoodieSchema.createVariant(recordName, nameSpace, null)
 
       case st: StructType =>
@@ -257,6 +300,7 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
         SchemaType(ArrayType(sparkElementType, containsNull = false), nullable = false, Some(metadata))
 
       case HoodieSchemaType.BLOB | HoodieSchemaType.RECORD =>
+        val isBlob = hoodieSchema.getType == HoodieSchemaType.BLOB
         val fullName = hoodieSchema.getFullName
         if (existingRecordNames.contains(fullName)) {
           throw new IncompatibleSchemaException(
@@ -278,10 +322,22 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
             metadataBuilder.putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchema.Blob.TYPE_DESCRIPTOR)
           }
           val metadata = metadataBuilder.build()
-          StructField(f.name(), schemaType.dataType, schemaType.nullable, metadata)
+          // For BLOB: force nullable-everywhere at the Spark type layer. The RFC-100
+          // canonical schema declares `type`, `reference.external_path`, and
+          // `reference.managed` as strictly non-null, but that contract is conditional
+          // ("required when parent is present") and Spark's type system can't model it.
+          // Projecting BLOB as nullable-everywhere for Spark avoids downstream pain
+          // (Cast / TableOutputResolver / Cast.canCast rewrites); the on-disk physical
+          // schema stays RFC-100 compliant because the write path goes through
+          // HoodieSchema.Blob.createBlob(), which uses the canonical fields verbatim.
+          if (isBlob) {
+            StructField(f.name(), withAllFieldsNullable(schemaType.dataType), nullable = true, metadata)
+          } else {
+            StructField(f.name(), schemaType.dataType, schemaType.nullable, metadata)
+          }
         }
         // For BLOB types, propagate type metadata via SchemaType
-        val schemaTypeMetadata = if (hoodieSchema.getType == HoodieSchemaType.BLOB) {
+        val schemaTypeMetadata = if (isBlob) {
           Some(new MetadataBuilder()
             .putString(HoodieSchema.TYPE_METADATA_FIELD, hoodieSchema.asInstanceOf[HoodieSchema.Blob].toTypeDescriptor)
             .build())
@@ -350,17 +406,58 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
   /**
    * Validates that a StructType matches the expected blob schema structure defined in {@link HoodieSchema.Blob}.
    *
+   * Purely structural: compares field names and data types recursively, ignoring nullability.
+   * At the Spark type layer, BLOB is projected as nullable-everywhere by [[toSqlType]] (see the
+   * comment on the BLOB case there); nullability is therefore not part of the structural
+   * contract. The RFC-100 non-null invariants are enforced at the physical-schema write
+   * boundary by {@link HoodieSchema.Blob#createBlob}.
+   *
    * @param structType the StructType to validate
    * @throws IllegalArgumentException if the structure does not match the expected blob schema
    */
   private def validateBlobStructure(structType: StructType): Unit = {
-    if (!structType.equals(expectedBlobStructType)) {
+    if (!isCanonicalBlobStruct(structType)) {
       throw new IllegalArgumentException(
         s"""Invalid blob schema structure. Expected schema:
            |${expectedBlobStructType.toDDL}
            |Got schema:
            |${structType.toDDL}""".stripMargin)
     }
+  }
+
+  /**
+   * Returns true if the StructType matches the canonical RFC-100 BLOB layout.
+   * Used both by the write/ingest validator and to distinguish a genuine BLOB
+   * struct from one that Spark's nested-schema pruning has partially stripped
+   * (Spark 3.3/3.4 preserves the hudi_type=BLOB metadata on the outer field
+   * while dropping sibling inner fields).
+   */
+  private def isCanonicalBlobStruct(structType: StructType): Boolean =
+    matchesStructure(structType, expectedBlobStructType, SQLConf.get.caseSensitiveAnalysis)
+
+  private def matchesStructure(source: DataType, expected: DataType, caseSensitive: Boolean): Boolean =
+    (source, expected) match {
+      case (s: StructType, e: StructType) =>
+        s.length == e.length && s.fields.zip(e.fields).forall { case (sf, ef) =>
+          nameEquals(sf.name, ef.name, caseSensitive) &&
+            matchesStructure(sf.dataType, ef.dataType, caseSensitive)
+        }
+      case _ => source == expected
+    }
+
+  private def nameEquals(a: String, b: String, caseSensitive: Boolean): Boolean =
+    if (caseSensitive) a == b else a.equalsIgnoreCase(b)
+
+  private def withAllFieldsNullable(dataType: DataType): DataType = dataType match {
+    case s: StructType =>
+      StructType(s.fields.map(f => f.copy(
+        dataType = withAllFieldsNullable(f.dataType),
+        nullable = true)))
+    case ArrayType(elementType, _) =>
+      ArrayType(withAllFieldsNullable(elementType), containsNull = true)
+    case MapType(keyType, valueType, _) =>
+      MapType(keyType, withAllFieldsNullable(valueType), valueContainsNull = true)
+    case other => other
   }
 
   private lazy val expectedVariantStructType: StructType = {
@@ -373,21 +470,41 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
    * Validates that a StructType matches the expected unshredded variant schema
    * (two non-null {@code BinaryType} fields: {@code metadata} and {@code value}).
    *
+   * Note on nullability: unlike BLOB, VARIANT is not projected nullable-everywhere at the
+   * Spark type layer because the user-facing path is gated. Spark 3.x rejects VARIANT at
+   * schema resolution, and Spark 4.0+ exposes it as the native {@code VariantType} populated
+   * via {@code parse_json(...)}, never a user-supplied {@code named_struct}. The internal
+   * physical layout ({@code struct<metadata, value>} with non-null fields) only appears
+   * through {@link HoodieSparkSchemaConverters#toSqlType}, which produces the canonical
+   * non-null shape this validator expects.
+   *
    * @param structType the StructType to validate
    * @throws IllegalArgumentException if the structure does not match the expected variant schema
    */
   private def validateVariantStructure(structType: StructType): Unit = {
-    val fieldsByName = structType.fields.map(f => f.name -> f).toMap
-    val ok = structType.length == 2 &&
-      fieldsByName.get(HoodieSchema.Variant.VARIANT_METADATA_FIELD).exists(f => f.dataType == BinaryType && !f.nullable) &&
-      fieldsByName.get(HoodieSchema.Variant.VARIANT_VALUE_FIELD).exists(f => f.dataType == BinaryType && !f.nullable)
-    if (!ok) {
+    if (!isCanonicalVariantStruct(structType)) {
       throw new IllegalArgumentException(
         s"""Invalid variant schema structure. Expected schema:
            |${expectedVariantStructType.toDDL}
            |Got schema:
            |${structType.toDDL}""".stripMargin)
     }
+  }
+
+  /**
+   * Returns true if the StructType matches the canonical unshredded VARIANT layout
+   * (two non-null {@code BinaryType} fields: {@code metadata} and {@code value}).
+   * Used both by the write/ingest validator and to distinguish a genuine VARIANT
+   * struct from one that Spark's nested-schema pruning has partially stripped.
+   */
+  private def isCanonicalVariantStruct(structType: StructType): Boolean = {
+    val caseSensitive = SQLConf.get.caseSensitiveAnalysis
+    val key: String => String =
+      if (caseSensitive) identity else (_: String).toLowerCase(Locale.ROOT)
+    val fieldsByName = structType.fields.map(f => key(f.name) -> f).toMap
+    structType.length == 2 &&
+      fieldsByName.get(key(HoodieSchema.Variant.VARIANT_METADATA_FIELD)).exists(f => f.dataType == BinaryType && !f.nullable) &&
+      fieldsByName.get(key(HoodieSchema.Variant.VARIANT_VALUE_FIELD)).exists(f => f.dataType == BinaryType && !f.nullable)
   }
 
   private def canBeUnion(st: StructType): Boolean = {
@@ -398,7 +515,7 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
   }
 
   private def sparkTypeForVectorElementType(
-      elementType: HoodieSchema.Vector.VectorElementType): DataType = elementType match {
+                                             elementType: HoodieSchema.Vector.VectorElementType): DataType = elementType match {
     case HoodieSchema.Vector.VectorElementType.FLOAT => FloatType
     case HoodieSchema.Vector.VectorElementType.DOUBLE => DoubleType
     case HoodieSchema.Vector.VectorElementType.INT8 => ByteType

@@ -444,6 +444,25 @@ public class TestHoodieContinuousSplitEnumerator {
         "discover must be called with the last consumed offset to avoid re-reading commits");
   }
 
+  /**
+   * Verify that when the metricGroup is null (Flink 1.17 path), discovering splits with
+   * non-empty results does not throw a NullPointerException.
+   */
+  @Test
+  public void testProcessDiscoveredSplitsWithNullMetricGroup() {
+    MockSplitEnumeratorContext nullMetricContext = new MockSplitEnumeratorContext(true);
+    splitDiscover.setNextBatch(new HoodieContinuousSplitBatch(
+        Arrays.asList(split1, split2), "20231201000000000", "20231201120000000"));
+
+    HoodieContinuousSplitEnumerator enumeratorWithNullMetrics = new HoodieContinuousSplitEnumerator(
+        TABLE_NAME, nullMetricContext, splitProvider, splitDiscover, scanContext, Option.empty());
+    enumeratorWithNullMetrics.start();
+    nullMetricContext.executeAsyncCallbacks();
+
+    assertEquals(2, splitProvider.pendingSplitCount(),
+        "Splits should be added to the provider even when enumeratorMetrics is null");
+  }
+
   private HoodieSourceSplit createTestSplit(int splitNum, String fileId) {
     return new HoodieSourceSplit(
         splitNum,
@@ -497,6 +516,15 @@ public class TestHoodieContinuousSplitEnumerator {
     private final List<Integer> noMoreSplitsSignaled = new ArrayList<>();
     private final List<AsyncTask<?>> asyncTasks = new ArrayList<>();
     private final AtomicInteger asyncCallCount = new AtomicInteger(0);
+    private final boolean returnNullMetricGroup;
+
+    MockSplitEnumeratorContext() {
+      this(false);
+    }
+
+    MockSplitEnumeratorContext(boolean returnNullMetricGroup) {
+      this.returnNullMetricGroup = returnNullMetricGroup;
+    }
 
     public void registerReader(ReaderInfo readerInfo) {
       registeredReaders.put(readerInfo.getSubtaskId(), readerInfo);
@@ -532,7 +560,7 @@ public class TestHoodieContinuousSplitEnumerator {
 
     @Override
     public SplitEnumeratorMetricGroup metricGroup() {
-      return UnregisteredMetricsGroup.createSplitEnumeratorMetricGroup();
+      return returnNullMetricGroup ? null : UnregisteredMetricsGroup.createSplitEnumeratorMetricGroup();
     }
 
     @Override

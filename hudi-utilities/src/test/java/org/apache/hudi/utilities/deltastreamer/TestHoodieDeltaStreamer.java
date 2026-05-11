@@ -456,8 +456,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     String[] splitNames = propsFilename.split("\\.");
     String tableBasePath = basePath + "/" + splitNames[0];
     syncOnce(TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT,
-            Collections.singletonList(TripsWithDistanceTransformer.class.getName()),
-            propsFilename, false));
+        Collections.singletonList(TripsWithDistanceTransformer.class.getName()),
+        propsFilename, false));
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(HoodieTestUtils.getDefaultStorageConf()).setBasePath(tableBasePath).build();
     assertEquals(
@@ -2003,7 +2003,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         // Schedule an indexing instant
         HoodieIndexer scheduleIndexingJob = new HoodieIndexer(jsc,
             buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, null, UtilHelpers.SCHEDULE, "RECORD_INDEX",
-            Arrays.asList(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() + "=true", HoodieWriteConfig.MARKERS_TYPE.key() + "=DIRECT")));
+                Arrays.asList(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() + "=true", HoodieWriteConfig.MARKERS_TYPE.key() + "=DIRECT")));
         scheduleIndexInstantTime = scheduleIndexingJob.doSchedule();
         TestHelpers.assertPendingIndexCommit(tableBasePath);
         LOG.info("Schedule indexing success, now build index with instant time " + scheduleIndexInstantTime.get());
@@ -3458,9 +3458,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     String tableBasePath = basePath + "/test_csv_table" + testNum;
     String sourceOrderingField = (hasHeader || useSchemaProvider) ? "timestamp" : "_c0";
     syncOnce(TestHelpers.makeConfig(
-            tableBasePath, WriteOperationType.INSERT, CsvDFSSource.class.getName(),
-            transformerClassNames, PROPS_FILENAME_TEST_CSV, false,
-            useSchemaProvider, 1000, false, null, null, sourceOrderingField, null));
+        tableBasePath, WriteOperationType.INSERT, CsvDFSSource.class.getName(),
+        transformerClassNames, PROPS_FILENAME_TEST_CSV, false,
+        useSchemaProvider, 1000, false, null, null, sourceOrderingField, null));
     assertRecordCount(CSV_NUM_RECORDS, tableBasePath, sqlContext);
     testNum++;
   }

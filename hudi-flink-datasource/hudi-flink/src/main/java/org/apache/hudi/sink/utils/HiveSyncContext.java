@@ -19,6 +19,8 @@
 package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -78,8 +80,8 @@ public class HiveSyncContext {
     HiveSyncMode syncMode = HiveSyncMode.of(props.getProperty(HIVE_SYNC_MODE.key()));
     if (syncMode == HiveSyncMode.GLUE) {
       return ((HiveSyncTool) ReflectionUtils.loadClass(AWS_GLUE_CATALOG_SYNC_TOOL_CLASS,
-          new Class<?>[] {Properties.class, org.apache.hadoop.conf.Configuration.class},
-          props, hiveConf));
+          new Class<?>[] {Properties.class, org.apache.hadoop.conf.Configuration.class, Option.class},
+          props, hiveConf, Option.<HoodieTableMetaClient>empty()));
     }
     return new HiveSyncTool(props, hiveConf);
   }

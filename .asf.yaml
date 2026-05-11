@@ -34,6 +34,7 @@ github:
     issues: true
     projects: true
     discussions: true
+    automerge_allowed: true
   enabled_merge_buttons:
     squash:  true
     merge:   false
@@ -42,6 +43,64 @@ github:
     master:
       required_pull_request_reviews:
         required_approving_review_count: 1
+      required_status_checks:
+        strict: false
+        contexts:
+          - validate-source
+          - validate-pr
+          - validate-pr-title
+          - test-spark-client-and-hadoop-common (scala-2.12, spark3.5, flink1.18)
+          - test-utilities (scala-2.12, spark3.5, flink1.18)
+          - test-common-and-other-modules (scala-2.12, spark3.5, flink1.18)
+          - test-hudi-hadoop-mr-and-hudi-java-client (scala-2.12, spark3.5, flink1.20)
+          - test-hudi-trino-plugin
+          - test-spark-java-tests-part1 (scala-2.12, spark3.3, hudi-spark-datasource/hudi-spark3.3.x)
+          - test-spark-java-tests-part1 (scala-2.12, spark3.4, hudi-spark-datasource/hudi-spark3.4.x)
+          - test-spark-java-tests-part1 (scala-2.12, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
+          - test-spark-java-tests-part2 (scala-2.12, spark3.3, hudi-spark-datasource/hudi-spark3.3.x)
+          - test-spark-java-tests-part2 (scala-2.12, spark3.4, hudi-spark-datasource/hudi-spark3.4.x)
+          - test-spark-java-tests-part2 (scala-2.12, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
+          - test-spark-java-tests-part3 (scala-2.12, spark3.3, hudi-spark-datasource/hudi-spark3.3.x)
+          - test-spark-java-tests-part3 (scala-2.12, spark3.4, hudi-spark-datasource/hudi-spark3.4.x)
+          - test-spark-java-tests-part3 (scala-2.12, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
+          - test-spark-scala-dml-tests (scala-2.12, spark3.3, hudi-spark-datasource/hudi-spark3.3.x)
+          - test-spark-scala-dml-tests (scala-2.12, spark3.4, hudi-spark-datasource/hudi-spark3.4.x)
+          - test-spark-scala-dml-tests (scala-2.12, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
+          - test-spark-scala-other-tests (scala-2.12, spark3.3, hudi-spark-datasource/hudi-spark3.3.x)
+          - test-spark-scala-other-tests (scala-2.12, spark3.4, hudi-spark-datasource/hudi-spark3.4.x)
+          - test-spark-scala-other-tests (scala-2.12, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
+          - test-spark-java17-java-tests-part1 (scala-2.13, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
+          - test-spark-java17-java-tests-part1 (scala-2.13, spark4.0, hudi-spark-datasource/hudi-spark4.0.x)
+          - test-spark-java17-java-tests-part2 (scala-2.13, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
+          - test-spark-java17-java-tests-part2 (scala-2.13, spark4.0, hudi-spark-datasource/hudi-spark4.0.x)
+          - test-spark-java17-java-tests-part3 (scala-2.13, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
+          - test-spark-java17-java-tests-part3 (scala-2.13, spark4.0, hudi-spark-datasource/hudi-spark4.0.x)
+          - test-spark-java17-scala-dml-tests (scala-2.13, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
+          - test-spark-java17-scala-dml-tests (scala-2.13, spark4.0, hudi-spark-datasource/hudi-spark4.0.x)
+          - test-spark-java17-scala-other-tests (scala-2.13, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
+          - test-spark-java17-scala-other-tests (scala-2.13, spark4.0, hudi-spark-datasource/hudi-spark4.0.x)
+          - test-flink-1 (flink1.17, 1.11.4, 1.12.3)
+          - test-flink-1 (flink1.18, 1.11.4, 1.13.1)
+          - test-flink-1 (flink1.19, 1.11.4, 1.13.1)
+          - test-flink-1 (flink1.20, 1.11.4, 1.13.1)
+          - test-flink-1 (flink2.0, 1.11.4, 1.14.4)
+          - test-flink-1 (flink2.1, 1.11.4, 1.15.2)
+          - test-flink-2 (flink1.20, 1.11.4, 1.13.1)
+          - build-spark-java17 (scala-2.12, spark3.3, hudi-spark-datasource/hudi-spark3.3.x)
+          - build-spark-java17 (scala-2.12, spark3.4, hudi-spark-datasource/hudi-spark3.4.x)
+          - build-spark-java17 (scala-2.12, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
+          - build-flink-java17 (scala-2.12, flink1.20, 1.11.4, 1.13.1)
+          - validate-bundles (scala-2.12, flink1.17, 1.11.4, 1.12.3, spark3.3, spark3.3.4)
+          - validate-bundles (scala-2.12, flink1.18, 1.11.4, 1.13.1, spark3.4, spark3.4.3)
+          - validate-bundles (scala-2.13, flink1.19, 1.11.4, 1.13.1, spark3.5, spark3.5.1)
+          - validate-bundles (scala-2.13, flink1.20, 1.11.4, 1.13.1, spark3.5, spark3.5.1)
+          - validate-bundle-spark4 (scala-2.13, flink1.20, 1.11.4, 1.13.1, spark4.0, spark4.0.0)
+          - validate-bundles-java11 (scala-2.12, flink2.0, 1.11.4, 1.14.4, spark3.5, spark3.5.1)
+          - validate-bundles-java11 (scala-2.12, flink2.1, 1.11.4, 1.15.2, spark3.5, spark3.5.1)
+          - docker-java17-test (scala-2.12, flink1.20, spark3.5, spark3.5.0)
+          - docker-java17-test (scala-2.13, flink1.20, spark3.5, spark3.5.0)
+          - docker-java17-test (scala-2.13, flink1.20, spark4.0, spark4.0.0)
+          - integration-tests (spark3.5, flink1.20, spark-3.5.3/spark-3.5.3-bin-hadoop3.tgz)
   collaborators:
     - ad1happy2go
     - rangareddy

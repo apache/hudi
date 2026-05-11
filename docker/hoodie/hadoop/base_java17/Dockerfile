@@ -15,7 +15,23 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM eclipse-temurin:17-jdk
+# --- Stage 1: fetch + extract Hadoop (throwaway) ---
+FROM eclipse-temurin:17-jre-jammy AS hadoop-builder
+
+ARG HADOOP_VERSION=3.4.0
+ARG HADOOP_URL=https://archive.apache.org/dist/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz
+
+RUN set -x \
+    && DEBIAN_FRONTEND=noninteractive apt-get -yq update \
+    && apt-get -yq install --no-install-recommends curl ca-certificates \
+    && curl -fSL "${HADOOP_URL}" -o /tmp/hadoop.tar.gz \
+    && mkdir -p /opt \
+    && tar -xzf /tmp/hadoop.tar.gz -C /opt/ \
+    && rm /tmp/hadoop.tar.gz \
+    && mkdir -p /opt/hadoop-${HADOOP_VERSION}/logs
+
+# --- Stage 2: runtime ---
+FROM eclipse-temurin:17-jre-jammy
 LABEL maintainer="Hoodie"
 USER root
 
@@ -23,28 +39,23 @@ USER root
 ENV LANG C.UTF-8
 
 ARG HADOOP_VERSION=3.4.0
-ARG HADOOP_URL=https://archive.apache.org/dist/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz
-ENV HADOOP_VERSION ${HADOOP_VERSION}
-ENV HADOOP_URL ${HADOOP_URL}
+ENV HADOOP_VERSION=${HADOOP_VERSION}
 
-RUN set -x \
-    && DEBIAN_FRONTEND=noninteractive apt-get -yq update && apt-get -yq install curl wget netcat-openbsd procps \
-    && echo "Fetch URL2 is : ${HADOOP_URL}" \
-    && curl -fSL "${HADOOP_URL}" -o /tmp/hadoop.tar.gz \
-    && curl -fSL "${HADOOP_URL}.asc" -o /tmp/hadoop.tar.gz.asc \
-    && mkdir -p /opt/hadoop-$HADOOP_VERSION/logs \
-    && tar -xvf /tmp/hadoop.tar.gz -C /opt/ \
-    && rm /tmp/hadoop.tar.gz* \
-    && ln -s /opt/hadoop-$HADOOP_VERSION/etc/hadoop /etc/hadoop \
+RUN DEBIAN_FRONTEND=noninteractive apt-get -yq update \
+    && apt-get -yq install --no-install-recommends netcat-openbsd procps \
+    && rm -rf /var/lib/apt/lists/* \
     && mkdir /hadoop-data
 
-ENV HADOOP_PREFIX=/opt/hadoop-$HADOOP_VERSION
+COPY --from=hadoop-builder /opt/hadoop-${HADOOP_VERSION} /opt/hadoop-${HADOOP_VERSION}
+RUN ln -s /opt/hadoop-${HADOOP_VERSION}/etc/hadoop /etc/hadoop
+
+ENV HADOOP_PREFIX=/opt/hadoop-${HADOOP_VERSION}
 ENV HADOOP_CONF_DIR=/etc/hadoop
 ENV MULTIHOMED_NETWORK=1
 ENV HADOOP_HOME=${HADOOP_PREFIX}
 ENV HADOOP_INSTALL=${HADOOP_HOME}
 ENV USER=root
-ENV PATH /usr/bin:/bin:$HADOOP_PREFIX/bin/:$PATH
+ENV PATH=/usr/bin:/bin:${HADOOP_PREFIX}/bin/:$PATH
 
 # Exposing a union of ports across hadoop versions
 # Well known ports including ssh

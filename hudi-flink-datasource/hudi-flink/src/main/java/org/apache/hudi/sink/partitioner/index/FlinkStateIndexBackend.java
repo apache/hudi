@@ -25,9 +25,9 @@ import org.apache.flink.api.common.state.ValueState;
 import java.io.IOException;
 
 /**
- * An implementation of {@link IndexBackend} based on flink keyed value state.
+ * An implementation of {@link GlobalIndexBackend} based on flink keyed value state.
  */
-public class FlinkStateIndexBackend implements IndexBackend {
+public class FlinkStateIndexBackend implements GlobalIndexBackend {
 
   private final ValueState<HoodieRecordGlobalLocation> indexState;
 

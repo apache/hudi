@@ -35,6 +35,7 @@ The modules are organized in a layered architecture to maximize code reuse acros
 | `hudi-spark3.4.x` | Spark 3.4.x-specific adapter implementation. |
 | `hudi-spark3.5.x` | Spark 3.5.x-specific adapter implementation (default). |
 | `hudi-spark4.0.x` | Spark 4.0.x-specific adapter implementation. |
+| `hudi-spark4.1.x` | Spark 4.1.x-specific adapter implementation. |
 | `hudi-spark` | Main Spark datasource module containing Spark Session extensions, stored procedures, SQL parser, and logical plans. |
 
 ## Spark Version Support
@@ -45,6 +46,7 @@ The modules are organized in a layered architecture to maximize code reuse acros
 | 3.4.x | `hudi-spark3.4.x` | 2.12 | 11+ | `-Dspark3.4` |
 | 3.5.x (default) | `hudi-spark3.5.x` | 2.12, 2.13 | 11+ | `-Dspark3.5` |
 | 4.0.x | `hudi-spark4.0.x` | 2.13 | 17+ | `-Dspark4.0` |
+| 4.1.x | `hudi-spark4.1.x` | 2.13 | 17+ | `-Dspark4.1` |
 
 ## Key Features
 

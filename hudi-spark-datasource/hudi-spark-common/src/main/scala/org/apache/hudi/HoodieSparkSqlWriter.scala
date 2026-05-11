@@ -368,7 +368,8 @@ class HoodieSparkSqlWriterInternal {
         (s.getName, toScalaOption(s.getNamespace).orNull))
         .getOrElse(getRecordNameAndNamespace(tblName))
 
-      val sourceSchema = convertStructTypeToHoodieSchema(df.schema, avroRecordName, avroRecordNamespace)
+      val sourceSchema = HoodieSchemaConversionUtils.convertUserStructTypeToHoodieSchema(
+        df.schema, avroRecordName, avroRecordNamespace)
       val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient).orElse {
         // In case we need to reconcile the schema and schema evolution is enabled,
         // we will force-apply schema evolution to the writer's schema
@@ -722,7 +723,7 @@ class HoodieSparkSqlWriterInternal {
     var schema: String = null
     if (df.schema.nonEmpty) {
       val (structName, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(tableName)
-      schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(df.schema, structName, namespace).toString
+      schema = HoodieSchemaConversionUtils.convertUserStructTypeToHoodieSchema(df.schema, structName, namespace).toString
     } else {
       schema = HoodieSchema.NULL_SCHEMA.toString
     }

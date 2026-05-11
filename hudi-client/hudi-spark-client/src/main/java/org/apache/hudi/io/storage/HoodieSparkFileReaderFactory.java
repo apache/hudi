@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
@@ -49,8 +50,10 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
   }
 
   @Override
-  protected HoodieFileReader newLanceFileReader(StoragePath path) {
-    return new HoodieSparkLanceReader(path);
+  protected HoodieFileReader newLanceFileReader(HoodieConfig hoodieConfig, StoragePath path) {
+    long dataAllocatorSize = hoodieConfig.getLongOrDefault(HoodieStorageConfig.LANCE_READ_ALLOCATOR_SIZE_BYTES);
+    long metadataAllocatorSize = hoodieConfig.getLongOrDefault(HoodieStorageConfig.LANCE_READ_METADATA_ALLOCATOR_SIZE_BYTES);
+    return new HoodieSparkLanceReader(path, dataAllocatorSize, metadataAllocatorSize);
   }
 
   @Override

@@ -146,9 +146,19 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   void deleteInstantFileIfExists(HoodieInstant instant);
 
   /**
-   * Returns most recent instant having valid schema in its {@link HoodieCommitMetadata}
+   * Returns most recent instant having valid schema in its {@link HoodieCommitMetadata},
+   * restricted to operations where {@link WriteOperationType#canUpdateSchema} is true.
    */
   Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataWithValidSchema();
+
+  /**
+   * Returns most recent instant having valid schema in its {@link HoodieCommitMetadata}.
+   *
+   * @param filterForSchemaMutableOperations if true, only considers commits where
+   *        {@link WriteOperationType#canUpdateSchema} is true (original behavior).
+   *        If false, considers any commit type with a non-empty schema.
+   */
+  Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataWithValidSchema(boolean filterForSchemaMutableOperations);
 
   /**
    * Get the last instant with valid data, and convert this to HoodieCommitMetadata

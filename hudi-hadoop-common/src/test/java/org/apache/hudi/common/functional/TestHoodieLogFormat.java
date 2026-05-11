@@ -234,8 +234,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     long size = writer.getCurrentSize();
     assertTrue(size > 0, "We just wrote a block - size should be > 0");
+    writer.sync();
     assertEquals(size, storage.getPathInfo(writer.getLogFile().getPath()).getLength(),
-        "Write should be auto-flushed. The size reported by FileStatus and the writer should match");
+        "After explicit sync, FileStatus length should match the writer's reported size");
     assertEquals(size, result.size());
     assertEquals(writer.getLogFile(), result.logFile());
     assertEquals(0, result.offset());
@@ -376,8 +377,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     long size2 = writer.getCurrentSize();
     assertTrue(size2 > size1, "We just wrote a new block - size2 should be > size1");
+    writer.sync();
     assertEquals(size2, storage.getPathInfo(writer.getLogFile().getPath()).getLength(),
-        "Write should be auto-flushed. The size reported by FileStatus and the writer should match");
+        "After explicit sync, FileStatus length should match the writer's reported size");
     writer.close();
 
     // Close and Open again and append 100 more records
@@ -394,8 +396,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     long size3 = writer.getCurrentSize();
     assertTrue(size3 > size2, "We just wrote a new block - size3 should be > size2");
+    writer.sync();
     assertEquals(size3, storage.getPathInfo(writer.getLogFile().getPath()).getLength(),
-        "Write should be auto-flushed. The size reported by FileStatus and the writer should match");
+        "After explicit sync, FileStatus length should match the writer's reported size");
     writer.close();
 
     // Cannot get the current size after closing the log

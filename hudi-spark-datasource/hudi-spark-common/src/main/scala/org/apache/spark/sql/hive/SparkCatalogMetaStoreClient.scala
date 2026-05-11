@@ -152,7 +152,11 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
   override def isLocalMetaStore(): Boolean = unsupported[Boolean]()
   override def reconnect(): Unit = unsupported[Unit]()
   override def close(): Unit = unsupported[Unit]()
-  override def setMetaConf(arg0: String, arg1: String): Unit = unsupported[Unit]()
+  // setMetaConf is no-op: HoodieHiveSyncClient.setMetaConf forwards
+  // hive.metastore.callerContext.* values to the metastore for audit/tracing. With Spark's
+  // external catalog there is no remote HMS to forward to, so accept the call silently
+  // instead of breaking sync clients that exercise the standard IMetaStoreClient contract.
+  override def setMetaConf(arg0: String, arg1: String): Unit = {}
   override def getMetaConf(arg0: String): String = unsupported[String]()
   override def getDatabases(arg0: String): java.util.List[String] = unsupported[java.util.List[String]]()
   override def getAllDatabases(): java.util.List[String] = unsupported[java.util.List[String]]()
@@ -302,6 +306,21 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
     val dataFields = cols.map(fs => StructField(fs.getName, CatalystSqlParser.parseDataType(fs.getType), nullable = true, Metadata.empty))
     val partitionFields = partCols.map(fs => StructField(fs.getName, CatalystSqlParser.parseDataType(fs.getType), nullable = true, Metadata.empty))
 
+    // Strip "spark.sql.*" properties before handing off to Spark's external catalog.
+    // HiveExternalCatalog.alterTable / createTable rejects such keys ("Cannot persist ...
+    // table property keys may not start with 'spark.sql.'") because they are reserved for
+    // Spark's internal use (provider, schema parts, create version). Spark re-derives and
+    // writes these from the CatalogTable itself, so dropping them on the way in is safe.
+    //
+    // Also strip "EXTERNAL". HMSDDLExecutor.createTable sets both
+    // `tableType=EXTERNAL_TABLE` and `parameters[EXTERNAL]=TRUE`. Spark's
+    // HiveExternalCatalog.verifyTableProperties rejects "EXTERNAL" as a property key
+    // ("Cannot set or change the preserved property key: 'EXTERNAL'") because it controls
+    // table type via CatalogTableType instead. The tableType field below already encodes
+    // that information, so dropping the property is safe.
+    val tableProperties = Option(table.getParameters).map(_.asScala.toMap).getOrElse(Map.empty)
+      .filterNot { case (k, _) => k.startsWith("spark.sql.") || k == "EXTERNAL" }
+
     CatalogTable(
       identifier = TableIdentifier(tbl, Some(db)),
       tableType = if ("EXTERNAL_TABLE".equalsIgnoreCase(table.getTableType)) CatalogTableType.EXTERNAL else CatalogTableType.MANAGED,
@@ -315,7 +334,7 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
       schema = StructType(dataFields ++ partitionFields),
       provider = Some("hudi"),
       partitionColumnNames = partCols.map(_.getName),
-      properties = Option(table.getParameters).map(_.asScala.toMap).getOrElse(Map.empty))
+      properties = tableProperties)
   }
 
   private def fromCatalogTable(table: CatalogTable): Table = {

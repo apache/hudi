@@ -18,6 +18,8 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.adapter.DataTypeAdapter;
+
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.apache.avro.generic.GenericFixed;
@@ -155,6 +157,9 @@ public class AvroToRowDataConverters {
       case MULTISET:
         return createMapConverter(type, utcTimezone);
       default:
+        if (DataTypeAdapter.isVariantType(type)) {
+          return createVariantConverter();
+        }
         throw new UnsupportedOperationException("Unsupported type: " + type);
     }
   }
@@ -209,6 +214,18 @@ public class AvroToRowDataConverters {
         result.put(key, value);
       }
       return new GenericMapData(result);
+    };
+  }
+
+  /**
+   * Creates a converter for Flink 2.1+ VARIANT LogicalType. The converter receives an Avro
+   * GenericRecord carrying metadata/value binary fields and produces a Flink
+   * {@code BinaryVariant}.
+   */
+  private static AvroToRowDataConverter createVariantConverter() {
+    return avroObject -> {
+      IndexedRecord record = (IndexedRecord) avroObject;
+      return DataTypeAdapter.createVariant(convertToBytes(record.get(1)), convertToBytes(record.get(0)));
     };
   }
 

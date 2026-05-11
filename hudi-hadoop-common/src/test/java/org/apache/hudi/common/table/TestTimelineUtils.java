@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.BaseTimelineV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
@@ -662,4 +663,91 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
     droppedPartitions = TimelineUtils.getDroppedPartitions(metaClient, Option.empty(), Option.empty());
     assertTrue(droppedPartitions.isEmpty());
   }
+
+  @Test
+  void testGetLastCommitMetadataWithSchemaIgnoresOperationType() throws Exception {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+
+    String schemaStr = "{\"type\":\"record\",\"name\":\"test\",\"fields\":[]}";
+    Map<String, String> extraMetadata = new HashMap<>();
+    extraMetadata.put(HoodieCommitMetadata.SCHEMA_KEY, schemaStr);
+    HoodieInstant clusterInstant = new HoodieInstant(INFLIGHT, CLUSTERING_ACTION, "1",
+        InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    activeTimeline.createNewInstant(clusterInstant);
+    activeTimeline.transitionClusterInflightToComplete(true, clusterInstant,
+        getReplaceCommitMetadata(basePath, "1", "p1", 0, "p1", 3, extraMetadata, WriteOperationType.CLUSTER));
+
+    metaClient.reloadActiveTimeline();
+
+    // getLastCommitMetadataWithValidSchema() should NOT find it (filtered by canUpdateSchema)
+    assertFalse(metaClient.getActiveTimeline().getLastCommitMetadataWithValidSchema().isPresent(),
+        "canUpdateSchema filter should exclude clustering");
+
+    // getLastCommitMetadataWithValidSchema(false) SHOULD find it (no operation type filter)
+    assertTrue(metaClient.getActiveTimeline().getLastCommitMetadataWithValidSchema(false).isPresent(),
+        "getLastCommitMetadataWithValidSchema(false) should find schema in clustering commit");
+    assertEquals(schemaStr,
+        metaClient.getActiveTimeline().getLastCommitMetadataWithValidSchema(false).get().getRight()
+            .getMetadata(HoodieCommitMetadata.SCHEMA_KEY));
+  }
+
+  @Test
+  void testGetLastCommitMetadataWithSchemaReturnsEmptyWhenNoSchema() throws Exception {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+
+    HoodieInstant instant = new HoodieInstant(INFLIGHT, COMMIT_ACTION, "1",
+        InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    activeTimeline.createNewInstant(instant);
+    activeTimeline.saveAsComplete(instant, getCommitMetadata(basePath, "1", "1", 2, Collections.emptyMap()));
+
+    metaClient.reloadActiveTimeline();
+
+    assertFalse(metaClient.getActiveTimeline().getLastCommitMetadataWithValidSchema(false).isPresent(),
+        "Should return empty when no commits have schema");
+  }
+
+  @Test
+  void testGetLastCommitMetadataWithSchemaIgnoresOperationType_V1() throws Exception {
+    cleanMetaClient();
+    initMetaClient(true);
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+
+    String schemaStr = "{\"type\":\"record\",\"name\":\"test\",\"fields\":[]}";
+    Map<String, String> extraMetadata = new HashMap<>();
+    extraMetadata.put(HoodieCommitMetadata.SCHEMA_KEY, schemaStr);
+    HoodieInstant clusterInstant = new HoodieInstant(INFLIGHT, REPLACE_COMMIT_ACTION, "1",
+        InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    activeTimeline.createNewInstant(clusterInstant);
+    activeTimeline.transitionClusterInflightToComplete(true, clusterInstant,
+        getReplaceCommitMetadata(basePath, "1", "p1", 0, "p1", 3, extraMetadata, WriteOperationType.CLUSTER));
+
+    metaClient.reloadActiveTimeline();
+
+    assertFalse(metaClient.getActiveTimeline().getLastCommitMetadataWithValidSchema().isPresent(),
+        "canUpdateSchema filter should exclude clustering in V1 timeline");
+
+    assertTrue(metaClient.getActiveTimeline().getLastCommitMetadataWithValidSchema(false).isPresent(),
+        "getLastCommitMetadataWithValidSchema(false) should find schema in V1 clustering commit");
+    assertEquals(schemaStr,
+        metaClient.getActiveTimeline().getLastCommitMetadataWithValidSchema(false).get().getRight()
+            .getMetadata(HoodieCommitMetadata.SCHEMA_KEY));
+  }
+
+  @Test
+  void testGetLastCommitMetadataWithSchemaReturnsEmptyWhenNoSchema_V1() throws Exception {
+    cleanMetaClient();
+    initMetaClient(true);
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+
+    HoodieInstant instant = new HoodieInstant(INFLIGHT, COMMIT_ACTION, "1",
+        InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    activeTimeline.createNewInstant(instant);
+    activeTimeline.saveAsComplete(instant, getCommitMetadata(basePath, "1", "1", 2, Collections.emptyMap()));
+
+    metaClient.reloadActiveTimeline();
+
+    assertFalse(metaClient.getActiveTimeline().getLastCommitMetadataWithValidSchema(false).isPresent(),
+        "Should return empty when no V1 commits have schema");
+  }
+
 }

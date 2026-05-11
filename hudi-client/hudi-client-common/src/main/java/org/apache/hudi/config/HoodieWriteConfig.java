@@ -768,21 +768,22 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.2.0")
       .withDocumentation("Comma-separated list of extra metadata keys that should be automatically carried forward "
-          + "to every new commit. These keys will be read from recent commit metadata and included in new commits, "
-          + "ensuring they remain accessible without walking the timeline or worrying about archival. "
-          + "This is useful for tracking checkpoint information (e.g., Kafka offsets, Flink checkpoints) or any metadata "
-          + "that needs to persist across commits. New values override old ones. Only applies to data table commits.");
+          + "to every new commit and clean instant. These keys will be read from recent commit and clean metadata "
+          + "and included in new commits/cleans, ensuring they remain accessible without walking the timeline or "
+          + "worrying about archival. This is useful for tracking checkpoint information (e.g., Kafka offsets, "
+          + "Flink checkpoints) or any metadata that needs to persist across commits. New values override old ones. "
+          + "Only applies to data table commits and clean instants.");
 
   public static final ConfigProperty<Integer> ROLLING_METADATA_TIMELINE_LOOKBACK_COMMITS = ConfigProperty
       .key("hoodie.write.rolling.metadata.timeline.lookback.commits")
       .defaultValue(10)
       .markAdvanced()
       .sinceVersion("1.2.0")
-      .withDocumentation("Maximum number of completed commits to walk back in the timeline when searching for "
-          + "rolling metadata keys. If a rolling metadata key is not found in the latest commit, the system will "
-          + "walk back up to this many commits to find the most recent value. This ensures rolling metadata is "
-          + "preserved even if some commits don't update all keys. Higher values provide more resilience but may "
-          + "impact performance. Only applies when hoodie.write.rolling.metadata.keys is configured.");
+      .withDocumentation("Maximum number of completed instants (commits and clean) to walk back in the timeline "
+          + "when searching for rolling metadata keys. If a rolling metadata key is not found in the latest instant, "
+          + "the system will walk back up to this many instants to find the most recent value. This ensures rolling "
+          + "metadata is preserved even if some instants don't carry all keys. Higher values provide more resilience "
+          + "but may impact performance. Only applies when hoodie.write.rolling.metadata.keys is configured.");
 
   public static final ConfigProperty<Boolean> ALLOW_OPERATION_METADATA_FIELD = ConfigProperty
       .key("hoodie.allow.operation.metadata.field")

@@ -310,7 +310,7 @@ public class HoodieTableSource extends FileIndexReader implements
             tableSchema.toString(),
             HoodieSchemaConverter.convertToSchema(requiredRowType).toString(),
             new ArrayList<>());
-    boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ;
+    boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ && context.isStreaming();
     if (conf.get(FlinkOptions.CDC_ENABLED)) {
       List<DataType> fieldTypes = rowDataType.getChildren();
       splitReaderFunction = new HoodieCdcSplitReaderFunction(
@@ -353,6 +353,9 @@ public class HoodieTableSource extends FileIndexReader implements
         .maxCompactionMemoryInBytes(conf.get(FlinkOptions.COMPACTION_MAX_MEMORY))
         .maxPendingSplits(conf.get(FlinkOptions.READ_SPLITS_LIMIT))
         .partitionPruner(partitionPruner)
+        .columnStatsProbe(columnStatsProbe)
+        .partitionBucketIdFunc(PartitionBucketIdFunc.create(this.dataBucketFunc,
+            this.metaClient, conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)))
         .isStreaming(conf.get(FlinkOptions.READ_AS_STREAMING))
         .limit(limit)
         .build();

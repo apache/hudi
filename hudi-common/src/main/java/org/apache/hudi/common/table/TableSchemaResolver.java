@@ -380,8 +380,9 @@ public class TableSchemaResolver {
 
   private Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLatestCommitMetadataWithValidSchema() {
     if (latestCommitWithValidSchema == null) {
+      boolean filterForSchemaMutableOperations = false;
       Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata =
-          metaClient.getActiveTimeline().getLastCommitMetadataWithValidSchema();
+          metaClient.getActiveTimeline().getLastCommitMetadataWithValidSchema(filterForSchemaMutableOperations);
       if (instantAndCommitMetadata.isPresent()) {
         HoodieInstant instant = instantAndCommitMetadata.get().getLeft();
         HoodieCommitMetadata metadata = instantAndCommitMetadata.get().getRight();

@@ -173,7 +173,8 @@ public class HoodieFlinkWriteClient<T>
   protected void writeToMetadataTable(boolean skipStreamingWritesToMetadataTable, HoodieTable table, String instantTime, List<HoodieWriteStat> partialMetadataTableWriteStats,
                                       HoodieCommitMetadata metadata) {
     if (!skipStreamingWritesToMetadataTable
-        && isStreamingWriteToMetadataEnabled(table)) {
+        && isStreamingWriteToMetadataEnabled(table)
+        && WriteOperationType.streamingWritesToMetadataSupported(getOperationType())) {
       streamingMetadataWriteHandler.commitToMetadataTable(table, instantTime, metadata, partialMetadataTableWriteStats);
     } else {
       super.writeToMetadataTable(skipStreamingWritesToMetadataTable, table, instantTime, partialMetadataTableWriteStats, metadata);

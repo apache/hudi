@@ -57,13 +57,15 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val adaptIngestionTargetLogicalRelations: RuleBuilder = session => AdaptIngestionTargetLogicalRelations(session)
 
     rules += adaptIngestionTargetLogicalRelations
-    val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark4_0)
+    val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark4_1) {
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark41DataSourceV2ToV1Fallback"
+    } else if (HoodieSparkUtils.isSpark4_0) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark40DataSourceV2ToV1Fallback"
-    else if (HoodieSparkUtils.isSpark3_5)
+    } else if (HoodieSparkUtils.isSpark3_5) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark35DataSourceV2ToV1Fallback"
-    else if (HoodieSparkUtils.isSpark3_4)
+    } else if (HoodieSparkUtils.isSpark3_4) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark34DataSourceV2ToV1Fallback"
-    else {
+    } else {
       // Spark 3.3.x
       "org.apache.spark.sql.hudi.analysis.HoodieSpark33DataSourceV2ToV1Fallback"
     }
@@ -81,7 +83,10 @@ object HoodieAnalysis extends SparkAdapterSupport {
     // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
     rules ++= Seq(dataSourceV2ToV1Fallback, resolveReferences)
 
-    if (HoodieSparkUtils.isSpark4_0) {
+    if (HoodieSparkUtils.isSpark4_1) {
+      rules += (_ => instantiateKlass(
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark41ResolveColumnsForInsertInto"))
+    } else if (HoodieSparkUtils.isSpark4_0) {
       rules += (_ => instantiateKlass(
         "org.apache.spark.sql.hudi.analysis.HoodieSpark40ResolveColumnsForInsertInto"))
     } else if (HoodieSparkUtils.isSpark3_5) {
@@ -90,7 +95,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
     }
 
     val resolveAlterTableCommandsClass =
-      if (HoodieSparkUtils.gteqSpark4_0) {
+      if (HoodieSparkUtils.isSpark4_1) {
+        "org.apache.spark.sql.hudi.Spark41ResolveHudiAlterTableCommand"
+      } else if (HoodieSparkUtils.isSpark4_0) {
         "org.apache.spark.sql.hudi.Spark40ResolveHudiAlterTableCommand"
       } else if (HoodieSparkUtils.gteqSpark3_5) {
         "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
@@ -136,7 +143,10 @@ object HoodieAnalysis extends SparkAdapterSupport {
       // Default rules
     )
 
-    val nestedSchemaPruningClass = if (HoodieSparkUtils.gteqSpark4_0) {
+    val nestedSchemaPruningClass =
+      if (HoodieSparkUtils.isSpark4_1) {
+        "org.apache.spark.sql.execution.datasources.Spark41NestedSchemaPruning"
+      } else if (HoodieSparkUtils.isSpark4_0) {
         "org.apache.spark.sql.execution.datasources.Spark40NestedSchemaPruning"
       } else if (HoodieSparkUtils.gteqSpark3_5) {
         "org.apache.spark.sql.execution.datasources.Spark35NestedSchemaPruning"

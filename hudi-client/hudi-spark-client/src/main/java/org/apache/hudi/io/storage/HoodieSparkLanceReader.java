@@ -22,6 +22,7 @@ import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 import org.apache.hudi.common.bloom.SimpleBloomFilter;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -43,6 +44,8 @@ import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.LanceArrowUtils;
+import org.lance.file.BlobReadMode;
+import org.lance.file.FileReadOptions;
 import org.lance.file.LanceFileReader;
 
 import java.io.IOException;
@@ -63,23 +66,36 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
  */
 @Slf4j
 public class HoodieSparkLanceReader implements HoodieSparkFileReader {
-  // Memory size for data read operations: 120MB
-  public static final long LANCE_DATA_ALLOCATOR_SIZE = 120 * 1024 * 1024;
-
-  // Memory size for metadata operations: 8MB
-  private static final long LANCE_METADATA_ALLOCATOR_SIZE = 8 * 1024 * 1024;
-
   // number of rows to read
   private static final int DEFAULT_BATCH_SIZE = 512;
   private final StoragePath path;
+  private final long dataAllocatorSize;
   private final BufferAllocator metadataAllocator;
   private final LanceFileReader lanceMetadataReader;
   private final Schema arrowSchema;
 
+  /**
+   * Convenience constructor using default Arrow allocator sizes from {@link HoodieStorageConfig}.
+   * Prefer {@link #HoodieSparkLanceReader(StoragePath, long, long)} when caller has access to a
+   * configured value (e.g. via the file-reader factory).
+   */
   public HoodieSparkLanceReader(StoragePath path) {
+    this(path,
+        Long.parseLong(HoodieStorageConfig.LANCE_READ_ALLOCATOR_SIZE_BYTES.defaultValue()),
+        Long.parseLong(HoodieStorageConfig.LANCE_READ_METADATA_ALLOCATOR_SIZE_BYTES.defaultValue()));
+  }
+
+  /**
+   * @param path Lance file to read
+   * @param dataAllocatorSize Maximum bytes for the per-read Arrow child allocator that holds
+   *                          column data. Sized so Arrow's internal buffer doublings stay within cap.
+   * @param metadataAllocatorSize Maximum bytes for the small Arrow allocator backing schema/footer reads.
+   */
+  public HoodieSparkLanceReader(StoragePath path, long dataAllocatorSize, long metadataAllocatorSize) {
     this.path = path;
+    this.dataAllocatorSize = dataAllocatorSize;
     metadataAllocator = HoodieArrowAllocator.newChildAllocator(
-        getClass().getSimpleName() + "-metadata-" + path.getName(), LANCE_METADATA_ALLOCATOR_SIZE);
+        getClass().getSimpleName() + "-metadata-" + path.getName(), metadataAllocatorSize);
     try {
       lanceMetadataReader = LanceFileReader.open(path.toString(), metadataAllocator);
       arrowSchema = lanceMetadataReader.schema();
@@ -178,7 +194,7 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
     StructType requestedSparkSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(requestedSchema);
 
     BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
-        getClass().getSimpleName() + "-data-" + path.getName(), LANCE_DATA_ALLOCATOR_SIZE);
+        getClass().getSimpleName() + "-data-" + path.getName(), dataAllocatorSize);
 
     try {
       LanceFileReader lanceReader = LanceFileReader.open(path.toString(), allocator);
@@ -189,8 +205,10 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
         columnNames.add(field.name());
       }
 
-      // Read only the requested columns from Lance file for efficiency
-      ArrowReader arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE);
+      // Pinned to CONTENT: compaction/merge/log-replay need actual bytes to rewrite.
+      // The user-facing `hoodie.read.blob.inline.mode` is honored by SparkLanceReaderBase.
+      FileReadOptions readOpts = FileReadOptions.builder().blobReadMode(BlobReadMode.CONTENT).build();
+      ArrowReader arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE, readOpts);
 
       return new LanceRecordIterator(allocator, lanceReader, arrowReader, requestedSparkSchema, path.toString());
     } catch (Exception e) {

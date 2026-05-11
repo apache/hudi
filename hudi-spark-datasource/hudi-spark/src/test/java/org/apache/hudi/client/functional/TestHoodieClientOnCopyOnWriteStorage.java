@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
@@ -55,8 +56,10 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -66,6 +69,7 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -1990,6 +1994,162 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       }
       throw (HoodieException) throwable;
     }
+  }
+
+  @Test
+  public void testRollingMetadataPreservedAcrossClusteringAfterArchival() throws Exception {
+    String schemaKey = HoodieCommitMetadata.SCHEMA_KEY;
+    dataGen = new HoodieTestDataGenerator(new String[] {DEFAULT_FIRST_PARTITION_PATH});
+
+    HoodieWriteConfig writeConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .compactionSmallFileSize(0).build())
+        .withRollingMetadataKeys(schemaKey)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .archiveCommitsWith(2, 3).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withAutoClean(false).build())
+        .build();
+
+    SparkRDDWriteClient client = getHoodieWriteClient(writeConfig);
+
+    // Insert multiple batches to create file groups for clustering
+    for (int i = 0; i < 5; i++) {
+      insertCommitWithSchema(client, dataGen, 20, TRIP_EXAMPLE_SCHEMA);
+    }
+
+    HoodieWriteConfig clusterConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA)
+        .withClusteringConfig(createClusteringBuilder(true, 1).build())
+        .withRollingMetadataKeys(schemaKey)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .archiveCommitsWith(2, 3).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withAutoClean(false).build())
+        .build();
+
+    for (int round = 0; round < 2; round++) {
+      SparkRDDWriteClient clusterWriter = getHoodieWriteClient(clusterConfig);
+      Option<String> clusteringInstant = clusterWriter.scheduleClustering(Option.empty());
+      assertTrue(clusteringInstant.isPresent(),
+          "Clustering plan should be created (round " + round + ")");
+      clusterWriter.cluster(clusteringInstant.get());
+
+      // Only insert after the first round so that the second clustering instant
+      // remains on the active timeline after archival
+      if (round < 1) {
+        for (int i = 0; i < 3; i++) {
+          insertCommitWithSchema(client, dataGen, 20, TRIP_EXAMPLE_SCHEMA);
+        }
+      }
+    }
+
+    client.archive();
+
+    HoodieTableMetaClient freshMeta = HoodieTableMetaClient.reload(metaClient);
+    HoodieTimeline completedTimeline = freshMeta.getActiveTimeline()
+        .getCommitsTimeline().filterCompletedInstants();
+
+    boolean foundSchemaInClustering = false;
+    for (HoodieInstant instant : completedTimeline.getInstants()) {
+      HoodieCommitMetadata metadata = completedTimeline.readCommitMetadata(instant);
+      if (metadata.getOperationType() == WriteOperationType.CLUSTER) {
+        String schema = metadata.getMetadata(schemaKey);
+        if (schema != null && !schema.isEmpty()) {
+          foundSchemaInClustering = true;
+          break;
+        }
+      }
+    }
+    assertTrue(foundSchemaInClustering,
+        "Schema should be rolled over into clustering commits via rolling metadata");
+
+    TableSchemaResolver resolver = new TableSchemaResolver(freshMeta);
+    assertTrue(resolver.getTableSchemaIfPresent(false).isPresent(),
+        "TableSchemaResolver should find schema even with clustering-only timeline");
+  }
+
+  @Test
+  public void testRollingMetadataPreservedInCleanCommits() throws Exception {
+    String schemaKey = HoodieCommitMetadata.SCHEMA_KEY;
+    dataGen = new HoodieTestDataGenerator(new String[] {DEFAULT_FIRST_PARTITION_PATH});
+
+    HoodieWriteConfig config = getConfigBuilder(TRIP_EXAMPLE_SCHEMA)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .compactionSmallFileSize(0).build())
+        .withRollingMetadataKeys(schemaKey)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withAutoClean(false)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .retainCommits(1)
+            .build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .archiveCommitsWith(10, 12).build())
+        .build();
+
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+
+    String firstCommit = client.startCommit();
+    List<HoodieRecord> records = dataGen.generateInserts(firstCommit, 100);
+    JavaRDD<WriteStatus> firstResult = client.insert(jsc.parallelize(records, 1), firstCommit);
+    client.commit(firstCommit, firstResult);
+
+    // Upsert several times to create superseded file versions
+    for (int i = 0; i < 4; i++) {
+      String commitTime = client.startCommit();
+      List<HoodieRecord> updates = dataGen.generateUpdates(commitTime, records);
+      JavaRDD<WriteStatus> result = client.upsert(jsc.parallelize(updates, 1), commitTime);
+      client.commit(commitTime, result);
+    }
+
+    // Run clean — retainCommits(1) means old file versions from earlier commits are eligible
+    HoodieCleanMetadata cleanResult = client.clean();
+    assertTrue(cleanResult != null, "Clean should produce metadata (files to clean exist)");
+
+    HoodieTableMetaClient freshMeta = HoodieTableMetaClient.reload(metaClient);
+    HoodieTimeline cleanTimeline = freshMeta.getActiveTimeline()
+        .getCleanerTimeline().filterCompletedInstants();
+    assertFalse(cleanTimeline.empty(), "Should have at least one clean instant");
+
+    HoodieInstant lastClean = cleanTimeline.lastInstant().get();
+    HoodieCleanMetadata cleanMetadata = cleanTimeline.readCleanMetadata(lastClean);
+
+    Map<String, String> cleanExtraMetadata = cleanMetadata.getExtraMetadata();
+    assertTrue(cleanExtraMetadata != null, "Clean metadata should have extraMetadata map");
+    assertTrue(cleanExtraMetadata.containsKey(schemaKey),
+        "Clean's extraMetadata should contain rolled-over schema key");
+    assertFalse(cleanExtraMetadata.get(schemaKey).isEmpty(),
+        "Rolled-over schema in clean should be non-empty");
+
+    // Now make one more commit with lookback=1. The rolling metadata walk should find
+    // the schema key in the clean instant (the most recent instant with the key).
+    HoodieWriteConfig lookback1Config = getConfigBuilder(TRIP_EXAMPLE_SCHEMA)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .compactionSmallFileSize(0).build())
+        .withRollingMetadataKeys(schemaKey)
+        .withRollingMetadataTimelineLookbackCommits(1)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withAutoClean(false)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .retainCommits(1)
+            .build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .archiveCommitsWith(10, 12).build())
+        .build();
+
+    SparkRDDWriteClient lookbackClient = getHoodieWriteClient(lookback1Config);
+    String nextCommit = lookbackClient.startCommit();
+    List<HoodieRecord> nextUpdates = dataGen.generateUpdates(nextCommit, records);
+    JavaRDD<WriteStatus> nextResult = lookbackClient.upsert(jsc.parallelize(nextUpdates, 1), nextCommit);
+    lookbackClient.commit(nextCommit, nextResult);
+
+    freshMeta = HoodieTableMetaClient.reload(metaClient);
+    HoodieTimeline commitsTimeline = freshMeta.getActiveTimeline()
+        .getCommitsTimeline().filterCompletedInstants();
+    HoodieInstant latestCommit = commitsTimeline.lastInstant().get();
+    HoodieCommitMetadata latestMeta = commitsTimeline.readCommitMetadata(latestCommit);
+    String rolledSchema = latestMeta.getMetadata(schemaKey);
+    assertFalse(StringUtils.isNullOrEmpty(rolledSchema),
+        "Schema should be rolled over into new commit even with lookback=1");
   }
 
   /**

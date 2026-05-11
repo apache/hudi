@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.ddl
 
-import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, QuickstartUtils}
+import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieSparkUtils, QuickstartUtils}
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -75,6 +75,8 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   }
 
   test("Test alter column types") {
+    // TODO: Fix reading ordering field with logical type on Spark 4.1 (https://github.com/apache/hudi/issues/18606)
+    assume(!HoodieSparkUtils.gteqSpark4_1, "Disabled on Spark 4.1 - see HUDI-18606")
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
@@ -146,6 +148,8 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   }
 
   test("Test alter column types 2") {
+    // TODO: Fix reading ordering field with logical type on Spark 4.1 (https://github.com/apache/hudi/issues/18606)
+    assume(!HoodieSparkUtils.gteqSpark4_1, "Disabled on Spark 4.1 - see HUDI-18606")
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName

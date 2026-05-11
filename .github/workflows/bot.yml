@@ -209,7 +209,7 @@ jobs:
             -v /var/run/docker.sock:/var/run/docker.sock \
             -w /hudi \
             hudi-ci \
-            /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn clean install -T 2 -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -Phudi-platform-service -Pthrift-gen-source -DskipTests=true -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS"
+            /bin/bash -c "MAVEN_OPTS='-Xmx8g' mvn clean install -T 2 -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -Phudi-platform-service -Pthrift-gen-source -DskipTests=true -Dmaven.compiler.maxmem=8192m -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS"
       - name: UT - common and other modules
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -611,6 +611,9 @@ jobs:
           - scalaProfile: "scala-2.13"
             sparkProfile: "spark4.0"
             sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark4.1"
+            sparkModules: "hudi-spark-datasource/hudi-spark4.1.x"
 
     steps:
       - uses: actions/checkout@v5
@@ -658,6 +661,9 @@ jobs:
           - scalaProfile: "scala-2.13"
             sparkProfile: "spark4.0"
             sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark4.1"
+            sparkModules: "hudi-spark-datasource/hudi-spark4.1.x"
 
     steps:
       - uses: actions/checkout@v5
@@ -718,6 +724,9 @@ jobs:
           - scalaProfile: "scala-2.13"
             sparkProfile: "spark4.0"
             sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark4.1"
+            sparkModules: "hudi-spark-datasource/hudi-spark4.1.x"
 
     steps:
       - uses: actions/checkout@v5
@@ -772,6 +781,9 @@ jobs:
           - scalaProfile: "scala-2.13"
             sparkProfile: "spark4.0"
             sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark4.1"
+            sparkModules: "hudi-spark-datasource/hudi-spark4.1.x"
 
     steps:
       - uses: actions/checkout@v5
@@ -826,6 +838,9 @@ jobs:
           - scalaProfile: "scala-2.13"
             sparkProfile: "spark4.0"
             sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark4.1"
+            sparkModules: "hudi-spark-datasource/hudi-spark4.1.x"
 
     steps:
       - uses: actions/checkout@v5
@@ -981,6 +996,10 @@ jobs:
             flinkProfile: 'flink1.20'
             sparkProfile: 'spark4.0'
             sparkRuntime: 'spark4.0.0'
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.20'
+            sparkProfile: 'spark4.1'
+            sparkRuntime: 'spark4.1.1'
 
     steps:
       - uses: actions/checkout@v5
@@ -1087,6 +1106,12 @@ jobs:
             flinkParquetVersion: '1.13.1'
             sparkProfile: 'spark4.0'
             sparkRuntime: 'spark4.0.0'
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.20'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.13.1'
+            sparkProfile: 'spark4.1'
+            sparkRuntime: 'spark4.1.1'
     steps:
       - uses: actions/checkout@v5
       - name: Set up JDK 17

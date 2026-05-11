@@ -574,4 +574,57 @@ class TestRollingMetadata extends SparkClientFunctionalTestHarness {
 
     client.close();
   }
+
+  /**
+   * Test that an empty-string value for a rolling metadata key is treated as missing,
+   * so the walkback still finds the most recent non-empty value.
+   */
+  @Test
+  public void testRollingMetadataEmptyStringTreatedAsMissing() throws IOException {
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+    HoodieWriteConfig config = getConfigBuilder(true)
+        .withPath(metaClient.getBasePath())
+        .withRollingMetadataKeys("checkpoint.offset")
+        .build();
+
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+
+    // First commit with valid rolling metadata value
+    String instant1 = client.createNewInstantTime(false);
+    List<HoodieRecord> records1 = dataGen.generateInserts(instant1, 10);
+    JavaRDD<HoodieRecord> writeRecords1 = jsc().parallelize(records1, 2);
+
+    WriteClientTestUtils.startCommitWithTime(client, instant1);
+    List<WriteStatus> writeStatuses1 = client.insert(writeRecords1, instant1).collect();
+    assertNoWriteErrors(writeStatuses1);
+
+    Map<String, String> extraMetadata1 = new HashMap<>();
+    extraMetadata1.put("checkpoint.offset", "1000");
+    client.commitStats(instant1, writeStatuses1.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+        Option.of(extraMetadata1), metaClient.getCommitActionType());
+
+    // Second commit explicitly sets the rolling key to empty string
+    String instant2 = client.createNewInstantTime(false);
+    List<HoodieRecord> records2 = dataGen.generateInserts(instant2, 10);
+    JavaRDD<HoodieRecord> writeRecords2 = jsc().parallelize(records2, 2);
+
+    WriteClientTestUtils.startCommitWithTime(client, instant2);
+    List<WriteStatus> writeStatuses2 = client.insert(writeRecords2, instant2).collect();
+    assertNoWriteErrors(writeStatuses2);
+
+    Map<String, String> extraMetadata2 = new HashMap<>();
+    extraMetadata2.put("checkpoint.offset", "");
+    client.commitStats(instant2, writeStatuses2.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+        Option.of(extraMetadata2), metaClient.getCommitActionType());
+
+    // The empty string should be treated as missing, so walkback finds "1000" from commit1
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieInstant commit2 = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get();
+    HoodieCommitMetadata metadata2 = TimelineUtils.getCommitMetadata(commit2, metaClient.getActiveTimeline());
+    assertEquals("1000", metadata2.getMetadata("checkpoint.offset"),
+        "Empty string value should be treated as missing; walkback should find the previous non-empty value");
+
+    client.close();
+  }
 }

@@ -18,34 +18,27 @@
 
 package org.apache.hudi.sink.partitioner.index;
 
-import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
-import org.apache.hudi.utils.TestData;
-import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mockito;
 
 import java.io.File;
-import java.io.IOException;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-
-import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
-import static org.mockito.Mockito.mock;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 /**
@@ -53,138 +46,145 @@ import static org.mockito.Mockito.when;
  */
 public class TestRecordLevelIndexBackend {
 
+  private static final long ONE_MB = 1024 * 1024;
+
   private Configuration conf;
 
   @TempDir
   File tempFile;
 
   @BeforeEach
-  void beforeEach() throws IOException {
+  public void before() throws Exception {
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.set(FlinkOptions.TABLE_TYPE, COPY_ON_WRITE.name());
-    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString("hadoop.fs.defaultFS", "file:///");
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_SIZE, 1L);
     StreamerUtil.initTableIfNotExists(conf);
   }
 
   @Test
-  void testRecordLevelIndexBackend() throws Exception {
-    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+  public void testCheckpointCompleteDoesNotEagerEvict() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.getPartitionBucketCaches().put("par1", cacheWithHeapSize(backend, 2 * ONE_MB, 1L));
 
-    String firstCommitTime = TestUtils.getLastCompleteInstant(tempFile.toURI().toString());
+      backend.onCheckpointComplete(new TestCorrespondent(Collections.emptyMap()), 2L);
 
-    try (RecordLevelIndexBackend recordLevelIndexBackend = new RecordLevelIndexBackend(conf, -1)) {
-      // get record location
-      HoodieRecordGlobalLocation location = recordLevelIndexBackend.get("id1");
-      assertNotNull(location);
-      assertEquals("par1", location.getPartitionPath());
-      assertEquals(firstCommitTime, location.getInstantTime());
-
-      // get record location with non existed key
-      location = recordLevelIndexBackend.get("new_key");
-      assertNull(location);
-
-      // get records locations for multiple record keys
-      Map<String, HoodieRecordGlobalLocation> locations = recordLevelIndexBackend.get(Arrays.asList("id1", "id2", "id3"));
-      assertEquals(3, locations.size());
-      locations.values().forEach(Assertions::assertNotNull);
-
-      // get records locations for multiple record keys with unexisted key
-      locations = recordLevelIndexBackend.get(Arrays.asList("id1", "id2", "new_key"));
-      assertEquals(3, locations.size());
-      assertNull(locations.get("new_key"));
-
-      // new checkpoint
-      recordLevelIndexBackend.onCheckpoint(1);
-
-      // update record location
-      HoodieRecordGlobalLocation newLocation = new HoodieRecordGlobalLocation("par5", "1003", "file_id_4");
-      recordLevelIndexBackend.update("new_key", newLocation);
-      location = recordLevelIndexBackend.get("new_key");
-      assertEquals(newLocation, location);
-
-      // previous instant commit success, clean
-      Correspondent correspondent = mock(Correspondent.class);
-      Map<Long, String> inflightInstants = new HashMap<>();
-      inflightInstants.put(1L, "0001");
-      when(correspondent.requestInflightInstants()).thenReturn(inflightInstants);
-      recordLevelIndexBackend.onCheckpointComplete(correspondent, 1);
-      assertEquals(2, recordLevelIndexBackend.getRecordIndexCache().getCaches().size());
-      // the cache contains 'new_key', and other old locations
-      location = recordLevelIndexBackend.getRecordIndexCache().get("new_key");
-      assertEquals(newLocation, location);
-      location = recordLevelIndexBackend.getRecordIndexCache().get("id1");
-      assertNotNull(location);
+      assertTrue(backend.getPartitionBucketCaches().containsKey("par1"));
     }
   }
 
   @Test
-  void testRecordLevelIndexCacheClean() throws Exception {
-    // set a small value for RLI cache
-    conf.set(FlinkOptions.INDEX_RLI_CACHE_SIZE, 1L);
+  public void testLazyEvictOldPartitionsWhenHeapExceedsLimit() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.getPartitionBucketCaches().put("par1", cacheWithHeapSize(backend, 800 * 1024, 1L));
+      backend.getPartitionBucketCaches().put("par2", cacheWithHeapSize(backend, 800 * 1024, 1L));
+      backend.onCheckpointComplete(new TestCorrespondent(Collections.emptyMap()), 2L);
+      backend.getPartitionBucketCaches().put("par3", cacheWithHeapSize(backend, 1L, 2L));
 
-    try (RecordLevelIndexBackend recordLevelIndexBackend = new RecordLevelIndexBackend(conf, -1)) {
+      backend.cleanIfNecessary(0L, "par3");
 
-      for (int i = 0; i < 1500; i++) {
-        recordLevelIndexBackend.update("id1_" + i,
-            new HoodieRecordGlobalLocation("par1", "000000001", UUID.randomUUID().toString(), -1));
-      }
-      // new checkpoint
-      recordLevelIndexBackend.onCheckpoint(1);
-      Correspondent correspondent = mock(Correspondent.class);
-      Map<Long, String> inflightInstants = new HashMap<>();
-      inflightInstants.put(1L, "0001");
-      when(correspondent.requestInflightInstants()).thenReturn(inflightInstants);
-      recordLevelIndexBackend.onCheckpointComplete(correspondent, 1);
+      assertFalse(backend.getPartitionBucketCaches().containsKey("par1"));
+      assertTrue(backend.getPartitionBucketCaches().containsKey("par2"));
+      assertTrue(backend.getPartitionBucketCaches().containsKey("par3"));
+    }
+  }
 
-      for (int i = 0; i < 2000; i++) {
-        recordLevelIndexBackend.update("id2_" + i,
-            new HoodieRecordGlobalLocation("par1", "000000001", UUID.randomUUID().toString(), -1));
-      }
+  @Test
+  public void testLazyEvictKeepsRecentPartition() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.getPartitionBucketCaches().put("old", cacheWithHeapSize(backend, 800 * 1024, 1L));
+      backend.getPartitionBucketCaches().put("recent", cacheWithHeapSize(backend, 800 * 1024, 2L));
+      backend.onCheckpointComplete(new TestCorrespondent(Collections.emptyMap()), 2L);
 
-      // new checkpoint
-      recordLevelIndexBackend.onCheckpoint(2);
-      correspondent = mock(Correspondent.class);
-      inflightInstants = new HashMap<>();
-      inflightInstants.put(2L, "0002");
-      when(correspondent.requestInflightInstants()).thenReturn(inflightInstants);
-      recordLevelIndexBackend.onCheckpointComplete(correspondent, 2);
+      backend.cleanIfNecessary(0L, null);
 
-      for (int i = 0; i < 2000; i++) {
-        recordLevelIndexBackend.update("id3_" + i,
-            new HoodieRecordGlobalLocation("par1", "000000001", UUID.randomUUID().toString(), -1));
-      }
+      assertFalse(backend.getPartitionBucketCaches().containsKey("old"));
+      assertTrue(backend.getPartitionBucketCaches().containsKey("recent"));
+    }
+  }
 
-      // the cache for the first instant is evicted
-      assertEquals(2, recordLevelIndexBackend.getRecordIndexCache().getCaches().size());
+  @Test
+  public void testGetDoesNotRefreshLastUpdatedCheckpoint() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.getPartitionBucketCaches().put("old", cacheWithHeapSize(backend, 2 * ONE_MB, 1L));
+      backend.onCheckpoint(2L);
 
-      // new checkpoint
-      recordLevelIndexBackend.onCheckpoint(3);
-      correspondent = mock(Correspondent.class);
-      inflightInstants = new HashMap<>();
-      inflightInstants.put(3L, "0003");
-      when(correspondent.requestInflightInstants()).thenReturn(inflightInstants);
-      recordLevelIndexBackend.onCheckpointComplete(correspondent, 3);
+      backend.get("old", "key1");
+      backend.onCheckpointComplete(new TestCorrespondent(Collections.emptyMap()), 2L);
+      backend.cleanIfNecessary(0L, null);
 
-      for (int i = 0; i < 500; i++) {
-        recordLevelIndexBackend.update("id4_" + i,
-            new HoodieRecordGlobalLocation("par1", "000000001", UUID.randomUUID().toString(), -1));
-      }
+      assertFalse(backend.getPartitionBucketCaches().containsKey("old"));
+    }
+  }
 
-      assertEquals(3, recordLevelIndexBackend.getRecordIndexCache().getCaches().size());
+  @Test
+  public void testPartitionCacheDictionaryEncodesFileGroupId() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      ExternalSpillableMap<String, Integer> recordKeyToFileGroupIdCode = mapWithStorage(0L);
+      RecordLevelIndexBackend.BucketCache cache = backend.newBucketCache(recordKeyToFileGroupIdCode, 1L);
 
-      // insert another batch of records, which will trigger the cleaning of the cache.
-      // another cache clean is triggered
-      for (int i = 500; i < 1500; i++) {
-        recordLevelIndexBackend.update("id4_" + i,
-            new HoodieRecordGlobalLocation("par1", "000000001", UUID.randomUUID().toString(), -1));
-      }
-      assertEquals(3, recordLevelIndexBackend.getRecordIndexCache().getCaches().size());
-      // cache for the oldest ckp id will be cleaned
-      assertNull(recordLevelIndexBackend.getRecordIndexCache().getCaches().get(-1L));
-      // caches for the latest 3 ckp id still in the cache
-      assertEquals("par1", recordLevelIndexBackend.get("id2_0").getPartitionPath());
-      assertEquals("par1", recordLevelIndexBackend.get("id3_0").getPartitionPath());
-      assertEquals("par1", recordLevelIndexBackend.get("id4_0").getPartitionPath());
+      cache.putRecordKey("key1", "file-group-id-000000000000000000000001");
+      cache.putRecordKey("key2", "file-group-id-000000000000000000000001");
+      cache.putRecordKey("key3", "file-group-id-000000000000000000000002");
+
+      assertEquals("file-group-id-000000000000000000000001", cache.getFileGroupId("key1"));
+      assertEquals("file-group-id-000000000000000000000001", cache.getFileGroupId("key2"));
+      assertEquals("file-group-id-000000000000000000000002", cache.getFileGroupId("key3"));
+      assertEquals(Integer.valueOf(0), recordKeyToFileGroupIdCode.get("key1"));
+      assertEquals(Integer.valueOf(0), recordKeyToFileGroupIdCode.get("key2"));
+      assertEquals(Integer.valueOf(1), recordKeyToFileGroupIdCode.get("key3"));
+    }
+  }
+
+  @Test
+  public void testLazyEvictUsesAccessOrder() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.getPartitionBucketCaches().put("par1", cacheWithHeapSize(backend, 500 * 1024, 1L));
+      backend.getPartitionBucketCaches().put("par2", cacheWithHeapSize(backend, 500 * 1024, 1L));
+      backend.getPartitionBucketCaches().get("par1");
+      backend.getPartitionBucketCaches().put("par3", cacheWithHeapSize(backend, 100 * 1024, 2L));
+      backend.onCheckpointComplete(new TestCorrespondent(Collections.emptyMap()), 2L);
+
+      backend.cleanIfNecessary(0L, "par3");
+
+      assertTrue(backend.getPartitionBucketCaches().containsKey("par1"));
+      assertFalse(backend.getPartitionBucketCaches().containsKey("par2"));
+      assertTrue(backend.getPartitionBucketCaches().containsKey("par3"));
+    }
+  }
+
+  private RecordLevelIndexBackend createBackend() {
+    return new RecordLevelIndexBackend(conf, (partitionPath, recordKey, fileId) -> true);
+  }
+
+  private RecordLevelIndexBackend.BucketCache cacheWithHeapSize(
+      RecordLevelIndexBackend indexBackend,
+      long heapSize,
+      long lastUpdatedCheckpoint) {
+    return indexBackend.newBucketCache(mapWithStorage(heapSize), lastUpdatedCheckpoint);
+  }
+
+  private ExternalSpillableMap<String, Integer> mapWithStorage(long heapSize) {
+    Map<String, Integer> storage = new HashMap<>();
+    ExternalSpillableMap<String, Integer> recordKeyToFileGroupIdCode = Mockito.mock(ExternalSpillableMap.class);
+    when(recordKeyToFileGroupIdCode.getCurrentInMemoryMapSize()).thenReturn(heapSize);
+    when(recordKeyToFileGroupIdCode.size()).thenAnswer(invocation -> storage.size());
+    when(recordKeyToFileGroupIdCode.get(Mockito.anyString()))
+        .thenAnswer(invocation -> storage.get(invocation.getArgument(0)));
+    doAnswer(invocation -> storage.put(invocation.getArgument(0), invocation.getArgument(1)))
+        .when(recordKeyToFileGroupIdCode).put(Mockito.anyString(), Mockito.anyInt());
+    return recordKeyToFileGroupIdCode;
+  }
+
+  private static class TestCorrespondent extends Correspondent {
+    private final Map<Long, String> inflightInstants;
+
+    TestCorrespondent(Map<Long, String> inflightInstants) {
+      this.inflightInstants = inflightInstants;
+    }
+
+    @Override
+    public Map<Long, String> requestInflightInstants() {
+      return inflightInstants;
     }
   }
 }

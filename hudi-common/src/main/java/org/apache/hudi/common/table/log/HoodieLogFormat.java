@@ -85,6 +85,17 @@ public interface HoodieLogFormat {
     AppendResult appendBlocks(List<HoodieLogBlock> blocks) throws IOException, InterruptedException;
 
     long getCurrentSize() throws IOException;
+
+    /**
+     * Force previously appended blocks to durable storage so that downstream
+     * readers can observe them before this writer is closed.
+     *
+     * <p>Production code paths typically rely on {@link #close()} for
+     * commit-level visibility and do not need to call this. It is exposed
+     * mainly for tests that assert per-append visibility on the underlying
+     * file system.
+     */
+    void sync() throws IOException;
   }
 
   /**

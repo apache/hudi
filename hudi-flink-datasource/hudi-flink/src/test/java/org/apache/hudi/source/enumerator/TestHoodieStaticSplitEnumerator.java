@@ -26,6 +26,7 @@ import org.apache.hudi.source.split.SplitRequestEvent;
 
 import lombok.Getter;
 import org.apache.flink.api.connector.source.ReaderInfo;
+import org.apache.flink.api.connector.source.SourceEvent;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.api.connector.source.SplitsAssignment;
 import org.apache.flink.metrics.groups.SplitEnumeratorMetricGroup;
@@ -43,7 +44,9 @@ import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -219,6 +222,36 @@ public class TestHoodieStaticSplitEnumerator {
     assertTrue(context.getAssignedSplits().size() > 0, "Should assign split via attempt-aware method");
   }
 
+  @Test
+  public void testConstructorWithNullMetricGroup() {
+    MockSplitEnumeratorContext nullMetricContext = new MockSplitEnumeratorContext(true);
+    HoodieStaticSplitEnumerator enumeratorWithNullMetrics =
+        new HoodieStaticSplitEnumerator("test-table", nullMetricContext, splitProvider);
+
+    assertNotNull(enumeratorWithNullMetrics, "Enumerator should initialize without NPE when metricGroup is null");
+
+    // Basic operations should still work without metrics
+    nullMetricContext.registerReader(new ReaderInfo(1, "localhost"));
+    enumeratorWithNullMetrics.start();
+    splitProvider.onDiscoveredSplits(Arrays.asList(split1));
+    enumeratorWithNullMetrics.handleSplitRequest(1, "localhost");
+    assertTrue(nullMetricContext.getAssignedSplits().containsKey(1),
+        "Splits should still be assigned when metrics are null");
+    assertFalse(nullMetricContext.getNoMoreSplitsSignaled().contains(1),
+        "No-more-splits signal should not be sent when a split was assigned");
+  }
+
+  @Test
+  public void testHandleSourceEventWithUnknownEventThrows() {
+    enumerator.start();
+    context.registerReader(new ReaderInfo(0, "localhost"));
+
+    SourceEvent unknownEvent = new SourceEvent() {};
+    assertThrows(IllegalArgumentException.class,
+        () -> enumerator.handleSourceEvent(0, unknownEvent),
+        "Should throw IllegalArgumentException for unknown source event type");
+  }
+
   private HoodieSourceSplit createTestSplit(int splitNum, String fileId) {
     return new HoodieSourceSplit(
         splitNum,
@@ -243,6 +276,15 @@ public class TestHoodieStaticSplitEnumerator {
     @Getter
     private final List<Integer> noMoreSplitsSignaled = new ArrayList<>();
     private final List<Runnable> coordinatorThreadTasks = new ArrayList<>();
+    private final boolean returnNullMetricGroup;
+
+    MockSplitEnumeratorContext() {
+      this(false);
+    }
+
+    MockSplitEnumeratorContext(boolean returnNullMetricGroup) {
+      this.returnNullMetricGroup = returnNullMetricGroup;
+    }
 
     public void registerReader(ReaderInfo readerInfo) {
       registeredReaders.put(readerInfo.getSubtaskId(), readerInfo);
@@ -254,7 +296,7 @@ public class TestHoodieStaticSplitEnumerator {
 
     @Override
     public SplitEnumeratorMetricGroup metricGroup() {
-      return  UnregisteredMetricsGroup.createSplitEnumeratorMetricGroup();
+      return returnNullMetricGroup ? null : UnregisteredMetricsGroup.createSplitEnumeratorMetricGroup();
     }
 
     @Override

@@ -120,6 +120,8 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
     boolean enableBloomFilter = enableBloomFilter(populateMetaFields, config);
     Option<BloomFilter> bloomFilter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
     long maxFileSize = config.getLongOrDefault(HoodieStorageConfig.LANCE_MAX_FILE_SIZE);
+    long allocatorSize = config.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_ALLOCATOR_SIZE_BYTES);
+    long flushByteWatermark = config.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_FLUSH_BYTE_WATERMARK);
 
     return HoodieSparkLanceWriter.builder()
         .file(path)
@@ -130,6 +132,8 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
         .populateMetaFields(populateMetaFields)
         .bloomFilterOpt(bloomFilter)
         .maxFileSize(maxFileSize)
+        .allocatorSize(allocatorSize)
+        .flushByteWatermark(flushByteWatermark)
         .build();
   }
 

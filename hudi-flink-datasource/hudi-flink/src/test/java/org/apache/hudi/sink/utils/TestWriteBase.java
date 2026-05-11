@@ -36,7 +36,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.partitioner.index.IndexBackend;
-import org.apache.hudi.sink.partitioner.index.RecordLevelIndexBackend;
+import org.apache.hudi.sink.partitioner.index.GlobalRecordLevelIndexBackend;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -366,8 +366,8 @@ public class TestWriteBase {
      */
     public TestHarness assertInflightCachesOfBucketAssigner(int expected) {
       IndexBackend indexBackend = pipeline.getBucketAssignFunction().getIndexBackend();
-      if (indexBackend instanceof RecordLevelIndexBackend) {
-        assertEquals(expected, ((RecordLevelIndexBackend) indexBackend).getRecordIndexCache().getCaches().size());
+      if (indexBackend instanceof GlobalRecordLevelIndexBackend) {
+        assertEquals(expected, ((GlobalRecordLevelIndexBackend) indexBackend).getRecordIndexCache().getCaches().size());
       }
       return this;
     }

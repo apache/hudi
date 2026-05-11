@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>1.2.0-SNAPSHOT</version>
+    <version>1.3.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -525,7 +525,6 @@
       <artifactId>kafka</artifactId>
       <scope>test</scope>
     </dependency>
-
     <!-- AWS Services -->
     <!-- https://mvnrepository.com/artifact/software.amazon.awssdk/aws-java-sdk-sqs -->
     <dependency>
@@ -533,7 +532,17 @@
       <artifactId>sqs</artifactId>
       <version>${aws.sdk.version}</version>
     </dependency>
-
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>kinesis</artifactId>
+      <version>${aws.sdk.version}</version>
+    </dependency>
+    <!-- KPL de-aggregation: extracts user records from Kinesis Producer Library aggregated records -->
+    <dependency>
+      <groupId>com.amazonaws</groupId>
+      <artifactId>amazon-kinesis-deaggregator</artifactId>
+      <version>${aws.kinesis.aggregator.version}</version>
+    </dependency>
     <!-- Hive - Test -->
     <dependency>
       <groupId>${hive.groupid}</groupId>

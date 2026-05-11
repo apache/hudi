@@ -486,6 +486,16 @@ public final class HoodieSchemaUtils {
   private static HoodieSchema pruneDataSchemaInternal(HoodieSchema dataSchema, HoodieSchema requiredSchema, Set<String> mandatoryFields) {
     switch (requiredSchema.getType()) {
       case RECORD:
+        // BLOB and VARIANT are represented as Avro RECORDs but carry a logical type
+        // whose validate() contract requires the full canonical field layout
+        // ({type,data,reference} and {metadata,value} respectively). Partially pruning
+        // their inner fields would drop that contract. Spark's projection still prunes
+        // these columns at eval time, so reading the full logical-type record here is
+        // correct and cheap.
+        if (dataSchema.getType() == HoodieSchemaType.BLOB
+            || dataSchema.getType() == HoodieSchemaType.VARIANT) {
+          return dataSchema;
+        }
         if (dataSchema.getType() != HoodieSchemaType.RECORD) {
           throw new IllegalArgumentException("Data schema is not a record");
         }

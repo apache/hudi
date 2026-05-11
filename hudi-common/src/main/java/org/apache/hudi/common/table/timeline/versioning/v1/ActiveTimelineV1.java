@@ -276,10 +276,15 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
 
   @Override
   public Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataWithValidSchema() {
+    return getLastCommitMetadataWithValidSchema(true);
+  }
+
+  @Override
+  public Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataWithValidSchema(boolean filterForSchemaMutableOperations) {
     return Option.fromJavaOptional(
         getCommitMetadataStream()
             .filter(instantCommitMetadataPair ->
-                WriteOperationType.canUpdateSchema(instantCommitMetadataPair.getRight().getOperationType())
+                (!filterForSchemaMutableOperations || WriteOperationType.canUpdateSchema(instantCommitMetadataPair.getRight().getOperationType()))
                     && !StringUtils.isNullOrEmpty(instantCommitMetadataPair.getValue().getMetadata(HoodieCommitMetadata.SCHEMA_KEY)))
             .findFirst()
     );

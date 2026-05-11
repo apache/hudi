@@ -431,11 +431,12 @@ public final class SchemaTestUtil {
     }
 
     private static Utf8 randomUtf8(Random rand, int maxLength) {
-      Utf8 utf8 = new Utf8().setLength(rand.nextInt(maxLength));
-      for (int i = 0; i < utf8.getLength(); i++) {
-        utf8.getBytes()[i] = (byte) ('a' + rand.nextInt('z' - 'a'));
+      int length = rand.nextInt(maxLength);
+      byte[] bytes = new byte[length];
+      for (int i = 0; i < length; i++) {
+        bytes[i] = (byte) ('a' + rand.nextInt('z' - 'a'));
       }
-      return utf8;
+      return new Utf8(bytes);
     }
 
     private static ByteBuffer randomBytes(Random rand, int maxLength) {

@@ -28,9 +28,23 @@ import java.util.Map;
 /**
  * Index delegator which supports mini-batch index operations.
  */
-public interface MinibatchIndexBackend extends IndexBackend {
+public interface MinibatchIndexBackend extends GlobalIndexBackend {
 
-  Map<String, HoodieRecordGlobalLocation> get(List<String> recordKey) throws IOException;
+  /**
+   * Retrieves locations for a batch of record keys.
+   *
+   * <p>The returned map should contain one entry for each requested key and preserve the request
+   * order when the implementation can do so. Missing keys should map to {@code null}.
+   *
+   * @param recordKeys record keys to look up
+   * @return record-key to global-location mapping
+   */
+  Map<String, HoodieRecordGlobalLocation> get(List<String> recordKeys) throws IOException;
 
+  /**
+   * Updates locations for a batch of record keys.
+   *
+   * @param recordKeysAndLocations record-key and location pairs to write into the backend
+   */
   void update(List<Pair<String, HoodieRecordGlobalLocation>> recordKeysAndLocations) throws IOException;
 }

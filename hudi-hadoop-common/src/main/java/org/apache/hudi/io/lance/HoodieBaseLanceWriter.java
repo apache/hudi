@@ -56,13 +56,11 @@ import java.util.Map;
  */
 @NotThreadSafe
 public abstract class HoodieBaseLanceWriter<R, K extends Comparable<K>> implements Closeable {
-  /** Memory size for data write operations: 120MB */
-  private static final long LANCE_DATA_ALLOCATOR_SIZE = 120 * 1024 * 1024L;
-
   protected static final int DEFAULT_BATCH_SIZE = 1000;
   private final StoragePath path;
   private final BufferAllocator allocator;
   private final int batchSize;
+  private final long flushByteWatermark;
   @Getter(value = AccessLevel.PROTECTED)
   private long writtenRecordCount = 0;
   private long totalFlushedDataSize = 0;
@@ -77,15 +75,21 @@ public abstract class HoodieBaseLanceWriter<R, K extends Comparable<K>> implemen
    * Constructor for base Lance writer.
    *
    * @param path Path where Lance file will be written
-   * @param batchSize Number of records to buffer before flushing to Lance
+   * @param batchSize Row-count threshold; the current batch is flushed when this many records have been buffered
+   * @param allocatorSize Maximum bytes the per-writer Arrow child allocator may hold at once; sized so Arrow's
+   *                      power-of-2 buffer doubling never requests a chunk above this cap
+   * @param flushByteWatermark Byte-size threshold; the current batch is flushed when the sum of in-flight
+   *                           FieldVector buffer sizes reaches this value. Must be small enough that the next
+   *                           doubling step stays below {@code allocatorSize}.
    * @param bloomFilterWriteSupportOpt Optional bloom filter write support for record key tracking
    */
-  protected HoodieBaseLanceWriter(StoragePath path, int batchSize,
+  protected HoodieBaseLanceWriter(StoragePath path, int batchSize, long allocatorSize, long flushByteWatermark,
                                   Option<HoodieBloomFilterWriteSupport<K>> bloomFilterWriteSupportOpt) {
     this.path = path;
     this.allocator = HoodieArrowAllocator.newChildAllocator(
-        getClass().getSimpleName() + "-data-" + path.getName(), LANCE_DATA_ALLOCATOR_SIZE);
+        getClass().getSimpleName() + "-data-" + path.getName(), allocatorSize);
     this.batchSize = batchSize;
+    this.flushByteWatermark = flushByteWatermark;
     this.bloomFilterWriteSupportOpt = bloomFilterWriteSupportOpt;
   }
 
@@ -147,10 +151,28 @@ public abstract class HoodieBaseLanceWriter<R, K extends Comparable<K>> implemen
     currentBatchSize++;
     writtenRecordCount++;
 
-    // Flush when batch is full
-    if (currentBatchSize >= batchSize) {
+    // Flush when row-count batch is full OR in-flight Arrow buffers cross the byte watermark.
+    // The byte-based check bounds in-flight memory so Arrow's power-of-2 vector reallocation
+    // can't escalate to a chunk size above the allocator cap regardless of per-row payload.
+    if (currentBatchSize >= batchSize || currentBufferBytes() >= flushByteWatermark) {
       flushBatch();
     }
+  }
+
+  /**
+   * Bytes currently held by the writer's Arrow child allocator. Used to drive the byte-aware
+   * flush.
+   *
+   * <p>Note: we deliberately do <em>not</em> use {@code FieldVector.getBufferSize()} here.
+   * For variable-width vectors (e.g. {@code BaseLargeVariableWidthVector} backing BLOB columns)
+   * that method short-circuits to 0 when {@code valueCount == 0}, and {@code valueCount} is only
+   * set during {@link ArrowWriter#finishBatch()} — i.e. at flush time. Mid-batch it always
+   * reports zero, so a watermark driven by it never fires. {@link BufferAllocator#getAllocatedMemory()}
+   * tracks the underlying ArrowBuf capacities directly and is exactly the quantity the allocator
+   * cap is enforced against.
+   */
+  private long currentBufferBytes() {
+    return allocator.getAllocatedMemory();
   }
 
   /**
@@ -242,17 +264,13 @@ public abstract class HoodieBaseLanceWriter<R, K extends Comparable<K>> implemen
   }
 
   /**
-   * Returns the estimated data size in bytes, including both flushed batches and
-   * the current in-progress batch. The in-progress batch size is derived from
-   * Arrow buffer capacities, which may slightly overestimate due to pre-allocation.
+   * Returns the estimated data size in bytes, including both flushed batches and the current
+   * in-progress batch. The in-progress portion uses {@link BufferAllocator#getAllocatedMemory()}
+   * — see {@link #currentBufferBytes()} for why per-vector {@code getBufferSize()} is unreliable
+   * mid-batch. This may slightly overestimate due to Arrow's pre-allocation overhead.
    */
   protected long getDataSize() {
-    long currentBufferSize = 0;
-    if (root != null && currentBatchSize > 0) {
-      for (FieldVector vector : root.getFieldVectors()) {
-        currentBufferSize += vector.getBufferSize();
-      }
-    }
+    long currentBufferSize = currentBatchSize > 0 ? allocator.getAllocatedMemory() : 0;
     return totalFlushedDataSize + currentBufferSize;
   }
 
@@ -274,6 +292,17 @@ public abstract class HoodieBaseLanceWriter<R, K extends Comparable<K>> implemen
 
     // Write VectorSchemaRoot to Lance file
     writer.write(root);
+
+    // Release Arrow buffers so capacity does not accumulate across batches.
+    // Arrow's BaseVariableWidthVector grows by doubling and never shrinks on its own;
+    // without releasing, a vector that doubled to 128MB on one batch would attempt
+    // to double to 256MB on the next, with the old 128MB still held — exceeding the
+    // allocator cap. Closing root here ensures each batch starts from the small
+    // initial capacity, so the watermark-bounded growth within a batch is the only
+    // memory the cap has to accommodate.
+    root.close();
+    root = null;
+    arrowWriter = null;
 
     // Reset batch counter for next batch
     currentBatchSize = 0;

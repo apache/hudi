@@ -76,7 +76,7 @@ public class HoodieFileReaderFactory {
       case ORC:
         return newOrcFileReader(path);
       case LANCE:
-        return newLanceFileReader(path);
+        return newLanceFileReader(hoodieConfig, path);
       default:
         throw new UnsupportedOperationException(format + " format not supported yet.");
     }
@@ -92,7 +92,7 @@ public class HoodieFileReaderFactory {
       case ORC:
         return newOrcFileReader(pathInfo.getPath());
       case LANCE:
-        return newLanceFileReader(pathInfo.getPath());
+        return newLanceFileReader(hoodieConfig, pathInfo.getPath());
       default:
         throw new UnsupportedOperationException(format + " format not supported yet.");
     }
@@ -133,7 +133,7 @@ public class HoodieFileReaderFactory {
     throw new UnsupportedOperationException();
   }
 
-  protected HoodieFileReader newLanceFileReader(StoragePath path) {
+  protected HoodieFileReader newLanceFileReader(HoodieConfig hoodieConfig, StoragePath path) {
     throw new UnsupportedOperationException(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG);
   }
 

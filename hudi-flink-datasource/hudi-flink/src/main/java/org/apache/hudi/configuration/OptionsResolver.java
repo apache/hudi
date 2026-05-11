@@ -198,15 +198,23 @@ public class OptionsResolver {
   }
 
   /**
-   * Returns whether {@link org.apache.hudi.sink.partitioner.MinibatchBucketAssignFunction} should be used for bucket assigning.
+   * Returns whether partitioned record level index is used for bucket assigning.
    */
   public static boolean isRecordLevelIndex(Configuration conf) {
+    HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
+    return indexType == HoodieIndex.IndexType.RECORD_LEVEL_INDEX;
+  }
+
+  /**
+   * Returns whether the table uses metadata-table record level index.
+   */
+  public static boolean isGlobalRecordLevelIndex(Configuration conf) {
     HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
     return indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
   }
 
   public static boolean isRLIWithBootstrap(Configuration conf) {
-    return isRecordLevelIndex(conf) && conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED);
+    return isGlobalRecordLevelIndex(conf) && conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED);
   }
 
   /**
@@ -459,7 +467,8 @@ public class OptionsResolver {
    */
   public static boolean isStreamingIndexWriteEnabled(Configuration conf) {
     return conf.get(FlinkOptions.METADATA_ENABLED)
-        && OptionsResolver.getIndexType(conf) == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX
+        && (OptionsResolver.getIndexType(conf) == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX
+        || OptionsResolver.getIndexType(conf) == HoodieIndex.IndexType.RECORD_LEVEL_INDEX)
         && WriteOperationType.streamingWritesToMetadataSupported(WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION)));
   }
 

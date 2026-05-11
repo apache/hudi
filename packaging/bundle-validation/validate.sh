@@ -80,7 +80,7 @@ use_default_java_runtime () {
 test_spark_hadoop_mr_bundles () {
     echo "::warning::validate.sh setting up hive metastore for spark & hadoop-mr bundles validation"
 
-    if [ "$SPARK_VERSION" = "4.0.0" ]; then
+    if [ "$SPARK_VERSION" = "4.0.0" ] || [ "$SPARK_VERSION" = "4.1.1" ]; then
         change_java_runtime_version
     fi
     $DERBY_HOME/bin/startNetworkServer -h 0.0.0.0 &
@@ -112,7 +112,7 @@ test_spark_hadoop_mr_bundles () {
     numRecordsHiveQL=$(cat $hiveqlresultsdir/*.csv | wc -l)
     if [ "$numRecordsHiveQL" -ne 10 ]; then
         echo "::error::validate.sh HiveQL validation failed."
-        if [ "$SPARK_VERSION" = "4.0.0" ]; then
+        if [ "$SPARK_VERSION" = "4.0.0" ] || [ "$SPARK_VERSION" = "4.1.1" ]; then
             echo "::error::validate.sh Debug info for Spark4 validation failure:"
             $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
                       -u jdbc:hive2://localhost:10000/default --showHeader=true --outputformat=csv2 \
@@ -259,7 +259,7 @@ test_metaserver_bundle () {
     java -jar $JARS_DIR/metaserver.jar &
     local METASEVER_PID=$!
 
-    if [ "$SPARK_VERSION" = "4.0.0" ]; then
+    if [ "$SPARK_VERSION" = "4.0.0" ] || [ "$SPARK_VERSION" = "4.1.1" ]; then
             change_java_runtime_version
     fi
     echo "::warning::validate.sh Start hive server"
@@ -377,7 +377,7 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating spark & hadoop-mr bundle"
 
-if [[ $SPARK_HOME == *"spark-3.5"* || $SPARK_HOME == *"spark-4.0"* ]]
+if [[ $SPARK_HOME == *"spark-3.5"* || $SPARK_HOME == *"spark-4.0"* || $SPARK_HOME == *"spark-4.1"* ]]
 then
   echo "::warning::validate.sh validating cli bundle"
   test_cli_bundle

@@ -134,7 +134,10 @@ object HoodieParquetReadSupport {
               hasMatchingField = true
               trimParquetType(field, fileType.asGroupType().getType(field.getName))
             } else {
-              Some(field)
+              // Field exists in the requested schema but not in the file.
+              // Exclude it from the Parquet read schema; Spark's schema evolution
+              // will fill it with null in the output row.
+              None
             }
           }).filter(_.isDefined).map(_.get).asJava
           if (hasMatchingField && !fields.isEmpty) {

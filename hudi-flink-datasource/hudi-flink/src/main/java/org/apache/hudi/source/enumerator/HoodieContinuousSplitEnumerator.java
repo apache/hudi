@@ -110,7 +110,9 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
 
     if (!result.getSplits().isEmpty()) {
       splitProvider.onDiscoveredSplits(result.getSplits());
-      position.get().getIssuedInstant().ifPresent(enumeratorMetrics::setIssuedInstant);
+      if (enumeratorMetrics != null) {
+        position.get().getIssuedInstant().ifPresent(enumeratorMetrics::setIssuedInstant);
+      }
       LOG.debug(
           "Added {} splits discovered between ({}, {}] to the assigner",
           result.getSplits().size(),

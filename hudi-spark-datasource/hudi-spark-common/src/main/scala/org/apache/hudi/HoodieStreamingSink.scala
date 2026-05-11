@@ -18,7 +18,7 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
-import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
+import org.apache.hudi.HoodieStreamingSink.{QUERY_ID_KEY, SINK_CHECKPOINT_KEY}
 import org.apache.hudi.async.{AsyncClusteringService, AsyncCompactService, SparkStreamingAsyncClusteringService, SparkStreamingAsyncCompactService}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -34,7 +34,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{DataFrame, SaveMode, SQLContext}
-import org.apache.spark.sql.execution.streaming.{Sink, StreamExecution}
+import org.apache.spark.sql.execution.streaming.Sink
 import org.apache.spark.sql.streaming.OutputMode
 import org.slf4j.LoggerFactory
 
@@ -103,7 +103,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
       throw new IllegalStateException("Async clustering service shutdown unexpectedly")
     }
 
-    val queryId = sqlContext.sparkContext.getLocalProperty(StreamExecution.QUERY_ID_KEY)
+    val queryId = sqlContext.sparkContext.getLocalProperty(QUERY_ID_KEY)
     checkArgument(queryId != null, "queryId is null")
     if (metaClient.isDefined && canSkipBatch(batchId, options.getOrElse(OPERATION.key, UPSERT_OPERATION_OPT_VAL))) {
       log.info(s"Skipping already completed batch $batchId in query $queryId")
@@ -323,7 +323,11 @@ class HoodieStreamingSink(sqlContext: SQLContext,
 }
 
 object HoodieStreamingSink {
-
+  // This key is defined by StreamExecution.QUERY_ID_KEY
+  // Spark 4.1 moves the StreamExecution class from `org.apache.spark.sql.execution.streaming`
+  // to `org.apache.spark.sql.execution.streaming.runtime`, so to maintain compatibility with
+  // different Spark versions, we define the key here
+  val QUERY_ID_KEY = "sql.streaming.queryId"
   // This constant serves as the checkpoint key for streaming sink so that each microbatch is processed exactly-once.
   val SINK_CHECKPOINT_KEY = "_hudi_streaming_sink_checkpoint"
 }
