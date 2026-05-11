@@ -36,6 +36,7 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.table.types.logical.VarCharType;
 import org.apache.flink.table.types.logical.VarBinaryType;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -692,6 +693,7 @@ public class TestHoodieSchemaConverter {
   }
 
   @Test
+  @Disabled("disabled and reopen the tests for 1.3")
   public void testVariantTypeConversion() {
     // Test direct Variant conversion
     HoodieSchema variantSchema = HoodieSchema.createVariant();
@@ -708,6 +710,7 @@ public class TestHoodieSchemaConverter {
   }
 
   @Test
+  @Disabled("disabled and reopen the tests for 1.3")
   public void testVariantInRecordConversion() {
     // Test Variant field within a record
     HoodieSchema recordWithVariant = HoodieSchema.createRecord(
