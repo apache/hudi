@@ -66,6 +66,18 @@ public abstract class RecordIterators {
       HoodieSchema requestedSchema,
       StoragePath path,
       List<Predicate> predicates) throws IOException {
+    return getParquetRecordIterator(conf, internalSchemaManager, dataType, requestedSchema, path, 0L, Long.MAX_VALUE, predicates);
+  }
+
+  public static ClosableIterator<RowData> getParquetRecordIterator(
+      StorageConfiguration<?> conf,
+      InternalSchemaManager internalSchemaManager,
+      DataType dataType,
+      HoodieSchema requestedSchema,
+      StoragePath path,
+      long splitStart,
+      long splitLength,
+      List<Predicate> predicates) throws IOException {
     List<String> fieldNames = ((RowType) dataType.getLogicalType()).getFieldNames();
     List<DataType> fieldTypes = dataType.getChildren();
     int[] selectedFields = requestedSchema.getFields().stream().map(HoodieSchemaField::name)
@@ -86,8 +98,8 @@ public abstract class RecordIterators {
         selectedFields,
         DEFAULT_BATCH_SIZE,
         new org.apache.flink.core.fs.Path(path.toUri()),
-        0L,
-        Long.MAX_VALUE,
+        splitStart,
+        splitLength,
         predicates);
   }
 

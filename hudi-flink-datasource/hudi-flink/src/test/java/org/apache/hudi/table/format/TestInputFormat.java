@@ -59,6 +59,7 @@ import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.api.common.io.InputFormat;
+import org.apache.flink.api.common.io.RichInputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.io.InputSplit;
 import org.apache.flink.table.api.DataTypes;
@@ -378,6 +379,25 @@ public class TestInputFormat {
     final String expected = "["
         + "+I[id1, Danny, 24, 1970-01-01T00:00:00.001, par1], "
         + "+I[id2, Stephen, 34, 1970-01-01T00:00:00.002, par1]]";
+    assertThat(actual, is(expected));
+  }
+
+  @Test
+  void testReadBaseFileWithMultipleSplitsCOW() throws Exception {
+    beforeEach(HoodieTableType.COPY_ON_WRITE);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(CopyOnWriteInputFormat.class));
+
+    InputSplit[] splits = inputFormat.createInputSplits(6);
+    // the 4 base files should be split into more than 4 splits
+    assertTrue(splits.length > 4, "Expected more than 4 splits but got " + splits.length);
+
+    // read from all splits and verify the result is complete and correct
+    List<RowData> result = readData(inputFormat, splits);
+    String actual = TestData.rowDataToString(result);
+    String expected = TestData.rowDataToString(TestData.DATA_SET_INSERT);
     assertThat(actual, is(expected));
   }
 
@@ -1531,7 +1551,9 @@ public class TestInputFormat {
   @SuppressWarnings("unchecked, rawtypes")
   private static List<RowData> readData(InputFormat inputFormat, InputSplit[] inputSplits, RowDataSerializer serializer) throws IOException {
     List<RowData> result = new ArrayList<>();
-
+    if (inputFormat instanceof RichInputFormat) {
+      ((RichInputFormat<?, ?>) inputFormat).openInputFormat();
+    }
     for (InputSplit inputSplit : inputSplits) {
       inputFormat.open(inputSplit);
       while (!inputFormat.reachedEnd()) {

@@ -100,7 +100,18 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
       DataType dataType,
       HoodieSchema requestedSchema,
       List<Predicate> predicates) throws IOException {
-    return RecordIterators.getParquetRecordIterator(storage.getConf(), internalSchemaManager, dataType, requestedSchema, path, predicates);
+    return getRowDataIterator(internalSchemaManager, dataType, requestedSchema, 0L, Long.MAX_VALUE, predicates);
+  }
+
+  public ClosableIterator<RowData> getRowDataIterator(
+      InternalSchemaManager internalSchemaManager,
+      DataType dataType,
+      HoodieSchema requestedSchema,
+      long splitStart,
+      long splitLength,
+      List<Predicate> predicates) throws IOException {
+    return RecordIterators.getParquetRecordIterator(
+        storage.getConf(), internalSchemaManager, dataType, requestedSchema, path, splitStart, splitLength, predicates);
   }
 
   @Override

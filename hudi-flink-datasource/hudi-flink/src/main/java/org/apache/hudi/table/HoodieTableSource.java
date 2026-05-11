@@ -131,7 +131,6 @@ import java.util.stream.IntStream;
 import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_ASYNC;
 import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_ASYNC_THREAD_NUMBER;
 import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_JOIN_CACHE_TTL;
-import static org.apache.hudi.configuration.HadoopConfigurations.getParquetConf;
 import static org.apache.hudi.util.ExpressionUtils.filterSimpleCallExpression;
 import static org.apache.hudi.util.ExpressionUtils.splitExprByPartitionCall;
 
@@ -535,12 +534,12 @@ public class HoodieTableSource extends FileIndexReader implements
             return mergeOnReadInputFormat(rowType, requiredRowType, tableSchema,
                 rowDataType, inputSplits, false);
           case COPY_ON_WRITE:
-            return baseFileOnlyInputFormat();
+            return baseFileOnlyInputFormat(requiredRowType);
           default:
             throw new HoodieException("Unexpected table type: " + this.conf.get(FlinkOptions.TABLE_TYPE));
         }
       case FlinkOptions.QUERY_TYPE_READ_OPTIMIZED:
-        return baseFileOnlyInputFormat();
+        return baseFileOnlyInputFormat(requiredRowType);
       case FlinkOptions.QUERY_TYPE_INCREMENTAL:
         IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
             .conf(conf)
@@ -653,7 +652,7 @@ public class HoodieTableSource extends FileIndexReader implements
         .build();
   }
 
-  private InputFormat<RowData, ?> baseFileOnlyInputFormat() {
+  private InputFormat<RowData, ?> baseFileOnlyInputFormat(RowType requiredRowType) {
     final List<FileSlice> fileSlices = getBaseFileOnlyFileSlices(metaClient);
     if (fileSlices.isEmpty()) {
       return InputFormats.EMPTY_INPUT_FORMAT;
@@ -666,18 +665,15 @@ public class HoodieTableSource extends FileIndexReader implements
       return InputFormats.EMPTY_INPUT_FORMAT;
     }
 
+    HoodieSchema sourceSchema = HoodieSchemaConverter.convertToSchema(
+        this.schema.toSourceRowDataType().notNull().getLogicalType());
     return new CopyOnWriteInputFormat(
         paths,
-        this.schema.getColumnNames().toArray(new String[0]),
-        this.schema.getColumnDataTypes().toArray(new DataType[0]),
-        this.requiredPos,
-        this.conf.get(FlinkOptions.PARTITION_DEFAULT_NAME),
-        this.conf.get(FlinkOptions.PARTITION_PATH_FIELD),
-        this.conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING),
         this.predicates,
         this.limit == NO_LIMIT_CONSTANT ? Long.MAX_VALUE : this.limit, // ParquetInputFormat always uses the limit value
-        getParquetConf(this.conf, this.hadoopConf.unwrap()),
-        this.conf.get(FlinkOptions.READ_UTC_TIMEZONE),
+        this.conf,
+        sourceSchema.toString(),
+        HoodieSchemaConverter.convertToSchema(requiredRowType).toString(),
         this.internalSchemaManager
     );
   }

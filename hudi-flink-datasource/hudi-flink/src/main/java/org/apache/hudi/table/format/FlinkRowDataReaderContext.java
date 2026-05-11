@@ -110,7 +110,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
             .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
             .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty());
     DataType rowType = RowDataQueryContexts.fromSchema(dataSchema).getRowType();
-    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, getSafePredicates(requiredSchema));
+    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, start, length, getSafePredicates(requiredSchema));
   }
 
   @Override
