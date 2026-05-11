@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.adapter.DataTypeAdapter;
+import org.apache.hudi.adapter.DataTypeAdapterTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.utils.FlinkMiniCluster;
@@ -26,7 +28,6 @@ import org.apache.hudi.utils.TestTableEnvs;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.types.Row;
-import org.apache.flink.types.variant.BinaryVariant;
 import org.apache.flink.util.CollectionUtil;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,7 +39,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
@@ -88,25 +88,24 @@ public class ITTestVariantCrossEngineCompatibility {
     // Verify the variant column is readable as a native Flink Variant.
     Object variantObject = row.getField(2);
     assertNotNull(variantObject, "Variant column should not be null");
-    assertInstanceOf(BinaryVariant.class, variantObject, "Variant column should be a BinaryVariant");
-    BinaryVariant variant = (BinaryVariant) variantObject;
+    DataTypeAdapterTestUtils.assertAsBinaryVariant(variantObject);
 
     // Expected byte values from Spark 4.0 Variant representation: {"updated": true, "new_field": 123}
     byte[] expectedValueBytes = new byte[]{0x02, 0x02, 0x01, 0x00, 0x01, 0x00, 0x03, 0x04, 0x0C, 0x7B};
     byte[] expectedMetadataBytes = new byte[]{0x01, 0x02, 0x00, 0x07, 0x10, 0x75, 0x70, 0x64, 0x61,
         0x74, 0x65, 0x64, 0x6E, 0x65, 0x77, 0x5F, 0x66, 0x69, 0x65, 0x6C, 0x64};
 
-    assertArrayEquals(expectedValueBytes, variant.getValue(),
+    assertArrayEquals(expectedValueBytes, DataTypeAdapter.getVariantValue(variantObject),
         String.format("Variant value bytes mismatch (%s). Expected: %s, Got: %s",
             testDescription,
             Arrays.toString(StringUtils.encodeHex(expectedValueBytes)),
-            Arrays.toString(StringUtils.encodeHex(variant.getValue()))));
+            Arrays.toString(StringUtils.encodeHex(DataTypeAdapter.getVariantValue(variantObject)))));
 
-    assertArrayEquals(expectedMetadataBytes, variant.getMetadata(),
+    assertArrayEquals(expectedMetadataBytes, DataTypeAdapter.getVariantMetadata(variantObject),
         String.format("Variant metadata bytes mismatch (%s). Expected: %s, Got: %s",
             testDescription,
             Arrays.toString(StringUtils.encodeHex(expectedMetadataBytes)),
-            Arrays.toString(StringUtils.encodeHex(variant.getMetadata()))));
+            Arrays.toString(StringUtils.encodeHex(DataTypeAdapter.getVariantMetadata(variantObject)))));
 
     tableEnv.executeSql("DROP TABLE variant_table");
   }
