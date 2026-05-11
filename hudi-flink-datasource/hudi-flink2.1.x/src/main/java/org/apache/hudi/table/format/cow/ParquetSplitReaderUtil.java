@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format.cow;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.table.format.cow.vector.HeapArrayGroupColumnVector;
 import org.apache.hudi.table.format.cow.vector.HeapArrayVector;
@@ -320,6 +321,17 @@ public class ParquetSplitReaderUtil {
         } else {
           throw new UnsupportedOperationException("Unsupported create row with default value.");
         }
+      case VARIANT:
+        HeapRowColumnVector variantVector = new HeapRowColumnVector(
+            batchSize,
+            new HeapBytesVector(batchSize),
+            new HeapBytesVector(batchSize));
+        if (value == null) {
+          variantVector.fillWithNulls();
+          return variantVector;
+        } else {
+          throw new UnsupportedOperationException("Unsupported create variant with default value.");
+        }
       default:
         throw new UnsupportedOperationException("Unsupported type: " + type);
     }
@@ -498,6 +510,20 @@ public class ParquetSplitReaderUtil {
           }
         }
         return new RowColumnReader(fieldReaders);
+      case VARIANT:
+        ColumnDescriptor valueDescriptor = getVariantColumnDescriptor(
+            physicalType,
+            descriptors,
+            depth,
+            HoodieSchema.Variant.VARIANT_VALUE_FIELD);
+        ColumnDescriptor metadataDescriptor = getVariantColumnDescriptor(
+            physicalType,
+            descriptors,
+            depth,
+            HoodieSchema.Variant.VARIANT_METADATA_FIELD);
+        return new RowColumnReader(Arrays.asList(
+            new BytesColumnReader(valueDescriptor, pages.getPageReader(valueDescriptor)),
+            new BytesColumnReader(metadataDescriptor, pages.getPageReader(metadataDescriptor))));
       default:
         throw new UnsupportedOperationException(fieldType + " is not supported now.");
     }
@@ -675,9 +701,42 @@ public class ParquetSplitReaderUtil {
           }
         }
         return new HeapRowColumnVector(batchSize, columnVectors);
+      case VARIANT:
+        validateVariantField(physicalType, HoodieSchema.Variant.VARIANT_VALUE_FIELD);
+        validateVariantField(physicalType, HoodieSchema.Variant.VARIANT_METADATA_FIELD);
+        return new HeapRowColumnVector(
+            batchSize,
+            new HeapBytesVector(batchSize),
+            new HeapBytesVector(batchSize));
       default:
         throw new UnsupportedOperationException(fieldType + " is not supported now.");
     }
+  }
+
+  private static ColumnDescriptor getVariantColumnDescriptor(
+      Type physicalType,
+      List<ColumnDescriptor> descriptors,
+      int depth,
+      String fieldName) {
+    validateVariantField(physicalType, fieldName);
+    return descriptors.stream()
+        .filter(descriptor -> descriptor.getPath().length > depth + 1
+            && fieldName.equals(descriptor.getPath()[depth + 1]))
+        .findFirst()
+        .orElseThrow(() -> new IllegalArgumentException(
+            "Invalid Variant Parquet schema: missing binary field '" + fieldName + "'."));
+  }
+
+  private static void validateVariantField(Type physicalType, String fieldName) {
+    if (!physicalType.isPrimitive() && physicalType.asGroupType().containsField(fieldName)) {
+      Type fieldType = physicalType.asGroupType().getType(fieldName);
+      if (fieldType.isPrimitive()
+          && fieldType.asPrimitiveType().getPrimitiveTypeName() == PrimitiveType.PrimitiveTypeName.BINARY) {
+        return;
+      }
+    }
+    throw new IllegalArgumentException(
+        "Invalid Variant Parquet schema: missing binary field '" + fieldName + "'.");
   }
 
   /**

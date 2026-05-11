@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # NOTE:
-# This config file defines how Azure CI runs tests with Spark 3.5 and Flink 1.18 profiles.
+# This config file defines how Azure CI runs tests with Spark 3.5 and Flink 2.1 profiles.
 # PRs will need to keep in sync with master's version to trigger the CI runs.
 # See scripts/jacoco/README.md for how aggregated code coverage report works
 # across multiple modules.
@@ -100,7 +100,7 @@ parameters:
       - '!packaging/hudi-utilities-slim-bundle'
 
 variables:
-  BUILD_PROFILES: '-Dscala-2.12 -Dspark3.5 -Dflink1.18'
+  BUILD_PROFILES: '-Dscala-2.12 -Dspark3.5 -Dflink2.1'
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
   MVN_OPTS_INSTALL: '-T 3 -Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5 -Dorg.eclipse.jetty.LEVEL=WARN'
   MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
