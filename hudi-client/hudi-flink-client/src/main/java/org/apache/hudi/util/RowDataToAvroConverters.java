@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.adapter.DataTypeAdapter;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -239,7 +240,7 @@ public class RowDataToAvroConverters {
         break;
       case RAW:
       default:
-        if (HoodieSchemaConverter.isVariantType(type)) {
+        if (DataTypeAdapter.isVariantType(type)) {
           converter = createVariantConverter();
           break;
         }
@@ -277,52 +278,19 @@ public class RowDataToAvroConverters {
     };
   }
 
-  /**
-   * Creates a converter for Flink 2.1+ VARIANT LogicalType. The converter receives a Flink
-   * {@code Variant} object at runtime and extracts the raw metadata/value byte arrays via
-   * reflection, then packs them into an Avro GenericRecord with the Variant schema.
-   *
-   * <p>Reflection is required because the {@code Variant} interface and {@code BinaryVariant}
-   * class only exist in Flink 2.1+, while this module compiles against Flink 1.20.
-   *
-   * <p>No shredded-variant check is needed here: {@code HoodieSchemaConverter.convertVariant()}
-   * already rejects shredded variants before a Flink type or converter is ever constructed,
-   * and Flink 2.1 itself only supports unshredded variants (FLIP-521).
-   */
   private static RowDataToAvroConverter createVariantConverter() {
-    final java.lang.reflect.Method metadataMethod;
-    final java.lang.reflect.Method valueMethod;
-    try {
-      Class<?> binaryVariantClass =
-          Class.forName("org.apache.flink.types.variant.BinaryVariant");
-      metadataMethod = binaryVariantClass.getMethod("getMetadata");
-      valueMethod = binaryVariantClass.getMethod("getValue");
-    } catch (ClassNotFoundException e) {
-      throw new UnsupportedOperationException(
-          "VARIANT LogicalType requires Flink 2.1+ (BinaryVariant class not found).", e);
-    } catch (NoSuchMethodException e) {
-      throw new RuntimeException("BinaryVariant getMetadata/getValue methods not found.", e);
-    }
-
     return new RowDataToAvroConverter() {
       private static final long serialVersionUID = 1L;
 
       @Override
       public Object convert(HoodieSchema schema, Object object) {
-        try {
-          byte[] metadata = (byte[]) metadataMethod.invoke(object);
-          byte[] value = (byte[]) valueMethod.invoke(object);
+        byte[] metadata = DataTypeAdapter.getVariantMetadata(object);
+        byte[] value = DataTypeAdapter.getVariantValue(object);
 
-          final GenericRecord record = new GenericData.Record(schema.toAvroSchema());
-          record.put("metadata", ByteBuffer.wrap(metadata));
-          record.put("value", ByteBuffer.wrap(value));
-          return record;
-        } catch (Exception e) {
-          throw new RuntimeException(
-              "Failed to extract Variant fields via reflection. "
-                  + "VARIANT LogicalType requires Flink 2.1+.",
-              e);
-        }
+        final GenericRecord record = new GenericData.Record(schema.toAvroSchema());
+        record.put("metadata", ByteBuffer.wrap(metadata));
+        record.put("value", ByteBuffer.wrap(value));
+        return record;
       }
     };
   }

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client.model;
 
+import org.apache.hudi.adapter.DataTypeAdapter;
+
 import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.MapData;
@@ -149,11 +151,7 @@ public class BootstrapRowData implements RowData {
     return getter.apply(pos);
   }
 
-  /**
-   * Delegates to the underlying RowData's native getVariant() on Flink 2.1+
-   * via cached reflection. On pre-2.1 Flink this throws UnsupportedOperationException.
-   */
   public Variant getVariant(int pos) {
-    return AbstractHoodieRowData.delegateGetVariant(row, pos);
+    return DataTypeAdapter.getVariant(row, pos);
   }
 }
