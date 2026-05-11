@@ -222,10 +222,9 @@ public class TestParquetSchemaConverter {
   }
 
   /**
-   * A Parquet group with metadata + value binary fields (the variant physical layout) must be
-   * treated as a plain ROW by this physical converter — it has no Hudi logical type context.
-   * Variant detection is handled by HoodieSchemaConverter in the outer read path, using the
-   * table-level HoodieSchema as the authoritative source.
+   * A Parquet group with metadata + value binary fields but NO VARIANT annotation must be
+   * treated as a plain ROW. Only the Parquet {@code VARIANT} annotation triggers variant
+   * detection in this converter; unannotated groups are never guessed as variant.
    */
   @Test
   void testVariantPhysicalLayoutTreatedAsRow() {
