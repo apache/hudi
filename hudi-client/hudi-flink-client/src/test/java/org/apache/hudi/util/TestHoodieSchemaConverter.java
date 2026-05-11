@@ -695,19 +695,16 @@ public class TestHoodieSchemaConverter {
 
   @Test
   public void testVariantTypeConversion() {
-    // Test direct Variant conversion
     HoodieSchema variantSchema = HoodieSchema.createVariant();
     DataType dataType = HoodieSchemaConverter.convertToDataType(variantSchema);
     assertNotNull(dataType);
 
-    // Verify it's a Variant
     assertThat("the return type should be variant",
         dataType.getLogicalType().asSummaryString(), is("VARIANT NOT NULL"));
   }
 
   @Test
   public void testVariantInRecordConversion() {
-    // Test Variant field within a record
     HoodieSchema recordWithVariant = HoodieSchema.createRecord(
         "test_record",
         null,
@@ -722,9 +719,38 @@ public class TestHoodieSchemaConverter {
     assertEquals(2, result.getFieldCount());
     assertEquals("data", result.getFieldNames().get(1));
 
-    // Verify variant field
     assertThat("the return type should be variant",
         result.getTypeAt(1).asSummaryString(), is("VARIANT NOT NULL"));
+  }
+
+  @Test
+  public void testVariantInArrayConversion() {
+    HoodieSchema arrayOfVariant = HoodieSchema.createArray(HoodieSchema.createVariant());
+    DataType dataType = HoodieSchemaConverter.convertToDataType(arrayOfVariant);
+    assertNotNull(dataType);
+    assertInstanceOf(ArrayType.class, dataType.getLogicalType());
+    LogicalType elementType = ((ArrayType) dataType.getLogicalType()).getElementType();
+    assertEquals("VARIANT", elementType.getTypeRoot().name());
+  }
+
+  @Test
+  public void testVariantInMapConversion() {
+    HoodieSchema mapOfVariant = HoodieSchema.createMap(HoodieSchema.createVariant());
+    DataType dataType = HoodieSchemaConverter.convertToDataType(mapOfVariant);
+    assertNotNull(dataType);
+    assertInstanceOf(MapType.class, dataType.getLogicalType());
+    LogicalType valueType = ((MapType) dataType.getLogicalType()).getValueType();
+    assertEquals("VARIANT", valueType.getTypeRoot().name());
+  }
+
+  @Test
+  public void testShreddedVariantConversionThrows() {
+    HoodieSchema.Variant shredded = HoodieSchema.createVariantShredded(
+        HoodieSchema.create(HoodieSchemaType.STRING));
+    UnsupportedOperationException ex = assertThrows(
+        UnsupportedOperationException.class,
+        () -> HoodieSchemaConverter.convertToDataType(shredded));
+    assertTrue(ex.getMessage().contains("Shredded Variant is not yet supported in Flink"));
   }
 
   @Test

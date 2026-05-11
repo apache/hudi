@@ -22,7 +22,6 @@ import org.apache.hudi.adapter.DataTypeAdapter;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.Pair;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.ArrayType;
@@ -41,6 +40,7 @@ import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
 import org.apache.parquet.schema.Types;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -49,9 +49,30 @@ import static org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit;
 /**
  * Schema converter converts Parquet schema to and from Flink internal types.
  *
+ * <p>This is a <b>pure physical converter</b> — it maps Parquet types to their closest Flink
+ * equivalents based only on the Parquet schema structure. It does NOT infer Hudi-specific logical
+ * types (Variant, Blob, Vector) because those cannot be distinguished from ordinary structs or
+ * binary columns by Parquet schema alone.
+ *
+ * <h3>Why not use the Parquet VARIANT annotation on reads?</h3>
+ * <p>parquet-java 1.15.2+ defines a {@code VariantLogicalTypeAnnotation} that writers can attach
+ * to variant groups. However, relying on this annotation alone is insufficient because:
+ * <ul>
+ *   <li>Spark 4.0 files written before parquet-java 1.15.2 lack the annotation entirely.</li>
+ *   <li>The annotation cannot distinguish Hudi Blob or Vector types (which share the same
+ *       binary physical layout as Variant).</li>
+ * </ul>
+ * Therefore, the authoritative source for logical type inference on reads is the table-level
+ * {@link HoodieSchema}, not the Parquet schema. The read path enforces this via
+ * {@code HoodieRowDataParquetReader.withTableSchema()}.
+ *
+ * <h3>Write path</h3>
+ * <p>On writes, this converter maps Flink {@code VariantType} to the canonical unshredded Parquet
+ * layout (group with binary metadata + value fields). Once parquet-java is bumped to 1.16.0+,
+ * the writer should also attach {@code LogicalTypeAnnotation.variantType()} for interoperability.
+ *
  * <p>Reference org.apache.flink.formats.parquet.utils.ParquetSchemaConverter to support timestamp of INT64 8 bytes.
  */
-@Slf4j
 public class ParquetSchemaConverter {
 
   static final String MAP_REPEATED_NAME = "key_value";
@@ -60,11 +81,18 @@ public class ParquetSchemaConverter {
   static final String LIST_REPEATED_NAME = "list";
   static final String LIST_ELEMENT_NAME = "element";
 
+  /**
+   * Converts a Parquet schema to a Flink RowType using best-effort physical type mapping.
+   *
+   * <p><b>Note:</b> Hudi logical types (Variant, Blob, Vector) will appear as plain ROW or BYTES
+   * since this converter has no HoodieSchema context. For correct logical type inference, use
+   * {@code HoodieSchemaConverter.convertToDataType(hoodieSchema)} instead.
+   */
   public static RowType convertToRowType(MessageType messageType) {
-    List<RowType.RowField> dataFields =
-        messageType.asGroupType().getFields().stream()
-            .map(ParquetSchemaConverter::convertToRowField)
-            .collect(Collectors.toList());
+    List<RowType.RowField> dataFields = new ArrayList<>();
+    for (Type field : messageType.getFields()) {
+      dataFields.add(convertToRowField(field));
+    }
     return new RowType(dataFields);
   }
 
@@ -148,24 +176,14 @@ public class ParquetSchemaConverter {
     } else {
       GroupType groupType = parquetType.asGroupType();
       if (logicalType instanceof LogicalTypeAnnotation.ListLogicalTypeAnnotation) {
-        dataType = DataTypes.of(new ArrayType(convertToRowField(parquetListElementType(groupType)).getType()));
+        dataType = DataTypes.of(new ArrayType(
+            convertToRowField(parquetListElementType(groupType)).getType()));
       } else if (logicalType instanceof LogicalTypeAnnotation.MapLogicalTypeAnnotation) {
         Pair<Type, Type> keyValueType = parquetMapKeyValueType(groupType);
-        // Since parquet does not support nullable key, when converting
-        // back to DataType, set as nullable by default.
         dataType = DataTypes.of(
             new MapType(
                 convertToRowField(keyValueType.getLeft()).getType().copy(true),
                 convertToRowField(keyValueType.getRight()).getType()));
-      } else if (hasVariantAnnotation(logicalType)) {
-        if (isShreddedVariant(groupType)) {
-          throw new UnsupportedOperationException(
-              "Shredded Variant is not supported in Flink. "
-                  + "The Parquet group '" + groupType.getName() + "' contains a '"
-                  + HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD
-                  + "' field indicating a shredded layout.");
-        }
-        dataType = DataTypeAdapter.createVariantType();
       } else {
         dataType =
             DataTypes.of(new RowType(
@@ -199,39 +217,6 @@ public class ParquetSchemaConverter {
       types[i] = convertToParquetType(fieldName, fieldType, fieldType.isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED);
     }
     return new MessageType(name, types);
-  }
-
-  /**
-   * Checks whether the group carries the Parquet {@code VARIANT} logical type annotation.
-   * Uses class-name matching so this compiles against parquet-java versions that predate the
-   * {@code VariantLogicalTypeAnnotation} class (< 1.15.2).
-   */
-  private static boolean hasVariantAnnotation(LogicalTypeAnnotation logicalType) {
-    // needs to ensure the writer attach the variant annotation in 1.3.
-    return logicalType != null
-        && logicalType.getClass().getSimpleName().equals("VariantLogicalTypeAnnotation");
-  }
-
-  /**
-   * Checks whether a variant group contains a {@code typed_value} field, indicating a shredded
-   * layout. Called only after {@link #hasVariantAnnotation} returns true.
-   */
-  private static boolean isShreddedVariant(GroupType groupType) {
-    return groupType.containsField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD);
-  }
-
-  /**
-   * Converts a Variant column to the canonical unshredded Parquet layout:
-   * a group with required binary {@code metadata} and required binary {@code value}.
-   */
-  private static Type convertVariantToParquetType(String name, Type.Repetition repetition) {
-    // TODO: add .as(LogicalTypeAnnotation.variantType()) once parquet-java is bumped to 1.16.0
-    return Types.buildGroup(repetition)
-        .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, Type.Repetition.REQUIRED)
-            .named(HoodieSchema.Variant.VARIANT_METADATA_FIELD))
-        .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, Type.Repetition.REQUIRED)
-            .named(HoodieSchema.Variant.VARIANT_VALUE_FIELD))
-        .named(name);
   }
 
   private static Type convertToParquetType(
@@ -309,26 +294,12 @@ public class ParquetSchemaConverter {
               .named(name);
         }
       case ARRAY:
-        // align with Spark And Avro regarding the standard mode array type, see:
-        // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#lists
-        //
-        // <list-repetition> group <name> (LIST) {
-        //   repeated group list {
-        //     <element-repetition> <element-type> element;
-        //   }
-        // }
         ArrayType arrayType = (ArrayType) type;
         Type.Repetition eleRepetition =
             arrayType.getElementType().isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED;
         return ConversionPatterns.listOfElements(
             repetition, name, convertToParquetType("element", arrayType.getElementType(), eleRepetition));
       case MAP:
-        // <map-repetition> group <name> (MAP) {
-        //   repeated group key_value {
-        //     required <key-type> key;
-        //     <value-repetition> <value-type> value;
-        //   }
-        // }
         MapType mapType = (MapType) type;
         LogicalType keyType = mapType.getKeyType();
         LogicalType valueType = mapType.getValueType();
@@ -361,5 +332,21 @@ public class ParquetSchemaConverter {
       numBytes += 1;
     }
     return numBytes;
+  }
+
+  /**
+   * Converts a Variant column to the canonical unshredded Parquet layout:
+   * a group with required binary {@code metadata} and required binary {@code value}.
+   *
+   * <p>TODO: attach {@code .as(LogicalTypeAnnotation.variantType())} once parquet-java is
+   * bumped to 1.16.0+ so that other readers (e.g. Spark) can detect the variant annotation.
+   */
+  private static Type convertVariantToParquetType(String name, Type.Repetition repetition) {
+    return Types.buildGroup(repetition)
+        .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, Type.Repetition.REQUIRED)
+            .named(HoodieSchema.Variant.VARIANT_METADATA_FIELD))
+        .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, Type.Repetition.REQUIRED)
+            .named(HoodieSchema.Variant.VARIANT_VALUE_FIELD))
+        .named(name);
   }
 }

@@ -52,6 +52,41 @@ import java.util.stream.Collectors;
  */
 public class HoodieSchemaConverter {
 
+  private static final class VariantTypeHolder {
+    static final DataType VARIANT_DATA_TYPE = resolveVariantDataType();
+
+    private static DataType resolveVariantDataType() {
+      try {
+        Class<?> clazz = Class.forName("org.apache.flink.table.types.logical.VariantType");
+        LogicalType variantType = (LogicalType) clazz.getConstructor().newInstance();
+        return DataTypes.of(variantType);
+      } catch (ClassNotFoundException | NoSuchMethodException e) {
+        return null;
+      } catch (Exception e) {
+        throw new RuntimeException("Failed to instantiate Flink VariantType via reflection", e);
+      }
+    }
+  }
+
+  /**
+   * Returns a Flink {@code VariantType} DataType if the runtime Flink version is 2.1+,
+   * or {@code null} if the class is not on the classpath (pre-2.1 Flink).
+   * Uses the lazy-holder idiom: the class is loaded at most once per JVM, with
+   * thread safety guaranteed by the JVM class loading mechanism.
+   */
+  public static DataType tryCreateVariantDataType() {
+    return VariantTypeHolder.VARIANT_DATA_TYPE;
+  }
+
+  /**
+   * Checks whether a Flink LogicalType is VARIANT. Uses string comparison on the
+   * TypeRoot name so this compiles against Flink 1.20 where the VARIANT enum
+   * constant does not exist.
+   */
+  public static boolean isVariantType(LogicalType type) {
+    return "VARIANT".equals(type.getTypeRoot().name());
+  }
+
   /**
    * Converts a Flink LogicalType into a HoodieSchema.
    *
@@ -69,6 +104,10 @@ public class HoodieSchemaConverter {
    *
    * <p>The "{rowName}." is used as the nested row type name prefix in order to generate
    * the right schema. Nested record types that only differ by type name are still compatible.
+   *
+   * <p>On Flink 2.1+, {@code LogicalTypeRoot.VARIANT} is detected via string comparison
+   * (to avoid compile-time dependency) and mapped to {@link HoodieSchema#createVariant()}.
+   * Pre-2.1 Flink does not support Variant.
    *
    * @param logicalType Flink logical type
    * @param rowName     the record name
@@ -592,8 +631,8 @@ public class HoodieSchemaConverter {
     if (schema.getType() != HoodieSchemaType.VARIANT) {
       throw new IllegalStateException("Expected HoodieSchema.Variant but got: " + schema.getClass());
     }
-
-    if (((HoodieSchema.Variant) schema).isShredded()) {
+    if (schema instanceof HoodieSchema.Variant
+        && ((HoodieSchema.Variant) schema).isShredded()) {
       throw new UnsupportedOperationException(
           "Shredded Variant is not yet supported in Flink. Use unshredded Variant instead.");
     }

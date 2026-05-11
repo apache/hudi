@@ -34,6 +34,9 @@ import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.table.types.logical.TinyIntType;
 import org.apache.flink.table.types.logical.VarCharType;
 import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.PrimitiveType;
+import org.apache.parquet.schema.Type;
+import org.apache.parquet.schema.Types;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -41,6 +44,7 @@ import java.util.Collections;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Test cases for {@link ParquetSchemaConverter}.
@@ -216,4 +220,53 @@ public class TestParquetSchemaConverter {
         + "}\n";
     assertThat(messageType.toString(), is(expected));
   }
+
+  /**
+   * A Parquet group with metadata + value binary fields (the variant physical layout) must be
+   * treated as a plain ROW by this physical converter — it has no Hudi logical type context.
+   * Variant detection is handled by HoodieSchemaConverter in the outer read path, using the
+   * table-level HoodieSchema as the authoritative source.
+   */
+  @Test
+  void testVariantPhysicalLayoutTreatedAsRow() {
+    MessageType variantParquet = new MessageType(
+        "test",
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32,
+            Type.Repetition.REQUIRED).named("id"),
+        Types.buildGroup(Type.Repetition.REQUIRED)
+            .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY,
+                Type.Repetition.REQUIRED).named("metadata"))
+            .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY,
+                Type.Repetition.REQUIRED).named("value"))
+            .named("data"));
+
+    RowType rowType = ParquetSchemaConverter.convertToRowType(variantParquet);
+    assertEquals(2, rowType.getFieldCount());
+    assertEquals("ROW", rowType.getTypeAt(1).getTypeRoot().name());
+  }
+
+  /**
+   * Unannotated group with metadata + value + typed_value (3 fields) is treated as a generic
+   * ROW when no annotation or schema hint is present.
+   */
+  @Test
+  void testUnannotatedShreddedGroupTreatedAsRow() {
+    MessageType shreddedNoAnnotation = new MessageType(
+        "test",
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32,
+            Type.Repetition.REQUIRED).named("id"),
+        Types.buildGroup(Type.Repetition.REQUIRED)
+            .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY,
+                Type.Repetition.REQUIRED).named("metadata"))
+            .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY,
+                Type.Repetition.REQUIRED).named("value"))
+            .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.INT32,
+                Type.Repetition.OPTIONAL).named("typed_value"))
+            .named("data"));
+
+    RowType rowType = ParquetSchemaConverter.convertToRowType(shreddedNoAnnotation);
+    assertEquals(2, rowType.getFieldCount());
+    assertEquals("ROW", rowType.getTypeAt(1).getTypeRoot().name());
+  }
+
 }

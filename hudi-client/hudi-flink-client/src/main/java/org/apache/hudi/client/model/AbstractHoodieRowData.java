@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.model;
 
-import org.apache.hudi.adapter.DataTypeAdapter;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.util.ValidationUtils;
 
@@ -32,12 +31,33 @@ import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.types.RowKind;
 import org.apache.flink.types.variant.Variant;
 
+import java.lang.reflect.Method;
+
 /**
  * RowData implementation for Hoodie Row. It wraps an {@link RowData} and keeps meta columns locally. But the {@link RowData}
  * does include the meta columns as well just that {@link AbstractHoodieRowData} will intercept queries for meta columns and serve from its
  * copy rather than fetching from {@link RowData}.
  */
 public abstract class AbstractHoodieRowData implements RowData {
+  /**
+   * Lazy holder for the {@code RowData.getVariant(int)} method handle.
+   * The JVM guarantees thread-safe, one-time class initialization with no per-access cost.
+   * On Flink 2.1+ this resolves successfully; on pre-2.1 it stays null.
+   */
+  private static final class GetVariantHolder {
+    static final Method METHOD;
+
+    static {
+      Method m;
+      try {
+        m = RowData.class.getMethod("getVariant", int.class);
+      } catch (NoSuchMethodException e) {
+        m = null;
+      }
+      METHOD = m;
+    }
+  }
+
   private final String[] metaColumns;
   protected final RowData row;
   protected final int metaColumnsNum;
@@ -169,7 +189,25 @@ public abstract class AbstractHoodieRowData implements RowData {
 
   protected abstract int rebaseOrdinal(int ordinal);
 
-  public Variant getVariant(int i) {
-    return DataTypeAdapter.getVariant(row, rebaseOrdinal(i));
+  /**
+   * Delegates to the underlying RowData's native getVariant() on Flink 2.1+
+   * via cached reflection. On pre-2.1 Flink (where RowData lacks getVariant),
+   * this throws UnsupportedOperationException.
+   */
+  public Variant getVariant(int ordinal) {
+    return delegateGetVariant(row, rebaseOrdinal(ordinal));
+  }
+
+  static Variant delegateGetVariant(RowData target, int pos) {
+    Method m = GetVariantHolder.METHOD;
+    if (m == null) {
+      throw new UnsupportedOperationException(
+          "Variant type requires Flink 2.1+. RowData.getVariant(int) not available.");
+    }
+    try {
+      return (Variant) m.invoke(target, pos);
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke RowData.getVariant(int)", e);
+    }
   }
 }

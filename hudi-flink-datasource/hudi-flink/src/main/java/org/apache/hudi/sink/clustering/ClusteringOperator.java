@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -309,9 +310,10 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK);
         HoodieRowDataParquetReader fileReader = (HoodieRowDataParquetReader) fileReaderFactory.getFileReader(
             table.getConfig(), new StoragePath(clusteringOp.getDataFilePath()));
+        fileReader.withTableSchema(new TableSchemaResolver(table.getMetaClient()).getTableSchema());
 
         return new CloseableMappingIterator<>(fileReader.getRecordIterator(readerSchema), HoodieRecord::getData);
-      } catch (IOException e) {
+      } catch (Exception e) {
         throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
             + " and " + clusteringOp.getDeltaFilePaths(), e);
       }

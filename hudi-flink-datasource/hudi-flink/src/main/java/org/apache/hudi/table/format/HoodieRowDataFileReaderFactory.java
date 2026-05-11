@@ -25,6 +25,15 @@ import org.apache.hudi.storage.StoragePath;
 
 /**
  * Factory methods to create RowData file reader.
+ *
+ * <p><b>Important:</b> The reader returned by this factory does not carry a HoodieSchema.
+ * Callers <b>must</b> chain {@code .withTableSchema(hoodieSchema)} on the returned reader
+ * before calling {@link HoodieRowDataParquetReader#getRowType()},
+ * {@link HoodieRowDataParquetReader#getSchema()}, or
+ * {@link HoodieRowDataParquetReader#getRecordKeyIterator()}.
+ * An {@link IllegalStateException} is thrown otherwise.
+ *
+ * @see HoodieRowDataParquetReader#withTableSchema
  */
 public class HoodieRowDataFileReaderFactory extends HoodieFileReaderFactory {
   public HoodieRowDataFileReaderFactory(HoodieStorage storage) {

@@ -18,8 +18,6 @@
 
 package org.apache.hudi.util;
 
-import org.apache.hudi.adapter.DataTypeAdapter;
-
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.apache.avro.generic.GenericFixed;
@@ -157,11 +155,47 @@ public class AvroToRowDataConverters {
       case MULTISET:
         return createMapConverter(type, utcTimezone);
       default:
-        if (DataTypeAdapter.isVariantType(type)) {
+        if (HoodieSchemaConverter.isVariantType(type)) {
           return createVariantConverter();
         }
         throw new UnsupportedOperationException("Unsupported type: " + type);
     }
+  }
+
+  /**
+   * Creates a converter for Flink 2.1+ VARIANT LogicalType. The converter receives an Avro
+   * GenericRecord carrying metadata/value binary fields and produces a Flink
+   * {@code BinaryVariant} via reflection.
+   *
+   * <p>Reflection is required because {@code BinaryVariant} only exists in Flink 2.1+,
+   * while this module compiles against Flink 1.20.
+   */
+  private static AvroToRowDataConverter createVariantConverter() {
+    // Resolve BinaryVariant constructor once at converter creation time, not per-row.
+    final java.lang.reflect.Constructor<?> ctor;
+    try {
+      Class<?> binaryVariantClass =
+          Class.forName("org.apache.flink.types.variant.BinaryVariant");
+      // BinaryVariant(byte[] value, byte[] metadata) — note: value first, metadata second
+      ctor = binaryVariantClass.getConstructor(byte[].class, byte[].class);
+    } catch (ClassNotFoundException e) {
+      throw new UnsupportedOperationException(
+          "VARIANT LogicalType requires Flink 2.1+ (BinaryVariant class not found).", e);
+    } catch (NoSuchMethodException e) {
+      throw new RuntimeException("BinaryVariant(byte[], byte[]) constructor not found.", e);
+    }
+
+    return avroObject -> {
+      IndexedRecord record = (IndexedRecord) avroObject;
+      byte[] metadata = convertToBytes(record.get(0));
+      byte[] value = convertToBytes(record.get(1));
+
+      try {
+        return ctor.newInstance(value, metadata);
+      } catch (Exception e) {
+        throw new RuntimeException("Failed to create Flink BinaryVariant via reflection.", e);
+      }
+    };
   }
 
   private static AvroToRowDataConverter createDecimalConverter(DecimalType decimalType) {
@@ -214,18 +248,6 @@ public class AvroToRowDataConverters {
         result.put(key, value);
       }
       return new GenericMapData(result);
-    };
-  }
-
-  /**
-   * Creates a converter for Flink 2.1+ VARIANT LogicalType. The converter receives an Avro
-   * GenericRecord carrying metadata/value binary fields and produces a Flink
-   * {@code BinaryVariant}.
-   */
-  private static AvroToRowDataConverter createVariantConverter() {
-    return avroObject -> {
-      IndexedRecord record = (IndexedRecord) avroObject;
-      return DataTypeAdapter.createVariant(convertToBytes(record.get(1)), convertToBytes(record.get(0)));
     };
   }
 
