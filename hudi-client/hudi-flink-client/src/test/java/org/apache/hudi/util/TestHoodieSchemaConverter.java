@@ -36,11 +36,12 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.table.types.logical.VarCharType;
 import org.apache.flink.table.types.logical.VarBinaryType;
-import org.apache.flink.table.types.logical.VariantType;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -700,7 +701,8 @@ public class TestHoodieSchemaConverter {
     assertNotNull(dataType);
 
     // Verify it's a Variant
-    assertInstanceOf(VariantType.class, dataType.getLogicalType(), "the return type should be variant");
+    assertThat("the return type should be variant",
+        dataType.getLogicalType().asSummaryString(), is("VARIANT NOT NULL"));
   }
 
   @Test
@@ -721,7 +723,8 @@ public class TestHoodieSchemaConverter {
     assertEquals("data", result.getFieldNames().get(1));
 
     // Verify variant field
-    assertInstanceOf(VariantType.class, result.getTypeAt(1), "the return type should be variant");
+    assertThat("the return type should be variant",
+        result.getTypeAt(1).asSummaryString(), is("VARIANT NOT NULL"));
   }
 
   @Test

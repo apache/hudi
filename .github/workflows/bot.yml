@@ -67,7 +67,7 @@ jobs:
         include:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
-            flinkProfile: "flink1.18"
+            flinkProfile: "flink2.1"
 
     steps:
       - uses: actions/checkout@v5
@@ -126,7 +126,7 @@ jobs:
         include:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
-            flinkProfile: "flink1.18"
+            flinkProfile: "flink2.1"
 
     steps:
       - uses: actions/checkout@v5
@@ -178,7 +178,7 @@ jobs:
         include:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
-            flinkProfile: "flink1.18"
+            flinkProfile: "flink2.1"
 
     env:
       UT_MODULES: >-
@@ -563,7 +563,7 @@ jobs:
         include:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
-            flinkProfile: "flink1.20"
+            flinkProfile: "flink2.1"
 
     steps:
       - uses: actions/checkout@v5
@@ -985,19 +985,19 @@ jobs:
       matrix:
         include:
           - scalaProfile: 'scala-2.13'
-            flinkProfile: 'flink1.20'
+            flinkProfile: 'flink2.1'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.0'
           - scalaProfile: 'scala-2.12'
-            flinkProfile: 'flink1.20'
+            flinkProfile: 'flink2.1'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.0'
           - scalaProfile: 'scala-2.13'
-            flinkProfile: 'flink1.20'
+            flinkProfile: 'flink2.1'
             sparkProfile: 'spark4.0'
             sparkRuntime: 'spark4.0.0'
           - scalaProfile: 'scala-2.13'
-            flinkProfile: 'flink1.20'
+            flinkProfile: 'flink2.1'
             sparkProfile: 'spark4.1'
             sparkRuntime: 'spark4.1.1'
 
