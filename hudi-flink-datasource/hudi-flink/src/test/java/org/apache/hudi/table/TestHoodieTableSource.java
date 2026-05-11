@@ -21,17 +21,13 @@ package org.apache.hudi.table;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
-import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
-import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -82,7 +78,6 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -386,32 +381,6 @@ public class TestHoodieTableSource {
     assertEquals(ExpressionPredicates.fromExpression(expectedFilters).toString(), actualPredicates);
   }
 
-  @Test
-  void testValidateSupportedDataTypesAllowsProjectionWithoutVector() {
-    HoodieSchema tableSchema = createVectorTableSchema();
-    DataType dataType = DataTypes.ROW(
-        DataTypes.FIELD("id", DataTypes.INT().notNull()),
-        DataTypes.FIELD("name", DataTypes.STRING().notNull())
-    ).notNull();
-
-    assertDoesNotThrow(() -> DataTypeUtils.validateReaderSupportedDataTypes(tableSchema, dataType));
-  }
-
-  @Test
-  void testValidateSupportedDataTypesRejectsProjectionWithVector() {
-    HoodieSchema tableSchema = createVectorTableSchema();
-    DataType dataType = DataTypes.ROW(
-        DataTypes.FIELD("id", DataTypes.INT().notNull()),
-        DataTypes.FIELD("name", DataTypes.STRING().notNull()),
-        DataTypes.FIELD("embedding", DataTypes.BYTES().notNull())
-    ).notNull();
-
-    HoodieValidationException exception = assertThrows(HoodieValidationException.class,
-        () -> DataTypeUtils.validateReaderSupportedDataTypes(tableSchema, dataType));
-    assertTrue(exception.getMessage().contains("Flink does not support reading VECTOR columns yet"));
-    assertTrue(exception.getMessage().contains("embedding"));
-  }
-
   /**
    * test single primary key filtering
    * @throws Exception
@@ -593,19 +562,6 @@ public class TestHoodieTableSource {
         Arrays.asList(conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
         "default-par",
         conf);
-  }
-
-  private HoodieSchema createVectorTableSchema() {
-    return HoodieSchema.createRecord(
-        "test_record",
-        null,
-        null,
-        Arrays.asList(
-            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
-            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
-            HoodieSchemaField.of("embedding", HoodieSchema.createVector(128))
-        )
-    );
   }
 
   private ResolvedExpression createLitEquivalenceExpr(String fieldName, int fieldIdx, DataType dataType, Object val) {

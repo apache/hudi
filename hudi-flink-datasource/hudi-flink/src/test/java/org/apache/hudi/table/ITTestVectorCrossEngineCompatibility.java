@@ -20,7 +20,6 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestTableEnvs;
 
@@ -80,9 +79,9 @@ public class ITTestVectorCrossEngineCompatibility {
     createTable(tableEnv, cowPath, tableType.name());
 
     // ValidationException expects to be thrown
-    assertThrows(HoodieValidationException.class,
+    assertThrows(RuntimeException.class,
         () -> CollectionUtil.iteratorToList(tableEnv.executeSql("select * from vector_table").collect()),
-        "Flink does not support reading VECTOR columns yet. Projected VECTOR columns: embedding1, embedding2, embedding3");
+        "Unexpected type exception. Primitive type: FIXED_LEN_BYTE_ARRAY. Field type: FLOAT. Field name: embedding1");
   }
 
   @ParameterizedTest

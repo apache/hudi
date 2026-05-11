@@ -19,11 +19,7 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaField;
-import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.exception.HoodieCatalogException;
-import org.apache.hudi.exception.HoodieValidationException;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
@@ -43,11 +39,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -276,29 +270,5 @@ public class DataTypeUtils {
                 "Hudi catalog doesn't support metadata key, usage: `_hoodie_commit_time STRING METADATA VIRTUAL`.");
           }
         }).map(Schema.UnresolvedColumn::getName).collect(Collectors.toList());
-  }
-
-  /**
-   * Validates that the required row data type only projects data types supported by Flink source reads.
-   */
-  public static void validateReaderSupportedDataTypes(HoodieSchema tableSchema, DataType requiredDataType) {
-    HoodieSchema nonNullTableSchema = tableSchema.getNonNullType();
-    if (nonNullTableSchema.getType() != HoodieSchemaType.RECORD) {
-      return;
-    }
-
-    // VECTOR type is not supported yet, see https://github.com/apache/hudi/issues/18506
-    RowType requiredRowType = (RowType) requiredDataType.notNull().getLogicalType();
-    Set<String> requiredFields = new HashSet<>(requiredRowType.getFieldNames());
-    List<String> requiredVectorFields = nonNullTableSchema.getFields().stream()
-        .filter(field -> field.schema().getNonNullType().getType() == HoodieSchemaType.VECTOR)
-        .map(HoodieSchemaField::name)
-        .filter(requiredFields::contains)
-        .collect(Collectors.toList());
-    if (!requiredVectorFields.isEmpty()) {
-      throw new HoodieValidationException(
-          "Flink does not support reading VECTOR columns yet. Projected VECTOR columns: "
-              + String.join(", ", requiredVectorFields));
-    }
   }
 }
