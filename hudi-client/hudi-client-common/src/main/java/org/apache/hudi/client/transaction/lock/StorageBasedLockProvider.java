@@ -553,9 +553,10 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           return true;
         case SUCCESS:
           // Only positive outcome
-          this.setLock(currentLock.getRight().get());
+          StorageLockFile renewedLock = currentLock.getRight().get();
+          this.setLock(renewedLock);
           hoodieLockMetrics.ifPresent(metrics -> metrics.updateLockExpirationDeadlineMetric(
-              (int) (oldExpirationMs - getCurrentEpochMs())));
+              (int) (renewedLock.getValidUntilMs() - getCurrentEpochMs())));
           logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}.",
               ownerId, oldExpirationMs - getCurrentEpochMs(), lockFilePath);
           recordAuditOperation(AuditOperationState.RENEW, acquisitionTimestamp);

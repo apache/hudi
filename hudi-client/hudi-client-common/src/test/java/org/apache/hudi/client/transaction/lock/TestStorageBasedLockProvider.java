@@ -92,23 +92,28 @@ class TestStorageBasedLockProvider {
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
     // Mock the readObject method to return Option.empty() to prevent NPE in audit service creation
     when(mockLockService.readObject(anyString(), anyBoolean())).thenReturn(Option.empty());
-    TypedProperties props = new TypedProperties();
-    props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
-    props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
-    props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-default");
 
-    lockProvider = spy(new StorageBasedLockProvider(
-        ownerId,
-        props,
-        (a, b, c) -> mockHeartbeatManager,
-        (a, b, c) -> mockLockService,
-        mockLogger,
-        null));
+    lockProvider = createLockProviderWithMetrics(null);
   }
 
   @AfterEach
   void cleanupLockProvider() {
     lockProvider.close();
+  }
+
+  private StorageBasedLockProvider createLockProviderWithMetrics(HoodieLockMetrics lockMetrics) {
+    TypedProperties props = new TypedProperties();
+    props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
+    props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
+    props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-default");
+
+    return spy(new StorageBasedLockProvider(
+        ownerId,
+        props,
+        (a, b, c) -> mockHeartbeatManager,
+        (a, b, c) -> mockLockService,
+        mockLogger,
+        lockMetrics));
   }
 
   @Test
@@ -514,6 +519,29 @@ class TestStorageBasedLockProvider {
     verify(mockLogger).info(
         eq("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}."),
         eq(this.ownerId), anyLong(), eq("gs://bucket/lake/db/tbl-default/.hoodie/.locks/table_lock.json"));
+  }
+
+  @Test
+  void testRenewLockUpdatesMetricWithRenewedExpirationDeadline() {
+    HoodieLockMetrics lockMetrics = mock(HoodieLockMetrics.class);
+    lockProvider.close();
+    lockProvider = createLockProviderWithMetrics(lockMetrics);
+
+    long currentEpochMs = 1000L;
+    long oldExpirationMs = currentEpochMs + 30L;
+    long renewedExpirationMs = currentEpochMs + DEFAULT_LOCK_VALIDITY_MS;
+    StorageLockFile lockFile = new StorageLockFile(
+        new StorageLockData(false, oldExpirationMs, ownerId), "v1");
+    doReturn(lockFile).when(lockProvider).getLock();
+    when(lockProvider.getCurrentEpochMs()).thenReturn(currentEpochMs);
+
+    StorageLockFile renewedLockFile = new StorageLockFile(
+        new StorageLockData(false, renewedExpirationMs, ownerId), "v2");
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(lockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(renewedLockFile)));
+
+    assertTrue(lockProvider.renewLock());
+    verify(lockMetrics).updateLockExpirationDeadlineMetric(DEFAULT_LOCK_VALIDITY_MS);
   }
 
   @Test
