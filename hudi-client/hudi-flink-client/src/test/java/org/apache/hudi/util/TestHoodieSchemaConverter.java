@@ -30,6 +30,7 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.table.types.logical.MapType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
@@ -40,6 +41,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -473,6 +475,58 @@ public class TestHoodieSchemaConverter {
     HoodieSchema fixedSchema = HoodieSchema.createFixed("MD5", null, null, 16);
     DataType dataType = HoodieSchemaConverter.convertToDataType(fixedSchema);
     assertTrue(dataType.getLogicalType() instanceof VarBinaryType);
+  }
+
+  @Test
+  public void testVectorConversion() {
+    HoodieSchema floatVectorSchema = HoodieSchema.createVector(128);
+    HoodieSchema doubleVectorSchema = HoodieSchema.createVector(128, HoodieSchema.Vector.VectorElementType.DOUBLE);
+    HoodieSchema int8VectorSchema = HoodieSchema.createVector(128, HoodieSchema.Vector.VectorElementType.INT8);
+
+    DataType floatDataType = HoodieSchemaConverter.convertToDataType(floatVectorSchema);
+    DataType doubleDataType = HoodieSchemaConverter.convertToDataType(doubleVectorSchema);
+    DataType int8DataType = HoodieSchemaConverter.convertToDataType(int8VectorSchema);
+
+    assertVectorArray(floatDataType, LogicalTypeRoot.FLOAT, false);
+    assertVectorArray(doubleDataType, LogicalTypeRoot.DOUBLE, false);
+    assertVectorArray(int8DataType, LogicalTypeRoot.TINYINT, false);
+  }
+
+  @Test
+  public void testNullableVectorConversion() {
+    HoodieSchema vectorSchema = HoodieSchema.createNullable(HoodieSchema.createVector(128));
+
+    DataType dataType = HoodieSchemaConverter.convertToDataType(vectorSchema);
+
+    assertVectorArray(dataType, LogicalTypeRoot.FLOAT, true);
+  }
+
+  @Test
+  public void testVectorInRecordConversion() {
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "test_record",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("embedding", HoodieSchema.createVector(128))
+        )
+    );
+
+    RowType rowType = HoodieSchemaConverter.convertToRowType(schema);
+
+    assertEquals(2, rowType.getFieldCount());
+    assertEquals("embedding", rowType.getFieldNames().get(1));
+    ArrayType vectorArrayType = assertInstanceOf(ArrayType.class, rowType.getTypeAt(1));
+    assertEquals(LogicalTypeRoot.FLOAT, vectorArrayType.getElementType().getTypeRoot());
+    assertFalse(rowType.getTypeAt(1).isNullable());
+  }
+
+  private void assertVectorArray(DataType dataType, LogicalTypeRoot elementTypeRoot, boolean nullable) {
+    ArrayType arrayType = assertInstanceOf(ArrayType.class, dataType.getLogicalType());
+    assertEquals(elementTypeRoot, arrayType.getElementType().getTypeRoot());
+    assertFalse(arrayType.getElementType().isNullable());
+    assertEquals(nullable, dataType.getLogicalType().isNullable());
   }
 
   @Test

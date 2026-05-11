@@ -413,6 +413,8 @@ public class HoodieSchemaConverter {
         return convertUnion(hoodieSchema);
       case VARIANT:
         return convertVariant(hoodieSchema);
+      case VECTOR:
+        return convertVector(hoodieSchema);
       default:
         throw new IllegalArgumentException("Unsupported HoodieSchemaType: " + type);
     }
@@ -467,6 +469,27 @@ public class HoodieSchemaConverter {
     HoodieSchema.Time timeSchema = (HoodieSchema.Time) schema;
     int flinkPrecision = (timeSchema.getPrecision() == HoodieSchema.TimePrecision.MILLIS) ? 3 : 6;
     return DataTypes.TIME(flinkPrecision).notNull();
+  }
+
+  private static DataType convertVector(HoodieSchema schema) {
+    if (!(schema instanceof HoodieSchema.Vector)) {
+      throw new IllegalStateException("Expected HoodieSchema.Vector but got: " + schema.getClass());
+    }
+    HoodieSchema.Vector vectorSchema = (HoodieSchema.Vector) schema;
+    return DataTypes.ARRAY(convertVectorElementType(vectorSchema.getVectorElementType())).notNull();
+  }
+
+  private static DataType convertVectorElementType(HoodieSchema.Vector.VectorElementType elementType) {
+    switch (elementType) {
+      case FLOAT:
+        return DataTypes.FLOAT().notNull();
+      case DOUBLE:
+        return DataTypes.DOUBLE().notNull();
+      case INT8:
+        return DataTypes.TINYINT().notNull();
+      default:
+        throw new IllegalArgumentException("Unsupported VECTOR element type: " + elementType);
+    }
   }
 
   private static DataType createBlob() {
