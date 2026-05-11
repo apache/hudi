@@ -169,7 +169,7 @@ public abstract class AbstractHoodieRowData implements RowData {
 
   protected abstract int rebaseOrdinal(int ordinal);
 
-  public Variant getVariant(int ordinal) {
-    return DataTypeAdapter.getVariant(row, rebaseOrdinal(ordinal));
+  public Variant getVariant(int i) {
+    return DataTypeAdapter.getVariant(row, rebaseOrdinal(i));
   }
 }

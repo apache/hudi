@@ -164,15 +164,6 @@ public class AvroToRowDataConverters {
     }
   }
 
-  private static AvroToRowDataConverter createVariantConverter() {
-    return avroObject -> {
-      IndexedRecord record = (IndexedRecord) avroObject;
-      byte[] metadata = convertToBytes(record.get(0));
-      byte[] value = convertToBytes(record.get(1));
-      return DataTypeAdapter.createVariant(value, metadata);
-    };
-  }
-
   private static AvroToRowDataConverter createDecimalConverter(DecimalType decimalType) {
     final int precision = decimalType.getPrecision();
     final int scale = decimalType.getScale();
@@ -223,6 +214,18 @@ public class AvroToRowDataConverters {
         result.put(key, value);
       }
       return new GenericMapData(result);
+    };
+  }
+
+  /**
+   * Creates a converter for Flink 2.1+ VARIANT LogicalType. The converter receives an Avro
+   * GenericRecord carrying metadata/value binary fields and produces a Flink
+   * {@code BinaryVariant}.
+   */
+  private static AvroToRowDataConverter createVariantConverter() {
+    return avroObject -> {
+      IndexedRecord record = (IndexedRecord) avroObject;
+      return DataTypeAdapter.createVariant(convertToBytes(record.get(1)), convertToBytes(record.get(0)));
     };
   }
 

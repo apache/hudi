@@ -596,8 +596,8 @@ public class HoodieSchemaConverter {
     if (schema.getType() != HoodieSchemaType.VARIANT) {
       throw new IllegalStateException("Expected HoodieSchema.Variant but got: " + schema.getClass());
     }
-    if (schema instanceof HoodieSchema.Variant
-        && ((HoodieSchema.Variant) schema).isShredded()) {
+
+    if (((HoodieSchema.Variant) schema).isShredded()) {
       throw new UnsupportedOperationException(
           "Shredded Variant is not yet supported in Flink. Use unshredded Variant instead.");
     }

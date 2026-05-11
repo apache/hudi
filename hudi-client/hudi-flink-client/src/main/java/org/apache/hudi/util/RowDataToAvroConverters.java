@@ -278,23 +278,6 @@ public class RowDataToAvroConverters {
     };
   }
 
-  private static RowDataToAvroConverter createVariantConverter() {
-    return new RowDataToAvroConverter() {
-      private static final long serialVersionUID = 1L;
-
-      @Override
-      public Object convert(HoodieSchema schema, Object object) {
-        byte[] metadata = DataTypeAdapter.getVariantMetadata(object);
-        byte[] value = DataTypeAdapter.getVariantValue(object);
-
-        final GenericRecord record = new GenericData.Record(schema.toAvroSchema());
-        record.put("metadata", ByteBuffer.wrap(metadata));
-        record.put("value", ByteBuffer.wrap(value));
-        return record;
-      }
-    };
-  }
-
   private static RowDataToAvroConverter createRowConverter(RowType rowType, boolean utcTimezone) {
     final RowDataToAvroConverter[] fieldConverters =
         rowType.getChildren().stream()
@@ -376,6 +359,29 @@ public class RowDataToAvroConverters {
           map.put(key, value);
         }
         return map;
+      }
+    };
+  }
+
+  /**
+   * Creates a converter for Flink 2.1+ VARIANT LogicalType. The converter receives a Flink
+   * {@code Variant} object at runtime and extracts the raw metadata/value byte arrays,
+   * then packs them into an Avro GenericRecord with the Variant schema.
+   *
+   * <p>No shredded-variant check is needed here: {@code HoodieSchemaConverter.convertVariant()}
+   * already rejects shredded variants before a Flink type or converter is ever constructed,
+   * and Flink 2.1 itself only supports unshredded variants (FLIP-521).
+   */
+  private static RowDataToAvroConverter createVariantConverter() {
+    return new RowDataToAvroConverter() {
+      private static final long serialVersionUID = 1L;
+
+      @Override
+      public Object convert(HoodieSchema schema, Object object) {
+        final GenericRecord record = new GenericData.Record(schema.toAvroSchema());
+        record.put(HoodieSchema.Variant.VARIANT_METADATA_FIELD, ByteBuffer.wrap(DataTypeAdapter.getVariantMetadata(object)));
+        record.put(HoodieSchema.Variant.VARIANT_VALUE_FIELD, ByteBuffer.wrap(DataTypeAdapter.getVariantValue(object)));
+        return record;
       }
     };
   }
