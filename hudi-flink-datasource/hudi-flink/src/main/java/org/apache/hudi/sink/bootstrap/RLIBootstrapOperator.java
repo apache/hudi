@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
+import org.apache.hudi.metrics.FlinkRLIBootstrapMetrics;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
@@ -54,9 +55,20 @@ public class RLIBootstrapOperator
 
   private transient HoodieBackedTableMetadata metadataTable;
   private transient long loadedCnt;
+  private transient long numFileSlicesProcessed;
+  private transient long bootstrapCostMs;
+  private transient FlinkRLIBootstrapMetrics metrics;
 
   public RLIBootstrapOperator(Configuration conf) {
     super(conf);
+  }
+
+  @Override
+  public void open() throws Exception {
+    super.open();
+    this.metrics = new FlinkRLIBootstrapMetrics(getRuntimeContext().getMetricGroup());
+    this.metrics.registerMetrics();
+    this.metrics.updateLoadResult(numFileSlicesProcessed, loadedCnt, bootstrapCostMs);
   }
 
   @Override
@@ -97,6 +109,7 @@ public class RLIBootstrapOperator
       }
       log.info("Subtask: {} will load record index records from file groups: {}, total file groups: {}.",
           taskID, filteredFileSlices.stream().map(FileSlice::getFileId).collect(Collectors.joining(",")), fileSlices.size());
+      numFileSlicesProcessed = filteredFileSlices.size();
       return filteredFileSlices;
     };
 
@@ -104,8 +117,8 @@ public class RLIBootstrapOperator
     long startTime = System.currentTimeMillis();
     HoodiePairData<String, HoodieRecordGlobalLocation> rliData = metadataTable.readRecordIndexLocations(fileSlicesFilter);
     rliData.forEach(locationPair -> emitIndexRecord(locationPair.getLeft(), locationPair.getRight()));
-    long costMs = System.currentTimeMillis() - startTime;
-    log.info("Finish loading RLI records, total records: {}, cost: {} ms, taskId = {}", loadedCnt, costMs, taskID);
+    bootstrapCostMs = System.currentTimeMillis() - startTime;
+    log.info("Finish loading RLI records, total records: {}, cost: {} ms, taskId = {}", loadedCnt, bootstrapCostMs, taskID);
 
     // Wait for other tasks to complete
     waitForBootstrapReady(taskID);
@@ -130,6 +143,11 @@ public class RLIBootstrapOperator
             location.getFileId(),
             String.valueOf(location.getInstantTime()))));
     loadedCnt += 1;
+
+    // update the metrics every 1000 records
+    if (loadedCnt % 1000 == 0) {
+      this.metrics.updateLoadResult(numFileSlicesProcessed, loadedCnt, bootstrapCostMs);
+    }
   }
 
   private void closeMetadataTable() {
