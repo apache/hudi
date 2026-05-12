@@ -27,12 +27,16 @@ import org.apache.flink.types.variant.Variant;
  * Adapter utils to provide {@code DataType} utilities.
  */
 public class DataTypeAdapter {
+  private static final String VARIANT_UNSUPPORTED_MSG =
+      "VARIANT type is only supported in Flink 2.1+. "
+          + "Please upgrade your Flink version to use Variant columns.";
+
   public static Variant getVariant(RowData rowData, int pos) {
-    throw new UnsupportedOperationException("Variant is not supported yet.");
+    throw new UnsupportedOperationException(VARIANT_UNSUPPORTED_MSG);
   }
 
   public static Object createVariant(byte[] value, byte[] metadata) {
-    throw new UnsupportedOperationException("Variant is not supported yet.");
+    throw new UnsupportedOperationException(VARIANT_UNSUPPORTED_MSG);
   }
 
   public static boolean isVariantType(LogicalType logicalType) {
@@ -40,14 +44,14 @@ public class DataTypeAdapter {
   }
 
   public static DataType createVariantType() {
-    throw new UnsupportedOperationException("Variant is not supported yet.");
+    throw new UnsupportedOperationException(VARIANT_UNSUPPORTED_MSG);
   }
 
   public static byte[] getVariantMetadata(Object obj) {
-    throw new UnsupportedOperationException("Variant is not supported yet.");
+    throw new UnsupportedOperationException(VARIANT_UNSUPPORTED_MSG);
   }
 
   public static byte[] getVariantValue(Object obj) {
-    throw new UnsupportedOperationException("Variant is not supported yet.");
+    throw new UnsupportedOperationException(VARIANT_UNSUPPORTED_MSG);
   }
 }
