@@ -46,6 +46,7 @@ import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -3883,6 +3884,23 @@ public class HoodieWriteConfig extends HoodieConfig {
       checkArgument(ttlStatsMaxParallelism > 0,
           String.format("%s must be positive, but was %d",
               HoodieTTLConfig.STATS_MAX_PARALLELISM.key(), ttlStatsMaxParallelism));
+
+      validateEventTimeConfigs();
+    }
+
+    private void validateEventTimeConfigs() {
+      // Event-time field is configured but watermark tracking is off — the field
+      // will be ignored at commit time. Surface a hint so the user can opt in via
+      // TRACK_EVENT_TIME_WATERMARK.
+      String eventTimeFieldName = writeConfig.getString(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY);
+      if (!StringUtils.isNullOrEmpty(eventTimeFieldName)
+          && !writeConfig.getBooleanOrDefault(TRACK_EVENT_TIME_WATERMARK)) {
+        log.warn("{}={} is configured but {}={}; event-time watermark metadata will not be tracked. "
+                + "Set {}=true to record event-time watermark in commit metadata.",
+            HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, eventTimeFieldName,
+            TRACK_EVENT_TIME_WATERMARK.key(), writeConfig.getBooleanOrDefault(TRACK_EVENT_TIME_WATERMARK),
+            TRACK_EVENT_TIME_WATERMARK.key());
+      }
     }
 
     public HoodieWriteConfig build() {
