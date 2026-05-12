@@ -155,12 +155,12 @@ class TestRestoreProcedure extends HoodieSparkProcedureTestBase {
       assert(restoreInstantTs != null)
       assert(restoreInstantTs != commits(1))
 
-      // Round 2: audit_only using restore_instant_time (the original target commit is not needed)
+      // Round 2: audit_only using start_restore_time (the original target commit is not needed)
       val auditRows = spark.sql(
         s"""call restore_to_instant(
            |  table => '$tableName',
            |  audit_only => true,
-           |  restore_instant_time => '$restoreInstantTs'
+           |  start_restore_time => '$restoreInstantTs'
            |)""".stripMargin
       ).collect()
 
@@ -180,20 +180,20 @@ class TestRestoreProcedure extends HoodieSparkProcedureTestBase {
       val tablePath = tmp.getCanonicalPath + "/" + tableName
       createTableAndInsertData(tableName, tablePath)
 
-      // restore_instant_time pointing at a timestamp that has never been a restore instant.
+      // start_restore_time pointing at a timestamp that has never been a restore instant.
       assertThrows[Exception] {
         spark.sql(
           s"""call restore_to_instant(
              |  table => '$tableName',
              |  audit_only => true,
-             |  restore_instant_time => '19700101000000000'
+             |  start_restore_time => '19700101000000000'
              |)""".stripMargin
         ).collect()
       }
     }
   }
 
-  test("Test restore_to_instant cross-validation: audit_only=true requires restore_instant_time") {
+  test("Test restore_to_instant cross-validation: audit_only=true requires start_restore_time") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath + "/" + tableName
@@ -207,7 +207,7 @@ class TestRestoreProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
-  test("Test restore_to_instant cross-validation: audit_only=false rejects restore_instant_time") {
+  test("Test restore_to_instant cross-validation: audit_only=false rejects start_restore_time") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath + "/" + tableName
@@ -218,7 +218,7 @@ class TestRestoreProcedure extends HoodieSparkProcedureTestBase {
           s"""call restore_to_instant(
              |  table => '$tableName',
              |  instant_time => '${commits(1)}',
-             |  restore_instant_time => '20990101000000000'
+             |  start_restore_time => '20990101000000000'
              |)""".stripMargin
         ).collect()
       }
@@ -237,7 +237,7 @@ class TestRestoreProcedure extends HoodieSparkProcedureTestBase {
              |  table => '$tableName',
              |  audit_only => true,
              |  instant_time => '${commits(1)}',
-             |  restore_instant_time => '20990101000000000'
+             |  start_restore_time => '20990101000000000'
              |)""".stripMargin
         ).collect()
       }

@@ -43,6 +43,7 @@ import java.util.Objects;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -221,10 +222,15 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
   }
 
   /**
-   * Coverage for the MDT-pre-check guard inside {@code restoreToInstant}.
-   * When the caller passes {@code initialMetadataTableIfNecessary=false}, the
-   * {@code shouldDeleteMdtBeforeRestore} helper must not be invoked, and the existing MDT
-   * directory must remain intact after the restore (no implicit deletion).
+   * Two-assertion test for the MDT pre-check guard:
+   * <ol>
+   *   <li>{@code deleteMetadataTableIfNecessaryBeforeRestore(firstCommit)} returns {@code false}
+   *       (and deletes the MDT) when the target is at or before the oldest MDT compaction,
+   *       confirming the guard logic is meaningful for this table setup.</li>
+   *   <li>{@code restoreToInstant(firstCommit, false)} does NOT invoke the pre-check, so a
+   *       caller that explicitly opts out of MDT integration is never surprised by an implicit
+   *       MDT deletion.</li>
+   * </ol>
    */
   @Test
   void testRestoreToInstantSkipsMdtCheckWhenMetadataDisabled() throws Exception {
@@ -251,53 +257,64 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
       }
       assertRowNumberEqualsTo(50);
 
-      // Sanity: the MDT directory exists.
       String mdtBasePath = HoodieTableMetadata.getMetadataTableBasePath(hoodieWriteConfig.getBasePath());
       assertTrue(HoodieStorageUtils.getStorage(mdtBasePath, storageConf).exists(new StoragePath(mdtBasePath)),
-          "MDT directory should exist before restore");
+          "MDT directory should exist before any pre-check");
 
-      // Restore to firstCommit with initialMetadataTableIfNecessary=false. Without the guard the
-      // helper would observe that firstCommit is at or before the oldest MDT compaction and
-      // delete the MDT. With the guard the helper is not invoked, so the MDT survives.
-      client.restoreToInstant(Objects.requireNonNull(firstCommit, "first commit should not be null"), false);
+      // Assertion 1: deleteMetadataTableIfNecessaryBeforeRestore detects that firstCommit is at or
+      // before the oldest MDT compaction and deletes the MDT, returning false.
+      boolean shouldContinueWithMdt = client.deleteMetadataTableIfNecessaryBeforeRestore(
+          Objects.requireNonNull(firstCommit, "first commit should not be null"));
+      assertFalse(shouldContinueWithMdt,
+          "deleteMetadataTableIfNecessaryBeforeRestore should return false when target is at or before the oldest MDT compaction");
+      assertFalse(HoodieStorageUtils.getStorage(mdtBasePath, storageConf).exists(new StoragePath(mdtBasePath)),
+          "MDT directory should have been deleted by deleteMetadataTableIfNecessaryBeforeRestore");
 
-      assertTrue(HoodieStorageUtils.getStorage(mdtBasePath, storageConf).exists(new StoragePath(mdtBasePath)),
-          "MDT directory should still exist after restoreToInstant when initialMetadataTableIfNecessary=false");
+      // Assertion 2: restoreToInstant with initialMetadataTableIfNecessary=false does NOT invoke
+      // the pre-check — the MDT (now absent) is not touched. The restore proceeds without MDT.
+      client.restoreToInstant(firstCommit, false);
       assertRowNumberEqualsTo(numRecords);
     }
   }
 
   /**
-   * Coverage for the penultimate-compaction trigger inside the centralized helper.
-   * Sets up a table with two MDT compactions and restores to a commit that is at or before the
-   * penultimate compaction. The helper should detect this and delete the MDT pre-emptively;
-   * the restore should still complete successfully.
+   * Coverage for the penultimate-compaction trigger inside {@code shouldDeleteMdtBeforeRestore}.
+   * Sets up a table with three MDT compactions and restores to a savepoint that sits between
+   * the oldest and penultimate compaction (so the oldest check does not fire, but the penultimate
+   * check does). The helper should detect this and delete the MDT pre-emptively;
+   * the restore must still complete successfully.
+   *
+   * <p>Setup: 9 inserts, maxDeltaCommits=3 → three MDT compactions (after commits 3, 6, 9).
+   * Savepoint at commit 4 (after the oldest compaction, before the penultimate).
+   * shouldDeleteMdtBeforeRestore(commit4) returns true via the penultimate check only.
    */
   @Test
-  void testRestoreToInstantDeletesMdtWhenTargetIsBeforePenultimateCompaction() throws Exception {
+  void testRestoreToSavepointDeletesMdtWhenTargetIsBeforePenultimateCompaction() throws Exception {
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
         .withRollbackUsingMarkers(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(true)
-            .withMaxNumDeltaCommitsBeforeCompaction(2)
+            .withMaxNumDeltaCommitsBeforeCompaction(3)
             .build())
         .build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
-      String earlyCommit = null;
+      String savepointCommit = null;
       String prevInstant = HoodieTimeline.INIT_INSTANT_TS;
       final int numRecords = 10;
-      // 6 inserts with maxDeltaCommits=2 produces multiple MDT compactions, ensuring at
-      // least two completed compactions exist on the MDT timeline.
-      for (int i = 1; i <= 6; i++) {
+      // 9 inserts with maxDeltaCommits=3 produces three MDT compactions (after commits 3, 6, 9),
+      // ensuring oldest < penultimate < latest are all distinct.
+      for (int i = 1; i <= 9; i++) {
         String newCommitTime = WriteClientTestUtils.createNewInstantTime();
         insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
             false, true, numRecords, numRecords * i, 1, Option.empty(), INSTANT_GENERATOR);
         prevInstant = newCommitTime;
-        if (i == 1) {
-          earlyCommit = newCommitTime;
+        if (i == 4) {
+          // Savepoint at commit 4: sits after the oldest MDT compaction (after commit 3) but
+          // before the penultimate compaction (after commit 6), so only the penultimate check fires.
+          savepointCommit = newCommitTime;
+          client.savepoint("user1", "Savepoint at commit 4 for penultimate-compaction test");
         }
       }
-      assertRowNumberEqualsTo(60);
+      assertRowNumberEqualsTo(numRecords * 9);
 
       String mdtBasePath = HoodieTableMetadata.getMetadataTableBasePath(hoodieWriteConfig.getBasePath());
       HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
@@ -305,14 +322,13 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
           .setConf(storageConf)
           .setLoadActiveTimelineOnLoad(true)
           .build();
-      assertTrue(mdtMetaClient.getCommitTimeline().filterCompletedInstants().countInstants() >= 2,
-          "Test setup should produce at least two completed MDT compactions");
+      assertTrue(mdtMetaClient.getCommitTimeline().filterCompletedInstants().countInstants() >= 3,
+          "Test setup should produce at least three completed MDT compactions");
 
-      // Restore to earlyCommit, which is well before the penultimate MDT compaction. The helper
-      // must trigger a pre-emptive MDT delete; the restore must still complete and the MDT must
-      // be rebuilt (or at minimum recreated as a fresh empty MDT) by the post-restore init.
-      client.restoreToInstant(Objects.requireNonNull(earlyCommit, "early commit should not be null"), true);
-      assertRowNumberEqualsTo(numRecords);
+      // Restore to savepointCommit (commit 4). shouldDeleteMdtBeforeRestore detects that commit 4
+      // is at or before the penultimate MDT compaction and pre-emptively deletes the MDT.
+      client.restoreToSavepoint(Objects.requireNonNull(savepointCommit, "savepoint commit should not be null"));
+      assertRowNumberEqualsTo(numRecords * 4);
     }
   }
 

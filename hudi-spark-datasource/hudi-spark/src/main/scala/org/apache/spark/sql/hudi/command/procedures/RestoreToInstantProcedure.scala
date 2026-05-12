@@ -50,19 +50,19 @@ import scala.collection.JavaConverters._
  *   - table / path: identifies the Hudi table (one must be provided)
  *   - instant_time: target commit to restore to (required when audit_only=false; must be omitted
  *                   when audit_only=true)
- *   - restore_instant_time: the restore operation's own timeline timestamp (the start_restore_time
+ *   - start_restore_time: the restore operation's own timeline timestamp (the start_restore_time
  *                   value returned by a prior restore_to_instant call). Required when
  *                   audit_only=true; must be omitted otherwise.
  *   - enable_metadata: whether the metadata table is enabled (default: true)
  *   - rollback_parallelism: Spark parallelism for rollback and audit operations (default: 4)
  *   - enable_consistency_guard: enable consistency guard for file existence checks (default: false)
- *   - audit_post_restore: after restoring, verify that all rolled-back files are absent (default: false)
+ *   - audit_post_restore: after restoring, verify that all successfully-deleted files are absent (default: false)
  *   - audit_only: skip the restore and only audit a previously completed restore instant (default: false)
  *
  * Output columns:
  *   - restore_result: true if restore succeeded; null if audit_only=true
  *   - start_restore_time: the restore operation's own timeline timestamp; null if audit_only=true.
- *                         Save this value to use as restore_instant_time for a subsequent audit_only call.
+ *                         Pass this value as start_restore_time to re-run the audit later.
  *   - time_taken_in_millis: restore duration; null if audit_only=true
  *   - instants_rolled_back: number of commits rolled back; null if audit_only=true
  *   - audit_result: one of "PASSED" / "FAILED" / "INCONCLUSIVE" when an audit ran; null otherwise.
@@ -80,7 +80,7 @@ class RestoreToInstantProcedure extends BaseProcedure with ProcedureBuilder with
     ProcedureParameter.optional(5, "audit_post_restore", DataTypes.BooleanType, false),
     ProcedureParameter.optional(6, "audit_only", DataTypes.BooleanType, false),
     ProcedureParameter.optional(7, "path", DataTypes.StringType),
-    ProcedureParameter.optional(8, "restore_instant_time", DataTypes.StringType)
+    ProcedureParameter.optional(8, "start_restore_time", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -106,24 +106,24 @@ class RestoreToInstantProcedure extends BaseProcedure with ProcedureBuilder with
     val shouldAuditPostRestore = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[Boolean]
     val auditOnly = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[Boolean]
     val tablePath = getArgValueOrDefault(args, PARAMETERS(7))
-    val restoreInstantTime = getArgValueOrDefault(args, PARAMETERS(8))
+    val startRestoreTimeArg = getArgValueOrDefault(args, PARAMETERS(8))
 
-    // Cross-validation: each of (instant_time, restore_instant_time) has one unambiguous meaning.
+    // Cross-validation: each of (instant_time, start_restore_time) has one unambiguous meaning.
     if (!auditOnly && instantTime.isEmpty) {
       throw new HoodieException("instant_time is required when audit_only=false.")
     }
-    if (auditOnly && restoreInstantTime.isEmpty) {
+    if (auditOnly && startRestoreTimeArg.isEmpty) {
       throw new HoodieException(
-        "restore_instant_time is required when audit_only=true. " +
+        "start_restore_time is required when audit_only=true. " +
           "Pass the start_restore_time value from a prior restore_to_instant call.")
     }
-    if (!auditOnly && restoreInstantTime.isDefined) {
-      throw new HoodieException("restore_instant_time may only be specified when audit_only=true.")
+    if (!auditOnly && startRestoreTimeArg.isDefined) {
+      throw new HoodieException("start_restore_time may only be specified when audit_only=true.")
     }
     if (auditOnly && instantTime.isDefined) {
       throw new HoodieException(
         "instant_time may only be specified when audit_only=false. " +
-          "Use restore_instant_time to identify a previously executed restore.")
+          "Use start_restore_time to identify a previously executed restore.")
     }
     if (auditOnly && shouldAuditPostRestore) {
       logWarning("Both audit_only and audit_post_restore are set. Only audit_only will be honored.")
@@ -151,12 +151,14 @@ class RestoreToInstantProcedure extends BaseProcedure with ProcedureBuilder with
       try {
         client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
           tableName.asInstanceOf[Option[String]])
-        // restoreToInstant either returns non-null HoodieRestoreMetadata or throws HoodieRestoreException.
-        // Restoring to a target before the MDT's penultimate / oldest compaction (or before the MDT
-        // timeline start) would otherwise leave the MDT inconsistent during finishRestore;
-        // BaseHoodieWriteClient.restoreToInstant invokes the centralized helper to pre-emptively
-        // delete the MDT in those cases.
-        val restoreMetadata = client.restoreToInstant(targetInstant, enableMetadata)
+        // Pre-check: if the target instant is at or before the penultimate/oldest MDT compaction,
+        // pre-emptively delete the MDT so restoreToInstant does not leave it inconsistent.
+        // deleteMetadataTableIfNecessaryBeforeRestore returns false when the MDT was deleted
+        // (caller must not re-initialize it), true otherwise.
+        val shouldInitMdt = if (enableMetadata) {
+          client.deleteMetadataTableIfNecessaryBeforeRestore(targetInstant)
+        } else true
+        val restoreMetadata = client.restoreToInstant(targetInstant, shouldInitMdt && enableMetadata)
         restoreResult = true
         startRestoreTime = restoreMetadata.getStartRestoreTime
         timeTakenInMillis = restoreMetadata.getTimeTakenInMillis
@@ -178,19 +180,22 @@ class RestoreToInstantProcedure extends BaseProcedure with ProcedureBuilder with
     var auditResult: String = null
     if (auditOnly || shouldAuditPostRestore) {
       val restoreInstant: HoodieInstant = if (auditOnly) {
-        val ts = restoreInstantTime.get.asInstanceOf[String]
+        val ts = startRestoreTimeArg.get.asInstanceOf[String]
         val instants = metaClient.getActiveTimeline.getRestoreTimeline.filterCompletedInstants
           .getInstants.asScala
         instants.find(_.requestedTime().equals(ts)).getOrElse(
           throw new HoodieException(s"No completed restore instant found for $ts. " +
-            "Pass the start_restore_time from a prior restore_to_instant call as restore_instant_time.")
+            "Pass the start_restore_time from a prior restore_to_instant call as start_restore_time.")
         )
       } else {
-        val lastOpt = metaClient.getActiveTimeline.getRestoreTimeline.filterCompletedInstants.lastInstant
-        if (!lastOpt.isPresent) {
-          throw new HoodieException("No completed restore instant found on timeline after restore.")
-        }
-        lastOpt.get()
+        // Use startRestoreTime captured from the restore metadata — more deterministic than
+        // lastInstant() since another concurrent restore could otherwise land in between.
+        val ts = startRestoreTime
+        val instants = metaClient.getActiveTimeline.getRestoreTimeline.filterCompletedInstants
+          .getInstants.asScala
+        instants.find(_.requestedTime().equals(ts)).getOrElse(
+          throw new HoodieException(s"No completed restore instant found for $ts after restore.")
+        )
       }
       auditResult = auditPostRestore(metaClient, basePath, restoreInstant, rollbackParallelism)
     }
@@ -227,9 +232,10 @@ class RestoreToInstantProcedure extends BaseProcedure with ProcedureBuilder with
             } else {
               // Use .toString() to preserve the full absolute path. Using .getName() would strip
               // the path to just the filename, making the subsequent FS.exists() check vacuously pass.
+              // Only check getSuccessDeleteFiles: these are the files the restore intended to delete
+              // and whose absence we can meaningfully verify. Files in getFailedDeleteFiles already
+              // failed to be deleted and are expected to still be present.
               pm.getSuccessDeleteFiles.asScala.foreach(f =>
-                filesToCheck.add(new Path(partitionPathStr, f).toString))
-              pm.getFailedDeleteFiles.asScala.foreach(f =>
                 filesToCheck.add(new Path(partitionPathStr, f).toString))
             }
           }

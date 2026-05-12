@@ -899,8 +899,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           return true;
         }
       }
-      Option<HoodieInstant> oldestMdtCompaction = mdtMetaClient.getCommitTimeline()
-          .filterCompletedInstants().firstInstant();
+      Option<HoodieInstant> oldestMdtCompaction = completedCompactions.isEmpty()
+          ? Option.empty() : Option.of(completedCompactions.get(0));
       if (oldestMdtCompaction.isPresent()
           && LESSER_THAN_OR_EQUALS.test(targetInstant, oldestMdtCompaction.get().requestedTime())) {
         log.warn("Deleting MDT before restore to {}: target is at or before oldest MDT compaction {}",
@@ -919,7 +919,31 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
   }
 
-  @Deprecated
+  /**
+   * Deletes the metadata table (MDT) if it would be left in an inconsistent state by a restore to
+   * {@code targetInstant}, and returns whether the MDT should be initialized after the restore.
+   *
+   * <p>Callers that drive restore via {@link #restoreToInstant} directly (e.g. the
+   * {@code restore_to_instant} stored procedure) should call this method before invoking
+   * {@code restoreToInstant} and pass the return value as {@code initialMetadataTableIfNecessary}:
+   *
+   * <pre>{@code
+   * boolean initMdt = client.deleteMetadataTableIfNecessaryBeforeRestore(targetInstant);
+   * client.restoreToInstant(targetInstant, initMdt && enableMetadata);
+   * }</pre>
+   *
+   * @param targetInstant the instant the data table will be restored to
+   * @return {@code false} if the MDT was deleted (caller must not initialize it post-restore);
+   *         {@code true} otherwise (MDT either does not need deletion or does not exist)
+   */
+  public boolean deleteMetadataTableIfNecessaryBeforeRestore(String targetInstant) {
+    if (shouldDeleteMdtBeforeRestore(targetInstant)) {
+      HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
+      return false;
+    }
+    return true;
+  }
+
   public boolean rollback(final String commitInstantTime) throws HoodieRollbackException {
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
     Option<HoodiePendingRollbackInfo> pendingRollbackInfo = tableServiceClient.getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
@@ -943,12 +967,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     log.info("Begin restore to instant {}", savepointToRestoreTimestamp);
     Timer.Context timerContext = metrics.getRollbackCtx();
     try {
-      boolean effectiveInitMdt = initialMetadataTableIfNecessary;
-      if (effectiveInitMdt && shouldDeleteMdtBeforeRestore(savepointToRestoreTimestamp)) {
-        HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
-        effectiveInitMdt = false;
-      }
-      HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), effectiveInitMdt);
+      HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);
       Pair<String, Option<HoodieRestorePlan>> timestampAndRestorePlan = scheduleAndGetRestorePlan(savepointToRestoreTimestamp, table);
       final String restoreInstantTimestamp = timestampAndRestorePlan.getLeft();
       Option<HoodieRestorePlan> restorePlanOption = timestampAndRestorePlan.getRight();
