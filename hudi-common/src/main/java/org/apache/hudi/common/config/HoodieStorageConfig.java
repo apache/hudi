@@ -19,6 +19,7 @@
 package org.apache.hudi.common.config;
 
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -173,6 +174,16 @@ public class HoodieStorageConfig extends HoodieConfig {
       .key("hoodie.parquet.compression.codec")
       .defaultValue("gzip")
       .withDocumentation("Compression Codec for parquet files");
+
+  public static final ConfigProperty<String> PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL = ConfigProperty
+      .key("hoodie.parquet.compression.codec.zstd.level")
+      .defaultValue("3")
+      .markAdvanced()
+      .withDocumentation("ZSTD compression level for parquet base files. Valid range is -22 to 22; higher values "
+          + "trade CPU for better compression. Only takes effect when hoodie.parquet.compression.codec=zstd. "
+          + "Forwarded to parquet-mr as parquet.compression.codec.zstd.level, overriding any value set directly "
+          + "on the Hadoop Configuration. Note: not applied to parquet files produced by the clustering "
+          + "binary-copy path (HoodieParquetFileBinaryCopier), which preserves the source files' codec settings.");
 
   public static final ConfigProperty<Boolean> PARQUET_DICTIONARY_ENABLED = ConfigProperty
       .key("hoodie.parquet.dictionary.enabled")
@@ -521,6 +532,13 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder parquetCompressionCodec(String parquetCompressionCodec) {
       storageConfig.setValue(PARQUET_COMPRESSION_CODEC_NAME, parquetCompressionCodec);
+      return this;
+    }
+
+    public Builder parquetCompressionCodecZstdLevel(int zstdLevel) {
+      ValidationUtils.checkArgument(zstdLevel >= -22 && zstdLevel <= 22,
+          "ZSTD compression level must be in the range [-22, 22], got: " + zstdLevel);
+      storageConfig.setValue(PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL, String.valueOf(zstdLevel));
       return this;
     }
 

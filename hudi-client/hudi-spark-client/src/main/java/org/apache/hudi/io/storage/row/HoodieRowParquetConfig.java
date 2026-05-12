@@ -36,6 +36,13 @@ public class HoodieRowParquetConfig extends HoodieParquetConfig<HoodieRowParquet
         new HadoopStorageConfiguration(hadoopConf), compressionRatio, enableDictionary);
   }
 
+  public HoodieRowParquetConfig(HoodieRowParquetWriteSupport writeSupport, CompressionCodecName compressionCodecName,
+      int blockSize, int pageSize, long maxFileSize, Configuration hadoopConf,
+      double compressionRatio, boolean enableDictionary, int zstdLevel) {
+    super(writeSupport, compressionCodecName, blockSize, pageSize, maxFileSize,
+        new HadoopStorageConfiguration(hadoopConf), compressionRatio, enableDictionary, zstdLevel);
+  }
+
   public Configuration getHadoopConf() {
     return getStorageConf().unwrapAs(Configuration.class);
   }

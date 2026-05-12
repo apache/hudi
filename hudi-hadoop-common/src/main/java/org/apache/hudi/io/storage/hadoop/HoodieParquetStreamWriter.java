@@ -49,6 +49,10 @@ public class HoodieParquetStreamWriter implements HoodieAvroFileWriter, AutoClos
   public HoodieParquetStreamWriter(FSDataOutputStream outputStream,
                                    HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig) throws IOException {
     this.writeSupport = parquetConfig.getWriteSupport();
+    Configuration hadoopConf = HoodieParquetConfig.applyZstdLevel(
+        parquetConfig.getStorageConf().unwrapAs(Configuration.class),
+        parquetConfig.getCompressionCodecName(),
+        parquetConfig.getZstdLevel());
     this.writer = new Builder<IndexedRecord>(new OutputStreamBackedOutputFile(outputStream), writeSupport)
         .withWriteMode(ParquetFileWriter.Mode.CREATE)
         .withCompressionCodec(parquetConfig.getCompressionCodecName())
@@ -57,7 +61,7 @@ public class HoodieParquetStreamWriter implements HoodieAvroFileWriter, AutoClos
         .withDictionaryPageSize(parquetConfig.getPageSize())
         .withDictionaryEncoding(parquetConfig.isDictionaryEnabled())
         .withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION)
-        .withConf(parquetConfig.getStorageConf().unwrapAs(Configuration.class))
+        .withConf(hadoopConf)
         .build();
   }
 

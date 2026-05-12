@@ -2436,6 +2436,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
   }
 
+  public int getParquetCompressionCodecZstdLevel() {
+    return getIntOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL);
+  }
+
   public boolean parquetDictionaryEnabled() {
     return getBoolean(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED);
   }

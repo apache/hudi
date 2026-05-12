@@ -74,7 +74,8 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
         hoodieConfig.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
         (Configuration) storageConfiguration.unwrapAs(Configuration.class),
         hoodieConfig.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
-        hoodieConfig.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
+        hoodieConfig.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED),
+        hoodieConfig.getIntOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL));
     parquetConfig.getHadoopConf().addResource(writeSupport.getHadoopConf());
 
     return new HoodieSparkParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields);
@@ -95,7 +96,8 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
         config.getInt(HoodieStorageConfig.PARQUET_PAGE_SIZE),
         config.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
         writeSupport.getHadoopConf(), config.getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
-        config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
+        config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED),
+        config.getIntOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL));
     parquetConfig.getHadoopConf().addResource(writeSupport.getHadoopConf());
     return new HoodieSparkParquetStreamWriter(new FSDataOutputStream(outputStream, null), parquetConfig);
   }

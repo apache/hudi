@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
 import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
@@ -42,6 +43,10 @@ public class HoodieSparkParquetStreamWriter implements HoodieSparkFileWriter, Au
   public HoodieSparkParquetStreamWriter(FSDataOutputStream outputStream,
       HoodieRowParquetConfig parquetConfig) throws IOException {
     this.writeSupport = parquetConfig.getWriteSupport();
+    Configuration hadoopConf = HoodieParquetConfig.applyZstdLevel(
+        parquetConfig.getHadoopConf(),
+        parquetConfig.getCompressionCodecName(),
+        parquetConfig.getZstdLevel());
     this.writer = new Builder<>(new OutputStreamBackedOutputFile(outputStream), writeSupport)
         .withWriteMode(ParquetFileWriter.Mode.CREATE)
         .withCompressionCodec(parquetConfig.getCompressionCodecName())
@@ -50,7 +55,7 @@ public class HoodieSparkParquetStreamWriter implements HoodieSparkFileWriter, Au
         .withDictionaryPageSize(parquetConfig.getPageSize())
         .withDictionaryEncoding(parquetConfig.isDictionaryEnabled())
         .withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION)
-        .withConf(parquetConfig.getHadoopConf())
+        .withConf(hadoopConf)
         .build();
   }
 

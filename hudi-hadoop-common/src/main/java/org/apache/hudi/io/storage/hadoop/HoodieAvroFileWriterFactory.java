@@ -85,7 +85,8 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         hoodieConfig.getIntOrDefault(HoodieStorageConfig.PARQUET_PAGE_SIZE),
         hoodieConfig.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
         storageConfiguration, hoodieConfig.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
-        hoodieConfig.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
+        hoodieConfig.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED),
+        hoodieConfig.getIntOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL));
     return new HoodieAvroParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields);
   }
 
@@ -102,7 +103,8 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         config.getInt(HoodieStorageConfig.PARQUET_PAGE_SIZE),
         config.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE), // todo: 1024*1024*1024
         storage.getConf(), config.getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
-        config.getBoolean(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
+        config.getBoolean(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED),
+        config.getIntOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL));
     return new HoodieParquetStreamWriter(new FSDataOutputStream(outputStream, null), parquetConfig);
   }
 
