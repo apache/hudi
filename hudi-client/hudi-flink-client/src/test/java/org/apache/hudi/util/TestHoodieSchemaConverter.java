@@ -36,11 +36,12 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.table.types.logical.VarCharType;
 import org.apache.flink.table.types.logical.VarBinaryType;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -693,24 +694,18 @@ public class TestHoodieSchemaConverter {
   }
 
   @Test
-  @Disabled("disabled and reopen the tests for 1.3")
   public void testVariantTypeConversion() {
     // Test direct Variant conversion
     HoodieSchema variantSchema = HoodieSchema.createVariant();
     DataType dataType = HoodieSchemaConverter.convertToDataType(variantSchema);
     assertNotNull(dataType);
 
-    // Verify it's a ROW with metadata and value binary fields
-    RowType rowType = (RowType) dataType.getLogicalType();
-    assertEquals(2, rowType.getFieldCount());
-    assertEquals("metadata", rowType.getFieldNames().get(0));
-    assertEquals("value", rowType.getFieldNames().get(1));
-    assertInstanceOf(VarBinaryType.class, rowType.getTypeAt(0));
-    assertInstanceOf(VarBinaryType.class, rowType.getTypeAt(1));
+    // Verify it's a Variant
+    assertThat("the return type should be variant",
+        dataType.getLogicalType().asSummaryString(), is("VARIANT NOT NULL"));
   }
 
   @Test
-  @Disabled("disabled and reopen the tests for 1.3")
   public void testVariantInRecordConversion() {
     // Test Variant field within a record
     HoodieSchema recordWithVariant = HoodieSchema.createRecord(
@@ -727,11 +722,9 @@ public class TestHoodieSchemaConverter {
     assertEquals(2, result.getFieldCount());
     assertEquals("data", result.getFieldNames().get(1));
 
-    // Verify variant field is a ROW<metadata BYTES, value BYTES>
-    RowType variantRowType = (RowType) result.getTypeAt(1);
-    assertEquals(2, variantRowType.getFieldCount());
-    assertEquals("metadata", variantRowType.getFieldNames().get(0));
-    assertEquals("value", variantRowType.getFieldNames().get(1));
+    // Verify variant field
+    assertThat("the return type should be variant",
+        result.getTypeAt(1).asSummaryString(), is("VARIANT NOT NULL"));
   }
 
   @Test
