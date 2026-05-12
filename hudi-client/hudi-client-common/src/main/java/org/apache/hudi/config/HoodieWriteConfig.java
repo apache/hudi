@@ -3999,6 +3999,20 @@ public class HoodieWriteConfig extends HoodieConfig {
                   + "Use %s=ALL or %s=NONE.",
               HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode, engineType,
               HoodieTableConfig.META_FIELDS_MODE.key(), HoodieTableConfig.META_FIELDS_MODE.key()));
+
+      warnIfEventTimeWatermarkNotTracked();
+    }
+
+    private void warnIfEventTimeWatermarkNotTracked() {
+      String eventTimeFieldName = writeConfig.getString(HoodiePayloadConfig.EVENT_TIME_FIELD);
+      boolean trackEventTimeWatermark = writeConfig.getBooleanOrDefault(TRACK_EVENT_TIME_WATERMARK);
+      if (!StringUtils.isNullOrEmpty(eventTimeFieldName) && !trackEventTimeWatermark) {
+        log.warn("{}={} is configured but {}={}; event-time watermark metadata will not be tracked. "
+                + "Set {}=true to record event-time watermark in commit metadata.",
+            HoodiePayloadConfig.EVENT_TIME_FIELD.key(), eventTimeFieldName,
+            TRACK_EVENT_TIME_WATERMARK.key(), trackEventTimeWatermark,
+            TRACK_EVENT_TIME_WATERMARK.key());
+      }
     }
 
     public HoodieWriteConfig build() {
