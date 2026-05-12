@@ -40,13 +40,12 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.ssl.SSLContexts;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
@@ -79,8 +78,9 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  * <p>
  * https://github.com/confluentinc/schema-registry
  */
+@Slf4j
 public class SchemaRegistryProvider extends SchemaProvider {
-  private static final Logger LOG = LoggerFactory.getLogger(SchemaRegistryProvider.class);
+
   private static final Pattern URL_PATTERN = Pattern.compile("(.*/)subjects/(.*)/versions/(.*)");
   private static final String LATEST = "latest";
 
@@ -195,7 +195,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
     } catch (IllegalAccessError error) {
       // If we're not processing Protobuf schema, fall back to the legacy method
       if (!ProtobufSchema.TYPE.equalsIgnoreCase(schemaType)) {
-        LOG.warn("Falling back to legacy schema retrieval due to IllegalAccessError", error);
+        log.warn("Falling back to legacy schema retrieval due to IllegalAccessError", error);
         return fetchSchemaUsingLegacyMethod(registryUrl);
       }
       // Otherwise, rethrow the error
