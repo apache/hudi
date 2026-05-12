@@ -255,7 +255,7 @@ public class HoodieIndexUtils {
     //  the Lance PR and is tracked at https://github.com/apache/hudi/issues/18496 — respect the
     //  merger's record type for all formats.
     HoodieRecord.HoodieRecordType recordType = HoodieFileFormat.resolveRecordTypeForExtension(
-        FSUtils.getFileExtension(filePath.toString()), HoodieRecord.HoodieRecordType.AVRO);
+        filePath.getFileExtension(), HoodieRecord.HoodieRecordType.AVRO);
     try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(recordType)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
