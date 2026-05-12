@@ -2314,25 +2314,28 @@ public class HoodieTableMetadataUtil {
   /**
    * Returns true if bucketing is enabled for the metadata table.
    *
+   * <p>Reads the property from the MDT's own table config so we avoid an extra disk read of the
+   * data table's hoodie.properties on every file-slice lookup. The property is persisted on both
+   * the data table and the MDT during MDT initialization (see
+   * {@link #setMetadataTablePartitionBucketing(HoodieTableMetaClient, HoodieTableMetaClient, boolean)}).
+   *
    * @param metaClient MetaClient for the metadata table
    * @return true if bucketing is enabled
    */
   private static boolean isBucketingEnabledForMDT(HoodieTableMetaClient metaClient) {
-    // Bucketing status is saved within the main dataset's properties.
-    String basePath = HoodieTableMetadata.getDataTableBasePathFromMetadataTable(metaClient.getBasePath().toString());
-    return HoodieTableMetaClient.builder()
-        .setBasePath(basePath)
-        .setConf(metaClient.getStorageConf().newInstance())
-        .setLoadActiveTimelineOnLoad(false)
-        .build()
-        .getTableConfig()
-        .isMetadataTablePartitionBucketingEnabled();
+    return metaClient.getTableConfig().isMetadataTablePartitionBucketingEnabled();
   }
 
   /**
    * Returns the list of partitions to list for file slices.
    * When bucketing is enabled, returns the bucket sub-directories.
    * When bucketing is disabled, returns the partition itself.
+   *
+   * <p>Note: bucketing is fixed at MDT initialization time (see
+   * {@link org.apache.hudi.metadata.HoodieBackedTableMetadataWriter#initializeFileGroups}). A given
+   * MDT is therefore either fully bucketed or fully non-bucketed; mixed-state file groups under
+   * partition/ alongside partition/&lt;bucket&gt;/ cannot occur. We deliberately do not also scan the
+   * partition root when bucketing is enabled.
    *
    * @param metaClient MetaClient for the metadata table
    * @param partition The partition path
@@ -2366,10 +2369,16 @@ public class HoodieTableMetadataUtil {
   /**
    * Set the bucketing of partitions within the metadata table.
    *
-   * @param dataMetaClient MetaClient for the dataset
-   * @param enabled If true, metadata table is being used for this dataset, false otherwise
+   * <p>The property is persisted on both the data table (authoritative source for MDT initialization
+   * decisions) and the MDT (to allow reader code to determine bucketing without loading data table
+   * properties on every call).
+   *
+   * @param dataMetaClient     MetaClient for the dataset
+   * @param metadataMetaClient MetaClient for the MDT (may be null if MDT is not yet initialized)
+   * @param enabled            If true, metadata table is being used for this dataset, false otherwise
    */
-  public static HoodieTableMetaClient setMetadataTablePartitionBucketing(HoodieTableMetaClient dataMetaClient, boolean enabled) {
+  public static HoodieTableMetaClient setMetadataTablePartitionBucketing(HoodieTableMetaClient dataMetaClient,
+                                                                         HoodieTableMetaClient metadataMetaClient, boolean enabled) {
     // Only allowed on the main dataset
     ValidationUtils.checkArgument(!isMetadataTable(dataMetaClient.getBasePath().toString()), "Bucketing should only be enabled on the main dataset");
 
@@ -2378,6 +2387,12 @@ public class HoodieTableMetadataUtil {
     dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
     ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataTablePartitionBucketingEnabled() == enabled,
             "Metadata table state change should be persisted");
+
+    if (metadataMetaClient != null) {
+      // Also persist on MDT so reader code can determine bucketing from MDT props alone.
+      metadataMetaClient.getTableConfig().setMetadataTableBucketing(enabled);
+      HoodieTableConfig.update(metadataMetaClient.getStorage(), metadataMetaClient.getMetaPath(), metadataMetaClient.getTableConfig().getProps());
+    }
 
     log.info("Metadata table {} partition bucketing has been {}", dataMetaClient.getBasePath(), enabled ? "enabled" : "disabled");
     return dataMetaClient;

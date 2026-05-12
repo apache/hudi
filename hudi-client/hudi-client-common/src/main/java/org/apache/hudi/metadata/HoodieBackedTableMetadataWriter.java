@@ -1154,13 +1154,13 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    *    ...
    *    record_index/record-index-1999
    *
-   *  So 1000 file groups are created in the metadata partition directory.
+   *  So 2000 file groups are created in the metadata partition directory.
    *
    * ==== When file group bucketing is enabled
    * Let's say we configure 2000 file groups for record index partition. File groups will be created as follows in 2
    * buckets (0000 and 0001) in the record_index partition directory.:
    *    record_index/
-   *    record_index/000/.hoodie_partition_metadata
+   *    record_index/0000/.hoodie_partition_metadata
    *    record_index/0000/record-index-0000
    *    record_index/0000/record-index-0001
    *    ...
@@ -1184,10 +1184,14 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       // already enabled on MDT so we need to ensure that the bucketing is enabled for this partition too
       bucketingEnabled = true;
     } else if (dataWriteConfig.getMetadataConfig().isFileGroupBucketingEnabled()) {
-      // Enabled via config. Ensure there are no existing partitions that have been initialized without bucketing
-      bucketingEnabled = !dataMetaClient.getTableConfig().isMetadataTableAvailable();
-      if (!bucketingEnabled) {
-        throw new HoodieMetadataException(String.format("Cannot enable MDT partition %s with bucketing as MDT is already initialized without bucketing", metadataPartition.name()));
+      // Enabled via config. Bucketing can only be enabled at MDT initialization time. If the MDT is already
+      // initialized without bucketing, we cannot retro-fit bucketing onto it; log a warning and proceed
+      // without bucketing rather than hard-failing the user's pipeline.
+      if (dataMetaClient.getTableConfig().isMetadataTableAvailable()) {
+        LOG.warn("hoodie.metadata.file.group.bucketing.enable=true was requested for MDT partition {} but MDT is already "
+            + "initialized without bucketing. Proceeding without bucketing for this partition.", metadataPartition.name());
+      } else {
+        bucketingEnabled = true;
       }
     }
 
@@ -1254,8 +1258,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }, fileGroupIdAndPathPairList.size());
 
     if (bucketingEnabled && !dataMetaClient.getTableConfig().isMetadataTablePartitionBucketingEnabled()) {
-      // Bucketing has been enabled so set it in the table config
-      dataMetaClient = HoodieTableMetadataUtil.setMetadataTablePartitionBucketing(dataMetaClient, bucketingEnabled);
+      // Bucketing has been enabled. Update the instance field so subsequent partition initializations
+      // in this writer see the refreshed table config. The parameter would otherwise shadow the field,
+      // leaving the writer with a stale view that bucketing is still disabled.
+      this.dataMetaClient = HoodieTableMetadataUtil.setMetadataTablePartitionBucketing(dataMetaClient, metadataMetaClient, bucketingEnabled);
     }
   }
 

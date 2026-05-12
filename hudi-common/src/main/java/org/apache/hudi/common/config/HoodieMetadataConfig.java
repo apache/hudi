@@ -1035,7 +1035,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   }
 
   public int getFileGroupBucketSize() {
-    return getInt(FILE_GROUP_BUCKET_SIZE);
+    int bucketSize = getInt(FILE_GROUP_BUCKET_SIZE);
+    checkArgument(bucketSize > 0, FILE_GROUP_BUCKET_SIZE.key() + " must be greater than 0, got " + bucketSize);
+    return bucketSize;
   }
 
   public static class Builder {

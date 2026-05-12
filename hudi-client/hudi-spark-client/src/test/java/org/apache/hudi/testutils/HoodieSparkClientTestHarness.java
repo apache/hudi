@@ -650,13 +650,15 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     // Metadata table has a fixed number of partitions
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
-    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, HoodieTableMetadata.getMetadataTableBasePath(basePath),
-        false, false);
+    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient, false);
 
     List<MetadataPartitionType> enabledPartitionTypes = metadataWriter.getEnabledPartitionTypes();
     if (writeConfig.getMetadataConfig().isFileGroupBucketingEnabled()) {
-      // First bucket should be present
-      assertTrue(metadataTablePartitions.contains(HoodieTableMetadataUtil.getBucketRelativePath(MetadataPartitionType.FILES, 0)));
+      // Each enabled partition should have its first bucket sub-directory present
+      for (MetadataPartitionType partitionType : enabledPartitionTypes) {
+        assertTrue(metadataTablePartitions.contains(HoodieTableMetadataUtil.getBucketRelativePath(partitionType, 0)),
+            "Missing bucket-0 for partition: " + partitionType.getPartitionPath());
+      }
     } else {
       // partition path is the only partition
       assertEquals(enabledPartitionTypes.size(), metadataTablePartitions.size());

@@ -1594,7 +1594,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<HoodieLogFile> logFiles = fileSlices.get(0).getLogFiles().collect(Collectors.toList());
 
     // Verify the on-disk raw records before they get materialized
-    verifyMetadataRawRecords(logFiles, enableMetaFields);
+    verifyMetadataRawRecords(metadataMetaClient.getStorage(), logFiles, enableMetaFields);
 
     // Verify the in-memory materialized and merged records
     verifyMetadataMergedRecords(metadataMetaClient, logFiles, latestCommitTimestamp);
@@ -1605,11 +1605,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * these records should have additional meta fields in the payload. When key deduplication
    * is enabled, these records on the disk should have key in the payload as empty string.
    *
+   * @param storage          - HoodieStorage to read the log files from
    * @param logFiles         - Metadata table log files to be verified
    * @param enableMetaFields - Enable meta fields for records
    */
-private static void verifyMetadataRawRecords(HoodieTable table, List<HoodieLogFile> logFiles, boolean enableMetaFields) throws IOException {
-    HoodieStorage storage = table.getStorage();
+  private static void verifyMetadataRawRecords(HoodieStorage storage, List<HoodieLogFile> logFiles, boolean enableMetaFields) throws IOException {
     for (HoodieLogFile logFile : logFiles) {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(logFile.getPath());
       HoodieSchema writerSchema  =
@@ -4041,7 +4041,7 @@ private static void verifyMetadataRawRecords(HoodieTable table, List<HoodieLogFi
     }
   }
 
-private void validateMetadata(SparkRDDWriteClient testClient) throws Exception {
+  private void validateMetadata(SparkRDDWriteClient testClient) throws Exception {
     validateMetadata(testClient, Option.empty());
   }
 
@@ -4117,8 +4117,7 @@ private void validateMetadata(SparkRDDWriteClient testClient) throws Exception {
       List<HoodieLogFile> logFiles = latestSlices.get(0).getLogFiles().collect(Collectors.toList());
       try {
         if (FILES.getPartitionPath().equals(partition)) {
-          HoodieTable table = HoodieSparkTable.create(config, engineContext);
-          verifyMetadataRawRecords(table, logFiles, false);
+          verifyMetadataRawRecords(storage, logFiles, false);
         }
         if (COLUMN_STATS.getPartitionPath().equals(partition)) {
           verifyMetadataColumnStatsRecords(storage, logFiles);
@@ -4265,7 +4264,7 @@ private void validateMetadata(SparkRDDWriteClient testClient) throws Exception {
       // Metadata table has a fixed number of partitions
       // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
       // in the .hoodie folder.
-List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient, false);
+      List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient, false);
       // check if the last instant is restore, then the metadata table should have only the partitions that are not deleted
       metaClient.reloadActiveTimeline().getReverseOrderedInstants().findFirst().ifPresent(instant -> {
         if (instant.getAction().equals(HoodieActiveTimeline.RESTORE_ACTION)) {
@@ -4284,7 +4283,7 @@ List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContex
         List<HoodieLogFile> logFiles = latestSlices.get(0).getLogFiles().collect(Collectors.toList());
         try {
           if (FILES.getPartitionPath().equals(partition)) {
-            verifyMetadataRawRecords(logFiles, false);
+            verifyMetadataRawRecords(storage, logFiles, false);
           }
           if (COLUMN_STATS.getPartitionPath().equals(partition)) {
             verifyMetadataColumnStatsRecords(storage, logFiles);
