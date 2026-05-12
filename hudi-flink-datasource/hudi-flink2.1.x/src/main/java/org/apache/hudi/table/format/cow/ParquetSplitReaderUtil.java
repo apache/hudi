@@ -702,8 +702,7 @@ public class ParquetSplitReaderUtil {
         }
         return new HeapRowColumnVector(batchSize, columnVectors);
       case VARIANT:
-        validateVariantField(physicalType, HoodieSchema.Variant.VARIANT_VALUE_FIELD);
-        validateVariantField(physicalType, HoodieSchema.Variant.VARIANT_METADATA_FIELD);
+        validateVariantType(physicalType);
         return new HeapRowColumnVector(
             batchSize,
             new HeapBytesVector(batchSize),
@@ -718,7 +717,6 @@ public class ParquetSplitReaderUtil {
       List<ColumnDescriptor> descriptors,
       int depth,
       String fieldName) {
-    validateVariantField(physicalType, fieldName);
     return descriptors.stream()
         .filter(descriptor -> descriptor.getPath().length > depth + 1
             && fieldName.equals(descriptor.getPath()[depth + 1]))
@@ -727,9 +725,35 @@ public class ParquetSplitReaderUtil {
             "Invalid Variant Parquet schema: missing binary field '" + fieldName + "'."));
   }
 
-  private static void validateVariantField(Type physicalType, String fieldName) {
-    if (!physicalType.isPrimitive() && physicalType.asGroupType().containsField(fieldName)) {
-      Type fieldType = physicalType.asGroupType().getType(fieldName);
+  private static void validateVariantType(Type physicalType) {
+    if (!physicalType.isPrimitive()) {
+      GroupType groupType = physicalType.asGroupType();
+      if (isShreddedVariant(groupType)) {
+        throw new UnsupportedOperationException(
+            "Shredded Variant is not supported in Flink. "
+                + "The Parquet group '" + groupType.getName() + "' contains a '"
+                + HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD
+                + "' field indicating a shredded layout.");
+      }
+      validateVariantField(groupType, HoodieSchema.Variant.VARIANT_VALUE_FIELD);
+      validateVariantField(groupType, HoodieSchema.Variant.VARIANT_METADATA_FIELD);
+    } else {
+      throw new IllegalArgumentException(
+          "Type mismatch, expected Variant but got '" + physicalType + "'.");
+    }
+  }
+
+  /**
+   * Checks whether a variant group contains a {@code typed_value} field, indicating a shredded
+   * layout.
+   */
+  private static boolean isShreddedVariant(GroupType groupType) {
+    return groupType.containsField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD);
+  }
+
+  private static void validateVariantField(GroupType groupType, String fieldName) {
+    if (groupType.containsField(fieldName)) {
+      Type fieldType = groupType.getType(fieldName);
       if (fieldType.isPrimitive()
           && fieldType.asPrimitiveType().getPrimitiveTypeName() == PrimitiveType.PrimitiveTypeName.BINARY) {
         return;
