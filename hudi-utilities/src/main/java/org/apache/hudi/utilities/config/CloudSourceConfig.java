@@ -181,4 +181,12 @@ public class CloudSourceConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("Boolean value to allow coalesce alias columns with actual columns while reading from source");
+
+  public static final ConfigProperty<Integer> EXISTS_CHECK_PARALLELISM = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.check.file.exists.parallelism")
+      .defaultValue(32)
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.check.file.exists.parallelism")
+      .markAdvanced()
+      .withDocumentation("Number of threads per Spark task for parallel cloud object existence checks. "
+          + "Each task uses a fixed thread pool of this size to issue HEAD requests concurrently.");
 }
