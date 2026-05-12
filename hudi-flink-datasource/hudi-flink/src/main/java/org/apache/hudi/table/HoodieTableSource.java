@@ -308,7 +308,7 @@ public class HoodieTableSource extends FileIndexReader implements
             rowType,
             requiredRowType,
             tableSchema.toString(),
-            HoodieSchemaConverter.convertToSchema(requiredRowType).toString(),
+            DataTypeUtils.createRequiredSchema(tableSchema, requiredRowType).toString(),
             new ArrayList<>());
     boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ && context.isStreaming();
     if (conf.get(FlinkOptions.CDC_ENABLED)) {
@@ -324,7 +324,7 @@ public class HoodieTableSource extends FileIndexReader implements
       splitReaderFunction = new HoodieSplitReaderFunction(
           conf,
           tableSchema,
-          HoodieSchemaConverter.convertToSchema(requiredRowType),
+          DataTypeUtils.createRequiredSchema(tableSchema, requiredRowType),
           internalSchemaManager,
           conf.get(FlinkOptions.MERGE_TYPE),
           predicates,
@@ -535,12 +535,12 @@ public class HoodieTableSource extends FileIndexReader implements
             return mergeOnReadInputFormat(rowType, requiredRowType, tableSchema,
                 rowDataType, inputSplits, false);
           case COPY_ON_WRITE:
-            return baseFileOnlyInputFormat();
+            return baseFileOnlyInputFormat(tableSchema);
           default:
             throw new HoodieException("Unexpected table type: " + this.conf.get(FlinkOptions.TABLE_TYPE));
         }
       case FlinkOptions.QUERY_TYPE_READ_OPTIMIZED:
-        return baseFileOnlyInputFormat();
+        return baseFileOnlyInputFormat(tableSchema);
       case FlinkOptions.QUERY_TYPE_INCREMENTAL:
         IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
             .conf(conf)
@@ -613,7 +613,7 @@ public class HoodieTableSource extends FileIndexReader implements
         rowType,
         requiredRowType,
         tableSchema.toString(),
-        HoodieSchemaConverter.convertToSchema(requiredRowType).toString(),
+        DataTypeUtils.createRequiredSchema(tableSchema, requiredRowType).toString(),
         inputSplits);
     return CdcInputFormat.builder()
         .config(this.conf)
@@ -638,7 +638,7 @@ public class HoodieTableSource extends FileIndexReader implements
         rowType,
         requiredRowType,
         tableAvroSchema.toString(),
-        HoodieSchemaConverter.convertToSchema(requiredRowType).toString(),
+        DataTypeUtils.createRequiredSchema(tableAvroSchema, requiredRowType).toString(),
         inputSplits);
     return MergeOnReadInputFormat.builder()
         .config(this.conf)
@@ -653,7 +653,7 @@ public class HoodieTableSource extends FileIndexReader implements
         .build();
   }
 
-  private InputFormat<RowData, ?> baseFileOnlyInputFormat() {
+  private InputFormat<RowData, ?> baseFileOnlyInputFormat(HoodieSchema tableSchema) {
     final List<FileSlice> fileSlices = getBaseFileOnlyFileSlices(metaClient);
     if (fileSlices.isEmpty()) {
       return InputFormats.EMPTY_INPUT_FORMAT;
@@ -678,7 +678,8 @@ public class HoodieTableSource extends FileIndexReader implements
         this.limit == NO_LIMIT_CONSTANT ? Long.MAX_VALUE : this.limit, // ParquetInputFormat always uses the limit value
         getParquetConf(this.conf, this.hadoopConf.unwrap()),
         this.conf.get(FlinkOptions.READ_UTC_TIMEZONE),
-        this.internalSchemaManager
+        this.internalSchemaManager,
+        tableSchema
     );
   }
 
