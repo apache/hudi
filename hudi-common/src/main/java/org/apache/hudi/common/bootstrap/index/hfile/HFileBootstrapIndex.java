@@ -30,8 +30,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 
@@ -49,11 +49,10 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  * on these index files to manage multiple file-groups.
  */
 
+@Slf4j
 public class HFileBootstrapIndex extends BootstrapIndex {
 
   private static final long serialVersionUID = 1L;
-
-  private static final Logger LOG = LoggerFactory.getLogger(HFileBootstrapIndex.class);
 
   public static final String BOOTSTRAP_INDEX_FILE_ID = "00000000-0000-0000-0000-000000000000-0";
 
@@ -68,6 +67,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
   public static final String INDEX_INFO_KEY_STRING = "INDEX_INFO";
   public static final byte[] INDEX_INFO_KEY = getUTF8Bytes(INDEX_INFO_KEY_STRING);
 
+  @Getter
   private final boolean isPresent;
 
   public HFileBootstrapIndex(HoodieTableMetaClient metaClient) {
@@ -152,17 +152,12 @@ public class HFileBootstrapIndex extends BootstrapIndex {
       StoragePath[] indexPaths = new StoragePath[] {partitionIndexPath(metaClient), fileIdIndexPath(metaClient)};
       for (StoragePath indexPath : indexPaths) {
         if (metaClient.getStorage().exists(indexPath)) {
-          LOG.info("Dropping bootstrap index. Deleting file: {}", indexPath);
+          log.info("Dropping bootstrap index. Deleting file: {}", indexPath);
           metaClient.getStorage().deleteDirectory(indexPath);
         }
       }
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
-  }
-
-  @Override
-  public boolean isPresent() {
-    return isPresent;
   }
 }
