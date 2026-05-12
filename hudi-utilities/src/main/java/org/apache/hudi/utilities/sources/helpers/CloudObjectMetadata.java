@@ -21,13 +21,18 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.io.Serializable;
 
 @AllArgsConstructor
+@NoArgsConstructor
 @Getter
+@Setter
 public class CloudObjectMetadata implements Serializable {
+  private static final long serialVersionUID = 1L;
 
-  private final String path;
-  private final long size;
+  private String path;
+  private long size;
 }
