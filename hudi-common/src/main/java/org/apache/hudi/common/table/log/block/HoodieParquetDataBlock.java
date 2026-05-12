@@ -122,7 +122,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
 
     ClosableIterator<HoodieRecord<T>> iterator = HoodieIOFactory.getIOFactory(inlineStorage)
         .getReaderFactory(type)
-        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, inlineLogFilePath, PARQUET, Option.empty())
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, inlineLogFilePath, PARQUET, Option.of(writerSchema))
         .getRecordIterator(writerSchema, readerSchema);
     return iterator;
   }

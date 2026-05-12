@@ -43,7 +43,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.io.IOUtils;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metrics.FlinkClusteringMetrics;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
@@ -306,11 +306,10 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   private Iterator<RowData> readRecordsForGroupBaseFiles(List<ClusteringOperation> clusteringOps) {
     List<ClosableIterator<RowData>> iteratorsForPartition = clusteringOps.stream().map(clusteringOp -> {
       try {
-        HoodieFileReaderFactory fileReaderFactory = HoodieIOFactory.getIOFactory(table.getStorage())
-            .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK);
-        HoodieRowDataParquetReader fileReader = (HoodieRowDataParquetReader) fileReaderFactory.getFileReader(
-            table.getConfig(), new StoragePath(clusteringOp.getDataFilePath()));
-        fileReader.withTableSchema(new TableSchemaResolver(table.getMetaClient()).getTableSchema());
+        HoodieSchema tableSchema = new TableSchemaResolver(table.getMetaClient()).getTableSchema();
+        HoodieRowDataParquetReader fileReader = (HoodieRowDataParquetReader) HoodieIOFactory.getIOFactory(table.getStorage())
+            .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
+            .getFileReader(table.getConfig(), new StoragePath(clusteringOp.getDataFilePath()), Option.of(tableSchema));
 
         return new CloseableMappingIterator<>(fileReader.getRecordIterator(readerSchema), HoodieRecord::getData);
       } catch (Exception e) {

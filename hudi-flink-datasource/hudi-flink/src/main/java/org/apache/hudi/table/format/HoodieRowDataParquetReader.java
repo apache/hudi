@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -48,44 +49,30 @@ import java.util.Set;
 /**
  * Implementation of {@link HoodieFileReader} to read {@link RowData}s from base file.
  *
- * <p><b>Schema enforcement:</b> This reader requires the table-level {@link HoodieSchema} to be
- * set via {@link #withTableSchema(HoodieSchema)} before reading. The HoodieSchema is the
- * authoritative source for Hudi logical types (Variant, Blob, Vector) — these types cannot be
- * inferred from the Parquet physical schema alone because their binary/group layouts are
- * indistinguishable from ordinary BYTES or ROW columns without schema context. The Parquet
- * {@code VARIANT} annotation (parquet-java 1.15.2+) is also insufficient because older files
- * lack it and it cannot distinguish Blob/Vector from Variant.
+ * <p>The table-level {@link HoodieSchema} is supplied at construction time via the factory
+ * ({@link HoodieRowDataFileReaderFactory}). When present, the schema is used to derive a Flink
+ * RowType that correctly preserves Hudi logical types (Variant, Blob, Vector). These types are
+ * indistinguishable from ordinary BYTES or ROW columns in the Parquet physical schema.
  *
- * <p>All callers (e.g. {@code FlinkRowDataReaderContext}, {@code ClusteringOperator}) supply the
- * schema from {@code TableSchemaResolver}. An {@link IllegalStateException} is thrown if the
- * schema is missing, preventing silent mis-inference of logical types.
+ * <p>The schema may be absent ({@code Option.empty()}) for metadata-only operations such as
+ * bloom filter lookups, min/max key reads, and record counts. In that case, calling
+ * {@link #getRowType()}, {@link #getSchema()}, or any record-reading method will throw
+ * {@link IllegalStateException}.
  */
 public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
   private final HoodieStorage storage;
   private final ParquetUtils parquetUtils;
   private final StoragePath path;
+  private final Option<HoodieSchema> tableSchema;
   private HoodieSchema fileSchema;
   private DataType fileRowType;
-  private HoodieSchema tableSchema;
   private final List<ClosableIterator<RowData>> readerIterators = new ArrayList<>();
 
-  public HoodieRowDataParquetReader(HoodieStorage storage, StoragePath path) {
+  public HoodieRowDataParquetReader(HoodieStorage storage, StoragePath path, Option<HoodieSchema> schemaOption) {
     this.storage = storage;
     this.parquetUtils = (ParquetUtils) HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(HoodieFileFormat.PARQUET);
     this.path = path;
-  }
-
-  /**
-   * Sets the table-level HoodieSchema. This schema is used directly to derive the Flink
-   * RowType (via {@code HoodieSchemaConverter}), ensuring Hudi logical types (Variant, Blob,
-   * Vector) are correctly represented in the Flink type system.
-   *
-   * <p><b>Must</b> be called before {@link #getRowType()}, {@link #getSchema()}, or
-   * {@link #getRecordKeyIterator()}. An {@link IllegalStateException} is thrown otherwise.
-   */
-  public HoodieRowDataParquetReader withTableSchema(HoodieSchema tableSchema) {
-    this.tableSchema = tableSchema;
-    return this;
+    this.tableSchema = schemaOption;
   }
 
   @Override
@@ -105,8 +92,7 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
 
   @Override
   public ClosableIterator<HoodieRecord<RowData>> getRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema) throws IOException {
-    DataType rowType = RowDataQueryContexts.fromSchema(readerSchema).getRowType();
-    ClosableIterator<RowData> rowDataItr = getRowDataIterator(InternalSchemaManager.DISABLED, rowType, requestedSchema, Collections.emptyList());
+    ClosableIterator<RowData> rowDataItr = getRowDataIterator(InternalSchemaManager.DISABLED, getRowType(), requestedSchema, Collections.emptyList());
     readerIterators.add(rowDataItr);
     return new CloseableMappingIterator<>(rowDataItr, HoodieFlinkRecord::new);
   }
@@ -129,26 +115,33 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
   @Override
   public HoodieSchema getSchema() {
     if (fileSchema == null) {
-      checkTableSchemaPresent();
-      fileSchema = tableSchema;
+      checkSchemaPresent();
+      fileSchema = tableSchema.get();
     }
     return fileSchema;
   }
 
   public DataType getRowType() {
     if (fileRowType == null) {
-      checkTableSchemaPresent();
-      fileRowType = RowDataQueryContexts.fromSchema(tableSchema).getRowType();
+      checkSchemaPresent();
+      fileRowType = RowDataQueryContexts.fromSchema(tableSchema.get()).getRowType();
     }
     return fileRowType;
   }
 
-  private void checkTableSchemaPresent() {
-    if (tableSchema == null) {
+  /**
+   * Ensures the HoodieSchema was supplied at construction time. Required for Flink MOR/COW
+   * unstructured type support: Hudi logical types (Variant, Blob, Vector) cannot be inferred
+   * from the Parquet physical schema alone because their binary/group layouts are
+   * indistinguishable from ordinary BYTES or ROW columns. Only the HoodieSchema carries the
+   * logical type annotations needed for correct Flink RowType derivation.
+   */
+  private void checkSchemaPresent() {
+    if (!tableSchema.isPresent()) {
       throw new IllegalStateException(
-          "tableSchema must be set via withTableSchema() before calling getRowType()/getSchema(). "
-              + "The Flink Parquet reader requires the HoodieSchema to correctly infer "
-              + "logical types (Variant, Blob, Vector). File: " + path);
+          "HoodieSchema is required for record-reading operations but was not supplied. "
+              + "Pass the schema via getFileReader(config, path, Option.of(schema)) or the "
+              + "4-arg getFileReader overload. File: " + path);
     }
   }
 
