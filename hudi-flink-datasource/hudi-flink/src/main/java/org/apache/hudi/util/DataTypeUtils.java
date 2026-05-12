@@ -19,6 +19,10 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.exception.HoodieCatalogException;
 
 import org.apache.flink.table.api.DataTypes;
@@ -118,6 +122,48 @@ public class DataTypeUtils {
   public static int[] projectOrdinals(RowType rowType, RowType producedRowType) {
     List<String> fieldNames = rowType.getFieldNames();
     return producedRowType.getFieldNames().stream().mapToInt(fieldNames::indexOf).toArray();
+  }
+
+  /**
+   * Creates a hoodie schema from a Flink row type with logical metadata from the table schema.
+   *
+   * <p>When a field is a hoodie specific logical type in {@code tableSchema}, this method
+   * reuses the table schema field to preserve logical metadata that cannot be recovered from Flink
+   * {@link RowType}, for example VECTOR element type and dimension. Other fields are taken from the
+   * schema converted from {@code rowType}, so the returned schema follows the row type's field order
+   * while retaining hoodie-specific logical metadata where needed.
+   *
+   * @param rowType     Flink row type to convert
+   * @param tableSchema source table schema with hoodie logical type metadata
+   * @return hoodie schema matching the row type field order
+   */
+  public static HoodieSchema toHoodieSchemaWithLogicalMetadata(RowType rowType, HoodieSchema tableSchema) {
+    HoodieSchema convertedSchema = HoodieSchemaConverter.convertToSchema(rowType);
+    List<HoodieSchemaField> schemaFields = new ArrayList<>(rowType.getFieldCount());
+
+    for (String fieldName : rowType.getFieldNames()) {
+      HoodieSchemaField tableField = tableSchema.getField(fieldName).orElse(null);
+      HoodieSchemaField field = tableField != null && useTableSchemaField(tableField)
+          ? tableField : convertedSchema.getField(fieldName).get();
+      schemaFields.add(HoodieSchemaUtils.createNewSchemaField(field));
+    }
+
+    return HoodieSchema.createRecord(
+        tableSchema.getName(),
+        tableSchema.getNamespace().orElse(null),
+        tableSchema.getDoc().orElse(null),
+        schemaFields);
+  }
+
+  /**
+   * Returns whether the converted schema should reuse the field from the table schema.
+   *
+   * <p>Only types whose logical metadata cannot be fully reconstructed from Flink
+   * {@link RowType} are reused from the table schema.
+   */
+  private static boolean useTableSchemaField(HoodieSchemaField field) {
+    HoodieSchemaType fieldType = field.schema().getNonNullType().getType();
+    return fieldType == HoodieSchemaType.VECTOR;
   }
 
   /**

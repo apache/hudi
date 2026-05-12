@@ -19,6 +19,9 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.adapter.DataTypeAdapter;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -57,6 +60,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
 
 /**
  * Tool class used to convert from Avro {@link GenericRecord} to {@link RowData}.
@@ -78,16 +82,55 @@ public class AvroToRowDataConverters {
   // -------------------------------------------------------------------------------------
   // Runtime Converters
   // -------------------------------------------------------------------------------------
+
+  /**
+   * Creates a row converter from the Flink row type using UTC timezone conversion.
+   *
+   * <p>Note that this RowType-only path cannot recover Hoodie-specific logical type metadata
+   * that is not represented in Flink's {@link RowType}.
+   */
   public static AvroToRowDataConverter createRowConverter(RowType rowType) {
     return createRowConverter(rowType, true);
   }
 
+  /**
+   * Creates a row converter from the Flink row type.
+   *
+   * <p>Note that this RowType-only path cannot recover Hoodie-specific logical type metadata
+   * that is not represented in Flink's {@link RowType}.
+   */
   public static AvroToRowDataConverter createRowConverter(RowType rowType, boolean utcTimezone) {
-    final AvroToRowDataConverter[] fieldConverters =
-        rowType.getFields().stream()
-            .map(RowType.RowField::getType)
-            .map(type -> AvroToRowDataConverters.createNullableConverter(type, utcTimezone))
-            .toArray(AvroToRowDataConverter[]::new);
+    return createRowConverter(HoodieSchemaConverter.convertToSchema(rowType), rowType, utcTimezone);
+  }
+
+  /**
+   * Creates a row converter using only the Flink row type.
+   *
+   * <p>This converter cannot recover Hoodie-specific logical type metadata from {@link RowType}.
+   * Use {@link #createRowConverter(HoodieSchema, RowType, boolean)} when a Hoodie schema is
+   * available, especially for VECTOR columns.
+   */
+  public static AvroToRowDataConverter createRowConverter(HoodieSchema hoodieSchema) {
+    return createRowConverter(hoodieSchema, (RowType) HoodieSchemaConverter.convertToDataType(hoodieSchema).getLogicalType(), true);
+  }
+
+  /**
+   * Creates a row converter using both Hoodie schema metadata and the target Flink row type.
+   */
+  public static AvroToRowDataConverter createRowConverter(HoodieSchema schema, RowType rowType, boolean utcTimezone) {
+    HoodieSchema recordSchema = schema.getNonNullType();
+    if (recordSchema.getType() == HoodieSchemaType.UNION) {
+      // getNonNullType() unwraps simple nullable unions only. Complex unions can still reach
+      // here when their Flink representation is a ROW, for example fields inside
+      // ColumnStatsSchemas.METADATA_SCHEMA. In that case the RowType already captures the
+      // target Flink shape, so use the first union branch only as the positional Hoodie schema
+      // template for building nested field converters.
+      recordSchema = recordSchema.getTypes().get(0);
+    }
+    final List<HoodieSchemaField> fields = recordSchema.getFields();
+    final AvroToRowDataConverter[] fieldConverters = IntStream.range(0, rowType.getFieldCount())
+        .mapToObj(i -> createNullableConverter(fields.get(i).schema(), rowType.getTypeAt(i), utcTimezone))
+        .toArray(AvroToRowDataConverter[]::new);
     final int arity = rowType.getFieldCount();
 
     return avroObject -> {
@@ -103,8 +146,11 @@ public class AvroToRowDataConverters {
   /**
    * Creates a runtime converter which is null safe.
    */
-  private static AvroToRowDataConverter createNullableConverter(LogicalType type, boolean utcTimezone) {
-    final AvroToRowDataConverter converter = createConverter(type, utcTimezone);
+  private static AvroToRowDataConverter createNullableConverter(
+      HoodieSchema schema,
+      LogicalType type,
+      boolean utcTimezone) {
+    final AvroToRowDataConverter converter = createConverter(schema, type, utcTimezone);
     return avroObject -> {
       if (avroObject == null) {
         return null;
@@ -117,6 +163,19 @@ public class AvroToRowDataConverters {
    * Creates a runtime converter which assuming input object is not null.
    */
   public static AvroToRowDataConverter createConverter(LogicalType type, boolean utcTimezone) {
+    return createConverter(HoodieSchemaConverter.convertToSchema(type), type, utcTimezone);
+  }
+
+  /**
+   * Creates a runtime converter with both Hoodie schema and Flink logical type information.
+   *
+   * <p>The recursive converter construction keeps these two type views together: Flink
+   * {@link LogicalType} decides the target RowData representation, while {@link HoodieSchema}
+   * carries Hoodie-specific logical metadata such as VECTOR dimension and element type.
+   */
+  private static AvroToRowDataConverter createConverter(HoodieSchema schema, LogicalType type, boolean utcTimezone) {
+    HoodieSchema nonNullSchema = schema.getNonNullType();
+
     switch (type.getTypeRoot()) {
       case NULL:
         return avroObject -> null;
@@ -143,25 +202,36 @@ public class AvroToRowDataConverters {
         return createTimestampConverter(((TimestampType) type).getPrecision(), utcTimezone);
       case CHAR:
       case VARCHAR:
-        return avroObject -> avroObject instanceof Utf8 ? StringData.fromBytes(((Utf8) avroObject).getBytes()) : StringData.fromString(avroObject.toString());
+        return avroObject -> avroObject instanceof Utf8
+            ? StringData.fromBytes(((Utf8) avroObject).getBytes())
+            : StringData.fromString(avroObject.toString());
       case BINARY:
       case VARBINARY:
         return AvroToRowDataConverters::convertToBytes;
       case DECIMAL:
         return createDecimalConverter((DecimalType) type);
       case ARRAY:
-        return createArrayConverter((ArrayType) type, utcTimezone);
+        if (nonNullSchema.getType() == HoodieSchemaType.VECTOR) {
+          HoodieSchema.Vector vectorSchema = (HoodieSchema.Vector) nonNullSchema;
+          VectorConversionUtils.validateVectorLogicalType(vectorSchema, type);
+          return createVectorConverter(vectorSchema);
+        }
+        return createArrayConverter(nonNullSchema.getElementType(), (ArrayType) type, utcTimezone);
       case ROW:
-        return createRowConverter((RowType) type, utcTimezone);
+        return createRowConverter(nonNullSchema, (RowType) type, utcTimezone);
       case MAP:
       case MULTISET:
-        return createMapConverter(type, utcTimezone);
+        return createMapConverter(nonNullSchema.getValueType(), type, utcTimezone);
       default:
         if (DataTypeAdapter.isVariantType(type)) {
           return createVariantConverter();
         }
         throw new UnsupportedOperationException("Unsupported type: " + type);
     }
+  }
+
+  private static AvroToRowDataConverter createVectorConverter(HoodieSchema.Vector vectorSchema) {
+    return avroObject -> VectorConversionUtils.createVectorArrayData(convertToBytes(avroObject), vectorSchema);
   }
 
   private static AvroToRowDataConverter createDecimalConverter(DecimalType decimalType) {
@@ -182,9 +252,12 @@ public class AvroToRowDataConverters {
     };
   }
 
-  private static AvroToRowDataConverter createArrayConverter(ArrayType arrayType, boolean utcTimezone) {
+  private static AvroToRowDataConverter createArrayConverter(
+      HoodieSchema elementSchema,
+      ArrayType arrayType,
+      boolean utcTimezone) {
     final AvroToRowDataConverter elementConverter =
-        createNullableConverter(arrayType.getElementType(), utcTimezone);
+        createNullableConverter(elementSchema, arrayType.getElementType(), utcTimezone);
     final Class<?> elementClass =
         LogicalTypeUtils.toInternalConversionClass(arrayType.getElementType());
 
@@ -199,11 +272,14 @@ public class AvroToRowDataConverters {
     };
   }
 
-  private static AvroToRowDataConverter createMapConverter(LogicalType type, boolean utcTimezone) {
+  private static AvroToRowDataConverter createMapConverter(
+      HoodieSchema valueSchema,
+      LogicalType type,
+      boolean utcTimezone) {
     final AvroToRowDataConverter keyConverter =
         createConverter(DataTypes.STRING().getLogicalType(), utcTimezone);
     final AvroToRowDataConverter valueConverter =
-        createNullableConverter(HoodieSchemaConverter.extractValueTypeToMap(type), utcTimezone);
+        createNullableConverter(valueSchema, HoodieSchemaConverter.extractValueTypeToMap(type), utcTimezone);
 
     return avroObject -> {
       final Map<?, ?> map = (Map<?, ?>) avroObject;
