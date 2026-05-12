@@ -56,12 +56,11 @@ public final class ArchiveExecutorUtils {
                             boolean enableMetadata,
                             String basePath,
                             Map<String, String> conf) throws IOException {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withProps(conf).withPath(basePath)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(minCommits, maxCommits).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(commitsRetained).build())
         .withEmbeddedTimelineServerEnabled(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build())
-        .withProps(conf)
         .build();
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     HoodieSparkTable<HoodieAvroPayload> table = HoodieSparkTable.create(config, context);

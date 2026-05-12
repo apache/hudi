@@ -109,8 +109,20 @@ object HoodieCLIUtils extends Logging {
 
   def extractOptions(s: String): Map[String, String] = {
     StringUtils.split(s, ",").asScala
-      .map(split => StringUtils.split(split, "="))
-      .map(pair => pair.get(0) -> pair.get(1))
+      .map(token => {
+        val delimiterIndex = token.indexOf('=')
+        if (delimiterIndex <= 0) {
+          throw new IllegalArgumentException(s"Invalid options format: '$token'. Expected 'key=value' pairs separated by commas, for example: 'k1=v1,k2=v2'.")
+        }
+
+        val key = token.substring(0, delimiterIndex).trim
+        if (key.isEmpty) {
+          throw new IllegalArgumentException(s"Invalid options format: '$token'. Option key must not be empty and options should follow 'key=value' format.")
+        }
+
+        val value = token.substring(delimiterIndex + 1).trim
+        key -> value
+      })
       .toMap
   }
 
