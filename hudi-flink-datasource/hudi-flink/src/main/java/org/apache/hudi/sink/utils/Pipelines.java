@@ -58,10 +58,10 @@ import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketIndexPartitioner;
 import org.apache.hudi.sink.partitioner.DynamicBucketAssignFunction;
 import org.apache.hudi.sink.partitioner.DynamicBucketAssignOperator;
+import org.apache.hudi.sink.partitioner.GlobalRecordIndexPartitioner;
 import org.apache.hudi.sink.partitioner.MiniBatchBucketAssignOperator;
 import org.apache.hudi.sink.partitioner.MinibatchBucketAssignFunction;
 import org.apache.hudi.sink.partitioner.RecordIndexPartitioner;
-import org.apache.hudi.sink.partitioner.GlobalRecordIndexPartitioner;
 import org.apache.hudi.sink.partitioner.index.IndexRowUtils;
 import org.apache.hudi.sink.partitioner.index.IndexWriteOperator;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
@@ -463,6 +463,7 @@ public class Pipelines {
     String assignerOperatorName = "bucket_assigner";
     if (OptionsResolver.isGlobalRecordLevelIndex(conf) && !conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       return inputStream
+          .partitionCustom(new GlobalRecordIndexPartitioner(conf), row -> new HoodieKey(row.getRecordKey(), row.getPartitionPath()))
           .transform(
               assignerOperatorName,
               new HoodieFlinkInternalRowTypeInfo(rowType),
