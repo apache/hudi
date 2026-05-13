@@ -55,6 +55,7 @@ public final class TestcontainersConfig {
     // Testcontainers appends the replica index, so the adhoc services resolve as "<name>-1".
     public static final String ADHOC_1 = "adhoc-1-1";
     public static final String ADHOC_2 = "adhoc-2-1";
+    public static final String TRINOCOORDINATOR = "trinocoordinator";
 
     private Containers() {
     }
@@ -71,6 +72,12 @@ public final class TestcontainersConfig {
     public static final String HADOOP_CONF_DIR = "/etc/hadoop";
     /** Host-side, relative to the hudi-integ-test module working directory. */
     public static final String COMPOSE_DIR = "../docker/compose/";
+    /**
+     * Host-side directory holding the assembled native Trino-Hudi plugin (output of
+     * `mvn -f hudi-trino-plugin/pom.xml package`). The plugin module is excluded from
+     * the parent Hudi reactor, so Trino-dependent ITs assume-skip when this is absent.
+     */
+    public static final String TRINO_PLUGIN_HOST = "../hudi-trino-plugin/target/trino-hudi-472";
 
     private Paths() {
     }
@@ -82,6 +89,8 @@ public final class TestcontainersConfig {
     public static final String HIVE_SERVER_JDBC_URL =
         "jdbc:hive2://" + Containers.HIVESERVER + ":" + HIVE_SERVER_JDBC_PORT;
     public static final int SPARK_MASTER_WEB_UI_PORT = 8080;
+    /** Container-internal Trino HTTP port. Tests exec the CLI inside the coordinator. */
+    public static final int TRINO_PORT = 8080;
 
     private Network() {
     }
@@ -92,6 +101,13 @@ public final class TestcontainersConfig {
     public static final Duration CONTAINER_STARTUP = Duration.ofMinutes(5);
     public static final int HDFS_MAX_RETRIES = 12;
     public static final Duration HDFS_RETRY_INTERVAL = Duration.ofSeconds(10);
+    /**
+     * Trino's slow startup path is plugin discovery + metastore handshake. The CLI's
+     * first query against an unready coordinator returns a misleading error, so callers
+     * should retry up to this many times.
+     */
+    public static final int TRINO_READY_MAX_RETRIES = 18;
+    public static final Duration TRINO_READY_RETRY_INTERVAL = Duration.ofSeconds(10);
 
     private Timeouts() {
     }

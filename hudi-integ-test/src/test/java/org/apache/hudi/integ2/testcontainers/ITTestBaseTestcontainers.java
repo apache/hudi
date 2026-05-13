@@ -21,6 +21,7 @@ package org.apache.hudi.integ2.testcontainers;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.integ2.testcontainers.service.HiveService;
 import org.apache.hudi.integ2.testcontainers.service.SparkService;
+import org.apache.hudi.integ2.testcontainers.service.TrinoService;
 
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assumptions;
@@ -59,6 +60,7 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
   protected HiveService hive;
   protected SparkService sparkAdhoc1;
   protected SparkService sparkAdhoc2;
+  protected TrinoService trino;
 
   @BeforeAll
   public static void setupDockerCompose() {
@@ -88,6 +90,7 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
     this.hive = new HiveService(this);
     this.sparkAdhoc1 = new SparkService(this, Containers.ADHOC_1);
     this.sparkAdhoc2 = new SparkService(this, Containers.ADHOC_2);
+    this.trino = new TrinoService(this);
   }
 
   /**
@@ -99,6 +102,23 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
     Assumptions.assumeTrue(
         composePrefix.contains(SystemProps.SPARK_4_PREFIX_TOKEN),
         "Test requires a Spark 4.x compose stack; active prefix is '" + composePrefix + "'");
+  }
+
+  /**
+   * Skip Trino-dependent tests when the native trino-hudi plugin has not been built.
+   * The plugin module ({@code hudi-trino-plugin/}) is excluded from the parent Hudi
+   * reactor (its Maven parent is upstream {@code io.trino:trino-root}), so {@code mvn
+   * install} from the repo root does not produce it. The compose service bind-mounts
+   * {@code hudi-trino-plugin/target/trino-hudi-472} into the coordinator; if the dir
+   * is missing the container would either fail to start or come up with no Hudi
+   * catalog. Skipping is friendlier than letting the suite fail with an opaque error.
+   */
+  protected static void assumeTrinoPluginBuilt() {
+    File pluginDir = new File(System.getProperty("user.dir"), TestcontainersConfig.Paths.TRINO_PLUGIN_HOST);
+    Assumptions.assumeTrue(pluginDir.isDirectory(),
+        "Test requires the native trino-hudi plugin assembled at "
+            + pluginDir.getAbsolutePath()
+            + " - build via `mvn -f hudi-trino-plugin/pom.xml package -DskipTests`.");
   }
 
   /**
@@ -165,6 +185,44 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
   }
 
   /**
+   * Remove a top-level docker-compose service block by name. A "service block" starts
+   * at a 2-space indented `serviceName:` line and continues until the next line that
+   * starts with whitespace less than 2 spaces *and* is non-blank (i.e. the next
+   * top-level YAML key like `volumes:` / `networks:`, or another 2-space service).
+   * Blank lines inside the block are consumed; the block-ending boundary line is left
+   * in place.
+   */
+  static String stripComposeService(String yaml, String serviceName) {
+    String[] lines = yaml.split("\\r?\\n", -1);
+    StringBuilder out = new StringBuilder(yaml.length());
+    boolean inBlock = false;
+    String header = "  " + serviceName + ":";
+    for (String line : lines) {
+      if (!inBlock && line.equals(header)) {
+        inBlock = true;
+        continue; // skip the service header
+      }
+      if (inBlock) {
+        // Stay in the block on blank or deeper-indented lines. Exit on any line
+        // that starts a new top-level key (column 0) or sibling service (col 2 ':').
+        if (line.isEmpty() || line.startsWith("    ") || line.startsWith("   ")) {
+          continue;
+        }
+        // 2-space indent or less: that's the next sibling. Drop the empty
+        // separator line preceding it from our buffer if present and exit.
+        inBlock = false;
+      }
+      out.append(line).append('\n');
+    }
+    // Trim the trailing newline we always append for the last entry.
+    int len = out.length();
+    if (len > 0 && out.charAt(len - 1) == '\n') {
+      out.setLength(len - 1);
+    }
+    return out.toString();
+  }
+
+  /**
    * Reads the original docker-compose file, removes all 'container_name' directives, and returns a temporary file containing the modified content. Including Testcontainers in the docker-compose file
    * will cause ContainerLaunchExceptions to be thrown.
    * <p>
@@ -178,6 +236,21 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
 
       // Use a regular expression to find and remove all lines containing 'container_name'
       String modifiedContent = originalContent.replaceAll("(?m)^\\s*container_name:.*$", "");
+
+      // If the native trino-hudi plugin has not been built, strip the trinocoordinator
+      // service so the rest of the integ2 suite still works. The plugin module is
+      // outside the parent reactor (see assumeTrinoPluginBuilt) and its absence would
+      // otherwise fail the docker-compose bind-mount, taking the entire @BeforeAll
+      // down with it.
+      File pluginDir = new File(System.getProperty("user.dir"), TestcontainersConfig.Paths.TRINO_PLUGIN_HOST);
+      if (!pluginDir.isDirectory()) {
+        log.info("Trino plugin not built at {} - dropping trinocoordinator from compose",
+            pluginDir.getAbsolutePath());
+        modifiedContent = stripComposeService(modifiedContent, "trinocoordinator");
+        // Also drop any links: entries pointing back at trinocoordinator so docker-compose
+        // doesn't fail on a dangling reference.
+        modifiedContent = modifiedContent.replaceAll("(?m)^\\s*-\\s*\"trinocoordinator\"\\s*$", "");
+      }
 
       // Create a temporary file to hold our modified configuration
       Path tempDir = Files.createTempDirectory("hudi-test-compose-");
