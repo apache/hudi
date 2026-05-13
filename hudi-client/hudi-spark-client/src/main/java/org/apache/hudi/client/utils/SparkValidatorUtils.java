@@ -187,15 +187,18 @@ public class SparkValidatorUtils {
       } catch (Exception e) {
         LOG.warn(String.format("Failed parsing schema from latest commit with exception %s, "
             + "defaulting to inferring schema from data files", e));
+        // convertJavaListToScalaList yields scala.collection.immutable.List, which satisfies
+        // the immutable.Seq bound on DataFrameReader.parquet; convertJavaListToScalaSeq returns
+        // the wider scala.collection.Seq.
         return sqlContext
             .read()
-            .parquet(JavaScalaConverters.convertJavaListToScalaSeq(baseFilePaths));
+            .parquet(JavaScalaConverters.convertJavaListToScalaList(baseFilePaths));
       }
     }
     return sqlContext
         .read()
         .schema(HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(readerSchema))
-        .parquet(JavaScalaConverters.convertJavaListToScalaSeq(baseFilePaths));
+        .parquet(JavaScalaConverters.convertJavaListToScalaList(baseFilePaths));
   }
 
   /**
