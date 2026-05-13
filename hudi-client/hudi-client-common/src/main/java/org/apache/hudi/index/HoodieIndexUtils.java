@@ -724,7 +724,7 @@ public class HoodieIndexUtils {
       if (fieldSchema.getNonNullType().getType().isComplex()) {
         throw new HoodieMetadataIndexException(String.format(
             "Cannot create expression index '%s': Column '%s' has unsupported data type '%s'. "
-                + "Complex types (RECORD, ARRAY, MAP) are not supported for indexing. "
+                + "Complex types (RECORD, ARRAY, MAP, VARIANT, BLOB, VECTOR) are not supported for indexing. "
                 + "Please choose a column with a primitive data type.",
             userIndexName, columnName, fieldSchema.getType()));
       }

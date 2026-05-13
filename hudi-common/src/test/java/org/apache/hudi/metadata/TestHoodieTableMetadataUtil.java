@@ -21,6 +21,7 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -330,5 +331,25 @@ class TestHoodieTableMetadataUtil {
 
     assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(vectorSchema, Option.empty(), HoodieIndexVersion.V2));
     assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(stringSchema, Option.empty(), HoodieIndexVersion.V2));
+  }
+
+  @Test
+  void testVariantBlobVectorColumnsAreNotSupportedForV1ColumnStats() {
+    HoodieSchema variantSchema = HoodieSchema.createNullable(HoodieSchema.createVariant());
+    HoodieSchema blobSchema = HoodieSchema.createNullable(HoodieSchema.createBlob());
+    HoodieSchema vectorSchema = HoodieSchema.createNullable(HoodieSchema.createVector(128));
+    HoodieSchema stringSchema = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING));
+
+    for (HoodieRecordType recordType : new HoodieRecordType[] {HoodieRecordType.AVRO, HoodieRecordType.SPARK}) {
+      Option<HoodieRecordType> rt = Option.of(recordType);
+      assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(variantSchema, rt, HoodieIndexVersion.V1),
+          "VARIANT must be excluded from V1 column stats for record type " + recordType);
+      assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(blobSchema, rt, HoodieIndexVersion.V1),
+          "BLOB must be excluded from V1 column stats for record type " + recordType);
+      assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(vectorSchema, rt, HoodieIndexVersion.V1),
+          "VECTOR must be excluded from V1 column stats for record type " + recordType);
+      assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(stringSchema, rt, HoodieIndexVersion.V1),
+          "STRING should remain supported for record type " + recordType);
+    }
   }
 }
