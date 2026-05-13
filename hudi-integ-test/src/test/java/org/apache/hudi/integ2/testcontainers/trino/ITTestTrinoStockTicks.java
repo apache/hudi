@@ -85,19 +85,16 @@ public class ITTestTrinoStockTicks extends ITTestBaseTestcontainers {
 
   @Test
   public void testTrinoReadsCowProjectedColumns() throws Exception {
+    // open == close == 1230.50 in the seed row, so "1230.5" appears twice in CSV output.
     trino.execute("SELECT symbol, ts, volume, open, close FROM stock_ticks_cow WHERE symbol = 'GOOG'")
         .expectToSucceed()
-        .assertStdOutContains("GOOG")
-        .assertStdOutContains("6330")
-        .assertStdOutContains("1230.5");
+        .assertStdOutContains("GOOG,2018-08-31 10:29:00,6330,1230.5,1230.5");
   }
 
   @Test
   public void testTrinoReadsMorRoProjectedColumns() throws Exception {
     trino.execute("SELECT symbol, ts, volume, open, close FROM stock_ticks_mor_ro WHERE symbol = 'GOOG'")
         .expectToSucceed()
-        .assertStdOutContains("GOOG")
-        .assertStdOutContains("6330")
-        .assertStdOutContains("1230.5");
+        .assertStdOutContains("GOOG,2018-08-31 10:29:00,6330,1230.5,1230.5");
   }
 }
