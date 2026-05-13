@@ -227,6 +227,33 @@ services:
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
 
+  trinocoordinator:
+    container_name: trinocoordinator
+    hostname: trinocoordinator
+    # Overlay the locally-built trino-hudi plugin at container start (not at
+    # image build), mirroring docker/hoodie/hadoop/trinobase/scripts/trino.sh
+    # from the legacy Trino 368 setup. No docker build needed per iteration:
+    # `mvn -f hudi-trino-plugin/pom.xml package` + container restart = updated
+    # plugin loaded. The entrypoint script cp's the bind-mounted overlay onto
+    # the image's plugin/hudi/, preserving the bundled hdfs/ sub-plugin.
+    image: trinodb/trino:472
+    entrypoint: ["/bin/bash", "/opt/overlay-entrypoint.sh"]
+    ports:
+      - "8092:8080"
+    depends_on:
+      - "hivemetastore"
+      - "namenode"
+    links:
+      - "hivemetastore"
+      - "hiveserver"
+      - "hive-metastore-postgresql"
+      - "namenode"
+    volumes:
+      - ${HUDI_WS}/hudi-trino-plugin/target/trino-hudi-472:/opt/hudi-plugin-overlay:ro
+      - ${HUDI_WS}/docker/trino/overlay-entrypoint.sh:/opt/overlay-entrypoint.sh:ro
+      - ${HUDI_WS}/docker/trino/etc:/etc/trino:ro
+      - ${HUDI_WS}:/var/hoodie/ws
+
   minio:
     image: 'minio/minio:latest'
     hostname: minio

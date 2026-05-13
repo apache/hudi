@@ -98,10 +98,20 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
    * Use for tests that rely on Spark 4.0+ only features (e.g. VARIANT type).
    */
   protected static void assumeSpark4Compose() {
+    Assumptions.assumeTrue(isSpark4Compose(),
+        "Test requires a Spark 4.x compose stack; active prefix is '"
+            + System.getProperty(SystemProps.COMPOSE_PREFIX, SystemProps.DEFAULT_COMPOSE_PREFIX) + "'");
+  }
+
+  /**
+   * Non-assumption variant of {@link #assumeSpark4Compose()}: returns {@code true} when the
+   * active compose prefix points at a Spark 4.x stack. Use in {@code @BeforeAll} seeding
+   * to conditionally run Spark 4-only fixtures (e.g. VARIANT) without aborting the whole
+   * test class on a Spark 3.5 run.
+   */
+  protected static boolean isSpark4Compose() {
     String composePrefix = System.getProperty(SystemProps.COMPOSE_PREFIX, SystemProps.DEFAULT_COMPOSE_PREFIX);
-    Assumptions.assumeTrue(
-        composePrefix.contains(SystemProps.SPARK_4_PREFIX_TOKEN),
-        "Test requires a Spark 4.x compose stack; active prefix is '" + composePrefix + "'");
+    return composePrefix.contains(SystemProps.SPARK_4_PREFIX_TOKEN);
   }
 
   /**
