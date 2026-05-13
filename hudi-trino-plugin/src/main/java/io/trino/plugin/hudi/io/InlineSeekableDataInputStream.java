@@ -26,7 +26,7 @@ import java.io.IOException;
  * Example InlineFS URL:
  * <pre>
  * inlinefs://tests_7af7f087-c807-4f5e-a759-65fd9c21063b/hudi_multi_fg_pt_v8_mor/.hoodie/metadata/column_stats/
- * .col-stats-0001-0_20250429145946675.log.1_1-120-382/local/?start_offset=8036&length=6959
+ * .col-stats-0001-0_20250429145946675.log.1_1-120-382/local/?start_offset=8036&amp;length=6959
  * </pre>
  * <p>
  * Key behaviors:

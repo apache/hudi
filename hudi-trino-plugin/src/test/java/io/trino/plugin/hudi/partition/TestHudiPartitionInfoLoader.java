@@ -161,6 +161,7 @@ public class TestHudiPartitionInfoLoader
                 TABLE_PATH,
                 HoodieTableType.COPY_ON_WRITE,
                 ImmutableList.of(),
+                ImmutableList.of(),
                 TupleDomain.all(),
                 TupleDomain.all(),
                 "",

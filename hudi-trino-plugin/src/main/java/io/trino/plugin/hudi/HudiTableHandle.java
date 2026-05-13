@@ -49,6 +49,7 @@ public class HudiTableHandle
     private final String basePath;
     private final HoodieTableType tableType;
     private final List<HiveColumnHandle> partitionColumns;
+    private final Lazy<List<HiveColumnHandle>> lazyOrderingColumns;
     // Used only for validation when config property hudi.query-partition-filter-required is enabled
     private final Set<HiveColumnHandle> constraintColumns;
     private final TupleDomain<HiveColumnHandle> partitionPredicates;
@@ -66,12 +67,13 @@ public class HudiTableHandle
             @JsonProperty("basePath") String basePath,
             @JsonProperty("tableType") HoodieTableType tableType,
             @JsonProperty("partitionColumns") List<HiveColumnHandle> partitionColumns,
+            @JsonProperty("orderingColumns") List<HiveColumnHandle> orderingColumns,
             @JsonProperty("partitionPredicates") TupleDomain<HiveColumnHandle> partitionPredicates,
             @JsonProperty("regularPredicates") TupleDomain<HiveColumnHandle> regularPredicates,
             @JsonProperty("tableSchemaStr") String tableSchemaStr,
             @JsonProperty("latestCommitTime") String latestCommitTime)
     {
-        this(Optional.empty(), Optional.empty(), schemaName, tableName, basePath, tableType, partitionColumns, ImmutableSet.of(),
+        this(Optional.empty(), Optional.empty(), schemaName, tableName, basePath, tableType, partitionColumns, Lazy.lazily(() -> orderingColumns), ImmutableSet.of(),
                 partitionPredicates, regularPredicates, buildTableSchema(tableSchemaStr), () -> latestCommitTime);
     }
 
@@ -83,6 +85,7 @@ public class HudiTableHandle
             String basePath,
             HoodieTableType tableType,
             List<HiveColumnHandle> partitionColumns,
+            Lazy<List<HiveColumnHandle>> lazyOrderingColumns,
             Set<HiveColumnHandle> constraintColumns,
             TupleDomain<HiveColumnHandle> partitionPredicates,
             TupleDomain<HiveColumnHandle> regularPredicates,
@@ -96,6 +99,7 @@ public class HudiTableHandle
                 basePath,
                 tableType,
                 partitionColumns,
+                lazyOrderingColumns,
                 constraintColumns,
                 partitionPredicates,
                 regularPredicates,
@@ -120,6 +124,7 @@ public class HudiTableHandle
             String basePath,
             HoodieTableType tableType,
             List<HiveColumnHandle> partitionColumns,
+            Lazy<List<HiveColumnHandle>> lazyOrderingColumns,
             Set<HiveColumnHandle> constraintColumns,
             TupleDomain<HiveColumnHandle> partitionPredicates,
             TupleDomain<HiveColumnHandle> regularPredicates,
@@ -133,6 +138,7 @@ public class HudiTableHandle
         this.basePath = requireNonNull(basePath, "basePath is null");
         this.tableType = requireNonNull(tableType, "tableType is null");
         this.partitionColumns = requireNonNull(partitionColumns, "partitionColumns is null");
+        this.lazyOrderingColumns = requireNonNull(lazyOrderingColumns, "lazyOrderingColumns is null");
         this.constraintColumns = requireNonNull(constraintColumns, "constraintColumns is null");
         this.partitionPredicates = requireNonNull(partitionPredicates, "partitionPredicates is null");
         this.regularPredicates = requireNonNull(regularPredicates, "regularPredicates is null");
@@ -248,6 +254,12 @@ public class HudiTableHandle
         return regularPredicates;
     }
 
+    @JsonProperty
+    public List<HiveColumnHandle> getOrderingColumns()
+    {
+        return lazyOrderingColumns.get();
+    }
+
     public SchemaTableName getSchemaTableName()
     {
         return schemaTableName(schemaName, tableName);
@@ -266,6 +278,7 @@ public class HudiTableHandle
                 basePath,
                 tableType,
                 partitionColumns,
+                lazyOrderingColumns,
                 constraintColumns,
                 partitionPredicates.intersect(partitionTupleDomain),
                 regularPredicates.intersect(regularTupleDomain),
