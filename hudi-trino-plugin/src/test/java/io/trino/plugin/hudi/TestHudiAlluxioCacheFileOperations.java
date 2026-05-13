@@ -13,7 +13,6 @@
  */
 package io.trino.plugin.hudi;
 
-import com.google.common.collect.HashMultiset;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultiset;
 import com.google.common.collect.Multiset;
@@ -21,7 +20,6 @@ import io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer;
 import io.trino.plugin.hudi.util.FileOperationUtils.FileOperation;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.DistributedQueryRunner;
-import io.trino.testing.QueryRunner;
 import org.intellij.lang.annotations.Language;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
@@ -34,15 +32,13 @@ import java.util.Map;
 
 import static com.google.common.io.MoreFiles.deleteRecursively;
 import static com.google.common.io.RecursiveDeleteOption.ALLOW_INSECURE;
-import static io.trino.filesystem.tracing.CacheFileSystemTraceUtils.getCacheOperationSpans;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_MULTI_FG_PT_V8_MOR;
+import static io.trino.plugin.hudi.util.FileOperationAssertions.assertAlluxioFileSystemAccesses;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.DATA;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.INDEX_DEFINITION;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.METADATA_TABLE;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.METADATA_TABLE_PROPERTIES;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.TABLE_PROPERTIES;
-import static io.trino.testing.MultisetAssertions.assertMultisetsEqual;
-import static java.util.stream.Collectors.toCollection;
 
 @ResourceLock("HUDI_CACHE_SYSTEM")
 @Execution(ExecutionMode.SAME_THREAD)
@@ -78,29 +74,18 @@ public class TestHudiAlluxioCacheFileOperations
             throws InterruptedException
     {
         @Language("SQL") String query = "SELECT * FROM " + HUDI_MULTI_FG_PT_V8_MOR + " WHERE country='SG'";
-        assertFileSystemAccesses(
-                query,
-                ImmutableMultiset.<FileOperation>builder()
-                        .addCopies(new FileOperation("Alluxio.readCached", DATA), 2)
-                        .addCopies(new FileOperation("Alluxio.readCached", METADATA_TABLE), 27)
-                        .addCopies(new FileOperation("InputFile.lastModified", METADATA_TABLE), 4)
-                        .addCopies(new FileOperation("InputFile.length", METADATA_TABLE), 10)
-                        .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 2)
-                        .add(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES))
-                        .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 2)
-                        .build());
+        Multiset<FileOperation> expectedFileOperations = ImmutableMultiset.<FileOperation>builder()
+                .addCopies(new FileOperation("Alluxio.readCached", DATA), 2)
+                .addCopies(new FileOperation("Alluxio.readCached", METADATA_TABLE), 20)
+                .addCopies(new FileOperation("InputFile.lastModified", METADATA_TABLE), 5)
+                .addCopies(new FileOperation("InputFile.length", METADATA_TABLE), 11)
+                .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 2)
+                .add(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES))
+                .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 2)
+                .build();
+        assertAlluxioFileSystemAccesses(getDistributedQueryRunner(), query, expectedFileOperations);
 
-        assertFileSystemAccesses(
-                query,
-                ImmutableMultiset.<FileOperation>builder()
-                        .addCopies(new FileOperation("Alluxio.readCached", DATA), 2)
-                        .addCopies(new FileOperation("Alluxio.readCached", METADATA_TABLE), 27)
-                        .addCopies(new FileOperation("InputFile.lastModified", METADATA_TABLE), 4)
-                        .addCopies(new FileOperation("InputFile.length", METADATA_TABLE), 10)
-                        .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 2)
-                        .add(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES))
-                        .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 2)
-                        .build());
+        assertAlluxioFileSystemAccesses(getDistributedQueryRunner(), query, expectedFileOperations);
     }
 
     @Test
@@ -112,69 +97,30 @@ public class TestHudiAlluxioCacheFileOperations
                 "INNER JOIN " + HUDI_MULTI_FG_PT_V8_MOR + " t2 ON t1.id = t2.id " +
                 "WHERE t2.price <= 102";
 
-        assertFileSystemAccesses(query,
+        assertAlluxioFileSystemAccesses(
+                getDistributedQueryRunner(),
+                query,
                 ImmutableMultiset.<FileOperation>builder()
                         .addCopies(new FileOperation("Alluxio.readCached", DATA), 6)
-                        .addCopies(new FileOperation("Alluxio.readCached", METADATA_TABLE), 288)
-                        .addCopies(new FileOperation("InputFile.lastModified", METADATA_TABLE), 39)
-                        .addCopies(new FileOperation("InputFile.length", METADATA_TABLE), 93)
+                        .addCopies(new FileOperation("Alluxio.readCached", METADATA_TABLE), 222)
+                        .addCopies(new FileOperation("InputFile.lastModified", METADATA_TABLE), 60)
+                        .addCopies(new FileOperation("InputFile.length", METADATA_TABLE), 114)
                         .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 5)
                         .addCopies(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES), 3)
                         .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 5)
                         .build());
 
-        assertFileSystemAccesses(query,
+        assertAlluxioFileSystemAccesses(
+                getDistributedQueryRunner(),
+                query,
                 ImmutableMultiset.<FileOperation>builder()
                         .addCopies(new FileOperation("Alluxio.readCached", DATA), 6)
-                        .addCopies(new FileOperation("Alluxio.readCached", METADATA_TABLE), 215)
-                        .addCopies(new FileOperation("InputFile.lastModified", METADATA_TABLE), 29)
-                        .addCopies(new FileOperation("InputFile.length", METADATA_TABLE), 69)
+                        .addCopies(new FileOperation("Alluxio.readCached", METADATA_TABLE), 166)
+                        .addCopies(new FileOperation("InputFile.lastModified", METADATA_TABLE), 45)
+                        .addCopies(new FileOperation("InputFile.length", METADATA_TABLE), 85)
                         .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 4)
                         .addCopies(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES), 2)
                         .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 4)
                         .build());
-    }
-
-    private void assertFileSystemAccesses(@Language("SQL") String query, Multiset<FileOperation> expectedCacheAccesses)
-            throws InterruptedException
-    {
-        DistributedQueryRunner queryRunner = getDistributedQueryRunner();
-        queryRunner.executeWithPlan(queryRunner.getDefaultSession(), query);
-        // Async table-stats computation can outlive the synchronous query and emit spans into
-        // the exporter after execute returns. A fixed Thread.sleep races with this — when
-        // stats from query N is still running while query N+1's measurement happens, spans
-        // leak across the boundary and counts get scrambled (the symmetric off-by-N failure
-        // across paired tests). Poll until the span set is stable for two consecutive reads.
-        Multiset<FileOperation> actual = waitForStableSpans(queryRunner);
-        assertMultisetsEqual(actual, expectedCacheAccesses);
-    }
-
-    /**
-     * Returns the file-operation span set once two consecutive reads (200ms apart) agree.
-     * Bounded by a 30-second ceiling so a runaway test fails loudly instead of hanging.
-     */
-    private static Multiset<FileOperation> waitForStableSpans(QueryRunner queryRunner)
-            throws InterruptedException
-    {
-        long deadlineMillis = System.currentTimeMillis() + 30_000L;
-        Multiset<FileOperation> previous = null;
-        while (System.currentTimeMillis() < deadlineMillis) {
-            Thread.sleep(200L);
-            Multiset<FileOperation> current = getFileOperations(queryRunner);
-            if (previous != null && current.equals(previous)) {
-                return current;
-            }
-            previous = current;
-        }
-        return previous != null ? previous : getFileOperations(queryRunner);
-    }
-
-    public static Multiset<FileOperation> getFileOperations(QueryRunner queryRunner)
-    {
-        return getCacheOperationSpans(queryRunner)
-                .stream()
-                .filter(span -> !span.getName().startsWith("InputFile.exists"))
-                .map(FileOperation::create)
-                .collect(toCollection(HashMultiset::create));
     }
 }

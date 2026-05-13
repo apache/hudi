@@ -181,6 +181,7 @@ public class TestHudiSplitFactory
                 "/test/path",
                 HoodieTableType.MERGE_ON_READ,
                 ImmutableList.of(),
+                ImmutableList.of(),
                 TupleDomain.all(),
                 TupleDomain.all(),
                 "",
