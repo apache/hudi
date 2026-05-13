@@ -16,13 +16,15 @@
 
     <properties>
         <air.compiler.fail-warnings>true</air.compiler.fail-warnings>
-        <dep.hudi.version>1.0.2</dep.hudi.version>
+        <dep.hudi.version>1.1.0</dep.hudi.version>
         <trino.parquet.version>1.15.2</trino.parquet.version>
     </properties>
 
     <dependencies>
         <dependency>
-            <!--Used to test execution in task executor after de-serializing-->
+            <!-- Required for compilation: HoodieRecord implements KryoSerializable,
+                 so the compiler needs Kryo on classpath to verify the class hierarchy
+                 when loading HoodieRecord for static imports -->
             <groupId>com.esotericsoftware</groupId>
             <artifactId>kryo</artifactId>
             <version>4.0.2</version>
@@ -169,6 +171,7 @@
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-io</artifactId>
             <version>${dep.hudi.version}</version>
+            <classifier>shaded</classifier>
             <exclusions>
                 <exclusion>
                     <groupId>com.google.protobuf</groupId>
@@ -470,12 +473,30 @@
                         <!-- org.apache.hudi:hudi-client-common and org.apache.hudi:hudi-java-client log4j.properties duplicates -->
                         <ignoredResourcePattern>log4j.properties</ignoredResourcePattern>
                         <ignoredResourcePattern>log4j-surefire.properties</ignoredResourcePattern>
+                        <ignoredResource>google/protobuf/.*</ignoredResource>
                     </ignoredResourcePatterns>
+                    <ignoredClassPatterns>
+                        <!-- org.apache.hudi:hudi-hadoop-common bundles parquet classes that conflict with org.apache.parquet:parquet-common -->
+                        <!-- ParquetConfiguration class is shaded/bundled inside the hudi-hadoop-common JAR, not a transitive dependency, so Maven exclusions won't work -->
+                        <ignoredClassPattern>org.apache.parquet.conf.ParquetConfiguration</ignoredClassPattern>
+                    </ignoredClassPatterns>
                 </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <configuration>
+                    <ignoredUnusedDeclaredDependencies>
+                        <!-- Kryo is not directly used but required for compilation:
+                             HoodieRecord implements KryoSerializable, so the compiler
+                             needs Kryo to verify the class hierarchy -->
+                        <ignoredUnusedDeclaredDependency>com.esotericsoftware:kryo</ignoredUnusedDeclaredDependency>
+                    </ignoredUnusedDeclaredDependencies>
+                </configuration>
             </plugin>
         </plugins>
     </build>

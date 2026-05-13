@@ -38,8 +38,6 @@ import io.trino.plugin.hive.ReaderColumns;
 import io.trino.plugin.hive.parquet.ParquetReaderConfig;
 import io.trino.plugin.hudi.file.HudiBaseFile;
 import io.trino.plugin.hudi.reader.HudiTrinoReaderContext;
-import io.trino.plugin.hudi.storage.HudiTrinoStorage;
-import io.trino.plugin.hudi.storage.TrinoStorageConfiguration;
 import io.trino.plugin.hudi.util.SynthesizedColumnHandler;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
@@ -57,7 +55,6 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.parquet.column.ColumnDescriptor;
@@ -104,7 +101,7 @@ import static io.trino.plugin.hudi.HudiUtil.buildTableMetaClient;
 import static io.trino.plugin.hudi.HudiUtil.constructSchema;
 import static io.trino.plugin.hudi.HudiUtil.convertToFileSlice;
 import static io.trino.plugin.hudi.HudiUtil.getLatestTableSchema;
-import static io.trino.plugin.hudi.HudiUtil.prependHudiMetaColumns;
+import static io.trino.plugin.hudi.HudiUtil.prependHudiMetaAndOrderingColumns;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.toUnmodifiableList;
@@ -184,7 +181,7 @@ public class HudiPageSourceProvider
         // The `columns` list could be empty when count(*) is issued,
         // prepending hoodie meta columns for Hudi split with log files
         // to allow a non-empty dataPageSource to be returned
-        List<HiveColumnHandle> hudiMetaAndDataColumnHandles = prependHudiMetaColumns(dataColumnHandles);
+        List<HiveColumnHandle> hudiMetaAndDataColumnHandles = prependHudiMetaAndOrderingColumns(hudiTableHandle, dataColumnHandles);
 
         TrinoFileSystem fileSystem = fileSystemFactory.create(session);
         ConnectorPageSource dataPageSource = createPageSource(
@@ -219,8 +216,9 @@ public class HudiPageSourceProvider
         // TODO: Move this into HudiTableHandle
         HoodieTableMetaClient metaClient = buildTableMetaClient(
                 fileSystemFactory.create(session), hudiTableHandle.getSchemaTableName().toString(), hudiTableHandle.getBasePath());
-
         HudiTrinoReaderContext readerContext = new HudiTrinoReaderContext(
+                metaClient.getStorageConf(),
+                metaClient.getTableConfig(),
                 dataPageSource,
                 dataColumnHandles,
                 hudiMetaAndDataColumnHandles,
@@ -232,21 +230,18 @@ public class HudiPageSourceProvider
         // Construct an Avro schema for log file reader
         Schema requestedSchema = constructSchema(dataSchema, hudiMetaAndDataColumnHandles.stream().map(HiveColumnHandle::getName).toList());
         HoodieFileGroupReader<IndexedRecord> fileGroupReader =
-                new HoodieFileGroupReader<>(
-                        readerContext,
-                        new HudiTrinoStorage(fileSystemFactory.create(session), new TrinoStorageConfiguration()),
-                        hudiTableHandle.getBasePath(),
-                        hudiTableHandle.getLatestCommitTime(),
-                        convertToFileSlice(hudiSplit, hudiTableHandle.getBasePath()),
-                        dataSchema,
-                        requestedSchema,
-                        Option.empty(),
-                        metaClient,
-                        metaClient.getTableConfig().getProps(),
-                        start,
-                        length,
-                        false);
-
+                HoodieFileGroupReader.<IndexedRecord>newBuilder()
+                        .withReaderContext(readerContext)
+                        .withHoodieTableMetaClient(metaClient)
+                        .withFileSlice(convertToFileSlice(hudiSplit, hudiTableHandle.getBasePath()))
+                        .withDataSchema(dataSchema)
+                        .withRequestedSchema(requestedSchema)
+                        .withLatestCommitTime(hudiTableHandle.getLatestCommitTime())
+                        .withProps(metaClient.getTableConfig().getProps())
+                        .withShouldUseRecordPosition(false)
+                        .withStart(start)
+                        .withLength(length)
+                        .build();
         return new HudiPageSource(
                 dataPageSource,
                 fileGroupReader,

@@ -13,7 +13,6 @@
  */
 package io.trino.plugin.hudi;
 
-import com.google.common.collect.HashMultiset;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultiset;
 import com.google.common.collect.Multiset;
@@ -21,7 +20,6 @@ import io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer;
 import io.trino.plugin.hudi.util.FileOperationUtils;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.DistributedQueryRunner;
-import io.trino.testing.QueryRunner;
 import org.intellij.lang.annotations.Language;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
@@ -30,16 +28,13 @@ import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.util.Map;
 
-import static io.trino.filesystem.tracing.CacheFileSystemTraceUtils.getFileLocation;
-import static io.trino.filesystem.tracing.CacheFileSystemTraceUtils.isTrinoSchemaOrPermissions;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_MULTI_FG_PT_V8_MOR;
+import static io.trino.plugin.hudi.util.FileOperationAssertions.assertFileSystemAccesses;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.DATA;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.INDEX_DEFINITION;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.METADATA_TABLE;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.METADATA_TABLE_PROPERTIES;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.TABLE_PROPERTIES;
-import static io.trino.testing.MultisetAssertions.assertMultisetsEqual;
-import static java.util.stream.Collectors.toCollection;
 
 @ResourceLock("HUDI_CACHE_SYSTEM")
 @Execution(ExecutionMode.SAME_THREAD)
@@ -68,29 +63,18 @@ public class TestHudiNoCacheFileOperations
             throws InterruptedException
     {
         @Language("SQL") String query = "SELECT * FROM " + HUDI_MULTI_FG_PT_V8_MOR + " WHERE country='SG'";
-        assertFileSystemAccesses(
-                query,
-                ImmutableMultiset.<FileOperationUtils.FileOperation>builder()
-                        .addCopies(new FileOperationUtils.FileOperation("Input.readTail", DATA), 2)
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.lastModified", METADATA_TABLE), 4)
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.length", METADATA_TABLE), 4)
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", METADATA_TABLE), 6)
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", INDEX_DEFINITION), 2)
-                        .add(new FileOperationUtils.FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES))
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", TABLE_PROPERTIES), 2)
-                        .build());
+        Multiset<FileOperationUtils.FileOperation> expectedFileOperations = ImmutableMultiset.<FileOperationUtils.FileOperation>builder()
+                .addCopies(new FileOperationUtils.FileOperation("Input.readTail", DATA), 2)
+                .addCopies(new FileOperationUtils.FileOperation("InputFile.lastModified", METADATA_TABLE), 5)
+                .addCopies(new FileOperationUtils.FileOperation("InputFile.length", METADATA_TABLE), 5)
+                .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", METADATA_TABLE), 6)
+                .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", INDEX_DEFINITION), 2)
+                .add(new FileOperationUtils.FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES))
+                .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", TABLE_PROPERTIES), 2)
+                .build();
+        assertFileSystemAccesses(getDistributedQueryRunner(), query, expectedFileOperations);
 
-        assertFileSystemAccesses(
-                query,
-                ImmutableMultiset.<FileOperationUtils.FileOperation>builder()
-                        .addCopies(new FileOperationUtils.FileOperation("Input.readTail", DATA), 2)
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.lastModified", METADATA_TABLE), 4)
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.length", METADATA_TABLE), 4)
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", INDEX_DEFINITION), 2)
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", METADATA_TABLE), 6)
-                        .add(new FileOperationUtils.FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES))
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", TABLE_PROPERTIES), 2)
-                        .build());
+        assertFileSystemAccesses(getDistributedQueryRunner(), query, expectedFileOperations);
     }
 
     @Test
@@ -102,47 +86,30 @@ public class TestHudiNoCacheFileOperations
                 "INNER JOIN " + HUDI_MULTI_FG_PT_V8_MOR + " t2 ON t1.id = t2.id " +
                 "WHERE t2.price <= 102";
 
-        assertFileSystemAccesses(query,
+        assertFileSystemAccesses(
+                getDistributedQueryRunner(),
+                query,
                 ImmutableMultiset.<FileOperationUtils.FileOperation>builder()
                         .addCopies(new FileOperationUtils.FileOperation("Input.readTail", DATA), 6)
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.lastModified", METADATA_TABLE), 39)
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.length", METADATA_TABLE), 39)
+                        .addCopies(new FileOperationUtils.FileOperation("InputFile.lastModified", METADATA_TABLE), 60)
+                        .addCopies(new FileOperationUtils.FileOperation("InputFile.length", METADATA_TABLE), 60)
                         .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", INDEX_DEFINITION), 5)
                         .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", METADATA_TABLE), 54)
                         .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES), 3)
                         .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", TABLE_PROPERTIES), 5)
                         .build());
 
-        assertFileSystemAccesses(query,
+        assertFileSystemAccesses(
+                getDistributedQueryRunner(),
+                query,
                 ImmutableMultiset.<FileOperationUtils.FileOperation>builder()
                         .addCopies(new FileOperationUtils.FileOperation("Input.readTail", DATA), 6)
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.lastModified", METADATA_TABLE), 29)
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.length", METADATA_TABLE), 29)
+                        .addCopies(new FileOperationUtils.FileOperation("InputFile.lastModified", METADATA_TABLE), 45)
+                        .addCopies(new FileOperationUtils.FileOperation("InputFile.length", METADATA_TABLE), 45)
                         .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", INDEX_DEFINITION), 4)
                         .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", METADATA_TABLE), 40)
                         .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES), 2)
                         .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", TABLE_PROPERTIES), 4)
                         .build());
-    }
-
-    private void assertFileSystemAccesses(@Language("SQL") String query, Multiset<FileOperationUtils.FileOperation> expectedCacheAccesses)
-               throws InterruptedException
-    {
-        DistributedQueryRunner queryRunner = getDistributedQueryRunner();
-        queryRunner.executeWithPlan(queryRunner.getDefaultSession(), query);
-        // Allow time for table stats computation to finish before validation.
-        Thread.sleep(1000L);
-        assertMultisetsEqual(getFileOperations(queryRunner), expectedCacheAccesses);
-    }
-
-    private static Multiset<FileOperationUtils.FileOperation> getFileOperations(QueryRunner queryRunner)
-    {
-        return queryRunner.getSpans().stream()
-                .filter(span -> span.getName().startsWith("Input.") || span.getName().startsWith("InputFile.") || span.getName().startsWith("FileSystemCache."))
-                .filter(span -> !span.getName().startsWith("InputFile.newInput"))
-                .filter(span -> !span.getName().startsWith("InputFile.exists"))
-                .filter(span -> !isTrinoSchemaOrPermissions(getFileLocation(span)))
-                .map(FileOperationUtils.FileOperation::create)
-                .collect(toCollection(HashMultiset::create));
     }
 }
