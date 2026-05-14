@@ -19,10 +19,13 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import org.apache.hudi.common.util.{Option => HOption}
+
 import org.apache.parquet.hadoop.api.InitContext
 import org.apache.parquet.hadoop.api.ReadSupport.ReadContext
 import org.apache.parquet.schema.{GroupType, MessageType, PrimitiveType, Type, Types}
 import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
+import org.apache.spark.sql.types.{StructType, VariantType}
 
 import java.time.ZoneId
 
@@ -42,15 +45,21 @@ class Spark40HoodieParquetReadSupport(
                                        enableTimestampFieldRepair: Boolean,
                                        datetimeRebaseSpec: RebaseSpec,
                                        int96RebaseSpec: RebaseSpec,
-                                       tableSchemaOpt: org.apache.hudi.common.util.Option[org.apache.parquet.schema.MessageType] = org.apache.hudi.common.util.Option.empty())
+                                       tableSchemaOpt: HOption[MessageType] = HOption.empty())
   extends HoodieParquetReadSupport(
     convertTz, enableVectorizedReader, enableTimestampFieldRepair,
     datetimeRebaseSpec, int96RebaseSpec, tableSchemaOpt) {
 
   override def init(context: InitContext): ReadContext = {
     val baseContext = super.init(context)
+    // Resolve the Spark catalyst requested schema so the reorder is gated on
+    // VariantType — a user struct that happens to be <value: binary, metadata: binary>
+    // shouldn't be silently reshuffled.
+    val sparkRequestedSchema = Option(context.getConfiguration.get(
+      ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA))
+      .map(StructType.fromString)
     val reorderedSchema = Spark40HoodieParquetReadSupport.reorderVariantFields(
-      baseContext.getRequestedSchema)
+      baseContext.getRequestedSchema, sparkRequestedSchema)
     new ReadContext(reorderedSchema, baseContext.getReadSupportMetadata)
   }
 }
@@ -62,9 +71,21 @@ object Spark40HoodieParquetReadSupport {
    * converters array in hardcoded [value, metadata] order and indexes by schema position.
    * parquet-mr reconciles the requested schema against the file schema by field name,
    * so the correct bytes still flow to the correct converters regardless of file order.
+   *
+   * When a Spark catalyst schema is supplied, reorder only the top-level fields that are
+   * actually typed `VariantType` in catalyst; this prevents reshuffling a user-defined
+   * `struct<value: binary, metadata: binary>` that happens to match the parquet shape.
    */
-  def reorderVariantFields(schema: MessageType): MessageType = {
-    val reordered = schema.getFields.asScala.map(reorderVariantType).toArray[Type]
+  def reorderVariantFields(schema: MessageType, sparkSchema: Option[StructType] = None): MessageType = {
+    val variantFieldNames: Set[String] = sparkSchema match {
+      case Some(s) => s.fields.collect { case f if f.dataType.isInstanceOf[VariantType] => f.name }.toSet
+      case None => null
+    }
+    val reordered = schema.getFields.asScala.map { f =>
+      if (variantFieldNames == null || variantFieldNames.contains(f.getName)) {
+        reorderVariantType(f)
+      } else f
+    }.toArray[Type]
     Types.buildMessage().addFields(reordered: _*).named(schema.getName)
   }
 
