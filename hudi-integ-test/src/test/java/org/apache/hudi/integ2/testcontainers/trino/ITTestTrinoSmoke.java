@@ -37,7 +37,6 @@ public class ITTestTrinoSmoke extends ITTestBaseTestcontainers {
 
   @BeforeAll
   public void setupOnce() throws Exception {
-    assumeTrinoPluginBuilt();
     initializeServices();
     trino.waitUntilReady();
   }

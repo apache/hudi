@@ -72,12 +72,6 @@ public final class TestcontainersConfig {
     public static final String HADOOP_CONF_DIR = "/etc/hadoop";
     /** Host-side, relative to the hudi-integ-test module working directory. */
     public static final String COMPOSE_DIR = "../docker/compose/";
-    /**
-     * Host-side directory holding the assembled native Trino-Hudi plugin (output of
-     * `mvn -f hudi-trino-plugin/pom.xml package`). The plugin module is excluded from
-     * the parent Hudi reactor, so Trino-dependent ITs assume-skip when this is absent.
-     */
-    public static final String TRINO_PLUGIN_HOST = "../hudi-trino-plugin/target/trino-hudi-472";
 
     private Paths() {
     }

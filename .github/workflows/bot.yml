@@ -1253,8 +1253,12 @@ jobs:
 
   integration-tests-hive-sync:
     # Testcontainers-based E2E hive sync coverage for Hudi's custom logical types
-    # (VECTOR, BLOB) and the Spark 4.0 VARIANT type. Runs ITTestCustomTypeHiveSync
-    # against a real Hive metastore on both a Spark 3.5.3 and Spark 4.0.2 stack.
+    # (VECTOR, BLOB) and the Spark 4.0 VARIANT type. Runs the integ2 testcontainers
+    # suite (ITTestCustomTypeHiveSync + ITTestTrino*) against a real Hive metastore
+    # on both a Spark 3.5.3 and Spark 4.0.2 stack. The Trino ITs require the native
+    # trino-hudi plugin to be built (separate JDK-23 build step below) - the plugin
+    # module is excluded from the parent Hudi reactor since its Maven parent is
+    # upstream io.trino:trino-root.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -1274,6 +1278,14 @@ jobs:
             sparkAdhocImage: 'apachehudi/hudi-hadoop_3.4.0-hive_2.3.10-sparkadhoc_4.0.2:latest'
     steps:
       - uses: actions/checkout@v5
+      - name: Set up JDK 23 (for hudi-trino-plugin)
+        # Installed before the matrix JDK so JAVA_HOME_23_X64 is available even
+        # though JAVA_HOME points at the matrix JDK after the second setup step.
+        uses: actions/setup-java@v5
+        with:
+          java-version: '23'
+          distribution: 'temurin'
+          architecture: x64
       - name: Set up JDK ${{ matrix.jdkVersion }}
         uses: actions/setup-java@v5
         with:
@@ -1303,7 +1315,20 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
         run:
           mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Pintegration-tests -DskipTests=true -Ddocker.compose.skip=true $MVN_ARGS
-      - name: Run ITTestCustomTypeHiveSync
+      - name: Build hudi-trino-plugin (JDK 23)
+        # The plugin module is excluded from the parent reactor (its Maven parent is
+        # io.trino:trino-root:472, which enforces JDK 23). Build it explicitly with
+        # JAVA_HOME pointed at the JDK-23 install so the assembled directory at
+        # hudi-trino-plugin/target/trino-hudi-472/ is present for the compose bind
+        # mount. The Trino ITs hard-fail if this directory is missing.
+        #
+        # Strip -Pwarn-log from MVN_ARGS: it's a Hudi-parent-pom profile, but the
+        # plugin inherits from io.trino:trino-root whose enforcer rule
+        # RequireProfileIdsExist fails on unknown profile ids.
+        run: |
+          TRINO_MVN_ARGS="${MVN_ARGS//-Pwarn-log/}"
+          JAVA_HOME=$JAVA_HOME_23_X64 mvn -f hudi-trino-plugin/pom.xml package -DskipTests $TRINO_MVN_ARGS
+      - name: Run integ2 testcontainers suite
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -1311,11 +1336,13 @@ jobs:
         run: |
           # -DskipITs=false overrides the spark4.0 profile's skipITs=true default
           # (see root pom.xml). Without it, failsafe skips all ITs on the spark4.0 matrix row.
+          # The it.test filter runs both the Hive-sync coverage and the Trino tests
+          # (which require the JDK-23-built plugin from the previous step).
           mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests \
             -pl hudi-integ-test \
             -DskipITs=false \
             -Ddocker.compose.skip=true \
-            -Dit.test=ITTestCustomTypeHiveSync \
+            -Dit.test='ITTestCustomTypeHiveSync,ITTestTrino*' \
             -Dspark.docker.compose.prefix=$COMPOSE_PREFIX \
             $MVN_ARGS
 

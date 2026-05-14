@@ -62,7 +62,6 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
 
   @BeforeAll
   public void setupOnce() throws Exception {
-    assumeTrinoPluginBuilt();
     initializeServices();
     waitForHdfs();
     sparkAdhoc1.executeShellCommand("/bin/bash " + Paths.DEMO_SETUP).expectToSucceed();
