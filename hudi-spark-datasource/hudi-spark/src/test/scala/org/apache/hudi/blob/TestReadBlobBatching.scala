@@ -24,11 +24,13 @@ import org.apache.hudi.testutils.HoodieClientTestBase
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 /**
- * SQL-driven correctness tests for read_blob() batching scenarios.
+ * SQL-driven correctness tests for read_blob() batching scenarios on
+ * Hudi-backed tables.
  *
  * Complements:
  *   - TestBatchedBlobReaderMerge: unit-level coverage of the merge algorithm.
@@ -36,30 +38,59 @@ import org.junit.jupiter.api.Test
  *     null handling, error paths).
  *   - TestBatchedBlobReader: byte-level correctness via the readBatched API.
  *
- * Scope: exercise the SQL path end-to-end with batching configurations chosen
- * to drive specific merge behaviors (high-ratio merging, threshold boundary,
- * per-file routing), and assert that the returned bytes match what the input
- * specified — i.e. the query succeeds and batching does not corrupt output.
+ * Each test writes a Hudi table containing a blob column referencing external
+ * data files, reads it back via the Hudi reader, and runs SELECT read_blob(...)
+ * with a batching configuration chosen to drive specific merge behaviors.
+ * Writing through Hudi (rather than a temp view) exercises HoodieFileIndex and
+ * BatchedBlobReadExec serialization — the production read path. Each test
+ * asserts the returned bytes match the deterministic pattern at each row's
+ * recorded offset — i.e. the query succeeds and batching does not corrupt
+ * output.
  */
 class TestReadBlobBatching extends HoodieClientTestBase {
 
   /**
-   * Build a temp view named `viewName` from (id, file, offset, length) tuples
-   * with a blob struct column `file_info`.
+   * Write a Hudi table at `tablePath` with rows (id, external_path, offset,
+   * file_info) and register the loaded table as the given temp view.
+   *
+   * Coerces the input to the canonical BlobType schema with a nullable
+   * reference struct, which HoodieSparkSchemaConverters.validateBlobStructure
+   * requires on write.
    */
-  private def registerBlobView(
+  private def writeHudiBlobTable(
+      tablePath: String,
+      tableName: String,
       viewName: String,
       entries: Seq[(Int, String, Long, Long)]): Unit = {
-    sparkSession.createDataFrame(entries)
+    val rawDf = sparkSession.createDataFrame(entries)
       .toDF("id", "external_path", "offset", "length")
-      .withColumn("file_info", blobStructCol("file_info", col("external_path"), col("offset"), col("length")))
+      .withColumn("file_info",
+        blobStructCol("file_info", col("external_path"), col("offset"), col("length")))
       .select("id", "external_path", "offset", "file_info")
+
+    val canonicalSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("external_path", StringType, nullable = true),
+      StructField("offset", LongType, nullable = true),
+      StructField("file_info", BlobType().asInstanceOf[StructType],
+        nullable = true, blobMetadata)
+    ))
+    val df = sparkSession.createDataFrame(rawDf.rdd, canonicalSchema)
+
+    df.write.format("hudi")
+      .option("hoodie.table.name", tableName)
+      .option("hoodie.datasource.write.recordkey.field", "id")
+      .option("hoodie.datasource.write.operation", "bulk_insert")
+      .mode("overwrite")
+      .save(tablePath)
+
+    sparkSession.read.format("hudi").load(tablePath)
       .createOrReplaceTempView(viewName)
   }
 
   /**
-   * Run SELECT id, external_path, offset, read_blob(file_info) and assert each
-   * returned blob equals the deterministic pattern at its recorded offset.
+   * Validate that each returned blob equals the deterministic pattern at its
+   * recorded offset.
    */
   private def assertBlobBytesMatchExpected(rows: Array[Row], expectedLength: Int): Unit = {
     rows.foreach { row =>
@@ -75,13 +106,14 @@ class TestReadBlobBatching extends HoodieClientTestBase {
    *
    * 20 small reads with 50-byte gaps under maxGap=4096 must all merge into a
    * single underlying range. Validates that high-ratio batching returns the
-   * correct bytes for every row.
+   * correct bytes for every row when driven by the Hudi read plan.
    */
   @Test
   def testManyBlobsInSingleFileBatched(): Unit = {
     val filePath = createTestFile(tempDir, "many.bin", 50000)
+    val tablePath = s"$tempDir/many_blobs_table"
     val entries = (0 until 20).map(i => (i, filePath, (i * 150).toLong, 100L))
-    registerBlobView("many_blobs_view", entries)
+    writeHudiBlobTable(tablePath, "many_blobs", "many_blobs_view", entries)
 
     withSparkConfig(sparkSession, Map(
       "hoodie.blob.batching.max.gap.bytes" -> "4096"
@@ -105,6 +137,7 @@ class TestReadBlobBatching extends HoodieClientTestBase {
   @Test
   def testMixedGapsInSingleFile(): Unit = {
     val filePath = createTestFile(tempDir, "mixed.bin", 20000)
+    val tablePath = s"$tempDir/mixed_gaps_table"
     val entries = Seq(
       (1, filePath, 0L, 100L),
       (2, filePath, 200L, 100L),
@@ -112,7 +145,7 @@ class TestReadBlobBatching extends HoodieClientTestBase {
       (4, filePath, 10000L, 100L),
       (5, filePath, 10200L, 100L),
       (6, filePath, 10400L, 100L))
-    registerBlobView("mixed_gaps_view", entries)
+    writeHudiBlobTable(tablePath, "mixed_gaps", "mixed_gaps_view", entries)
 
     withSparkConfig(sparkSession, Map(
       "hoodie.blob.batching.max.gap.bytes" -> "4096"
@@ -136,9 +169,10 @@ class TestReadBlobBatching extends HoodieClientTestBase {
   @Test
   def testThresholdBoundaryInclusiveMerge(): Unit = {
     val filePath = createTestFile(tempDir, "boundary.bin", 5000)
+    val tablePath = s"$tempDir/boundary_table"
     // Gap between consecutive reads = 1024 bytes (1124 - 100, etc.).
     val entries = (0 until 4).map(i => (i, filePath, (i * 1124).toLong, 100L))
-    registerBlobView("boundary_view", entries)
+    writeHudiBlobTable(tablePath, "boundary", "boundary_view", entries)
 
     withSparkConfig(sparkSession, Map(
       "hoodie.blob.batching.max.gap.bytes" -> "1024"
@@ -156,15 +190,16 @@ class TestReadBlobBatching extends HoodieClientTestBase {
    * Scenario (4) — multi-file with interleaved input + mixed gap patterns.
    *
    * Three files with different access patterns (contiguous, small gaps within
-   * threshold, large gaps above threshold) queried in interleaved order.
-   * Confirms per-file routing through the SQL planner returns correct bytes
-   * regardless of input ordering.
+   * threshold, large gaps above threshold) written into one Hudi table in
+   * interleaved order. Confirms per-file routing through the Hudi read plan
+   * returns correct bytes regardless of input ordering.
    */
   @Test
   def testMultiFileInterleavedWithMixedGaps(): Unit = {
     val fileA = createTestFile(tempDir, "fileA.bin", 1000)   // contiguous
     val fileB = createTestFile(tempDir, "fileB.bin", 2000)   // 50-byte gaps
     val fileC = createTestFile(tempDir, "fileC.bin", 50000)  // 8KB gaps
+    val tablePath = s"$tempDir/multi_file_table"
 
     val entries = (0 until 4).flatMap { i =>
       Seq(
@@ -172,7 +207,7 @@ class TestReadBlobBatching extends HoodieClientTestBase {
         (i * 3 + 1, fileB, (i * 150).toLong,  100L),
         (i * 3 + 2, fileC, (i * 8192).toLong, 100L))
     }
-    registerBlobView("multi_file_view", entries)
+    writeHudiBlobTable(tablePath, "multi_file", "multi_file_view", entries)
 
     withSparkConfig(sparkSession, Map(
       "hoodie.blob.batching.max.gap.bytes" -> "1024"
