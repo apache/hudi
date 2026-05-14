@@ -24,6 +24,7 @@ import org.apache.hudi.integ2.testcontainers.service.SparkService;
 import org.apache.hudi.integ2.testcontainers.service.TrinoService;
 
 import lombok.extern.slf4j.Slf4j;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.testcontainers.containers.ComposeContainer;
@@ -81,6 +82,25 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
 
     log.info("Docker Compose environment started successfully");
     log.info("All containers verified and running");
+  }
+
+  /**
+   * Tear down the compose stack between test classes. The docker-compose files publish
+   * host ports directly (zookeeper 2181, trino 8080, spark 7077, …), so leaving one
+   * stack up would make the next class's `@BeforeAll` collide on those host ports.
+   * Testcontainers' Ryuk reaper only fires at JVM shutdown, which is too late when
+   * failsafe reuses a JVM across classes.
+   */
+  @AfterAll
+  public static void tearDownDockerCompose() {
+    if (environment != null) {
+      log.info("Stopping Docker Compose environment");
+      try {
+        environment.stop();
+      } finally {
+        environment = null;
+      }
+    }
   }
 
   /**
