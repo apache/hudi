@@ -156,8 +156,7 @@ public class OptionsResolver {
   }
 
   /**
-   * Return value of {@link FlinkOptions#RECORD_KEY_FIELD} if it was set,
-   * or throw exception otherwise.
+   * Return value of {@link FlinkOptions#RECORD_KEY_FIELD}, could be null if it is not set.
    */
   @Nullable
   public static String getRecordKeyStr(Configuration conf) {

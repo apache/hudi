@@ -361,6 +361,26 @@ public class TestHoodieCatalog extends BaseTestHoodieCatalog {
   }
 
   @Test
+  public void testCreateNonAppendTableWithoutRecordKey() {
+    ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb_non_append_without_record_key");
+    ResolvedSchema schemaWithoutPrimaryKey = new ResolvedSchema(
+        CREATE_COLUMNS,
+        Collections.emptyList(),
+        null);
+    ResolvedCatalogTable catalogTable = new ResolvedCatalogTable(
+        CatalogUtils.createCatalogTable(
+            Schema.newBuilder().fromResolvedSchema(schemaWithoutPrimaryKey).build(),
+            Arrays.asList("partition"),
+            EXPECTED_OPTIONS,
+            "test"),
+        schemaWithoutPrimaryKey
+    );
+
+    CatalogException exception = assertThrows(CatalogException.class, () -> catalog.createTable(tablePath, catalogTable, false));
+    assertEquals("Primary key definition is missing", exception.getMessage());
+  }
+
+  @Test
   void testCreateTableWithPartitionBucketIndex() throws TableAlreadyExistException, DatabaseNotExistException, IOException {
     String rule = "regex";
     String expressions = "\\d{4}-(06-(01|17|18)|11-(01|10|11)),256";

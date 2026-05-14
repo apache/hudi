@@ -314,6 +314,11 @@ public class HoodieCatalog extends AbstractCatalog {
     Configuration conf = Configuration.fromMap(options);
     conf.set(FlinkOptions.PATH, tablePathStr);
     ResolvedSchema resolvedSchema = resolvedTable.getResolvedSchema();
+    if (!resolvedSchema.getPrimaryKey().isPresent()
+        && !conf.containsKey(RECORD_KEY_FIELD.key())
+        && !OptionsResolver.isAppendMode(conf)) {
+      throw new CatalogException("Primary key definition is missing");
+    }
     final String avroSchema = HoodieSchemaConverter.convertToSchema(
         resolvedSchema.toPhysicalRowDataType().getLogicalType(),
         HoodieSchemaUtils.getRecordQualifiedName(tablePath.getObjectName())).toString();

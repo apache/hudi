@@ -73,11 +73,11 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   protected final boolean encodePartitionPath;
 
   public TimestampBasedAvroKeyGenerator(TypedProperties config) throws IOException {
-    this(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null),
+    this(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()),
         config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
   }
 
-  TimestampBasedAvroKeyGenerator(TypedProperties config, String partitionPathField) throws IOException {
+  public TimestampBasedAvroKeyGenerator(TypedProperties config, String partitionPathField) throws IOException {
     this(config, null, partitionPathField);
   }
 
