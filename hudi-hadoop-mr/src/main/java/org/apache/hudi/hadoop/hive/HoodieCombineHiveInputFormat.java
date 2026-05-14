@@ -428,7 +428,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       perfLogger.PerfLogEnd(CLASS_NAME, PerfLogger.GET_SPLITS);
       return result.toArray(new InputSplit[result.size()]);
     } finally {
-      // Clear work from ThreadLocal after splits are generated in case the thread is reused in a pool.
+      // Clear work from ThreadLocal after each getSplits attempt, in case the thread is reused in a pool.
       Utilities.clearWorkMapForConf(job);
     }
   }
