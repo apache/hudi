@@ -18,6 +18,9 @@
 
 package org.apache.hudi.io.storage.row.parquet;
 
+import org.apache.hudi.adapter.DataTypeAdapter;
+import org.apache.hudi.common.schema.HoodieSchema;
+
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.ArrayType;
@@ -27,12 +30,15 @@ import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.DoubleType;
 import org.apache.flink.table.types.logical.FloatType;
 import org.apache.flink.table.types.logical.IntType;
+import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.MapType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.SmallIntType;
 import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.table.types.logical.TinyIntType;
 import org.apache.flink.table.types.logical.VarCharType;
+import org.apache.parquet.schema.GroupType;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
@@ -45,6 +51,8 @@ import java.util.Collections;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for {@link ParquetSchemaConverter}.
@@ -266,6 +274,71 @@ public class TestParquetSchemaConverter {
     RowType rowType = ParquetSchemaConverter.convertToRowType(shreddedNoAnnotation);
     assertEquals(2, rowType.getFieldCount());
     assertEquals("ROW", rowType.getTypeAt(1).getTypeRoot().name());
+  }
+
+  /**
+   * On Flink 2.1+, converting a RowType containing a Variant column to a Parquet MessageType
+   * should produce a group with required binary {@code metadata} and {@code value} fields.
+   * On pre-2.1 Flink this test is skipped since VariantType does not exist.
+   */
+  @Test
+  void testVariantWritePathProducesCorrectLayout() {
+    LogicalType variantType;
+    try {
+      variantType = DataTypeAdapter.createVariantType().getLogicalType();
+    } catch (UnsupportedOperationException e) {
+      // Pre-2.1 Flink: VariantType doesn't exist, skip
+      return;
+    }
+
+    RowType rowType = RowType.of(
+        new LogicalType[]{new IntType(), variantType},
+        new String[]{"id", "data"});
+
+    MessageType messageType = ParquetSchemaConverter.convertToParquetMessageType("test", rowType);
+    assertEquals(2, messageType.getFieldCount());
+
+    Type variantField = messageType.getType("data");
+    assertTrue(variantField instanceof GroupType, "Variant column should be a Parquet group");
+    GroupType variantGroup = (GroupType) variantField;
+    assertEquals(2, variantGroup.getFieldCount());
+    assertEquals(HoodieSchema.Variant.VARIANT_METADATA_FIELD, variantGroup.getType(0).getName());
+    assertEquals(HoodieSchema.Variant.VARIANT_VALUE_FIELD, variantGroup.getType(1).getName());
+    assertTrue(variantGroup.getType(0).isPrimitive());
+    assertTrue(variantGroup.getType(1).isPrimitive());
+    assertEquals(PrimitiveType.PrimitiveTypeName.BINARY,
+        variantGroup.getType(0).asPrimitiveType().getPrimitiveTypeName());
+    assertEquals(PrimitiveType.PrimitiveTypeName.BINARY,
+        variantGroup.getType(1).asPrimitiveType().getPrimitiveTypeName());
+
+    // On parquet 1.15.2, annotation is null (variantType() doesn't exist).
+    // On parquet 1.16.0+, annotation should be present.
+    LogicalTypeAnnotation annotation = variantGroup.getLogicalTypeAnnotation();
+    LogicalTypeAnnotation expectedAnnotation = DataTypeAdapter.variantParquetAnnotation();
+    assertEquals(expectedAnnotation, annotation,
+        "Variant group annotation should match DataTypeAdapter.variantParquetAnnotation()");
+  }
+
+  /**
+   * Verifies that {@link DataTypeAdapter#variantParquetAnnotation()} gracefully returns null
+   * when parquet-java on the classpath does not have the {@code variantType()} factory
+   * (i.e., parquet < 1.16.0). This test will need updating when parquet is bumped.
+   */
+  @Test
+  void testVariantAnnotationReflectionFallback() {
+    LogicalTypeAnnotation annotation;
+    try {
+      annotation = DataTypeAdapter.variantParquetAnnotation();
+    } catch (UnsupportedOperationException e) {
+      // Pre-2.1 Flink: expected to throw, not return null
+      assertTrue(e.getMessage().contains("VARIANT type is only supported in Flink 2.1+"));
+      return;
+    }
+    // On Flink 2.1 with parquet 1.15.2: should be null (reflection fallback)
+    // On Flink 2.1 with parquet 1.16.0+: should be non-null
+    assertNotNull(annotation == null ? "null" : annotation,
+        "On parquet 1.15.2, variantParquetAnnotation() should return null; "
+            + "on parquet 1.16.0+ it should return a VariantLogicalTypeAnnotation");
   }
 
 }

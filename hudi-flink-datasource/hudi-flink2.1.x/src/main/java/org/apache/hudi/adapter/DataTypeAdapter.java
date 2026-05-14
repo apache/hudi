@@ -25,11 +25,37 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.types.variant.BinaryVariant;
 import org.apache.flink.types.variant.Variant;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
+
+import java.lang.reflect.Method;
 
 /**
  * Adapter utils to provide {@code DataType} utilities.
  */
 public class DataTypeAdapter {
+
+  /**
+   * Cached VARIANT annotation resolved via reflection, or {@code null} if parquet-java
+   * on the classpath predates {@code LogicalTypeAnnotation.variantType()} (< 1.16.0).
+   */
+  private static final LogicalTypeAnnotation VARIANT_ANNOTATION = resolveVariantAnnotation();
+
+  private static LogicalTypeAnnotation resolveVariantAnnotation() {
+    try {
+      Method factory = LogicalTypeAnnotation.class.getMethod("variantType", byte.class);
+      return (LogicalTypeAnnotation) factory.invoke(null, (byte) 1);
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  /**
+   * Returns the Parquet VARIANT {@link LogicalTypeAnnotation} if parquet-java 1.16.0+ is on the
+   * classpath, or {@code null} if the annotation class is unavailable.
+   */
+  public static LogicalTypeAnnotation variantParquetAnnotation() {
+    return VARIANT_ANNOTATION;
+  }
   public static Variant getVariant(RowData rowData, int pos) {
     return rowData.getVariant(pos);
   }

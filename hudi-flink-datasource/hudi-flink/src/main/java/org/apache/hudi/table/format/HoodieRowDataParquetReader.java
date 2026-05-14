@@ -24,20 +24,23 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.io.storage.row.parquet.ParquetSchemaConverter;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.util.RowDataQueryContexts;
 
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.RowType;
+import org.apache.hudi.util.HoodieSchemaConverter;
+import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -48,31 +51,19 @@ import java.util.Set;
 
 /**
  * Implementation of {@link HoodieFileReader} to read {@link RowData}s from base file.
- *
- * <p>The table-level {@link HoodieSchema} is supplied at construction time via the factory
- * ({@link HoodieRowDataFileReaderFactory}). When present, the schema is used to derive a Flink
- * RowType that correctly preserves Hudi logical types (Variant, Blob, Vector). These types are
- * indistinguishable from ordinary BYTES or ROW columns in the Parquet physical schema.
- *
- * <p>The schema may be absent ({@code Option.empty()}) for metadata-only operations such as
- * bloom filter lookups, min/max key reads, and record counts. In that case, calling
- * {@link #getRowType()}, {@link #getSchema()}, or any record-reading method will throw
- * {@link IllegalStateException}.
  */
 public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
   private final HoodieStorage storage;
   private final ParquetUtils parquetUtils;
   private final StoragePath path;
-  private final Option<HoodieSchema> tableSchema;
   private HoodieSchema fileSchema;
   private DataType fileRowType;
   private final List<ClosableIterator<RowData>> readerIterators = new ArrayList<>();
 
-  public HoodieRowDataParquetReader(HoodieStorage storage, StoragePath path, Option<HoodieSchema> schemaOption) {
+  public HoodieRowDataParquetReader(HoodieStorage storage, StoragePath path) {
     this.storage = storage;
     this.parquetUtils = (ParquetUtils) HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(HoodieFileFormat.PARQUET);
     this.path = path;
-    this.tableSchema = schemaOption;
   }
 
   @Override
@@ -115,34 +106,21 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
   @Override
   public HoodieSchema getSchema() {
     if (fileSchema == null) {
-      checkSchemaPresent();
-      fileSchema = tableSchema.get();
+      fileSchema = HoodieSchemaConverter.convertToSchema(getRowType().notNull().getLogicalType());
     }
     return fileSchema;
   }
 
   public DataType getRowType() {
     if (fileRowType == null) {
-      checkSchemaPresent();
-      fileRowType = RowDataQueryContexts.fromSchema(tableSchema.get()).getRowType();
+      // Some types in avro are not compatible with parquet.
+      // Avro only supports representing Decimals as fixed byte array
+      // and therefore if we convert to Avro directly we'll lose logical type-info.
+      MessageType messageType = parquetUtils.readMessageType(storage, path);
+      RowType rowType = ParquetSchemaConverter.convertToRowType(messageType);
+      fileRowType = DataTypes.of(rowType);
     }
     return fileRowType;
-  }
-
-  /**
-   * Ensures the HoodieSchema was supplied at construction time. Required for Flink MOR/COW
-   * unstructured type support: Hudi logical types (Variant, Blob, Vector) cannot be inferred
-   * from the Parquet physical schema alone because their binary/group layouts are
-   * indistinguishable from ordinary BYTES or ROW columns. Only the HoodieSchema carries the
-   * logical type annotations needed for correct Flink RowType derivation.
-   */
-  private void checkSchemaPresent() {
-    if (!tableSchema.isPresent()) {
-      throw new IllegalStateException(
-          "HoodieSchema is required for record-reading operations but was not supplied. "
-              + "Pass the schema via getFileReader(config, path, Option.of(schema)) or the "
-              + "4-arg getFileReader overload. File: " + path);
-    }
   }
 
   @Override

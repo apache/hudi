@@ -49,16 +49,15 @@ import static org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit;
 /**
  * Schema converter converts Parquet schema to and from Flink internal types.
  *
- * <p>On reads, this converter performs best-effort physical type mapping. It does detect the
- * Parquet {@code VARIANT} annotation (parquet-java 1.15.2+) and will reject shredded variants,
- * but it cannot distinguish Hudi Blob or Vector types from ordinary binary columns. For full
- * Hudi logical type inference, callers should derive the Flink RowType from the table-level
- * {@link HoodieSchema} via {@code HoodieSchemaConverter.convertToDataType()} instead —
- * see {@code HoodieRowDataParquetReader.withTableSchema()}.
+ * <p>On reads, this converter performs best-effort physical type mapping. It detects the
+ * Parquet {@code VARIANT} annotation and will reject shredded variants. Blob and Vector types
+ * cannot be distinguished from ordinary binary columns via Parquet schema alone.
  *
  * <p>On writes, this converter maps Flink {@code VariantType} to the canonical unshredded Parquet
- * layout (group with binary metadata + value fields). Once parquet-java is bumped to 1.16.0+,
- * the writer should also attach {@code LogicalTypeAnnotation.variantType()} for interoperability.
+ * layout (group with binary metadata + value fields). The VARIANT logical type annotation is
+ * resolved by {@link DataTypeAdapter#variantParquetAnnotation()} — on Flink 2.1+ with
+ * parquet-java 1.16.0+ the annotation is attached automatically; on pre-2.1 Flink the call
+ * throws {@link UnsupportedOperationException} (variant writes require Flink 2.1+).
  *
  * <p>Reference org.apache.flink.formats.parquet.utils.ParquetSchemaConverter to support timestamp of INT64 8 bytes.
  */
@@ -169,10 +168,9 @@ public class ParquetSchemaConverter {
                 convertToRowField(keyValueType.getLeft()).getType().copy(true),
                 convertToRowField(keyValueType.getRight()).getType()));
       } else if (hasVariantAnnotation(logicalType)) {
-        // This branch only fires for files written with parquet-java 1.15.2+ that carry the
-        // VARIANT annotation. Note: convertToRowType() is not called by any production read
-        // path today — all reads derive the Flink RowType from HoodieSchema via
-        // RowDataQueryContexts.fromSchema(). This annotation check serves as defense-in-depth.
+        // Fires for files written with parquet-java that carry the VARIANT annotation.
+        // The reader infers the Flink RowType from the Parquet footer via convertToRowType(),
+        // so this annotation detection is the primary mechanism for recognizing Variant columns.
         if (isShreddedVariant(groupType)) {
           throw new UnsupportedOperationException(
               "Shredded Variant is not supported in Flink. "
@@ -238,10 +236,23 @@ public class ParquetSchemaConverter {
   /**
    * Converts a Variant column to the canonical unshredded Parquet layout:
    * a group with required binary {@code metadata} and required binary {@code value}.
+   *
+   * <p>No shredded-variant guard is needed here: Flink 2.1's {@code VariantType} is a single
+   * atomic {@code LogicalTypeRoot.VARIANT} with no shredding representation (FLIP-521 scopes
+   * shredding out), so a shredded variant can never arrive as a Flink LogicalType.
+   *
+   * <p>Delegates to {@link DataTypeAdapter#variantParquetAnnotation()} for the VARIANT logical
+   * type annotation. On Flink < 2.1 this throws (variant writes are unsupported). On Flink 2.1+
+   * the annotation is attached when parquet-java 1.16.0+ is on the classpath; on older parquet
+   * versions the group is written without the annotation.
    */
   private static Type convertVariantToParquetType(String name, Type.Repetition repetition) {
-    // TODO: add .as(LogicalTypeAnnotation.variantType()) once parquet-java is bumped to 1.16.0
-    return Types.buildGroup(repetition)
+    LogicalTypeAnnotation annotation = DataTypeAdapter.variantParquetAnnotation();
+    Types.GroupBuilder<GroupType> builder = Types.buildGroup(repetition);
+    if (annotation != null) {
+      builder = builder.as(annotation);
+    }
+    return builder
         .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, Type.Repetition.REQUIRED)
             .named(HoodieSchema.Variant.VARIANT_METADATA_FIELD))
         .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, Type.Repetition.REQUIRED)

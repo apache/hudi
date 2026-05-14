@@ -45,23 +45,18 @@ public class HoodieFileReaderFactory {
   }
 
   public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StoragePath path) throws IOException {
-    return getFileReader(hoodieConfig, path, Option.empty());
-  }
-
-  public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StoragePath path,
-                                        Option<HoodieSchema> schemaOption) throws IOException {
     final String extension = FSUtils.getFileExtension(path.toString());
     if (PARQUET.getFileExtension().equals(extension)) {
-      return getFileReader(hoodieConfig, path, PARQUET, schemaOption);
+      return getFileReader(hoodieConfig, path, PARQUET, Option.empty());
     }
     if (HFILE.getFileExtension().equals(extension)) {
-      return getFileReader(hoodieConfig, path, HFILE, schemaOption);
+      return getFileReader(hoodieConfig, path, HFILE, Option.empty());
     }
     if (ORC.getFileExtension().equals(extension)) {
-      return getFileReader(hoodieConfig, path, ORC, schemaOption);
+      return getFileReader(hoodieConfig, path, ORC, Option.empty());
     }
     if (LANCE.getFileExtension().equals(extension)) {
-      return getFileReader(hoodieConfig, path, LANCE, schemaOption);
+      return getFileReader(hoodieConfig, path, LANCE, Option.empty());
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
@@ -75,7 +70,7 @@ public class HoodieFileReaderFactory {
                                         Option<HoodieSchema> schemaOption) throws IOException {
     switch (format) {
       case PARQUET:
-        return newParquetFileReader(path, schemaOption);
+        return newParquetFileReader(path);
       case HFILE:
         return newHFileFileReader(hoodieConfig, path, schemaOption);
       case ORC:
@@ -91,7 +86,7 @@ public class HoodieFileReaderFactory {
                                         Option<HoodieSchema> schemaOption) throws IOException {
     switch (format) {
       case PARQUET:
-        return newParquetFileReader(pathInfo.getPath(), schemaOption);
+        return newParquetFileReader(pathInfo.getPath());
       case HFILE:
         return newHFileFileReader(hoodieConfig, pathInfo, schemaOption);
       case ORC:
@@ -116,15 +111,6 @@ public class HoodieFileReaderFactory {
 
   protected HoodieFileReader newParquetFileReader(StoragePath path) {
     throw new UnsupportedOperationException();
-  }
-
-  /**
-   * Creates a Parquet file reader with an optional table-level schema. Subclasses that need
-   * the schema for logical type inference (e.g. the Flink reader for Variant/Blob/Vector)
-   * should override this method. The default delegates to {@link #newParquetFileReader(StoragePath)}.
-   */
-  protected HoodieFileReader newParquetFileReader(StoragePath path, Option<HoodieSchema> schemaOption) {
-    return newParquetFileReader(path);
   }
 
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig, StoragePath path,

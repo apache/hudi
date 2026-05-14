@@ -32,7 +32,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -43,7 +42,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.io.IOUtils;
-
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metrics.FlinkClusteringMetrics;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
@@ -306,13 +305,13 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   private Iterator<RowData> readRecordsForGroupBaseFiles(List<ClusteringOperation> clusteringOps) {
     List<ClosableIterator<RowData>> iteratorsForPartition = clusteringOps.stream().map(clusteringOp -> {
       try {
-        HoodieSchema tableSchema = new TableSchemaResolver(table.getMetaClient()).getTableSchema();
-        HoodieRowDataParquetReader fileReader = (HoodieRowDataParquetReader) HoodieIOFactory.getIOFactory(table.getStorage())
-            .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
-            .getFileReader(table.getConfig(), new StoragePath(clusteringOp.getDataFilePath()), Option.of(tableSchema));
+        HoodieFileReaderFactory fileReaderFactory = HoodieIOFactory.getIOFactory(table.getStorage())
+            .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK);
+        HoodieRowDataParquetReader fileReader = (HoodieRowDataParquetReader) fileReaderFactory.getFileReader(
+            table.getConfig(), new StoragePath(clusteringOp.getDataFilePath()));
 
         return new CloseableMappingIterator<>(fileReader.getRecordIterator(readerSchema), HoodieRecord::getData);
-      } catch (Exception e) {
+      } catch (IOException e) {
         throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
             + " and " + clusteringOp.getDeltaFilePaths(), e);
       }

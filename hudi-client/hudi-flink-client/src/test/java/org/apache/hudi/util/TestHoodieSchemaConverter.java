@@ -19,7 +19,6 @@
 
 package org.apache.hudi.util;
 
-import org.apache.hudi.adapter.DataTypeAdapter;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
