@@ -187,10 +187,13 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
                 String.valueOf(storage.getConf().getBoolean(SQLConf.PARQUET_RECORD_FILTER_ENABLED().key(), sqlConf.parquetRecordFilterEnabled())));
           });
     }
-    ParquetReader<InternalRow> reader = ParquetReader.builder(new HoodieParquetReadSupport(Option$.MODULE$.empty(), true, true,
-                rebaseDateSpec,
-                SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("LEGACY"), messageSchema),
-            new Path(path.toUri()))
+    // Via SparkAdapter so Spark 4.0 picks up its variant-reordering ReadSupport subclass
+    // (#18334); constructing the base class here would MALFORMED_VARIANT on Spark 4.0.
+    HoodieParquetReadSupport readSupport = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetReadSupport(
+        Option$.MODULE$.empty(), true, true,
+        rebaseDateSpec,
+        messageSchema);
+    ParquetReader<InternalRow> reader = ParquetReader.builder(readSupport, new Path(path.toUri()))
         .withConf(storage.getConf().unwrapAs(Configuration.class))
         .build();
     UnsafeProjection projection = evolution.generateUnsafeProjection();

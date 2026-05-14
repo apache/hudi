@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark.internal.ReflectUtil
 import org.apache.hudi.storage.StorageConfiguration
 
-import org.apache.parquet.schema.{MessageType, PrimitiveType, Type, Types}
+import org.apache.parquet.schema.{GroupType, MessageType, PrimitiveType, Type, Types}
 import org.apache.parquet.schema.Type.Repetition
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
@@ -198,6 +198,14 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     (requiredType, fileType) match {
       case (_: VariantType, s: StructType) if isVariantPhysicalSchema(s) => Some(true)
       case (s: StructType, _: VariantType) if isVariantPhysicalSchema(s) => Some(true)
+      // Spark 4.1's PushVariantIntoScan rewrites a `v: VariantType` column into a
+      // pushed-down projection struct (each child carries `VariantMetadata`). When the file
+      // stores `v` as a real Variant, the projection struct is NOT a type change — parquet-mr
+      // reads the variant natively and projects per-row using the field metadata. Treat the
+      // pair as compatible so Hudi's schema-change machinery doesn't rewrite the requested
+      // schema back to `VariantType` (which would lose the projection metadata).
+      case (s: StructType, _: VariantType) if isVariantProjectionStruct(s) => Some(true)
+      case (_: VariantType, s: StructType) if isVariantProjectionStruct(s) => Some(true)
       case _ => None // Not a VariantType comparison, use default logic
     }
   }
@@ -245,12 +253,15 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     // VariantType is always stored in Parquet as a struct with separate value and metadata binary fields.
     // This matches how the HoodieRowParquetWriteSupport writes variant data.
     // Note: We intentionally omit 'typed_value' for shredded variants as this writer only accesses raw binary blobs.
-    // TODO: use `.as(LogicalTypeAnnotation.variantType())` after parquet-java version is bumped to 1.16.0
-    Types.buildGroup(repetition)
+    // The variant LogicalTypeAnnotation is applied via applyVariantLogicalType, Spark 4.0 (parquet 1.15.2)
+    // is a no-op since the annotation only exists in parquet 1.16.0+; Spark 4.1 overrides to apply it.
+    val builder = Types.buildGroup(repetition)
       .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, Repetition.REQUIRED).named(HoodieSchema.Variant.VARIANT_METADATA_FIELD))
       .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, valueRepetition).named(HoodieSchema.Variant.VARIANT_VALUE_FIELD))
-      .named(fieldName)
+    applyVariantLogicalType(builder).named(fieldName)
   }
+
+  protected def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = builder
 
   override def isVariantShreddingStruct(structType: StructType): Boolean = {
     SparkShreddingUtils.isVariantShreddingStruct(structType)

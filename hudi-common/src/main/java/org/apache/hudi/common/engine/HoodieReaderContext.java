@@ -56,6 +56,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
@@ -382,6 +383,15 @@ public abstract class HoodieReaderContext<T> {
                                                             ClosableIterator<T> dataFileIterator,
                                                             HoodieSchema dataRequiredSchema,
                                                             List<Pair<String, Object>> requiredPartitionFieldAndValues);
+
+  /**
+   * Optional per-row transformer applied to log-block records before they reach the merger.
+   * Engines override this to align records with a projected read schema (e.g. Spark 4.1's
+   * PushVariantIntoScan). Default is no projection.
+   */
+  public Option<Function<T, T>> getLogBlockRecordProjection(HoodieSchema dataBlockSchema) {
+    return Option.empty();
+  }
 
   public Option<Pair<String, String>> getPayloadClasses(TypedProperties props) {
     return getRecordMerger().map(merger -> {

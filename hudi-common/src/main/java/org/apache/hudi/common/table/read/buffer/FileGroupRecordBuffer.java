@@ -199,9 +199,8 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
       } else {
         blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext);
       }
-      Pair<Function<T, T>, HoodieSchema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
-      return Pair.of(new CloseableMappingIterator<>(
-          blockRecordsIterator, schemaTransformerWithEvolvedSchema.getLeft()), schemaTransformerWithEvolvedSchema.getRight());
+      Pair<Function<T, T>, HoodieSchema> projectedTransformer = getProjectedTransformer(dataBlock);
+      return Pair.of(new CloseableMappingIterator<>(blockRecordsIterator, projectedTransformer.getLeft()), projectedTransformer.getRight());
     } catch (IOException e) {
       throw new HoodieIOException("Failed to deser records from log files ", e);
     }
@@ -279,6 +278,28 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
 
     HoodieSchema evolvedSchema = schemaEvolutionTransformerOpt.map(Pair::getRight).orElseGet(dataBlock::getSchema);
     return Pair.of(transformer, evolvedSchema);
+  }
+
+  /**
+   * Composes schema evolution then the engine's optional log-block record projection
+   * (currently only Spark 4.1's PushVariantIntoScan). Returns the evolved data-block schema
+   * — the projector preserves field shape, only rewriting variant fields, so merger
+   * metadata cols (read by ordinal) stay intact.
+   *
+   * <p>Skipped when a custom payload class is configured: {@code PayloadUpdateProcessor}
+   * round-trips through {@code convertToAvroRecord} against a schema that still types
+   * variant fields as {@code VariantType}, which would mis-decode rewritten rows.
+   */
+  protected Pair<Function<T, T>, HoodieSchema> getProjectedTransformer(HoodieDataBlock dataBlock) {
+    Pair<Function<T, T>, HoodieSchema> evolved = getSchemaTransformerWithEvolvedSchema(dataBlock);
+    if (payloadClasses.isPresent()) {
+      return evolved;
+    }
+    Option<Function<T, T>> logProjOpt = readerContext.getLogBlockRecordProjection(evolved.getRight());
+    if (!logProjOpt.isPresent()) {
+      return evolved;
+    }
+    return Pair.of(evolved.getLeft().andThen(logProjOpt.get()), evolved.getRight());
   }
 
   private static class LogRecordIterator<T> implements ClosableIterator<BufferedRecord<T>> {

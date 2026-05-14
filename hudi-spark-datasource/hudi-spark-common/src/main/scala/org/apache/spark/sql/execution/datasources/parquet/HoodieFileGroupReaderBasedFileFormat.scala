@@ -151,6 +151,21 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       supportVectorizedRead = false
       supportReturningBatch = false
       false
+    } else if (schema.fields.exists(f => f.dataType.isInstanceOf[StructType]
+        && sparkAdapter.isVariantProjectionStruct(f.dataType.asInstanceOf[StructType]))) {
+      // Spark 4.1's PushVariantIntoScan rewrites a variant column to a struct of pushed-down
+      // extractions. The Spark vectorized parquet reader treats this as a nested type change
+      // (data column is VariantType, required is a struct) and refuses to read in vectorized
+      // mode (ParquetSchemaEvolutionUtils throws). Force row-based reading on this path.
+      supportVectorizedRead = false
+      supportReturningBatch = false
+      false
+    } else if (HoodieSparkUtils.gteqSpark4_1 && schema.fields.exists(f => sparkAdapter.isVariantType(f.dataType))) {
+      // #18605: Spark 4.1's vectorized variant read produces UnsafeRow encodings that SIGBUS
+      // during RangePartitioner sampling. Force row-based reads. Spark 4.0 unaffected.
+      supportVectorizedRead = false
+      supportReturningBatch = false
+      false
     } else {
       val conf = sparkSession.sessionState.conf
       val parquetBatchSupported = ParquetUtils.isBatchReadSupportedForSchema(conf, schema) && supportBatchWithTableSchema
@@ -173,7 +188,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       }
       supportVectorizedRead = !isIncremental && !isBootstrap && supportBatch
       supportReturningBatch = !isMOR && supportVectorizedRead
-      logInfo(s"supportReturningBatch: $supportReturningBatch, supportVectorizedRead: $supportVectorizedRead, isIncremental: $isIncremental, " +
+      logDebug(s"supportReturningBatch: $supportReturningBatch, supportVectorizedRead: $supportVectorizedRead, isIncremental: $isIncremental, " +
         s"isBootstrap: $isBootstrap, superSupportBatch: $supportBatch")
       supportReturningBatch
     }
@@ -222,7 +237,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val superSplitable = super.isSplitable(sparkSession, options, path)
     val isLance = hoodieFileFormat == HoodieFileFormat.LANCE
     val splitable = !isMOR && !isIncremental && !isBootstrap && !isLance && superSplitable
-    logInfo(s"isSplitable: $splitable, super.isSplitable: $superSplitable, isMOR: $isMOR, isIncremental: $isIncremental, isBootstrap: $isBootstrap")
+    logDebug(s"isSplitable: $splitable, super.isSplitable: $superSplitable, isMOR: $isMOR, isIncremental: $isIncremental, isBootstrap: $isBootstrap")
     splitable
   }
 
@@ -286,7 +301,9 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
             .getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
           fileSliceMapping.getSlice(fileGroupName) match {
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
-              val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig)
+              val readerContext = new SparkFileFormatInternalRowReaderContext(
+                fileGroupBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig,
+                sparkRequiredSchema = Some(requiredSchema))
               readerContext.setEnableLogicalTimestampFieldRepair(storageConf.getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true))
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))

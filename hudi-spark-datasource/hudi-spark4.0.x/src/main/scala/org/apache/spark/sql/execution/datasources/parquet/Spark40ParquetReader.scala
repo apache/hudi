@@ -206,7 +206,7 @@ class Spark40ParquetReader(enableVectorizedReader: Boolean,
       }
     } else {
       // ParquetRecordReader returns InternalRow
-      val readSupport = new HoodieParquetReadSupport(
+      val readSupport = new Spark40HoodieParquetReadSupport(
         convertTz,
         enableVectorizedReader = false,
         enableLogicalTimestampRepair,

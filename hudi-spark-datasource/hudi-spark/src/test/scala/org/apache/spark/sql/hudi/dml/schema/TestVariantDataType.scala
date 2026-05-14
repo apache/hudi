@@ -33,19 +33,9 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable
 import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{ArrayType, BinaryType, DataType, LongType, MapType, MetadataBuilder, StringType, StructField, StructType}
-import org.scalatest.{Canceled, Outcome}
 
 
 class TestVariantDataType extends HoodieSparkSqlTestBase {
-
-  // TODO(#18605): Re-enable after fixing JVM SIGSEGV crash on Spark 4.1
-  override def withFixture(test: NoArgTest): Outcome = {
-    if (HoodieSparkUtils.gteqSpark4_1) {
-      Canceled("Disabled on Spark 4.1 due to JVM SIGSEGV crash in variant data type tests")
-    } else {
-      super.withFixture(test)
-    }
-  }
 
   test(s"Test Table with Variant Data Type") {
     // Variant type is only supported in Spark 4.0+

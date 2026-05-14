@@ -23,6 +23,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.schema.ConversionPatterns;
@@ -77,6 +78,7 @@ import static org.apache.parquet.schema.Type.Repetition.REPEATED;
  * This was taken from parquet-java 1.13.1 AvroSchemaConverter and modified
  * to support local timestamp types by copying a few methods from 1.14.0 AvroSchemaConverter.
  */
+@Slf4j
 @SuppressWarnings("all")
 public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchemaConverter {
 
@@ -478,7 +480,14 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
           public java.util.Optional<HoodieSchema> visit(LogicalTypeAnnotation.EnumLogicalTypeAnnotation enumLogicalType) {
             return java.util.Optional.of(HoodieSchema.create(HoodieSchemaType.STRING));
           }
-        }).orElseThrow(() -> new UnsupportedOperationException("Cannot convert Parquet type " + parquetType));
+        }).orElseGet(() -> {
+          // Unrecognized annotation (e.g., parquet 1.16.0+ VariantLogicalTypeAnnotation, not
+          // available on the parquet version we compile against). Fall back to record
+          // conversion, correct for the variant binary group (`metadata`, `value`) we write.
+          log.debug("Unrecognized parquet LogicalTypeAnnotation '{}' on group '{}', falling back to record conversion",
+              logicalTypeAnnotation, parquetGroupType.getName());
+          return convertFields(parquetGroupType.getName(), parquetGroupType.getFields(), names);
+        });
       } else {
         // if no original type then it's a record
         return convertFields(parquetGroupType.getName(), parquetGroupType.getFields(), names);

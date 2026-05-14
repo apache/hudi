@@ -22,8 +22,10 @@ import org.apache.hudi.client.model.{HoodieInternalRow, Spark40HoodieInternalRow
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
+import org.apache.hudi.common.util.{Option => HOption}
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.parquet.schema.MessageType
 import org.apache.spark.SparkEnv
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
@@ -37,11 +39,12 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.util.{METADATA_COL_ATTR_KEY, RebaseDateTime}
+import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.lance.SparkLanceReaderBase
 import org.apache.spark.sql.execution.datasources.orc.Spark40OrcReader
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark40LegacyHoodieParquetFileFormat, Spark40ParquetReader}
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetReadSupport, ParquetFileFormat, Spark40HoodieParquetReadSupport, Spark40LegacyHoodieParquetFileFormat, Spark40ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.hudi.HoodieMemoryStream
@@ -193,6 +196,17 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
                                        options: Map[String, String],
                                        hadoopConf: Configuration): SparkColumnarFileReader = {
     Spark40ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
+  }
+
+  override def createParquetReadSupport(convertTz: Option[java.time.ZoneId],
+                                        enableVectorizedReader: Boolean,
+                                        enableTimestampFieldRepair: Boolean,
+                                        datetimeRebaseSpec: RebaseSpec,
+                                        tableSchemaOpt: HOption[MessageType])
+      : HoodieParquetReadSupport = {
+    new Spark40HoodieParquetReadSupport(
+      convertTz, enableVectorizedReader, enableTimestampFieldRepair,
+      datetimeRebaseSpec, getRebaseSpec("LEGACY"), tableSchemaOpt)
   }
 
   /**

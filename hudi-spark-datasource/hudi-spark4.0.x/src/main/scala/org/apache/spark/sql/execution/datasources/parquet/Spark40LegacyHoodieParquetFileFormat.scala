@@ -329,7 +329,9 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         }
       } else {
         logDebug(s"Falling back to parquet-mr")
-        val readSupport = new HoodieParquetReadSupport(
+        // Spark40 subclass reorders variant group fields to [value, metadata] for Spark 4.0's
+        // positional variant converter (#18334); base class no longer applies the reorder.
+        val readSupport = new Spark40HoodieParquetReadSupport(
           convertTz,
           enableVectorizedReader = false,
           enableTimestampFieldRepair = true,

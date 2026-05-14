@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.ValidationUtils
 
 import org.apache.parquet.hadoop.api.InitContext
 import org.apache.parquet.hadoop.api.ReadSupport.ReadContext
-import org.apache.parquet.schema.{GroupType, MessageType, PrimitiveType, SchemaRepair, Type, Types}
+import org.apache.parquet.schema.{GroupType, MessageType, SchemaRepair, Type, Types}
 import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 
 import java.time.ZoneId
@@ -50,15 +50,7 @@ class HoodieParquetReadSupport(
       readContext.getRequestedSchema
     }
     val trimmedParquetSchema = HoodieParquetReadSupport.trimParquetSchema(requestedParquetSchema, context.getFileSchema)
-    // TODO: Remove this workaround once Spark is bumped to 4.1+, which reads variant fields by
-    //  name via SPARK-54410. Spark 4.0.x's ParquetUnshreddedVariantConverter builds its converters
-    //  array in hardcoded [value, metadata] order, then indexes by schema position. If the Parquet
-    //  schema has [metadata, value] order (per spec), the positional mismatch causes
-    //  MALFORMED_VARIANT. Workaround: reorder variant group fields to [value, metadata] in the
-    //  requested schema. parquet-mr reconciles requested vs file schema by field name, so bytes
-    //  flow correctly. This is tracked in issue #18334
-    val reorderedSchema = HoodieParquetReadSupport.reorderVariantFields(trimmedParquetSchema)
-    new ReadContext(reorderedSchema, readContext.getReadSupportMetadata)
+    new ReadContext(trimmedParquetSchema, readContext.getReadSupportMetadata)
   }
 }
 
@@ -81,42 +73,6 @@ object HoodieParquetReadSupport {
       }
     }).filter(_.isDefined).map(_.get).toArray[Type]
     Types.buildMessage().addFields(trimmedFields: _*).named(requestedSchema.getName)
-  }
-
-  /**
-   * Reorders variant group fields in the requested schema so that "value" precedes "metadata".
-   * This works around Spark 4.0.x's ParquetUnshreddedVariantConverter, which builds its
-   * converters array in hardcoded [value, metadata] order and indexes by schema position.
-   * parquet-mr reconciles the requested schema against the file schema by field name,
-   * so the correct bytes still flow to the correct converters regardless of file order.
-   */
-  def reorderVariantFields(schema: MessageType): MessageType = {
-    val reordered = schema.getFields.asScala.map(reorderVariantType).toArray[Type]
-    Types.buildMessage().addFields(reordered: _*).named(schema.getName)
-  }
-
-  private def reorderVariantType(t: Type): Type = {
-    t match {
-      case group: GroupType if isVariantGroup(group) =>
-        // Rebuild with [value, metadata] order for Spark compatibility
-        val valueField = group.getType("value")
-        val metadataField = group.getType("metadata")
-        group.withNewFields(java.util.Arrays.asList(valueField, metadataField))
-      case group: GroupType =>
-        // Recurse into nested groups
-        val children = group.getFields.asScala.map(reorderVariantType).asJava
-        group.withNewFields(children)
-      case _ => t
-    }
-  }
-
-  private def isVariantGroup(group: GroupType): Boolean = {
-    group.containsField("value") &&
-      group.containsField("metadata") &&
-      group.getType("value").isPrimitive &&
-      group.getType("metadata").isPrimitive &&
-      group.getType("value").asPrimitiveType().getPrimitiveTypeName == PrimitiveType.PrimitiveTypeName.BINARY &&
-      group.getType("metadata").asPrimitiveType().getPrimitiveTypeName == PrimitiveType.PrimitiveTypeName.BINARY
   }
 
   private def trimParquetType(requestedType: Type, fileType: Type): Option[Type] = {

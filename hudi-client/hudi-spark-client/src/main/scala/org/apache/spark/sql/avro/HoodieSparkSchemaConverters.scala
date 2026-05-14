@@ -18,7 +18,7 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.common.schema.{HoodieJsonProperties, HoodieSchema, HoodieSchemaField, HoodieSchemaType}
 import org.apache.hudi.common.schema.HoodieSchema.TimePrecision
 import org.apache.hudi.internal.schema.HoodieSchemaException
@@ -188,6 +188,12 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
       case variantStruct: StructType if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
         HoodieSchema.parseTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)).getType == HoodieSchemaType.VARIANT &&
         isCanonicalVariantStruct(variantStruct) =>
+        HoodieSchema.createVariant(recordName, nameSpace, null)
+
+      // PushVariantIntoScan (Spark 4.1+) rewrites Variant to a struct of extractions; map
+      // it back to a regular HoodieSchema Variant. parquet-mr does the projection natively
+      // from the Spark required schema's VariantMetadata.
+      case projectedVariant: StructType if isSparkVariantProjectionStruct(projectedVariant) =>
         HoodieSchema.createVariant(recordName, nameSpace, null)
 
       case st: StructType =>
@@ -512,6 +518,18 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
       st.forall { f =>
         f.name.matches("member\\d+") && f.nullable
       }
+  }
+
+  /**
+   * Detects a Spark 4.1 PushVariantIntoScan-projected struct. Short-circuits before consulting
+   * the version-specific SparkAdapter so shared-module unit tests (whose classpath lacks any
+   * SparkXAdapter) don't trigger an adapter-load failure on plain StructType conversions.
+   */
+  private def isSparkVariantProjectionStruct(st: StructType): Boolean = {
+    if (!HoodieSparkUtils.gteqSpark4_1) return false
+    if (st.fields.forall(_.metadata == Metadata.empty)) return false
+    try sparkAdapter.isVariantProjectionStruct(st)
+    catch { case _: NoClassDefFoundError | _: ClassNotFoundException => false }
   }
 
   private def sparkTypeForVectorElementType(

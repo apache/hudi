@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.hadoop.conf.Configuration
@@ -43,7 +44,7 @@ import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, ParquetFilters}
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetReadSupport, ParquetFileFormat, ParquetFilters}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
@@ -241,6 +242,21 @@ trait SparkAdapter extends Serializable {
                             sqlConf: SQLConf,
                             options: Map[String, String],
                             hadoopConf: Configuration): Option[SparkColumnarFileReader]
+
+  /**
+   * Build the [[HoodieParquetReadSupport]] for a parquet read. Spark 4.0 overrides to return
+   * its variant-aware subclass (variant group field reorder for the positional converter).
+   * int96 rebase mode is fixed to LEGACY (Hudi convention for timestamp compatibility).
+   */
+  def createParquetReadSupport(convertTz: Option[java.time.ZoneId],
+                               enableVectorizedReader: Boolean,
+                               enableTimestampFieldRepair: Boolean,
+                               datetimeRebaseSpec: RebaseSpec,
+                               tableSchemaOpt: HOption[MessageType])
+      : HoodieParquetReadSupport = {
+    new HoodieParquetReadSupport(convertTz, enableVectorizedReader, enableTimestampFieldRepair,
+      datetimeRebaseSpec, getRebaseSpec("LEGACY"), tableSchemaOpt)
+  }
 
   /**
    * use new qe execute
@@ -465,6 +481,28 @@ trait SparkAdapter extends Serializable {
    * @return true if this is a shredded Variant schema
    */
   def isVariantShreddingStruct(structType: StructType): Boolean
+
+  /**
+   * Checks if a StructType is the result of Spark 4.1's PushVariantIntoScan rewriting — i.e.,
+   * every child field carries `VariantMetadata` describing a pushed-down variant extraction.
+   *
+   * Returns false on Spark versions earlier than 4.1 (the rewriting only happens there).
+   */
+  def isVariantProjectionStruct(structType: StructType): Boolean = false
+
+  /**
+   * If `sparkRequiredSchema` contains any field that's a Spark 4.1 variant projection struct
+   * (i.e., the same-named field in `sparkDataSchema` is `VariantType`), returns a row
+   * transformer that takes an InternalRow in the data-schema shape (with full variants) and
+   * produces an InternalRow in the required-schema shape (with each variant column projected
+   * to its requested struct via VariantGet).
+   *
+   * Used on the MOR log-file path: log records carry the full variant on disk, but the merger
+   * expects rows aligned to the post-PushVariantIntoScan required schema. Returns None when
+   * there's nothing to project (cheap fast-path for Spark < 4.1 and for non-variant queries).
+   */
+  def buildVariantProjector(sparkDataSchema: StructType,
+                            sparkRequiredSchema: StructType): Option[InternalRow => InternalRow] = None
 
   /**
    * Generates a shredded Variant schema and marks it with write shredding metadata.
