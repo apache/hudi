@@ -173,7 +173,7 @@ public class Pipelines {
       if (conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)) {
         final boolean isNeededSortInput = conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY);
         final String[] partitionFields = FilePathUtils.extractPartitionKeys(conf);
-        final String[] recordKeyFields = OptionsResolver.getRecordKeyStr(conf).split(",");
+        final String[] recordKeyFields = OptionsResolver.getRecordKeys(conf);
 
         // if sort input by record key is needed then add record keys to partition keys
         String[] sortFields = isNeededSortInput

@@ -250,7 +250,11 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   private void checkRecordKey(Configuration conf, ResolvedSchema schema) {
     List<String> fields = schema.getColumnNames();
     if (schema.getPrimaryKey().isEmpty()) {
-      String[] recordKeys = OptionsResolver.getRecordKeyStr(conf).split(",");
+      String[] recordKeys = OptionsResolver.getRecordKeys(conf);
+      if (recordKeys.length == 0) {
+        throw new HoodieValidationException("Primary key definition is required, use either PRIMARY KEY syntax or option '"
+            + FlinkOptions.RECORD_KEY_FIELD.key() + "' to specify.");
+      }
       Arrays.stream(recordKeys)
           .filter(field -> !fields.contains(field))
           .findAny()
@@ -303,7 +307,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   private static void setupHoodieKeyOptions(Configuration conf, CatalogTable table) {
     List<String> pkColumns = table.getSchema().getPrimaryKey()
         .map(pk -> pk.getColumns()).orElse(Collections.emptyList());
-    if (pkColumns.size() > 0) {
+    if (!pkColumns.isEmpty()) {
       // the PRIMARY KEY syntax always has higher priority than option FlinkOptions#RECORD_KEY_FIELD
       String recordKey = String.join(",", pkColumns);
       conf.set(FlinkOptions.RECORD_KEY_FIELD, recordKey);
@@ -319,12 +323,15 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
         log.info("'{}' is not set, therefore '{}' value will be used as index key instead",
             FlinkOptions.INDEX_KEY_FIELD.key(),
             FlinkOptions.RECORD_KEY_FIELD.key());
-        conf.set(FlinkOptions.INDEX_KEY_FIELD, OptionsResolver.getRecordKeyStr(conf));
+        String recordKeyStr = OptionsResolver.getRecordKeyStr(conf);
+        if (StringUtils.nonEmpty(recordKeyStr)) {
+          conf.set(FlinkOptions.INDEX_KEY_FIELD, recordKeyStr);
+        }
       } else {
         Set<String> recordKeySet =
-            Arrays.stream(OptionsResolver.getRecordKeyStr(conf).split(",")).collect(Collectors.toSet());
+            Arrays.stream(OptionsResolver.getRecordKeys(conf)).collect(Collectors.toSet());
         Set<String> indexKeySet =
-            Arrays.stream(conf.get(FlinkOptions.INDEX_KEY_FIELD).split(",")).collect(Collectors.toSet());
+            Arrays.stream(OptionsResolver.getBucketIndexKeys(conf)).collect(Collectors.toSet());
         if (!recordKeySet.containsAll(indexKeySet)) {
           throw new HoodieValidationException(
               FlinkOptions.INDEX_KEY_FIELD + " should be a subset of or equal to the recordKey fields");
@@ -334,7 +341,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
     // tweak the key gen class if possible
     final String[] partitions = conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",");
-    final String[] pks = OptionsResolver.getRecordKeyStr(conf).split(",");
+    final String[] pks = OptionsResolver.getRecordKeys(conf);
     if (partitions.length == 1) {
       final String partitionField = partitions[0];
       if (partitionField.isEmpty()) {
