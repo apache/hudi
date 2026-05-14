@@ -128,7 +128,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void clearWorkMapForConfOnGetSplitsFailure() throws Exception {
+  public void testClearWorkMapForConfOnGetSplitsFailure() throws Exception {
     StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
     File inputDir = tempDir.resolve("input").toFile();
     assertTrue(inputDir.mkdirs());
