@@ -66,7 +66,6 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
                                               requiredFilters: Seq[Filter],
                                               storageConfiguration: StorageConfiguration[_],
                                               tableConfig: HoodieTableConfig,
-                                              sparkDataSchema: Option[StructType] = None,
                                               sparkRequiredSchema: Option[StructType] = None)
   extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig, SparkFileFormatInternalRecordContext.apply(tableConfig)) {
 
@@ -76,7 +75,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
            requiredFilters: Seq[Filter],
            storageConfiguration: StorageConfiguration[_],
            tableConfig: HoodieTableConfig) =
-    this(baseFileReader, filters, requiredFilters, storageConfiguration, tableConfig, None, None)
+    this(baseFileReader, filters, requiredFilters, storageConfiguration, tableConfig, None)
 
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
   private lazy val recordKeyFields = Option(tableConfig.getRecordKeyFields.orElse(null)).map(_.map(_.toLowerCase).toSet).getOrElse(Set.empty)

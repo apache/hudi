@@ -527,7 +527,7 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
    */
   private def isSparkVariantProjectionStruct(st: StructType): Boolean = {
     if (!HoodieSparkUtils.gteqSpark4_1) return false
-    if (!st.fields.exists(_.metadata != Metadata.empty)) return false
+    if (st.fields.forall(_.metadata == Metadata.empty)) return false
     try sparkAdapter.isVariantProjectionStruct(st)
     catch { case _: NoClassDefFoundError | _: ClassNotFoundException => false }
   }

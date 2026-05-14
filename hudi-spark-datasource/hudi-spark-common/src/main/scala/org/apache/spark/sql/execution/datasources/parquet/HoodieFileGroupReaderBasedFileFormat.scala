@@ -303,7 +303,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
               val readerContext = new SparkFileFormatInternalRowReaderContext(
                 fileGroupBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig,
-                sparkDataSchema = Some(dataStructType), sparkRequiredSchema = Some(requiredSchema))
+                sparkRequiredSchema = Some(requiredSchema))
               readerContext.setEnableLogicalTimestampFieldRepair(storageConf.getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true))
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
