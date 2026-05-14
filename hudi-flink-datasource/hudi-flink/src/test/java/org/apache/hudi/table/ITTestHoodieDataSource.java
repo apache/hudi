@@ -1651,6 +1651,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.OPERATION, "insert")
         .option(FlinkOptions.INSERT_CLUSTER, clustering)
+        .option(FlinkOptions.RECORD_KEY_FIELD, clustering ? "uuid" : "")
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
@@ -3213,6 +3214,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.OPERATION, "insert")
         .option(FlinkOptions.WRITE_BUFFER_MEMORY_TYPE, BufferMemoryType.MANAGED)
         .option(FlinkOptions.WRITE_BUFFER_TYPE, bufferType.name())
+        .option(FlinkOptions.RECORD_KEY_FIELD, "uuid")
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
 
