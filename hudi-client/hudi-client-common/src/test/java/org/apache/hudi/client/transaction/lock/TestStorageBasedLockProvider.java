@@ -523,9 +523,9 @@ class TestStorageBasedLockProvider {
 
   @Test
   void testRenewLockUpdatesMetricWithRenewedExpirationDeadline() {
-    HoodieLockMetrics lockMetrics = mock(HoodieLockMetrics.class);
+    HoodieLockMetrics mockLockMetrics = mock(HoodieLockMetrics.class);
     lockProvider.close();
-    lockProvider = createLockProvider(lockMetrics);
+    lockProvider = createLockProvider(mockLockMetrics);
 
     long currentEpochMs = 1000L;
     long oldExpirationMs = currentEpochMs + 30L;
@@ -541,7 +541,7 @@ class TestStorageBasedLockProvider {
         .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(renewedLockFile)));
 
     assertTrue(lockProvider.renewLock());
-    verify(lockMetrics).updateLockExpirationDeadlineMetric(DEFAULT_LOCK_VALIDITY_MS);
+    verify(mockLockMetrics).updateLockExpirationDeadlineMetric(DEFAULT_LOCK_VALIDITY_MS);
   }
 
   @Test
