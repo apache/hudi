@@ -21,7 +21,7 @@ import org.apache.hudi.{HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, Hoo
 import org.apache.hudi.cdc.{CDCFileGroupIterator, HoodieCDCFileGroupSplit, HoodieCDCFileIndex}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
-import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieMemoryConfig, HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.schema.HoodieSchema
@@ -86,8 +86,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                            shouldUseRecordPosition: Boolean,
                                            requiredFilters: Seq[Filter],
                                            isMultipleBaseFileFormatsEnabled: Boolean,
-                                           hoodieFileFormat: HoodieFileFormat,
-                                           isBlobDescriptorMode: Boolean = false)
+                                           val hoodieFileFormat: HoodieFileFormat,
+                                           val isBlobDescriptorMode: Boolean = false)
   extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait with Logging with Serializable {
 
   private lazy val schema = tableSchema.schema
@@ -258,6 +258,20 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val augmentedStorageConf = new HadoopStorageConfiguration(hadoopConf).getInline
     setSchemaEvolutionConfigs(augmentedStorageConf)
     augmentedStorageConf.set(ENABLE_LOGICAL_TIMESTAMP_REPAIR, hasTimestampMillisFieldInTableSchema.toString)
+
+    // Per-query set of blob columns that read_blob() materializes in the current query, written
+    // into HadoopFsRelation.options by ReadBlobRule. Under DESCRIPTOR mode these columns keep their
+    // `data` sub-field so the bytes flow through to BatchedBlobReader. The conf entry below makes
+    // the same set visible to the MOR path (SparkFileFormatInternalRowReaderContext) at task time.
+    val forceContentCols: Set[String] = options
+      .get(HoodieReaderConfig.BLOB_INLINE_READ_FORCE_CONTENT_COLUMNS)
+      .map(_.split(",").iterator.map(_.trim).filter(_.nonEmpty).toSet)
+      .getOrElse(Set.empty)
+    if (forceContentCols.nonEmpty) {
+      augmentedStorageConf.set(
+        HoodieReaderConfig.BLOB_INLINE_READ_FORCE_CONTENT_COLUMNS,
+        forceContentCols.mkString(","))
+    }
     val (remainingPartitionSchemaArr, fixedPartitionIndexesArr) = partitionSchema.fields.toSeq.zipWithIndex.filter(p => !mandatoryFields.contains(p._1.name)).unzip
 
     // The schema of the partition cols we want to append the value instead of reading from the file
@@ -340,7 +354,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
             case _ =>
               readBaseFile(file, baseFileReader.value, requestedStructType, remainingPartitionSchema, fixedPartitionIndexes,
-                requiredSchema, partitionSchema, outputSchema, filters ++ requiredFilters, storageConf)
+                requiredSchema, partitionSchema, outputSchema, filters ++ requiredFilters, storageConf, forceContentCols)
           }
         // CDC queries.
         case hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping =>
@@ -348,7 +362,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
         case _ =>
           readBaseFile(file, baseFileReader.value, requestedStructType, remainingPartitionSchema, fixedPartitionIndexes,
-            requiredSchema, partitionSchema, outputSchema, filters ++ requiredFilters, storageConf)
+            requiredSchema, partitionSchema, outputSchema, filters ++ requiredFilters, storageConf, forceContentCols)
       }
       CloseableIteratorListener.addListener(iter)
     }
@@ -480,18 +494,25 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   /**
    * Detects BLOB columns and strips the {@code data} sub-field when DESCRIPTOR mode is active.
    * Only applies to Parquet format; other formats handle DESCRIPTOR mode natively.
+   *
+   * @param forceContentCols Top-level column names that must keep their {@code data} sub-field
+   *                         (i.e. the columns the current query reads via {@code read_blob()}).
+   *                         These are excluded from the strip set so the bytes are materialized.
    */
-  private def withBlobDescriptorRewrite(schema: StructType): (StructType, Set[Int]) = {
+  private def withBlobDescriptorRewrite(schema: StructType,
+                                        forceContentCols: Set[String]): (StructType, Set[Int]) = {
     if (hoodieFileFormat != HoodieFileFormat.PARQUET) {
       (schema, Set.empty[Int])
     } else {
       import scala.collection.JavaConverters._
-      val blobCols = VectorConversionUtils.detectBlobColumnsFromMetadata(schema).asScala.map(_.intValue()).toSet
-      if (blobCols.isEmpty) {
-        (schema, blobCols)
+      val detected = VectorConversionUtils.detectBlobColumnsFromMetadata(schema).asScala.map(_.intValue()).toSet
+      val toStrip = if (forceContentCols.isEmpty) detected
+        else detected.filterNot(idx => forceContentCols.contains(schema.fields(idx).name))
+      if (toStrip.isEmpty) {
+        (schema, Set.empty[Int])
       } else {
-        val javaBlobCols: java.util.Set[Integer] = blobCols.map(Integer.valueOf).asJava
-        (VectorConversionUtils.stripBlobDataField(schema, javaBlobCols), blobCols)
+        val javaBlobCols: java.util.Set[Integer] = toStrip.map(Integer.valueOf).asJava
+        (VectorConversionUtils.stripBlobDataField(schema, javaBlobCols), toStrip)
       }
     }
   }
@@ -529,7 +550,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   private def readBaseFile(file: PartitionedFile, parquetFileReader: SparkColumnarFileReader, requestedSchema: StructType,
                            remainingPartitionSchema: StructType, fixedPartitionIndexes: Set[Int], requiredSchema: StructType,
                            partitionSchema: StructType, outputSchema: StructType, filters: Seq[Filter],
-                           storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
+                           storageConf: StorageConfiguration[Configuration],
+                           forceContentCols: Set[String]): Iterator[InternalRow] = {
     // Detect vector columns and create modified schemas with BinaryType.
     // Each schema is detected independently because ordinals are relative to the schema being
     // modified — outputSchema and requestedSchema may have vector columns at different positions
@@ -541,10 +563,13 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
     // Blob DESCRIPTOR mode: strip `data` sub-field from blob structs so Parquet skips
     // those column chunks entirely (real I/O savings). Applied after vector rewrite.
-    val (blobRequiredSchema, blobCols) = if (isBlobDescriptorMode) withBlobDescriptorRewrite(modifiedRequiredSchema) else (modifiedRequiredSchema, Set.empty[Int])
+    // `forceContentCols` carries the columns referenced by read_blob() in the current query
+    // (set by ReadBlobRule via HadoopFsRelation.options); those columns retain `data` so bytes
+    // are materialized for read_blob().
+    val (blobRequiredSchema, blobCols) = if (isBlobDescriptorMode) withBlobDescriptorRewrite(modifiedRequiredSchema, forceContentCols) else (modifiedRequiredSchema, Set.empty[Int])
     val hasBlobs = blobCols.nonEmpty
-    val (blobOutputSchema, outputBlobCols) = if (hasBlobs) withBlobDescriptorRewrite(modifiedOutputSchema) else (modifiedOutputSchema, Set.empty[Int])
-    val (blobRequestedSchema, _) = if (hasBlobs) withBlobDescriptorRewrite(modifiedRequestedSchema) else (modifiedRequestedSchema, Set.empty[Int])
+    val (blobOutputSchema, outputBlobCols) = if (hasBlobs) withBlobDescriptorRewrite(modifiedOutputSchema, forceContentCols) else (modifiedOutputSchema, Set.empty[Int])
+    val (blobRequestedSchema, _) = if (hasBlobs) withBlobDescriptorRewrite(modifiedRequestedSchema, forceContentCols) else (modifiedRequestedSchema, Set.empty[Int])
 
     val rawIter = if (remainingPartitionSchema.fields.length == partitionSchema.fields.length) {
       //none of partition fields are read from the file, so the reader will do the appending for us

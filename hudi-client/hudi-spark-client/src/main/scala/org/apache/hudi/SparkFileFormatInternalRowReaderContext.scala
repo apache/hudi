@@ -99,16 +99,28 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
 
     // Blob DESCRIPTOR mode: strip `data` sub-field from blob structs for Parquet base files.
     // Applied after vector rewrite; not applied to Lance base files or log files.
+    // Columns referenced by read_blob() in the current query (carried in the Hadoop conf via
+    // BLOB_INLINE_READ_FORCE_CONTENT_COLUMNS, set by ReadBlobRule per-query) are excluded from
+    // the strip set so the bytes survive for BatchedBlobReader to materialize.
     val isParquetBaseFile = FSUtils.isBaseFile(filePath) && !isLanceBaseFile
+    import org.apache.hudi.common.config.HoodieReaderConfig
+    val hadoopConf = storageConfiguration.unwrapAs(classOf[Configuration])
     val isBlobDescriptorMode = isParquetBaseFile && {
-      val hadoopConf = storageConfiguration.unwrapAs(classOf[Configuration])
-      import org.apache.hudi.common.config.HoodieReaderConfig
       val modeValue = hadoopConf.get(HoodieReaderConfig.BLOB_INLINE_READ_MODE.key(),
         HoodieReaderConfig.BLOB_INLINE_READ_MODE.defaultValue())
       modeValue.equalsIgnoreCase(HoodieReaderConfig.BLOB_INLINE_READ_MODE_DESCRIPTOR)
     }
+    val forceContentCols: Set[String] = if (isBlobDescriptorMode) {
+      Option(hadoopConf.get(HoodieReaderConfig.BLOB_INLINE_READ_FORCE_CONTENT_COLUMNS))
+        .map(_.split(",").iterator.map(_.trim).filter(_.nonEmpty).toSet)
+        .getOrElse(Set.empty)
+    } else {
+      Set.empty
+    }
     val blobColumnIndices: Set[Int] = if (isBlobDescriptorMode) {
-      VectorConversionUtils.detectBlobColumnsFromMetadata(parquetReadStructType).asScala.map(_.intValue()).toSet
+      val detected = VectorConversionUtils.detectBlobColumnsFromMetadata(parquetReadStructType).asScala.map(_.intValue()).toSet
+      if (forceContentCols.isEmpty) detected
+      else detected.filterNot(idx => forceContentCols.contains(parquetReadStructType.fields(idx).name))
     } else {
       Set.empty
     }
