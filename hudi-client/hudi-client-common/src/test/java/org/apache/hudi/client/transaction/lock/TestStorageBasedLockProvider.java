@@ -93,7 +93,7 @@ class TestStorageBasedLockProvider {
     // Mock the readObject method to return Option.empty() to prevent NPE in audit service creation
     when(mockLockService.readObject(anyString(), anyBoolean())).thenReturn(Option.empty());
 
-    lockProvider = createLockProviderWithMetrics(null);
+    lockProvider = createLockProvider(null);
   }
 
   @AfterEach
@@ -101,7 +101,7 @@ class TestStorageBasedLockProvider {
     lockProvider.close();
   }
 
-  private StorageBasedLockProvider createLockProviderWithMetrics(HoodieLockMetrics lockMetrics) {
+  private StorageBasedLockProvider createLockProvider(HoodieLockMetrics metrics) {
     TypedProperties props = new TypedProperties();
     props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
     props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
@@ -113,7 +113,7 @@ class TestStorageBasedLockProvider {
         (a, b, c) -> mockHeartbeatManager,
         (a, b, c) -> mockLockService,
         mockLogger,
-        lockMetrics));
+        metrics));
   }
 
   @Test
@@ -525,7 +525,7 @@ class TestStorageBasedLockProvider {
   void testRenewLockUpdatesMetricWithRenewedExpirationDeadline() {
     HoodieLockMetrics lockMetrics = mock(HoodieLockMetrics.class);
     lockProvider.close();
-    lockProvider = createLockProviderWithMetrics(lockMetrics);
+    lockProvider = createLockProvider(lockMetrics);
 
     long currentEpochMs = 1000L;
     long oldExpirationMs = currentEpochMs + 30L;
