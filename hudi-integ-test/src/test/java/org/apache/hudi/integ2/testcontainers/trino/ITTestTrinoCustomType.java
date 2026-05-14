@@ -97,10 +97,12 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
         + VECTOR_TEST_PATH + " " + VARIANT_TEST_PATH).expectToSucceed();
   }
 
+  // ---------- BLOB OUT_OF_LINE (blob_test) ----------
+
   @Test
   public void testTrinoCountBlob() throws Exception {
     // Post-DELETE state of sparksql-blob-type-sql.commands is 2 rows (id=1 updated,
-    // id=2 merged, id=3 inserted then deleted) — parity with the Hive count assertion
+    // id=2 merged, id=3 inserted then deleted) - parity with the Hive count assertion
     // in ITTestCustomTypeHiveSync#testBlobTypeWithHiveSyncSQL.
     trino.execute("SELECT count(*) FROM blob_test")
         .expectToSucceed()
@@ -108,44 +110,37 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
   }
 
   @Test
-  public void testTrinoProjectsBlobStructField() throws Exception {
-    // The BLOB column is stored as a Spark struct<type, data, reference>. Projecting
-    // the nested `type` field through the native plugin confirms struct decoding is
-    // wired correctly. id=1's final state per the fixture is OUT_OF_LINE.
-    trino.execute("SELECT blob_data.type FROM blob_test WHERE id = 1")
-        .expectToSucceed()
-        .assertStdOutContains("OUT_OF_LINE");
-  }
-
-  @Test
-  public void testTrinoProjectsBlobReferenceFields() throws Exception {
-    // Full reference-struct projection for id=1 (post-UPDATE state from the fixture).
-    // A whole-row substring catches column-order shifts, nested-struct field rename,
-    // and per-field decoding bugs in one assertion.
-    trino.execute("SELECT blob_data.reference.external_path, blob_data.reference.offset, "
+  public void testTrinoProjectsBlobUpdatedRow() throws Exception {
+    // Full per-row shape for id=1 (post-UPDATE state): type discriminator +
+    // every reference subfield + the OUT_OF_LINE invariant that data IS NULL.
+    // One query, one substring assertion - catches column-order shifts,
+    // nested-struct field renames, and per-field decoding bugs.
+    trino.execute("SELECT blob_data.type, blob_data.data IS NULL, "
+            + "blob_data.reference.external_path, blob_data.reference.offset, "
             + "blob_data.reference.length, blob_data.reference.managed "
             + "FROM blob_test WHERE id = 1")
         .expectToSucceed()
-        .assertStdOutContains("blobs/updated-1,10,100,true");
+        .assertStdOutContains("OUT_OF_LINE,true,blobs/updated-1,10,100,true");
   }
 
   @Test
   public void testTrinoProjectsBlobMergedRow() throws Exception {
-    // id=2 was MATCHED by the MERGE clause and its reference was rewritten to the
-    // 'blobs/merged-2' values. Pairs with id=1 (UPDATE path) to confirm both write
-    // paths land identically in the on-disk OUT_OF_LINE branch.
-    trino.execute("SELECT blob_data.reference.external_path, blob_data.reference.offset, "
+    // id=2 was MATCHED by the MERGE clause and rewritten to 'blobs/merged-2'.
+    // Same full-shape assertion as id=1 - confirms both UPDATE and MERGE write
+    // paths land at an identical on-disk OUT_OF_LINE shape.
+    trino.execute("SELECT blob_data.type, blob_data.data IS NULL, "
+            + "blob_data.reference.external_path, blob_data.reference.offset, "
             + "blob_data.reference.length, blob_data.reference.managed "
             + "FROM blob_test WHERE id = 2")
         .expectToSucceed()
-        .assertStdOutContains("blobs/merged-2,20,200,true");
+        .assertStdOutContains("OUT_OF_LINE,true,blobs/merged-2,20,200,true");
   }
 
   @Test
   public void testTrinoBlobDeletedRowAbsent() throws Exception {
     // id=3 was MERGE-inserted into dt=2024-01-02 then DELETEd. A DELETE that
-    // leaves the row visible to Trino (e.g. tombstone not honored on read) shows
-    // up as count = 1 here. Pairs with testTrinoCountBlob = 2 (total post-delete)
+    // leaves the row visible (e.g. tombstone not honored on read) shows up as
+    // count = 1 here. Pairs with testTrinoCountBlob = 2 (total post-delete)
     // to catch the case where DELETE silently no-ops.
     trino.execute("SELECT count(*) FROM blob_test WHERE id = 3")
         .expectToSucceed()
@@ -164,18 +159,68 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
         .assertStdOutContains("2024-01-01,2");
   }
 
+  // ---------- BLOB INLINE (blob_test_df) ----------
+
   @Test
-  public void testTrinoProjectsBlobInlineData() throws Exception {
-    // blob_test_df (DF fixture) seeds the INLINE branch: data is non-null binary,
-    // reference is null. id=1 is "hello world".getBytes (never mutated). The
-    // Trino plugin exposes blob_data.data as VARBINARY, so from_utf8() is the
-    // right cast for the UTF-8 seed (raw `cast(varbinary as varchar)` is not
-    // allowed in Trino). Exercises the complementary BLOB shape that the SQL
-    // fixture doesn't reach.
-    trino.execute("SELECT blob_data.type, from_utf8(blob_data.data), blob_data.reference "
-            + "FROM blob_test_df WHERE id = 1")
+  public void testTrinoCountBlobInline() throws Exception {
+    // Post-DELETE state of sparksql-blob-type-df.commands is 2 rows (id=1 kept,
+    // id=2 updated to "updated payload", id=3 upserted then deleted). Parity
+    // with testTrinoCountBlob for the INLINE-shape table.
+    trino.execute("SELECT count(*) FROM blob_test_df")
         .expectToSucceed()
-        .assertStdOutContains("INLINE,hello world,");
+        .assertStdOutContains("2");
+  }
+
+  @Test
+  public void testTrinoProjectsBlobInlineRow() throws Exception {
+    // INLINE shape for id=1 (never mutated): type=INLINE, data is the UTF-8
+    // seed "hello world", and the INLINE invariant that reference IS NULL.
+    // from_utf8(data) is the right decoder - raw cast(varbinary as varchar)
+    // is rejected by Trino.
+    trino.execute("SELECT blob_data.type, from_utf8(blob_data.data), "
+            + "blob_data.reference IS NULL FROM blob_test_df WHERE id = 1")
+        .expectToSucceed()
+        .assertStdOutContains("INLINE,hello world,true");
+  }
+
+  @Test
+  public void testTrinoProjectsBlobInlineUpdatedRow() throws Exception {
+    // id=2 was UPSERT-rewritten to "updated payload" in the DF fixture. Same
+    // full-shape assertion as id=1 - confirms the UPSERT write path for the
+    // INLINE branch round-trips end-to-end through Trino.
+    trino.execute("SELECT blob_data.type, from_utf8(blob_data.data), "
+            + "blob_data.reference IS NULL FROM blob_test_df WHERE id = 2")
+        .expectToSucceed()
+        .assertStdOutContains("INLINE,updated payload,true");
+  }
+
+  @Test
+  public void testTrinoBlobInlineDeletedRowAbsent() throws Exception {
+    // id=3 was upserted into dt=2024-01-02 then DELETEd in the DF fixture.
+    // Parity with testTrinoBlobDeletedRowAbsent for the INLINE-shape table.
+    trino.execute("SELECT count(*) FROM blob_test_df WHERE id = 3")
+        .expectToSucceed()
+        .assertStdOutContains("0");
+  }
+
+  // ---------- VECTOR (vector_test) ----------
+
+  @Test
+  public void testTrinoCountVector() throws Exception {
+    // Post-DELETE state of sparksql-vector-type-sql.commands is 2 rows.
+    // Parity with testTrinoCountBlob / testTrinoCountVariant.
+    trino.execute("SELECT count(*) FROM vector_test")
+        .expectToSucceed()
+        .assertStdOutContains("2");
+  }
+
+  @Test
+  public void testTrinoVectorDeletedRowAbsent() throws Exception {
+    // id=3 was MERGE-inserted then DELETEd in the vector fixture. Parity with
+    // the BLOB/VARIANT delete-absence checks.
+    trino.execute("SELECT count(*) FROM vector_test WHERE id = 3")
+        .expectToSucceed()
+        .assertStdOutContains("0");
   }
 
   @Test
@@ -291,10 +336,11 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
   public void testTrinoVariantValuesDifferAcrossRows() throws Exception {
     assumeSpark4Compose();
     // Invariant: id=1 ({"key":"value1-updated"}) and id=2 ({"key":"value2-merged"})
-    // must produce different value bytes. count(DISTINCT to_base64(value)) = 2
-    // catches the "projection returns same bytes for every row" regression that
-    // per-row length checks would silently miss.
-    trino.execute("SELECT count(DISTINCT to_base64(variant_data.value)) FROM variant_test")
+    // must produce different value bytes. Trino's count(DISTINCT ...) supports
+    // VARBINARY natively, so no base64 wrapping is needed. Catches the
+    // "projection returns same bytes for every row" regression that per-row
+    // content matches would silently miss.
+    trino.execute("SELECT count(DISTINCT variant_data.value) FROM variant_test")
         .expectToSucceed()
         .assertStdOutContains("2");
   }
