@@ -179,73 +179,32 @@ services:
       - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
       - ALLOW_PLAINTEXT_LISTENER=yes
 
-  presto-coordinator-1:
-    container_name: presto-coordinator-1
-    hostname: presto-coordinator-1
-    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.271:latest
+  trinocoordinator:
+    container_name: trinocoordinator
+    hostname: trinocoordinator
+    # Overlay the locally-built trino-hudi plugin at container start (not at
+    # image build), mirroring docker/hoodie/hadoop/trinobase/scripts/trino.sh
+    # from the legacy Trino 368 setup. No docker build needed per iteration:
+    # `mvn -f hudi-trino-plugin/pom.xml package` + container restart = updated
+    # plugin loaded. The entrypoint script cp's the bind-mounted overlay onto
+    # the image's plugin/hudi/, preserving the bundled hdfs/ sub-plugin.
+    image: trinodb/trino:472
+    entrypoint: ["/bin/bash", "/opt/overlay-entrypoint.sh"]
     ports:
-      - "8090:8090"
-    environment:
-      - PRESTO_JVM_MAX_HEAP=512M
-      - PRESTO_QUERY_MAX_MEMORY=1GB
-      - PRESTO_QUERY_MAX_MEMORY_PER_NODE=256MB
-      - PRESTO_QUERY_MAX_TOTAL_MEMORY_PER_NODE=384MB
-      - PRESTO_MEMORY_HEAP_HEADROOM_PER_NODE=100MB
-      - TERM=xterm
-    links:
+      - "8092:8080"
+    depends_on:
       - "hivemetastore"
-    volumes:
-      - ${HUDI_WS}:/var/hoodie/ws
-    command: coordinator
-
-  presto-worker-1:
-    container_name: presto-worker-1
-    hostname: presto-worker-1
-    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.271:latest
-    depends_on: [ "presto-coordinator-1" ]
-    environment:
-      - PRESTO_JVM_MAX_HEAP=512M
-      - PRESTO_QUERY_MAX_MEMORY=1GB
-      - PRESTO_QUERY_MAX_MEMORY_PER_NODE=256MB
-      - PRESTO_QUERY_MAX_TOTAL_MEMORY_PER_NODE=384MB
-      - PRESTO_MEMORY_HEAP_HEADROOM_PER_NODE=100MB
-      - TERM=xterm
+      - "namenode"
     links:
       - "hivemetastore"
       - "hiveserver"
       - "hive-metastore-postgresql"
       - "namenode"
     volumes:
+      - ${HUDI_WS}/hudi-trino-plugin/target/trino-hudi-472:/opt/hudi-plugin-overlay:ro
+      - ${HUDI_WS}/docker/trino/overlay-entrypoint.sh:/opt/overlay-entrypoint.sh:ro
+      - ${HUDI_WS}/docker/trino/etc:/etc/trino:ro
       - ${HUDI_WS}:/var/hoodie/ws
-    command: worker
-
-  trino-coordinator-1:
-    container_name: trino-coordinator-1
-    hostname: trino-coordinator-1
-    image: apachehudi/hudi-hadoop_2.8.4-trinocoordinator_368:latest
-    ports:
-      - "8091:8091"
-    links:
-      - "hivemetastore"
-    volumes:
-      - ${HUDI_WS}:/var/hoodie/ws
-    command: http://trino-coordinator-1:8091 trino-coordinator-1
-
-  trino-worker-1:
-    container_name: trino-worker-1
-    hostname: trino-worker-1
-    image: apachehudi/hudi-hadoop_2.8.4-trinoworker_368:latest
-    depends_on: [ "trino-coordinator-1" ]
-    ports:
-      - "8092:8092"
-    links:
-      - "hivemetastore"
-      - "hiveserver"
-      - "hive-metastore-postgresql"
-      - "namenode"
-    volumes:
-      - ${HUDI_WS}:/var/hoodie/ws
-    command: http://trino-coordinator-1:8091 trino-worker-1
 
   graphite:
     container_name: graphite
@@ -275,8 +234,7 @@ services:
       - "hiveserver"
       - "hive-metastore-postgresql"
       - "namenode"
-      - "presto-coordinator-1"
-      - "trino-coordinator-1"
+      - "trinocoordinator"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
 
@@ -298,8 +256,7 @@ services:
       - "hiveserver"
       - "hive-metastore-postgresql"
       - "namenode"
-      - "presto-coordinator-1"
-      - "trino-coordinator-1"
+      - "trinocoordinator"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
 

@@ -22,9 +22,9 @@ services:
     environment:
       - CLUSTER_NAME=hudi_hadoop334_hive313_spark353
     ports:
-      - "50070:50070"
-      - "8020:8020"
-      - "9870:9870"
+      - "8020:8020" # HDFS NameNode IPC
+      - "9000:9000" # HDFS NameNode Client
+      - "9870:9870" # HDFS NameNode Web UI
     env_file:
       - ./hadoop.env
     healthcheck:

@@ -24,11 +24,11 @@ ARG PRESTO_VERSION=0.268
 ARG TRINO_VERSION=368
 COPY adhoc.sh /opt/spark
 
-ENV SPARK_WORKER_WEBUI_PORT 8081
-ENV SPARK_WORKER_LOG /spark/logs
-ENV SPARK_MASTER "spark://spark-master:7077"
-ENV PRESTO_VERSION ${PRESTO_VERSION}
-ENV TRINO_VERSION ${TRINO_VERSION}
+ENV SPARK_WORKER_WEBUI_PORT=8081
+ENV SPARK_WORKER_LOG=/spark/logs
+ENV SPARK_MASTER="spark://spark-master:7077"
+ENV PRESTO_VERSION=${PRESTO_VERSION}
+ENV TRINO_VERSION=${TRINO_VERSION}
 ENV BASE_URL=https://repo1.maven.org/maven2
 
 ENV SPARK_BUNDLE_JAR=/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-spark-bundle.jar
@@ -53,6 +53,11 @@ RUN set -x \
     && wget -q -O /usr/local/bin/trino ${BASE_URL}/io/trino/trino-cli/${TRINO_VERSION}/trino-cli-${TRINO_VERSION}-executable.jar \
     && chmod +x /usr/local/bin/trino
 
-RUN cp /opt/hive/lib/calcite-core*.jar $HADOOP_HOME/share/hadoop/common/lib/ 2>/dev/null || true
+RUN if [ "$HIVE_VERSION" != "2.3.10" ]; then \
+      echo "HIVE_VERSION is $HIVE_VERSION, copying calcite-core jar..."; \
+      cp /opt/hive/lib/calcite-core*.jar $HADOOP_HOME/share/hadoop/common/lib/ 2>/dev/null || true; \
+    else \
+      echo "HIVE_VERSION is 2.3.10, skipping calcite-core jar copy."; \
+    fi
 RUN cp /opt/hive/lib/libfb*.jar $HADOOP_HOME/share/hadoop/common/lib/ 2>/dev/null || true
 CMD ["/bin/bash", "/opt/spark/adhoc.sh"]

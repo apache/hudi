@@ -1,0 +1,94 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Self-contained stock_ticks fixture for the Trino integ2 E2E. Replaces the
+// full Kafka -> Spark Streaming -> Hudi -> Hive pipeline that the legacy demo
+// used: that flow is too heavy to bring up under testcontainers and has no
+// other integ2 caller. Two rows per table is enough to assert symbol-grouped
+// queries return the expected GOOG row (parity with trino-batch1.commands).
+
+// Cleanup first so the script is idempotent across reruns.
+spark.sql("DROP TABLE IF EXISTS stock_ticks_cow")
+spark.sql("DROP TABLE IF EXISTS stock_ticks_mor_ro")
+
+spark.sql("""
+  CREATE TABLE stock_ticks_cow (
+    symbol STRING,
+    ts STRING,
+    volume LONG,
+    open DOUBLE,
+    close DOUBLE
+  ) USING hudi
+  TBLPROPERTIES (
+    'type' = 'cow',
+    'primaryKey' = 'symbol',
+    'preCombineField' = 'ts',
+    'hoodie.datasource.hive_sync.enable' = 'true',
+    'hoodie.datasource.hive_sync.database' = 'default',
+    'hoodie.datasource.hive_sync.table' = 'stock_ticks_cow',
+    'hoodie.datasource.hive_sync.jdbcurl' = 'jdbc:hive2://hiveserver:10000/',
+    'hoodie.datasource.hive_sync.mode' = 'jdbc',
+    'hoodie.datasource.hive_sync.username' = 'hive',
+    'hoodie.datasource.hive_sync.password' = 'hive'
+  )
+  LOCATION '/user/hive/warehouse/stock_ticks_cow'
+""")
+
+spark.sql("""
+  INSERT INTO stock_ticks_cow VALUES
+    ('GOOG', '2018-08-31 10:29:00', 6330L, 1230.50, 1230.50),
+    ('MSFT', '2018-08-31 10:29:00', 1200L, 110.10, 110.50)
+""")
+spark.sql("select symbol, ts from stock_ticks_cow order by symbol").show(10, false)
+println("STOCK_TICKS_COW_SETUP_SUCCESS")
+
+// MOR table -- the legacy demo had _mor_ro and _mor_rt. Hive sync emits both;
+// the _ro suffix surfaces the read-optimized view (base files only), which is
+// what trino-batch1.commands historically queried.
+spark.sql("""
+  CREATE TABLE stock_ticks_mor (
+    symbol STRING,
+    ts STRING,
+    volume LONG,
+    open DOUBLE,
+    close DOUBLE
+  ) USING hudi
+  TBLPROPERTIES (
+    'type' = 'mor',
+    'primaryKey' = 'symbol',
+    'preCombineField' = 'ts',
+    'hoodie.datasource.hive_sync.enable' = 'true',
+    'hoodie.datasource.hive_sync.database' = 'default',
+    'hoodie.datasource.hive_sync.table' = 'stock_ticks_mor',
+    'hoodie.datasource.hive_sync.jdbcurl' = 'jdbc:hive2://hiveserver:10000/',
+    'hoodie.datasource.hive_sync.mode' = 'jdbc',
+    'hoodie.datasource.hive_sync.username' = 'hive',
+    'hoodie.datasource.hive_sync.password' = 'hive'
+  )
+  LOCATION '/user/hive/warehouse/stock_ticks_mor'
+""")
+
+spark.sql("""
+  INSERT INTO stock_ticks_mor VALUES
+    ('GOOG', '2018-08-31 10:29:00', 6330L, 1230.50, 1230.50),
+    ('MSFT', '2018-08-31 10:29:00', 1200L, 110.10, 110.50)
+""")
+spark.sql("select symbol, ts from stock_ticks_mor order by symbol").show(10, false)
+println("STOCK_TICKS_MOR_SETUP_SUCCESS")
+
+println("STOCK_TICKS_TRINO_SETUP_SUCCESS")

@@ -20,7 +20,8 @@
 
 ARG HADOOP_VERSION=2.8.4
 ARG HIVE_VERSION=2.3.3
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base-java11:latest as hadoop-base
+ARG BASE_IMAGE_TAG=java11
+FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base-${BASE_IMAGE_TAG}:latest as hadoop-base
 
 ENV TRINO_VERSION=368
 ENV TRINO_HOME=/usr/local/trino
@@ -40,8 +41,8 @@ RUN apt-get install -y \
     uuid-runtime \
     less
 
-ENV JAVA_HOME /usr/java/default
-ENV PATH $PATH:$JAVA_HOME/bin
+ENV JAVA_HOME=/usr/java/default
+ENV PATH=$PATH:$JAVA_HOME/bin
 
 WORKDIR /usr/local/bin
 RUN wget -q ${BASE_URL}/io/trino/trino-cli/${TRINO_VERSION}/trino-cli-${TRINO_VERSION}-executable.jar
@@ -53,10 +54,10 @@ RUN wget -q ${BASE_URL}/io/trino/trino-server/${TRINO_VERSION}/trino-server-${TR
 RUN tar xvzf trino-server-${TRINO_VERSION}.tar.gz -C /usr/local/
 RUN ln -s /usr/local/trino-server-${TRINO_VERSION} $TRINO_HOME
 
-ENV TRINO_BASE_WS /var/hoodie/ws/docker/hoodie/hadoop/trinobase
+ENV TRINO_BASE_WS=/var/hoodie/ws/docker/hoodie/hadoop/trinobase
 RUN mkdir -p ${TRINO_BASE_WS}/target/
 ADD target/ ${TRINO_BASE_WS}/target/
-ENV HUDI_TRINO_BUNDLE ${TRINO_BASE_WS}/target/hudi-trino-bundle.jar
+ENV HUDI_TRINO_BUNDLE=${TRINO_BASE_WS}/target/hudi-trino-bundle.jar
 RUN cp ${HUDI_TRINO_BUNDLE} ${TRINO_HOME}/plugin/hive/
 
 ADD scripts ${TRINO_HOME}/scripts
