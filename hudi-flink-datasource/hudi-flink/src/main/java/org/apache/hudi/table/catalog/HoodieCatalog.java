@@ -314,7 +314,9 @@ public class HoodieCatalog extends AbstractCatalog {
     Configuration conf = Configuration.fromMap(options);
     conf.set(FlinkOptions.PATH, tablePathStr);
     ResolvedSchema resolvedSchema = resolvedTable.getResolvedSchema();
-    if (!resolvedSchema.getPrimaryKey().isPresent() && !conf.containsKey(RECORD_KEY_FIELD.key())) {
+    if (!resolvedSchema.getPrimaryKey().isPresent()
+        && !conf.containsKey(RECORD_KEY_FIELD.key())
+        && !OptionsResolver.isAppendMode(conf)) {
       throw new CatalogException("Primary key definition is missing");
     }
     final String avroSchema = HoodieSchemaConverter.convertToSchema(
@@ -350,7 +352,7 @@ public class HoodieCatalog extends AbstractCatalog {
       conf.set(FlinkOptions.PARTITION_PATH_FIELD, partitions);
       options.put(TableOptionProperties.PARTITION_COLUMNS, partitions);
 
-      final String[] pks = OptionsResolver.getRecordKeyStr(conf).split(",");
+      final String[] pks = OptionsResolver.getRecordKeys(conf);
       boolean complexHoodieKey = pks.length > 1 || resolvedTable.getPartitionKeys().size() > 1;
       StreamerUtil.checkKeygenGenerator(complexHoodieKey, conf);
     } else {

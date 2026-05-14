@@ -50,6 +50,8 @@ import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 
+import javax.annotation.Nullable;
+
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -154,16 +156,33 @@ public class OptionsResolver {
   }
 
   /**
-   * Return value of {@link FlinkOptions#RECORD_KEY_FIELD} if it was set,
-   * or throw exception otherwise.
+   * Return value of {@link FlinkOptions#RECORD_KEY_FIELD}, could be null if it is not set.
    */
+  @Nullable
   public static String getRecordKeyStr(Configuration conf) {
+    return conf.get(FlinkOptions.RECORD_KEY_FIELD);
+  }
+
+  /**
+   * Return the record keys as an array.
+   */
+  public static String[] getRecordKeys(Configuration conf) {
     final String recordKeyStr = conf.get(FlinkOptions.RECORD_KEY_FIELD);
-    ValidationUtils.checkArgument(
-        recordKeyStr != null,
-        "Primary key definition is required, use either PRIMARY KEY syntax or option '"
-            + FlinkOptions.RECORD_KEY_FIELD.key() + "' to specify.");
-    return recordKeyStr;
+    if (StringUtils.isNullOrEmpty(recordKeyStr)) {
+      return new String[]{};
+    }
+    return recordKeyStr.split(",");
+  }
+
+  /**
+   * Return the bucket index keys as an array.
+   */
+  public static String[] getBucketIndexKeys(Configuration conf) {
+    final String indexKeyStr = conf.get(FlinkOptions.INDEX_KEY_FIELD);
+    if (StringUtils.isNullOrEmpty(indexKeyStr)) {
+      return new String[]{};
+    }
+    return indexKeyStr.split(",");
   }
 
   /**

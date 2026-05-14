@@ -59,7 +59,7 @@ public class AutoRowDataKeyGen extends RowDataKeyGen {
     Option<TimestampBasedAvroKeyGenerator> keyGeneratorOpt = Option.empty();
     if (TimestampBasedAvroKeyGenerator.class.getName().equals(conf.get(FlinkOptions.KEYGEN_CLASS_NAME))) {
       try {
-        keyGeneratorOpt = Option.of(new TimestampBasedAvroKeyGenerator(StreamerUtil.flinkConf2TypedProperties(conf)));
+        keyGeneratorOpt = Option.of(new TimestampBasedAvroKeyGenerator(StreamerUtil.flinkConf2TypedProperties(conf), conf.get(FlinkOptions.PARTITION_PATH_FIELD)));
       } catch (IOException e) {
         throw new HoodieKeyException("Initialize TimestampBasedAvroKeyGenerator error", e);
       }

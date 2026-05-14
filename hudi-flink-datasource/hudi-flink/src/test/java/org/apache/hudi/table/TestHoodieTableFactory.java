@@ -193,6 +193,46 @@ public class TestHoodieTableFactory {
   }
 
   @Test
+  void testAppendOnlySinkWithoutRecordKey() {
+    Configuration appendOnlyConf = new Configuration();
+    appendOnlyConf.set(FlinkOptions.PATH, new File(tempFile, "append_only_without_record_key").getAbsolutePath());
+    appendOnlyConf.set(FlinkOptions.TABLE_NAME, "append_only_without_record_key");
+    appendOnlyConf.set(FlinkOptions.OPERATION, "insert");
+
+    ResolvedSchema schema = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("ts", DataTypes.TIMESTAMP(3))
+        .build();
+    MockContext context = MockContext.getInstance(appendOnlyConf, schema, "");
+
+    HoodieTableSink tableSink = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(context);
+    assertNull(tableSink.getConf().get(FlinkOptions.RECORD_KEY_FIELD));
+    assertThat(tableSink.getConf().get(FlinkOptions.ORDERING_FIELDS), is(FlinkOptions.NO_PRE_COMBINE));
+    assertThat(tableSink.getConf().get(FlinkOptions.KEYGEN_CLASS_NAME), is(NonpartitionedAvroKeyGenerator.class.getName()));
+  }
+
+  @Test
+  void testNonAppendSinkRequiresRecordKey() {
+    Configuration upsertConf = new Configuration();
+    upsertConf.set(FlinkOptions.PATH, new File(tempFile, "upsert_without_record_key").getAbsolutePath());
+    upsertConf.set(FlinkOptions.TABLE_NAME, "upsert_without_record_key");
+
+    ResolvedSchema schema = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("ts", DataTypes.TIMESTAMP(3))
+        .build();
+    MockContext context = MockContext.getInstance(upsertConf, schema, "");
+
+    HoodieValidationException exception = assertThrows(
+        HoodieValidationException.class,
+        () -> new HoodieTableFactory().createDynamicTableSink(context));
+    assertThat(exception.getMessage(), is("Primary key definition is required, use either PRIMARY KEY syntax or option '"
+        + FlinkOptions.RECORD_KEY_FIELD.key() + "' to specify."));
+  }
+
+  @Test
   void testIndexTypeCheck() {
     ResolvedSchema schema = SchemaBuilder.instance()
             .field("f0", DataTypes.INT().notNull())

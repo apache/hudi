@@ -226,7 +226,7 @@ public class TestRowDataKeyGens {
   @Test
   void testPrimaryKeylessWrite() {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
-    conf.set(FlinkOptions.RECORD_KEY_FIELD, "");
+    conf.removeConfig(FlinkOptions.RECORD_KEY_FIELD);
     final RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
     final int taskId = 3;
@@ -252,7 +252,7 @@ public class TestRowDataKeyGens {
     final String instantTime = "000001";
 
     Configuration conf = TestConfigurations.getDefaultConf("path1");
-    conf.set(FlinkOptions.RECORD_KEY_FIELD, "");
+    conf.removeConfig(FlinkOptions.RECORD_KEY_FIELD);
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "ts");
     conf.set(FlinkOptions.PARTITION_FORMAT, partitionFormat);
     HoodieTableFactory.setupTimestampKeygenOptions(conf, DataTypes.TIMESTAMP(3));
@@ -284,10 +284,21 @@ public class TestRowDataKeyGens {
   }
 
   @Test
-  void testAutoKeyGenRecordKey() {
+  void testAutoKeyGenRecordKeyWithEmptyRecordKeyField() {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
-    // without record keys AutoRowDataKeyGen will be used, which expects taskId and instantTime parameters for instantiation
     conf.set(FlinkOptions.RECORD_KEY_FIELD, "");
+
+    int taskId = 1;
+    String instantTime = "20250716145212986";
+    final AutoRowDataKeyGen autoKeyGen = (AutoRowDataKeyGen) RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE, taskId, instantTime);
+    assertThat(autoKeyGen.getRecordKey(TestData.DATA_SET_INSERT.get(0)), is(instantTime + "_" + taskId + "_0"));
+    assertThat(autoKeyGen.getRecordKey(TestData.DATA_SET_INSERT.get(1)), is(instantTime + "_" + taskId + "_1"));
+  }
+
+  @Test
+  void testAutoKeyGenRecordKeyWithoutDeclaringRecordKeyField() {
+    Configuration conf = TestConfigurations.getDefaultConf("path1");
+    conf.removeConfig(FlinkOptions.RECORD_KEY_FIELD);
 
     int taskId = 1;
     String instantTime = "20250716145212986";
@@ -300,7 +311,7 @@ public class TestRowDataKeyGens {
   void testAutoKeyGenNotAllowNulls() {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
     // without record keys AutoRowDataKeyGen will be used, which expects taskId and instantTime parameters for instantiation
-    conf.set(FlinkOptions.RECORD_KEY_FIELD, "");
+    conf.removeConfig(FlinkOptions.RECORD_KEY_FIELD);
 
     HoodieValidationException exNullInstant =
         assertThrows(HoodieValidationException.class, () -> RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE, 1, null));

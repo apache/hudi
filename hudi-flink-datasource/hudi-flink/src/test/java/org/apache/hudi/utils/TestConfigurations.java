@@ -241,11 +241,18 @@ public class TestConfigurations {
       String partitionField) {
     StringBuilder builder = new StringBuilder();
     builder.append("create table ").append(tableName).append("(\n");
-    for (String field : fields) {
-      builder.append("  ").append(field).append(",\n");
+    for (int i = 0; i < fields.size(); i++) {
+      builder.append("  ").append(fields.get(i));
+      if (i == fields.size() - 1 && pkField == null) {
+        builder.append(")\n");
+      } else {
+        builder.append(",\n");
+      }
     }
-    builder.append("  PRIMARY KEY(").append(pkField).append(") NOT ENFORCED\n")
-        .append(")\n");
+    if (pkField != null) {
+      builder.append("  PRIMARY KEY(").append(pkField).append(") NOT ENFORCED\n")
+          .append(")\n");
+    }
     if (havePartition) {
       builder.append("PARTITIONED BY (`").append(partitionField).append("`)\n");
     }
@@ -420,7 +427,7 @@ public class TestConfigurations {
     private final String tableName;
     private List<String> fields = new ArrayList<>();
     private boolean withPartition = true;
-    private String pkField = "uuid";
+    private String pkField = null;
     private String partitionField = "partition";
 
     public Sql(String tableName) {
@@ -464,8 +471,12 @@ public class TestConfigurations {
     }
 
     public String end() {
-      if (this.fields.size() == 0) {
+      if (this.fields.isEmpty()) {
         this.fields = FIELDS;
+      }
+      if (!"insert".equalsIgnoreCase(options.get(FlinkOptions.OPERATION.key())) && this.pkField == null) {
+        // assign default pk for upsert table
+        this.pkField = "uuid";
       }
       return TestConfigurations.getCreateHoodieTableDDL(this.tableName, this.fields, options,
           this.withPartition, this.pkField, this.partitionField);

@@ -77,7 +77,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
         config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
   }
 
-  TimestampBasedAvroKeyGenerator(TypedProperties config, String partitionPathField) throws IOException {
+  public TimestampBasedAvroKeyGenerator(TypedProperties config, String partitionPathField) throws IOException {
     this(config, null, partitionPathField);
   }
 

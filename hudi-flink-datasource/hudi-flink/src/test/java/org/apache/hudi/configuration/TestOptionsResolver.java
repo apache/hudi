@@ -30,8 +30,10 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -50,6 +52,31 @@ public class TestOptionsResolver {
     // set lowercase index
     conf.set(FlinkOptions.INDEX_TYPE, "bloom");
     assertEquals(HoodieIndex.IndexType.BLOOM, OptionsResolver.getIndexType(conf));
+  }
+
+  @Test
+  void testGetRecordKeys() {
+    Configuration conf = new Configuration();
+    assertNull(OptionsResolver.getRecordKeyStr(conf));
+    assertArrayEquals(new String[]{}, OptionsResolver.getRecordKeys(conf));
+
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "");
+    assertArrayEquals(new String[]{}, OptionsResolver.getRecordKeys(conf));
+
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid, name");
+    assertArrayEquals(new String[]{"uuid", " name"}, OptionsResolver.getRecordKeys(conf));
+  }
+
+  @Test
+  void testGetBucketIndexKeys() {
+    Configuration conf = new Configuration();
+    assertArrayEquals(new String[]{}, OptionsResolver.getBucketIndexKeys(conf));
+
+    conf.set(FlinkOptions.INDEX_KEY_FIELD, "");
+    assertArrayEquals(new String[]{}, OptionsResolver.getBucketIndexKeys(conf));
+
+    conf.set(FlinkOptions.INDEX_KEY_FIELD, "uuid, name");
+    assertArrayEquals(new String[]{"uuid", " name"}, OptionsResolver.getBucketIndexKeys(conf));
   }
 
   @Test

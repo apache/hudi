@@ -840,7 +840,6 @@ public class StreamerUtil {
    *
    * @param conf             The Flink configuration
    * @param checkpointId     The checkpoint ID
-   * @param checkpointClient The checkpoint client (nullable)
    * @return Kafka offset checkpoint string in URL-encoded format for Hudi metadata,
    * e.g., "kafka_metadata%3Atopic-name%3A0:100;kafka_metadata%3Atopic-name%3A1:200"
    * where format is "kafka_metadata%3Atopic%3Apartition:offset" separated by semicolons.
