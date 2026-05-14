@@ -1175,9 +1175,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    */
   private void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
                                     int fileGroupCount, String relativePartitionPath, Option<String> dataPartitionName) throws IOException {
-    // Capture the storage to avoid lambda capture issues with dataMetaClient reassignment
-    final HoodieStorage storage = dataMetaClient.getStorage();
-
     // Bucketing is enabled for the entire MDT at the time it is initialized. The bucketing cannot be changed later.
     boolean bucketingEnabled = false;
     if (dataMetaClient.getTableConfig().isMetadataTablePartitionBucketingEnabled()) {
@@ -1246,7 +1243,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
             .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
             .withFileSize(0L)
             .withSizeThreshold(metadataWriteConfig.getLogFileMaxSize())
-            .withStorage(storage)
+            .withStorage(dataMetaClient.getStorage())
             .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
             .withTableVersion(metadataWriteConfig.getWriteVersion())
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build()) {
