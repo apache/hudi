@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.hadoop.conf.Configuration
@@ -245,16 +246,16 @@ trait SparkAdapter extends Serializable {
   /**
    * Build the [[HoodieParquetReadSupport]] for a parquet read. Spark 4.0 overrides to return
    * its variant-aware subclass (variant group field reorder for the positional converter).
+   * int96 rebase mode is fixed to LEGACY (Hudi convention for timestamp compatibility).
    */
   def createParquetReadSupport(convertTz: Option[java.time.ZoneId],
                                enableVectorizedReader: Boolean,
                                enableTimestampFieldRepair: Boolean,
-                               datetimeRebaseSpec: org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec,
-                               int96RebaseSpec: org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec,
-                               tableSchemaOpt: org.apache.hudi.common.util.Option[org.apache.parquet.schema.MessageType])
+                               datetimeRebaseSpec: RebaseSpec,
+                               tableSchemaOpt: HOption[MessageType])
       : HoodieParquetReadSupport = {
     new HoodieParquetReadSupport(convertTz, enableVectorizedReader, enableTimestampFieldRepair,
-      datetimeRebaseSpec, int96RebaseSpec, tableSchemaOpt)
+      datetimeRebaseSpec, getRebaseSpec("LEGACY"), tableSchemaOpt)
   }
 
   /**

@@ -192,7 +192,6 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     HoodieParquetReadSupport readSupport = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetReadSupport(
         Option$.MODULE$.empty(), true, true,
         rebaseDateSpec,
-        SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("LEGACY"),
         messageSchema);
     ParquetReader<InternalRow> reader = ParquetReader.builder(readSupport, new Path(path.toUri()))
         .withConf(storage.getConf().unwrapAs(Configuration.class))
