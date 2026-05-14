@@ -53,6 +53,7 @@ public class TestSparkSqlHudiPackageStructure {
    */
   private static final Set<String> ALLOWED_PACKAGES = new HashSet<>(Arrays.asList(
       "org.apache.spark.sql.hudi.analysis",
+      "org.apache.spark.sql.hudi.blob",
       "org.apache.spark.sql.hudi.catalog",
       "org.apache.spark.sql.hudi.command",
       "org.apache.spark.sql.hudi.common",
