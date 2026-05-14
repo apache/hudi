@@ -49,7 +49,7 @@ import org.apache.hudi.util.JFunction
 
 import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.sql.{DataFrame, DataFrameWriter, Dataset, Encoders, Row, SaveMode, SparkSession, SparkSessionExtensions}
-import org.apache.spark.sql.functions.{col, concat, lit, udf, when}
+import org.apache.spark.sql.functions.{col, concat, date_format, lit, udf, when}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{ArrayType, DataTypes, DateType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampType}
 import org.joda.time.DateTime
@@ -1437,16 +1437,81 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   def testSparkPartitionByWithTimestampBasedKeyGenerator(recordType: HoodieRecordType) {
     val (writeOpts, readOpts) = getWriterReaderOptsLessPartitionPath(recordType)
 
-    val writer = getDataFrameWriter(classOf[TimestampBasedKeyGenerator].getName, writeOpts)
-    writer.partitionBy("current_ts")
-      .option(TIMESTAMP_TYPE_FIELD.key, "EPOCHMILLISECONDS")
-      .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyyMMdd")
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+      .withColumn("current_ts_seconds", (col("current_ts") / 1000).cast("long"))
+      .withColumn("current_date_string",
+        date_format((col("current_ts") / 1000).cast("timestamp"), "yyyy-MM-dd HH:mm:ss"))
 
-    val recordsReadDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
-    val udf_date_format = udf((data: Long) => new DateTime(data).toString(DateTimeFormat.forPattern("yyyyMMdd")))
-    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count() == 0)
+    case class TimestampPartitionCase(
+                                        partitionCol: String,
+                                        tsType: String,
+                                        outFmt: String,
+                                        extraOpts: Map[String, String] = Map.empty,
+                                        expectedPartitionUdf: org.apache.spark.sql.expressions.UserDefinedFunction
+                                      )
+
+    def writeAndAssertPartition(testCase: TimestampPartitionCase): Unit = {
+      val writer = testCase.extraOpts.foldLeft(
+        inputDF.write.format("hudi")
+          .options(writeOpts)
+          .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[TimestampBasedKeyGenerator].getName)
+          .mode(SaveMode.Overwrite)
+      ) {
+        case (w, (k, v)) => w.option(k, v)
+      }
+      writer.partitionBy(testCase.partitionCol)
+        .option(TIMESTAMP_TYPE_FIELD.key, testCase.tsType)
+        .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, testCase.outFmt)
+        .save(basePath)
+      val readDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
+      assertTrue(readDF.filter(col("_hoodie_partition_path") =!= testCase.expectedPartitionUdf(col(testCase.partitionCol))).count() == 0)
+    }
+
+    val epochMillisOutFmt = "yyyyMMdd HHmmss.SSS"
+    val udfMillis = udf((millis: Long) => new DateTime(millis).toString(DateTimeFormat.forPattern(epochMillisOutFmt)))
+
+    val unixTimestampOutFmt = "yyyy/MM/dd HHmmss"
+    val udfSeconds = udf((seconds: Long) => new DateTime(TimeUnit.SECONDS.toMillis(seconds)).toString(DateTimeFormat.forPattern(unixTimestampOutFmt)))
+
+    val dateStringInFmt = "yyyy-MM-dd HH:mm:ss"
+    val dateStringOutFmt = "yyyy-MM-dd'T'HHmm"
+    val udfDateStr = udf((s: String) => DateTime.parse(s, DateTimeFormat.forPattern(dateStringInFmt))
+      .toString(DateTimeFormat.forPattern(dateStringOutFmt)))
+
+    val scalarOutFmt = "yyyy-MM-dd HH"
+    val udfDays = udf((days: Int) => new DateTime(TimeUnit.DAYS.toMillis(days)).toString(DateTimeFormat.forPattern(scalarOutFmt)))
+
+    val testCases = Seq(
+      TimestampPartitionCase(
+        partitionCol = "current_ts",
+        tsType = "EPOCHMILLISECONDS",
+        outFmt = epochMillisOutFmt,
+        expectedPartitionUdf = udfMillis
+      ),
+      TimestampPartitionCase(
+        partitionCol = "current_ts_seconds",
+        tsType = "UNIX_TIMESTAMP",
+        outFmt = unixTimestampOutFmt,
+        expectedPartitionUdf = udfSeconds
+      ),
+      TimestampPartitionCase(
+        partitionCol = "current_date_string",
+        tsType = "DATE_STRING",
+        outFmt = dateStringOutFmt,
+        extraOpts = Map("hoodie.keygen.timebased.input.dateformat" -> dateStringInFmt),
+        expectedPartitionUdf = udfDateStr
+      ),
+      TimestampPartitionCase(
+        partitionCol = "current_date",
+        tsType = "SCALAR",
+        outFmt = scalarOutFmt,
+        extraOpts = Map("hoodie.keygen.timebased.timestamp.scalar.time.unit" -> "days"),
+        expectedPartitionUdf = udfDays
+      )
+    )
+
+    testCases.foreach(writeAndAssertPartition)
   }
 
   @ParameterizedTest
