@@ -38,7 +38,9 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -263,6 +265,104 @@ public final class VectorConversionUtils {
         result.update(i, row.get(i, readSchema.apply(i).dataType()));
       }
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Blob descriptor-mode helpers (Parquet DESCRIPTOR read path)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Detects BLOB columns from Spark StructType metadata annotations.
+   *
+   * @param schema Spark StructType (may be null)
+   * @return set of field ordinals that are BLOB columns; empty set if none found
+   */
+  public static Set<Integer> detectBlobColumnsFromMetadata(StructType schema) {
+    Set<Integer> blobColumnIndices = new LinkedHashSet<>();
+    if (schema == null) {
+      return blobColumnIndices;
+    }
+    StructField[] fields = schema.fields();
+    for (int i = 0; i < fields.length; i++) {
+      StructField field = fields[i];
+      if (field.metadata().contains(HoodieSchema.TYPE_METADATA_FIELD)) {
+        String typeStr = field.metadata().getString(HoodieSchema.TYPE_METADATA_FIELD);
+        HoodieSchema parsed = HoodieSchema.parseTypeDescriptor(typeStr);
+        if (parsed != null && parsed.getType() == HoodieSchemaType.BLOB) {
+          blobColumnIndices.add(i);
+        }
+      }
+    }
+    return blobColumnIndices;
+  }
+
+  /**
+   * Strips the {@code data} sub-field from BLOB struct columns so the Parquet reader
+   * skips the binary column chunk entirely (genuine I/O savings).
+   *
+   * <p>The returned schema has 2-field blob structs: {@code {type, reference}} instead of
+   * the full {@code {type, data, reference}}. Use {@link #buildBlobNullPadRowMapper} to
+   * re-insert null at the {@code data} position after reading.
+   *
+   * @param schema      the original Spark schema
+   * @param blobColumns ordinals of blob columns (from {@link #detectBlobColumnsFromMetadata})
+   * @return a new StructType with the {@code data} sub-field removed from blob structs
+   */
+  public static StructType stripBlobDataField(StructType schema, Set<Integer> blobColumns) {
+    StructField[] fields = schema.fields();
+    StructField[] newFields = new StructField[fields.length];
+    for (int i = 0; i < fields.length; i++) {
+      if (blobColumns.contains(i) && fields[i].dataType() instanceof StructType) {
+        StructType blobStruct = (StructType) fields[i].dataType();
+        List<StructField> kept = new ArrayList<>();
+        for (StructField sub : blobStruct.fields()) {
+          if (!sub.name().equals(HoodieSchema.Blob.INLINE_DATA_FIELD)) {
+            kept.add(sub);
+          }
+        }
+        StructType strippedStruct = new StructType(kept.toArray(new StructField[0]));
+        newFields[i] = new StructField(fields[i].name(), strippedStruct, fields[i].nullable(), fields[i].metadata());
+      } else {
+        newFields[i] = fields[i];
+      }
+    }
+    return new StructType(newFields);
+  }
+
+  /**
+   * Returns a {@link Function} that expands 2-field blob structs {@code {type, reference}}
+   * back to 3-field structs {@code {type, null, reference}} by inserting null at the
+   * {@code data} position, then applies the projection callback.
+   *
+   * @param readSchema         the Spark schema of incoming rows (blob structs have 2 fields)
+   * @param blobColumns        ordinals of blob columns in {@code readSchema}
+   * @param projectionCallback called with the expanded row; must copy any data it needs to retain
+   * @return a function that converts one row and returns the projected result
+   */
+  public static Function<InternalRow, InternalRow> buildBlobNullPadRowMapper(
+      StructType readSchema,
+      Set<Integer> blobColumns,
+      Function<InternalRow, InternalRow> projectionCallback) {
+    int numFields = readSchema.fields().length;
+    GenericInternalRow buffer = new GenericInternalRow(numFields);
+    return row -> {
+      for (int i = 0; i < numFields; i++) {
+        if (row.isNullAt(i)) {
+          buffer.setNullAt(i);
+        } else if (blobColumns.contains(i)) {
+          InternalRow blobStruct = row.getStruct(i, 2);
+          // Expand {type, reference} → {type, null, reference}
+          GenericInternalRow expanded = new GenericInternalRow(3);
+          expanded.update(0, blobStruct.isNullAt(0) ? null : blobStruct.getUTF8String(0));
+          expanded.setNullAt(1);
+          expanded.update(2, blobStruct.isNullAt(1) ? null : blobStruct.getStruct(1, HoodieSchema.Blob.getReferenceFieldCount()));
+          buffer.update(i, expanded);
+        } else {
+          buffer.update(i, row.get(i, readSchema.apply(i).dataType()));
+        }
+      }
+      return projectionCallback.apply(buffer);
+    };
   }
 
   /**

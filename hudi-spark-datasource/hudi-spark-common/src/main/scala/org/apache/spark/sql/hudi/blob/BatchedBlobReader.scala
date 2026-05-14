@@ -208,8 +208,8 @@ class BatchedBlobReader(
             // Dispatch based on storage_type (field 0)
             val storageType = accessor.getString(blobStruct, 0)
             if (storageType == HoodieSchema.Blob.INLINE) {
-              // Case 1: Inline — bytes are in field 1
-              val bytes = accessor.getBytes(blobStruct, 1)
+              // Case 1: Inline — bytes are in field 1 (may be null in DESCRIPTOR mode)
+              val bytes = if (accessor.isNullAt(blobStruct, 1)) null else accessor.getBytes(blobStruct, 1)
               batch += RowInfo[R](
                 originalRow = row,
                 filePath = "",

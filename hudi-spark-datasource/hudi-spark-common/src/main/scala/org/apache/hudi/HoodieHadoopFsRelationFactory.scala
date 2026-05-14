@@ -237,11 +237,16 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
 
   override def buildFileFormat(): FileFormat = {
     val tableConfig = metaClient.getTableConfig
+    val blobDescriptorMode = optParams.getOrElse(
+      HoodieReaderConfig.BLOB_INLINE_READ_MODE.key(),
+      HoodieReaderConfig.BLOB_INLINE_READ_MODE.defaultValue()
+    ).equalsIgnoreCase(HoodieReaderConfig.BLOB_INLINE_READ_MODE_DESCRIPTOR)
     new HoodieFileGroupReaderBasedFileFormat(basePath.toString,
       HoodieTableSchema(tableStructSchema, tableSchema, internalSchemaOpt),
       tableConfig.getTableName, queryTimestamp.get, getMandatoryFields, isMOR, isBootstrap,
       isIncremental, validCommits, shouldUseRecordPosition, getRequiredFilters,
-      tableConfig.isMultipleBaseFileFormatsEnabled, tableConfig.getBaseFileFormat)
+      tableConfig.isMultipleBaseFileFormatsEnabled, tableConfig.getBaseFileFormat,
+      isBlobDescriptorMode = blobDescriptorMode)
   }
 
   override def buildBucketSpec(): Option[BucketSpec] = None
