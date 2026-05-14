@@ -56,6 +56,7 @@ public class DataTypeAdapter {
   public static LogicalTypeAnnotation variantParquetAnnotation() {
     return VARIANT_ANNOTATION;
   }
+
   public static Variant getVariant(RowData rowData, int pos) {
     return rowData.getVariant(pos);
   }
