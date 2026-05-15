@@ -193,6 +193,10 @@
                   <shadedPattern>${flink.bundle.shade.prefix}com.yammer.metrics.</shadedPattern>
                 </relocation>
                 <relocation>
+                  <pattern>com.codahale.metrics.</pattern>
+                  <shadedPattern>org.apache.hudi.com.codahale.metrics.</shadedPattern>
+                </relocation>
+                <relocation>
                   <pattern>com.beust.jcommander.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}com.beust.jcommander.</shadedPattern>
                 </relocation>
