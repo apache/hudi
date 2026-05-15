@@ -975,6 +975,30 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       assertArrayEquals(expectedPayloads(i), bytes,
         s"read_blob() bytes mismatch for id=$i")
     }
+
+    // Mixed-usage regression: read_blob(payload) co-projected with payload.reference.* in a
+    // single SELECT. The INLINE-descriptor fallback in BatchedBlobReader is load-bearing, if
+    // read_blob() forced the scan to CONTENT shape, reference.* would all be null here.
+    val mixed = spark.sql(
+      s"""SELECT id,
+         |       read_blob(payload)              AS bytes,
+         |       payload.reference.external_path AS ext_path,
+         |       payload.reference.offset        AS off,
+         |       payload.reference.length        AS len
+         |  FROM $viewName ORDER BY id""".stripMargin).collect()
+    assertEquals(numRows, mixed.length)
+    mixed.zipWithIndex.foreach { case (row, i) =>
+      assertArrayEquals(expectedPayloads(i), row.getAs[Array[Byte]]("bytes"),
+        s"read_blob() bytes must survive co-projection with reference.* (id=$i)")
+      val ext = row.getAs[String]("ext_path")
+      assertNotNull(ext, s"reference.external_path must survive read_blob co-usage (id=$i)")
+      assertTrue(ext.endsWith(".lance"), s"external_path should point at .lance, got: $ext (id=$i)")
+      assertFalse(row.isNullAt(row.fieldIndex("off")),
+        s"reference.offset must not be null when co-selected with read_blob (id=$i)")
+      assertTrue(row.getLong(row.fieldIndex("off")) >= 0L)
+      assertEquals(payloadLen.toLong, row.getLong(row.fieldIndex("len")),
+        s"reference.length must equal payload length (id=$i)")
+    }
   }
 
   /**
