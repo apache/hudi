@@ -425,8 +425,23 @@ Set up a few environment variables to simplify Maven commands that follow. This 
               module. See [checklist](#checklist-to-proceed-to-the-next-step).
        2. Continue with Java 17 build for Spark 4 bundle, run `export JAVA_HOME=$(/usr/libexec/java_home -v 17)` and
           `./scripts/release/deploy_staging_jars_java17.sh 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.deploy2.log"`
-   5. Note that the artifacts from Java 17 build are uploaded to a separate staging repo. You need to manually
-      download those artifacts and upload them to the first staging repo so that all artifacts stay in the same repo.
+   5. Note that the artifacts from Java 17 build are uploaded to a separate staging repo. Use the
+      `copy_staging_repo.sh` script to copy all artifacts from the Java 17 staging repo into the Java 11 staging repo
+      so that all artifacts stay in the same repo.
+      1. Identify both staging repo IDs from [Apache Nexus Staging Repositories](https://repository.apache.org/#stagingRepositories)
+         (e.g., `orgapachehudi-1177` for Java 17, `orgapachehudi-1176` for Java 11). Make sure both repos are still in
+         the "open" state (not closed).
+      2. First do a dry-run to verify the list of artifacts to be copied:
+         ```shell
+         ./scripts/release/copy_staging_repo.sh --dry-run <java17-repo-id> <java11-repo-id>
+         ```
+      3. Then run the actual copy:
+         ```shell
+         ./scripts/release/copy_staging_repo.sh <java17-repo-id> <java11-repo-id> 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.copy_staging.log"
+         ```
+      4. The script reads Nexus credentials from `~/.m2/settings.xml` (server id `apache.releases.https`), downloads
+         every artifact from the source repo, and re-uploads them to the target repo. After it finishes, drop the
+         Java 17 staging repo on Apache Nexus.
    6. Review all staged artifacts by logging into Apache Nexus and clicking on "Staging Repositories" link on left pane.
       Then find a "open" entry for apachehudi
    7. Ensure it contains all 2 (2.12 and 2.13) artifacts, mainly hudi-spark-bundle-2.12/2.13,
