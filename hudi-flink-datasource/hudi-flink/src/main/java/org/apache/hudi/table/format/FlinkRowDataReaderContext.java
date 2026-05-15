@@ -102,7 +102,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     // disable schema evolution in fileReader if it's log file, since schema evolution for log file is handled in `FileGroupRecordBuffer`
     InternalSchemaManager schemaManager = isLogFile ? InternalSchemaManager.DISABLED : internalSchemaManager.get();
 
-    if (HoodieFileFormat.fromFileExtension(filePath.getFileExtension()) == HoodieFileFormat.LANCE) {
+    if (filePath.getName().endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
       HoodieRowDataLanceReader rowDataLanceReader =
           (HoodieRowDataLanceReader) HoodieIOFactory.getIOFactory(storage)
               .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
