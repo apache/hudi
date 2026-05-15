@@ -641,9 +641,15 @@ object HoodieIncrementalRelationIdentifier extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan =
     AnalysisHelper.allowInvokingTransformsInAnalyzer {
       plan transform {
-        case lr @ LogicalRelation(hfsr: HadoopFsRelation, _, None, _)
-            if isIncrementalOrCDC(hfsr.location) =>
-          val metaClient = hfsr.location.asInstanceOf[HoodieFileIndex].metaClient
+        // Type pattern + guard avoids destructuring `LogicalRelation`, whose case-class
+        // arity differs between Spark 3.x (4 args) and Spark 4.x (5 args). This rule
+        // lives in `hudi-spark`, which is compiled against every supported profile.
+        case lr: LogicalRelation
+            if lr.catalogTable.isEmpty
+              && lr.relation.isInstanceOf[HadoopFsRelation]
+              && isIncrementalOrCDC(lr.relation.asInstanceOf[HadoopFsRelation].location) =>
+          val fsRelation = lr.relation.asInstanceOf[HadoopFsRelation]
+          val metaClient = fsRelation.location.asInstanceOf[HoodieFileIndex].metaClient
           lr.copy(catalogTable = Some(buildCatalogTable(metaClient, lr.schema)))
       }
     }
