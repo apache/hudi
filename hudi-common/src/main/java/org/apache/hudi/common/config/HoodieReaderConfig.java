@@ -107,13 +107,13 @@ public class HoodieReaderConfig extends HoodieConfig {
   public static final String BLOB_INLINE_READ_MODE_DESCRIPTOR = "DESCRIPTOR";
   public static final ConfigProperty<String> BLOB_INLINE_READ_MODE = ConfigProperty
       .key("hoodie.read.blob.inline.mode")
-      .defaultValue(BLOB_INLINE_READ_MODE_CONTENT)
+      .defaultValue(BLOB_INLINE_READ_MODE_DESCRIPTOR)
       .markAdvanced()
       .sinceVersion("1.2.0")
       .withValidValues(BLOB_INLINE_READ_MODE_CONTENT, BLOB_INLINE_READ_MODE_DESCRIPTOR)
       .withDocumentation("How Hudi interprets INLINE BLOB values on read. "
-          + "CONTENT (default) returns the raw inline bytes. "
-          + "DESCRIPTOR returns an OUT_OF_LINE-shaped reference pointing at the backing "
-          + "Lance file with the INLINE payload's position and size, so callers can defer "
-          + "the byte read via read_blob().");
+          + "DESCRIPTOR (default) returns an OUT_OF_LINE-shaped reference pointing at the "
+          + "backing Lance file with the INLINE payload's position and size, so callers can "
+          + "defer the byte read via read_blob(). "
+          + "CONTENT returns the raw inline bytes directly in the data field on every read.");
 }

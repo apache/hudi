@@ -208,16 +208,44 @@ class BatchedBlobReader(
             // Dispatch based on storage_type (field 0)
             val storageType = accessor.getString(blobStruct, 0)
             if (storageType == HoodieSchema.Blob.INLINE) {
-              // Case 1: Inline — bytes are in field 1
-              val bytes = accessor.getBytes(blobStruct, 1)
-              batch += RowInfo[R](
-                originalRow = row,
-                filePath = "",
-                offset = -1,
-                length = -1,
-                index = rowIndex,
-                inlineBytes = Some(bytes)
-              )
+              // INLINE rows can arrive in two shapes:
+              //  - CONTENT-mode read: inline_data populated with raw bytes (field 1).
+              //  - DESCRIPTOR-mode read: inline_data is null and the reference struct
+              //    (field 2) carries a synthetic positional pointer into the base file.
+              // read_blob() must return bytes in both cases, so we fall back to the
+              // descriptor's range read when inline_data is absent.
+              val inlineIsNull = accessor.isNullAt(blobStruct, 1)
+              if (!inlineIsNull) {
+                val bytes = accessor.getBytes(blobStruct, 1)
+                batch += RowInfo[R](
+                  originalRow = row,
+                  filePath = "",
+                  offset = -1,
+                  length = -1,
+                  index = rowIndex,
+                  inlineBytes = Some(bytes)
+                )
+              } else {
+                require(!accessor.isNullAt(blobStruct, 2),
+                  s"INLINE blob at row $rowIndex has null inline_data and null reference; cannot resolve bytes")
+                val referenceStruct = accessor.getStruct(blobStruct, 2, HoodieSchema.Blob.getReferenceFieldCount)
+                val filePath = accessor.getString(referenceStruct, 0)
+                require(filePath != null && filePath.nonEmpty,
+                  s"INLINE blob descriptor at row $rowIndex must have non-empty external_path")
+                require(!accessor.isNullAt(referenceStruct, 1) && !accessor.isNullAt(referenceStruct, 2),
+                  s"INLINE blob descriptor at row $rowIndex must set both offset and length")
+                val offset = accessor.getLong(referenceStruct, 1)
+                val length = accessor.getLong(referenceStruct, 2)
+                require(offset >= 0, s"INLINE blob descriptor offset must be non-negative for '$filePath': $offset")
+                require(length >= 0, s"INLINE blob descriptor length must be non-negative for '$filePath': $length")
+                batch += RowInfo[R](
+                  originalRow = row,
+                  filePath = filePath,
+                  offset = offset,
+                  length = length,
+                  index = rowIndex
+                )
+              }
             } else if (storageType  == HoodieSchema.Blob.OUT_OF_LINE) {
               // Case 2 or 3: Out-of-line — get reference struct (field 2)
               require(!accessor.isNullAt(blobStruct, 2), s"Out-of-line blob at row $rowIndex must set reference")
