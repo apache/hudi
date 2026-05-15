@@ -19,13 +19,13 @@
 
 package org.apache.hudi.blob
 
-import org.apache.hudi.blob.BlobTestHelpers._
+import org.apache.hudi.blob.BlobTestHelpers.{assertBytesContent, blobMetadata, blobStructCol, createTestFile, withSparkConfig}
 import org.apache.hudi.testutils.HoodieClientTestBase
 
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types._
-import org.junit.jupiter.api.Assertions._
+import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.types.{BlobType, IntegerType, LongType, StringType, StructField, StructType}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 /**

@@ -20,7 +20,7 @@
 package org.apache.spark.sql.hudi.blob
 
 import org.apache.spark.sql.Row
-import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 
 /**
