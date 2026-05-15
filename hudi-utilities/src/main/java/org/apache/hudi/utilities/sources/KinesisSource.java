@@ -237,7 +237,7 @@ public abstract class KinesisSource<T> extends Source<T> {
           response = client.getRecords(
               GetRecordsRequest.builder()
                   .shardIterator(shardIteratorStr)
-                  .limit(Math.min(currentMaxRecords, (int) (maxTotalRecords - totalConsumed)))
+                  .limit(Math.min(currentMaxRecords, Math.toIntExact(maxTotalRecords - totalConsumed)))
                   .build());
           lastSuccessTimeMs = System.currentTimeMillis();
           break;
@@ -290,7 +290,9 @@ public abstract class KinesisSource<T> extends Source<T> {
 
       // Process records first (done above), then decide whether to stop.
       // millisBehindLatest can be 0 in LocalStack even when the response contained records.
-      if (response.millisBehindLatest() == 0) {
+      // It is documented as nullable on AWS SDK responses, so guard against NPE on auto-unbox.
+      Long millisBehind = response.millisBehindLatest();
+      if (millisBehind != null && millisBehind == 0) {
         fetchingDone = true;
       }
       if (shardIteratorStr == null) {

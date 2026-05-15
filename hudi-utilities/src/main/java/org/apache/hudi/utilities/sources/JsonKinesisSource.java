@@ -143,12 +143,12 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
               KinesisSource.ShardRecordIterator recordIt = KinesisSource.readShardRecords(
                   client, readConfig.getStreamName(), range, readConfig.getStartingPosition(),
                   readConfig.getMaxRecordsPerRequest(), readConfig.getIntervalMilliSeconds(),
-                  readConfig.getMaxRecordsPerShard(), readConfig.isEnableDeaggregation(),
+                  readConfig.getMaxRecordsPerShard(), readConfig.isDeaggregationEnabled(),
                   readConfig.getRetryInitialIntervalMs(), readConfig.getRetryMaxIntervalMs(),
                   readConfig.getThrottleTimeoutMs());
 
               String shardId = range.getShardId();
-              boolean addMetaFields = readConfig.isShouldAddMetaFields();
+              boolean addMetaFields = readConfig.isMetaFieldsEnabled();
               List<String> jsonRecords = new ArrayList<>();
               long numNull = 0;
               java.time.Instant lastArrivalTimestamp = null;

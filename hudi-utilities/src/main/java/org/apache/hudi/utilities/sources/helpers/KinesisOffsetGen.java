@@ -42,6 +42,7 @@ import software.amazon.awssdk.services.kinesis.model.ProvisionedThroughputExceed
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 
+import java.math.BigInteger;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -163,6 +164,17 @@ public class KinesisOffsetGen {
     }
 
     /**
+     * Compares two Kinesis sequence numbers numerically.
+     * Kinesis sequence numbers are 128-bit integers represented as decimal strings whose lengths
+     * can vary, so lexicographic {@link String#compareTo} is not correct for numeric ordering.
+     *
+     * @return negative if a &lt; b, zero if equal, positive if a &gt; b
+     */
+    public static int compareSequenceNumbers(String a, String b) {
+      return new BigInteger(a).compareTo(new BigInteger(b));
+    }
+
+    /**
      * Build checkpoint value without arrival time: "lastSeq" or "lastSeq|endSeq".
      */
     public static String buildCheckpointValue(String lastSeq, String endSeq) {
@@ -262,7 +274,7 @@ public class KinesisOffsetGen {
         return !useLatestWhenNoCheckpoint;
       }
       // CASE 3: Closed shard: lastSeq >= endSeq means fully consumed
-      if (lastSeq.compareTo(endSeq) >= 0) {
+      if (CheckpointUtils.compareSequenceNumbers(lastSeq, endSeq) >= 0) {
         return false;
       }
       // CASE 4: lastSeq < endSeq: may have unread records
@@ -459,9 +471,11 @@ public class KinesisOffsetGen {
       Option<String> lastSeqOpt = seqs.getLeft();
       Option<String> endSeqOpt = seqs.getRight();
       // endSeq absent = was open shard; conservatively assume not fully consumed.
-      // endSeq present: fully consumed iff lastSeq >= endSeq.
+      // endSeq present with non-empty lastSeq: fully consumed iff lastSeq >= endSeq.
+      // Empty lastSeq (e.g. "|endSeq" checkpoint) is treated as not consumed.
       boolean fullyConsumed = endSeqOpt.isPresent()
-          && lastSeqOpt.map(last -> last.compareTo(endSeqOpt.get()) >= 0).orElse(false);
+          && lastSeqOpt.map(last -> !last.isEmpty()
+              && CheckpointUtils.compareSequenceNumbers(last, endSeqOpt.get()) >= 0).orElse(false);
       if (fullyConsumed) {
         log.info("Expired shard {} was fully consumed (lastSeq >= endSeq); pruning from checkpoint", shardId);
       } else {
@@ -495,7 +509,7 @@ public class KinesisOffsetGen {
         continue;
       }
       // lastSeq < shardStartSeq: records between the checkpoint and the trim horizon were dropped.
-      if (lastSeq.compareTo(shardStartSeq) < 0) {
+      if (CheckpointUtils.compareSequenceNumbers(lastSeq, shardStartSeq) < 0) {
         reportDataLoss("Shard " + shardId + " checkpoint lastSeq=" + lastSeq
             + " is before the shard's earliest available sequence number " + shardStartSeq
             + ". Records may have been trimmed due to retention expiry (data loss).");
