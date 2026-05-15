@@ -44,14 +44,14 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, GreaterThanOrEqual, LessThan, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, GetStructField, GreaterThanOrEqual, LessThan, Literal, Or}
 import org.apache.spark.sql.execution.datasources.{NoopCache, PartitionDirectory}
 import org.apache.spark.sql.functions.{lit, struct}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.{BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource, ValueSource}
 
@@ -858,6 +858,35 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       partitionValues.mkString(StoragePath.SEPARATOR)
     }
   }
+
+  // ---- buildNestedPartitionSchema tests ----
+
+  @ParameterizedTest
+  @MethodSource(Array("buildNestedPartitionSchemaCases"))
+  def testBuildNestedPartitionSchema(name: String, flat: StructType, expected: StructType): Unit = {
+    assertEquals(expected, SparkHoodieTableFileIndex.buildNestedPartitionSchema(flat))
+  }
+
+  @Test
+  def testBuildNestedPartitionSchemaConflictThrows(): Unit = {
+    // "a" as leaf and "a.b" as nested — conflict
+    val flat = StructType(Seq(StructField("a", StringType), StructField("a.b", IntegerType)))
+    assertThrows(classOf[IllegalStateException]) {
+      SparkHoodieTableFileIndex.buildNestedPartitionSchema(flat)
+    }
+  }
+
+  // ---- extractNestedPartitionFilters tests ----
+
+  @ParameterizedTest
+  @MethodSource(Array("extractNestedPartitionFiltersCases"))
+  def testExtractNestedPartitionFilters(name: String,
+                                        filters: Seq[Expression],
+                                        partitionColumns: Set[String],
+                                        expected: Seq[Expression]): Unit = {
+    assertEquals(expected, HoodieFileIndex.extractNestedPartitionFilters(filters, partitionColumns))
+  }
+
 }
 
 object TestHoodieFileIndex {
@@ -868,6 +897,67 @@ object TestHoodieFileIndex {
       Arguments.arguments("org.apache.hudi.keygen.ComplexKeyGenerator"),
       Arguments.arguments("org.apache.hudi.keygen.SimpleKeyGenerator"),
       Arguments.arguments("org.apache.hudi.keygen.TimestampBasedKeyGenerator")
+    )
+  }
+
+  def buildNestedPartitionSchemaCases(): java.util.stream.Stream[Arguments] = {
+    val nested = StructType(Seq(
+      StructField("nested_record", StructType(Seq(StructField("level", StringType, nullable = true))), nullable = true)))
+    val twoLevel = StructType(Seq(
+      StructField("a", StructType(Seq(
+        StructField("b", StructType(Seq(StructField("c", IntegerType, nullable = true))), nullable = true))), nullable = true)))
+    val siblings = StructType(Seq(
+      StructField("a", StructType(Seq(
+        StructField("b", StringType, nullable = true),
+        StructField("c", IntegerType, nullable = true))), nullable = true)))
+    val mixed = StructType(Seq(
+      StructField("country", StringType, nullable = true),
+      StructField("nested_record", StructType(Seq(StructField("level", StringType, nullable = true))), nullable = true)))
+    java.util.stream.Stream.of(
+      Arguments.of("empty",
+        new StructType(),
+        new StructType()),
+      Arguments.of("flat",
+        StructType(Seq(StructField("country", StringType))),
+        StructType(Seq(StructField("country", StringType, nullable = true)))),
+      Arguments.of("singleNested",
+        StructType(Seq(StructField("nested_record.level", StringType))),
+        nested),
+      Arguments.of("twoLevelNesting",
+        StructType(Seq(StructField("a.b.c", IntegerType))),
+        twoLevel),
+      Arguments.of("siblingFields",
+        StructType(Seq(StructField("a.b", StringType), StructField("a.c", IntegerType))),
+        siblings),
+      Arguments.of("mixedFlatAndNested",
+        StructType(Seq(StructField("country", StringType), StructField("nested_record.level", StringType))),
+        mixed)
+    )
+  }
+
+  def extractNestedPartitionFiltersCases(): java.util.stream.Stream[Arguments] = {
+    val levelStruct = StructType(Seq(StructField("level", StringType)))
+    val multiFieldStruct = StructType(Seq(
+      StructField("nested_int", IntegerType), StructField("level", StringType)))
+
+    val partFilter = EqualTo(
+      GetStructField(AttributeReference("nested_record", levelStruct)(), 0, Some("level")),
+      Literal("INFO"))
+    val dataFilter = EqualTo(AttributeReference("int_field", IntegerType)(), Literal(5))
+    val siblingFilter = EqualTo(
+      GetStructField(AttributeReference("nested_record", multiFieldStruct)(), 0, Some("nested_int")),
+      Literal(10))
+    val orFilter = Or(
+      EqualTo(GetStructField(AttributeReference("nested_record", levelStruct)(), 0, Some("level")), Literal("INFO")),
+      EqualTo(GetStructField(AttributeReference("nested_record", levelStruct)(), 0, Some("level")), Literal("ERROR")))
+
+    java.util.stream.Stream.of(
+      Arguments.of("partitionFilterExtractedDataFilterDropped",
+        Seq(partFilter, dataFilter), Set("nested_record.level"), Seq(partFilter)),
+      Arguments.of("siblingFieldExcluded",
+        Seq(siblingFilter), Set("nested_record.level"), Seq.empty[Expression]),
+      Arguments.of("orWithOnlyPartitionColumnsExtracted",
+        Seq(orFilter), Set("nested_record.level"), Seq(orFilter))
     )
   }
 }

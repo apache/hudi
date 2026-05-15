@@ -36,7 +36,7 @@ import org.apache.spark.sql.types.StructType
  * Prune the partitions of Hudi table based relations by the means of pushing down the
  * partition filters
  *
- * NOTE: [[HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's [[PruneFileSourcePartitions]]
+ * NOTE: [[HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's [[org.apache.spark.sql.execution.datasources.PruneFileSourcePartitions]]
  */
 case class Spark3HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[LogicalPlan] {
 
@@ -48,11 +48,11 @@ case class Spark3HoodiePruneFileSourcePartitions(spark: SparkSession) extends Ru
       val normalizedFilters = exprUtils.normalizeExprs(deterministicFilters, lr.output)
 
       val (partitionPruningFilters, dataFilters) =
-        getPartitionFiltersAndDataFilters(fileIndex.partitionSchema, normalizedFilters)
+        getPartitionFiltersAndDataFilters(fileIndex.partitionSchemaForSpark, normalizedFilters)
 
       // [[HudiFileIndex]] is a caching one, therefore we don't need to reconstruct new relation,
       // instead we simply just refresh the index and update the stats
-      fileIndex.filterFileSlices(dataFilters, partitionPruningFilters, isPartitionPruned = true)
+      fileIndex.filterFileSlices(dataFilters, partitionPruningFilters, isPartitionPruneOnly = true)
 
       if (partitionPruningFilters.nonEmpty) {
         // Change table stats based on the sizeInBytes of pruned files
@@ -105,11 +105,21 @@ private object Spark3HoodiePruneFileSourcePartitions extends PredicateHelper {
     Project(projects, withFilter)
   }
 
+  /**
+   * Returns true if the given attribute references a partition column. For nested partition columns
+   * (e.g. `nested_record.level`), `partitionSchema` is the nested [[StructType]] from
+   * `partitionSchemaForSpark`, so the top-level name is the struct root (e.g. `nested_record`),
+   * which matches `attr.name` directly via `contains`.
+   */
+  private def isPartitionColumnReference(attr: AttributeReference, partitionSchema: StructType): Boolean = {
+    partitionSchema.names.contains(attr.name)
+  }
+
   def getPartitionFiltersAndDataFilters(partitionSchema: StructType,
                                         normalizedFilters: Seq[Expression]): (Seq[Expression], Seq[Expression]) = {
     val partitionColumns = normalizedFilters.flatMap { expr =>
       expr.collect {
-        case attr: AttributeReference if partitionSchema.names.contains(attr.name) =>
+        case attr: AttributeReference if isPartitionColumnReference(attr, partitionSchema) =>
           attr
       }
     }

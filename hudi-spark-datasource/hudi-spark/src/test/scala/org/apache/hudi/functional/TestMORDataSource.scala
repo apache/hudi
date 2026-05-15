@@ -2347,6 +2347,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertEquals("row4", results(3).getAs[String]("_row_key"))
     assertEquals("value4", results(3).getAs[String]("data"))
   }
+
+  @Test
+  def testNestedFieldPartition(): Unit = {
+    TestCOWDataSource.runNestedFieldPartitionTest(spark, basePath, storage, "MOR")
+  }
 }
 
 object TestMORDataSource {

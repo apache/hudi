@@ -20,9 +20,9 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullException;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullSQLException;
 
@@ -49,6 +49,8 @@ import java.sql.Statement;
 import java.util.List;
 import java.util.Scanner;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.io.util.FileIOUtils.readAsUTFString;
 
 /**
  * Utility to pull data after a given commit, based on the supplied HiveQL and save the delta as another hive temporary
@@ -115,7 +117,7 @@ public class HiveIncrementalPuller {
     this.config = config;
     validateConfig(config);
     String templateContent =
-        FileIOUtils.readAsUTFString(this.getClass().getResourceAsStream("/IncrementalPull.sqltemplate"));
+        readAsUTFString(this.getClass().getResourceAsStream("/IncrementalPull.sqltemplate"));
     incrementalPullSQLTemplate = new ST(templateContent);
   }
 
@@ -298,12 +300,13 @@ public class HiveIncrementalPuller {
     if (!fs.exists(new Path(targetDataPath)) || !fs.exists(new Path(targetDataPath + "/.hoodie"))) {
       return "0";
     }
-    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(targetDataPath).build();
+    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf())).setBasePath(targetDataPath).build();
 
     Option<HoodieInstant> lastCommit =
         metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
     if (lastCommit.isPresent()) {
-      return lastCommit.get().getTimestamp();
+      return lastCommit.get().requestedTime();
     }
     return "0";
   }
@@ -331,14 +334,15 @@ public class HiveIncrementalPuller {
   }
 
   private String getLastCommitTimePulled(FileSystem fs, String sourceTableLocation) {
-    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(sourceTableLocation).build();
+    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf()))
+        .setBasePath(sourceTableLocation).build();
     List<String> commitsToSync = metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
-        .findInstantsAfter(config.fromCommitTime, config.maxCommits).getInstantsAsStream().map(HoodieInstant::getTimestamp)
+        .findInstantsAfter(config.fromCommitTime, config.maxCommits).getInstantsAsStream().map(HoodieInstant::requestedTime)
         .collect(Collectors.toList());
     if (commitsToSync.isEmpty()) {
-      LOG.info("Nothing to sync. All commits in {} are {} and from commit time is {}", config.sourceTable,
-          metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants(),
-          config.fromCommitTime);
+      LOG.info("Nothing to sync. All commits in {} are {} and from commit time is {}", config.sourceTable, metadata.getActiveTimeline().getCommitsTimeline()
+          .filterCompletedInstants().getInstants(), config.fromCommitTime);
       return null;
     }
     LOG.info("Syncing commits {}", commitsToSync);
