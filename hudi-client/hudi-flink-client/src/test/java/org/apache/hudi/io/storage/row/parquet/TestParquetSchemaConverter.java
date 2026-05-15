@@ -20,7 +20,6 @@ package org.apache.hudi.io.storage.row.parquet;
 
 import org.apache.hudi.adapter.DataTypeAdapter;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.util.Option;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
@@ -39,7 +38,6 @@ import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.table.types.logical.TinyIntType;
 import org.apache.flink.table.types.logical.VarCharType;
 import org.apache.parquet.schema.GroupType;
-import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
@@ -278,11 +276,10 @@ public class TestParquetSchemaConverter {
   }
 
   /**
-   * On Flink 2.1+ with parquet 1.16.0+, converting a RowType containing a Variant column to a
-   * Parquet MessageType should produce a group with the VARIANT annotation and required binary
-   * {@code metadata} and {@code value} fields.
+   * On Flink 2.1+, converting a RowType containing a Variant column to a Parquet MessageType
+   * should produce a group with the VARIANT annotation and required binary {@code metadata}
+   * and {@code value} fields.
    * On pre-2.1 Flink this test is skipped since VariantType does not exist.
-   * On parquet < 1.16.0 the write is expected to fail (annotation unavailable).
    */
   @Test
   void testVariantWritePathProducesCorrectLayout() {
@@ -298,17 +295,6 @@ public class TestParquetSchemaConverter {
         new LogicalType[]{new IntType(), variantType},
         new String[]{"id", "data"});
 
-    if (!DataTypeAdapter.variantParquetAnnotation().isPresent()) {
-      // parquet < 1.16.0: write must fail because annotation is unavailable
-      UnsupportedOperationException ex = org.junit.jupiter.api.Assertions.assertThrows(
-          UnsupportedOperationException.class,
-          () -> ParquetSchemaConverter.convertToParquetMessageType("test", rowType));
-      assertTrue(ex.getMessage().contains("parquet-java 1.16.0+"),
-          "Error message should mention parquet version requirement");
-      return;
-    }
-
-    // parquet 1.16.0+: write succeeds with annotation
     MessageType messageType = ParquetSchemaConverter.convertToParquetMessageType("test", rowType);
     assertEquals(2, messageType.getFieldCount());
 
@@ -329,39 +315,19 @@ public class TestParquetSchemaConverter {
   }
 
   /**
-   * Verifies that writing a Variant column fails with a clear error when parquet-java on the
-   * classpath does not support the VARIANT annotation (< 1.16.0). On pre-2.1 Flink the adapter
-   * throws directly; on Flink 2.1+ with parquet < 1.16.0 the write path throws.
+   * Verifies that on pre-2.1 Flink, calling variantParquetAnnotation() throws
+   * UnsupportedOperationException with a clear message.
    */
   @Test
-  void testVariantWriteFailsWithoutAnnotation() {
-    Option<LogicalTypeAnnotation> annotationOpt;
+  void testVariantAnnotationThrowsOnPreFlink21() {
     try {
-      annotationOpt = DataTypeAdapter.variantParquetAnnotation();
+      DataTypeAdapter.variantParquetAnnotation();
     } catch (UnsupportedOperationException e) {
       // Pre-2.1 Flink: expected to throw from the adapter
       assertTrue(e.getMessage().contains("VARIANT type is only supported in Flink 2.1+"));
       return;
     }
-
-    if (annotationOpt.isPresent()) {
-      // parquet 1.16.0+: annotation is available, write succeeds — nothing to test here
-      return;
-    }
-
-    // Flink 2.1 + parquet < 1.16.0: annotation is null, write must fail
-    LogicalType variantType = DataTypeAdapter.createVariantType().getLogicalType();
-    RowType rowType = RowType.of(
-        new LogicalType[]{new IntType(), variantType},
-        new String[]{"id", "data"});
-
-    UnsupportedOperationException ex = org.junit.jupiter.api.Assertions.assertThrows(
-        UnsupportedOperationException.class,
-        () -> ParquetSchemaConverter.convertToParquetMessageType("test", rowType));
-    assertTrue(ex.getMessage().contains("parquet-java 1.16.0+"),
-        "Error message should mention the parquet version requirement");
-    assertTrue(ex.getMessage().contains("VARIANT"),
-        "Error message should mention VARIANT");
+    // On Flink 2.1+ this method succeeds — nothing else to verify here
   }
 
 }

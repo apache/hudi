@@ -55,10 +55,8 @@ import static org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit;
  *
  * <p>On writes, this converter maps Flink {@code VariantType} to the canonical unshredded Parquet
  * layout (group with binary metadata + value fields). The VARIANT logical type annotation is
- * resolved by {@link DataTypeAdapter#variantParquetAnnotation()} — on Flink 2.1+ with
- * parquet-java 1.16.0+ the annotation is attached automatically; on pre-2.1 Flink or with
- * parquet < 1.16.0 the write throws {@link UnsupportedOperationException} because writing
- * variant data without the annotation would produce files that no reader can identify as variant.
+ * obtained from {@link DataTypeAdapter#variantParquetAnnotation()} and attached to the group.
+ * On pre-2.1 Flink the adapter throws {@link UnsupportedOperationException}.
  *
  * <p>Reference org.apache.flink.formats.parquet.utils.ParquetSchemaConverter to support timestamp of INT64 8 bytes.
  */
@@ -243,17 +241,10 @@ public class ParquetSchemaConverter {
    * shredding out), so a shredded variant can never arrive as a Flink LogicalType.
    *
    * <p>Delegates to {@link DataTypeAdapter#variantParquetAnnotation()} for the VARIANT logical
-   * type annotation. On Flink < 2.1 this throws (variant writes are unsupported). On Flink 2.1+
-   * with parquet-java < 1.16.0 this also throws, because writing variant data without the
-   * annotation would produce files that no reader can identify as variant.
+   * type annotation. On Flink < 2.1 this throws (variant writes are unsupported).
    */
   private static Type convertVariantToParquetType(String name, Type.Repetition repetition) {
-    LogicalTypeAnnotation annotation = DataTypeAdapter.variantParquetAnnotation()
-        .orElseThrow(() -> new UnsupportedOperationException(
-            "Cannot write Variant columns: parquet-java 1.16.0+ is required to emit the VARIANT "
-                + "logical type annotation. Without the annotation, readers cannot identify the "
-                + "column as Variant. Current parquet-java version does not support "
-                + "LogicalTypeAnnotation.variantType()."));
+    LogicalTypeAnnotation annotation = DataTypeAdapter.variantParquetAnnotation();
     return Types.buildGroup(repetition)
         .as(annotation)
         .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, Type.Repetition.REQUIRED)
