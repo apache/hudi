@@ -50,13 +50,15 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BasePredic
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{ByteType, DateType, IntegerType, LongType, ShortType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{ByteType, DataType, DateType, IntegerType, LongType, ShortType, StringType, StructField, StructType}
 import org.slf4j.LoggerFactory
 
 import javax.annotation.concurrent.NotThreadSafe
 
 import java.lang.reflect.{Array => JArray}
 import java.util.Collections
+
+import scala.collection.mutable.LinkedHashMap
 
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
@@ -535,8 +537,8 @@ object SparkHoodieTableFileIndex extends SparkAdapterSupport {
   private val PUT_LEAF_FILES_METHOD_NAME = "putLeafFiles"
 
   private case class NestedFieldNode(
-      leafType: Option[org.apache.spark.sql.types.DataType],
-      children: scala.collection.mutable.LinkedHashMap[String, NestedFieldNode]
+      leafType: Option[DataType],
+      children: LinkedHashMap[String, NestedFieldNode]
   )
 
   /**
@@ -553,10 +555,10 @@ object SparkHoodieTableFileIndex extends SparkAdapterSupport {
     if (flatPartitionSchema.isEmpty) {
       new StructType()
     } else {
-      val root = NestedFieldNode(None, scala.collection.mutable.LinkedHashMap.empty)
+      val root = NestedFieldNode(None, LinkedHashMap.empty)
 
       def getOrCreateChild(parent: NestedFieldNode, name: String): NestedFieldNode = {
-        parent.children.getOrElseUpdate(name, NestedFieldNode(None, scala.collection.mutable.LinkedHashMap.empty))
+        parent.children.getOrElseUpdate(name, NestedFieldNode(None, LinkedHashMap.empty))
       }
 
       flatPartitionSchema.fields.foreach { field =>

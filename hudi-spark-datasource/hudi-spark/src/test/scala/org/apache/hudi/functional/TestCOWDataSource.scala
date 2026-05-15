@@ -46,9 +46,11 @@ import org.apache.hudi.storage.{HoodieStorage, StoragePath, StoragePathFilter}
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
+import org.apache.hudi.{HoodieBaseRelation, HoodieFileIndex}
 
 import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.sql.{DataFrame, DataFrameWriter, Dataset, Encoders, Row, SaveMode, SparkSession, SparkSessionExtensions}
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.functions.{col, concat, lit, udf, when}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{ArrayType, DataTypes, DateType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampType}
@@ -2740,13 +2742,13 @@ object TestCOWDataSource {
 
     // VERIFICATION 1: Check partition schema contains the nested field
     val snapshotRelation = snapshotDF.queryExecution.optimizedPlan.collectFirst {
-      case lr: org.apache.spark.sql.execution.datasources.LogicalRelation => lr
+      case lr: LogicalRelation => lr
     }
     assertTrue(snapshotRelation.isDefined, s"LogicalRelation should exist for $tableType")
     val fileIndex = snapshotRelation.get.relation match {
-      case fsRelation: org.apache.spark.sql.execution.datasources.HadoopFsRelation =>
-        fsRelation.location.asInstanceOf[org.apache.hudi.HoodieFileIndex]
-      case baseRelation: org.apache.hudi.HoodieBaseRelation =>
+      case fsRelation: HadoopFsRelation =>
+        fsRelation.location.asInstanceOf[HoodieFileIndex]
+      case baseRelation: HoodieBaseRelation =>
         baseRelation.fileIndex
       case _ => null
     }
