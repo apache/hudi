@@ -43,7 +43,6 @@ public class ParquetDFSSourceConfig extends HoodieConfig {
       .key(STREAMER_CONFIG_PREFIX + "source.parquet.dfs.merge.schema.enable")
       .defaultValue(true)
       .withAlternatives(
-          DELTA_STREAMER_CONFIG_PREFIX + "source.parquet.dfs.merge.schema.enable",
           // Back-compat aliases for the previous underscore-style keys (since 0.15.0).
           STREAMER_CONFIG_PREFIX + "source.parquet.dfs.merge_schema.enable",
           DELTA_STREAMER_CONFIG_PREFIX + "source.parquet.dfs.merge_schema.enable")

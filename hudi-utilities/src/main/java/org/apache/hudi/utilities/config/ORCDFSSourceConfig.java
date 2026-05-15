@@ -26,7 +26,6 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
-import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
 import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
 
 /**
@@ -42,7 +41,6 @@ public class ORCDFSSourceConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> ORC_DFS_MERGE_SCHEMA = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.orc.dfs.merge.schema.enable")
       .defaultValue(true)
-      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.orc.dfs.merge.schema.enable")
       .markAdvanced()
       .sinceVersion("1.2.0")
       .withDocumentation("Whether to merge schema across ORC files within a single read. "

@@ -47,6 +47,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness {
 
   @BeforeEach
@@ -228,12 +231,12 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
         new CloudObjectMetadata(p1, 1L),
         new CloudObjectMetadata(p2, 1L));
     Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "parquet", Option.empty(), 1);
-    Assertions.assertTrue(result.isPresent());
+    assertTrue(result.isPresent());
     Dataset<Row> ds = result.get();
     Assertions.assertEquals(2, ds.count());
     Set<String> colNames = Arrays.stream(ds.schema().fields()).map(StructField::name).collect(Collectors.toSet());
-    Assertions.assertTrue(colNames.contains("b"));
-    Assertions.assertTrue(colNames.contains("c"));
+    assertTrue(colNames.contains("b"));
+    assertTrue(colNames.contains("c"));
   }
 
   /**
@@ -246,17 +249,17 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
    */
   @Test
   void isParquetOrOrcFileFormatRecognisesBothFormats() {
-    Assertions.assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("parquet"));
-    Assertions.assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("PARQUET"));
-    Assertions.assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("orc"));
-    Assertions.assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("ORC"));
-    Assertions.assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(" parquet "));
-    Assertions.assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(" orc "));
-    Assertions.assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("json"));
-    Assertions.assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("csv"));
-    Assertions.assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("avro"));
-    Assertions.assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(""));
-    Assertions.assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(null));
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("parquet"));
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("PARQUET"));
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("orc"));
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("ORC"));
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(" parquet "));
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(" orc "));
+    assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("json"));
+    assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("csv"));
+    assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("avro"));
+    assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(""));
+    assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(null));
   }
 
   @Test

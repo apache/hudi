@@ -185,7 +185,6 @@ public class CloudSourceConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> CLOUD_INCREMENTAL_MERGE_SCHEMA = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.merge.schema.enable")
       .defaultValue(true)
-      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.merge.schema.enable")
       .markAdvanced()
       .sinceVersion("1.2.0")
       .withDocumentation("For Parquet and ORC data files in S3/GCS incremental ingestion, merge schemas across all "
