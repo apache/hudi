@@ -40,6 +40,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.sink.buffer.BufferMemoryType;
 import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
@@ -168,21 +169,15 @@ public class OptionsResolver {
    */
   public static String[] getRecordKeys(Configuration conf) {
     final String recordKeyStr = conf.get(FlinkOptions.RECORD_KEY_FIELD);
-    if (StringUtils.isNullOrEmpty(recordKeyStr)) {
-      return new String[]{};
-    }
-    return recordKeyStr.split(",");
+    return KeyGenUtils.getRecordKeyFields(recordKeyStr).toArray(new String[0]);
   }
 
   /**
    * Return the bucket index keys as an array.
    */
   public static String[] getBucketIndexKeys(Configuration conf) {
-    final String indexKeyStr = conf.get(FlinkOptions.INDEX_KEY_FIELD);
-    if (StringUtils.isNullOrEmpty(indexKeyStr)) {
-      return new String[]{};
-    }
-    return indexKeyStr.split(",");
+    final String indexKeyStr = getIndexKeyField(conf);
+    return KeyGenUtils.getIndexKeyFields(indexKeyStr).toArray(new String[0]);
   }
 
   /**
