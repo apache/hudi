@@ -27,6 +27,22 @@ docker demo environment.
 The `/hoodie` folder contains all the configs for assembling necessary docker images. The name and repository of each
 docker image, e.g., `apachehudi/hudi-hadoop_2.8.4-trinobase_368`, is defined in the maven configuration file `pom.xml`.
 
+### Base images by Java version
+
+`build_docker_images.sh` auto-selects one of the two supported base images from `--spark-version`:
+
+| Base module   | JDK     | Used for   |
+|---------------|---------|------------|
+| `base_java11` | Java 11 | Spark 3.x  |
+| `base_java17` | Java 17 | Spark 4.0+ |
+
+The legacy Java 8 `base` module under `/hoodie/hadoop/base` is retained for historical reference only; Spark 2.x is no
+longer supported and `build_docker_images.sh` never selects it.
+
+Downstream Dockerfiles (`datanode`, `historyserver`, `hive_base`, `namenode`, `prestobase`, `trinobase`) pick the base
+via the `BASE_IMAGE_TAG` build arg (default `java11`). `build_docker_images.sh` sets it automatically; bare `docker
+build` invocations targeting the Java 17 base must pass `--build-arg BASE_IMAGE_TAG=java17`.
+
 ### Docker compose config for the Demo - `/compose`
 
 The `/compose` folder contains the yaml file to compose the Docker environment for running Hudi Demo.
@@ -150,9 +166,13 @@ push the image to the dockerhub repo:
 # Run under hoodie/hadoop, the <tag> is optional, "latest" by default
 docker buildx build <image_folder_name> --platform <comma-separated,platforms> -t <hub-user>/<repo-name>[:<tag>] --push
 
-# For example, to build base image
-docker buildx build base --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-base:linux-arm64-0.10.1 --push
+# For example, to build the Java 11 base image
+docker buildx build base_java11 --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-base-java11:linux-arm64-0.10.1 --push
 ```
+
+Note: the base image is now tagged per Java variant (`-base-java11` / `-base-java17`). Downstream Dockerfiles
+select the variant via the `BASE_IMAGE_TAG` build arg (default `java11`). If you also need the Java 17 base for
+arm64, repeat the build against `base_java17` and tag it as `...-base-java17:<tag>`.
 
 Once the base image is pushed then you could do something similar for other images.
 Change [hive](./hoodie/hadoop/hive_base/Dockerfile) dockerfile to pull the base image with tag corresponding to
@@ -160,9 +180,9 @@ linux/arm64 platform.
 
 ```
 # Change below line in the Dockerfile
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
-# as shown below
-FROM --platform=linux/arm64 apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:linux-arm64-0.10.1
+FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base-${BASE_IMAGE_TAG}:latest
+# as shown below (pin to the same Java variant you built above, e.g. java11)
+FROM --platform=linux/arm64 apachehudi/hudi-hadoop_${HADOOP_VERSION}-base-java11:linux-arm64-0.10.1
 
 # and then build & push from under hoodie/hadoop dir
 docker buildx build hive_base --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:linux-arm64-0.10.1 --push
@@ -178,8 +198,8 @@ shows what changes to make in Dockerfiles (assuming tag is named `linux-arm64-0.
 of `docker buildx` commands.
 
 ```
-docker buildx build base --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-base:linux-arm64-0.10.1 --push
-docker buildx build datanode --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-datanode:linux-arm64-0.10.1 --push
+docker buildx build base_java11 --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-base-java11:linux-arm64-0.10.1 --push
+docker buildx build datanode --platform linux/arm64 --build-arg BASE_IMAGE_TAG=java11 -t apachehudi/hudi-hadoop_2.8.4-datanode:linux-arm64-0.10.1 --push
 docker buildx build historyserver --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-history:linux-arm64-0.10.1 --push
 docker buildx build hive_base --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:linux-arm64-0.10.1 --push
 docker buildx build namenode --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-namenode:linux-arm64-0.10.1 --push

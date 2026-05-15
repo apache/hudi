@@ -15,9 +15,10 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG HADOOP_VERSION=3.3.4 
+ARG HADOOP_VERSION=3.3.4
 ARG HADOOP_HISTORY_PORT=8188
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
+ARG BASE_IMAGE_TAG=java11
+FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base-${BASE_IMAGE_TAG}:latest
 
 # Install unzip and wget
 RUN apt-get update && \

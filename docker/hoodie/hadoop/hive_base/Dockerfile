@@ -15,8 +15,9 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG HADOOP_VERSION=3.3.4 
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
+ARG HADOOP_VERSION=3.3.4
+ARG BASE_IMAGE_TAG=java11
+FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base-${BASE_IMAGE_TAG}:latest
 
 ENV HIVE_HOME /opt/hive
 ENV PATH $HIVE_HOME/bin:$PATH
