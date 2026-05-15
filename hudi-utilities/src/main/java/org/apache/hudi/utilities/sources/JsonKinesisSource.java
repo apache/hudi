@@ -148,7 +148,7 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
                   readConfig.getThrottleTimeoutMs());
 
               String shardId = range.getShardId();
-              boolean addMetaFields = readConfig.shouldAddMetaFields();
+              boolean addMetaFields = readConfig.isMetaFieldsEnabled();
               List<String> jsonRecords = new ArrayList<>();
               long numNull = 0;
               java.time.Instant lastArrivalTimestamp = null;

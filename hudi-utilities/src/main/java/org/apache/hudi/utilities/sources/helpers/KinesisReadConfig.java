@@ -20,7 +20,6 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.utilities.config.KinesisSourceConfig;
 
-import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -42,8 +41,7 @@ public class KinesisReadConfig implements Serializable {
   private final String accessKey; // null if not set
   private final String secretKey; // null if not set
   private final KinesisSourceConfig.KinesisStartingPositionStrategy startingPosition;
-  @Getter(AccessLevel.NONE)
-  private final boolean shouldAddMetaFields;
+  private final boolean metaFieldsEnabled;
   private final boolean deaggregationEnabled;
   private final int maxRecordsPerRequest;
   private final long intervalMilliSeconds;
@@ -51,8 +49,4 @@ public class KinesisReadConfig implements Serializable {
   private final long retryInitialIntervalMs;
   private final long retryMaxIntervalMs;
   private final long throttleTimeoutMs;
-
-  public boolean shouldAddMetaFields() {
-    return shouldAddMetaFields;
-  }
 }
