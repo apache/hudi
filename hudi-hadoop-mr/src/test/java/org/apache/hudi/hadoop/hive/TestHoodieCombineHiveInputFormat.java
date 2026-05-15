@@ -67,6 +67,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.IOException;
@@ -80,7 +82,13 @@ import static org.apache.hadoop.hive.ql.exec.Utilities.HAS_MAP_WORK;
 import static org.apache.hadoop.hive.ql.exec.Utilities.MAPRED_MAPPER_CLASS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.spy;
 
 public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
@@ -116,6 +124,30 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
   public void tearDown() throws IOException {
     if (fs != null) {
       fs.delete(new Path(tempDir.toAbsolutePath().toString()), true);
+    }
+  }
+
+  @Test
+  public void testClearWorkMapForConfOnGetSplitsFailure() throws Exception {
+    StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
+    File inputDir = tempDir.resolve("input").toFile();
+    assertTrue(inputDir.mkdirs());
+
+    MapredWork mrwork = new MapredWork();
+    Path mapWorkPath = new Path(tempDir.toAbsolutePath().toString());
+    Utilities.setMapRedWork(conf.unwrap(), mrwork, mapWorkPath);
+    JobConf jobConf = new JobConf(conf.unwrap());
+    FileInputFormat.setInputPaths(jobConf, inputDir.getPath());
+    jobConf.set(HAS_MAP_WORK, "true");
+    jobConf.set(MAPRED_MAPPER_CLASS, ExecMapper.class.getName());
+
+    HoodieCombineHiveInputFormat combineHiveInputFormat = spy(new HoodieCombineHiveInputFormat());
+    doThrow(new RuntimeException("path classification failed")).when(combineHiveInputFormat)
+        .getNonCombinablePathIndices(eq(jobConf), any(Path[].class), anyInt());
+
+    try (MockedStatic<Utilities> utilities = Mockito.mockStatic(Utilities.class, Mockito.CALLS_REAL_METHODS)) {
+      assertThrows(IOException.class, () -> combineHiveInputFormat.getSplits(jobConf, 1));
+      utilities.verify(() -> Utilities.clearWorkMapForConf(jobConf));
     }
   }
 
