@@ -274,7 +274,7 @@ class BatchedBlobReader(
    * @param rows Sequence of row information
    * @return Sequence of merged ranges
    */
-  private def identifyConsecutiveRanges[R](rows: Seq[RowInfo[R]]): Seq[MergedRange[R]] = {
+  private[blob] def identifyConsecutiveRanges[R](rows: Seq[RowInfo[R]]): Seq[MergedRange[R]] = {
     // Group by file path
     val byFile = rows.groupBy(_.filePath)
 
@@ -299,7 +299,7 @@ class BatchedBlobReader(
    * @param maxGap Maximum gap to consider for merging
    * @return Sequence of merged ranges
    */
-  private def mergeRanges[R](rows: Seq[RowInfo[R]], maxGap: Int): Seq[MergedRange[R]] = {
+  private[blob] def mergeRanges[R](rows: Seq[RowInfo[R]], maxGap: Int): Seq[MergedRange[R]] = {
 
     val result = ArrayBuffer[MergedRange[R]]()
     var currentFilePath: String = null
