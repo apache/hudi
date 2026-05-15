@@ -29,6 +29,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexRule;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import lombok.Getter;
@@ -40,8 +41,8 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_DYNAMIC_MAX_ENTRIES;
 import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_FPP_VALUE;
@@ -777,10 +778,8 @@ public class HoodieIndexConfig extends HoodieConfig {
           hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD,
               hoodieIndexConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
         } else {
-          boolean valid = Arrays
-              .stream(hoodieIndexConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME).split(","))
-              .collect(Collectors.toSet())
-              .containsAll(Arrays.asList(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD).split(",")));
+          List<String> recordKeyFields = KeyGenUtils.getRecordKeyFields(hoodieIndexConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
+          boolean valid = recordKeyFields.containsAll(Arrays.asList(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD).split(",")));
           if (!valid) {
             throw new HoodieIndexException("Bucket index key (if configured) must be subset of record key.");
           }

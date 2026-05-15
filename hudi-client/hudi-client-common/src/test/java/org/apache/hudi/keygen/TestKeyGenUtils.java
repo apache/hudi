@@ -18,9 +18,11 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import org.apache.avro.Schema;
@@ -31,6 +33,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
@@ -119,6 +122,17 @@ public class TestKeyGenUtils {
     assertEquals(
         KeyGeneratorType.NON_PARTITION,
         KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields(null));
+  }
+
+  @Test
+  public void testGetRecordKeyFields() {
+    assertEquals(Collections.emptyList(), KeyGenUtils.getRecordKeyFields((String) null));
+    assertEquals(Collections.emptyList(), KeyGenUtils.getRecordKeyFields(""));
+    assertEquals(Arrays.asList("id", "ts", "name"), KeyGenUtils.getRecordKeyFields(" id,ts, name,, "));
+
+    TypedProperties props = new TypedProperties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), " id,ts ");
+    assertEquals(Arrays.asList("id", "ts"), KeyGenUtils.getRecordKeyFields(props));
   }
 
   @Test
