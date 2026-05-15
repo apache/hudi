@@ -31,6 +31,17 @@ if [ ! -d "$CURR_DIR/packaging" ] ; then
   exit 1
 fi
 
+# Validate Java version (Spark 4.x requires Java 17)
+EXPECTED_JAVA_VERSION=17
+JAVA_VERSION_OUTPUT=$("${JAVA_HOME:+$JAVA_HOME/bin/}java" -version 2>&1)
+JAVA_MAJOR_VERSION=$(echo "$JAVA_VERSION_OUTPUT" | awk -F[\".] '/version/ {print ($2 == "1" ? $3 : $2); exit}')
+if [ "$JAVA_MAJOR_VERSION" != "$EXPECTED_JAVA_VERSION" ]; then
+  echo "Error: Java $EXPECTED_JAVA_VERSION is required for this script, but found:"
+  echo "$JAVA_VERSION_OUTPUT"
+  echo "Set JAVA_HOME to a Java $EXPECTED_JAVA_VERSION installation and retry."
+  exit 1
+fi
+
 if [ "$#" -gt "1" ]; then
   echo "Only accept 0 or 1 argument. Use -h to see examples."
   exit 1

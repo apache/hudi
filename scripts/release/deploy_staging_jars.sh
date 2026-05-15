@@ -31,6 +31,17 @@ if [ ! -d "$CURR_DIR/packaging" ] ; then
   exit 1
 fi
 
+# Validate Java version (expects Java 11, matching <java.version> in pom.xml)
+EXPECTED_JAVA_VERSION=11
+JAVA_VERSION_OUTPUT=$("${JAVA_HOME:+$JAVA_HOME/bin/}java" -version 2>&1)
+JAVA_MAJOR_VERSION=$(echo "$JAVA_VERSION_OUTPUT" | awk -F[\".] '/version/ {print ($2 == "1" ? $3 : $2); exit}')
+if [ "$JAVA_MAJOR_VERSION" != "$EXPECTED_JAVA_VERSION" ]; then
+  echo "Error: Java $EXPECTED_JAVA_VERSION is required for this script, but found:"
+  echo "$JAVA_VERSION_OUTPUT"
+  echo "Set JAVA_HOME to a Java $EXPECTED_JAVA_VERSION installation and retry."
+  exit 1
+fi
+
 if [ "$#" -gt "1" ]; then
   echo "Only accept 0 or 1 argument. Use -h to see examples."
   exit 1
@@ -56,16 +67,18 @@ declare -a ALL_VERSION_OPTS=(
 # hudi-spark3.4-bundle_2.12
 "-T 1C -Dscala-2.12 -Dspark3.4 -pl hudi-spark-datasource/hudi-spark3.4.x,packaging/hudi-spark-bundle -am"
 # For all modules spark3.5
-"-Dscala-2.12 -Dspark3.5"
+"-Dscala-2.12 -Dspark3.5 -Dflink1.20 -Ddocker.compose.skip=true"
 
 # Upload legacy Spark bundles (not overwriting previous uploads as these jar names are unique)
 "-T 1C -Dscala-2.12 -Dspark3 -pl packaging/hudi-spark-bundle -am" # for legacy bundle name hudi-spark3-bundle_2.12
 
 # Upload Flink bundles (overwriting previous uploads)
-"-T 1C -Dscala-2.12 -Dflink1.17 -Davro.version=1.11.4 -Dparquet.version=1.12.3 -pl packaging/hudi-flink-bundle -am"
-"-T 1C -Dscala-2.12 -Dflink1.18 -Davro.version=1.11.4 -Dparquet.version=1.13.1 -pl packaging/hudi-flink-bundle -am"
-"-T 1C -Dscala-2.12 -Dflink1.19 -Davro.version=1.11.4 -Dparquet.version=1.13.1 -pl packaging/hudi-flink-bundle -am"
-"-T 1C -Dscala-2.12 -Dflink1.20 -Davro.version=1.11.4 -Dparquet.version=1.13.1 -pl packaging/hudi-flink-bundle -am"
+"-T 1C -Dscala-2.12 -Dspark3.5 -Dflink1.17 -Davro.version=1.11.4 -Dparquet.version=1.12.3 -pl packaging/hudi-flink-bundle -am"
+"-T 1C -Dscala-2.12 -Dspark3.5 -Dflink1.18 -Davro.version=1.11.4 -Dparquet.version=1.13.1 -pl packaging/hudi-flink-bundle -am"
+"-T 1C -Dscala-2.12 -Dspark3.5 -Dflink1.19 -Davro.version=1.11.4 -Dparquet.version=1.13.1 -pl packaging/hudi-flink-bundle -am"
+"-T 1C -Dscala-2.12 -Dspark3.5 -Dflink1.20 -Davro.version=1.11.4 -Dparquet.version=1.13.1 -pl packaging/hudi-flink-bundle -am"
+"-T 1C -Dscala-2.12 -Dspark3.5 -Dflink2.0 -Davro.version=1.11.4 -Dparquet.version=1.14.4 -pl packaging/hudi-flink-bundle -am"
+"-T 1C -Dscala-2.12 -Dspark3.5 -Dflink2.1 -Davro.version=1.11.4 -Dparquet.version=1.15.2 -pl packaging/hudi-flink-bundle -am"
 )
 printf -v joined "'%s'\n" "${ALL_VERSION_OPTS[@]}"
 

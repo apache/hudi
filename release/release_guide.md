@@ -409,9 +409,9 @@ Set up a few environment variables to simplify Maven commands that follow. This 
    2. Review all staged artifacts (https://repository.apache.org/). They should contain all relevant parts for each module, including pom.xml, jar, test jar, source, test source, javadoc, etc. Carefully review any new artifacts.
    3. git checkout ${RELEASE_BRANCH}
    4. Given that certain bundle jars are built by Java 17 (Spark 4 bundle), multiple
-      scripts need to be run
+      scripts need to be run. Run each from the repository root directory (the one containing `packaging/`).
        1. For most modules with Java 11 build, run `export JAVA_HOME=$(/usr/libexec/java_home -v 11)` and
-          `/scripts/release/deploy_staging_jars.sh 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.deploy1.log"`
+          `./scripts/release/deploy_staging_jars.sh 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.deploy1.log"`
            1. when prompted for the passphrase, if you have multiple gpg keys in your keyring, make sure that you enter
               the right passphase corresponding to the same key (FINGERPRINT) as used while generating source release in
               step 6.2.
@@ -424,7 +424,7 @@ Set up a few environment variables to simplify Maven commands that follow. This 
               please ensure that you have docker daemon running. This is required to build `hudi-metaserver-server`
               module. See [checklist](#checklist-to-proceed-to-the-next-step).
        2. Continue with Java 17 build for Spark 4 bundle, run `export JAVA_HOME=$(/usr/libexec/java_home -v 17)` and
-          `/scripts/release/deploy_staging_jars_java17.sh 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.deploy2.log"`
+          `./scripts/release/deploy_staging_jars_java17.sh 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.deploy2.log"`
    5. Note that the artifacts from Java 17 build are uploaded to a separate staging repo. You need to manually
       download those artifacts and upload them to the first staging repo so that all artifacts stay in the same repo.
    6. Review all staged artifacts by logging into Apache Nexus and clicking on "Staging Repositories" link on left pane.
