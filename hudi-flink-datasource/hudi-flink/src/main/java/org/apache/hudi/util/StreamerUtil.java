@@ -25,7 +25,9 @@ import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
@@ -275,6 +277,22 @@ public class StreamerUtil {
     return properties;
   }
 
+  /**
+   * Builds a Lance write config from storage options carried in the Hadoop configuration.
+   */
+  public static HoodieConfig getLanceWriteConfig(org.apache.hadoop.conf.Configuration conf) {
+    HoodieConfig hoodieConfig = new HoodieConfig();
+    String dataAllocatorSize = conf.get(HoodieStorageConfig.LANCE_READ_ALLOCATOR_SIZE_BYTES.key());
+    if (dataAllocatorSize != null) {
+      hoodieConfig.setValue(HoodieStorageConfig.LANCE_READ_ALLOCATOR_SIZE_BYTES, dataAllocatorSize);
+    }
+    String metadataAllocatorSize = conf.get(HoodieStorageConfig.LANCE_READ_METADATA_ALLOCATOR_SIZE_BYTES.key());
+    if (metadataAllocatorSize != null) {
+      hoodieConfig.setValue(HoodieStorageConfig.LANCE_READ_METADATA_ALLOCATOR_SIZE_BYTES, metadataAllocatorSize);
+    }
+    return hoodieConfig;
+  }
+
   public static void initTableFromClientIfNecessary(Configuration conf) {
     // Since Flink 2.0, the adaptive execution for batch job will generate job graph incrementally
     // for multiple stages (FLIP-469). And the write coordinator is initialized along with write
@@ -318,6 +336,7 @@ public class StreamerUtil {
           .setTableName(conf.get(FlinkOptions.TABLE_NAME))
           .setTableVersion(conf.get(FlinkOptions.WRITE_TABLE_VERSION))
           .setTableFormat(conf.get(FlinkOptions.WRITE_TABLE_FORMAT))
+          .setBaseFileFormat(conf.getString(HoodieTableConfig.BASE_FILE_FORMAT.key(), null))
           .setRecordMergeMode(getMergeMode(conf))
           .setRecordMergeStrategyId(getMergeStrategyId(conf))
           .setPayloadClassName(getPayloadClass(conf))

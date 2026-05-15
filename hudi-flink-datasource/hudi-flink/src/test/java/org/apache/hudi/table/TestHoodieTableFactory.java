@@ -21,7 +21,6 @@ package org.apache.hudi.table;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -788,28 +787,42 @@ public class TestHoodieTableFactory {
   }
 
   @Test
-  void testLanceFormatNotSupportedByFlink() {
-    // Lance base file format is only supported with the Spark engine.
-    // Both source and sink should reject it with a clear error message.
-    this.conf.setString("hoodie.table.base.file.format", "LANCE");
-    ResolvedSchema schema = SchemaBuilder.instance()
+  void testLanceFormatSupportedForAppendOnlyTables() {
+    Configuration lanceConf = new Configuration();
+    lanceConf.set(FlinkOptions.PATH, new File(tempFile, "lance").getAbsolutePath());
+    lanceConf.set(FlinkOptions.TABLE_NAME, "lance_t1");
+    lanceConf.set(FlinkOptions.OPERATION, "insert");
+    lanceConf.setString("hoodie.table.base.file.format", "LANCE");
+    ResolvedSchema appendOnlySchema = SchemaBuilder.instance()
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
         .field("f2", DataTypes.TIMESTAMP(3))
         .field("ts", DataTypes.TIMESTAMP(3))
-        .primaryKey("f0")
         .build();
-    final MockContext context = MockContext.getInstance(this.conf, schema, "f2");
+    final MockContext appendOnlyContext = MockContext.getInstance(lanceConf, appendOnlySchema, "f2");
 
-    // Source path should throw
-    HoodieValidationException sourceEx = assertThrows(HoodieValidationException.class,
-        () -> new HoodieTableFactory().createDynamicTableSource(context));
-    assertThat(sourceEx.getMessage(), is(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG));
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(appendOnlyContext));
 
-    // Sink path should throw
+    Configuration morConf = new Configuration(lanceConf);
+    morConf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    final MockContext morContext = MockContext.getInstance(morConf, appendOnlySchema, "f2");
+    HoodieValidationException morEx = assertThrows(HoodieValidationException.class,
+        () -> new HoodieTableFactory().createDynamicTableSink(morContext));
+    assertThat(morEx.getMessage(), is("Flink Lance base-file support is only available for COPY_ON_WRITE append-only tables."));
+
+    Configuration upsertConf = new Configuration(lanceConf);
+    upsertConf.set(FlinkOptions.OPERATION, "upsert");
+    final MockContext upsertContext = MockContext.getInstance(upsertConf, appendOnlySchema, "f2");
+    HoodieValidationException operationEx = assertThrows(HoodieValidationException.class,
+        () -> new HoodieTableFactory().createDynamicTableSink(upsertContext));
+    assertThat(operationEx.getMessage(), is("Flink Lance base-file writes require append-only INSERT mode. Set '"
+        + FlinkOptions.OPERATION.key() + "' = 'insert'."));
+
+    lanceConf.set(FlinkOptions.RECORD_KEY_FIELD, "f0");
+    final MockContext keyedContext = MockContext.getInstance(lanceConf, appendOnlySchema, "f2");
     HoodieValidationException sinkEx = assertThrows(HoodieValidationException.class,
-        () -> new HoodieTableFactory().createDynamicTableSink(context));
-    assertThat(sinkEx.getMessage(), is(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG));
+        () -> new HoodieTableFactory().createDynamicTableSink(keyedContext));
+    assertThat(sinkEx.getMessage(), is("Flink Lance base-file support is only available for append-only tables without primary keys."));
   }
 
   // -------------------------------------------------------------------------

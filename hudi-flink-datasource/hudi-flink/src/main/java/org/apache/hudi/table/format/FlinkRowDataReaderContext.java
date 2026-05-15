@@ -98,18 +98,22 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       HoodieSchema dataSchema,
       HoodieSchema requiredSchema,
       HoodieStorage storage) throws IOException {
-    if (filePath.toString().endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
-      throw new UnsupportedOperationException(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG);
-    }
     boolean isLogFile = FSUtils.isLogFile(filePath);
     // disable schema evolution in fileReader if it's log file, since schema evolution for log file is handled in `FileGroupRecordBuffer`
     InternalSchemaManager schemaManager = isLogFile ? InternalSchemaManager.DISABLED : internalSchemaManager.get();
 
+    if (HoodieFileFormat.fromFileExtension(filePath.getFileExtension()) == HoodieFileFormat.LANCE) {
+      HoodieRowDataLanceReader rowDataLanceReader =
+          (HoodieRowDataLanceReader) HoodieIOFactory.getIOFactory(storage)
+              .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
+              .getFileReader(tableConfig, filePath, HoodieFileFormat.LANCE, Option.empty());
+      return rowDataLanceReader.getRowDataIterator(RowDataQueryContexts.fromSchema(requiredSchema).getRowType(), requiredSchema);
+    }
+    DataType rowType = RowDataQueryContexts.fromSchema(dataSchema).getRowType();
     HoodieRowDataParquetReader rowDataParquetReader =
         (HoodieRowDataParquetReader) HoodieIOFactory.getIOFactory(storage)
             .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
             .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty());
-    DataType rowType = RowDataQueryContexts.fromSchema(dataSchema).getRowType();
     return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, getSafePredicates(requiredSchema));
   }
 

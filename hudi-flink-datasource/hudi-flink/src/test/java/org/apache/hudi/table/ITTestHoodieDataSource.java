@@ -21,7 +21,6 @@ package org.apache.hudi.table;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -65,7 +64,6 @@ import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
-import org.apache.flink.util.ExceptionUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -1360,31 +1358,27 @@ public class ITTestHoodieDataSource {
   }
 
   @Test
-  void testLanceFormatRejectedByFlink() {
-    // Lance base file format is only supported with the Spark engine.
-    // Flink should reject it early with a clear error on both read and write paths.
-    String createLanceTable = sql("lance_t1")
+  void testLanceFormatAppendOnlyWriteAndRead() {
+    String createHoodieTable = sql("lance_t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
-        .options(getDefaultKeys())
+        .option(FlinkOptions.OPERATION, "insert")
         .option("hoodie.table.base.file.format", "LANCE")
         .end();
+    batchTableEnv.executeSql(createHoodieTable);
 
-    // Creating the table itself succeeds (DDL is just metadata registration),
-    // but any attempt to read or write should fail.
-    // Flink wraps our HoodieValidationException in its own ValidationException.
-    batchTableEnv.executeSql(createLanceTable);
+    execInsertSql(batchTableEnv, "insert into lance_t1 values "
+        + "('id1', 'Alice', 23, TIMESTAMP '1970-01-01 00:00:01', 'par1'),"
+        + "('id2', 'Bob', 31, TIMESTAMP '1970-01-01 00:00:02', 'par2')");
 
-    // Source (read) path should throw
-    ValidationException readEx = assertThrows(ValidationException.class,
-        () -> execSelectSql(batchTableEnv, "select * from lance_t1"),
-        "Lance format should be rejected when reading via Flink");
-    assertTrue(ExceptionUtils.findThrowableWithMessage(readEx, HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG).isPresent());
+    List<Row> rows = CollectionUtil.iteratorToList(
+        batchTableEnv.executeSql("select uuid, name, age, ts, `partition` from lance_t1").collect());
+    assertRowsEquals(rows,
+        "[+I[id1, Alice, 23, 1970-01-01T00:00:01, par1], "
+            + "+I[id2, Bob, 31, 1970-01-01T00:00:02, par2]]");
 
-    // Sink (write) path should throw
-    ValidationException writeEx = assertThrows(ValidationException.class,
-        () -> execInsertSql(batchTableEnv, "insert into lance_t1 values ('id1', 'Alice', 23, TIMESTAMP '1970-01-01 00:00:01', 'par1')"),
-        "Lance format should be rejected when writing via Flink");
-    assertTrue(ExceptionUtils.findThrowableWithMessage(writeEx, HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG).isPresent());
+    List<Row> projectedRows = CollectionUtil.iteratorToList(
+        batchTableEnv.executeSql("select name, uuid from lance_t1").collect());
+    assertRowsEquals(projectedRows, "[+I[Alice, id1], +I[Bob, id2]]");
   }
 
   @ParameterizedTest
