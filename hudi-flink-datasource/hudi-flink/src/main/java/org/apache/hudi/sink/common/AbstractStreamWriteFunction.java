@@ -176,6 +176,14 @@ public abstract class AbstractStreamWriteFunction<I>
     this.inputEnded = true;
   }
 
+  @Override
+  public void close() throws Exception {
+    if (this.writeClient != null) {
+      this.writeClient.close();
+    }
+    super.close();
+  }
+
   // -------------------------------------------------------------------------
   //  Getter/Setter
   // -------------------------------------------------------------------------
