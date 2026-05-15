@@ -159,7 +159,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
             .toArray(DataTypes.Field[]::new))
         .bridgedTo(RowData.class);
     HoodieSchema requestedSchema = HoodieSchemaConverter.convertToSchema(selectedDataType.getLogicalType());
-    HoodieRowDataLanceReader reader = new HoodieRowDataLanceReader(new StoragePath(path.toString()), StreamerUtil.getLanceWriteConfig(conf.conf()));
+    HoodieRowDataLanceReader reader = new HoodieRowDataLanceReader(new StoragePath(path.toString()), StreamerUtil.getLanceReadConfig(conf.conf()));
     try {
       return reader.getRowDataIterator(selectedDataType, requestedSchema);
     } catch (RuntimeException e) {

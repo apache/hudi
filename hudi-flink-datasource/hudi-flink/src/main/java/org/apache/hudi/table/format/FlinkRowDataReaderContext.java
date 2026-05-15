@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.source.ExpressionPredicates;
@@ -107,7 +108,12 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
           (HoodieRowDataLanceReader) HoodieIOFactory.getIOFactory(storage)
               .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
               .getFileReader(tableConfig, filePath, HoodieFileFormat.LANCE, Option.empty());
-      return rowDataLanceReader.getRowDataIterator(RowDataQueryContexts.fromSchema(requiredSchema).getRowType(), requiredSchema);
+      try {
+        return rowDataLanceReader.getRowDataIterator(RowDataQueryContexts.fromSchema(requiredSchema).getRowType(), requiredSchema);
+      } catch (RuntimeException e) {
+        rowDataLanceReader.close();
+        throw new HoodieException("Failed to get iterator from lance reader", e);
+      }
     }
     DataType rowType = RowDataQueryContexts.fromSchema(dataSchema).getRowType();
     HoodieRowDataParquetReader rowDataParquetReader =

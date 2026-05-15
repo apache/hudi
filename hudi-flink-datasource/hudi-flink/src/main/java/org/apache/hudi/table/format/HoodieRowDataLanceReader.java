@@ -244,15 +244,14 @@ public class HoodieRowDataLanceReader implements HoodieFileReader<RowData> {
 
     private void loadNextBatch() {
       try {
-        hasNext = arrowReader.loadNextBatch();
-        if (hasNext) {
-          batch = arrowReader.getVectorSchemaRoot();
-          orderedVectors = orderVectors(rowType, batch.getFieldVectors());
-          rowId = 0;
-          if (batch.getRowCount() == 0) {
-            loadNextBatch();
+        do {
+          hasNext = arrowReader.loadNextBatch();
+          if (hasNext) {
+            batch = arrowReader.getVectorSchemaRoot();
+            orderedVectors = orderVectors(rowType, batch.getFieldVectors());
+            rowId = 0;
           }
-        }
+        } while (hasNext && batch.getRowCount() == 0);
       } catch (IOException e) {
         throw new HoodieIOException("Failed to read Lance batch", e);
       }

@@ -278,9 +278,9 @@ public class StreamerUtil {
   }
 
   /**
-   * Builds a Lance write config from storage options carried in the Hadoop configuration.
+   * Builds a Lance read config from storage options carried in the Hadoop configuration.
    */
-  public static HoodieConfig getLanceWriteConfig(org.apache.hadoop.conf.Configuration conf) {
+  public static HoodieConfig getLanceReadConfig(org.apache.hadoop.conf.Configuration conf) {
     HoodieConfig hoodieConfig = new HoodieConfig();
     String dataAllocatorSize = conf.get(HoodieStorageConfig.LANCE_READ_ALLOCATOR_SIZE_BYTES.key());
     if (dataAllocatorSize != null) {

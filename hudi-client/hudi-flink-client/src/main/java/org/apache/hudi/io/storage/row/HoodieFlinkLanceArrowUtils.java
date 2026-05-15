@@ -48,13 +48,17 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.DecimalType;
+import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.table.types.logical.TimestampType;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
+import static org.apache.flink.table.types.logical.utils.LogicalTypeChecks.getPrecision;
 
 /**
  * Primitive RowData/Arrow conversion helpers for Flink Lance base files.
@@ -141,7 +145,7 @@ public final class HoodieFlinkLanceArrowUtils {
         return;
       case TIMESTAMP_WITHOUT_TIME_ZONE:
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-        TimestampData timestamp = rowData.getTimestamp(ordinal, LogicalTypeChecks.getPrecision(type));
+        TimestampData timestamp = rowData.getTimestamp(ordinal, getPrecision(type));
         long micros = timestamp.getMillisecond() * 1000L + timestamp.getNanoOfMillisecond() / 1000L;
         ((TimeStampMicroVector) vector).setSafe(rowId, micros);
         return;
@@ -265,18 +269,15 @@ public final class HoodieFlinkLanceArrowUtils {
       ArrowType.Decimal decimal = (ArrowType.Decimal) arrowType;
       return new DecimalType(decimal.getPrecision(), decimal.getScale());
     } else if (arrowType instanceof ArrowType.Timestamp) {
-      return new org.apache.flink.table.types.logical.TimestampType(6);
+      ArrowType.Timestamp timestamp = (ArrowType.Timestamp) arrowType;
+      return timestamp.getTimezone() == null
+          ? new TimestampType(6)
+          : new LocalZonedTimestampType(6);
     }
     throw new HoodieNotSupportedException("Unsupported Arrow type for Lance Flink reader: " + arrowType);
   }
 
   private static HoodieNotSupportedException unsupported(LogicalType type) {
     return new HoodieNotSupportedException("Flink Lance base-file support currently supports primitive append-only columns; unsupported type: " + type);
-  }
-
-  private static final class LogicalTypeChecks {
-    private static int getPrecision(LogicalType type) {
-      return org.apache.flink.table.types.logical.utils.LogicalTypeChecks.getPrecision(type);
-    }
   }
 }

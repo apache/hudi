@@ -88,7 +88,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     setupTableOptions(conf.get(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
-    checkBaseFileFormat(conf, false);
+    checkBaseFileFormatForRead(conf);
     return new HoodieTableSource(
         SerializableSchema.create(schema),
         path,
@@ -173,7 +173,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    */
   private void sanityCheck(Configuration conf, ResolvedSchema schema) {
     checkTableType(conf);
-    checkBaseFileFormat(conf, true);
+    checkBaseFileFormatForWrite(conf);
     checkIndexType(conf);
 
     if (!OptionsResolver.isAppendMode(conf)) {
@@ -217,7 +217,15 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   /**
    * Validate the base file format. Flink Lance support is scoped to append-only COW tables.
    */
-  private void checkBaseFileFormat(Configuration conf, boolean write) {
+  private void checkBaseFileFormatForRead(Configuration conf) {
+    checkBaseFileFormat(conf, false);
+  }
+
+  private void checkBaseFileFormatForWrite(Configuration conf) {
+    checkBaseFileFormat(conf, true);
+  }
+
+  private void checkBaseFileFormat(Configuration conf, boolean isWritePath) {
     String baseFileFormat = conf.getString(HoodieTableConfig.BASE_FILE_FORMAT.key(), null);
     if (baseFileFormat != null && HoodieFileFormat.LANCE.name().equalsIgnoreCase(baseFileFormat)) {
       if (conf.containsKey(FlinkOptions.RECORD_KEY_FIELD.key())) {
@@ -226,7 +234,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       if (OptionsResolver.isMorTable(conf)) {
         throw new HoodieValidationException("Flink Lance base-file support is only available for COPY_ON_WRITE append-only tables.");
       }
-      if (write && !OptionsResolver.isAppendMode(conf)) {
+      if (isWritePath && !OptionsResolver.isAppendMode(conf)) {
         throw new HoodieValidationException("Flink Lance base-file writes require append-only INSERT mode. Set '"
             + FlinkOptions.OPERATION.key() + "' = 'insert'.");
       }
