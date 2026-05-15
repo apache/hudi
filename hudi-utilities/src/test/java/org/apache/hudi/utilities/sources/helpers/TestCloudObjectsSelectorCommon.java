@@ -28,18 +28,27 @@ import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness {
 
@@ -198,6 +207,59 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     StructType expectedSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema);
     // assert final output schema matches with the source schema
     Assertions.assertEquals(expectedSchema, result.get().schema(), "output dataset schema should match source schema");
+  }
+
+  @Test
+  void parquetMixedSchemasMergedByDefault(@TempDir Path tempDir) {
+    String p1 = tempDir.resolve("part1").toString();
+    String p2 = tempDir.resolve("part2").toString();
+
+    StructType schema1 = DataTypes.createStructType(Arrays.asList(
+        DataTypes.createStructField("id", DataTypes.IntegerType, true),
+        DataTypes.createStructField("b", DataTypes.StringType, true)));
+    sparkSession.createDataFrame(Collections.singletonList(RowFactory.create(1, "x")), schema1)
+        .write().parquet(p1);
+
+    StructType schema2 = DataTypes.createStructType(Arrays.asList(
+        DataTypes.createStructField("id", DataTypes.IntegerType, true),
+        DataTypes.createStructField("c", DataTypes.IntegerType, true)));
+    sparkSession.createDataFrame(Collections.singletonList(RowFactory.create(1, 99)), schema2)
+        .write().parquet(p2);
+
+    CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(new TypedProperties());
+    List<CloudObjectMetadata> input = Arrays.asList(
+        new CloudObjectMetadata(p1, 1L),
+        new CloudObjectMetadata(p2, 1L));
+    Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "parquet", Option.empty(), 1);
+    assertTrue(result.isPresent());
+    Dataset<Row> ds = result.get();
+    Assertions.assertEquals(2, ds.count());
+    Set<String> colNames = Arrays.stream(ds.schema().fields()).map(StructField::name).collect(Collectors.toSet());
+    assertTrue(colNames.contains("b"));
+    assertTrue(colNames.contains("c"));
+  }
+
+  /**
+   * Verifies that the format-gating predicate for the cloud-incremental mergeSchema option recognises
+   * Parquet and ORC and rejects everything else. End-to-end ORC ingestion is not exercised here because
+   * {@code hudi-utilities} pulls in {@code orc-core-nohive} while Spark 3.x's ORC writer expects the
+   * regular {@code orc-core}; that classpath conflict makes {@code sparkSession.write().orc(...)} fail
+   * with {@code NoSuchFieldError: type} in this module's tests. The end-to-end behaviour for ORC is
+   * covered by Parquet's tests via the shared helper, plus this predicate test for the format dispatch.
+   */
+  @Test
+  void isParquetOrOrcFileFormatRecognisesBothFormats() {
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("parquet"));
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("PARQUET"));
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("orc"));
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("ORC"));
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(" parquet "));
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(" orc "));
+    assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("json"));
+    assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("csv"));
+    assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("avro"));
+    assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(""));
+    assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(null));
   }
 
   @Test

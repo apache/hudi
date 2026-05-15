@@ -26,31 +26,26 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
-import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
 import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
 
 /**
- * Parquet DFS Source Configs
+ * ORC DFS Source Configs
  */
 @Immutable
-@ConfigClassProperty(name = "Parquet DFS Source Configs",
+@ConfigClassProperty(name = "ORC DFS Source Configs",
         groupName = ConfigGroups.Names.HUDI_STREAMER,
         subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_SOURCE,
-        description = "Configurations controlling the behavior of Parquet DFS source in Hudi Streamer.")
-public class ParquetDFSSourceConfig extends HoodieConfig {
+        description = "Configurations controlling the behavior of ORC DFS source in Hudi Streamer.")
+public class ORCDFSSourceConfig extends HoodieConfig {
 
-  public static final ConfigProperty<Boolean> PARQUET_DFS_MERGE_SCHEMA = ConfigProperty
-      .key(STREAMER_CONFIG_PREFIX + "source.parquet.dfs.merge.schema.enable")
+  public static final ConfigProperty<Boolean> ORC_DFS_MERGE_SCHEMA = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.orc.dfs.merge.schema.enable")
       .defaultValue(true)
-      .withAlternatives(
-          // Back-compat aliases for the previous underscore-style keys (since 0.15.0).
-          STREAMER_CONFIG_PREFIX + "source.parquet.dfs.merge_schema.enable",
-          DELTA_STREAMER_CONFIG_PREFIX + "source.parquet.dfs.merge_schema.enable")
       .markAdvanced()
-      .sinceVersion("0.15.0")
-      .withDocumentation("Whether to merge schema across parquet files within a single read. "
+      .sinceVersion("1.2.0")
+      .withDocumentation("Whether to merge schema across ORC files within a single read. "
           + "Defaults to true: heterogeneous-schema source files (e.g. during bootstrap or "
           + "evolving producers) get a unioned schema instead of silently dropping columns "
-          + "that exist only in some files. Set to false to restore the previous reader "
-          + "behavior (single file's schema wins).");
+          + "that exist only in some files. Requires spark.sql.orc.impl=native (default since "
+          + "Spark 2.4); the option is silently ignored under spark.sql.orc.impl=hive.");
 }
