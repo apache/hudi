@@ -180,7 +180,6 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       // Create the writer for writing the new version file
       fileWriter = HoodieFileWriterFactory.getFileWriter(
           instantTime, newFilePath, hoodieTable.getStorage(),
-
           config, writeSchemaWithMetaFields, taskContextSupplier, getRecordType());
     } catch (IOException io) {
       log.error("Error in update task at commit {}", instantTime, io);

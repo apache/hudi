@@ -388,6 +388,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                                                BiFunction<HoodieWriteConfig, HoodieEngineContext, HoodieTable> createTableFn) {
     HoodieTable table = createTableFn.apply(writeConfig, context);
     CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), writeConfig);
+    // Overlay the persisted POPULATE_META_FIELDS and META_FIELDS_EXCLUDE_LIST onto the
+    // shared writer config so every downstream consumer (in particular the file-writer
+    // factories that only see a HoodieConfig) observes on-disk state regardless of whether
+    // the engine-level table-config merge ran. Safe to mutate in place: these properties
+    // are immutable for the lifetime of the table.
+    table.getMetaClient().getTableConfig().overlayMetaFieldProps(writeConfig);
     return table;
   }
 
@@ -402,6 +408,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                                                    HoodieTableMetaClient, HoodieTable> createTableFn) {
     HoodieTable table = createTableFn.apply(writeConfig, context, metaClient);
     CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), writeConfig);
+    // Overlay persisted meta-field props onto the writer config (see overload above for why).
+    table.getMetaClient().getTableConfig().overlayMetaFieldProps(writeConfig);
     return table;
   }
 
