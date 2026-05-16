@@ -166,6 +166,17 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     writeMetrics.registerMetrics();
   }
 
+  @Override
+  public void close() throws Exception {
+    try {
+      if (this.writerHelper != null) {
+        this.writerHelper.close();
+      }
+    } finally {
+      super.close();
+    }
+  }
+
   /**
    * Update metrics and log for errors in write status.
    *
