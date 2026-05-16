@@ -78,7 +78,8 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
     this.keyGeneratorOpt = keyGeneratorOpt;
     initPartitionMetadataAndFilePaths(partitionPath);
     initWriteStatus(fileId, partitionPath);
-    validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
+    validateAndSetAndKeyGenProps(keyGeneratorOpt,
+        hoodieTable.getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isRecordKeyPopulated());
   }
 
   /**
@@ -143,8 +144,17 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
     setWriteStatusPath();
   }
 
-  private void validateAndSetAndKeyGenProps(Option<BaseKeyGenerator> keyGeneratorOpt, boolean populateMetaFields) {
-    ValidationUtils.checkArgument(populateMetaFields == !keyGeneratorOpt.isPresent());
+  private void validateAndSetAndKeyGenProps(Option<BaseKeyGenerator> keyGeneratorOpt,
+                                            boolean recordKeyPopulated) {
+    // Invariant: if _hoodie_record_key is populated on disk, the merge handle reads it
+    // directly from the base file (no key generator needed). If it is not populated -
+    // either because hoodie.populate.meta.fields=false or because _hoodie_record_key is
+    // in hoodie.table.meta.fields.exclude.list - the handle must reconstruct the key
+    // via the supplied BaseKeyGenerator.
+    ValidationUtils.checkArgument(recordKeyPopulated == !keyGeneratorOpt.isPresent(),
+        "Merge handle keyGenerator presence must mirror _hoodie_record_key population: "
+            + "recordKeyPopulated=" + recordKeyPopulated
+            + ", keyGeneratorOpt.isPresent=" + keyGeneratorOpt.isPresent());
     this.keyGeneratorOpt = keyGeneratorOpt;
   }
 

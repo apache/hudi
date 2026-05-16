@@ -18,6 +18,7 @@
 
 package org.apache.hudi.index;
 
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -60,8 +61,11 @@ public final class JavaHoodieIndexFactory {
   }
 
   private static Option<BaseKeyGenerator> getKeyGeneratorForSimpleIndex(HoodieWriteConfig config) {
+    // The simple-index lookup reads the _hoodie_record_key column from base files; a key
+    // generator is needed only when that column is not populated on disk (either
+    // populate.meta.fields=false or _hoodie_record_key in META_FIELDS_EXCLUDE_LIST).
     try {
-      return config.populateMetaFields() ? Option.empty()
+      return HoodieMetaFieldFlags.fromConfig(config).isRecordKeyPopulated() ? Option.empty()
           : Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps()));
     } catch (IOException e) {
       throw new HoodieIOException("KeyGenerator instantiation failed ", e);

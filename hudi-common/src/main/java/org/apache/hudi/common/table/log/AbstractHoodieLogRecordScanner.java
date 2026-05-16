@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -201,14 +202,19 @@ public abstract class AbstractHoodieLogRecordScanner {
       this.populateMetaFields = false;
       this.recordKeyField = keyFieldOverride.get();
       this.partitionPathFieldOpt = Option.empty();
-    } else if (tableConfig.populateMetaFields()) {
-      this.populateMetaFields = true;
-      this.recordKeyField = HoodieRecord.RECORD_KEY_METADATA_FIELD;
-      this.partitionPathFieldOpt = Option.of(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
     } else {
-      this.populateMetaFields = false;
-      this.recordKeyField = tableConfig.getRecordKeyFieldProp();
-      this.partitionPathFieldOpt = Option.of(tableConfig.getPartitionFieldProp());
+      // _hoodie_record_key may be null in log blocks when the column is excluded via
+      // META_FIELDS_EXCLUDE_LIST (even with populate.meta.fields=true); in that case the
+      // reader must read the configured source record-key field instead. Partition path uses
+      // the analogous flag.
+      HoodieMetaFieldFlags flags = HoodieMetaFieldFlags.fromConfig(tableConfig);
+      this.populateMetaFields = flags.isRecordKeyPopulated();
+      this.recordKeyField = flags.isRecordKeyPopulated()
+          ? HoodieRecord.RECORD_KEY_METADATA_FIELD
+          : tableConfig.getRecordKeyFieldProp();
+      this.partitionPathFieldOpt = Option.of(flags.isPartitionPathPopulated()
+          ? HoodieRecord.PARTITION_PATH_METADATA_FIELD
+          : tableConfig.getPartitionFieldProp());
     }
 
     this.partitionNameOverrideOpt = partitionNameOverride;

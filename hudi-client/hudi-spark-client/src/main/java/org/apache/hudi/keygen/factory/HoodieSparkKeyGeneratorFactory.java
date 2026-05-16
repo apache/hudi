@@ -19,6 +19,8 @@
 package org.apache.hudi.keygen.factory;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -99,17 +101,45 @@ public class HoodieSparkKeyGeneratorFactory {
   }
 
   /**
-   * Creates BaseKeyGenerator if meta columns are disabled.
+   * Creates BaseKeyGenerator if the {@code _hoodie_record_key} meta column is not populated
+   * on disk and the key must therefore be reconstructed from source fields at read time.
+   * This covers two configurations:
+   * <ul>
+   *   <li>{@code populate.meta.fields=false} - none of the meta columns are populated.</li>
+   *   <li>{@code populate.meta.fields=true} with {@code _hoodie_record_key} in
+   *       {@link HoodieTableConfig#META_FIELDS_EXCLUDE_LIST} - the record-key column is null
+   *       even though other meta columns are populated.</li>
+   * </ul>
+   * Returning {@link Option#empty()} signals that callers should read the record key directly
+   * from the {@code _hoodie_record_key} column.
+   *
+   * <p>Prefer {@link #createBaseKeyGenerator(HoodieWriteConfig, boolean)} when the caller has
+   * a {@link org.apache.hudi.common.table.HoodieTableMetaClient} in scope; the persisted
+   * table config is the source of truth for meta-field population state. This overload reads
+   * the population state off the writer config, which mirrors the persisted state (the
+   * writer-side conflict check enforces that).
    *
    * @throws HoodieException if unable instantiate or cast class to {@link BaseKeyGenerator}.
    */
   public static Option<BaseKeyGenerator> createBaseKeyGenerator(HoodieWriteConfig writeConfig) {
-    if (!writeConfig.populateMetaFields()) {
+    return createBaseKeyGenerator(writeConfig,
+        HoodieMetaFieldFlags.fromConfig(writeConfig).isRecordKeyPopulated());
+  }
+
+  /**
+   * Overload that takes the {@code _hoodie_record_key} population state explicitly. Callers
+   * that hold a {@link org.apache.hudi.common.table.HoodieTableMetaClient} should source the
+   * flag from {@code metaClient.getTableConfig().getHoodieMetaFieldFlags().isRecordKeyPopulated()}
+   * to read directly from the persisted table state rather than the merged writer config.
+   */
+  public static Option<BaseKeyGenerator> createBaseKeyGenerator(HoodieWriteConfig writeConfig,
+                                                                 boolean recordKeyPopulated) {
+    if (!recordKeyPopulated) {
       try {
         TypedProperties typedProperties = TypedProperties.copy(writeConfig.getProps());
         return Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(typedProperties));
       } catch (ClassCastException cce) {
-        throw new HoodieException("Only BaseKeyGenerators are supported when meta columns are disabled ", cce);
+        throw new HoodieException("Only BaseKeyGenerators are supported when the _hoodie_record_key meta column is not populated ", cce);
       }
     } else {
       return Option.empty();

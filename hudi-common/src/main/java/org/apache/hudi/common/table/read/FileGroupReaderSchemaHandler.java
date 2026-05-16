@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -226,8 +227,10 @@ public class FileGroupReaderSchemaHandler<T> {
       requiredFields.add(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
     }
 
-    // Add record key fields.
-    if (cfg.populateMetaFields()) {
+    // Add record key fields. Read from the meta column only when _hoodie_record_key is
+    // populated on disk; otherwise (populate.meta.fields=false or _hoodie_record_key in
+    // META_FIELDS_EXCLUDE_LIST) project the configured source record-key fields instead.
+    if (HoodieMetaFieldFlags.fromConfig(cfg).isRecordKeyPopulated()) {
       requiredFields.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);
     } else {
       Option<String[]> fields = cfg.getRecordKeyFields();

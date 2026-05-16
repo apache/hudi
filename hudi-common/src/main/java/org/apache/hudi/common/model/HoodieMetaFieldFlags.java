@@ -20,10 +20,12 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.exception.HoodieException;
 
 import java.io.Serializable;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Encapsulates which individual meta fields should be populated during writes.
@@ -151,6 +153,74 @@ public class HoodieMetaFieldFlags implements Serializable {
 
   public boolean isFileNamePopulated() {
     return fileNamePopulated;
+  }
+
+  /**
+   * Validates a transition from one (populateMetaFields, excludeList) state to another.
+   * The set of valid states forms a lattice that can only move in one direction:
+   *
+   * <ul>
+   *   <li>{@code populate=true,exclude=X} -> {@code populate=true,exclude=Y}: allowed iff
+   *       {@code Y} is a superset of {@code X} (i.e. transitions can only widen the set
+   *       of excluded fields, never narrow it). Reintroducing a previously-excluded field
+   *       would lie to readers about historical files written while it was null.</li>
+   *   <li>{@code populate=true,*} -> {@code populate=false}: always allowed. The exclude
+   *       list is irrelevant once meta fields are disabled entirely.</li>
+   *   <li>{@code populate=false} -> {@code populate=true}: rejected. Historical files
+   *       have empty meta fields and cannot be retro-populated.</li>
+   *   <li>{@code populate=false} -> {@code populate=false}: allowed (no-op).</li>
+   * </ul>
+   *
+   * <p>Both exclude sets must contain only names from {@link HoodieRecord#HOODIE_META_COLUMNS};
+   * an unknown name in {@code newExclude} is rejected so config typos fail fast.
+   *
+   * @throws HoodieException if the transition is not allowed
+   * @throws IllegalArgumentException if {@code newExclude} contains an unknown meta-field name
+   */
+  public static void validateTransition(boolean oldPopulate, Set<String> oldExclude,
+                                        boolean newPopulate, Set<String> newExclude) {
+    Set<String> safeOldExclude = oldExclude == null ? new HashSet<>() : oldExclude;
+    Set<String> safeNewExclude = newExclude == null ? new HashSet<>() : newExclude;
+
+    // Fail fast on unknown names in the new exclude list (typos).
+    Set<String> unknownNew = new HashSet<>(safeNewExclude);
+    unknownNew.removeAll(HoodieRecord.HOODIE_META_COLUMNS);
+    if (!unknownNew.isEmpty()) {
+      throw new IllegalArgumentException(
+          "Unknown meta field name(s) in exclusion list: " + new TreeSet<>(unknownNew)
+              + ". Valid names are: " + HoodieRecord.HOODIE_META_COLUMNS);
+    }
+
+    if (!oldPopulate) {
+      // Absorbing state: once populate=false, the only allowed transition is staying false.
+      if (newPopulate) {
+        throw new HoodieException(
+            "Cannot transition " + HoodieTableConfig.POPULATE_META_FIELDS.key()
+                + " from false to true. Historical files written with meta fields disabled "
+                + "cannot be retro-populated, which would corrupt reads that rely on meta "
+                + "field availability.");
+      }
+      return;
+    }
+
+    if (!newPopulate) {
+      // populate=true -> populate=false is always allowed; the prior exclude list becomes
+      // irrelevant once meta fields are disabled entirely.
+      return;
+    }
+
+    // populate=true -> populate=true: new exclude set must be a (non-strict) superset of old.
+    Set<String> removed = new HashSet<>(safeOldExclude);
+    removed.removeAll(safeNewExclude);
+    if (!removed.isEmpty()) {
+      throw new HoodieException(
+          "Cannot remove field(s) " + new TreeSet<>(removed) + " from "
+              + HoodieTableConfig.META_FIELDS_EXCLUDE_LIST.key()
+              + ". The exclude list is monotonic - fields can only be added, never removed, "
+              + "because historical files written while a field was excluded contain null for "
+              + "that field and cannot be retro-populated. Current exclude list: "
+              + new TreeSet<>(safeOldExclude) + ", attempted: " + new TreeSet<>(safeNewExclude) + ".");
+    }
   }
 
   /**

@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -246,12 +247,15 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
   protected HoodieMergeHandle<?, ?, ?, ?> getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
     Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
-    if (!config.populateMetaFields()) {
+    // Even with populate.meta.fields=true, the _hoodie_record_key column may be selectively
+    // excluded via META_FIELDS_EXCLUDE_LIST. In that case the merge handle still needs a key
+    // generator to recompute the record key for the old base-file records it reads.
+    if (!HoodieMetaFieldFlags.fromConfig(config).isRecordKeyPopulated()) {
       try {
         keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps()));
       } catch (IOException e) {
-        throw new HoodieIOException("Only BaseKeyGenerator (or any key generator that extends from BaseKeyGenerator) are supported when meta "
-            + "columns are disabled. Please choose the right key generator if you wish to disable meta fields.", e);
+        throw new HoodieIOException("Only BaseKeyGenerator (or any key generator that extends from BaseKeyGenerator) are supported when the "
+            + "_hoodie_record_key meta column is not populated. Please choose the right key generator if you wish to disable or exclude meta fields.", e);
       }
     }
     return HoodieMergeHandleFactory.create(operationType, config, instantTime, table, recordItr, partitionPath, fileId,

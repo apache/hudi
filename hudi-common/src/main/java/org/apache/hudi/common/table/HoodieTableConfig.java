@@ -553,6 +553,13 @@ public class HoodieTableConfig extends HoodieConfig {
       // 1. Read the existing config
       TypedProperties props = fetchConfigs(storage, metadataFolder, HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
 
+      // 1a. Validate meta-field-population state transitions BEFORE any destructive write,
+      // so a rejected transition leaves hoodie.properties (and the backup) untouched.
+      // Also yields any extra keys to delete (currently: META_FIELDS_EXCLUDE_LIST when
+      // populate flips true->false) so the persisted state stays internally consistent.
+      Set<String> extraDeletes =
+          validateAndNormalizeMetaFieldsTransition(props, modifyProps, propsToUpdate, propsToDelete);
+
       // 2. backup the existing properties.
       try (OutputStream out = storage.create(backupCfgPath, false)) {
         storeProperties(props, out, backupCfgPath);
@@ -566,6 +573,7 @@ public class HoodieTableConfig extends HoodieConfig {
       try (OutputStream out = storage.create(cfgPath, true)) {
         propsToUpdate.accept(props, modifyProps);
         propsToDelete.forEach(propToDelete -> props.remove(propToDelete));
+        extraDeletes.forEach(props::remove);
         checksum = storeProperties(props, out, cfgPath);
       }
       LOG.warn(String.format("%s modified to: %s (at %s)", cfgPath.getName(), props, cfgPath.getParent()));
@@ -595,6 +603,56 @@ public class HoodieTableConfig extends HoodieConfig {
   private static void deleteFile(HoodieStorage storage, StoragePath cfgPath) throws IOException {
     storage.deleteFile(cfgPath);
     LOG.info("Deleted properties file at " + cfgPath);
+  }
+
+  /**
+   * Computes the (populate, exclude) state before and after the requested modification
+   * and asks {@link HoodieMetaFieldFlags#validateTransition} to enforce the lattice rules.
+   *
+   * <p>The merge is computed off to the side (a copy of {@code currentProps} + the requested
+   * upserts/deletes) so this check runs strictly before any on-disk mutation. If the merged
+   * state flips {@code populate.meta.fields} from {@code true} to {@code false}, the requested
+   * modification is mutated to also strip {@link #META_FIELDS_EXCLUDE_LIST} - the exclude list
+   * is meaningless once meta fields are disabled, and keeping a stale value around would be
+   * confusing for operators inspecting {@code hoodie.properties}.
+   */
+  private static Set<String> validateAndNormalizeMetaFieldsTransition(Properties currentProps,
+                                                                       Properties modifyProps,
+                                                                       BiConsumer<Properties, Properties> propsToUpdate,
+                                                                       Set<String> propsToDelete) {
+    Properties merged = new Properties();
+    merged.putAll(currentProps);
+    propsToUpdate.accept(merged, modifyProps);
+    propsToDelete.forEach(merged::remove);
+
+    boolean oldPopulate = parsePopulateMetaFields(currentProps);
+    boolean newPopulate = parsePopulateMetaFields(merged);
+    Set<String> oldExclude = HoodieMetaFieldFlags.parseExcludeList(
+        currentProps.getProperty(META_FIELDS_EXCLUDE_LIST.key()));
+    Set<String> newExclude = HoodieMetaFieldFlags.parseExcludeList(
+        merged.getProperty(META_FIELDS_EXCLUDE_LIST.key()));
+
+    HoodieMetaFieldFlags.validateTransition(oldPopulate, oldExclude, newPopulate, newExclude);
+
+    // populate=true -> populate=false: strip the now-meaningless exclude list and warn so
+    // operators can find the prior value in the logs if they need to.
+    if (oldPopulate && !newPopulate
+        && currentProps.getProperty(META_FIELDS_EXCLUDE_LIST.key()) != null) {
+      String prior = currentProps.getProperty(META_FIELDS_EXCLUDE_LIST.key());
+      LOG.warn("Clearing {} (prior value: '{}') because {} is being set to false; the "
+              + "exclude list is meaningless once meta fields are disabled.",
+          META_FIELDS_EXCLUDE_LIST.key(), prior, POPULATE_META_FIELDS.key());
+      return Collections.singleton(META_FIELDS_EXCLUDE_LIST.key());
+    }
+    return Collections.emptySet();
+  }
+
+  private static boolean parsePopulateMetaFields(Properties props) {
+    String value = props.getProperty(POPULATE_META_FIELDS.key());
+    if (value == null || value.isEmpty()) {
+      return POPULATE_META_FIELDS.defaultValue();
+    }
+    return Boolean.parseBoolean(value);
   }
 
   /**
