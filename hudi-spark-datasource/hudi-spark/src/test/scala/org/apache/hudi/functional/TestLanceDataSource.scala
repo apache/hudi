@@ -880,9 +880,13 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       }
     }
 
-    // read_blob() resolution path: INLINE payloads resolve to the same bytes.
+    // read_blob() resolution path: INLINE payloads resolve to the same bytes. CONTENT is set
+    // explicitly here — under the DESCRIPTOR default, read_blob() throws for INLINE rows.
     val viewName = s"${tableName}_view"
-    spark.read.format("hudi").load(tablePath).createOrReplaceTempView(viewName)
+    spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(viewName)
     val materialized = spark.sql(
       s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
     assertEquals(numRows, materialized.length)
@@ -1170,13 +1174,16 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
         s"DESCRIPTOR default should populate reference on plain read (id=$id)")
     }
 
-    // read_blob() is the canonical bytes-materializing path under the DESCRIPTOR default. The
-    // bytes can only come back if (a) HoodieSparkLanceReader's CONTENT pin held during the
-    // compactor's base-file read — otherwise untouched ids 3..5 would have been rewritten with
-    // null `data` — and (b) the compacted base file retained Lance blob encoding so the
-    // synthesized descriptor's positional read resolves. Failure on either side surfaces here.
+    // read_blob() under CONTENT mode is what we use to verify the post-compaction bytes
+    // because read_blob() on INLINE rows throws under the DESCRIPTOR default. The bytes can
+    // only come back if HoodieSparkLanceReader's CONTENT pin held during the compactor's
+    // base-file read — otherwise untouched ids 3..5 would have been rewritten with null
+    // `data` and CONTENT-mode read would surface that.
     val viewName = s"${tableName}_view"
-    spark.read.format("hudi").load(tablePath).createOrReplaceTempView(viewName)
+    spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(viewName)
     val materialized = spark.sql(
       s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
     assertEquals(numRows, materialized.length)
