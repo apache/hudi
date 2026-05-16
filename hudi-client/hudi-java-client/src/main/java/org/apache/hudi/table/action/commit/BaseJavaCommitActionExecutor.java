@@ -22,7 +22,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -250,7 +249,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     // Even with populate.meta.fields=true, the _hoodie_record_key column may be selectively
     // excluded via META_FIELDS_EXCLUDE_LIST. In that case the merge handle still needs a key
     // generator to recompute the record key for the old base-file records it reads.
-    if (!HoodieMetaFieldFlags.fromConfig(config).isRecordKeyPopulated()) {
+    if (!table.getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isRecordKeyPopulated()) {
       try {
         keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps()));
       } catch (IOException e) {

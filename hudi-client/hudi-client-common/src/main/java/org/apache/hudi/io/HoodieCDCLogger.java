@@ -21,7 +21,6 @@ package org.apache.hudi.io;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
@@ -119,7 +118,9 @@ public class HoodieCDCLogger implements Closeable {
       this.commitTime = commitTime;
       // Use the meta-column for the CDC key only when _hoodie_record_key is populated
       // on disk; otherwise fall back to the configured source record-key field.
-      this.keyField = HoodieMetaFieldFlags.fromConfig(config).isRecordKeyPopulated()
+      // Sourced from the persisted table config (single source of truth) rather than the
+      // writer config so we are not dependent on the engine-specific merge step.
+      this.keyField = tableConfig.getHoodieMetaFieldFlags().isRecordKeyPopulated()
           ? HoodieRecord.RECORD_KEY_METADATA_FIELD
           : tableConfig.getRecordKeyFieldProp();
       this.partitionPath = partitionPath;

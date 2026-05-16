@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -490,7 +489,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         // Log-block key field names the column readers consult for the record key. If
         // _hoodie_record_key is excluded (or populate.meta.fields=false), the meta column is
         // null and we must point at the configured source record-key field instead.
-        String keyField = HoodieMetaFieldFlags.fromConfig(config).isRecordKeyPopulated()
+        // Source the flag from the persisted table config (single source of truth) since the
+        // writer config depends on each engine's table-config merge step running correctly.
+        String keyField = hoodieTable.getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isRecordKeyPopulated()
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
