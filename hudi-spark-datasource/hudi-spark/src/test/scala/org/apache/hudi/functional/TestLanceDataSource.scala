@@ -37,8 +37,9 @@ import org.apache.arrow.vector.types.pojo.ArrowType
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertFalse, assertNotNull, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertFalse, assertNotNull, assertThrows, assertTrue}
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
 import org.lance.file.LanceFileReader
@@ -902,8 +903,10 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
    * DESCRIPTOR mode on INLINE rows: user writes `data` bytes; on read with
    * `hoodie.read.blob.inline.mode=DESCRIPTOR` each row comes back with type still set to
    * {@code INLINE} (preserving the original storage mode) but with {@code data=null} and a
-   * populated {@code reference} pointing at the Lance file. {@code read_blob()} then preads
-   * the bytes back from the .lance file via the reference.
+   * populated synthesized {@code reference} pointing at the Lance file. The synthesized
+   * reference is an internal pointer, not user-facing storage. {@code read_blob()} is
+   * therefore unsupported on INLINE rows in this mode and must throw a clear error so
+   * callers don't conflate the synthesized pointer with durable metadata.
    */
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
@@ -963,41 +966,116 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
         s"synthetic reference to the Lance file should be flagged managed (id=$i)")
     }
 
-    // read_blob() materializes bytes via BatchedBlobReader, which always reads with CONTENT
-    // mode (actual bytes) regardless of the user's inline read mode setting.
+    // read_blob() on INLINE rows under DESCRIPTOR mode is unsupported by design: DESCRIPTOR
+    // is metadata-only and the synthesized reference is an internal pointer into the .lance
+    // file's storage layout, not user-facing metadata. BatchedBlobReader must throw with a
+    // message that names both INLINE and DESCRIPTOR so the failure is actionable.
     val viewName = s"${tableName}_view"
-    spark.read.format("hudi").load(tablePath).createOrReplaceTempView(viewName)
+    spark.read.format("hudi")
+      .option(modeKey, "DESCRIPTOR")
+      .load(tablePath)
+      .createOrReplaceTempView(viewName)
+    val ex = assertThrows(classOf[Throwable], new Executable {
+      override def execute(): Unit = {
+        spark.sql(s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
+      }
+    })
+    val msgChain = Iterator.iterate[Throwable](ex)(_.getCause).takeWhile(_ != null)
+      .flatMap(t => Option(t.getMessage)).mkString(" | ")
+    assertTrue(msgChain.contains("INLINE") && msgChain.contains("DESCRIPTOR"),
+      s"error must mention INLINE and DESCRIPTOR; got: $msgChain")
+
+    // Same table, same rows, but read under CONTENT mode: read_blob() takes the 1-hop
+    // passthrough of inline_data and must return the originally-written bytes. This pins the
+    // write -> read roundtrip integrity for INLINE blobs (compaction/merge included for MOR)
+    // independently of the DESCRIPTOR-shape verification above.
+    val contentViewName = s"${tableName}_content_view"
+    spark.read.format("hudi")
+      .option(modeKey, "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(contentViewName)
     val materialized = spark.sql(
-      s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
+      s"SELECT id, read_blob(payload) AS bytes FROM $contentViewName ORDER BY id").collect()
     assertEquals(numRows, materialized.length)
     materialized.zipWithIndex.foreach { case (row, i) =>
-      val bytes = row.getAs[Array[Byte]]("bytes")
-      assertArrayEquals(expectedPayloads(i), bytes,
-        s"read_blob() bytes mismatch for id=$i")
+      assertEquals(i, row.getInt(row.fieldIndex("id")))
+      assertArrayEquals(expectedPayloads(i), row.getAs[Array[Byte]]("bytes"),
+        s"read_blob() bytes mismatch under CONTENT mode (id=$i)")
+    }
+  }
+
+  /**
+   * Mixed-storage table on Lance: one blob column holds both INLINE rows (small payloads
+   * stored inline) and OUT_OF_LINE rows (external file references). Under CONTENT mode,
+   * read_blob() must materialize the correct bytes for both shapes in a single query —
+   * INLINE rows go through the 1-hop inline_data passthrough, OUT_OF_LINE rows go through
+   * the external pread (with BatchedBlobReader merging consecutive ranges).
+   */
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testBlobMixedInlineAndOutOfLineContentMode(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_blob_mixed_content_${tableType.name().toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    val payloadLen = 256
+    val numInline = 3
+    val numOutOfLine = 3
+    val externalFileSize = numOutOfLine * payloadLen
+    val externalDir = Files.createDirectories(
+      Paths.get(s"$basePath/_blob_ext_mixed_${tableType.name().toLowerCase}"))
+    val extPath = BlobTestHelpers.createTestFile(externalDir, "mixed_file.bin", externalFileSize)
+
+    val inlinePayloads: Seq[Array[Byte]] = (0 until numInline).map { i =>
+      (0 until payloadLen).map(j => ((i + j) % 256).toByte).toArray
     }
 
-    // Mixed-usage regression: read_blob(payload) co-projected with payload.reference.* in a
-    // single SELECT. The INLINE-descriptor fallback in BatchedBlobReader is load-bearing, if
-    // read_blob() forced the scan to CONTENT shape, reference.* would all be null here.
-    val mixed = spark.sql(
-      s"""SELECT id,
-         |       read_blob(payload)              AS bytes,
-         |       payload.reference.external_path AS ext_path,
-         |       payload.reference.offset        AS off,
-         |       payload.reference.length        AS len
-         |  FROM $viewName ORDER BY id""".stripMargin).collect()
-    assertEquals(numRows, mixed.length)
-    mixed.zipWithIndex.foreach { case (row, i) =>
-      assertArrayEquals(expectedPayloads(i), row.getAs[Array[Byte]]("bytes"),
-        s"read_blob() bytes must survive co-projection with reference.* (id=$i)")
-      val ext = row.getAs[String]("ext_path")
-      assertNotNull(ext, s"reference.external_path must survive read_blob co-usage (id=$i)")
-      assertTrue(ext.endsWith(".lance"), s"external_path should point at .lance, got: $ext (id=$i)")
-      assertFalse(row.isNullAt(row.fieldIndex("off")),
-        s"reference.offset must not be null when co-selected with read_blob (id=$i)")
-      assertTrue(row.getLong(row.fieldIndex("off")) >= 0L)
-      assertEquals(payloadLen.toLong, row.getLong(row.fieldIndex("len")),
-        s"reference.length must equal payload length (id=$i)")
+    val sparkSess = spark
+    import sparkSess.implicits._
+    val inlineDf = inlinePayloads.zipWithIndex.map { case (b, i) => (i, b) }
+      .toDF("id", "bytes")
+      .select($"id", BlobTestHelpers.inlineBlobStructCol("payload", $"bytes"))
+
+    val outOfLineDf = (0 until numOutOfLine).map { k =>
+      (numInline + k, extPath, (k * payloadLen).toLong, payloadLen.toLong)
+    }.toDF("id", "path", "offset", "length")
+      .select($"id", BlobTestHelpers.blobStructCol("payload", $"path", $"offset", $"length"))
+
+    val canonicalSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("payload", BlobType().asInstanceOf[StructType], nullable = true,
+        BlobTestHelpers.blobMetadata)
+    ))
+    val raw = inlineDf.unionByName(outOfLineDf)
+    val df = spark.createDataFrame(raw.rdd, canonicalSchema)
+
+    writeDataframe(tableType, tableName, tablePath, df, saveMode = SaveMode.Overwrite,
+      operation = Some("bulk_insert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id"))
+
+    assertLanceBlobEncoding(tablePath)
+
+    val viewName = s"${tableName}_mixed_view"
+    spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(viewName)
+
+    val rows = spark.sql(
+      s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
+    assertEquals(numInline + numOutOfLine, rows.length)
+
+    rows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val bytes = row.getAs[Array[Byte]]("bytes")
+      if (id < numInline) {
+        assertArrayEquals(inlinePayloads(id), bytes,
+          s"INLINE row: read_blob() bytes mismatch (id=$id)")
+      } else {
+        val k = id - numInline
+        assertEquals(payloadLen, bytes.length,
+          s"OUT_OF_LINE row: read_blob() length mismatch (id=$id)")
+        BlobTestHelpers.assertBytesContent(bytes, expectedOffset = k * payloadLen)
+      }
     }
   }
 

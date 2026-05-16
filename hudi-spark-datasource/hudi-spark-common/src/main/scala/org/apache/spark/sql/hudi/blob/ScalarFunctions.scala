@@ -81,6 +81,10 @@ object ScalarFunctions {
           |Returns:
           |  Binary data read from the file
           |
+          |Caveat:
+          |  Throws on INLINE rows under hoodie.read.blob.inline.mode=DESCRIPTOR.
+          |  Set CONTENT mode or read col.data directly to materialize INLINE bytes.
+          |
           |Performance:
           |  - Configure batching: hoodie.blob.batching.max.gap.bytes (default 4096)
           |  - Configure lookahead: hoodie.blob.batching.lookahead.size (default 50)
