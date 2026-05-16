@@ -22,9 +22,12 @@ package org.apache.hudi.utilities.streamer.validator;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
@@ -33,6 +36,8 @@ import org.apache.hudi.exception.HoodieValidationException;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -79,6 +84,10 @@ public class TestSparkStreamerValidatorUtils {
 
   private HoodieTableMetaClient createMetaClient() throws IOException {
     return HoodieTestUtils.init(tempDir.toAbsolutePath().toString());
+  }
+
+  private HoodieTableMetaClient createMetaClient(HoodieTableVersion version) throws IOException {
+    return HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), HoodieTableType.COPY_ON_WRITE, version);
   }
 
   // ========== Tests ==========
@@ -207,41 +216,72 @@ public class TestSparkStreamerValidatorUtils {
     assertTrue(ex.getMessage().contains("FakeValidator"));
   }
 
-  @Test
-  public void testSecondCommitMatchingOffsetsPasses() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {
+      StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1,
+      StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2
+  })
+  public void testSecondCommitMatchingOffsetsPasses(String checkpointKey) throws Exception {
     TypedProperties props = propsWithValidator(
         "org.apache.hudi.utilities.streamer.validator.SparkKafkaOffsetValidator");
 
     // Create table with a previous committed instant: offset 0 -> 500
     HoodieTableMetaClient metaClient = createMetaClient();
     HoodieCommitMetadata prevMeta = new HoodieCommitMetadata();
-    prevMeta.addMetadata(StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1, "events,0:500");
+    prevMeta.addMetadata(checkpointKey, "events,0:500");
     HoodieTestTable.of(metaClient).addCommit("20260320110000000", Option.of(prevMeta));
 
     // Second commit: offset 500 -> 600, 100 records written — matches diff exactly
     Map<String, String> extraMeta = new HashMap<>();
-    extraMeta.put(StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1, "events,0:600");
+    extraMeta.put(checkpointKey, "events,0:600");
     List<WriteStatus> writeStatuses = Collections.singletonList(buildWriteStatus("p1", 100, 0));
 
     assertDoesNotThrow(() -> SparkStreamerValidatorUtils.runValidators(
         props, "20260320120000000", writeStatuses, extraMeta, metaClient));
   }
 
-  @Test
-  public void testSecondCommitDataLossDetected() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {
+      StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1,
+      StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2
+  })
+  public void testSecondCommitDataLossDetected(String checkpointKey) throws Exception {
     TypedProperties props = propsWithValidator(
         "org.apache.hudi.utilities.streamer.validator.SparkKafkaOffsetValidator");
 
     // Create table with a previous committed instant: offset 0 -> 1000
     HoodieTableMetaClient metaClient = createMetaClient();
     HoodieCommitMetadata prevMeta = new HoodieCommitMetadata();
-    prevMeta.addMetadata(StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1, "events,0:1000");
+    prevMeta.addMetadata(checkpointKey, "events,0:1000");
     HoodieTestTable.of(metaClient).addCommit("20260320110000000", Option.of(prevMeta));
 
     // Second commit: offset 1000 -> 2000 (diff=1000) but only 500 records written — data loss
     Map<String, String> extraMeta = new HashMap<>();
-    extraMeta.put(StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1, "events,0:2000");
+    extraMeta.put(checkpointKey, "events,0:2000");
     List<WriteStatus> writeStatuses = Collections.singletonList(buildWriteStatus("p1", 500, 0));
+
+    assertThrows(HoodieValidationException.class,
+        () -> SparkStreamerValidatorUtils.runValidators(
+            props, "20260320120000000", writeStatuses, extraMeta, metaClient));
+  }
+
+  @Test
+  public void testV2CheckpointKeyOnTableVersionEightFires() throws Exception {
+    // Verifies the validator actually fires on a writeTableVersion=8 table that uses the
+    // V2 checkpoint key — i.e. the auto-resolution in StreamingOffsetValidator picks up V2
+    // and runs the comparison instead of silently skipping.
+    TypedProperties props = propsWithValidator(
+        "org.apache.hudi.utilities.streamer.validator.SparkKafkaOffsetValidator");
+
+    HoodieTableMetaClient metaClient = createMetaClient(HoodieTableVersion.EIGHT);
+    HoodieCommitMetadata prevMeta = new HoodieCommitMetadata();
+    prevMeta.addMetadata(StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2, "events,0:1000");
+    HoodieTestTable.of(metaClient).addCommit("20260320110000000", Option.of(prevMeta));
+
+    // Offset diff = 1000 but only 200 records written — must fail
+    Map<String, String> extraMeta = new HashMap<>();
+    extraMeta.put(StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2, "events,0:2000");
+    List<WriteStatus> writeStatuses = Collections.singletonList(buildWriteStatus("p1", 200, 0));
 
     assertThrows(HoodieValidationException.class,
         () -> SparkStreamerValidatorUtils.runValidators(

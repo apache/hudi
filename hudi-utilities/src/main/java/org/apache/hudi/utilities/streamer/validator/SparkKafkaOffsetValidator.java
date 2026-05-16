@@ -21,15 +21,16 @@ package org.apache.hudi.utilities.streamer.validator;
 
 import org.apache.hudi.client.validator.StreamingOffsetValidator;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.util.CheckpointUtils.CheckpointFormat;
 
 /**
  * Spark/HoodieStreamer-specific Kafka offset validator.
  *
  * <p>Validates that the number of records written matches the Kafka offset difference
- * between the current and previous HoodieStreamer checkpoints. Uses the Spark Kafka
- * checkpoint format stored with key {@code deltastreamer.checkpoint.key} in extraMetadata.</p>
+ * between the current and previous HoodieStreamer checkpoints. The active checkpoint key
+ * (V1 {@code deltastreamer.checkpoint.key} or V2 {@code streamer.checkpoint.key.v2}) is
+ * resolved at validation time via {@link org.apache.hudi.common.table.checkpoint.CheckpointUtils#getCheckpoint},
+ * so this validator works against tables written with either checkpoint key version.</p>
  *
  * <p>Configuration:
  * <ul>
@@ -54,6 +55,6 @@ import org.apache.hudi.common.util.CheckpointUtils.CheckpointFormat;
 public class SparkKafkaOffsetValidator extends StreamingOffsetValidator {
 
   public SparkKafkaOffsetValidator(TypedProperties config) {
-    super(config, StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1, CheckpointFormat.SPARK_KAFKA);
+    super(config, CheckpointFormat.SPARK_KAFKA);
   }
 }

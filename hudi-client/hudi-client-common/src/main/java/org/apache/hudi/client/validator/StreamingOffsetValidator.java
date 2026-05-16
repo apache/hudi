@@ -20,11 +20,13 @@
 package org.apache.hudi.client.validator;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.CheckpointUtils;
 import org.apache.hudi.common.util.CheckpointUtils.CheckpointFormat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig.ValidationFailurePolicy;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
 
 import lombok.extern.slf4j.Slf4j;
@@ -50,7 +52,11 @@ import lombok.extern.slf4j.Slf4j;
  *
  * Subclasses specify:
  * - Checkpoint format (SPARK_KAFKA, FLINK_KAFKA, etc.)
- * - Checkpoint metadata key
+ * - Checkpoint metadata key (optional — when omitted, the validator auto-resolves the
+ *   active streamer key from commit metadata using
+ *   {@link org.apache.hudi.common.table.checkpoint.CheckpointUtils#getCheckpoint(HoodieCommitMetadata)},
+ *   which prefers V2 and falls back to V1. Subclasses that read a custom non-streamer key
+ *   (e.g. Flink's HOODIE_METADATA_KEY) must pass it explicitly.)
  * - Source-specific parsing logic (if needed)
  *
  * Configuration:
@@ -66,7 +72,26 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
   protected final CheckpointFormat checkpointFormat;
 
   /**
-   * Create a streaming offset validator.
+   * Create a streaming offset validator that auto-resolves the checkpoint key from commit
+   * metadata using {@link org.apache.hudi.common.table.checkpoint.CheckpointUtils#getCheckpoint(HoodieCommitMetadata)}.
+   *
+   * <p>Use this constructor for streamer pipelines (V1 or V2 checkpoint keys). The validator
+   * will prefer V2 (table version 8+) and fall back to V1 transparently, so subclasses don't
+   * need to know which key the writer used.</p>
+   *
+   * @param config Validator configuration
+   * @param checkpointFormat Format of the checkpoint string
+   */
+  protected StreamingOffsetValidator(TypedProperties config,
+                                      CheckpointFormat checkpointFormat) {
+    this(config, null, checkpointFormat);
+  }
+
+  /**
+   * Create a streaming offset validator with an explicit checkpoint metadata key.
+   *
+   * <p>Use this constructor when the writer stores its checkpoint under a custom key that
+   * is not the standard streamer V1/V2 key (e.g. Flink's HOODIE_METADATA_KEY).</p>
    *
    * @param config Validator configuration
    * @param checkpointKey Key to extract checkpoint from extraMetadata
@@ -95,10 +120,12 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
       return;
     }
 
-    // Extract current checkpoint
-    Option<String> currentCheckpointOpt = context.getExtraMetadata(checkpointKey);
+    // Extract current checkpoint — either from the explicit key (custom writers like Flink) or
+    // by auto-resolving from commit metadata (streamer pipelines, V2-then-V1 fallback).
+    Option<String> currentCheckpointOpt = resolveCheckpoint(context.getCommitMetadata());
     if (!currentCheckpointOpt.isPresent()) {
-      log.warn("Current checkpoint not found with key: {}. Skipping validation.", checkpointKey);
+      log.warn("Current checkpoint not found (key: {}). Skipping validation.",
+          checkpointKey == null ? "<auto-resolved>" : checkpointKey);
       return;
     }
     String currentCheckpoint = currentCheckpointOpt.get();
@@ -110,8 +137,7 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
     }
 
     // Extract previous checkpoint
-    Option<String> previousCheckpointOpt = context.getPreviousCommitMetadata()
-        .flatMap(metadata -> Option.ofNullable(metadata.getMetadata(checkpointKey)));
+    Option<String> previousCheckpointOpt = resolveCheckpoint(context.getPreviousCommitMetadata());
 
     if (!previousCheckpointOpt.isPresent()) {
       log.info("Previous checkpoint not found. May be first streaming commit. Skipping validation.");
@@ -217,5 +243,34 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
 
     long difference = Math.abs(offsetDiff - recordsWritten);
     return (100.0 * difference) / offsetDiff;
+  }
+
+  /**
+   * Resolve the checkpoint string from commit metadata.
+   *
+   * <p>When the validator was constructed with an explicit {@code checkpointKey}, that key
+   * is read directly. Otherwise, {@link org.apache.hudi.common.table.checkpoint.CheckpointUtils#getCheckpoint(HoodieCommitMetadata)}
+   * is used to locate the active streamer checkpoint (V2 first, V1 fallback), so callers
+   * don't need to know which key the writer used.</p>
+   *
+   * @param commitMetadataOpt Optional commit metadata containing extraMetadata
+   * @return Optional checkpoint string (empty if metadata is absent or no checkpoint key matches)
+   */
+  private Option<String> resolveCheckpoint(Option<HoodieCommitMetadata> commitMetadataOpt) {
+    if (!commitMetadataOpt.isPresent()) {
+      return Option.empty();
+    }
+    HoodieCommitMetadata metadata = commitMetadataOpt.get();
+    if (checkpointKey != null) {
+      return Option.ofNullable(metadata.getMetadata(checkpointKey));
+    }
+    try {
+      return Option.ofNullable(
+          org.apache.hudi.common.table.checkpoint.CheckpointUtils.getCheckpoint(metadata)
+              .getCheckpointKey());
+    } catch (HoodieException e) {
+      // No V1 or V2 streamer checkpoint key present in extraMetadata.
+      return Option.empty();
+    }
   }
 }
