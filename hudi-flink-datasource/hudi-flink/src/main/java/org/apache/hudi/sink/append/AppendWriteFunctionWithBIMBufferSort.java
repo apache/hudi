@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -228,8 +229,15 @@ public class AppendWriteFunctionWithBIMBufferSort<T> extends AppendWriteFunction
   @Override
   public void close() throws Exception {
     try {
-      if (asyncWriteExecutor != null && !asyncWriteExecutor.isShutdown()) {
-        asyncWriteExecutor.shutdown();
+      if (asyncWriteExecutor != null) {
+        if (!asyncWriteExecutor.isShutdown()) {
+          asyncWriteExecutor.shutdown();
+        }
+        // Do not release the sort buffers while an already-submitted flush is still using them.
+        waitForAsyncWriteCompletion();
+        if (!asyncWriteExecutor.awaitTermination(10, TimeUnit.MINUTES)) {
+          log.warn("Timed out waiting for async write executor to terminate");
+        }
       }
       if (memorySegmentPools != null) {
         for (MemorySegmentPool memorySegmentPool : memorySegmentPools) {
