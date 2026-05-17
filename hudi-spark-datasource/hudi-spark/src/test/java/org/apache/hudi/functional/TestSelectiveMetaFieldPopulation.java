@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -92,6 +93,7 @@ class TestSelectiveMetaFieldPopulation extends SparkClientFunctionalTestHarness 
           + HoodieRecord.RECORD_KEY_METADATA_FIELD + ","
           + HoodieRecord.PARTITION_PATH_METADATA_FIELD + ","
           + HoodieRecord.FILENAME_METADATA_FIELD;
+
 
   /**
    * Incremental query must fail when _hoodie_commit_time is in the exclusion list.
@@ -466,5 +468,56 @@ class TestSelectiveMetaFieldPopulation extends SparkClientFunctionalTestHarness 
       assertNull(r.getAs(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD),
           "Clustering must not retro-populate _hoodie_commit_seqno. Row: " + r);
     }
+  }
+
+  /**
+   * Upsert with the BLOOM index enabled and the exclude list set to everything except
+   * {@code _hoodie_commit_time}. The merge-handle write path (HoodieFileWriterFactory)
+   * must still write the bloom filter even though {@code _hoodie_record_key} is excluded
+   * from disk - the bloom filter indexes the in-memory record-key value carried on
+   * HoodieKey/HoodieRecord, not the on-disk meta column. This test exercises that path
+   * end-to-end: bootstrap one record, flip the exclude list, then upsert (update + insert)
+   * to ensure (a) the bloom-filter-enabled merge handle does not crash, (b) the bloom
+   * index can still locate the existing file for the update, and (c) the excluded
+   * columns are null on disk.
+   */
+  @ParameterizedTest
+  @CsvSource({"6", "9"})
+  void testBloomIndexUpsertWithRecordKeyExcluded(String tableVersion) {
+    String path = basePath();
+    Map<String, String> writeOptions = baseWriteOptions(tableVersion, "COPY_ON_WRITE");
+    writeOptions.put(HoodieIndexConfig.INDEX_TYPE.key(), "BLOOM");
+    StructType schema = simpleSchema();
+
+    // Bootstrap with one commit (no exclusion).
+    writeRows(Collections.singletonList(RowFactory.create("k0", "p1", "v0")), schema, writeOptions, path);
+    persistMetaFieldsExcludeList(path, EXCLUDE_ALL_EXCEPT_COMMIT_TIME);
+
+    Map<String, String> postFlipOptions = withExcludeList(writeOptions, EXCLUDE_ALL_EXCEPT_COMMIT_TIME);
+
+    // Upsert: update k0 and insert k1. The update side hits the merge handle, which writes
+    // through HoodieFileWriterFactory. The bloom filter must be populated from the in-memory
+    // record key even though the _hoodie_record_key column is null on disk.
+    writeRows(Arrays.asList(
+        RowFactory.create("k0", "p1", "v0-updated"),
+        RowFactory.create("k1", "p1", "v1")), schema, postFlipOptions, path);
+
+    Dataset<Row> snapshot = spark().read().format("hudi").load(path);
+    List<Row> rows = snapshot.collectAsList();
+    assertEquals(2, rows.size(), "Expect updated k0 + new k1");
+    assertEquals(1, snapshot.filter("column1 = 'k0' and column3 = 'v0-updated'").count(),
+        "BLOOM-index upsert must update k0 - proves the bloom filter located the existing "
+            + "file even though _hoodie_record_key is excluded from on-disk storage");
+    assertEquals(1, snapshot.filter("column1 = 'k1' and column3 = 'v1'").count());
+
+    // Excluded columns must be null on the post-flip insert.
+    List<Row> k1Rows = snapshot.filter("column1 = 'k1'").collectAsList();
+    assertEquals(1, k1Rows.size());
+    Row k1 = k1Rows.get(0);
+    assertNotNull(k1.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+    assertNull(k1.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+    assertNull(k1.getAs(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD));
+    assertNull(k1.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+    assertNull(k1.getAs(HoodieRecord.FILENAME_METADATA_FIELD));
   }
 }

@@ -25,7 +25,6 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.storage.HoodieStorage;
@@ -127,23 +126,12 @@ public class HoodieFileWriterFactory {
   }
 
   /**
-   * Check if need to enable bloom filter. Bloom filters index {@code _hoodie_record_key},
-   * so they require the record-key column to be populated on disk - either because
-   * {@code populate.meta.fields=false} (no meta fields at all) or because the record-key
-   * column is in {@code META_FIELDS_EXCLUDE_LIST} disables them.
+   * Check if need to enable bloom filter.
    */
   public static boolean enableBloomFilter(boolean populateMetaFields, HoodieConfig config) {
-    if (!populateMetaFields) {
-      return false;
-    }
-    // Selective exclusion: even with populateMetaFields=true, the record-key column may
-    // be null on disk. In that case the bloom filter has no key to index and must be off.
-    if (!HoodieMetaFieldFlags.fromConfig(config).isRecordKeyPopulated()) {
-      return false;
-    }
-    return config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED)
+    return populateMetaFields && (config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED)
         // HoodieIndexConfig is located in the package hudi-client-common, and the package hudi-client-common depends on the package hudi-common,
         // so the class HoodieIndexConfig cannot be accessed in hudi-common, otherwise there will be a circular dependency problem
-        || (config.contains("hoodie.index.type") && config.getString("hoodie.index.type").contains("BLOOM"));
+        || (config.contains("hoodie.index.type") && config.getString("hoodie.index.type").contains("BLOOM")));
   }
 }
