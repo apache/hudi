@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieSparkLanceWriter;
@@ -115,10 +116,10 @@ public class HoodieInternalRowFileWriterFactory {
   }
 
   private static Option<BloomFilter> tryInstantiateBloomFilter(HoodieWriteConfig writeConfig) {
-    // NOTE: Currently Bloom Filter is only going to be populated if meta-fields are populated.
-    // The bloom filter indexes record keys passed at write time and is independent of whether
-    // the _hoodie_record_key column is selectively excluded from storage.
-    if (writeConfig.populateMetaFields()) {
+    // Bloom filter indexes the _hoodie_record_key value passed at write time. It is only
+    // viable when that meta column is populated on disk - either populateMetaFields=false
+    // or _hoodie_record_key in META_FIELDS_EXCLUDE_LIST disables it.
+    if (HoodieMetaFieldFlags.fromConfig(writeConfig).isRecordKeyPopulated()) {
       BloomFilter bloomFilter = BloomFilterFactory.createBloomFilter(
           writeConfig.getBloomFilterNumEntries(),
           writeConfig.getBloomFilterFPP(),

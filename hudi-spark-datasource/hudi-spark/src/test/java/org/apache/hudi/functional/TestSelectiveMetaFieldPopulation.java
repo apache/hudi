@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -71,7 +72,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *   <li>Incremental query error path: {@code _hoodie_commit_time} excluded ⇒ query fails.</li>
  *   <li>Incremental query happy path: only {@code _hoodie_commit_time} populated, CoW + MoR.</li>
  *   <li>MoR upsert + snapshot + compaction + snapshot with only {@code _hoodie_commit_time}.</li>
+ *   <li>Bulk-insert path (row-writer on/off) honors the exclude list.</li>
+ *   <li>Clustering rewrites preserve the exclude list on the rewritten output.</li>
  * </ul>
+ *
+ * <p>Parameterized over table versions 6 and 9 (the production-supported pair).
  */
 class TestSelectiveMetaFieldPopulation extends SparkClientFunctionalTestHarness {
 
@@ -91,12 +96,12 @@ class TestSelectiveMetaFieldPopulation extends SparkClientFunctionalTestHarness 
   /**
    * Incremental query must fail when _hoodie_commit_time is in the exclusion list.
    * Exercises CoW V1 / V2 and MoR V1 / V2 incremental relations via table-version parameterization
-   * (version 6 -> V1, versions 8 and 9 -> V2).
+   * (version 6 -> V1, version 9 -> V2).
    */
   @ParameterizedTest
   @CsvSource({
-      "6,COPY_ON_WRITE", "8,COPY_ON_WRITE", "9,COPY_ON_WRITE",
-      "6,MERGE_ON_READ", "8,MERGE_ON_READ", "9,MERGE_ON_READ"})
+      "6,COPY_ON_WRITE", "9,COPY_ON_WRITE",
+      "6,MERGE_ON_READ", "9,MERGE_ON_READ"})
   void testIncrementalQueryFailsWhenCommitTimeExcluded(String tableVersion, String tableType) {
     String path = basePath();
     Map<String, String> writeOptions = baseWriteOptions(tableVersion, tableType);
@@ -130,7 +135,7 @@ class TestSelectiveMetaFieldPopulation extends SparkClientFunctionalTestHarness 
    * and verify the query still returns the right rows.
    */
   @ParameterizedTest
-  @CsvSource({"6,COPY_ON_WRITE", "8,COPY_ON_WRITE", "9,COPY_ON_WRITE"})
+  @CsvSource({"6,COPY_ON_WRITE", "9,COPY_ON_WRITE"})
   void testIncrementalQueryServesDataWithOnlyCommitTimePopulated_CoW(String tableVersion,
                                                                      String tableType) {
     runIncrementalHappyPath(tableVersion, tableType);
@@ -141,7 +146,7 @@ class TestSelectiveMetaFieldPopulation extends SparkClientFunctionalTestHarness 
    * _hoodie_commit_time so the merge of base + log files must still resolve correctly.
    */
   @ParameterizedTest
-  @CsvSource({"6,MERGE_ON_READ", "8,MERGE_ON_READ", "9,MERGE_ON_READ"})
+  @CsvSource({"6,MERGE_ON_READ", "9,MERGE_ON_READ"})
   void testIncrementalQueryServesDataWithOnlyCommitTimePopulated_MoR(String tableVersion,
                                                                      String tableType) {
     runIncrementalHappyPath(tableVersion, tableType);
@@ -153,7 +158,7 @@ class TestSelectiveMetaFieldPopulation extends SparkClientFunctionalTestHarness 
    * fields are present and (b) compaction preserves the null-meta-field invariant.
    */
   @ParameterizedTest
-  @CsvSource({"8", "9"})
+  @CsvSource({"6", "9"})
   void testMoRSnapshotAndCompactionWithOnlyCommitTimePopulated(String tableVersion) {
     String path = basePath();
     Map<String, String> writeOptions = baseWriteOptions(tableVersion, "MERGE_ON_READ");
@@ -326,5 +331,140 @@ class TestSelectiveMetaFieldPopulation extends SparkClientFunctionalTestHarness 
         DataTypes.createStructField("column2", DataTypes.StringType, true),
         DataTypes.createStructField("column3", DataTypes.StringType, true)
     }).asNullable();
+  }
+
+  /**
+   * Bulk-insert path with selective meta-field exclusion. Verifies that the row-writer
+   * path (the default for Spark bulk_insert) honors the persisted exclude list.
+   * Parameterized over table versions 6 and 9, CoW only - bulk_insert into MoR creates
+   * base files the same way as CoW.
+   */
+  @ParameterizedTest
+  @CsvSource({"6", "9"})
+  void testBulkInsertWithExcludeList(String tableVersion) {
+    String path = basePath();
+    Map<String, String> writeOptions = baseWriteOptions(tableVersion, "COPY_ON_WRITE");
+    StructType schema = simpleSchema();
+
+    // Bootstrap with one default-options commit so the table exists, then flip the exclude list.
+    writeRows(Collections.singletonList(RowFactory.create("k0", "p1", "v0")), schema, writeOptions, path);
+    persistMetaFieldsExcludeList(path, EXCLUDE_ALL_EXCEPT_COMMIT_TIME);
+
+    Map<String, String> bulkInsertOptions = new HashMap<>(withExcludeList(writeOptions, EXCLUDE_ALL_EXCEPT_COMMIT_TIME));
+    bulkInsertOptions.put(DataSourceWriteOptions.OPERATION().key(),
+        DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+
+    writeRows(Arrays.asList(
+        RowFactory.create("k1", "p1", "v1"),
+        RowFactory.create("k2", "p1", "v2"),
+        RowFactory.create("k3", "p1", "v3")), schema, bulkInsertOptions, path);
+
+    Dataset<Row> snapshot = spark().read().format("hudi").load(path);
+    assertEquals(4, snapshot.count(), "Expect bootstrap row plus 3 bulk-inserted rows");
+    // The 3 bulk-inserted rows must have the four excluded fields null; k0 (pre-flip) may have
+    // them populated. Assert >= 3 nulls on each excluded column and commit_time always populated.
+    assertTrue(snapshot.filter(HoodieRecord.RECORD_KEY_METADATA_FIELD + " is null").count() >= 3,
+        "Bulk-inserted rows should have null _hoodie_record_key");
+    assertTrue(snapshot.filter(HoodieRecord.PARTITION_PATH_METADATA_FIELD + " is null").count() >= 3,
+        "Bulk-inserted rows should have null _hoodie_partition_path");
+    assertTrue(snapshot.filter(HoodieRecord.FILENAME_METADATA_FIELD + " is null").count() >= 3,
+        "Bulk-inserted rows should have null _hoodie_file_name");
+    assertTrue(snapshot.filter(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD + " is null").count() >= 3,
+        "Bulk-inserted rows should have null _hoodie_commit_seqno");
+    assertEquals(4, snapshot.filter(HoodieRecord.COMMIT_TIME_METADATA_FIELD + " is not null").count(),
+        "_hoodie_commit_time must be populated on every row, including bulk-inserted");
+
+    // Pin to a known materialized row so we are not relying on Spark's count() shortcut
+    // when the record_key column is all-null (see runIncrementalHappyPath for rationale).
+    List<Row> bulkInsertedRows = snapshot.filter("column1 in ('k1','k2','k3')").collectAsList();
+    assertEquals(3, bulkInsertedRows.size());
+    for (Row r : bulkInsertedRows) {
+      assertNotNull(r.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD),
+          "_hoodie_commit_time must be populated on bulk-inserted row: " + r);
+      assertNull(r.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      assertNull(r.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+      assertNull(r.getAs(HoodieRecord.FILENAME_METADATA_FIELD));
+      assertNull(r.getAs(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD));
+    }
+  }
+
+  /**
+   * Clustering rewrites file groups via the bulk-insert row-writer (default plan-strategy).
+   * Ensures that when META_FIELDS_EXCLUDE_LIST is set on the table, the clustered output
+   * preserves the exclusion - i.e. rows that were null in the input remain null after
+   * rewrite, and no field that should stay null gets retro-populated.
+   *
+   * <p>Bootstrap is done with all meta fields populated, so k0 has them populated. Three
+   * subsequent commits run under the exclude list, each going to a separate file group.
+   * Inline clustering on the fourth commit consolidates those small file groups. The
+   * post-clustering snapshot must still have >= 3 rows with null exclude-list columns
+   * (the three post-flip writes), regardless of which file group(s) clustering merged
+   * them into.
+   */
+  @ParameterizedTest
+  @CsvSource({"6", "9"})
+  void testClusteringPreservesExcludeList(String tableVersion) {
+    String path = basePath();
+    Map<String, String> writeOptions = baseWriteOptions(tableVersion, "COPY_ON_WRITE");
+    // Use DIRECT markers throughout so the embedded timeline-server marker endpoint does
+    // not bottleneck on the burst of marker requests during clustering.
+    writeOptions.put(HoodieWriteConfig.MARKERS_TYPE.key(), "DIRECT");
+    StructType schema = simpleSchema();
+
+    // Bootstrap commit with all meta fields populated.
+    writeRows(Collections.singletonList(RowFactory.create("k0", "p1", "v0")), schema, writeOptions, path);
+    persistMetaFieldsExcludeList(path, EXCLUDE_ALL_EXCEPT_COMMIT_TIME);
+
+    Map<String, String> postFlipOptions = withExcludeList(writeOptions, EXCLUDE_ALL_EXCEPT_COMMIT_TIME);
+
+    // Three small commits under the exclude list. Each ends up in its own file group
+    // (small inserts go to new file groups by default with metadata table disabled).
+    writeRows(Collections.singletonList(RowFactory.create("k1", "p1", "v1")), schema, postFlipOptions, path);
+    writeRows(Collections.singletonList(RowFactory.create("k2", "p1", "v2")), schema, postFlipOptions, path);
+    writeRows(Collections.singletonList(RowFactory.create("k3", "p1", "v3")), schema, postFlipOptions, path);
+
+    // Fourth commit triggers inline clustering. Set a high small-file-limit so the prior
+    // small files are eligible for clustering; trigger after this single commit. Use
+    // DIRECT markers to avoid the embedded timeline service marker endpoint timing out
+    // under the burst of marker requests clustering issues in this test harness.
+    Map<String, String> clusterOptions = new HashMap<>(postFlipOptions);
+    clusterOptions.put(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true");
+    clusterOptions.put(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "1");
+    clusterOptions.put(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(),
+        String.valueOf(1024L * 1024L * 1024L));
+    clusterOptions.put(HoodieWriteConfig.MARKERS_TYPE.key(), "DIRECT");
+    // Surface the underlying write error instead of swallowing into writeStatus.errors, so any
+    // failure shows up as a Spark task exception with a real stack instead of a generic
+    // "CLUSTER failed to write to files:<fileId>" wrapper.
+    clusterOptions.put("hoodie.write.ignore.failed", "false");
+    writeRows(Collections.singletonList(RowFactory.create("k4", "p1", "v4")), schema, clusterOptions, path);
+
+    // Assert clustering ran (a replacecommit on the timeline).
+    HoodieTableMetaClient metaClient =
+        HoodieTableMetaClient.builder().setBasePath(path).setConf(storageConf()).build();
+    long replaceCommits = metaClient.getActiveTimeline()
+        .getCompletedReplaceTimeline().countInstants();
+    assertTrue(replaceCommits >= 1,
+        "Expected at least one replacecommit (clustering) on the timeline, found " + replaceCommits);
+
+    // Post-clustering snapshot: 5 rows total. Excluded fields must still be null for the
+    // four post-flip rows (k1..k4), regardless of which file group(s) clustering merged
+    // them into. Commit_time must remain populated everywhere.
+    Dataset<Row> snapshot = spark().read().format("hudi").load(path);
+    assertEquals(5, snapshot.count());
+    List<Row> postFlipRows = snapshot.filter("column1 in ('k1','k2','k3','k4')").collectAsList();
+    assertEquals(4, postFlipRows.size());
+    for (Row r : postFlipRows) {
+      assertNotNull(r.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD),
+          "Clustering must not strip _hoodie_commit_time. Row: " + r);
+      assertNull(r.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD),
+          "Clustering must not retro-populate _hoodie_record_key. Row: " + r);
+      assertNull(r.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
+          "Clustering must not retro-populate _hoodie_partition_path. Row: " + r);
+      assertNull(r.getAs(HoodieRecord.FILENAME_METADATA_FIELD),
+          "Clustering must not retro-populate _hoodie_file_name. Row: " + r);
+      assertNull(r.getAs(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD),
+          "Clustering must not retro-populate _hoodie_commit_seqno. Row: " + r);
+    }
   }
 }

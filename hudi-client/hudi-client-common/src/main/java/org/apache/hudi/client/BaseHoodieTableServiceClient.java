@@ -795,6 +795,11 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     if (!skipValidation) {
       CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), config);
     }
+    // Overlay the persisted POPULATE_META_FIELDS and META_FIELDS_EXCLUDE_LIST onto the
+    // shared writer config so table services (clustering/compaction/clean) see the on-disk
+    // state. Safe to mutate in place: these properties are immutable for the lifetime of
+    // the table. Mirrors the same step in BaseHoodieWriteClient.createTableAndValidate.
+    table.getMetaClient().getTableConfig().overlayMetaFieldProps(config);
     return table;
   }
 

@@ -195,14 +195,24 @@ public class HoodieRowCreateHandle implements Serializable {
         // NOTE: To avoid conversion on the hot-path we only convert [[UTF8String]] into [[String]]
         //       in cases when successful records' writes are being tracked
         HoodieRecordDelegate recordDelegate = writeStatus.isTrackingSuccessfulWrites()
-            ? HoodieRecordDelegate.create(recordKey.toString(), partitionPath.toString(), null, newRecordLocation) : null;
+            ? HoodieRecordDelegate.create(
+                recordKey == null ? null : recordKey.toString(),
+                partitionPath == null ? null : partitionPath.toString(),
+                null,
+                newRecordLocation)
+            : null;
         writeStatus.markSuccess(recordDelegate, Option.empty());
       } catch (Exception t) {
         log.error("Error writing record " + row, t);
         if (!writeConfig.getIgnoreWriteFailed()) {
           throw new HoodieException(t.getMessage(), t);
         }
-        writeStatus.markFailure(recordKey.toString(), partitionPath.toString(), t);
+        // recordKey/partitionPath may be null when _hoodie_record_key or _hoodie_partition_path
+        // are excluded via META_FIELDS_EXCLUDE_LIST; tolerate the null when reporting failure.
+        writeStatus.markFailure(
+            recordKey == null ? null : recordKey.toString(),
+            partitionPath == null ? null : partitionPath.toString(),
+            t);
       }
     } catch (Exception e) {
       writeStatus.setGlobalError(e);
