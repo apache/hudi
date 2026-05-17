@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.flink.metrics.Gauge;
 import org.apache.flink.metrics.Histogram;
 import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 
@@ -52,6 +53,46 @@ class TestFlinkIndexBackendMetrics {
     assertNotNull(metricGroup.getHistogram("remoteIndexLookupLatency"));
     assertNotNull(metricGroup.getHistogram("localLookupKeysNum"));
     assertNotNull(metricGroup.getHistogram("remoteLookupKeysNum"));
+  }
+
+  @Test
+  void testRegisterMetricsRegistersHitRatioGauge() {
+    Gauge<?> gauge = metricGroup.getGauge(FlinkIndexBackendMetrics.LOOKUP_CACHE_HIT_RATIO);
+    assertNotNull(gauge);
+    assertEquals(0.0D, ((Double) gauge.getValue()).doubleValue());
+  }
+
+  @Test
+  void testUpdateLookupCacheHitRatioTracksLatestMiniBatch() {
+    Gauge<?> gauge = metricGroup.getGauge(FlinkIndexBackendMetrics.LOOKUP_CACHE_HIT_RATIO);
+
+    metrics.updateLookupCacheHitRatio(3L, 1L);
+    assertEquals(0.75D, ((Double) gauge.getValue()).doubleValue());
+    assertEquals(0.75D, metrics.getLookupCacheHitRatio());
+
+    // gauge reflects the latest mini-batch, not a running average.
+    metrics.updateLookupCacheHitRatio(1L, 3L);
+    assertEquals(0.25D, ((Double) gauge.getValue()).doubleValue());
+
+    metrics.updateLookupCacheHitRatio(5L, 0L);
+    assertEquals(1.0D, ((Double) gauge.getValue()).doubleValue());
+
+    metrics.updateLookupCacheHitRatio(0L, 5L);
+    assertEquals(0.0D, ((Double) gauge.getValue()).doubleValue());
+  }
+
+  @Test
+  void testUpdateLookupCacheHitRatioPreservesPreviousValueOnEmptyBatch() {
+    metrics.updateLookupCacheHitRatio(3L, 1L);
+    assertEquals(0.75D, metrics.getLookupCacheHitRatio());
+
+    // empty mini-batch (no keys looked up) must not reset the ratio to NaN or 0.
+    metrics.updateLookupCacheHitRatio(0L, 0L);
+    assertEquals(0.75D, metrics.getLookupCacheHitRatio());
+
+    // negative counts are treated as an empty batch (defensive guard).
+    metrics.updateLookupCacheHitRatio(-1L, -2L);
+    assertEquals(0.75D, metrics.getLookupCacheHitRatio());
   }
 
   @Test
@@ -189,6 +230,7 @@ class TestFlinkIndexBackendMetrics {
 
   private static class CapturingMetricGroup extends UnregisteredMetricsGroup {
     private final Map<String, Histogram> histograms = new HashMap<>();
+    private final Map<String, Gauge<?>> gauges = new HashMap<>();
 
     @Override
     public <H extends Histogram> H histogram(String name, H histogram) {
@@ -196,8 +238,18 @@ class TestFlinkIndexBackendMetrics {
       return histogram;
     }
 
+    @Override
+    public <T, G extends Gauge<T>> G gauge(String name, G gauge) {
+      gauges.put(name, gauge);
+      return gauge;
+    }
+
     Histogram getHistogram(String name) {
       return histograms.get(name);
+    }
+
+    Gauge<?> getGauge(String name) {
+      return gauges.get(name);
     }
   }
 }

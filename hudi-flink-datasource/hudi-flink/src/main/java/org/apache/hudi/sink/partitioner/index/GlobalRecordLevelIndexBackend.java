@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.partitioner.index;
 
-import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.data.HoodieListData;
@@ -37,6 +36,7 @@ import org.apache.hudi.util.StreamerUtil;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.MetricGroup;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -106,8 +106,10 @@ public class GlobalRecordLevelIndexBackend implements MinibatchIndexBackend {
       }
     }
 
+    int hitCount = recordKeys.size() - missedKeys.size();
     metrics.endLocalIndexLookup();
-    metrics.updateLocalLookupKeysCount(recordKeys.size() - missedKeys.size());
+    metrics.updateLocalLookupKeysCount(hitCount);
+    metrics.updateLookupCacheHitRatio(hitCount, missedKeys.size());
 
     if (!missedKeys.isEmpty()) {
       metrics.startRemoteIndexLookup();

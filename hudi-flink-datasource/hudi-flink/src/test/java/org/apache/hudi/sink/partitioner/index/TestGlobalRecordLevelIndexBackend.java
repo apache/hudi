@@ -24,6 +24,7 @@ import org.apache.flink.runtime.metrics.groups.TaskManagerMetricGroup;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.metrics.FlinkIndexBackendMetrics;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -31,6 +32,8 @@ import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.MetricGroup;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,8 +51,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -221,5 +228,85 @@ public class TestGlobalRecordLevelIndexBackend {
       backend.update("idempotent_key", location);
       assertEquals(location, backend.get(Collections.singletonList("idempotent_key")).get("idempotent_key"));
     }
+  }
+
+  @Test
+  void testGetUpdatesCacheHitRatioGauge() throws Exception {
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    try (GlobalRecordLevelIndexBackend backend = new GlobalRecordLevelIndexBackend(conf, -1)) {
+      Map<String, Gauge<?>> gauges = new HashMap<>();
+      backend.registerMetrics(captureGauges(gauges));
+
+      Gauge<?> hitRatioGauge = gauges.get(FlinkIndexBackendMetrics.LOOKUP_CACHE_HIT_RATIO);
+      assertNotNull(hitRatioGauge);
+      // no lookups yet: gauge is at its initial value.
+      assertEquals(0.0D, ((Double) hitRatioGauge.getValue()).doubleValue());
+
+      // first lookup for two known + one unknown key: 0 / 3 hit ratio, then the two known keys
+      // are populated into the cache by the metadata table fallback.
+      Map<String, HoodieRecordGlobalLocation> firstLookup =
+          backend.get(Arrays.asList("id1", "id2", "missing_key"));
+      assertEquals(2, firstLookup.size());
+      assertEquals(0.0D, ((Double) hitRatioGauge.getValue()).doubleValue());
+
+      // second lookup: id1 and id2 are now cached so they should be hits; missing_key remains a miss.
+      // ratio = 2 hits / (2 hits + 1 miss).
+      backend.get(Arrays.asList("id1", "id2", "missing_key"));
+      assertEquals(2.0D / 3.0D, ((Double) hitRatioGauge.getValue()).doubleValue());
+    }
+  }
+
+  @Test
+  void testRegisterMetricsRegistersHitRatioGauge() throws Exception {
+    try (GlobalRecordLevelIndexBackend backend = new GlobalRecordLevelIndexBackend(conf, -1)) {
+      Map<String, Gauge<?>> gauges = new HashMap<>();
+      backend.registerMetrics(captureGauges(gauges));
+
+      assertTrue(gauges.containsKey(FlinkIndexBackendMetrics.LOOKUP_CACHE_HIT_RATIO));
+      assertEquals(0.0D, ((Double) gauges.get(FlinkIndexBackendMetrics.LOOKUP_CACHE_HIT_RATIO).getValue()).doubleValue());
+    }
+  }
+
+  @Test
+  void testGetUpdatesCacheHitRatioGaugeForCachedLookup() throws Exception {
+    // Cache-only variant of testGetUpdatesCacheHitRatioGauge: pre-populates the cache
+    // so the metadata-table fallback is skipped, which keeps the test from depending on
+    // any writer/runtime setup while still exercising the get(List) -> gauge wire-up.
+    try (GlobalRecordLevelIndexBackend backend = new GlobalRecordLevelIndexBackend(conf, -1)) {
+      Map<String, Gauge<?>> gauges = new HashMap<>();
+      backend.registerMetrics(captureGauges(gauges));
+
+      Gauge<?> hitRatioGauge = gauges.get(FlinkIndexBackendMetrics.LOOKUP_CACHE_HIT_RATIO);
+      assertNotNull(hitRatioGauge);
+      // no lookups yet: gauge is at its initial value.
+      assertEquals(0.0D, ((Double) hitRatioGauge.getValue()).doubleValue());
+
+      HoodieRecordGlobalLocation location1 = new HoodieRecordGlobalLocation("par1", "000000001", "file-id-1");
+      HoodieRecordGlobalLocation location2 = new HoodieRecordGlobalLocation("par1", "000000001", "file-id-2");
+      backend.update("cached_key_1", location1);
+      backend.update("cached_key_2", location2);
+
+      // all keys served from the in-memory cache: ratio = 2 / 2 = 1.0.
+      Map<String, HoodieRecordGlobalLocation> result =
+          backend.get(Arrays.asList("cached_key_1", "cached_key_2"));
+      assertEquals(2, result.size());
+      assertEquals(1.0D, ((Double) hitRatioGauge.getValue()).doubleValue());
+
+      // a second, single-key cached lookup keeps the ratio at 1.0.
+      backend.get(Collections.singletonList("cached_key_1"));
+      assertEquals(1.0D, ((Double) hitRatioGauge.getValue()).doubleValue());
+    }
+  }
+
+  private static MetricGroup captureGauges(Map<String, Gauge<?>> sink) {
+    MetricGroup metricGroup = mock(MetricGroup.class);
+    doAnswer(invocation -> {
+      String name = invocation.getArgument(0);
+      Gauge<?> gauge = invocation.getArgument(1);
+      sink.put(name, gauge);
+      return gauge;
+    }).when(metricGroup).gauge(anyString(), any(Gauge.class));
+    return metricGroup;
   }
 }
