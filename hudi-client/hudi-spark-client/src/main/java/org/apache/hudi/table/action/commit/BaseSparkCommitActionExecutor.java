@@ -109,7 +109,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
                                        Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime, operationType, extraMetadata);
     keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config,
-        table.getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isRecordKeyPopulated());
+        table.getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isKeyGeneratorRequired());
     readerContextFactory = WriteOperationType.isChangingRecords(operationType) ? table.getReaderContextFactoryForWrite() : null;
   }
 

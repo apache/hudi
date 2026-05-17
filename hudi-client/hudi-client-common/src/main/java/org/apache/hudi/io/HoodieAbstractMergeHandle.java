@@ -79,7 +79,7 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
     initPartitionMetadataAndFilePaths(partitionPath);
     initWriteStatus(fileId, partitionPath);
     validateAndSetAndKeyGenProps(keyGeneratorOpt,
-        hoodieTable.getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isRecordKeyPopulated());
+        hoodieTable.getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isKeyGeneratorRequired());
   }
 
   /**
@@ -145,15 +145,15 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
   }
 
   private void validateAndSetAndKeyGenProps(Option<BaseKeyGenerator> keyGeneratorOpt,
-                                            boolean recordKeyPopulated) {
-    // Invariant: if _hoodie_record_key is populated on disk, the merge handle reads it
-    // directly from the base file (no key generator needed). If it is not populated -
-    // either because hoodie.populate.meta.fields=false or because _hoodie_record_key is
-    // in hoodie.table.meta.fields.exclude.list - the handle must reconstruct the key
-    // via the supplied BaseKeyGenerator.
-    ValidationUtils.checkArgument(recordKeyPopulated == !keyGeneratorOpt.isPresent(),
-        "Merge handle keyGenerator presence must mirror _hoodie_record_key population: "
-            + "recordKeyPopulated=" + recordKeyPopulated
+                                            boolean keyGeneratorRequired) {
+    // Invariant: the merge handle reconstructs the record key and/or partition path of old
+    // records via the supplied BaseKeyGenerator when those meta columns are not populated
+    // on disk - either populate.meta.fields=false or the field is in META_FIELDS_EXCLUDE_LIST.
+    // When both columns are populated, the values come from the base file and no key
+    // generator is needed.
+    ValidationUtils.checkArgument(keyGeneratorRequired == keyGeneratorOpt.isPresent(),
+        "Merge handle keyGenerator presence must mirror meta-field population: "
+            + "keyGeneratorRequired=" + keyGeneratorRequired
             + ", keyGeneratorOpt.isPresent=" + keyGeneratorOpt.isPresent());
     this.keyGeneratorOpt = keyGeneratorOpt;
   }

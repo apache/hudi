@@ -156,6 +156,16 @@ public class HoodieMetaFieldFlags implements Serializable {
   }
 
   /**
+   * @return {@code true} if a key generator is needed at read/write time to reconstruct the
+   *         record key or partition path. The key generator derives both from source fields,
+   *         so a single instance is needed if either {@code _hoodie_record_key} or
+   *         {@code _hoodie_partition_path} is not populated on disk.
+   */
+  public boolean isKeyGeneratorRequired() {
+    return !recordKeyPopulated || !partitionPathPopulated;
+  }
+
+  /**
    * Validates a transition from one (populateMetaFields, excludeList) state to another.
    * The set of valid states forms a lattice that can only move in one direction:
    *

@@ -65,8 +65,9 @@ public final class JavaHoodieIndexFactory {
     // generator is needed only when that column is not populated on disk (either
     // populate.meta.fields=false or _hoodie_record_key in META_FIELDS_EXCLUDE_LIST).
     try {
-      return HoodieMetaFieldFlags.fromConfig(config).isRecordKeyPopulated() ? Option.empty()
-          : Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps()));
+      return HoodieMetaFieldFlags.fromConfig(config).isKeyGeneratorRequired()
+          ? Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps()))
+          : Option.empty();
     } catch (IOException e) {
       throw new HoodieIOException("KeyGenerator instantiation failed ", e);
     }

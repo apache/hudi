@@ -99,13 +99,11 @@ public class BulkInsertDataInternalWriterHelper {
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
     this.fileIdPrefix = UUID.randomUUID().toString();
 
-    // Allocate a key generator when the partition_path meta column is not populated on
-    // disk - either because populate.meta.fields=false or because _hoodie_partition_path
-    // is in META_FIELDS_EXCLUDE_LIST. The keygen reconstructs the partition path from
-    // source fields at write time.
-    boolean partitionPathPopulated = hoodieTable.getMetaClient().getTableConfig()
-        .getHoodieMetaFieldFlags().isPartitionPathPopulated();
-    if (!partitionPathPopulated) {
+    // Allocate a key generator when either the partition_path or record_key meta column is
+    // not populated on disk - either because populate.meta.fields=false or because the field
+    // is in META_FIELDS_EXCLUDE_LIST. The keygen reconstructs the missing value from source
+    // fields at write time.
+    if (hoodieTable.getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isKeyGeneratorRequired()) {
       this.keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.getKeyGenerator(writeConfig.getProps());
     } else {
       this.keyGeneratorOpt = Option.empty();

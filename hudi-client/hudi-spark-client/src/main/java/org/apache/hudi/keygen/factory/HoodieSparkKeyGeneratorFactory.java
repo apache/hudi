@@ -20,7 +20,6 @@ package org.apache.hudi.keygen.factory;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieMetaFieldFlags;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -101,17 +100,11 @@ public class HoodieSparkKeyGeneratorFactory {
   }
 
   /**
-   * Creates BaseKeyGenerator if the {@code _hoodie_record_key} meta column is not populated
-   * on disk and the key must therefore be reconstructed from source fields at read time.
-   * This covers two configurations:
-   * <ul>
-   *   <li>{@code populate.meta.fields=false} - none of the meta columns are populated.</li>
-   *   <li>{@code populate.meta.fields=true} with {@code _hoodie_record_key} in
-   *       {@link HoodieTableConfig#META_FIELDS_EXCLUDE_LIST} - the record-key column is null
-   *       even though other meta columns are populated.</li>
-   * </ul>
-   * Returning {@link Option#empty()} signals that callers should read the record key directly
-   * from the {@code _hoodie_record_key} column.
+   * Creates BaseKeyGenerator if either {@code _hoodie_record_key} or
+   * {@code _hoodie_partition_path} meta column is not populated on disk and the corresponding
+   * value must therefore be reconstructed from source fields. The key generator handles both
+   * derivations, so a single instance covers either missing column. Returning
+   * {@link Option#empty()} signals that callers should read both directly from the meta columns.
    *
    * <p>Prefer {@link #createBaseKeyGenerator(HoodieWriteConfig, boolean)} when the caller has
    * a {@link org.apache.hudi.common.table.HoodieTableMetaClient} in scope; the persisted
@@ -123,23 +116,25 @@ public class HoodieSparkKeyGeneratorFactory {
    */
   public static Option<BaseKeyGenerator> createBaseKeyGenerator(HoodieWriteConfig writeConfig) {
     return createBaseKeyGenerator(writeConfig,
-        HoodieMetaFieldFlags.fromConfig(writeConfig).isRecordKeyPopulated());
+        HoodieMetaFieldFlags.fromConfig(writeConfig).isKeyGeneratorRequired());
   }
 
   /**
-   * Overload that takes the {@code _hoodie_record_key} population state explicitly. Callers
-   * that hold a {@link org.apache.hudi.common.table.HoodieTableMetaClient} should source the
-   * flag from {@code metaClient.getTableConfig().getHoodieMetaFieldFlags().isRecordKeyPopulated()}
+   * Overload that takes the "key generator required" flag explicitly. Callers that hold a
+   * {@link org.apache.hudi.common.table.HoodieTableMetaClient} should source the flag from
+   * {@code metaClient.getTableConfig().getHoodieMetaFieldFlags().isKeyGeneratorRequired()}
    * to read directly from the persisted table state rather than the merged writer config.
    */
   public static Option<BaseKeyGenerator> createBaseKeyGenerator(HoodieWriteConfig writeConfig,
-                                                                 boolean recordKeyPopulated) {
-    if (!recordKeyPopulated) {
+                                                                 boolean keyGeneratorRequired) {
+    if (keyGeneratorRequired) {
       try {
         TypedProperties typedProperties = TypedProperties.copy(writeConfig.getProps());
         return Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(typedProperties));
       } catch (ClassCastException cce) {
-        throw new HoodieException("Only BaseKeyGenerators are supported when the _hoodie_record_key meta column is not populated ", cce);
+        throw new HoodieException(
+            "Only BaseKeyGenerators are supported when _hoodie_record_key or "
+                + "_hoodie_partition_path meta column is not populated ", cce);
       }
     } else {
       return Option.empty();

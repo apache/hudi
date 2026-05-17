@@ -248,7 +248,7 @@ public class HoodieSparkCopyOnWriteTable<T>
     // (either populate.meta.fields=false or _hoodie_record_key in META_FIELDS_EXCLUDE_LIST), so the
     // merge handle can recompute the record key from source fields for the old base-file records.
     Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(
-        config, getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isRecordKeyPopulated());
+        config, getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isKeyGeneratorRequired());
     HoodieMergeHandle mergeHandle = HoodieMergeHandleFactory.create(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
         dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
     if (mergeHandle.getOldFilePath() != null && mergeHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {

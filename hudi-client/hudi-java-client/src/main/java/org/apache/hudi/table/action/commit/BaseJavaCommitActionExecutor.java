@@ -249,7 +249,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     // Even with populate.meta.fields=true, the _hoodie_record_key column may be selectively
     // excluded via META_FIELDS_EXCLUDE_LIST. In that case the merge handle still needs a key
     // generator to recompute the record key for the old base-file records it reads.
-    if (!table.getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isRecordKeyPopulated()) {
+    if (table.getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isKeyGeneratorRequired()) {
       try {
         keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps()));
       } catch (IOException e) {
