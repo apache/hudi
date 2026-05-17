@@ -84,9 +84,28 @@ public class SparkValidatorUtils {
       Dataset<Row> beforeState = getRecordsFromCommittedFiles(sqlContext, partitionsModified, table, afterState.schema());
 
       Stream<SparkPreCommitValidator> validators = Arrays.stream(config.getPreCommitValidators().split(","))
-          .map(validatorClass -> ((SparkPreCommitValidator) ReflectionUtils.loadClass(validatorClass,
-              new Class<?>[] {HoodieSparkTable.class, HoodieEngineContext.class, HoodieWriteConfig.class},
-              table, context, config)));
+          .map(String::trim)
+          .filter(s -> !s.isEmpty())
+          .flatMap(validatorClass -> {
+            try {
+              Class<?> clazz = Class.forName(validatorClass);
+              if (!SparkPreCommitValidator.class.isAssignableFrom(clazz)) {
+                LOG.warn("Skipping validator {} — it does not implement SparkPreCommitValidator. "
+                    + "If this is a streaming offset validator (e.g. SparkKafkaOffsetValidator), "
+                    + "it will be invoked by SparkStreamerValidatorUtils instead.", validatorClass);
+                return Stream.empty();
+              }
+              SparkPreCommitValidator validator = (SparkPreCommitValidator) ReflectionUtils.loadClass(
+                  validatorClass,
+                  new Class<?>[] {HoodieSparkTable.class, HoodieEngineContext.class, HoodieWriteConfig.class},
+                  table, context, config);
+              return Stream.of(validator);
+            } catch (ClassNotFoundException e) {
+              throw new HoodieValidationException("Cannot find validator class: " + validatorClass, e);
+            } catch (ReflectiveOperationException e) {
+              throw new HoodieValidationException("Failed to instantiate validator: " + validatorClass, e);
+            }
+          });
 
       boolean allSuccess = validators.map(v -> runValidatorAsync(v, writeMetadata, beforeState, afterState, instantTime)).map(CompletableFuture::join)
           .reduce(true, Boolean::logicalAnd);
