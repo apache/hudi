@@ -43,7 +43,10 @@ public class HoodiePreCommitValidatorConfig extends HoodieConfig {
       .key("hoodie.precommit.validators")
       .defaultValue("")
       .markAdvanced()
-      .withDocumentation("Comma separated list of class names that can be invoked to validate commit");
+      .withDocumentation("Comma separated list of class names that can be invoked to validate commit. "
+          + "Available streaming offset validators: "
+          + "org.apache.hudi.sink.validator.FlinkKafkaOffsetValidator (Flink Kafka), "
+          + "org.apache.hudi.utilities.streamer.validator.SparkKafkaOffsetValidator (Spark/HoodieStreamer Kafka)");
   public static final String VALIDATOR_TABLE_VARIABLE = "<TABLE_NAME>";
 
   public static final ConfigProperty<String> EQUALITY_SQL_QUERIES = ConfigProperty
@@ -71,7 +74,8 @@ public class HoodiePreCommitValidatorConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Tolerance percentage for streaming offset validation "
           + "(used by org.apache.hudi.client.validator.StreamingOffsetValidator "
-          + "and org.apache.hudi.sink.validator.FlinkKafkaOffsetValidator). "
+          + "and org.apache.hudi.sink.validator.FlinkKafkaOffsetValidator "
+          + "and org.apache.hudi.utilities.streamer.validator.SparkKafkaOffsetValidator). "
           + "The validator compares the offset difference (expected records from source) "
           + "with actual records written. If the deviation exceeds this percentage, "
           + "the commit is rejected or warned depending on the validation failure policy. "

@@ -62,7 +62,7 @@ public class TestStreamingOffsetValidator {
     // Expose protected method for testing
     public void testValidateOffsetConsistency(long offsetDiff, long recordsWritten,
                                                 String current, String previous) {
-      validateOffsetConsistency(offsetDiff, recordsWritten, current, previous);
+      validateOffsetConsistency(offsetDiff, recordsWritten, 0L, current, previous);
     }
 
     // Expose validateWithMetadata for testing
