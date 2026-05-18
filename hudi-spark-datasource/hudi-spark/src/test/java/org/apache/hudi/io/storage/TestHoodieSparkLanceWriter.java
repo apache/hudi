@@ -23,8 +23,12 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.memory.HoodieArrowAllocator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -57,6 +61,8 @@ import org.lance.file.LanceFileReader;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.apache.hudi.common.bloom.BloomFilterTypeCode.SIMPLE;
@@ -566,5 +572,71 @@ public class TestHoodieSparkLanceWriter {
     } catch (Exception e) {
       return false;
     }
+  }
+
+  // ----- VARIANT-on-Lance guard tests -----
+
+  @Test
+  public void testValidateNoVariantColumns_noVariant_succeeds() {
+    HoodieSchema record = HoodieSchema.createRecord("R", "ns", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))));
+    HoodieSparkLanceWriter.validateNoVariantColumns(record);
+  }
+
+  @Test
+  public void testValidateNoVariantColumns_topLevelVariant_throws() {
+    HoodieSchema record = HoodieSchema.createRecord("R", "ns", null, Collections.singletonList(
+        HoodieSchemaField.of("payload", HoodieSchema.createVariant())));
+    HoodieNotSupportedException ex = assertThrows(
+        HoodieNotSupportedException.class,
+        () -> HoodieSparkLanceWriter.validateNoVariantColumns(record));
+    assertTrue(ex.getMessage().contains("Lance"));
+    assertTrue(ex.getMessage().contains("VARIANT"));
+    assertTrue(ex.getMessage().contains("payload"), "Error should name the offending field: " + ex.getMessage());
+  }
+
+  @Test
+  public void testValidateNoVariantColumns_variantInNestedRecord_throws() {
+    HoodieSchema nested = HoodieSchema.createRecord("Nested", "ns", null, Collections.singletonList(
+        HoodieSchemaField.of("v", HoodieSchema.createVariant())));
+    HoodieSchema record = HoodieSchema.createRecord("R", "ns", null, Collections.singletonList(
+        HoodieSchemaField.of("inner", nested)));
+    HoodieNotSupportedException ex = assertThrows(
+        HoodieNotSupportedException.class,
+        () -> HoodieSparkLanceWriter.validateNoVariantColumns(record));
+    assertTrue(ex.getMessage().contains("inner.v"), "Error should point at nested path: " + ex.getMessage());
+  }
+
+  @Test
+  public void testValidateNoVariantColumns_variantInArray_throws() {
+    HoodieSchema record = HoodieSchema.createRecord("R", "ns", null, Collections.singletonList(
+        HoodieSchemaField.of("items", HoodieSchema.createArray(HoodieSchema.createVariant()))));
+    HoodieNotSupportedException ex = assertThrows(
+        HoodieNotSupportedException.class,
+        () -> HoodieSparkLanceWriter.validateNoVariantColumns(record));
+    assertTrue(ex.getMessage().contains("items[]"), "Error should point at array element path: " + ex.getMessage());
+  }
+
+  @Test
+  public void testValidateNoVariantColumns_variantInMap_throws() {
+    HoodieSchema record = HoodieSchema.createRecord("R", "ns", null, Collections.singletonList(
+        HoodieSchemaField.of("attrs", HoodieSchema.createMap(HoodieSchema.createVariant()))));
+    HoodieNotSupportedException ex = assertThrows(
+        HoodieNotSupportedException.class,
+        () -> HoodieSparkLanceWriter.validateNoVariantColumns(record));
+    assertTrue(ex.getMessage().contains("attrs.<value>"), "Error should point at map value path: " + ex.getMessage());
+  }
+
+  @Test
+  public void testValidateNoVariantColumns_variantInNullableUnion_throws() {
+    HoodieSchema nullableVariant = HoodieSchema.createUnion(
+        HoodieSchema.NULL_SCHEMA, HoodieSchema.createVariant());
+    HoodieSchema record = HoodieSchema.createRecord("R", "ns", null, Collections.singletonList(
+        HoodieSchemaField.of("payload", nullableVariant)));
+    HoodieNotSupportedException ex = assertThrows(
+        HoodieNotSupportedException.class,
+        () -> HoodieSparkLanceWriter.validateNoVariantColumns(record));
+    assertTrue(ex.getMessage().contains("payload"), "Error should name the field: " + ex.getMessage());
   }
 }
