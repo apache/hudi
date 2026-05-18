@@ -419,7 +419,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
       });
       Future backfillJobFuture = service.submit(() -> {
         try {
-          // trigger backfill atleast after 1 requested entry is added to timeline from continuous job. If not, there is a chance that backfill will complete even before
+          // trigger backfill at least after 1 requested entry is added to timeline from continuous job. If not, there is a chance that backfill will complete even before
           // continuous job starts.
           awaitCondition(new GetCommitsAfterInstant(tableBasePath, lastSuccessfulCommit));
           backfillJob.sync();

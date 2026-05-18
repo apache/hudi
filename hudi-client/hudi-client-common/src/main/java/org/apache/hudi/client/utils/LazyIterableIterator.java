@@ -28,7 +28,7 @@ import java.util.Iterator;
  * Provide a way to obtain a inputItr of type O (output), out of an inputItr of type I (input)
  * <p>
  * Things to remember: - Assumes Spark calls hasNext() to check for elements, before calling next() to obtain them -
- * Assumes hasNext() gets called atleast once. - Concrete Implementation is responsible for calling inputIterator.next()
+ * Assumes hasNext() gets called at least once. - Concrete Implementation is responsible for calling inputIterator.next()
  * and doing the processing in computeNext()
  */
 public abstract class LazyIterableIterator<I, O> implements Iterable<O>, Iterator<O> {

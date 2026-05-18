@@ -2026,7 +2026,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         // scheduling of INDEX only initializes the file group and not add commit
         // so if there are no committed file slices, look for inflight slices
         if (isNonGlobalRLI) {
-          // For isNonGlobalRLI, new partitions added to the data table will cause new filegroups that are not yet commited
+          // For isNonGlobalRLI, new partitions added to the data table will cause new filegroups that are not yet committed
           // therefore, we always need to look for inflight filegroups
           fileSlices = getPartitionLatestFileSlicesIncludingInflight(metadataMetaClient, Option.ofNullable(fsView), partitionPath);
         } else if (fileSlices.isEmpty()) {
