@@ -72,6 +72,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
+import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -872,39 +873,39 @@ public class StreamSync implements Serializable, Closeable {
 
       // Pre-commit orchestration (issue #18750): the legacy HoodieStreamerWriteStatusValidator
       // ran inside writeClient.commit() via the WriteStatusValidator callback and combined three
-      // concerns — validate, commit error table, count successful records. Each is now an explicit
-      // step here before writeClient.commit(), so the writer no longer receives a callback.
+      // concerns — count records, commit the error table, and gate on write errors. Each is now
+      // an explicit step here before writeClient.commit(), so the writer no longer receives a
+      // callback. Step order is deliberate (see comments below).
       //
-      // We always cache and collect the write statuses: the data is needed for counting and
-      // error-table accounting regardless of whether user-configured pre-commit validators run.
+      // We collect the write statuses only when user-configured pre-commit validators are present,
+      // because the runValidators() entry point requires a materialized List<WriteStatus>. When no
+      // validators are configured we count via distributed Spark aggregation, preserving the
+      // pre-#18750 no-overhead behavior for the default path. The cache is engaged in both paths
+      // so that the count action (or collect) and the later writeClient.commit() consume the same
+      // materialization rather than re-evaluating the upstream DAG.
+      boolean validatorsConfigured = !StringUtils.isNullOrEmpty(props.getString(
+          HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES.key(),
+          HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES.defaultValue()));
       boolean shouldUnpersist = writeStatusRDD.getStorageLevel().equals(StorageLevel.NONE());
       if (shouldUnpersist) {
         writeStatusRDD.cache();
       }
       boolean success;
       try {
-        List<WriteStatus> writeStatuses = writeStatusRDD.collect();
+        // Collect only when validators need the materialized list. Null marker triggers the
+        // RDD-based code paths for the writeStatuses-on-demand checks below.
+        List<WriteStatus> writeStatuses = validatorsConfigured ? writeStatusRDD.collect() : null;
 
-        // Step 1: Run user-configured pre-commit validators (offset validators, custom validators).
-        // Placement before writeClient.commit() is intentional: validation is a stronger guard than
-        // commitOnErrors — if validation fails, the commit must be prevented regardless of policy.
-        SparkStreamerValidatorUtils.runValidators(props, instantTime, writeStatuses,
-            checkpointCommitMetadata, metaClient);
-
-        // Step 2: Count successful records (consumed below for the runMetaSync decision).
-        SuccessfulRecordCounter.Counts counts = SuccessfulRecordCounter.compute(
-            writeStatuses, errorTableWriteStatusRDDOpt, isErrorTableWriteUnificationEnabled);
-        totalSuccessfulRecords.set(counts.getTotalSuccessfulRecords());
-        LOG.info("instantTime={}, totalRecords={}, totalErrorRecords={}, totalSuccessfulRecords={}",
-            instantTime, counts.getTotalRecords(), counts.getTotalErroredRecords(),
-            counts.getTotalSuccessfulRecords());
-        if (counts.getTotalRecords() == 0) {
-          LOG.info("No new data, perform empty commit.");
-        }
-
-        // Step 3: Commit the error table (when configured). Apply failure strategy on failure.
-        // Note: unlike the legacy HSWSV path, no rollback is needed here because writeClient.commit()
-        // has not yet been called — failure simply means we do not call it.
+        // Step 1: Commit the error table BEFORE running validators or the write-error gate.
+        // Error records captured here are a genuine artifact of the write attempt and should
+        // survive even when a validator later blocks the data-table commit (otherwise the
+        // operator loses the captured errors and the next run has nothing to triage against).
+        // Note: success here means the error-table commit landed; no rollback is needed on
+        // failure because the data-table writeClient.commit() has not been called yet.
+        // Latent design quirk (preserved from HSWSV): if error-table commit succeeds and any
+        // subsequent step (Step 4 gate, validator, or writeClient.commit) fails, the error
+        // table will have a committed instant for a data-table instant that never lands.
+        // Downstream consumers of the error table should tolerate this divergence.
         if (errorTableWriter.isPresent()) {
           boolean errorTableSuccess = ErrorTableCommitter.commit(errorTableWriter.get(),
               errorTableWriteStatusRDDOpt, isErrorTableWriteUnificationEnabled, instantTime,
@@ -922,11 +923,36 @@ public class StreamSync implements Serializable, Closeable {
           }
         }
 
-        // Step 4: Apply the write-error gate (legacy HSWSV semantics):
-        //   commitOnErrors=false (default): any error -> log top 100 + fail.
-        //   commitOnErrors=true: log a warning, proceed to commit.
-        // Users who configured SparkWriteErrorValidator above will already have failed at Step 1
-        // when failure.policy=FAIL; this gate preserves the default behavior for everyone else.
+        // Step 2: Run user-configured pre-commit validators (offset, custom, and the opt-in
+        // SparkWriteErrorValidator). Validators are intentionally stronger than commitOnErrors
+        // — a failure here aborts the data-table commit regardless of the gate in Step 4.
+        if (validatorsConfigured) {
+          SparkStreamerValidatorUtils.runValidators(props, instantTime, writeStatuses,
+              checkpointCommitMetadata, metaClient);
+        }
+
+        // Step 3: Count records. Drives the runMetaSync() decision below the try/finally.
+        SuccessfulRecordCounter.Counts counts = validatorsConfigured
+            ? SuccessfulRecordCounter.compute(writeStatuses, errorTableWriteStatusRDDOpt,
+                isErrorTableWriteUnificationEnabled)
+            : SuccessfulRecordCounter.computeFromRdd(writeStatusRDD, errorTableWriteStatusRDDOpt,
+                isErrorTableWriteUnificationEnabled);
+        totalSuccessfulRecords.set(counts.getTotalSuccessfulRecords());
+        LOG.info("instantTime={}, totalRecords={}, totalErrorRecords={}, totalSuccessfulRecords={}",
+            instantTime, counts.getTotalRecords(), counts.getTotalErroredRecords(),
+            counts.getTotalSuccessfulRecords());
+        if (counts.getTotalRecords() == 0) {
+          LOG.info("No new data, perform empty commit.");
+        }
+
+        // Step 4: Apply the legacy HSWSV write-error gate.
+        //   commitOnErrors=false (default): any error -> log top N + fail.
+        //   commitOnErrors=true:            log a warning, proceed to commit.
+        // This gate is redundant with SparkWriteErrorValidator when that validator is configured
+        // with failure.policy=FAIL — both will reject the same commits. The redundancy is
+        // intentional: the gate preserves HSWSV's default behavior for users who do not configure
+        // any validators, while the validator gives users running multiple validators a unified
+        // failure-policy story.
         if (counts.hasErrors()) {
           if (cfg.commitOnErrors) {
             LOG.warn("Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total={}/{}",
@@ -934,7 +960,12 @@ public class StreamSync implements Serializable, Closeable {
           } else {
             LOG.error("Delta Sync found errors when writing. Errors/Total={}/{}",
                 counts.getTotalErroredRecords(), counts.getTotalRecords());
-            WriteErrorReporter.logTopErrors(writeStatusRDD);
+            // Use the already-collected list when available to avoid an extra Spark action.
+            if (writeStatuses != null) {
+              WriteErrorReporter.logTopErrors(writeStatuses);
+            } else {
+              WriteErrorReporter.logTopErrors(writeStatusRDD);
+            }
             throw new HoodieStreamerWriteException("Commit " + instantTime + " has write errors and commitOnErrors=false");
           }
         }

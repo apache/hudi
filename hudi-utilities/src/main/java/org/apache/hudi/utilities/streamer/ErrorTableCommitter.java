@@ -24,8 +24,10 @@ import org.apache.hudi.common.util.Option;
 
 import org.apache.spark.api.java.JavaRDD;
 
+import java.util.Objects;
+
 /**
- * Commits the error-table side effect for a HoodieStreamer commit.
+ * Commits the error-table side of a HoodieStreamer commit.
  *
  * <p>Two paths exist, mirroring the original {@code HoodieStreamerWriteStatusValidator} behavior:</p>
  * <ul>
@@ -35,10 +37,10 @@ import org.apache.spark.api.java.JavaRDD;
  *       which performs both the upsert and the commit internally.</li>
  * </ul>
  *
- * <p>This helper is intentionally side-effect-only and returns a boolean success. Failure-policy
- * handling (ROLLBACK_COMMIT vs LOG_ERROR) is the caller's responsibility — see
- * {@code StreamSync.writeToSinkAndDoMetaSync()}. Extracted from
- * {@code HoodieStreamerWriteStatusValidator} as part of issue #18750.</p>
+ * <p>This helper performs the commit and reports success/failure. It deliberately does <i>not</i>
+ * handle the {@code ROLLBACK_COMMIT} / {@code LOG_ERROR} failure strategies — that policy decision
+ * lives in {@code StreamSync.writeToSinkAndDoMetaSync()}, which understands the surrounding
+ * orchestration. Extracted from {@code HoodieStreamerWriteStatusValidator} as part of #18750.</p>
  */
 public final class ErrorTableCommitter {
 
@@ -48,13 +50,15 @@ public final class ErrorTableCommitter {
   /**
    * Commit the error-table writes for the given instant.
    *
-   * @param errorTableWriter                    The configured error-table writer.
+   * @param errorTableWriter                    The configured error-table writer. Must not be null.
    * @param errorTableWriteStatusRDDOpt         Optional error-table write status RDD, populated when
-   *                                            unification is enabled.
+   *                                            unification is enabled. Must not be null
+   *                                            ({@link Option#empty()} if no RDD).
    * @param isErrorTableWriteUnificationEnabled Whether unified-write mode is enabled.
    * @param instantTime                         Instant being committed.
    * @param latestCommittedInstant              Optional latest completed instant, passed to legacy
-   *                                            {@code upsertAndCommit}.
+   *                                            {@code upsertAndCommit}. Must not be null
+   *                                            ({@link Option#empty()} if none).
    * @return {@code true} if the error-table commit succeeded (or was a no-op);
    *         {@code false} if it failed and the caller must apply a failure-policy action.
    */
@@ -63,10 +67,14 @@ public final class ErrorTableCommitter {
                                boolean isErrorTableWriteUnificationEnabled,
                                String instantTime,
                                Option<String> latestCommittedInstant) {
+    Objects.requireNonNull(errorTableWriter, "errorTableWriter");
+    Objects.requireNonNull(errorTableWriteStatusRDDOpt, "errorTableWriteStatusRDDOpt");
+    Objects.requireNonNull(instantTime, "instantTime");
+    Objects.requireNonNull(latestCommittedInstant, "latestCommittedInstant");
+
     if (isErrorTableWriteUnificationEnabled) {
-      // In unification mode, the error-table writes were already produced upstream by the
-      // unified write path. We only need to commit them here; nothing to commit when the
-      // optional RDD is absent (true no-op).
+      // In unification mode the error-table writes were produced upstream by the unified write
+      // path. Commit them here; nothing to do when the optional RDD is absent (true no-op).
       if (errorTableWriteStatusRDDOpt.isPresent()) {
         return errorTableWriter.commit(errorTableWriteStatusRDDOpt.get());
       }

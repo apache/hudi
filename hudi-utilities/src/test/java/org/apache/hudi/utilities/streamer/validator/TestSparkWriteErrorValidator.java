@@ -164,4 +164,35 @@ public class TestSparkWriteErrorValidator {
     SparkWriteErrorValidator validator = new SparkWriteErrorValidator(props);
     assertThrows(HoodieValidationException.class, () -> validator.validateWithMetadata(ctx));
   }
+
+  @Test
+  public void testInvalidFailurePolicyRejected() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodiePreCommitValidatorConfig.VALIDATION_FAILURE_POLICY.key(), "garbage");
+    HoodieValidationException ex = assertThrows(HoodieValidationException.class,
+        () -> new SparkWriteErrorValidator(props));
+    assertTrue(ex.getMessage().contains("Invalid value 'garbage'"),
+        "message should name the bad value, got: " + ex.getMessage());
+    assertTrue(ex.getMessage().contains("FAIL") && ex.getMessage().contains("WARN_LOG"),
+        "message should list allowed values, got: " + ex.getMessage());
+  }
+
+  @Test
+  public void testLowercasePolicyRejected() {
+    // Java enum valueOf is case-sensitive; lowercase should fail loudly with a clear message.
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodiePreCommitValidatorConfig.VALIDATION_FAILURE_POLICY.key(), "fail");
+    assertThrows(HoodieValidationException.class, () -> new SparkWriteErrorValidator(props));
+  }
+
+  @Test
+  public void testErrorMessageReferencesCommitOnErrorsFlag() {
+    // Regression: the prior message referenced a non-existent config key
+    // "hoodie.streamer.commit.on.errors". The user-facing fix should mention --commit-on-errors.
+    SparkValidationContext ctx = context(Collections.singletonList(stat("p1", 10, 0, 1)));
+    HoodieValidationException ex = assertThrows(HoodieValidationException.class,
+        () -> new SparkWriteErrorValidator(failConfig()).validateWithMetadata(ctx));
+    assertTrue(ex.getMessage().contains("--commit-on-errors"),
+        "should reference the real CLI flag, got: " + ex.getMessage());
+  }
 }

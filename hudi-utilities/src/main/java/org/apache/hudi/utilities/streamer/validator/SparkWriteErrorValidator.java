@@ -29,18 +29,26 @@ import org.apache.hudi.exception.HoodieValidationException;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Pure pre-commit validator that fails the commit when any records failed to write.
+ * Pre-commit validator that fails the commit when records failed to write.
  *
- * <p>This is Phase 1 of migrating {@code HoodieStreamerWriteStatusValidator} (HSWSV) into the
- * pre-commit validator framework (issue #18750). It mirrors the boolean error check from
- * HSWSV ({@code hasErrorRecords = totalErroredRecords &gt; 0}) without any of HSWSV's
- * side effects — no error-table commit, no top-100 error logging, no instant rollback.
- * Those concerns are extracted in subsequent phases.</p>
+ * <p>Equivalent of the legacy {@code HoodieStreamerWriteStatusValidator}'s boolean error check
+ * ({@code hasErrorRecords = totalErroredRecords > 0}), wired through the pre-commit validator
+ * framework (issue #18750). Pure validation: no side effects (no error-table commit, no
+ * top-100 error logging, no instant rollback). Those side effects are handled separately by
+ * {@code StreamSync}'s pre-commit orchestration.</p>
  *
- * <p>Behavior mapping from HSWSV:</p>
+ * <p><b>Relationship with the inline write-error gate in {@code StreamSync}:</b> the default
+ * commit path in {@code StreamSync} already applies an equivalent error check via the
+ * {@code commitOnErrors} flag. This validator exists so that users running multiple validators
+ * (e.g. write-error + offset checks) can express a unified pass/fail story through a single
+ * {@code failure.policy} knob. Enabling this validator while leaving {@code commitOnErrors=false}
+ * means both checks run and either can block the commit — they are intentionally not mutually
+ * exclusive.</p>
+ *
+ * <p>Behavior mapping from the legacy HSWSV:</p>
  * <ul>
- *   <li>{@code cfg.commitOnErrors = false} (default) ↔ {@code failure.policy = FAIL}</li>
- *   <li>{@code cfg.commitOnErrors = true} ↔ {@code failure.policy = WARN_LOG}</li>
+ *   <li>{@code commitOnErrors = false} (HSWSV default) ↔ {@code failure.policy = FAIL}</li>
+ *   <li>{@code commitOnErrors = true} ↔ {@code failure.policy = WARN_LOG}</li>
  * </ul>
  *
  * <p>Configuration:</p>
@@ -49,11 +57,6 @@ import lombok.extern.slf4j.Slf4j;
  *       {@code org.apache.hudi.utilities.streamer.validator.SparkWriteErrorValidator}</li>
  *   <li>{@code hoodie.precommit.validators.failure.policy}: FAIL (default) or WARN_LOG</li>
  * </ul>
- *
- * <p><b>Important:</b> In Phase 1 this validator is opt-in and runs <i>alongside</i> HSWSV,
- * not in place of it. HSWSV remains the canonical path that commits the error table and
- * rolls back the instant on failure. Enabling this validator gives an additional pre-commit
- * guard but does not yet allow HSWSV to be disabled.</p>
  *
  * <p>Like {@link SparkKafkaOffsetValidator}, this class extends {@link BasePreCommitValidator}
  * and must be invoked via {@link SparkStreamerValidatorUtils} — not {@code SparkValidatorUtils},
@@ -69,20 +72,28 @@ public class SparkWriteErrorValidator extends BasePreCommitValidator {
     String policyStr = config.getString(
         HoodiePreCommitValidatorConfig.VALIDATION_FAILURE_POLICY.key(),
         HoodiePreCommitValidatorConfig.VALIDATION_FAILURE_POLICY.defaultValue());
-    this.failurePolicy = ValidationFailurePolicy.valueOf(policyStr);
+    try {
+      this.failurePolicy = ValidationFailurePolicy.valueOf(policyStr);
+    } catch (IllegalArgumentException e) {
+      throw new HoodieValidationException(String.format(
+          "Invalid value '%s' for %s. Allowed values: %s.",
+          policyStr,
+          HoodiePreCommitValidatorConfig.VALIDATION_FAILURE_POLICY.key(),
+          java.util.Arrays.toString(ValidationFailurePolicy.values())), e);
+    }
   }
 
   @Override
   public void validateWithMetadata(ValidationContext context) throws HoodieValidationException {
     long totalErrors = context.getTotalWriteErrors();
     long totalRecordsWritten = context.getTotalRecordsWritten();
-    // Total records considered for the commit includes both successfully written records
-    // and records that failed to write. HSWSV computes this from the raw WriteStatus RDD;
-    // here we derive the equivalent from HoodieWriteStat fields exposed by ValidationContext.
+    // Total considered for the commit = successfully-written + failed. HSWSV computed this from
+    // the raw WriteStatus RDD; we derive the equivalent from HoodieWriteStat fields exposed by
+    // ValidationContext.
     long totalRecords = totalRecordsWritten + totalErrors;
 
     if (totalRecords == 0) {
-      // Mirrors HSWSV: "No new data, perform empty commit." — nothing to validate.
+      // Empty commit (mirrors HSWSV "No new data, perform empty commit.").
       log.info("Empty commit (no records written, no errors). Skipping write-error validation "
           + "for instant {}.", context.getInstantTime());
       return;
@@ -97,8 +108,8 @@ public class SparkWriteErrorValidator extends BasePreCommitValidator {
     String errorMsg = String.format(
         "Write-error validation failed for instant %s. "
             + "Errors: %d, Total: %d. "
-            + "To allow the commit to proceed despite write errors, set "
-            + "%s=WARN_LOG (mirrors hoodie.streamer.commit.on.errors=true).",
+            + "To allow the commit to proceed despite write errors, set %s=WARN_LOG, "
+            + "or run HoodieStreamer with --commit-on-errors.",
         context.getInstantTime(), totalErrors, totalRecords,
         HoodiePreCommitValidatorConfig.VALIDATION_FAILURE_POLICY.key());
 
