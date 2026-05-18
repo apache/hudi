@@ -22,6 +22,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.types.variant.Variant;
+import org.apache.hudi.common.util.Option;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
 
 /**
@@ -32,7 +33,7 @@ public class DataTypeAdapter {
       "VARIANT type is only supported in Flink 2.1+. "
           + "Please upgrade your Flink version to use Variant columns.";
 
-  public static LogicalTypeAnnotation variantParquetAnnotation() {
+  public static Option<LogicalTypeAnnotation> variantParquetAnnotation() {
     throw new UnsupportedOperationException(VARIANT_UNSUPPORTED_MSG);
   }
 
