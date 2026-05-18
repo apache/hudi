@@ -20,13 +20,13 @@
     "lint:md:root": "markdownlint \"../*.md\" --fix"
   },
   "dependencies": {
-    "@docusaurus/core": "^3.9.2",
-    "@docusaurus/plugin-client-redirects": "^3.9.2",
-    "@docusaurus/plugin-content-docs": "^3.9.2",
-    "@docusaurus/plugin-sitemap": "^3.9.2",
-    "@docusaurus/preset-classic": "^3.9.2",
-    "@docusaurus/theme-classic": "^3.9.2",
-    "@docusaurus/theme-search-algolia": "^3.9.2",
+    "@docusaurus/core": "3.9.2",
+    "@docusaurus/plugin-client-redirects": "3.9.2",
+    "@docusaurus/plugin-content-docs": "3.9.2",
+    "@docusaurus/plugin-sitemap": "3.9.2",
+    "@docusaurus/preset-classic": "3.9.2",
+    "@docusaurus/theme-classic": "3.9.2",
+    "@docusaurus/theme-search-algolia": "3.9.2",
     "@fontsource/comfortaa": "^5.0.20",
     "@mdx-js/react": "^3.0.0",
     "@svgr/webpack": "^8.1.0",
@@ -64,5 +64,8 @@
   },
   "engines": {
     "node": ">=22.0"
+  },
+  "overrides": {
+    "webpack": "5.99.9"
   }
 }

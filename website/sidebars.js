@@ -16,9 +16,21 @@ module.exports = {
                 'quick-start-guide',
                 'flink-quick-start-guide',
                 'python-rust-quick-start-guide',
+                'ai-quick-start-guide',
                 'docker_demo',
                 "notebooks",
                 'use_cases',
+            ],
+        },
+        {
+            type: 'category',
+            label: 'AI & Unstructured Data',
+            items: [
+                'ai_overview',
+                'vector_search',
+                'blob_unstructured_data',
+                'variant_type',
+                'lance_file_format',
             ],
         },
         {

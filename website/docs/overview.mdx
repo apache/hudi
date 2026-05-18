@@ -51,8 +51,20 @@ Sometimes the fastest way to learn is by doing. Try out these Quick Start resour
 - [Spark Quick Start Guide](quick-start-guide.md) – if you primarily use Apache Spark
 - [Flink Quick Start Guide](flink-quick-start-guide.md) – if you primarily use Apache Flink
 - [Python/Rust Quick Start Guide (Hudi-rs)](python-rust-quick-start-guide.md) - if you primarily use Python or Rust
+- [AI Quick Start Guide](ai-quick-start-guide.md) – if you are building AI/ML pipelines with embeddings, vector search, or unstructured data
 
 If you want to experience Apache Hudi integrated into an end to end demo with Kafka, Spark, Hive, Presto, etc, try out the [Docker Demo](docker_demo.md)
+
+## AI-Native Capabilities
+
+Hudi brings first-class support for AI and unstructured data workloads to the data lakehouse:
+
+- **[VECTOR type & Similarity Search](vector_search.md)** — Store embeddings and run approximate nearest neighbor search directly in Spark SQL
+- **[BLOB type for Unstructured Data](blob_unstructured_data.md)** — Store images, PDFs, audio, and other binary data with inline or out-of-line storage
+- **[VARIANT type for Semi-Structured Data](variant_type.md)** — Store flexible JSON-like data (LLM outputs, model metadata, feature maps) without rigid schemas
+- **[Lance File Format](lance_file_format.md)** — Vector-optimized columnar format with built-in ANN indexing
+
+See the full [AI-Native Lakehouse Overview](ai_overview.md) for use cases and architecture.
 
 ## Connect With The Community
 Apache Hudi is community-focused and community-led and welcomes new-comers with open arms. Leverage the following
