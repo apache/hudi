@@ -158,9 +158,33 @@ public class TestHudiAlluxioCacheFileOperations
     {
         DistributedQueryRunner queryRunner = getDistributedQueryRunner();
         queryRunner.executeWithPlan(queryRunner.getDefaultSession(), query);
-        // Allow time for table stats computation to finish before validation.
-        Thread.sleep(1000L);
-        assertMultisetsEqual(getFileOperations(queryRunner), expectedCacheAccesses);
+        // Async table-stats computation can outlive the synchronous query and emit spans into
+        // the exporter after execute returns. A fixed Thread.sleep races with this — when
+        // stats from query N is still running while query N+1's measurement happens, spans
+        // leak across the boundary and counts get scrambled (the symmetric off-by-N failure
+        // across paired tests). Poll until the span set is stable for two consecutive reads.
+        Multiset<FileOperation> actual = waitForStableSpans(queryRunner);
+        assertMultisetsEqual(actual, expectedCacheAccesses);
+    }
+
+    /**
+     * Returns the file-operation span set once two consecutive reads (200ms apart) agree.
+     * Bounded by a 30-second ceiling so a runaway test fails loudly instead of hanging.
+     */
+    private static Multiset<FileOperation> waitForStableSpans(QueryRunner queryRunner)
+            throws InterruptedException
+    {
+        long deadlineMillis = System.currentTimeMillis() + 30_000L;
+        Multiset<FileOperation> previous = null;
+        while (System.currentTimeMillis() < deadlineMillis) {
+            Thread.sleep(200L);
+            Multiset<FileOperation> current = getFileOperations(queryRunner);
+            if (previous != null && current.equals(previous)) {
+                return current;
+            }
+            previous = current;
+        }
+        return previous != null ? previous : getFileOperations(queryRunner);
     }
 
     public static Multiset<FileOperation> getFileOperations(QueryRunner queryRunner)
