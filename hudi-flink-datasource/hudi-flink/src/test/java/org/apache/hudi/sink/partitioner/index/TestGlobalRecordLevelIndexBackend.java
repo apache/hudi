@@ -36,6 +36,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -43,6 +44,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.mockito.Mockito.mock;
@@ -74,14 +76,15 @@ public class TestGlobalRecordLevelIndexBackend {
 
     try (GlobalRecordLevelIndexBackend globalRecordLevelIndexBackend = new GlobalRecordLevelIndexBackend(conf, -1)) {
       // get record location
-      HoodieRecordGlobalLocation location = globalRecordLevelIndexBackend.get("id1");
+      HoodieRecordGlobalLocation location = globalRecordLevelIndexBackend.get(Collections.singletonList("id1")).get("id1");
       assertNotNull(location);
       assertEquals("par1", location.getPartitionPath());
       assertEquals(firstCommitTime, location.getInstantTime());
 
       // get record location with non existed key
-      location = globalRecordLevelIndexBackend.get("new_key");
+      location = globalRecordLevelIndexBackend.get(Collections.singletonList("new_key")).get("new_key");
       assertNull(location);
+      assertThrows(UnsupportedOperationException.class, () -> globalRecordLevelIndexBackend.get("id1"));
 
       // get records locations for multiple record keys
       Map<String, HoodieRecordGlobalLocation> locations = globalRecordLevelIndexBackend.get(Arrays.asList("id1", "id2", "id3"));
@@ -90,7 +93,7 @@ public class TestGlobalRecordLevelIndexBackend {
 
       // get records locations for multiple record keys with unexisted key
       locations = globalRecordLevelIndexBackend.get(Arrays.asList("id1", "id2", "new_key"));
-      assertEquals(3, locations.size());
+      assertEquals(2, locations.size());
       assertNull(locations.get("new_key"));
 
       // new checkpoint
@@ -99,7 +102,7 @@ public class TestGlobalRecordLevelIndexBackend {
       // update record location
       HoodieRecordGlobalLocation newLocation = new HoodieRecordGlobalLocation("par5", "1003", "file_id_4");
       globalRecordLevelIndexBackend.update("new_key", newLocation);
-      location = globalRecordLevelIndexBackend.get("new_key");
+      location = globalRecordLevelIndexBackend.get(Collections.singletonList("new_key")).get("new_key");
       assertEquals(newLocation, location);
 
       // previous instant commit success, clean
@@ -182,9 +185,9 @@ public class TestGlobalRecordLevelIndexBackend {
       // cache for the oldest ckp id will be cleaned
       assertNull(globalRecordLevelIndexBackend.getRecordIndexCache().getCaches().get(-1L));
       // caches for the latest 3 ckp id still in the cache
-      assertEquals("par1", globalRecordLevelIndexBackend.get("id2_0").getPartitionPath());
-      assertEquals("par1", globalRecordLevelIndexBackend.get("id3_0").getPartitionPath());
-      assertEquals("par1", globalRecordLevelIndexBackend.get("id4_0").getPartitionPath());
+      assertEquals("par1", globalRecordLevelIndexBackend.get(Collections.singletonList("id2_0")).get("id2_0").getPartitionPath());
+      assertEquals("par1", globalRecordLevelIndexBackend.get(Collections.singletonList("id3_0")).get("id3_0").getPartitionPath());
+      assertEquals("par1", globalRecordLevelIndexBackend.get(Collections.singletonList("id4_0")).get("id4_0").getPartitionPath());
     }
   }
 }

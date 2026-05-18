@@ -20,6 +20,7 @@ package org.apache.hudi.sink.partitioner;
 
 import org.apache.hudi.adapter.ProcessFunctionAdapter;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -36,8 +37,10 @@ import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.util.Collector;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -58,6 +61,8 @@ public class MinibatchBucketAssignFunction
    * extending the BucketAssignFunction here, because BucketAssignFunction is a
    * KeyedProcessFunction while MinibatchBucketAssignFunction is a ProcessFunction.
    */
+  @VisibleForTesting
+  @Getter
   private final BucketAssignFunction delegateFunction;
 
   /**
@@ -76,11 +81,21 @@ public class MinibatchBucketAssignFunction
 
   private transient Collector<HoodieFlinkInternalRow> outCollector;
 
+  /**
+   * Processor for buffered data records selected by the write operation type.
+   */
+  private transient Processor minibatchProcessor;
+
   public MinibatchBucketAssignFunction(Configuration conf) {
+    this(conf, Math.max(conf.get(FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE), FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE.defaultValue()));
+  }
+
+  @VisibleForTesting
+  public MinibatchBucketAssignFunction(Configuration conf, int miniBatchSize) {
     this.delegateFunction = new BucketAssignFunction(conf);
     this.isChangingRecords = WriteOperationType.isChangingRecords(
         WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION)));
-    this.miniBatchSize = Math.max(conf.get(FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE), FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE.defaultValue());
+    this.miniBatchSize = miniBatchSize;
   }
 
   @Override
@@ -88,6 +103,7 @@ public class MinibatchBucketAssignFunction
     super.open(parameters);
     delegateFunction.open(parameters);
     this.recordBuffer = new ArrayList<>();
+    this.minibatchProcessor = initRecordProcessor();
   }
 
   @Override
@@ -102,7 +118,7 @@ public class MinibatchBucketAssignFunction
     }
     if (record.isIndexRecord()) {
       // handle index records immediately, do not need buffering
-      delegateFunction.processRecord(record, record.getRecordKey(), outCollector);
+      delegateFunction.processIndexRecord(record, record.getRecordKey());
     } else {
       // Add data records to the buffer
       recordBuffer.add(record);
@@ -120,20 +136,47 @@ public class MinibatchBucketAssignFunction
     if (recordBuffer.isEmpty()) {
       return;
     }
-
     // process batch of records.
-    if (isChangingRecords) {
-      List<String> recordKeys = recordBuffer.stream().map(HoodieFlinkInternalRow::getRecordKey).collect(Collectors.toList());
-      MinibatchIndexBackend minibatchIndexBackend = (MinibatchIndexBackend) delegateFunction.getIndexBackend();
-      // load the record location mapping into the record index cache.
-      minibatchIndexBackend.get(recordKeys);
-    }
-    for (HoodieFlinkInternalRow record: recordBuffer) {
-      delegateFunction.processRecord(record, record.getRecordKey(), out);
-    }
-
+    minibatchProcessor.process(recordBuffer, out);
     // Clear the buffer after processing
     recordBuffer.clear();
+  }
+
+  /**
+   * Initializes the processor for buffered data records based on whether minibatch index lookup is needed.
+   */
+  private Processor initRecordProcessor() {
+    if (isChangingRecords) {
+      return new Processor() {
+        @Override
+        public void process(List<HoodieFlinkInternalRow> records, Collector<HoodieFlinkInternalRow> out) throws Exception {
+          List<String> recordKeys = records.stream().map(HoodieFlinkInternalRow::getRecordKey).collect(Collectors.toList());
+          MinibatchIndexBackend minibatchIndexBackend = (MinibatchIndexBackend) delegateFunction.getIndexBackend();
+          // get record locations by minibatch
+          Map<String, HoodieRecordGlobalLocation> recordLocations = minibatchIndexBackend.get(recordKeys);
+          for (HoodieFlinkInternalRow record: records) {
+            String recordKey = record.getRecordKey();
+            delegateFunction.processChangingRecord(record, recordKey, out, recordLocations.get(recordKey), true);
+          }
+        }
+      };
+    } else {
+      return new Processor() {
+        @Override
+        public void process(List<HoodieFlinkInternalRow> records, Collector<HoodieFlinkInternalRow> out) throws Exception {
+          for (HoodieFlinkInternalRow record: recordBuffer) {
+            delegateFunction.processInsertRecord(record, out);
+          }
+        }
+      };
+    }
+  }
+
+  /**
+   * Processes buffered data records while keeping index records out of the minibatch buffer.
+   */
+  private interface Processor extends Serializable {
+    void process(List<HoodieFlinkInternalRow> records, Collector<HoodieFlinkInternalRow> out) throws Exception;
   }
 
   @Override
