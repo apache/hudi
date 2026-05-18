@@ -186,7 +186,7 @@ class Spark41LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       }
 
       // When there are vectorized reads, we can avoid
-      // 1. opening the file twice by transfering the SeekableInputStream
+      // 1. opening the file twice by transferring the SeekableInputStream
       // 2. reading the footer twice by reading all row groups in advance and filter row groups
       //    according to filters that require push down
       val openedFooter = ParquetFooterReader.openFileAndReadFooter(sharedConf, file, enableVectorizedReader)
