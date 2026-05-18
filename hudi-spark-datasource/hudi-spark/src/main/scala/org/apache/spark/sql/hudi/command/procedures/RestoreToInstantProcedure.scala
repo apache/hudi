@@ -151,14 +151,14 @@ class RestoreToInstantProcedure extends BaseProcedure with ProcedureBuilder with
       try {
         client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
           tableName.asInstanceOf[Option[String]])
-        // Pre-check: if the target instant is at or before the penultimate/oldest MDT compaction,
-        // pre-emptively delete the MDT so restoreToInstant does not leave it inconsistent.
-        // deleteMetadataTableIfNecessaryBeforeRestore returns false when the MDT was deleted
-        // (caller must not re-initialize it), true otherwise.
-        val shouldInitMdt = if (enableMetadata) {
-          client.deleteMetadataTableIfNecessaryBeforeRestore(targetInstant)
-        } else true
-        val restoreMetadata = client.restoreToInstant(targetInstant, shouldInitMdt && enableMetadata)
+        // Pre-check: if the target instant is at or before the oldest MDT compaction or before the
+        // MDT timeline start, pre-emptively delete the MDT so restoreToInstant does not leave it
+        // inconsistent. deleteMdtIfNecessaryBeforeRestore returns true when the MDT was deleted
+        // (caller must not re-initialize it), false otherwise.
+        val mdtDeleted = if (enableMetadata) {
+          client.deleteMdtIfNecessaryBeforeRestore(targetInstant)
+        } else false
+        val restoreMetadata = client.restoreToInstant(targetInstant, !mdtDeleted && enableMetadata)
         restoreResult = true
         startRestoreTime = restoreMetadata.getStartRestoreTime
         timeTakenInMillis = restoreMetadata.getTimeTakenInMillis

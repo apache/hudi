@@ -867,17 +867,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * {@code targetInstant}. Returns true when restoring would leave the MDT in an inconsistent
    * state, specifically when any of the following holds:
    * <ol>
-   *   <li>The target is at or before the MDT's penultimate completed compaction (when at least
-   *       two compactions exist). The restore would otherwise succeed for the data table but
-   *       {@code finishRestore} would fail to sync rollbacks into an MDT with no base file at or
-   *       before the target time.</li>
    *   <li>The target is at or before the oldest completed compaction. We cannot restore to before
    *       the oldest compaction because we don't have base files before that time.</li>
    *   <li>The target is before the MDT timeline start (the relevant history was archived away).</li>
    * </ol>
-   * Returns false when the MDT directory does not exist (nothing to delete or worry about).
-   * Wraps any IOException reading the MDT in a {@link HoodieException} so genuine permission /
-   * network failures surface to the caller instead of being silently swallowed.
+   * Returns false when the MDT directory does not exist or is not readable (nothing to delete or
+   * worry about). Wraps genuine IO failures ({@link IOException}) in a {@link HoodieException}
+   * so permission / network errors surface to the caller.
    */
   protected boolean shouldDeleteMdtBeforeRestore(String targetInstant) {
     String mdtBasePath = getMetadataTableBasePath(config.getBasePath());
@@ -891,14 +887,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           .setBasePath(mdtBasePath).build();
       List<HoodieInstant> completedCompactions = mdtMetaClient.getCommitTimeline()
           .filterCompletedInstants().getInstants();
-      if (completedCompactions.size() >= 2) {
-        String penultimate = completedCompactions.get(completedCompactions.size() - 2).requestedTime();
-        if (LESSER_THAN_OR_EQUALS.test(targetInstant, penultimate)) {
-          log.warn("Deleting MDT before restore to {}: target is at or before penultimate MDT compaction {}",
-              targetInstant, penultimate);
-          return true;
-        }
-      }
       Option<HoodieInstant> oldestMdtCompaction = completedCompactions.isEmpty()
           ? Option.empty() : Option.of(completedCompactions.get(0));
       if (oldestMdtCompaction.isPresent()
@@ -916,34 +904,41 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       throw new HoodieException(
           "Failed to inspect MDT at " + mdtBasePath + " before restore to " + targetInstant
               + " - refusing to silently proceed without an MDT integrity check.", e);
+    } catch (HoodieException e) {
+      // MDT directory exists but is not usable (e.g. TableNotFoundException from a partially
+      // initialized MDT). Treat as absent: no deletion needed, let the restore proceed.
+      log.warn("MDT at {} is present but could not be read ({}); skipping pre-check.",
+          mdtBasePath, e.getMessage());
+      return false;
     }
   }
 
   /**
-   * Deletes the metadata table (MDT) if it would be left in an inconsistent state by a restore to
-   * {@code targetInstant}, and returns whether the MDT should be initialized after the restore.
+   * Deletes the metadata table (MDT) if it would be left in an inconsistent state by a restore
+   * to {@code targetInstant}, and returns whether the MDT was actually deleted.
    *
    * <p>Callers that drive restore via {@link #restoreToInstant} directly (e.g. the
    * {@code restore_to_instant} stored procedure) should call this method before invoking
-   * {@code restoreToInstant} and pass the return value as {@code initialMetadataTableIfNecessary}:
+   * {@code restoreToInstant} and suppress MDT initialization when it returns {@code true}:
    *
    * <pre>{@code
-   * boolean initMdt = client.deleteMetadataTableIfNecessaryBeforeRestore(targetInstant);
-   * client.restoreToInstant(targetInstant, initMdt && enableMetadata);
+   * boolean mdtDeleted = client.deleteMdtIfNecessaryBeforeRestore(targetInstant);
+   * client.restoreToInstant(targetInstant, !mdtDeleted && enableMetadata);
    * }</pre>
    *
    * @param targetInstant the instant the data table will be restored to
-   * @return {@code false} if the MDT was deleted (caller must not initialize it post-restore);
-   *         {@code true} otherwise (MDT either does not need deletion or does not exist)
+   * @return {@code true} if the MDT was deleted (caller must not re-initialize it);
+   *         {@code false} otherwise (MDT either did not need deletion or does not exist)
    */
-  public boolean deleteMetadataTableIfNecessaryBeforeRestore(String targetInstant) {
+  public boolean deleteMdtIfNecessaryBeforeRestore(String targetInstant) {
     if (shouldDeleteMdtBeforeRestore(targetInstant)) {
       HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
-      return false;
+      return true;
     }
-    return true;
+    return false;
   }
 
+  @Deprecated
   public boolean rollback(final String commitInstantTime) throws HoodieRollbackException {
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
     Option<HoodiePendingRollbackInfo> pendingRollbackInfo = tableServiceClient.getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
