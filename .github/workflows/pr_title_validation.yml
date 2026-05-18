@@ -15,11 +15,13 @@ jobs:
   validate-pr-title:
     runs-on: ubuntu-latest
     steps:
-      - name: Check for legacy PR title format using JIRA or MINOR
-        id: check-legacy-format
-        run: |
-          title="${{ github.event.pull_request.title }}"
-          echo "Checking PR title: $title"
+     - name: Check for legacy PR title format using JIRA or MINOR
+      id: check-legacy-format
+      env:
+        PR_TITLE: ${{ github.event.pull_request.title }}
+      run: |
+        title="$PR_TITLE"
+        echo "Checking PR title: $title"
           
           # Check for HUDI JIRA format: [HUDI-1234] description
           if [[ "$title" =~ ^\[HUDI-[0-9]+\]\ .+ ]]; then
