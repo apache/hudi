@@ -499,6 +499,101 @@ public class TestHoodieAvroUtils {
     assertEquals(0, buffer.position());
   }
 
+  /**
+   * Cross-Avro-version invariant: {@link HoodieAvroUtils#convertValueForAvroLogicalTypes} must produce
+   * the same canonical Java value whether the GenericRecord field holds the Avro 1.11.x primitive form
+   * ({@code Long}/{@code Integer}) or the Avro 1.12 java.time form ({@code Instant}/{@code LocalDate}/
+   * {@code LocalDateTime}). This is the contract that lets a Spark 4.1 reader (Avro 1.12) compare
+   * ordering values against a Spark 3.5 / 4.0 writer's records (Avro 1.11.x) without divergence.
+   */
+  @Test
+  public void testConvertValueForAvroLogicalTypesCrossAvroVersion() {
+    long epochMicros = 1716163200_000000L + 123456L; // 2024-05-20T00:00:00.123456Z
+    long epochMillis = 1716163200_000L + 123L;       // 2024-05-20T00:00:00.123Z
+    int epochDay = (int) java.time.LocalDate.of(2024, 5, 20).toEpochDay();
+    java.time.Instant microsInstant = java.time.Instant.ofEpochSecond(epochMicros / 1_000_000L,
+        (epochMicros % 1_000_000L) * 1000L);
+    java.time.Instant millisInstant = java.time.Instant.ofEpochMilli(epochMillis);
+    java.time.LocalDate localDate = java.time.LocalDate.ofEpochDay(epochDay);
+    java.time.LocalDateTime localDateTimeMicros = java.time.LocalDateTime.ofInstant(microsInstant, java.time.ZoneOffset.UTC);
+    java.time.LocalDateTime localDateTimeMillis = java.time.LocalDateTime.ofInstant(millisInstant, java.time.ZoneOffset.UTC);
+
+    Schema dateSchema = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
+    Schema tsMillisSchema = LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
+    Schema tsMicrosSchema = LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
+    Schema localTsMillisSchema = LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
+    Schema localTsMicrosSchema = LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
+
+    // date
+    assertEquals(HoodieAvroUtils.convertValueForAvroLogicalTypes(dateSchema, epochDay, false),
+        HoodieAvroUtils.convertValueForAvroLogicalTypes(dateSchema, localDate, false));
+
+    // timestamp-millis, consistent=false → epoch-millis Long
+    assertEquals(epochMillis, HoodieAvroUtils.convertValueForAvroLogicalTypes(tsMillisSchema, epochMillis, false));
+    assertEquals(epochMillis, HoodieAvroUtils.convertValueForAvroLogicalTypes(tsMillisSchema, millisInstant, false));
+
+    // timestamp-millis, consistent=true → java.sql.Timestamp
+    assertEquals(HoodieAvroUtils.convertValueForAvroLogicalTypes(tsMillisSchema, epochMillis, true),
+        HoodieAvroUtils.convertValueForAvroLogicalTypes(tsMillisSchema, millisInstant, true));
+
+    // timestamp-micros, consistent=false → epoch-micros Long
+    assertEquals(epochMicros, HoodieAvroUtils.convertValueForAvroLogicalTypes(tsMicrosSchema, epochMicros, false));
+    assertEquals(epochMicros, HoodieAvroUtils.convertValueForAvroLogicalTypes(tsMicrosSchema, microsInstant, false));
+
+    // timestamp-micros, consistent=true → java.sql.Timestamp (millis precision, matches Avro 1.11 behavior)
+    assertEquals(HoodieAvroUtils.convertValueForAvroLogicalTypes(tsMicrosSchema, epochMicros, true),
+        HoodieAvroUtils.convertValueForAvroLogicalTypes(tsMicrosSchema, microsInstant, true));
+
+    // local-timestamp-millis / local-timestamp-micros → Long
+    assertEquals(epochMillis, HoodieAvroUtils.convertValueForAvroLogicalTypes(localTsMillisSchema, epochMillis, false));
+    assertEquals(epochMillis, HoodieAvroUtils.convertValueForAvroLogicalTypes(localTsMillisSchema, localDateTimeMillis, false));
+    assertEquals(epochMicros, HoodieAvroUtils.convertValueForAvroLogicalTypes(localTsMicrosSchema, epochMicros, false));
+    assertEquals(epochMicros, HoodieAvroUtils.convertValueForAvroLogicalTypes(localTsMicrosSchema, localDateTimeMicros, false));
+  }
+
+  /**
+   * Cross-Avro-version invariant for ordering-value extraction: a record whose timestamp/date field
+   * holds the Avro 1.12 java.time form must yield the same comparable ordering value as one holding
+   * the Avro 1.11.x primitive form. Without this property, {@code DefaultHoodieRecordPayload.compareOrderingVal}
+   * throws ClassCastException when one side of the comparison was read via Avro 1.12 and the other
+   * built from a Long (which is what Hudi's Spark→Avro serializer always produces).
+   */
+  @Test
+  public void testGetNestedFieldValOrderingInvariantAcrossAvroVersions() {
+    String schemaStr = "{\"type\":\"record\",\"name\":\"r\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"string\"},"
+        + "{\"name\":\"ts\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},"
+        + "{\"name\":\"d\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}}]}";
+    Schema schema = new Schema.Parser().parse(schemaStr);
+
+    long epochMicros = 1716163200_000000L + 123456L;
+    int epochDay = (int) java.time.LocalDate.of(2024, 5, 20).toEpochDay();
+
+    GenericRecord avro111Form = new GenericData.Record(schema);
+    avro111Form.put("id", "k");
+    avro111Form.put("ts", epochMicros);
+    avro111Form.put("d", epochDay);
+
+    GenericRecord avro112Form = new GenericData.Record(schema);
+    avro112Form.put("id", "k");
+    avro112Form.put("ts", java.time.Instant.ofEpochSecond(epochMicros / 1_000_000L,
+        (epochMicros % 1_000_000L) * 1000L));
+    avro112Form.put("d", java.time.LocalDate.ofEpochDay(epochDay));
+
+    Object ts111 = HoodieAvroUtils.getNestedFieldVal(avro111Form, "ts", true, false);
+    Object ts112 = HoodieAvroUtils.getNestedFieldVal(avro112Form, "ts", true, false);
+    assertEquals(ts111, ts112);
+    // ordering compareTo must be symmetric and produce 0 — this is exactly what
+    // DefaultHoodieRecordPayload.compareOrderingVal relies on.
+    assertEquals(0, ((Comparable<Object>) ts111).compareTo(ts112));
+    assertEquals(0, ((Comparable<Object>) ts112).compareTo(ts111));
+
+    Object d111 = HoodieAvroUtils.getNestedFieldVal(avro111Form, "d", true, false);
+    Object d112 = HoodieAvroUtils.getNestedFieldVal(avro112Form, "d", true, false);
+    assertEquals(d111, d112);
+    assertEquals(0, ((Comparable<Object>) d111).compareTo(d112));
+  }
+
   @Test
   public void testReWriteAvroRecordWithNewSchema() {
     Schema nestedSchema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_STR);

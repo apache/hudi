@@ -70,8 +70,11 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -671,20 +674,38 @@ public class HoodieAvroUtils {
    * <p>
    * Decimal Data Type is converted to actual decimal value instead of bytes/fixed which is how it is
    * represented/stored in parquet.
+   * <p>
+   * <b>Avro version compatibility:</b> Avro 1.12 (pulled in by the Spark 4.1 profile) installs default
+   * {@code Conversion}s on {@code GenericData.get()} for date/time logical types. As a result, records
+   * read by {@code GenericDatumReader} now materialize {@link LocalDate} for date, {@link Instant} for
+   * timestamp-millis / timestamp-micros, and {@link LocalDateTime} for local-timestamp-* — where Avro
+   * 1.11.x (used by Spark 3.5 / 4.0 and earlier) exposed the raw {@link Integer} / {@link Long}. This
+   * method normalizes both forms to the same stable representation, so callers (precombine/ordering
+   * comparison, partition-path and record-key derivation, etc.) behave identically across Avro versions
+   * and across writer/reader Spark version combinations. The on-disk byte format is unaffected by this
+   * normalization: Avro's wire encoding for these logical types is fixed by spec to int / long and is
+   * identical across Avro versions; only the in-memory Java type returned by the reader changed.
    *
    * @param fieldSchema avro field schema
    * @param fieldValue  avro field value
    * @return field value either converted (for certain data types) or as it is.
    */
   public static Object convertValueForAvroLogicalTypes(Schema fieldSchema, Object fieldValue, boolean consistentLogicalTimestampEnabled) {
-    if (fieldSchema.getLogicalType() == LogicalTypes.date()) {
-      return LocalDate.ofEpochDay(Long.parseLong(fieldValue.toString()));
-    } else if (fieldSchema.getLogicalType() == LogicalTypes.timestampMillis() && consistentLogicalTimestampEnabled) {
-      return new Timestamp(Long.parseLong(fieldValue.toString()));
-    } else if (fieldSchema.getLogicalType() == LogicalTypes.timestampMicros() && consistentLogicalTimestampEnabled) {
-      return new Timestamp(Long.parseLong(fieldValue.toString()) / 1000);
-    } else if (fieldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
-      Decimal dc = (Decimal) fieldSchema.getLogicalType();
+    org.apache.avro.LogicalType logicalType = fieldSchema.getLogicalType();
+    if (logicalType == LogicalTypes.date()) {
+      return LocalDate.ofEpochDay(extractEpochDay(fieldValue));
+    } else if (logicalType == LogicalTypes.timestampMillis()) {
+      long millis = extractEpochMillis(fieldValue);
+      return consistentLogicalTimestampEnabled ? new Timestamp(millis) : millis;
+    } else if (logicalType == LogicalTypes.timestampMicros()) {
+      long micros = extractEpochMicros(fieldValue);
+      return consistentLogicalTimestampEnabled ? new Timestamp(micros / 1000) : micros;
+    } else if (logicalType == LogicalTypes.localTimestampMillis()) {
+      return extractLocalEpochMillis(fieldValue);
+    } else if (logicalType == LogicalTypes.localTimestampMicros()) {
+      return extractLocalEpochMicros(fieldValue);
+    } else if (logicalType instanceof LogicalTypes.Decimal) {
+      Decimal dc = (Decimal) logicalType;
       DecimalConversion decimalConversion = new DecimalConversion();
       if (fieldSchema.getType() == Schema.Type.FIXED) {
         return decimalConversion.fromFixed((GenericFixed) fieldValue, fieldSchema,
@@ -698,6 +719,62 @@ public class HoodieAvroUtils {
       }
     }
     return fieldValue;
+  }
+
+  // The extract* helpers below accept either the Avro 1.11.x primitive form (Integer / Long) or the
+  // Avro 1.12 java.time form, and return the canonical primitive that Avro 1.11.x would have produced
+  // for the same underlying bytes. See the javadoc on convertValueForAvroLogicalTypes for context.
+
+  private static long extractEpochDay(Object fieldValue) {
+    if (fieldValue instanceof LocalDate) {
+      return ((LocalDate) fieldValue).toEpochDay();
+    }
+    if (fieldValue instanceof Number) {
+      return ((Number) fieldValue).longValue();
+    }
+    return Long.parseLong(fieldValue.toString());
+  }
+
+  private static long extractEpochMillis(Object fieldValue) {
+    if (fieldValue instanceof Instant) {
+      return ((Instant) fieldValue).toEpochMilli();
+    }
+    if (fieldValue instanceof Number) {
+      return ((Number) fieldValue).longValue();
+    }
+    return Long.parseLong(fieldValue.toString());
+  }
+
+  private static long extractEpochMicros(Object fieldValue) {
+    if (fieldValue instanceof Instant) {
+      Instant instant = (Instant) fieldValue;
+      return Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1_000_000L), instant.getNano() / 1000L);
+    }
+    if (fieldValue instanceof Number) {
+      return ((Number) fieldValue).longValue();
+    }
+    return Long.parseLong(fieldValue.toString());
+  }
+
+  private static long extractLocalEpochMillis(Object fieldValue) {
+    if (fieldValue instanceof LocalDateTime) {
+      return ((LocalDateTime) fieldValue).toInstant(ZoneOffset.UTC).toEpochMilli();
+    }
+    if (fieldValue instanceof Number) {
+      return ((Number) fieldValue).longValue();
+    }
+    return Long.parseLong(fieldValue.toString());
+  }
+
+  private static long extractLocalEpochMicros(Object fieldValue) {
+    if (fieldValue instanceof LocalDateTime) {
+      Instant instant = ((LocalDateTime) fieldValue).toInstant(ZoneOffset.UTC);
+      return Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1_000_000L), instant.getNano() / 1000L);
+    }
+    if (fieldValue instanceof Number) {
+      return ((Number) fieldValue).longValue();
+    }
+    return Long.parseLong(fieldValue.toString());
   }
 
   /**

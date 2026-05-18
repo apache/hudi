@@ -206,14 +206,16 @@ public class HoodieAvroWrapperUtils {
       return null;
     } else if (DateWrapper.class.getSimpleName().equals(wrapperClassName)) {
       ValidationUtils.checkArgument(avroValueWrapper instanceof GenericRecord);
-      return Date.valueOf(LocalDate.ofEpochDay((Integer) ((GenericRecord) avroValueWrapper).get(0)));
+      // Avro 1.12 (Spark 4.1 profile) returns java.time.LocalDate for date logical types; Avro 1.11.x returns
+      // Integer. Accept both — see HoodieAvroUtils#convertValueForAvroLogicalTypes for the broader context.
+      return Date.valueOf(LocalDate.ofEpochDay(toEpochDay(((GenericRecord) avroValueWrapper).get(0))));
     } else if (LocalDateWrapper.class.getSimpleName().equals(wrapperClassName)) {
       ValidationUtils.checkArgument(avroValueWrapper instanceof GenericRecord);
-      return LocalDate.ofEpochDay((Integer) ((GenericRecord) avroValueWrapper).get(0));
+      return LocalDate.ofEpochDay(toEpochDay(((GenericRecord) avroValueWrapper).get(0)));
     } else if (TimestampMicrosWrapper.class.getSimpleName().equals(wrapperClassName)) {
       ValidationUtils.checkArgument(avroValueWrapper instanceof GenericRecord);
-      Instant instant = microsToInstant((Long) ((GenericRecord) avroValueWrapper).get(0));
-      return Timestamp.from(instant);
+      // Avro 1.12 (Spark 4.1 profile) returns java.time.Instant for timestamp-micros; Avro 1.11.x returns Long.
+      return Timestamp.from(toInstantFromMicros(((GenericRecord) avroValueWrapper).get(0)));
     } else if (DecimalWrapper.class.getSimpleName().equals(wrapperClassName)) {
       Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
       ValidationUtils.checkArgument(avroValueWrapper instanceof GenericRecord);
@@ -339,5 +341,19 @@ public class HoodieAvroWrapperUtils {
   public static Comparable<?> unwrapGenericRecord(Object val) {
     GenericRecord genRec = (GenericRecord) val;
     return (Comparable<?>) genRec.get("value");
+  }
+
+  private static int toEpochDay(Object dateFieldValue) {
+    if (dateFieldValue instanceof LocalDate) {
+      return Math.toIntExact(((LocalDate) dateFieldValue).toEpochDay());
+    }
+    return ((Number) dateFieldValue).intValue();
+  }
+
+  private static Instant toInstantFromMicros(Object timestampMicrosFieldValue) {
+    if (timestampMicrosFieldValue instanceof Instant) {
+      return (Instant) timestampMicrosFieldValue;
+    }
+    return microsToInstant(((Number) timestampMicrosFieldValue).longValue());
   }
 }
