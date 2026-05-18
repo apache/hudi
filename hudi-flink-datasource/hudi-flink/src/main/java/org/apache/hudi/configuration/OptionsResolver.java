@@ -372,6 +372,14 @@ public class OptionsResolver {
     return isCowTable(conf) && isUpsertOperation(conf);
   }
 
+  /**
+   * Returns whether the table operation is 'upsert'.
+   */
+  public static boolean isUpsertOperation(Configuration conf) {
+    WriteOperationType operationType = WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION));
+    return operationType == WriteOperationType.UPSERT;
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

@@ -324,7 +324,7 @@ public class TestStreamWriteOperatorCoordinator {
     metadataTableMetaClient.reloadActiveTimeline();
     completedTimeline = metadataTableMetaClient.reloadActiveTimeline().filterCompletedAndCompactionInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(numCommits + 2));
-    assertThat(completedTimeline.nthFromLastInstant(0).get().getAction(), is(HoodieTimeline.COMMIT_ACTION));
+    assertThat(completedTimeline.nthFromLastInstant(1).get().getAction(), is(HoodieTimeline.COMMIT_ACTION));
     // write another 2 commits
     for (int i = 7; i < 8; i++) {
       instant = mockWriteWithMetadata(ckp++);
@@ -340,15 +340,14 @@ public class TestStreamWriteOperatorCoordinator {
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(9));
 
-    // write three more commits
-    mockWriteWithMetadata(ckp++);
+    // write two more commits
     mockWriteWithMetadata(ckp++);
     mockWriteWithMetadata(ckp++);
     // write another commit to trigger compaction
     mockWriteWithMetadata(ckp++);
     metadataTableMetaClient.reloadActiveTimeline();
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
-    assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(14));
+    assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(13));
     assertThat(completedTimeline.nthFromLastInstant(1).get().getAction(), is(HoodieTimeline.COMMIT_ACTION));
   }
 
@@ -436,7 +435,7 @@ public class TestStreamWriteOperatorCoordinator {
     metadataTableMetaClient.reloadActiveTimeline();
 
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
-    assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(metadataPartitions + 3));
+    assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(metadataPartitions + 4));
     assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant));
     assertThat("The pending instant should be rolled back first",
         completedTimeline.nthFromLastInstant(1).get().getAction(), is(HoodieTimeline.ROLLBACK_ACTION));

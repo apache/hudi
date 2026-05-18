@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.event;
 
+import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
@@ -63,7 +64,7 @@ public class Correspondent {
    */
   public String requestInstantTime(long checkpointId) {
     try {
-      InstantTimeResponse response = CoordinationResponseSerDe.unwrap(this.gateway.sendRequestToCoordinator(this.operatorID,
+      InstantTimeResponse response = CoordinationResponseSerDe.unwrap(Utils.sendRequestToCoordinator(gateway, this.operatorID,
           new SerializedValue<>(InstantTimeRequest.getInstance(checkpointId))).get());
       return response.getInstant();
     } catch (Exception e) {

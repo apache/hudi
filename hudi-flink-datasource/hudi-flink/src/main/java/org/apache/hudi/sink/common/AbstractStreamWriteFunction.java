@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.common;
 
+import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -148,7 +149,7 @@ public abstract class AbstractStreamWriteFunction<I>
 
     int attemptId = getRuntimeContext().getAttemptNumber();
     if (context.isRestored()) {
-      initCheckpointId(attemptId, context.getRestoredCheckpointId().orElse(-1L));
+      initCheckpointId(attemptId, Utils.getRestoredCheckpointId(context));
     }
     sendBootstrapEvent(attemptId, context.isRestored());
   }

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.flink.util.FatalExitExceptionHandler;
+import org.apache.hudi.adapter.Utils;
 
 import java.util.concurrent.ThreadFactory;
 
@@ -35,7 +35,7 @@ public class ExplicitClassloaderThreadFactory implements ThreadFactory {
   public ExplicitClassloaderThreadFactory(
       final String threadName,
       final ClassLoader contextClassLoader) {
-    this(threadName, contextClassLoader, FatalExitExceptionHandler.INSTANCE);
+    this(threadName, contextClassLoader, Utils.createFatalExitExceptionHandler());
   }
 
   public ExplicitClassloaderThreadFactory(

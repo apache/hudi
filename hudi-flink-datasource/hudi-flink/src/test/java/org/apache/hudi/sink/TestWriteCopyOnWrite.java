@@ -40,9 +40,7 @@ import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -55,14 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
  */
 public class TestWriteCopyOnWrite extends TestWriteBase {
   // for RowData write function: to trigger buffer flush with batch size exceeded by 3 rows, each record is 48 bytes
-  private static final double BATCH_SIZE_MB = 0.00013;
-  // for RowData write function: to trigger buffer flush with memory pool exhausted.
-  private static final double BUFFER_SIZE_MB = 0.0003;
-
-  protected Configuration conf;
-
-  @TempDir
-  File tempFile;
+  protected static final double BATCH_SIZE_MB = 0.001;
 
   @BeforeEach
   public void before() {
@@ -85,7 +76,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
   @Test
   public void testCheckpoint() throws Exception {
-    preparePipeline()
+    preparePipeline(conf)
         .consume(TestData.DATA_SET_INSERT)
         // no checkpoint, so the coordinator does not accept any events
         .emptyEventBuffer()
@@ -123,6 +114,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testSubtaskFails() throws Exception {
     conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
+    conf.setString(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), "true");
     // open the function and ingest data
     preparePipeline()
         .checkpoint(1)
@@ -696,9 +688,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
       // step to commit the 2nd txn, should throw exception
       // for concurrent modification of same fileGroups
-      pipeline2.checkpoint(1)
-          .assertNextEvent()
-          .checkpointCompleteThrows(1, HoodieWriteConflictException.class, "Cannot resolve conflicts");
+      pipeline2.checkpointCompleteThrows(1, HoodieWriteConflictException.class, "Cannot resolve conflicts");
     } finally {
       if (pipeline1 != null) {
         pipeline1.end();

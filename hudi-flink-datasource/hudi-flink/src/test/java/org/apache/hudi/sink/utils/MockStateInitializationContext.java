@@ -71,7 +71,6 @@ public class MockStateInitializationContext implements StateInitializationContex
     return getRestoredCheckpointId().isPresent();
   }
 
-  @Override
   public OptionalLong getRestoredCheckpointId() {
     return this.lastCheckpointId >= 0 ? OptionalLong.of(this.lastCheckpointId) : OptionalLong.empty();
   }
