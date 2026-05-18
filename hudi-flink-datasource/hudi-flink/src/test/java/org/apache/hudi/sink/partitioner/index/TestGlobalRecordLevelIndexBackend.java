@@ -18,6 +18,9 @@
 
 package org.apache.hudi.sink.partitioner.index;
 
+import org.apache.flink.runtime.clusterframework.types.ResourceID;
+import org.apache.flink.runtime.metrics.NoOpMetricRegistry;
+import org.apache.flink.runtime.metrics.groups.TaskManagerMetricGroup;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -56,6 +59,7 @@ import static org.mockito.Mockito.when;
 public class TestGlobalRecordLevelIndexBackend {
 
   private Configuration conf;
+  private NoOpMetricRegistry registry = new NoOpMetricRegistry();
 
   @TempDir
   File tempFile;
@@ -75,6 +79,7 @@ public class TestGlobalRecordLevelIndexBackend {
     String firstCommitTime = TestUtils.getLastCompleteInstant(tempFile.toURI().toString());
 
     try (GlobalRecordLevelIndexBackend globalRecordLevelIndexBackend = new GlobalRecordLevelIndexBackend(conf, -1)) {
+      globalRecordLevelIndexBackend.registerMetrics(TaskManagerMetricGroup.createTaskManagerMetricGroup(registry, "localhost", ResourceID.generate()));
       // get record location
       HoodieRecordGlobalLocation location = globalRecordLevelIndexBackend.get(Collections.singletonList("id1")).get("id1");
       assertNotNull(location);
@@ -188,6 +193,33 @@ public class TestGlobalRecordLevelIndexBackend {
       assertEquals("par1", globalRecordLevelIndexBackend.get(Collections.singletonList("id2_0")).get("id2_0").getPartitionPath());
       assertEquals("par1", globalRecordLevelIndexBackend.get(Collections.singletonList("id3_0")).get("id3_0").getPartitionPath());
       assertEquals("par1", globalRecordLevelIndexBackend.get(Collections.singletonList("id4_0")).get("id4_0").getPartitionPath());
+    }
+  }
+
+  @Test
+  void testLookupWithoutMetricsRegistrationIsNullSafe() throws Exception {
+    // Verifies that the if (metrics != null) guards in get(List) don't throw even when
+    // registerMetrics was never called.
+    try (GlobalRecordLevelIndexBackend backend = new GlobalRecordLevelIndexBackend(conf, -1)) {
+      HoodieRecordGlobalLocation location = new HoodieRecordGlobalLocation("par1", "000000001", "file-id-1");
+      backend.update("null_metrics_key", location);
+      Map<String, HoodieRecordGlobalLocation> result = backend.get(Collections.singletonList("null_metrics_key"));
+      assertEquals(location, result.get("null_metrics_key"));
+    }
+  }
+
+  @Test
+  void testRegisterMetricsIsIdempotent() throws Exception {
+    // The second registerMetrics call must be a no-op and must not throw.
+    try (GlobalRecordLevelIndexBackend backend = new GlobalRecordLevelIndexBackend(conf, -1)) {
+      TaskManagerMetricGroup group = TaskManagerMetricGroup.createTaskManagerMetricGroup(
+          registry, "localhost", ResourceID.generate());
+      backend.registerMetrics(group);
+      backend.registerMetrics(group);
+
+      HoodieRecordGlobalLocation location = new HoodieRecordGlobalLocation("par2", "000000002", "file-id-2");
+      backend.update("idempotent_key", location);
+      assertEquals(location, backend.get(Collections.singletonList("idempotent_key")).get("idempotent_key"));
     }
   }
 }

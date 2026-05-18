@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.metrics.FlinkBucketAssignMetrics;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.partitioner.index.MinibatchIndexBackend;
 
@@ -120,6 +121,10 @@ public class MinibatchBucketAssignFunction
       // handle index records immediately, do not need buffering
       delegateFunction.processIndexRecord(record, record.getRecordKey());
     } else {
+      // Start buffering timer when first record enters an empty buffer
+      if (recordBuffer.isEmpty()) {
+        delegateFunction.getMetrics().startRecordBuffering();
+      }
       // Add data records to the buffer
       recordBuffer.add(record);
       // Process the buffer if it reaches the configured size
@@ -136,6 +141,9 @@ public class MinibatchBucketAssignFunction
     if (recordBuffer.isEmpty()) {
       return;
     }
+
+    // Record how long the oldest record in the batch was buffered
+    delegateFunction.getMetrics().endRecordBuffering();
     // process batch of records.
     minibatchProcessor.process(recordBuffer, out);
     // Clear the buffer after processing
@@ -197,6 +205,11 @@ public class MinibatchBucketAssignFunction
 
   public void setCorrespondent(Correspondent correspondent) {
     this.delegateFunction.setCorrespondent(correspondent);
+  }
+
+  @VisibleForTesting
+  public FlinkBucketAssignMetrics getDelegateMetrics() {
+    return delegateFunction.getMetrics();
   }
 
   @Override
