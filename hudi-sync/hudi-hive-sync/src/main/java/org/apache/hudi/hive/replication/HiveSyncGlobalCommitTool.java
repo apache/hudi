@@ -21,10 +21,9 @@ package org.apache.hudi.hive.replication;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 
 import com.beust.jcommander.JCommander;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -33,9 +32,9 @@ import java.util.List;
 import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.LOCAL_HIVE_SITE_URI;
 import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.REMOTE_HIVE_SITE_URI;
 
+@Slf4j
 public class HiveSyncGlobalCommitTool implements HiveSyncGlobalCommit, AutoCloseable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HiveSyncGlobalCommitTool.class);
   private final HiveSyncGlobalCommitParams params;
   private final List<ReplicationStateSync> replicationStateSyncList;
 
@@ -60,26 +59,26 @@ public class HiveSyncGlobalCommitTool implements HiveSyncGlobalCommit, AutoClose
     try {
       for (ReplicationStateSync stateSync : replicationStateSyncList) {
         Thread.currentThread().setName(stateSync.getClusterId());
-        LOG.info("starting sync for state " + stateSync);
+        log.info("starting sync for state {}", stateSync);
         stateSync.sync();
-        LOG.info("synced state " + stateSync);
+        log.info("synced state {}", stateSync);
       }
     } catch (Exception e) {
       Thread.currentThread().setName(name);
-      LOG.error(String.format("Error while trying to commit replication state %s", e.getMessage()), e);
+      log.error("Error while trying to commit replication state {}", e.getMessage(), e);
       return false;
     } finally {
       Thread.currentThread().setName(name);
     }
 
-    LOG.info("done syncing to all tables, verifying the timestamps...");
+    log.info("done syncing to all tables, verifying the timestamps...");
     ReplicationStateSync base = replicationStateSyncList.get(0);
     boolean success = true;
-    LOG.info("expecting all timestamps to be similar to: " + base);
+    log.info("expecting all timestamps to be similar to: {}", base);
     for (int idx = 1; idx < replicationStateSyncList.size(); ++idx) {
       ReplicationStateSync other = replicationStateSyncList.get(idx);
       if (!base.replicationStateIsInSync(other)) {
-        LOG.error("the timestamp of other : " + other + " is not matching with base: " + base);
+        log.error("the timestamp of other: {} is not matching with base: {}", other, base);
         success = false;
       }
     }

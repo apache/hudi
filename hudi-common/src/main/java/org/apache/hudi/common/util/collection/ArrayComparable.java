@@ -25,6 +25,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
+import java.util.stream.IntStream;
 
 /**
  * A wrapper class to manage multiple ordering fields across Hudi.
@@ -49,6 +50,13 @@ public class ArrayComparable implements Comparable<ArrayComparable>, Serializabl
 
   public ArrayComparable apply(Function<Comparable, Comparable> mappingFunction) {
     return new ArrayComparable(Arrays.stream(values).map(mappingFunction).toArray(Comparable[]::new));
+  }
+
+  public ArrayComparable apply(List<Function<Comparable, Comparable>> mappingFunctions) {
+    return new ArrayComparable(
+        IntStream.range(0, values.length)
+            .mapToObj(i -> mappingFunctions.get(i).apply(values[i]))
+            .toArray(Comparable[]::new));
   }
 
   public boolean isValueSameClass(ArrayComparable other) {

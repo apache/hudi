@@ -25,10 +25,10 @@ import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonCo
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME
-import org.apache.hudi.common.util.{ConfigUtils, ReflectionUtils, StringUtils}
+import org.apache.hudi.common.util.{ConfigUtils, HoodieTableConfigUtils, ReflectionUtils, StringUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
-import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
+import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, NonPartitionedExtractor}
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
@@ -43,7 +43,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, L
 import org.apache.spark.sql.execution.datasources.FileStatusCache
 import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.sql.hudi.HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{filterHoodieConfigs, isUsingHiveCatalog}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{extractSparkPrefixedHoodieConfigs, filterHoodieConfigs, isUsingHiveCatalog}
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{buildOverridingOpts, buildOverridingOptsForDelete, combineOptions, getPartitionPathFieldWriteConfig}
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.sql.internal.SQLConf
@@ -53,7 +53,6 @@ import org.slf4j.LoggerFactory
 
 import java.util.Locale
 
-import scala.collection.JavaConverters
 import scala.collection.JavaConverters._
 
 trait ProvidesHoodieConfig extends Logging {
@@ -84,7 +83,7 @@ trait ProvidesHoodieConfig extends Logging {
     )
 
     val overridingOpts = buildOverridingOpts(hoodieCatalogTable, orderingFields)
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
 
@@ -105,7 +104,7 @@ trait ProvidesHoodieConfig extends Logging {
     )
 
     val overridingOpts = buildOverridingOpts(hoodieCatalogTable, orderingFields)
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
 
@@ -113,14 +112,11 @@ trait ProvidesHoodieConfig extends Logging {
    * Deduce the sql write operation for INSERT_INTO
    */
   private def deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition: Boolean, isOverwriteTable: Boolean,
-                                                     shouldAutoKeyGen: Boolean, preCombineField: String,
-                                                     sparkSqlInsertIntoOperationSet: Boolean, sparkSqlInsertIntoOperation: String): String = {
+                                                     sparkSqlInsertIntoOperation: String): String = {
     if (isOverwriteTable) {
       INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
     } else if (isOverwritePartition) {
       INSERT_OVERWRITE_OPERATION_OPT_VAL
-    } else if (!sparkSqlInsertIntoOperationSet && !shouldAutoKeyGen && preCombineField.nonEmpty) {
-      UPSERT_OPERATION_OPT_VAL
     } else {
       sparkSqlInsertIntoOperation
     }
@@ -182,7 +178,7 @@ trait ProvidesHoodieConfig extends Logging {
     val tableType = hoodieCatalogTable.tableTypeName
     val tableConfig = hoodieCatalogTable.tableConfig
 
-    val combinedOpts: Map[String, String] = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    val combinedOpts: Map[String, String] = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = Map.empty, overridingOpts = extraOptions)
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig, extraOptions)
 
@@ -215,7 +211,8 @@ trait ProvidesHoodieConfig extends Logging {
     val insertDupPolicy = combinedOpts.getOrElse(INSERT_DUP_POLICY.key(), INSERT_DUP_POLICY.defaultValue())
     val isNonStrictMode = insertMode == InsertMode.NON_STRICT
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
-    val combineBeforeInsert = !hoodieCatalogTable.orderingFields.isEmpty && hoodieCatalogTable.primaryKeys.nonEmpty
+    val combineBeforeInsert = combinedOpts.getOrElse(HoodieWriteConfig.COMBINE_BEFORE_INSERT.key(),
+      HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()).toBoolean
 
     /*
      * The sql write operation has higher precedence than the legacy insert mode.
@@ -231,8 +228,7 @@ trait ProvidesHoodieConfig extends Logging {
         deduceOperation(enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate,
           isNonStrictMode, isPartitionedTable, combineBeforeInsert, insertMode, shouldAutoKeyGen)
       } else {
-        deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition, isOverwriteTable,
-          shouldAutoKeyGen, orderingFieldsStr, sparkSqlInsertIntoOperationSet, sparkSqlInsertIntoOperation)
+        deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition, isOverwriteTable, sparkSqlInsertIntoOperation)
       }
     )
 
@@ -306,7 +302,7 @@ trait ProvidesHoodieConfig extends Logging {
         keyGeneratorClassName, partitionFieldsStr, hoodieCatalogTable)
     ) ++ overwriteTableOpts ++ getDropDupsConfig(useLegacyInsertModeFlow, combinedOpts) ++ staticOverwritePartitionPathOptions
 
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
 
@@ -343,7 +339,7 @@ trait ProvidesHoodieConfig extends Logging {
     val overridingOpts = extraOptions ++ Map(
       "path" -> catalogTable.tableLocation
     )
-    val combinedOpts: Map[String, String] = combineOptions(catalogTable, catalogTable.tableConfig, sparkSession.sqlContext.conf,
+    val combinedOpts: Map[String, String] = combineOptions(catalogTable, catalogTable.tableConfig, sparkSession.sessionState.conf,
       defaultOpts = Map.empty, overridingOpts = overridingOpts)
     val operation = combinedOpts.getOrElse(OPERATION.key, null)
     val isOverwriteOperation = operation != null &&
@@ -410,7 +406,7 @@ trait ProvidesHoodieConfig extends Logging {
       HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
     )
 
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = Map.empty, overridingOpts = overridingOpts)
   }
 
@@ -438,7 +434,7 @@ trait ProvidesHoodieConfig extends Logging {
     )
 
     val overridingOpts = buildOverridingOptsForDelete(hoodieCatalogTable)
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
 
@@ -446,7 +442,7 @@ trait ProvidesHoodieConfig extends Logging {
                           hoodieCatalogTable: HoodieCatalogTable,
                           tableConfig: HoodieTableConfig,
                           extraOptions: Map[String, String] = Map.empty): HiveSyncConfig = {
-    val combinedOpts = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    val combinedOpts = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = Map.empty, overridingOpts = extraOptions)
     val props = toProperties(combinedOpts)
 
@@ -463,7 +459,25 @@ trait ProvidesHoodieConfig extends Logging {
     if (props.get(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key) != null) {
       hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS, props.getString(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key))
     }
-    hiveSyncConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS, classOf[MultiPartKeysValueExtractor].getName)
+    // If partition value extractor is present in params Object we can use it.
+    // Here as well it checks first for hoodie.datasource.hive_sync.partition_extractor_class and then
+    // for hoodie.datasource.partition_extractor_class config.
+    // If either of the above configs are not provided then we can try inferring the partition extractor class name.
+    // Even if that fails, then we can assume it to be a NonPartitionExtractor.
+    val inferredPartitionValueExtractorClass = HoodieTableConfigUtils.inferPartitionValueExtractorClass(tableConfig)
+    if (props.containsKey(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key())) {
+      hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
+        props.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key()))
+    } else if (props.containsKey(DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key())) {
+      hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
+        props.getString(DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key()))
+    } else if (inferredPartitionValueExtractorClass.isPresent) {
+      hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
+        inferredPartitionValueExtractorClass.get())
+    } else {
+      hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), classOf[NonPartitionedExtractor].getName)
+    }
+
     // This is hardcoded to true to ensure consistency as Spark syncs TIMESTAMP types as TIMESTAMP by default
     // via Spark's externalCatalog API, which is used by AlterHoodieTableCommand.
     hiveSyncConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE, "true")
@@ -501,18 +515,21 @@ object ProvidesHoodieConfig {
     // NOTE: Properties are merged in the following order of priority (first has the highest priority, last has the
     //       lowest, which is inverse to the ordering in the code):
     //          1. (Extra) Option overrides
-    //          2. Spark SQL configs
+    //          2. Spark SQL configs (hoodie.* keys)
+    //          2b. Spark SQL configs (spark.hoodie.* keys, normalized to hoodie.*)
     //          3. Persisted Hudi's Table configs
     //          4. Table's properties in Spark Catalog
     //          5. Global DFS properties
     //          6. (Feature-specific) Default values
+    val allConfs = sqlConf.getAllConfs
     filterNullValues(defaultOpts) ++
       DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++
       // NOTE: Catalog table provided t/h `TBLPROPERTIES` clause might contain Spark SQL specific
       //       properties that need to be mapped into Hudi's conventional ones
       mapSqlOptionsToDataSourceWriteConfigs(catalogTable.catalogProperties) ++
       tableConfig.getProps.asScala.toMap ++
-      filterHoodieConfigs(sqlConf.getAllConfs) ++
+      extractSparkPrefixedHoodieConfigs(allConfs) ++
+      filterHoodieConfigs(allConfs) ++
       filterNullValues(overridingOpts)
   }
 

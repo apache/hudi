@@ -100,10 +100,10 @@ public class ProtoKafkaSource extends KafkaSource<JavaRDD<Message>> {
   }
 
   @Override
-  protected boolean allowSourcePersist() {
+  protected boolean isAllowSourcePersistRdd() {
     // Persisting proto messages where protobuf class is unknown, is expensive because of the overhead.
     // Eg: Persisting DynamicMessage using kryo requires attaching descriptor info for each message.
-    return persistRdd && deserializerName.equals(ByteArrayDeserializer.class.getName());
+    return allowSourcePersistRdd && deserializerName.equals(ByteArrayDeserializer.class.getName());
   }
 
   private static class ProtoDeserializer implements Serializable {

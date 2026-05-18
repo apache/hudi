@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.data;
 
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,8 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 class TestHoodieListData {
 
@@ -94,6 +97,16 @@ class TestHoodieListData {
 
     emptyListData = HoodieListData.lazy(Collections.emptyList());
     assertTrue(emptyListData.isEmpty());
+  }
+
+  @Test
+  void testCloseableIterator() {
+    ClosableIterator<String> iterator = spy(ClosableIterator.wrap(Arrays.asList("value1", "value2").iterator()));
+    HoodieData<String> listData = HoodieListData.lazy(iterator);
+    List<String> values = listData.collectAsList();
+    assertEquals(Arrays.asList("value1", "value2"), values);
+    // Ensure the iterator is closed after use
+    verify(iterator).close();
   }
 
   @ParameterizedTest

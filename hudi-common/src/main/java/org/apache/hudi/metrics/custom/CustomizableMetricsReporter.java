@@ -21,26 +21,18 @@ package org.apache.hudi.metrics.custom;
 import org.apache.hudi.metrics.MetricsReporter;
 
 import com.codahale.metrics.MetricRegistry;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 
 import java.util.Properties;
 
 /**
  * Extensible metrics reporter for custom implementation.
  */
+@AllArgsConstructor
+@Getter
 public abstract class CustomizableMetricsReporter extends MetricsReporter {
+
   private final Properties props;
   private final MetricRegistry registry;
-
-  public CustomizableMetricsReporter(Properties props, MetricRegistry registry) {
-    this.props = props;
-    this.registry = registry;
-  }
-
-  public Properties getProps() {
-    return props;
-  }
-
-  public MetricRegistry getRegistry() {
-    return registry;
-  }
 }

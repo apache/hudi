@@ -32,10 +32,9 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -43,6 +42,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -52,10 +53,9 @@ import scala.Tuple2;
  * whether particular record key could be stored in the latest file-slice of the file-group
  * identified by the {@link HoodieFileGroupId}
  */
+@Slf4j
 public class HoodieMetadataBloomFilterProbingFunction implements
     PairFlatMapFunction<Iterator<Tuple2<HoodieFileGroupId, String>>, HoodieFileGroupId, HoodieBloomFilterProbingResult> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataBloomFilterProbingFunction.class);
 
   // Assuming each file bloom filter takes up 512K, sizing the max file count
   // per batch so that the total fetched bloom filters would not cross 128 MB.
@@ -124,7 +124,7 @@ public class HoodieMetadataBloomFilterProbingFunction implements
 
       List<Pair<String, String>> partitionNameFileNameList = fileToKeysMap.keySet().stream().map(pair -> Pair.of(pair.getLeft(), pair.getRight().getFileName())).collect(Collectors.toList());
       Map<Pair<String, String>, BloomFilter> fileToBloomFilterMap =
-          hoodieTable.getMetadataTable().getBloomFilters(partitionNameFileNameList);
+          hoodieTable.getTableMetadata().getBloomFilters(partitionNameFileNameList);
 
       return fileToKeysMap.entrySet().stream()
           .map(entry -> {
@@ -140,14 +140,14 @@ public class HoodieMetadataBloomFilterProbingFunction implements
             }
             final BloomFilter fileBloomFilter = fileToBloomFilterMap.get(partitionPathFileNamePair);
 
-            List<String> candidateRecordKeys = new ArrayList<>();
+            Set<String> candidateRecordKeys = new TreeSet<>();
             hoodieKeyList.forEach(hoodieKey -> {
               if (fileBloomFilter.mightContain(hoodieKey.getRecordKey())) {
                 candidateRecordKeys.add(hoodieKey.getRecordKey());
               }
             });
 
-            LOG.debug("Total records ({}), bloom filter candidates ({})",
+            log.debug("Total records ({}), bloom filter candidates ({})",
                 hoodieKeyList.size(), candidateRecordKeys.size());
 
             return Tuple2.apply(new HoodieFileGroupId(partitionPath, fileId), new HoodieBloomFilterProbingResult(candidateRecordKeys));

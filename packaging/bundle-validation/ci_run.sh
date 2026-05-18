@@ -105,6 +105,9 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.12' ]];
   if [[ ${FLINK_PROFILE} == 'flink2.0' ]]; then
     IMAGE_TAG=flink200hive313spark351
     FLINK_VERSION=2.0.0
+  elif [[ ${FLINK_PROFILE} == 'flink2.1' ]]; then
+    IMAGE_TAG=flink211hive313spark351
+    FLINK_VERSION=2.1.1
   else
     IMAGE_TAG=flink1170hive313spark351
     FLINK_VERSION=1.17.0
@@ -119,6 +122,26 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.13' ]];
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
   IMAGE_TAG=flink1200hive313spark351scala213
+elif [[ ${SPARK_RUNTIME} == 'spark4.0.0' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
+  HADOOP_VERSION=3.4.0
+  HIVE_VERSION=3.1.3
+  DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.20.1
+  SPARK_VERSION=4.0.0
+  SPARK_HADOOP_VERSION=3
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1200hive313spark400scala213
+elif [[ ${SPARK_RUNTIME} == 'spark4.1.1' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
+  HADOOP_VERSION=3.4.2
+  HIVE_VERSION=3.1.3
+  DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.20.1
+  SPARK_VERSION=4.1.1
+  SPARK_HADOOP_VERSION=3
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1200hive313spark411scala213
 fi
 
 # Copy bundle jars to temp dir for mounting
@@ -166,6 +189,16 @@ else
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3.5-bundle_2.13
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.13
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.13
+  elif [[ ${SPARK_PROFILE} == 'spark4.0' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
+    HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.13
+    HUDI_SPARK_BUNDLE_NAME=hudi-spark4.0-bundle_2.13
+    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.13
+    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.13
+  elif [[ ${SPARK_PROFILE} == 'spark4.1' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
+    HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.13
+    HUDI_SPARK_BUNDLE_NAME=hudi-spark4.1-bundle_2.13
+    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.13
+    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.13
   elif [[ ${SPARK_PROFILE} == 'spark3' ]]; then
     HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.12
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3-bundle_2.12
@@ -183,6 +216,8 @@ else
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.20-bundle
   elif [[ ${FLINK_PROFILE} == 'flink2.0' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink2.0-bundle
+  elif [[ ${FLINK_PROFILE} == 'flink2.1' ]]; then
+    HUDI_FLINK_BUNDLE_NAME=hudi-flink2.1-bundle
   fi
 
   echo "Downloading bundle jars from base URL - $REPO_BASE_URL ..."
@@ -226,4 +261,4 @@ docker run --name $CONTAINER_NAME \
   -v ${GITHUB_WORKSPACE}:/opt/bundle-validation/docker-test \
   -v $TMP_JARS_DIR:/opt/bundle-validation/jars \
   -v $TMP_DATA_DIR:/opt/bundle-validation/data \
-  -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh $JAVA_RUNTIME_VERSION $SCALA_PROFILE
+  -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh $JAVA_RUNTIME_VERSION $SCALA_PROFILE $SPARK_VERSION

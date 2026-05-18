@@ -20,8 +20,7 @@ package org.apache.hudi.client.transaction;
 
 import org.apache.hudi.index.bucket.BucketIdentifier;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -30,9 +29,9 @@ import java.util.stream.Collectors;
 /**
  * This class is a basic implementation of a conflict resolution strategy for concurrent writes {@link ConflictResolutionStrategy} using bucket index.
  */
+@Slf4j
 public class BucketIndexConcurrentFileWritesConflictResolutionStrategy
     extends SimpleConcurrentFileWritesConflictResolutionStrategy {
-  private static final Logger LOG = LoggerFactory.getLogger(BucketIndexConcurrentFileWritesConflictResolutionStrategy.class);
 
   @Override
   public boolean hasConflict(ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) {
@@ -52,7 +51,7 @@ public class BucketIndexConcurrentFileWritesConflictResolutionStrategy
     Set<String> intersection = new HashSet<>(partitionBucketIdSetForFirstInstant);
     intersection.retainAll(partitionBucketIdSetForSecondInstant);
     if (!intersection.isEmpty()) {
-      LOG.info("Found conflicting writes between first operation = " + thisOperation
+      log.info("Found conflicting writes between first operation = " + thisOperation
           + ", second operation = " + otherOperation + " , intersecting bucket ids " + intersection);
       return true;
     }

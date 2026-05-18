@@ -21,8 +21,9 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.util.HoodieTimer
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+import org.apache.hudi.storage.HoodieStorageUtils
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
@@ -58,7 +59,7 @@ class ShowMetadataTablePartitionsProcedure() extends BaseProcedure with Procedur
 
     validateFilter(filter, outputType)
     val basePath = getBasePath(table, path)
-    val storage = new HoodieHadoopStorage(basePath, spark.sessionState.newHadoopConf())
+    val storage = HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()))
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
     val metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc), storage, config, basePath)
     if (!metadata.enabled){

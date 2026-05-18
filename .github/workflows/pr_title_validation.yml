@@ -1,0 +1,68 @@
+name: PR Title Validation
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches:
+      - master
+      - branch-0.x
+
+concurrency:
+  group: pr-title-validation-${{ github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') }}
+
+jobs:
+  validate-pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for legacy PR title format using JIRA or MINOR
+        id: check-legacy-format
+        run: |
+          title="${{ github.event.pull_request.title }}"
+          echo "Checking PR title: $title"
+          
+          # Check for HUDI JIRA format: [HUDI-1234] description
+          if [[ "$title" =~ ^\[HUDI-[0-9]+\]\ .+ ]]; then
+            echo "✅ Title matches HUDI JIRA format"
+            echo "skip_conventional=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check for MINOR format: [MINOR] description
+          if [[ "$title" =~ ^\[MINOR\]\ .+ ]]; then
+            echo "✅ Title matches MINOR format"
+            echo "skip_conventional=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "Title does not match JIRA/MINOR format, will validate as conventional commit"
+          echo "skip_conventional=false" >> $GITHUB_OUTPUT
+
+      - name: Validate PR title with Conventional Commits spec
+        if: steps.check-legacy-format.outputs.skip_conventional == 'false'
+        uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            chore
+          requireScope: false
+          # Disable subject case validation to be more permissive
+          subjectPattern: ^.+$
+          subjectPatternError: |
+            The subject "{subject}" found in the pull request title "{title}"
+            is empty. Please provide a meaningful description.
+          # Allow ignoring certain labels
+          ignoreLabels: |
+            bot
+            ignore-semantic-pull-request
+          validateSingleCommit: false
+          headerPattern: '^(\w+)(?:\(([^)]+)\))?!?: (.+)$'
+          headerPatternCorrespondence: type,scope,subject

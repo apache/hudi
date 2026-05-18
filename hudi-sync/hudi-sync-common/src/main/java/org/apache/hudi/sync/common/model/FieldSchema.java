@@ -21,8 +21,15 @@ package org.apache.hudi.sync.common.model;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.Objects;
 
+@AllArgsConstructor
+@Getter
+@Setter
 public class FieldSchema {
 
   private final String name;
@@ -37,38 +44,8 @@ public class FieldSchema {
     this(name, type, Option.ofNullable(comment));
   }
 
-  public FieldSchema(String name, String type, Option<String> comment) {
-    this.name = name;
-    this.type = type;
-    this.comment = comment;
-  }
-
-  public String getName() {
-    return name;
-  }
-
-  public String getType() {
-    return type;
-  }
-
-  public Option<String> getComment() {
-    return comment;
-  }
-
   public String getCommentOrEmpty() {
     return comment.orElse("");
-  }
-
-  public void setType(String type) {
-    this.type = type;
-  }
-
-  public void setComment(Option<String> comment) {
-    this.comment = comment;
-  }
-
-  public void setComment(String comment) {
-    this.comment = Option.ofNullable(comment);
   }
 
   public boolean updateComment(FieldSchema another) {

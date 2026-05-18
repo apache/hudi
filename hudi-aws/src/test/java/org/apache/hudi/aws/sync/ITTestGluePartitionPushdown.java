@@ -48,7 +48,6 @@ import software.amazon.awssdk.services.glue.model.SerDeInfo;
 import software.amazon.awssdk.services.glue.model.StorageDescriptor;
 import software.amazon.awssdk.services.glue.model.TableInput;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.time.Instant;
 import java.util.Arrays;
@@ -65,19 +64,18 @@ public class ITTestGluePartitionPushdown {
   private static final String MOTO_ENDPOINT = "http://localhost:" + MOTO_PORT;
   private static final String DB_NAME = "db_name";
   private static final String TABLE_NAME = "tbl_name";
-  private String basePath = Files.createTempDirectory("hivesynctest" + Instant.now().toEpochMilli()).toUri().toString();
-  private String tablePath = basePath + "/" + TABLE_NAME;
+  private String basePath;
+  private String tablePath;
   private TypedProperties hiveSyncProps;
   private AWSGlueCatalogSyncClient glueSync;
   private FileSystem fileSystem;
   private Column[] partitionsColumn = {Column.builder().name("part1").type("int").build(), Column.builder().name("part2").type("string").build()};
   List<FieldSchema> partitionsFieldSchema = Arrays.asList(new FieldSchema("part1", "int"), new FieldSchema("part2", "string"));
 
-  public ITTestGluePartitionPushdown() throws IOException {
-  }
-
   @BeforeEach
   public void setUp() throws Exception {
+    basePath = Files.createTempDirectory("hivesynctest" + Instant.now().toEpochMilli()).toUri().toString();
+    tablePath = basePath + "/" + TABLE_NAME;
     hiveSyncProps = new TypedProperties();
     hiveSyncProps.setProperty(HoodieAWSConfig.AWS_ACCESS_KEY.key(), "dummy");
     hiveSyncProps.setProperty(HoodieAWSConfig.AWS_SECRET_KEY.key(), "dummy");

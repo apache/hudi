@@ -49,4 +49,8 @@ public class RuntimeContextUtils {
   public static long getWatermarkInternal(RuntimeContext runtimeContext) {
     return runtimeContext.getExecutionConfig().getAutoWatermarkInterval();
   }
+
+  public static boolean isObjectReuseEnabled(RuntimeContext runtimeContext) {
+    return runtimeContext.getExecutionConfig().isObjectReuseEnabled();
+  }
 }

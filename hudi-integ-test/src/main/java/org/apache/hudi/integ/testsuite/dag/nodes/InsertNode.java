@@ -25,11 +25,14 @@ import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.hudi.integ.testsuite.generator.DeltaGenerator;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
+
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
 
 /**
  * An insert node in the DAG of operations for a workflow.
  */
+@Slf4j
 public class InsertNode extends DagNode<JavaRDD<WriteStatus>> {
 
   protected JavaRDD<DeltaWriteStats> deltaWriteStatsRDD;

@@ -81,6 +81,7 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
     assertEquals(0, sqlContext.read().format("org.apache.hudi").load(tableBasePath).where("timestamp != 110").count());
     testNum++;
+    deltaStreamer.shutdownGracefully();
   }
 
   /**

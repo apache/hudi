@@ -19,8 +19,6 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -28,6 +26,10 @@ import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
@@ -43,6 +45,9 @@ import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.ToString;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -65,8 +70,10 @@ import java.math.MathContext;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -76,10 +83,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -150,6 +157,37 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       + "{\"name\":\"current_ts\",\"type\": {\"type\": \"long\"}},"
       + "{\"name\":\"height\",\"type\":{\"type\":\"fixed\",\"name\":\"abc\",\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":6}},";
 
+  public static final String EXTENDED_LOGICAL_TYPES_SCHEMA_V6 = "{\"name\":\"ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}},"
+      + "{\"name\":\"ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},"
+      + "{\"name\":\"local_ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}},"
+      + "{\"name\":\"local_ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}},"
+      + "{\"name\":\"event_date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},"
+      + "{\"name\":\"dec_fixed_small\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedSmall\",\"size\":3,\"logicalType\":\"decimal\",\"precision\":5,\"scale\":2}},"
+      + "{\"name\":\"dec_fixed_large\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedLarge\",\"size\":8,\"logicalType\":\"decimal\",\"precision\":18,\"scale\":9}},";
+
+  public static final String EXTENDED_LOGICAL_TYPES_SCHEMA = "{\"name\":\"ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}},"
+          + "{\"name\":\"ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},"
+          + "{\"name\":\"local_ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}},"
+          + "{\"name\":\"local_ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}},"
+          + "{\"name\":\"event_date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},"
+          + "{\"name\":\"dec_plain_large\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":20,\"scale\":10}},"
+          + "{\"name\":\"dec_fixed_small\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedSmall\",\"size\":3,\"logicalType\":\"decimal\",\"precision\":5,\"scale\":2}},"
+          + "{\"name\":\"dec_fixed_large\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedLarge\",\"size\":8,\"logicalType\":\"decimal\",\"precision\":18,\"scale\":9}},";
+
+  // LTS = Local Timestamp
+  public static final String EXTENDED_LOGICAL_TYPES_SCHEMA_NO_LTS = "{\"name\":\"ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}},"
+      + "{\"name\":\"ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},"
+      + "{\"name\":\"event_date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},"
+      + "{\"name\":\"dec_plain_large\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":20,\"scale\":10}},"
+      + "{\"name\":\"dec_fixed_small\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedSmall\",\"size\":3,\"logicalType\":\"decimal\",\"precision\":5,\"scale\":2}},"
+      + "{\"name\":\"dec_fixed_large\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedLarge\",\"size\":8,\"logicalType\":\"decimal\",\"precision\":18,\"scale\":9}},";
+
+  public static final String EXTENDED_LOGICAL_TYPES_SCHEMA_NO_LTS_V6 = "{\"name\":\"ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}},"
+      + "{\"name\":\"ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},"
+      + "{\"name\":\"event_date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},"
+      + "{\"name\":\"dec_fixed_small\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedSmall\",\"size\":3,\"logicalType\":\"decimal\",\"precision\":5,\"scale\":2}},"
+      + "{\"name\":\"dec_fixed_large\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedLarge\",\"size\":8,\"logicalType\":\"decimal\",\"precision\":18,\"scale\":9}},";
+
   public static final String EXTRA_COL_SCHEMA1 = "{\"name\": \"extra_column1\", \"type\": [\"null\", \"string\"], \"default\": null },";
   public static final String EXTRA_COL_SCHEMA2 = "{\"name\": \"extra_column2\", \"type\": [\"null\", \"string\"], \"default\": null},";
   public static final String EXTRA_COL_SCHEMA_FOR_AWS_DMS_PAYLOAD = "{\"name\": \"Op\", \"type\": [\"null\", \"string\"], \"default\": null},";
@@ -165,6 +203,17 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + EXTRA_COL_SCHEMA2 + TRIP_SCHEMA_SUFFIX;
   public static final String TRIP_FLATTENED_SCHEMA =
       TRIP_SCHEMA_PREFIX + FARE_FLATTENED_SCHEMA + TRIP_SCHEMA_SUFFIX;
+  public static final String TRIP_LOGICAL_TYPES_SCHEMA_V6 =
+      TRIP_SCHEMA_PREFIX + EXTENDED_LOGICAL_TYPES_SCHEMA_V6 + TRIP_SCHEMA_SUFFIX;
+  public static final String TRIP_LOGICAL_TYPES_SCHEMA =
+      TRIP_SCHEMA_PREFIX + EXTENDED_LOGICAL_TYPES_SCHEMA + TRIP_SCHEMA_SUFFIX;
+  // LTS = Local Timestamp
+  public static final String TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS =
+      TRIP_SCHEMA_PREFIX + EXTENDED_LOGICAL_TYPES_SCHEMA_NO_LTS + TRIP_SCHEMA_SUFFIX;
+
+  public static final String TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6 =
+      TRIP_SCHEMA_PREFIX + EXTENDED_LOGICAL_TYPES_SCHEMA_NO_LTS_V6 + TRIP_SCHEMA_SUFFIX;
+
 
   public static final String TRIP_NESTED_EXAMPLE_SCHEMA =
       TRIP_SCHEMA_PREFIX + FARE_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
@@ -187,12 +236,24 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
 
   public static final Schema AVRO_SCHEMA = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
+  public static final HoodieSchema HOODIE_SCHEMA = HoodieSchema.fromAvroSchema(AVRO_SCHEMA);
   public static final Schema AVRO_SCHEMA_WITH_SPECIFIC_COLUMNS = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS);
   public static final Schema NESTED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_NESTED_EXAMPLE_SCHEMA);
+  public static final HoodieSchema NESTED_SCHEMA = HoodieSchema.fromAvroSchema(NESTED_AVRO_SCHEMA);
   public static final Schema AVRO_SCHEMA_WITH_METADATA_FIELDS =
-      HoodieAvroUtils.addMetadataFields(AVRO_SCHEMA);
+      HoodieSchemaUtils.addMetadataFields(HoodieSchema.fromAvroSchema(AVRO_SCHEMA)).toAvroSchema();
+  public static final HoodieSchema HOODIE_SCHEMA_WITH_METADATA_FIELDS = HoodieSchema.fromAvroSchema(AVRO_SCHEMA_WITH_METADATA_FIELDS);
   public static final Schema AVRO_SHORT_TRIP_SCHEMA = new Schema.Parser().parse(SHORT_TRIP_SCHEMA);
   public static final Schema AVRO_TRIP_ENCODED_DECIMAL_SCHEMA = new Schema.Parser().parse(TRIP_ENCODED_DECIMAL_SCHEMA);
+  public static final HoodieSchema HOODIE_TRIP_ENCODED_DECIMAL_SCHEMA = HoodieSchema.parse(TRIP_ENCODED_DECIMAL_SCHEMA);
+  public static final Schema AVRO_TRIP_LOGICAL_TYPES_SCHEMA = new Schema.Parser().parse(TRIP_LOGICAL_TYPES_SCHEMA);
+  public static final HoodieSchema HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA = HoodieSchema.parse(TRIP_LOGICAL_TYPES_SCHEMA);
+  public static final Schema AVRO_TRIP_LOGICAL_TYPES_SCHEMA_V6 = new Schema.Parser().parse(TRIP_LOGICAL_TYPES_SCHEMA_V6);
+  public static final HoodieSchema HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_V6 = HoodieSchema.parse(TRIP_LOGICAL_TYPES_SCHEMA_V6);
+  public static final Schema AVRO_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS = new Schema.Parser().parse(TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS);
+  public static final HoodieSchema HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS = HoodieSchema.parse(TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS);
+  public static final Schema AVRO_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6 = new Schema.Parser().parse(TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6);
+  public static final HoodieSchema HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6 = HoodieSchema.parse(TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6);
   public static final Schema AVRO_TRIP_SCHEMA = new Schema.Parser().parse(TRIP_SCHEMA);
   public static final Schema FLATTENED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_FLATTENED_SCHEMA);
 
@@ -200,10 +261,11 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
   //Maintains all the existing keys schema wise
   private final Map<String, Map<Integer, KeyPartition>> existingKeysBySchema;
+  @Getter
   private final String[] partitionPaths;
   //maintains the count of existing keys schema wise
   private Map<String, Integer> numKeysBySchema;
-  private Option<Schema> extendedSchema = Option.empty();
+  private Option<HoodieSchema> extendedSchema = Option.empty();
 
   public HoodieTestDataGenerator(long seed) {
     this(seed, DEFAULT_PARTITION_PATHS, new HashMap<>());
@@ -315,20 +377,48 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   public IndexedRecord generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened, long timestamp) throws IOException {
-    if (TRIP_FLATTENED_SCHEMA.equals(schemaStr)) {
-      return generateRandomValue(key, commitTime, true, timestamp);
-    } else if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
-      return generateRandomValue(key, commitTime, isFlattened, timestamp);
-    } else if (TRIP_ENCODED_DECIMAL_SCHEMA.equals(schemaStr)) {
-      return generatePayloadForTripEncodedDecimalSchema(key, commitTime, timestamp);
-    } else if (TRIP_SCHEMA.equals(schemaStr)) {
-      return generatePayloadForTripSchema(key, commitTime, timestamp);
-    } else if (SHORT_TRIP_SCHEMA.equals(schemaStr)) {
-      return generatePayloadForShortTripSchema(key, commitTime, timestamp);
-    } else if (TRIP_NESTED_EXAMPLE_SCHEMA.equals(schemaStr)) {
-      return generateNestedExampleRandomValue(key, commitTime, timestamp);
-    } else if (TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS.equals(schemaStr)) {
-      return generateRandomValueWithColumnRequired(key, commitTime);
+    return generateRandomValueAsPerSchema(schemaStr, key, commitTime, isFlattened, false, timestamp);
+  }
+
+  public IndexedRecord generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened, boolean isDelete, long timestamp) throws IOException {
+    if (!isDelete) {
+      if (TRIP_FLATTENED_SCHEMA.equals(schemaStr)) {
+        return generateRandomValue(key, commitTime, true, timestamp);
+      } else if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
+        return generateRandomValue(key, commitTime, isFlattened, timestamp);
+      } else if (TRIP_EXAMPLE_SCHEMA_EVOLVED_1.equals(schemaStr)) {
+        return generateRandomValueForSchemaEvolved1(key, commitTime, isFlattened, timestamp);
+      } else if (TRIP_ENCODED_DECIMAL_SCHEMA.equals(schemaStr)) {
+        return generatePayloadForTripEncodedDecimalSchema(key, commitTime, timestamp);
+      } else if (TRIP_SCHEMA.equals(schemaStr)) {
+        return generatePayloadForTripSchema(key, commitTime, timestamp);
+      } else if (SHORT_TRIP_SCHEMA.equals(schemaStr)) {
+        return generatePayloadForShortTripSchema(key, commitTime, timestamp);
+      } else if (TRIP_NESTED_EXAMPLE_SCHEMA.equals(schemaStr)) {
+        return generateNestedExampleRandomValue(key, commitTime, timestamp);
+      } else if (TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS.equals(schemaStr)) {
+        return generateRandomValueWithColumnRequired(key, commitTime);
+      } else if (TRIP_LOGICAL_TYPES_SCHEMA.equals(schemaStr)) {
+        return generatePayloadForLogicalTypesSchema(key, commitTime, false, timestamp);
+      } else if (TRIP_LOGICAL_TYPES_SCHEMA_V6.equals(schemaStr)) {
+        return generatePayloadForLogicalTypesSchemaV6(key, commitTime, false, timestamp);
+      } else if (TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS.equals(schemaStr)) {
+        return generatePayloadForLogicalTypesSchemaNoLTS(key, commitTime, false, timestamp);
+      } else if (TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6.equals(schemaStr)) {
+        return generatePayloadForLogicalTypesSchemaNoLTSV6(key, commitTime, false, timestamp);
+      }
+    } else {
+      if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
+        return generateRandomDeleteValue(key, commitTime, timestamp);
+      } else if (TRIP_LOGICAL_TYPES_SCHEMA.equals(schemaStr)) {
+        return generatePayloadForLogicalTypesSchema(key, commitTime, true, timestamp);
+      } else if (TRIP_LOGICAL_TYPES_SCHEMA_V6.equals(schemaStr)) {
+        return generatePayloadForLogicalTypesSchemaV6(key, commitTime, true, timestamp);
+      } else if (TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS.equals(schemaStr)) {
+        return generatePayloadForLogicalTypesSchemaNoLTS(key, commitTime, true, timestamp);
+      } else if (TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6.equals(schemaStr)) {
+        return generatePayloadForLogicalTypesSchemaNoLTSV6(key, commitTime, true, timestamp);
+      }
     }
 
     return null;
@@ -370,6 +460,25 @@ public class HoodieTestDataGenerator implements AutoCloseable {
         false, isFlattened);
   }
 
+  private IndexedRecord generateRandomValueForSchemaEvolved1(HoodieKey key, String instantTime, boolean isFlattened, long timestamp) {
+    Schema evolvedSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA_EVOLVED_1);
+    GenericRecord rec = new GenericData.Record(evolvedSchema);
+
+    // Reuse existing logic to populate base fields
+    generateTripPrefixValues(rec, key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, timestamp);
+    generateExtraSchemaValues(rec);
+    generateMapTypeValues(rec);
+    generateFareNestedValues(rec);
+    generateTipNestedValues(rec);
+
+    // Add the evolved column
+    rec.put("extra_column1", "extra_value_" + instantTime);
+
+    generateCustomValues(rec, "customField");
+    generateTripSuffixValues(rec, false);
+    return rec;
+  }
+
   private IndexedRecord generateNestedExampleRandomValue(HoodieKey key, String instantTime, long ts) {
     return generateNestedExampleGenericRecord(
         key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, ts,
@@ -381,6 +490,25 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    */
   public IndexedRecord generatePayloadForTripEncodedDecimalSchema(HoodieKey key, String commitTime, long timestamp) {
     return generateRecordForTripEncodedDecimalSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, timestamp);
+  }
+
+  /**
+   * LTS = Local Timestamp
+   */
+  public IndexedRecord generatePayloadForLogicalTypesSchemaNoLTS(HoodieKey key, String commitTime, boolean isDelete, long timestamp) {
+    return generateRecordForTripLogicalTypesSchema(key, "rider-" + commitTime, "driver-" + commitTime, timestamp, isDelete, false, false);
+  }
+  
+  public IndexedRecord generatePayloadForLogicalTypesSchemaNoLTSV6(HoodieKey key, String commitTime, boolean isDelete, long timestamp) {
+    return generateRecordForTripLogicalTypesSchema(key, "rider-" + commitTime, "driver-" + commitTime, timestamp, isDelete, true, false);
+  }
+
+  public IndexedRecord generatePayloadForLogicalTypesSchema(HoodieKey key, String commitTime, boolean isDelete, long timestamp) {
+    return generateRecordForTripLogicalTypesSchema(key, "rider-" + commitTime, "driver-" + commitTime, timestamp, isDelete, false, true);
+  }
+
+  public IndexedRecord generatePayloadForLogicalTypesSchemaV6(HoodieKey key, String commitTime, boolean isDelete, long timestamp) {
+    return generateRecordForTripLogicalTypesSchema(key, "rider-" + commitTime, "driver-" + commitTime, timestamp, isDelete, true, true);
   }
 
   /**
@@ -412,6 +540,13 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public GenericRecord generateGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,
                                              long timestamp) {
     return generateGenericRecord(rowKey, partitionPath, riderName, driverName, timestamp, false, false);
+  }
+
+  /**
+   * Get the Avro schema to use, considering extendedSchema if present.
+   */
+  private Schema getEffectiveAvroSchema() {
+    return extendedSchema.map(HoodieSchema::toAvroSchema).orElse(AVRO_SCHEMA);
   }
 
   /**
@@ -455,7 +590,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     rec.put("current_ts", randomMillis);
 
     BigDecimal bigDecimal = new BigDecimal(String.format(Locale.ENGLISH, "%5f", rand.nextFloat()));
-    Schema decimalSchema = AVRO_SCHEMA.getField("height").schema();
+    Schema decimalSchema = getEffectiveAvroSchema().getField("height").schema();
     Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
     GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, decimalSchema, LogicalTypes.decimal(10, 6));
     rec.put("height", genericFixed);
@@ -472,7 +607,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * Populate rec with values for FARE_NESTED_SCHEMA
    */
   private void generateFareNestedValues(GenericRecord rec) {
-    GenericRecord fareRecord = new GenericData.Record(extendedSchema.orElse(AVRO_SCHEMA).getField("fare").schema());
+    GenericRecord fareRecord = new GenericData.Record(getEffectiveAvroSchema().getField("fare").schema());
     fareRecord.put("amount", rand.nextDouble() * 100);
     fareRecord.put("currency", "USD");
     if (extendedSchema.isPresent()) {
@@ -501,14 +636,13 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * Populate rec with values for TIP_NESTED_SCHEMA
    */
   private void generateTipNestedValues(GenericRecord rec) {
+    Schema schemaToUse = getEffectiveAvroSchema();
     // TODO [HUDI-9603] remove this check
-    if (extendedSchema.isPresent()) {
-      if (extendedSchema.get().getField("tip_history") == null) {
-        return;
-      }
+    if (schemaToUse.getField("tip_history") == null) {
+      return;
     }
-    GenericArray<GenericRecord> tipHistoryArray = new GenericData.Array<>(1, AVRO_SCHEMA.getField("tip_history").schema());
-    Schema tipSchema = new Schema.Parser().parse(AVRO_SCHEMA.getField("tip_history").schema().toString()).getElementType();
+    GenericArray<GenericRecord> tipHistoryArray = new GenericData.Array<>(1, schemaToUse.getField("tip_history").schema());
+    Schema tipSchema = new Schema.Parser().parse(schemaToUse.getField("tip_history").schema().toString()).getElementType();
     GenericRecord tipRecord = new GenericData.Record(tipSchema);
     tipRecord.put("amount", rand.nextDouble() * 100);
     tipRecord.put("currency", "USD");
@@ -533,7 +667,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public GenericRecord generateGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,
                                              long timestamp, boolean isDeleteRecord,
                                              boolean isFlattened) {
-    GenericRecord rec = new GenericData.Record(extendedSchema.orElseGet(() -> isFlattened ? FLATTENED_AVRO_SCHEMA : AVRO_SCHEMA));
+    Schema schemaToUse = extendedSchema.isPresent() ? getEffectiveAvroSchema() : (isFlattened ? FLATTENED_AVRO_SCHEMA : AVRO_SCHEMA);
+    GenericRecord rec = new GenericData.Record(schemaToUse);
     generateTripPrefixValues(rec, rowKey, partitionPath, riderName, driverName, timestamp);
     if (isFlattened) {
       generateFareFlattenedValues(rec);
@@ -595,6 +730,99 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     rec.put("driver", driverName);
     rec.put("fare", rand.nextDouble() * 100);
     rec.put("_hoodie_is_deleted", false);
+    return rec;
+  }
+
+  public GenericRecord generateRecordForTripLogicalTypesSchema(HoodieKey key, String riderName, String driverName,
+                                                               long timestamp, boolean isDeleteRecord, boolean v6, boolean hasLTS) {
+    GenericRecord rec;
+    if (!hasLTS) {
+      if (v6) {
+        rec = new GenericData.Record(AVRO_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6);
+      } else {
+        rec = new GenericData.Record(AVRO_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS);
+      }
+    } else if (v6) {
+      rec = new GenericData.Record(AVRO_TRIP_LOGICAL_TYPES_SCHEMA_V6);
+    } else {
+      rec = new GenericData.Record(AVRO_TRIP_LOGICAL_TYPES_SCHEMA);
+    }
+    generateTripPrefixValues(rec, key.getRecordKey(), key.getPartitionPath(), riderName, driverName, timestamp);
+
+    int hash = key.getRecordKey().hashCode();
+    boolean above = (hash & 1) == 0; // half above, half below threshold
+
+    // -------------------
+    // Threshold definitions
+    // -------------------
+    Instant tsMillisThreshold = Instant.parse("2020-01-01T00:00:00Z");
+    Instant tsMicrosThreshold = Instant.parse("2020-06-01T12:00:00Z");
+
+    Instant localTsMillisThreshold = ZonedDateTime.of(
+        2015, 5, 20, 12, 34, 56, 0, ZoneOffset.UTC).toInstant();
+    Instant localTsMicrosThreshold = ZonedDateTime.of(
+        2017, 7, 7, 7, 7, 7, 0, ZoneOffset.UTC).toInstant();
+
+    LocalDate dateThreshold = LocalDate.of(2000, 1, 1);
+
+    // -------------------
+    // Assign edge values
+    // -------------------
+
+    // ts_millis
+    long tsMillisBase = tsMillisThreshold.toEpochMilli();
+    rec.put("ts_millis", above ? tsMillisBase + 1 : tsMillisBase - 1);
+
+    // ts_micros
+    long tsMicrosBase = TimeUnit.SECONDS.toMicros(tsMicrosThreshold.getEpochSecond()) + tsMicrosThreshold.getNano() / 1_000L;
+    rec.put("ts_micros", above ? tsMicrosBase + 1 : tsMicrosBase - 1);
+
+    if (hasLTS) {
+      // local_ts_millis
+      long localTsMillisBase = localTsMillisThreshold.toEpochMilli();
+      rec.put("local_ts_millis", above ? localTsMillisBase + 1 : localTsMillisBase - 1);
+
+      // local_ts_micros
+      long localTsMicrosBase = TimeUnit.SECONDS.toMicros(localTsMicrosThreshold.getEpochSecond()) + localTsMicrosThreshold.getNano() / 1_000L;
+      rec.put("local_ts_micros", above ? localTsMicrosBase + 1 : localTsMicrosBase - 1);
+    }
+
+    // event_date
+    int eventDateBase = (int) dateThreshold.toEpochDay();
+    rec.put("event_date", above ? eventDateBase + 1 : eventDateBase - 1);
+
+
+    // -------------------
+    // Decimal thresholds
+    // -------------------
+    BigDecimal decPlainLargeThreshold = new BigDecimal("1234567890.0987654321"); // precision=20, scale=10
+
+    BigDecimal decFixedSmallThreshold = new BigDecimal("543.21"); // precision=5, scale=2
+    BigDecimal decFixedLargeThreshold = new BigDecimal("987654321.123456789"); // precision=18, scale=9
+
+    // Increment for just-above/below threshold = smallest possible unit for that scale
+    BigDecimal incSmallScale2 = new BigDecimal("0.01");
+    BigDecimal incLargeScale9 = new BigDecimal("0.000000001");
+    BigDecimal incLargeScale10 = new BigDecimal("0.0000000001");
+
+    // Assign thresholded decimals
+    if (!v6) {
+      rec.put("dec_plain_large", ByteBuffer.wrap((above
+          ? decPlainLargeThreshold.add(incLargeScale10)
+          : decPlainLargeThreshold.subtract(incLargeScale10)).unscaledValue().toByteArray()));
+    }
+
+    Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
+    Schema decFixedSmallSchema = AVRO_TRIP_LOGICAL_TYPES_SCHEMA.getField("dec_fixed_small").schema();
+    rec.put("dec_fixed_small", decimalConversions.toFixed(above
+        ? decFixedSmallThreshold.add(incSmallScale2)
+        : decFixedSmallThreshold.subtract(incSmallScale2), decFixedSmallSchema, LogicalTypes.decimal(5, 2)));
+
+    Schema decFixedLargeSchema = AVRO_TRIP_LOGICAL_TYPES_SCHEMA.getField("dec_fixed_large").schema();
+    rec.put("dec_fixed_large", decimalConversions.toFixed(above
+        ? decFixedLargeThreshold.add(incLargeScale9)
+        : decFixedLargeThreshold.subtract(incLargeScale9), decFixedLargeSchema, LogicalTypes.decimal(18, 9)));
+    generateTripSuffixValues(rec, isDeleteRecord);
     return rec;
   }
 
@@ -745,7 +973,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     createEmptyFile(basePath, commitFile, configuration);
   }
 
-  private static void createEmptyFile(String basePath, Path filePath, StorageConfiguration<?> configuration) throws IOException {
+  public static void createEmptyFile(String basePath, Path filePath, StorageConfiguration<?> configuration) throws IOException {
     HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, configuration);
     OutputStream os = storage.create(new StoragePath(filePath.toUri()), true);
     os.close();
@@ -877,8 +1105,8 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       populateKeysBySchema(schemaStr, currSize + i, kp);
       incrementNumExistingKeysBySchema(schemaStr);
       try {
-        return new HoodieAvroIndexedRecord(key, generateRandomValueAsPerSchema(schemaStr, key, instantTime, isFlattened, timestamp),
-            null, Option.of(Collections.singletonMap("InputRecordCount_1506582000", "2")));
+        return new HoodieAvroIndexedRecord(key, generateRandomValueAsPerSchema(schemaStr, key, instantTime, isFlattened, timestamp), null,
+            Option.of(Collections.singletonMap("InputRecordCount_1506582000", "2")), null, null);
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
@@ -1153,9 +1381,13 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    * @return stream of hoodie records for delete
    */
   private Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n, boolean updatePartition, long timestamp) {
+    return generateUniqueDeleteRecordStream(instantTime, n, updatePartition, TRIP_EXAMPLE_SCHEMA, timestamp);
+  }
+
+  public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n, boolean updatePartition, String schemaStr, long timestamp) {
     final Set<KeyPartition> used = new HashSet<>();
-    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
-    Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(schemaStr);
+    Integer numExistingKeys = numKeysBySchema.get(schemaStr);
     if (n > numExistingKeys) {
       throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
     }
@@ -1179,12 +1411,12 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
         key = new HoodieKey(key.getRecordKey(), updatedPartitionPath);
       }
       try {
-        result.add(new HoodieAvroIndexedRecord(key, generateRandomDeleteValue(key, instantTime, timestamp)));
+        result.add(new HoodieAvroIndexedRecord(key, generateRandomValueAsPerSchema(schemaStr, kp.key, instantTime, false, true, timestamp)));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
     }
-    numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, numExistingKeys);
+    numKeysBySchema.put(schemaStr, numExistingKeys);
     return result.stream();
   }
 
@@ -1236,10 +1468,6 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     List<GenericRecord> list = new ArrayList<>();
     IntStream.range(0, numRecords).forEach(i -> list.add(generateGenericRecord()));
     return list;
-  }
-
-  public String[] getPartitionPaths() {
-    return partitionPaths;
   }
 
   public int getNumExistingKeys(String schemaStr) {
@@ -1300,7 +1528,11 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    * The fields identify the record with the combination of the recordKey and partitionPath and assert that the proper
    * value is present with the orderingVal and the riderValue, which is updated as part of the update utility methods.
    */
+  @Getter
+  @EqualsAndHashCode
+  @ToString
   public static class RecordIdentifier {
+
     private final String recordKey;
     private final String orderingVal;
     private final String partitionPath;
@@ -1324,54 +1556,15 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     public static RecordIdentifier fromTripTestPayload(HoodieAvroIndexedRecord record, String[] orderingFields) {
       String recordKey = record.getRecordKey();
       String partitionPath = record.getPartitionPath();
-      Comparable orderingValue = record.getOrderingValue(record.getData().getSchema(), CollectionUtils.emptyProps(), orderingFields);
+      Comparable orderingValue = record.getOrderingValue(HoodieSchema.fromAvroSchema(record.getData().getSchema()), CollectionUtils.emptyProps(), orderingFields);
       String orderingValStr = orderingValue.toString();
       String riderValue = ((GenericRecord) record.getData()).hasField("rider") ? ((GenericRecord) record.getData()).get("rider").toString() : "";
       return new RecordIdentifier(recordKey, partitionPath, orderingValStr, riderValue);
     }
-
-    @Override
-    public boolean equals(Object o) {
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      RecordIdentifier that = (RecordIdentifier) o;
-      return Objects.equals(recordKey, that.recordKey)
-          && Objects.equals(orderingVal, that.orderingVal)
-          && Objects.equals(partitionPath, that.partitionPath)
-          && Objects.equals(riderValue, that.riderValue);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(recordKey, orderingVal, partitionPath, riderValue);
-    }
-
-    public String getRecordKey() {
-      return recordKey;
-    }
-
-    public String getOrderingVal() {
-      return orderingVal;
-    }
-
-    public String getPartitionPath() {
-      return partitionPath;
-    }
-
-    public String getRiderValue() {
-      return riderValue;
-    }
-
-    @Override
-    public String toString() {
-      return "RowKey: " + recordKey + ", PartitionPath: " + partitionPath
-          + ", OrderingVal: " + orderingVal + ", RiderValue: " + riderValue;
-    }
   }
 
   public static class SchemaEvolutionConfigs {
-    public Schema schema = AVRO_SCHEMA;
+    public HoodieSchema schema = HOODIE_SCHEMA;
     public boolean nestedSupport = true;
     public boolean mapSupport = true;
     public boolean arraySupport = true;
@@ -1405,30 +1598,30 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   }
 
   private enum SchemaEvolutionTypePromotionCase {
-    INT_TO_INT(Schema.Type.INT, Schema.Type.INT, config -> true),
-    INT_TO_LONG(Schema.Type.INT, Schema.Type.LONG, config -> config.intToLongSupport),
-    INT_TO_FLOAT(Schema.Type.INT, Schema.Type.FLOAT, config -> config.intToFloatSupport),
-    INT_TO_DOUBLE(Schema.Type.INT, Schema.Type.DOUBLE, config -> config.intToDoubleSupport),
-    INT_TO_STRING(Schema.Type.INT, Schema.Type.STRING, config -> config.intToStringSupport),
-    LONG_TO_LONG(Schema.Type.LONG, Schema.Type.LONG, config -> true),
-    LONG_TO_FLOAT(Schema.Type.LONG, Schema.Type.FLOAT, config -> config.longToFloatSupport),
-    LONG_TO_DOUBLE(Schema.Type.LONG, Schema.Type.DOUBLE, config -> config.longToDoubleSupport),
-    LONG_TO_STRING(Schema.Type.LONG, Schema.Type.STRING, config -> config.longToStringSupport),
-    FLOAT_TO_FLOAT(Schema.Type.FLOAT, Schema.Type.FLOAT, config -> true),
-    FLOAT_TO_DOUBLE(Schema.Type.FLOAT, Schema.Type.DOUBLE, config -> config.floatToDoubleSupport),
-    FLOAT_TO_STRING(Schema.Type.FLOAT, Schema.Type.STRING, config -> config.floatToStringSupport),
-    DOUBLE_TO_DOUBLE(Schema.Type.DOUBLE, Schema.Type.DOUBLE, config -> true),
-    DOUBLE_TO_STRING(Schema.Type.DOUBLE, Schema.Type.STRING, config -> config.doubleToStringSupport),
-    STRING_TO_STRING(Schema.Type.STRING, Schema.Type.STRING, config -> true),
-    STRING_TO_BYTES(Schema.Type.STRING, Schema.Type.BYTES, config -> config.stringToBytesSupport),
-    BYTES_TO_BYTES(Schema.Type.BYTES, Schema.Type.BYTES, config -> true),
-    BYTES_TO_STRING(Schema.Type.BYTES, Schema.Type.STRING, config -> config.bytesToStringSupport);
+    INT_TO_INT(HoodieSchemaType.INT, HoodieSchemaType.INT, config -> true),
+    INT_TO_LONG(HoodieSchemaType.INT, HoodieSchemaType.LONG, config -> config.intToLongSupport),
+    INT_TO_FLOAT(HoodieSchemaType.INT, HoodieSchemaType.FLOAT, config -> config.intToFloatSupport),
+    INT_TO_DOUBLE(HoodieSchemaType.INT, HoodieSchemaType.DOUBLE, config -> config.intToDoubleSupport),
+    INT_TO_STRING(HoodieSchemaType.INT, HoodieSchemaType.STRING, config -> config.intToStringSupport),
+    LONG_TO_LONG(HoodieSchemaType.LONG, HoodieSchemaType.LONG, config -> true),
+    LONG_TO_FLOAT(HoodieSchemaType.LONG, HoodieSchemaType.FLOAT, config -> config.longToFloatSupport),
+    LONG_TO_DOUBLE(HoodieSchemaType.LONG, HoodieSchemaType.DOUBLE, config -> config.longToDoubleSupport),
+    LONG_TO_STRING(HoodieSchemaType.LONG, HoodieSchemaType.STRING, config -> config.longToStringSupport),
+    FLOAT_TO_FLOAT(HoodieSchemaType.FLOAT, HoodieSchemaType.FLOAT, config -> true),
+    FLOAT_TO_DOUBLE(HoodieSchemaType.FLOAT, HoodieSchemaType.DOUBLE, config -> config.floatToDoubleSupport),
+    FLOAT_TO_STRING(HoodieSchemaType.FLOAT, HoodieSchemaType.STRING, config -> config.floatToStringSupport),
+    DOUBLE_TO_DOUBLE(HoodieSchemaType.DOUBLE, HoodieSchemaType.DOUBLE, config -> true),
+    DOUBLE_TO_STRING(HoodieSchemaType.DOUBLE, HoodieSchemaType.STRING, config -> config.doubleToStringSupport),
+    STRING_TO_STRING(HoodieSchemaType.STRING, HoodieSchemaType.STRING, config -> true),
+    STRING_TO_BYTES(HoodieSchemaType.STRING, HoodieSchemaType.BYTES, config -> config.stringToBytesSupport),
+    BYTES_TO_BYTES(HoodieSchemaType.BYTES, HoodieSchemaType.BYTES, config -> true),
+    BYTES_TO_STRING(HoodieSchemaType.BYTES, HoodieSchemaType.STRING, config -> config.bytesToStringSupport);
 
-    public final Schema.Type before;
-    public final Schema.Type after;
+    public final HoodieSchemaType before;
+    public final HoodieSchemaType after;
     public final Predicate<SchemaEvolutionConfigs> isEnabled;
 
-    SchemaEvolutionTypePromotionCase(Schema.Type before, Schema.Type after, Predicate<SchemaEvolutionConfigs> isEnabled) {
+    SchemaEvolutionTypePromotionCase(HoodieSchemaType before, HoodieSchemaType after, Predicate<SchemaEvolutionConfigs> isEnabled) {
       this.before = before;
       this.after = after;
       this.isEnabled = isEnabled;
@@ -1436,7 +1629,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   }
 
   public void extendSchema(SchemaEvolutionConfigs configs, boolean isBefore) {
-    List<Schema.Type> baseFields = new ArrayList<>();
+    List<HoodieSchemaType> baseFields = new ArrayList<>();
     for (SchemaEvolutionTypePromotionCase evolution : SchemaEvolutionTypePromotionCase.values()) {
       if (evolution.isEnabled.test(configs)) {
         baseFields.add(isBefore ? evolution.before : evolution.after);
@@ -1445,7 +1638,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
 
     // Add new field if we are testing adding new fields
     if (!isBefore && configs.addNewFieldSupport) {
-      baseFields.add(Schema.Type.BOOLEAN);
+      baseFields.add(HoodieSchemaType.BOOLEAN);
     }
 
     this.extendedSchema = Option.of(generateExtendedSchema(configs, new ArrayList<>(baseFields)));
@@ -1459,69 +1652,72 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     extendSchema(configs, false);
   }
 
-  public Schema getExtendedSchema() {
+  public HoodieSchema getExtendedSchema() {
     return extendedSchema.orElseThrow(IllegalArgumentException::new);
   }
 
-  private static Schema generateExtendedSchema(SchemaEvolutionConfigs configs, List<Schema.Type> baseFields) {
+  private static HoodieSchema generateExtendedSchema(SchemaEvolutionConfigs configs, List<HoodieSchemaType> baseFields) {
     return generateExtendedSchema(configs.schema, configs, baseFields, "customField", true);
   }
 
-  private static Schema generateExtendedSchema(Schema baseSchema, SchemaEvolutionConfigs configs, List<Schema.Type> baseFields, String fieldPrefix, boolean toplevel) {
-    List<Schema.Field> fields =  baseSchema.getFields();
-    List<Schema.Field> finalFields = new ArrayList<>(fields.size() + baseFields.size());
+  private static HoodieSchema generateExtendedSchema(HoodieSchema baseSchema, SchemaEvolutionConfigs configs, List<HoodieSchemaType> baseFields, String fieldPrefix, boolean toplevel) {
+    List<HoodieSchemaField> fields =  baseSchema.getFields();
+    List<HoodieSchemaField> finalFields = new ArrayList<>(fields.size() + baseFields.size());
     boolean addedFields = false;
-    for (Schema.Field field : fields) {
-      if (configs.nestedSupport && field.name().equals("fare") && field.schema().getType() == Schema.Type.RECORD) {
-        finalFields.add(new Schema.Field(field.name(), generateExtendedSchema(field.schema(), configs, baseFields, "customFare", false), field.doc(), field.defaultVal()));
+    for (HoodieSchemaField field : fields) {
+      if (configs.nestedSupport && field.name().equals("fare") && field.schema().getType() == HoodieSchemaType.RECORD) {
+        finalFields.add(HoodieSchemaUtils.createNewSchemaField(field.name(),
+            generateExtendedSchema(field.schema(), configs, baseFields, "customFare", false), field.doc().orElse(null), field.defaultVal().orElse(null)));
       } else if (configs.anyArraySupport || !field.name().equals("tip_history")) {
         //TODO: [HUDI-9603] remove the if condition when the issue is fixed
         if (field.name().equals("_hoodie_is_deleted")) {
           addedFields = true;
-          addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace(), toplevel);
+          addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace().orElse(null), toplevel);
         }
-        finalFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
+        finalFields.add(HoodieSchemaUtils.createNewSchemaField(field));
       }
     }
     if (!addedFields) {
-      addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace(), toplevel);
+      addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace().orElse(null), toplevel);
     }
-    Schema finalSchema = Schema.createRecord(baseSchema.getName(), baseSchema.getDoc(),
-        baseSchema.getNamespace(), baseSchema.isError());
-    finalSchema.setFields(finalFields);
+    HoodieSchema finalSchema = HoodieSchema.createRecord(baseSchema.getName(), baseSchema.getDoc().orElse(null),
+        baseSchema.getNamespace().orElse(null), baseSchema.isError(), finalFields);
     return finalSchema;
   }
 
-  private static void addFields(SchemaEvolutionConfigs configs, List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix, String namespace, boolean toplevel) {
+  private static void addFields(SchemaEvolutionConfigs configs, List<HoodieSchemaField> finalFields, List<HoodieSchemaType> baseFields, String fieldPrefix, String namespace, boolean toplevel) {
     if (toplevel) {
       if (configs.mapSupport) {
-        List<Schema.Field> mapFields = new ArrayList<>(baseFields.size());
+        List<HoodieSchemaField> mapFields = new ArrayList<>(baseFields.size());
         addFieldsHelper(mapFields, baseFields, fieldPrefix + "Map");
-        finalFields.add(new Schema.Field(fieldPrefix + "Map", Schema.createMap(Schema.createRecord("customMapRecord", "", namespace, false, mapFields)), "", null));
+        finalFields.add(HoodieSchemaField.of(fieldPrefix + "Map",
+            HoodieSchema.createMap(HoodieSchema.createRecord("customMapRecord", "", namespace, false, mapFields)), "", null));
       }
 
       if (configs.arraySupport) {
-        List<Schema.Field> arrayFields = new ArrayList<>(baseFields.size());
+        List<HoodieSchemaField> arrayFields = new ArrayList<>(baseFields.size());
         addFieldsHelper(arrayFields, baseFields, fieldPrefix + "Array");
-        finalFields.add(new Schema.Field(fieldPrefix + "Array", Schema.createArray(Schema.createRecord("customArrayRecord", "", namespace, false, arrayFields)), "", null));
+        finalFields.add(HoodieSchemaField.of(fieldPrefix + "Array",
+            HoodieSchema.createArray(HoodieSchema.createRecord("customArrayRecord", "", namespace, false, arrayFields)), "", null));
       }
     }
     addFieldsHelper(finalFields, baseFields, fieldPrefix);
   }
 
-  private static void addFieldsHelper(List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix) {
+  private static void addFieldsHelper(List<HoodieSchemaField> finalFields, List<HoodieSchemaType> baseFields, String fieldPrefix) {
     for (int i = 0; i < baseFields.size(); i++) {
-      if (baseFields.get(i) == Schema.Type.BOOLEAN) {
+      if (baseFields.get(i) == HoodieSchemaType.BOOLEAN) {
         // boolean fields are added fields
-        finalFields.add(new Schema.Field(fieldPrefix + i, AvroSchemaUtils.createNullableSchema(Schema.Type.BOOLEAN), "", null));
+        finalFields.add(HoodieSchemaField.of(fieldPrefix + i, HoodieSchema.createNullable(HoodieSchemaType.BOOLEAN), "", null));
       } else {
-        finalFields.add(new Schema.Field(fieldPrefix + i, Schema.create(baseFields.get(i)), "", null));
+        finalFields.add(HoodieSchemaField.of(fieldPrefix + i, HoodieSchema.create(baseFields.get(i)), "", null));
       }
     }
   }
 
   private void generateCustomValues(GenericRecord rec, String customPrefix) {
-    for (Schema.Field field : rec.getSchema().getFields()) {
+    HoodieSchema recordSchema = HoodieSchema.fromAvroSchema(rec.getSchema());
+    for (HoodieSchemaField field : recordSchema.getFields()) {
       if (field.name().startsWith(customPrefix)) {
         switch (field.schema().getType()) {
           case INT:
@@ -1543,7 +1739,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
             rec.put(field.name(), ByteBuffer.wrap(getUTF8Bytes(genPseudoRandomUUID(rand).toString())));
             break;
           case UNION:
-            if (!AvroSchemaUtils.resolveNullableSchema(field.schema()).getType().equals(Schema.Type.BOOLEAN)) {
+            if (field.schema().getNonNullType().getType() != HoodieSchemaType.BOOLEAN) {
               throw new IllegalStateException("Union should only be boolean");
             }
             rec.put(field.name(), rand.nextBoolean());
@@ -1564,18 +1760,18 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     }
   }
 
-  private GenericArray<GenericRecord> genArray(Schema arraySchema, String customPrefix) {
-    GenericArray<GenericRecord> customArray = new GenericData.Array<>(1, arraySchema);
-    Schema arrayElementSchema = arraySchema.getElementType();
-    GenericRecord customRecord = new GenericData.Record(arrayElementSchema);
+  private GenericArray<GenericRecord> genArray(HoodieSchema arraySchema, String customPrefix) {
+    GenericArray<GenericRecord> customArray = new GenericData.Array<>(1, arraySchema.toAvroSchema());
+    HoodieSchema arrayElementSchema = arraySchema.getElementType();
+    GenericRecord customRecord = new GenericData.Record(arrayElementSchema.toAvroSchema());
     generateCustomValues(customRecord, customPrefix);
     customArray.add(customRecord);
     return customArray;
   }
 
-  private Map<String,GenericRecord> genMap(Schema mapSchema, String customPrefix) {
-    Schema mapElementSchema = mapSchema.getValueType();
-    GenericRecord customRecord = new GenericData.Record(mapElementSchema);
+  private Map<String,GenericRecord> genMap(HoodieSchema mapSchema, String customPrefix) {
+    HoodieSchema mapElementSchema = mapSchema.getValueType();
+    GenericRecord customRecord = new GenericData.Record(mapElementSchema.toAvroSchema());
     generateCustomValues(customRecord, customPrefix);
     return Collections.singletonMap("customMapKey", customRecord);
   }

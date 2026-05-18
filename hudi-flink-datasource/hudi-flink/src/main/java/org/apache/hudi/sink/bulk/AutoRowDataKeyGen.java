@@ -21,10 +21,16 @@ package org.apache.hudi.sink.bulk;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
+
+import java.io.IOException;
 
 /**
  * Key generator for {@link RowData} that use an auto key generator.
@@ -40,15 +46,27 @@ public class AutoRowDataKeyGen extends RowDataKeyGen {
       String partitionFields,
       RowType rowType,
       boolean hiveStylePartitioning,
-      boolean encodePartitionPath) {
-    super(Option.empty(), partitionFields, rowType, hiveStylePartitioning, encodePartitionPath, false, Option.empty());
+      boolean encodePartitionPath,
+      boolean useComplexKeygenNewEncoding,
+      Option<TimestampBasedAvroKeyGenerator> keyGenOpt) {
+    super(Option.empty(), partitionFields, rowType, hiveStylePartitioning, encodePartitionPath, false, keyGenOpt,
+            useComplexKeygenNewEncoding);
     this.taskId = taskId;
     this.instantTime = instantTime;
   }
 
   public static RowDataKeyGen instance(Configuration conf, RowType rowType, int taskId, String instantTime) {
+    Option<TimestampBasedAvroKeyGenerator> keyGeneratorOpt = Option.empty();
+    if (TimestampBasedAvroKeyGenerator.class.getName().equals(conf.get(FlinkOptions.KEYGEN_CLASS_NAME))) {
+      try {
+        keyGeneratorOpt = Option.of(new TimestampBasedAvroKeyGenerator(StreamerUtil.flinkConf2TypedProperties(conf), conf.get(FlinkOptions.PARTITION_PATH_FIELD)));
+      } catch (IOException e) {
+        throw new HoodieKeyException("Initialize TimestampBasedAvroKeyGenerator error", e);
+      }
+    }
     return new AutoRowDataKeyGen(taskId, instantTime, conf.get(FlinkOptions.PARTITION_PATH_FIELD),
-        rowType, conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.get(FlinkOptions.URL_ENCODE_PARTITIONING));
+        rowType, conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.get(FlinkOptions.URL_ENCODE_PARTITIONING),
+        OptionsResolver.useComplexKeygenNewEncoding(conf), keyGeneratorOpt);
   }
 
   @Override

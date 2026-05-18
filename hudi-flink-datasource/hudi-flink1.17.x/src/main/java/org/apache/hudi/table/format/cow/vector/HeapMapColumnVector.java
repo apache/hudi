@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.format.cow.vector;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.flink.table.data.MapData;
 import org.apache.flink.table.data.columnar.ColumnarMapData;
 import org.apache.flink.table.data.columnar.vector.ColumnVector;
@@ -28,11 +30,13 @@ import org.apache.flink.table.data.columnar.vector.writable.WritableColumnVector
 /**
  * This class represents a nullable heap map column vector.
  */
+@Setter
 public class HeapMapColumnVector extends AbstractHeapVector
     implements WritableColumnVector, MapColumnVector {
 
   private long[] offsets;
   private long[] lengths;
+  @Getter
   private int size;
   private ColumnVector keys;
   private ColumnVector values;
@@ -44,30 +48,6 @@ public class HeapMapColumnVector extends AbstractHeapVector
     lengths = new long[len];
     this.keys = keys;
     this.values = values;
-  }
-
-  public void setOffsets(long[] offsets) {
-    this.offsets = offsets;
-  }
-
-  public void setLengths(long[] lengths) {
-    this.lengths = lengths;
-  }
-
-  public void setKeys(ColumnVector keys) {
-    this.keys = keys;
-  }
-
-  public void setValues(ColumnVector values) {
-    this.values = values;
-  }
-
-  public int getSize() {
-    return size;
-  }
-
-  public void setSize(int size) {
-    this.size = size;
   }
 
   @Override

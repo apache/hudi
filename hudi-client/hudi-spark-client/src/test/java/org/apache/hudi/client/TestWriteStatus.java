@@ -19,12 +19,13 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.stats.ValueMetadata;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -211,7 +212,7 @@ public class TestWriteStatus {
     WriteStatus status = new WriteStatus(true, 0.1);
     status.markSuccess(HoodieRecordDelegate.create(new HoodieKey("key", "partition")), Option.empty());
     Map<String, HoodieColumnRangeMetadata<Comparable>> stats = new HashMap<>();
-    stats.put("field1", HoodieColumnRangeMetadata.<Comparable>create("f1", "field1", 1, 2, 0, 2, 5, 10));
+    stats.put("field1", HoodieColumnRangeMetadata.<Comparable>create("f1", "field1", 1, 2, 0, 2, 5, 10, ValueMetadata.V1EmptyMetadata.get()));
     status.setStat(new HoodieWriteStat());
     status.getStat().putRecordsStats(stats);
     assertEquals(1, status.getIndexStats().getWrittenRecordDelegates().size());

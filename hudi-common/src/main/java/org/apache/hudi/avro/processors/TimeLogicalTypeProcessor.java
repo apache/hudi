@@ -19,10 +19,10 @@
 package org.apache.hudi.avro.processors;
 
 import org.apache.hudi.avro.AvroLogicalTypeEnum;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.LogicalType;
-import org.apache.avro.Schema;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -60,12 +60,12 @@ public abstract class TimeLogicalTypeProcessor extends JsonFieldProcessor {
   /**
    * Main function that convert input to Object with java data type specified by schema
    */
-  public Pair<Boolean, Object> convertCommon(Parser parser, Object value, Schema schema) {
-    LogicalType logicalType = schema.getLogicalType();
+  public Pair<Boolean, Object> convertCommon(Parser parser, Object value, HoodieSchema schema) {
+    LogicalType logicalType = schema.toAvroSchema().getLogicalType();
     if (logicalType == null) {
       return Pair.of(false, null);
     }
-    logicalType.validate(schema);
+
     if (value instanceof Number) {
       return parser.handleNumberValue((Number) value);
     }

@@ -142,8 +142,8 @@ public class BootstrapExecutor implements Serializable {
             .withRecordMergeImplClasses(cfg.recordMergeImplClasses)
             .withProps(props);
 
-    if (null != schemaProvider && null != schemaProvider.getTargetSchema()) {
-      builder = builder.withSchema(schemaProvider.getTargetSchema().toString());
+    if (null != schemaProvider && null != schemaProvider.getTargetHoodieSchema()) {
+      builder = builder.withSchema(schemaProvider.getTargetHoodieSchema().toString());
     }
     this.bootstrapConfig = builder.build();
     LOG.info("Created bootstrap executor with configs : " + bootstrapConfig.getProps());
@@ -189,7 +189,7 @@ public class BootstrapExecutor implements Serializable {
     Path basePath = new Path(cfg.targetBasePath);
     if (fs.exists(basePath)) {
       if (cfg.bootstrapOverwrite) {
-        LOG.warn("Target base path already exists, overwrite it");
+        LOG.info("Target base path already exists, overwrite it");
         fs.delete(basePath, true);
       } else {
         throw new HoodieException("target base path already exists at " + cfg.targetBasePath

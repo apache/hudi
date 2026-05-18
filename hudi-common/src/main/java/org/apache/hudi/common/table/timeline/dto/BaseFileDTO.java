@@ -56,7 +56,7 @@ public class BaseFileDTO {
     } else {
       baseFile = new HoodieBaseFile(
           dto.fullPath, dto.fileId, dto.commitTime, toBaseFile(dto.bootstrapBaseFile));
-      baseFile.setFileLen(dto.fileLen);
+      baseFile.setFileSize(dto.fileLen);
     }
 
     return baseFile;
@@ -72,7 +72,7 @@ public class BaseFileDTO {
       baseFile = new BaseFile(FileStatusDTO.toStoragePathInfo(dto.fileStatus));
     } else {
       baseFile = new BaseFile(dto.fullPath);
-      baseFile.setFileLen(dto.fileLen);
+      baseFile.setFileSize(dto.fileLen);
     }
     return baseFile;
   }
@@ -85,7 +85,7 @@ public class BaseFileDTO {
     BaseFileDTO dto = new BaseFileDTO();
     dto.fileStatus = FileStatusDTO.fromStoragePathInfo(baseFile.getPathInfo());
     dto.fullPath = baseFile.getPath();
-    dto.fileLen = baseFile.getFileLen();
+    dto.fileLen = baseFile.getFileSize();
     if (baseFile instanceof HoodieBaseFile) {
       HoodieBaseFile hoodieBaseFile = (HoodieBaseFile) baseFile;
       dto.bootstrapBaseFile = hoodieBaseFile.getBootstrapBaseFile()

@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -67,6 +68,14 @@ public class CollectionUtils {
 
   public static boolean nonEmpty(Collection<?> c) {
     return !isNullOrEmpty(c);
+  }
+
+  public static boolean nonEmpty(Map<?, ?> m) {
+    return !isNullOrEmpty(m);
+  }
+
+  public static boolean containsAll(Map<?, ?> m1, Map<?, ?> m2) {
+    return m1.entrySet().containsAll(m2.entrySet());
   }
 
   /**
@@ -252,7 +261,7 @@ public class CollectionUtils {
 
   @SafeVarargs
   public static <T> List<T> createImmutableList(final T... elements) {
-    return Collections.unmodifiableList(Stream.of(elements).collect(Collectors.toList()));
+    return Collections.unmodifiableList(new ArrayList<>(Arrays.asList(elements)));
   }
 
   public static <T> List<T> createImmutableList(final List<T> list) {

@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -45,14 +46,13 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
@@ -115,7 +115,7 @@ public class HoodieLogFileCommand {
       } else {
         fileName = path.getName();
       }
-      Schema writerSchema = TableSchemaResolver.readSchemaFromLogFile(storage, path);
+      HoodieSchema writerSchema = TableSchemaResolver.readSchemaFromLogFile(storage, path);
       try (Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(path), writerSchema)) {
 
         // read the avro blocks
@@ -217,10 +217,10 @@ public class HoodieLogFileCommand {
     checkArgument(logFilePaths.size() > 0, "There is no log file");
 
     // TODO : readerSchema can change across blocks/log files, fix this inside Scanner
-    Schema readerSchema = null;
+    HoodieSchema readerSchema = null;
     // get schema from last log file
     for (int i = logFilePaths.size() - 1; i >= 0; i--) {
-      Schema schema = TableSchemaResolver.readSchemaFromLogFile(
+      HoodieSchema schema = TableSchemaResolver.readSchemaFromLogFile(
           storage, new StoragePath(logFilePaths.get(i)));
       if (schema != null) {
         readerSchema = schema;
@@ -231,16 +231,17 @@ public class HoodieLogFileCommand {
     List<IndexedRecord> allRecords = new ArrayList<>();
     if (shouldMerge) {
       System.out.println("===========================> MERGING RECORDS <===================");
-      HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
-          HoodieCLI.getTableMetaClient().getStorage().getConf(),
-          HoodieCLI.getTableMetaClient().getTableConfig(),
-          Option.empty(),
-          Option.empty());
       StoragePath firstLogFile = new StoragePath(logFilePaths.get(0));
       HoodieFileGroupId fileGroupId = new HoodieFileGroupId(FSUtils.getRelativePartitionPath(HoodieCLI.getTableMetaClient().getBasePath(), firstLogFile), FSUtils.getFileIdFromLogPath(firstLogFile));
       FileSlice fileSlice = new FileSlice(fileGroupId, HoodieTimeline.INIT_INSTANT_TS, null, logFilePaths.stream()
           .map(l -> new HoodieLogFile(new StoragePath(l))).collect(Collectors.toList()));
       TypedProperties fileGroupReaderProperties = buildFileGroupReaderProperties();
+      HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
+          HoodieCLI.getTableMetaClient().getStorage().getConf(),
+          HoodieCLI.getTableMetaClient().getTableConfig(),
+          Option.empty(),
+          Option.empty(),
+          fileGroupReaderProperties);
       try (HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
           .withReaderContext(readerContext)
           .withHoodieTableMetaClient(HoodieCLI.getTableMetaClient())
@@ -260,7 +261,7 @@ public class HoodieLogFileCommand {
       }
     } else {
       for (String logFile : logFilePaths) {
-        Schema writerSchema = TableSchemaResolver.readSchemaFromLogFile(
+        HoodieSchema writerSchema = TableSchemaResolver.readSchemaFromLogFile(
             client.getStorage(), new StoragePath(logFile));
         try (HoodieLogFormat.Reader reader =
                  HoodieLogFormat.newReader(storage, new HoodieLogFile(new StoragePath(logFile)), writerSchema)) {

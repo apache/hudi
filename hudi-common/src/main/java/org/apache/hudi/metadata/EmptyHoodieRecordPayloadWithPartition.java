@@ -21,6 +21,9 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 /**
  * NOTE: This payload is intended to be used in-memeory ONLY. DO NOT use this in any serializing
  * Used to store the data table partition for delete records. The hoodie record stores the recordkey and
@@ -29,14 +32,9 @@ import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
  * data table partition path will be in the metadata payload, but obviously the empty payload doesn't store
  * that info. Hence, this wrapper class
  */
+@AllArgsConstructor
+@Getter
 public class EmptyHoodieRecordPayloadWithPartition extends EmptyHoodieRecordPayload {
+
   private final String partitionPath;
-
-  public EmptyHoodieRecordPayloadWithPartition(String partitionPath) {
-    this.partitionPath = partitionPath;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
 }

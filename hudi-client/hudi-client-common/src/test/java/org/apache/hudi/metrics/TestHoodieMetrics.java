@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 
 import com.codahale.metrics.Timer;
@@ -44,6 +45,8 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.metrics.HoodieMetrics.COUNTER_METRIC_EXTENSION;
+import static org.apache.hudi.metrics.HoodieMetrics.FAILURE_COUNTER;
 import static org.apache.hudi.metrics.HoodieMetrics.SOURCE_READ_AND_INDEX_ACTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -317,5 +320,73 @@ public class TestHoodieMetrics {
       super();
       this.setInstants(Arrays.asList(instants));
     }
+  }
+
+  @Test
+  public void testRollbackFailureMetric() {
+    // Test that rollback failure metric is emitted correctly
+    String exceptionType = "FileNotFoundException";
+    hoodieMetrics.emitRollbackFailure(exceptionType);
+
+    // Verify the failure counter is incremented
+    String metricName = hoodieMetrics.getMetricsName("rollback", FAILURE_COUNTER);
+    assertEquals(1, metrics.getRegistry().getCounters().get(metricName).getCount());
+
+    // Verify a specific counter is incremented for this exception type
+    String exceptionMetricName = hoodieMetrics.getMetricsName("rollback", exceptionType + COUNTER_METRIC_EXTENSION);
+    assertEquals(1, metrics.getRegistry().getCounters().get(exceptionMetricName).getCount());
+
+    // Emit another failure and verify counter increments
+    hoodieMetrics.emitRollbackFailure(exceptionType);
+    assertEquals(2, metrics.getRegistry().getCounters().get(metricName).getCount());
+    assertEquals(2, metrics.getRegistry().getCounters().get(exceptionMetricName).getCount());
+
+    // Test with a different exception type
+    String differentExceptionType = "IOException";
+    hoodieMetrics.emitRollbackFailure(differentExceptionType);
+
+    // Verify the overall failure counter is incremented
+    assertEquals(3, metrics.getRegistry().getCounters().get(metricName).getCount());
+
+    // Verify a separate counter is incremented for this new exception type
+    String differentExceptionMetricName = hoodieMetrics.getMetricsName("rollback", differentExceptionType + COUNTER_METRIC_EXTENSION);
+    assertEquals(1, metrics.getRegistry().getCounters().get(differentExceptionMetricName).getCount());
+
+    // Verify the original exception type counter is unchanged
+    assertEquals(2, metrics.getRegistry().getCounters().get(exceptionMetricName).getCount());
+  }
+
+  @Test
+  public void testConflictResolutionByCategoryMetrics() {
+    when(writeConfig.isLockingMetricsEnabled()).thenReturn(true);
+
+    String tableServiceVsIngestion = hoodieMetrics.getMetricsName(
+        HoodieMetrics.CONFLICT_RESOLUTION_STR, "table_service_vs_ingestion" + COUNTER_METRIC_EXTENSION);
+    String ingestionVsIngestion = hoodieMetrics.getMetricsName(
+        HoodieMetrics.CONFLICT_RESOLUTION_STR, "ingestion_vs_ingestion" + COUNTER_METRIC_EXTENSION);
+    String ingestionVsTableService = hoodieMetrics.getMetricsName(
+        HoodieMetrics.CONFLICT_RESOLUTION_STR, "ingestion_vs_table_service" + COUNTER_METRIC_EXTENSION);
+    String tableServiceVsTableService = hoodieMetrics.getMetricsName(
+        HoodieMetrics.CONFLICT_RESOLUTION_STR, "table_service_vs_table_service" + COUNTER_METRIC_EXTENSION);
+
+    hoodieMetrics.emitConflictResolutionByCategory(
+        HoodieWriteConflictException.ConflictCategory.TABLE_SERVICE_VS_INGESTION);
+    assertEquals(1, metrics.getRegistry().getCounters().get(tableServiceVsIngestion).getCount());
+
+    hoodieMetrics.emitConflictResolutionByCategory(
+        HoodieWriteConflictException.ConflictCategory.TABLE_SERVICE_VS_INGESTION);
+    assertEquals(2, metrics.getRegistry().getCounters().get(tableServiceVsIngestion).getCount());
+
+    hoodieMetrics.emitConflictResolutionByCategory(
+        HoodieWriteConflictException.ConflictCategory.INGESTION_VS_INGESTION);
+    assertEquals(1, metrics.getRegistry().getCounters().get(ingestionVsIngestion).getCount());
+
+    hoodieMetrics.emitConflictResolutionByCategory(
+        HoodieWriteConflictException.ConflictCategory.INGESTION_VS_TABLE_SERVICE);
+    assertEquals(1, metrics.getRegistry().getCounters().get(ingestionVsTableService).getCount());
+
+    hoodieMetrics.emitConflictResolutionByCategory(
+        HoodieWriteConflictException.ConflictCategory.TABLE_SERVICE_VS_TABLE_SERVICE);
+    assertEquals(1, metrics.getRegistry().getCounters().get(tableServiceVsTableService).getCount());
   }
 }

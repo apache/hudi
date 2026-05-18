@@ -28,14 +28,12 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.JavaWriteHelper;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 
+@Slf4j
 public class JavaUpsertDeltaCommitActionExecutor<T> extends BaseJavaDeltaCommitActionExecutor<T> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(JavaUpsertDeltaCommitActionExecutor.class);
 
   private final List<HoodieRecord<T>> inputRecords;
 

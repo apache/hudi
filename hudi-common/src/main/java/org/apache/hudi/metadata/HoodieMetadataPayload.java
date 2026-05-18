@@ -28,11 +28,12 @@ import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -42,6 +43,7 @@ import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -67,7 +69,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -103,7 +104,12 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStats
  * During compaction on the table, the deletions are merged with additions and hence records are pruned.
  */
 public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
-  private static final Schema HOODIE_METADATA_SCHEMA = AvroSchemaCache.intern(HoodieMetadataRecord.getClassSchema());
+
+  // Note: Variable is unused, but caching is required.
+  private static final HoodieSchema HOODIE_METADATA_SCHEMA = HoodieSchemaCache.intern(
+      HoodieSchema.fromAvroSchema(HoodieMetadataRecord.getClassSchema()));
+  // Cache the Avro schema reference for O(1) equality checks during Avro.Schema -> HoodieSchema migration
+  private static final Schema HOODIE_METADATA_AVRO_SCHEMA = AvroSchemaCache.intern(HoodieMetadataRecord.getClassSchema());
   /**
    * Field offsets when metadata fields are present
    */
@@ -148,6 +154,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static final String COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE = "totalUncompressedSize";
   public static final String COLUMN_STATS_FIELD_IS_DELETED = FIELD_IS_DELETED;
   public static final String COLUMN_STATS_FIELD_IS_TIGHT_BOUND = "isTightBound";
+  public static final String COLUMN_STATS_FIELD_VALUE_TYPE = "valueType";
+  public static final String COLUMN_STATS_FIELD_VALUE_TYPE_ORDINAL = "typeOrdinal";
+  public static final String COLUMN_STATS_FIELD_VALUE_TYPE_ADDITIONAL_INFO = "additionalInfo";
 
   /**
    * HoodieMetadata record index payload field ids
@@ -308,7 +317,13 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     int size = filesAdded.size() + filesDeleted.size();
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>(size, 1);
-    filesAdded.forEach((fileName, fileSize) -> fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false)));
+    filesAdded.forEach((fileName, fileSize) -> {
+      // Assert that the file-size of the file being added is positive, since Hudi
+      // should not be creating empty files
+      checkState(fileSize > 0, "File name " + fileName
+          + ", is a 0 byte file. It does not have any contents");
+      fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false));
+    });
 
     filesDeleted.forEach(fileName -> fileInfo.put(fileName, DELETE_FILE_METADATA));
 
@@ -408,7 +423,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       return Option.empty();
     }
 
-    if (schema == null || HOODIE_METADATA_SCHEMA == schema) {
+    // TODO: feature(schema): Swap this over to HOODIE_METADATA_SCHEMA after HoodieRecordPayload implementations are using HoodieSchema
+    // Uses cached Avro schema reference for O(1) equality check.
+    if (schema == null || schema == HOODIE_METADATA_AVRO_SCHEMA) {
       // If the schema is same or none is provided, we can return the record directly
       HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
           columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
@@ -570,13 +587,14 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         HoodieMetadataColumnStats.newBuilder()
             .setFileName(new StoragePath(columnRangeMetadata.getFilePath()).getName())
             .setColumnName(columnRangeMetadata.getColumnName())
-            .setMinValue(wrapValueIntoAvro(columnRangeMetadata.getMinValue()))
-            .setMaxValue(wrapValueIntoAvro(columnRangeMetadata.getMaxValue()))
+            .setMinValue(columnRangeMetadata.getMinValueWrapped())
+            .setMaxValue(columnRangeMetadata.getMaxValueWrapped())
             .setNullCount(columnRangeMetadata.getNullCount())
             .setValueCount(columnRangeMetadata.getValueCount())
             .setTotalSize(columnRangeMetadata.getTotalSize())
             .setTotalUncompressedSize(columnRangeMetadata.getTotalUncompressedSize())
             .setIsDeleted(isDeleted)
+            .setValueType(columnRangeMetadata.getValueMetadata().getValueTypeInfo())
             .build(),
         recordType);
 
@@ -603,14 +621,15 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           HoodieMetadataColumnStats.newBuilder()
               .setFileName(columnRangeMetadata.getFilePath())
               .setColumnName(columnRangeMetadata.getColumnName())
-              .setMinValue(wrapValueIntoAvro(columnRangeMetadata.getMinValue()))
-              .setMaxValue(wrapValueIntoAvro(columnRangeMetadata.getMaxValue()))
+              .setMinValue(columnRangeMetadata.getMinValueWrapped())
+              .setMaxValue(columnRangeMetadata.getMaxValueWrapped())
               .setNullCount(columnRangeMetadata.getNullCount())
               .setValueCount(columnRangeMetadata.getValueCount())
               .setTotalSize(columnRangeMetadata.getTotalSize())
               .setTotalUncompressedSize(columnRangeMetadata.getTotalUncompressedSize())
               .setIsDeleted(isDeleted)
               .setIsTightBound(isTightBound)
+              .setValueType(columnRangeMetadata.getValueMetadata().getValueTypeInfo())
               .build(),
           MetadataPartitionType.PARTITION_STATS.getRecordType());
 
@@ -653,7 +672,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           fileIndex = Integer.parseInt(fileId.substring(index + 1));
         }
       } catch (Exception e) {
-        throw new HoodieMetadataException(String.format("Invalid UUID or index: fileID=%s, partition=%s, instantTIme=%s",
+        throw new HoodieMetadataException(String.format("Invalid UUID or index: fileID=%s, partition=%s, instantTime=%s",
             fileId, partition, instantTime), e);
       }
 

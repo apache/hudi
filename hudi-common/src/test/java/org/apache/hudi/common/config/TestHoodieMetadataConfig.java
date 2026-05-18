@@ -19,11 +19,16 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.common.model.WriteConcurrencyMode;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests {@link HoodieMetadataConfig}.
@@ -58,5 +63,210 @@ class TestHoodieMetadataConfig {
         .fromProperties(propsNegative)
         .build();
     assertEquals(-50, configWithNegativeValue.getRecordPreparationParallelism());
+  }
+
+  @Test
+  void testStreamingWritesCoalesceDivisorForDataTableWrites() {
+    // Test default value
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
+    assertEquals(5000, config.getStreamingWritesCoalesceDivisorForDataTableWrites());
+
+    // Test custom value
+    Properties props = new Properties();
+    props.put(HoodieMetadataConfig.STREAMING_WRITE_DATATABLE_WRITE_STATUSES_COALESCE_DIVISOR.key(), "1");
+    HoodieMetadataConfig configWithCustomValue = HoodieMetadataConfig.newBuilder()
+        .fromProperties(props)
+        .build();
+    assertEquals(1, configWithCustomValue.getStreamingWritesCoalesceDivisorForDataTableWrites());
+
+    Properties propsZero = new Properties();
+    propsZero.put(HoodieMetadataConfig.STREAMING_WRITE_DATATABLE_WRITE_STATUSES_COALESCE_DIVISOR.key(), "10000");
+    HoodieMetadataConfig configWithZeroValue = HoodieMetadataConfig.newBuilder()
+        .fromProperties(propsZero)
+        .build();
+    assertEquals(10000, configWithZeroValue.getStreamingWritesCoalesceDivisorForDataTableWrites());
+  }
+
+  @Test
+  void testGlobalRLI() {
+    // Test default value
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
+    assertFalse(config.isGlobalRecordLevelIndexEnabled());
+
+    //set older config property.
+    Properties props = new Properties();
+    props.put("hoodie.metadata.record.index.enable", "true");
+    HoodieMetadataConfig configWithCustomValue = HoodieMetadataConfig.newBuilder()
+        .fromProperties(props)
+        .build();
+    assertTrue(configWithCustomValue.isGlobalRecordLevelIndexEnabled());
+
+    // set latest config property
+    props = new Properties();
+    props.put(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    configWithCustomValue = HoodieMetadataConfig.newBuilder()
+        .fromProperties(props)
+        .build();
+    assertTrue(configWithCustomValue.isGlobalRecordLevelIndexEnabled());
+  }
+
+  @Test
+  void testRecordIndexMaxFileGroupSizeBytes() {
+    // Test default value (1GB)
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
+    assertEquals(1024L * 1024L * 1024L, config.getRecordIndexMaxFileGroupSizeBytes());
+
+    // Test custom value using builder method
+    long customSize = 2L * 1024L * 1024L * 1024L; // 2GB
+    HoodieMetadataConfig configWithBuilder = HoodieMetadataConfig.newBuilder()
+        .withRecordIndexMaxFileGroupSizeBytes(customSize)
+        .build();
+    assertEquals(customSize, configWithBuilder.getRecordIndexMaxFileGroupSizeBytes());
+
+    // Test custom value via Properties
+    Properties props = new Properties();
+    props.put(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP.key(), String.valueOf(customSize));
+    HoodieMetadataConfig configWithProperties = HoodieMetadataConfig.newBuilder()
+        .fromProperties(props)
+        .build();
+    assertEquals(customSize, configWithProperties.getRecordIndexMaxFileGroupSizeBytes());
+
+    // Test value larger than Integer.MAX_VALUE to ensure long is properly handled
+    long largeSize = 3L * 1024L * 1024L * 1024L; // 3GB (exceeds Integer.MAX_VALUE which is ~2.1GB)
+    Properties propsLarge = new Properties();
+    propsLarge.put(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP.key(), String.valueOf(largeSize));
+    HoodieMetadataConfig configWithLargeValue = HoodieMetadataConfig.newBuilder()
+        .fromProperties(propsLarge)
+        .build();
+    assertEquals(largeSize, configWithLargeValue.getRecordIndexMaxFileGroupSizeBytes());
+
+    // Verify that the value is indeed larger than Integer.MAX_VALUE
+    assertTrue(largeSize > Integer.MAX_VALUE, "Test value should exceed Integer.MAX_VALUE to validate long type");
+  }
+
+  @Test
+  void testFailOnTableServiceFailures() {
+    // Test default value
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
+    assertTrue(config.shouldFailOnTableServiceFailures());
+
+    // Test setting to false via Properties
+    Properties propsFalse = new Properties();
+    propsFalse.put(HoodieMetadataConfig.FAIL_ON_TABLE_SERVICE_FAILURES.key(), "false");
+    HoodieMetadataConfig configWithFalse = HoodieMetadataConfig.newBuilder()
+        .fromProperties(propsFalse)
+        .build();
+    assertFalse(configWithFalse.shouldFailOnTableServiceFailures());
+
+    // Test setting to true via builder method
+    HoodieMetadataConfig configWithBuilder = HoodieMetadataConfig.newBuilder()
+        .setFailOnTableServiceFailures(true)
+        .build();
+    assertTrue(configWithBuilder.shouldFailOnTableServiceFailures());
+
+    // Test setting to false via builder method
+    HoodieMetadataConfig configWithBuilderFalse = HoodieMetadataConfig.newBuilder()
+        .setFailOnTableServiceFailures(false)
+        .build();
+    assertFalse(configWithBuilderFalse.shouldFailOnTableServiceFailures());
+
+    // Verify the config key is correct
+    assertEquals("hoodie.metadata.write.fail.on.table.service.failures",
+        HoodieMetadataConfig.FAIL_ON_TABLE_SERVICE_FAILURES.key());
+  }
+
+  @Test
+  void testWriteConcurrencyMode() {
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
+    assertEquals(WriteConcurrencyMode.SINGLE_WRITER.name(), config.getWriteConcurrencyMode());
+
+    HoodieMetadataConfig occConfig = HoodieMetadataConfig.newBuilder()
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .build();
+    assertEquals(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name(), occConfig.getWriteConcurrencyMode());
+
+    Properties props = new Properties();
+    props.put(HoodieMetadataConfig.METADATA_WRITE_CONCURRENCY_MODE.key(),
+        WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+    HoodieMetadataConfig propsConfig = HoodieMetadataConfig.newBuilder()
+        .fromProperties(props)
+        .build();
+    assertEquals(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name(), propsConfig.getWriteConcurrencyMode());
+  }
+
+  @Test
+  void testTableServiceManagerEnabled() {
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
+    assertFalse(config.isTableServiceManagerEnabled());
+
+    HoodieMetadataConfig enabledConfig = HoodieMetadataConfig.newBuilder()
+        .withTableServiceManagerEnabled(true)
+        .withTableServiceManagerActions("compaction")
+        .build();
+    assertTrue(enabledConfig.isTableServiceManagerEnabled());
+
+    HoodieMetadataConfig disabledConfig = HoodieMetadataConfig.newBuilder()
+        .withTableServiceManagerEnabled(false)
+        .build();
+    assertFalse(disabledConfig.isTableServiceManagerEnabled());
+  }
+
+  @Test
+  void testTableServiceManagerActions() {
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
+    assertEquals("", config.getTableServiceManagerActions());
+
+    HoodieMetadataConfig configWithActions = HoodieMetadataConfig.newBuilder()
+        .withTableServiceManagerActions("compaction,logcompaction")
+        .build();
+    assertEquals("compaction,logcompaction", configWithActions.getTableServiceManagerActions());
+
+    Properties props = new Properties();
+    props.put(HoodieMetadataConfig.TABLE_SERVICE_MANAGER_ACTIONS.key(), "compaction");
+    HoodieMetadataConfig propsConfig = HoodieMetadataConfig.newBuilder()
+        .fromProperties(props)
+        .build();
+    assertEquals("compaction", propsConfig.getTableServiceManagerActions());
+  }
+
+  @Test
+  void testTableServiceManagerActionsRejectsUnsupportedActions() {
+    assertThrows(IllegalArgumentException.class, () ->
+        HoodieMetadataConfig.newBuilder()
+            .withTableServiceManagerActions("clean")
+            .build());
+
+    assertThrows(IllegalArgumentException.class, () ->
+        HoodieMetadataConfig.newBuilder()
+            .withTableServiceManagerActions("clustering")
+            .build());
+
+    assertThrows(IllegalArgumentException.class, () ->
+        HoodieMetadataConfig.newBuilder()
+            .withTableServiceManagerActions("compaction,clean")
+            .build());
+
+    assertThrows(IllegalArgumentException.class, () ->
+        HoodieMetadataConfig.newBuilder()
+            .withTableServiceManagerActions("nonexistent")
+            .build());
+  }
+
+  @Test
+  void testTableServiceManagerActionsValidatedInBuildFromProperties() {
+    Properties props = new Properties();
+    props.put(HoodieMetadataConfig.TABLE_SERVICE_MANAGER_ACTIONS.key(), "clean");
+    assertThrows(IllegalArgumentException.class, () ->
+        HoodieMetadataConfig.newBuilder()
+            .fromProperties(props)
+            .build());
+  }
+
+  @Test
+  void testTableServiceManagerEnabledWithEmptyActionsRejected() {
+    assertThrows(IllegalArgumentException.class, () ->
+        HoodieMetadataConfig.newBuilder()
+            .withTableServiceManagerEnabled(true)
+            .build());
   }
 }

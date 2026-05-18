@@ -31,6 +31,7 @@ import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
+import org.apache.hudi.utilities.testutils.KafkaTestUtils;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -40,9 +41,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.streaming.kafka010.KafkaTestUtils;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -71,17 +72,22 @@ public abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarne
   protected final Option<SourceProfileSupplier> sourceProfile = Option.of(mock(SourceProfileSupplier.class));
 
   protected SchemaProvider schemaProvider;
-  protected KafkaTestUtils testUtils;
+  protected static KafkaTestUtils testUtils;
 
-  @BeforeEach
-  public void initClass() {
+  @BeforeAll
+  public static void setupKafka() {
     testUtils = new KafkaTestUtils();
     testUtils.setup();
   }
 
-  @AfterEach
-  public void cleanupClass() {
+  @AfterAll
+  public static void teardownKafka() {
     testUtils.teardown();
+  }
+
+  @AfterEach
+  void cleanupTopics() {
+    testUtils.deleteTopics();
   }
 
   protected abstract TypedProperties createPropsForKafkaSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy);
@@ -118,7 +124,7 @@ public abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarne
     assertEquals(900, fetch1.getBatch().get().count());
     // Test Avro To DataFrame<Row> path
     Dataset<Row> fetch1AsRows = AvroConversionUtils.createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
-        schemaProvider.getSourceSchema().toString(), kafkaSource.getSource().getSparkSession());
+        schemaProvider.getSourceHoodieSchema().toString(), kafkaSource.getSource().getSparkSession());
     assertEquals(900, fetch1AsRows.count());
 
     // 2. Produce new data, extract new data

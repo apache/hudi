@@ -19,29 +19,35 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, getAppliedRequiredSchema}
-import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
+import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, filterIsSafeForPrimaryKey, getAppliedRequiredSchema}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, Pair => HPair}
-import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
+import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader, VectorConversionUtils}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
+import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.JoinedRow
+import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader}
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, ByteType, DoubleType, FloatType, LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+
+import java.util.function.{Function => JFunction}
+
+import scala.collection.JavaConverters._
 
 /**
  * Implementation of [[HoodieReaderContext]] to read [[InternalRow]]s with
@@ -59,35 +65,128 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
                                               filters: Seq[Filter],
                                               requiredFilters: Seq[Filter],
                                               storageConfiguration: StorageConfiguration[_],
-                                              tableConfig: HoodieTableConfig)
-  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig, new SparkFileFormatInternalRecordContext(tableConfig)) {
+                                              tableConfig: HoodieTableConfig,
+                                              sparkRequiredSchema: Option[StructType] = None)
+  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig, SparkFileFormatInternalRecordContext.apply(tableConfig)) {
+
+  // Java-friendly auxiliary constructor (Scala default args don't generate matching Java overloads).
+  def this(baseFileReader: SparkColumnarFileReader,
+           filters: Seq[Filter],
+           requiredFilters: Seq[Filter],
+           storageConfiguration: StorageConfiguration[_],
+           tableConfig: HoodieTableConfig) =
+    this(baseFileReader, filters, requiredFilters, storageConfiguration, tableConfig, None)
+
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
+  private lazy val recordKeyFields = Option(tableConfig.getRecordKeyFields.orElse(null)).map(_.map(_.toLowerCase).toSet).getOrElse(Set.empty)
   private lazy val bootstrapSafeFilters: Seq[Filter] = filters.filter(filterIsSafeForBootstrap) ++ requiredFilters
+  private lazy val morFilters = filters.filter(filterIsSafeForPrimaryKey(_, recordKeyFields)) ++ requiredFilters
   private lazy val allFilters = filters ++ requiredFilters
+
+  // For each field of `target`, replace its dataType with the matching field's projected
+  // variant struct from `source` (when present). Non-matching fields pass through.
+  private def overlayVariantProjections(target: StructType, source: StructType): StructType = {
+    StructType(target.fields.map { f =>
+      SparkFileFormatInternalRowReaderContext.findFieldByName(source, f.name).map(_.dataType) match {
+        case Some(projStruct: StructType) if sparkAdapter.isVariantProjectionStruct(projStruct) =>
+          f.copy(dataType = projStruct)
+        case _ => f
+      }
+    })
+  }
+
+  // Aligns log-block records with the PushVariantIntoScan-projected variant shape before
+  // they reach the merger. Preserves merger metadata cols (_hoodie_record_key,
+  // _tmp_metadata_row_index) which the merger reads by ordinal — projecting down to the
+  // bare required schema would drop them and the merger would read garbage offsets.
+  override def getLogBlockRecordProjection(
+      dataBlockSchema: HoodieSchema): HOption[JFunction[InternalRow, InternalRow]] = {
+    val needsProjection = sparkRequiredSchema.exists(_.fields.exists(f => f.dataType match {
+      case st: StructType => sparkAdapter.isVariantProjectionStruct(st)
+      case _ => false
+    }))
+    if (!needsProjection) {
+      return HOption.empty[JFunction[InternalRow, InternalRow]]()
+    }
+    val req = sparkRequiredSchema.get
+    val dataStruct = HoodieInternalRowUtils.getCachedSchema(dataBlockSchema)
+    val targetStruct = overlayVariantProjections(dataStruct, req)
+    sparkAdapter.buildVariantProjector(dataStruct, targetStruct) match {
+      case Some(p) => HOption.of(new JFunction[InternalRow, InternalRow] {
+        // .copy() because the buffer stores rows into ExternalSpillableMap and
+        // UnsafeProjection reuses a single output buffer.
+        override def apply(r: InternalRow): InternalRow = p(r).copy()
+      })
+      case None => HOption.empty[JFunction[InternalRow, InternalRow]]()
+    }
+  }
 
   override def getFileRecordIterator(filePath: StoragePath,
                                      start: Long,
                                      length: Long,
-                                     dataSchema: Schema,
-                                     requiredSchema: Schema,
+                                     dataSchema: HoodieSchema, // dataSchema refers to table schema in most cases(non log file reads).
+                                     requiredSchema: HoodieSchema,
                                      storage: HoodieStorage): ClosableIterator[InternalRow] = {
-    val hasRowIndexField = AvroSchemaUtils.containsFieldInSchema(requiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME)
+    val hasRowIndexField = requiredSchema.getField(ROW_INDEX_TEMPORARY_COLUMN_NAME).isPresent
     if (hasRowIndexField) {
       assert(getRecordContext.supportsParquetRowIndex())
     }
-    val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
+    // Use the engine's augmented requiredSchema (includes merger metadata cols the merger
+    // reads from base rows), but overlay the projected variant shape from sparkRequiredSchema
+    // so parquet-mr's PushVariantIntoScan kicks in (HoodieSchema collapses the projected
+    // struct back to VariantType, dropping the VariantMetadata parquet-mr looks for).
+    val structType = sparkRequiredSchema match {
+      case Some(sparkReq) => overlayVariantProjections(HoodieInternalRowUtils.getCachedSchema(requiredSchema), sparkReq)
+      case None => HoodieInternalRowUtils.getCachedSchema(requiredSchema)
+    }
+
+    // Parquet stores VECTOR as FIXED_LEN_BYTE_ARRAY, so the reader needs BinaryType
+    // and we decode back to ArrayType below. Lance returns ArrayType natively, so skip
+    // the rewrite only for Lance base files; log files always go through the rewrite path.
+    val isLanceBaseFile = FSUtils.isBaseFile(filePath) &&
+      tableConfig.getBaseFileFormat == HoodieFileFormat.LANCE
+    val vectorColumnInfo: Map[Int, HoodieSchema.Vector] = if (isLanceBaseFile) {
+      Map.empty
+    } else {
+      SparkFileFormatInternalRowReaderContext.detectVectorColumns(requiredSchema)
+    }
+    val parquetReadStructType = if (vectorColumnInfo.nonEmpty) {
+      SparkFileFormatInternalRowReaderContext.replaceVectorColumnsWithBinary(structType, vectorColumnInfo)
+    } else {
+      structType
+    }
+
+    val (readSchema, readFilters) = getSchemaAndFiltersForRead(parquetReadStructType, hasRowIndexField)
     if (FSUtils.isLogFile(filePath)) {
+      // NOTE: now only primary key based filtering is supported for log files
+      // Variant alignment happens later via getLogBlockRecordProjection in the merge buffer.
       new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
-        .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(structType).asInstanceOf[ClosableIterator[InternalRow]]
+        .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(requiredSchema, readFilters.asJava)
+        .asInstanceOf[ClosableIterator[InternalRow]]
     } else {
       // partition value is empty because the spark parquet reader will append the partition columns to
       // each row if they are given. That is the only usage of the partition values in the reader.
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
-      val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
-      new CloseableInternalRowIterator(baseFileReader.read(fileInfo,
+
+      // Convert Avro dataSchema to Parquet MessageType for timestamp precision conversion
+      val tableSchemaOpt = if (dataSchema != null) {
+        val hadoopConf = storage.getConf.unwrapAs(classOf[Configuration])
+        val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(dataSchema)
+        org.apache.hudi.common.util.Option.of(parquetSchema)
+      } else {
+        org.apache.hudi.common.util.Option.empty[org.apache.parquet.schema.MessageType]()
+      }
+      val rawIterator = new CloseableInternalRowIterator(baseFileReader.read(fileInfo,
         readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
-        readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
+        readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]], tableSchemaOpt))
+
+      // Post-process: convert binary VECTOR columns back to typed arrays
+      if (vectorColumnInfo.nonEmpty) {
+        SparkFileFormatInternalRowReaderContext.wrapWithVectorConversion(rawIterator, vectorColumnInfo, readSchema)
+      } else {
+        rawIterator
+      }
     }
   }
 
@@ -97,6 +196,8 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       (schemaForRead, allFilters)
     } else if (!getHasLogFiles && hasRowIndexField) {
       (schemaForRead, bootstrapSafeFilters)
+    } else if (!getNeedsBootstrapMerge) {
+      (schemaForRead, morFilters)
     } else {
       (schemaForRead, requiredFilters)
     }
@@ -111,34 +212,34 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
    * @return iterator that concatenates the skeletonFileIterator and dataFileIterator
    */
   override def mergeBootstrapReaders(skeletonFileIterator: ClosableIterator[InternalRow],
-                                     skeletonRequiredSchema: Schema,
+                                     skeletonRequiredSchema: HoodieSchema,
                                      dataFileIterator: ClosableIterator[InternalRow],
-                                     dataRequiredSchema: Schema,
+                                     dataRequiredSchema: HoodieSchema,
                                      partitionFieldAndValues: java.util.List[HPair[String, Object]]): ClosableIterator[InternalRow] = {
     doBootstrapMerge(skeletonFileIterator.asInstanceOf[ClosableIterator[Any]], skeletonRequiredSchema,
       dataFileIterator.asInstanceOf[ClosableIterator[Any]], dataRequiredSchema, partitionFieldAndValues)
   }
 
   private def doBootstrapMerge(skeletonFileIterator: ClosableIterator[Any],
-                               skeletonRequiredSchema: Schema,
+                               skeletonRequiredSchema: HoodieSchema,
                                dataFileIterator: ClosableIterator[Any],
-                               dataRequiredSchema: Schema,
+                               dataRequiredSchema: HoodieSchema,
                                partitionFieldAndValues: java.util.List[HPair[String, Object]]): ClosableIterator[InternalRow] = {
     if (getRecordContext.supportsParquetRowIndex()) {
-      assert(AvroSchemaUtils.containsFieldInSchema(skeletonRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
-      assert(AvroSchemaUtils.containsFieldInSchema(dataRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
+      assert(skeletonRequiredSchema.getField(ROW_INDEX_TEMPORARY_COLUMN_NAME).isPresent)
+      assert(dataRequiredSchema.getField(ROW_INDEX_TEMPORARY_COLUMN_NAME).isPresent)
       val rowIndexColumn = new java.util.HashSet[String]()
       rowIndexColumn.add(ROW_INDEX_TEMPORARY_COLUMN_NAME)
       //always remove the row index column from the skeleton because the data file will also have the same column
       val skeletonProjection = recordContext.projectRecord(skeletonRequiredSchema,
-        HoodieAvroUtils.removeFields(skeletonRequiredSchema, rowIndexColumn))
+        HoodieSchemaUtils.removeFields(skeletonRequiredSchema, rowIndexColumn))
 
       //If we need to do position based merging with log files we will leave the row index column at the end
       val dataProjection = if (getShouldMergeUseRecordPosition) {
         getBootstrapProjection(dataRequiredSchema, dataRequiredSchema, partitionFieldAndValues)
       } else {
         getBootstrapProjection(dataRequiredSchema,
-          HoodieAvroUtils.removeFields(dataRequiredSchema, rowIndexColumn), partitionFieldAndValues)
+          HoodieSchemaUtils.removeFields(dataRequiredSchema, rowIndexColumn), partitionFieldAndValues)
       }
 
       //row index will always be the last column
@@ -234,6 +335,15 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
 }
 
 object SparkFileFormatInternalRowReaderContext {
+  /** Look up a field by name, honoring `spark.sql.caseSensitive`. */
+  private[hudi] def findFieldByName(schema: StructType, name: String): Option[StructField] = {
+    if (SQLConf.get.caseSensitiveAnalysis) {
+      schema.fields.find(_.name == name)
+    } else {
+      schema.fields.find(_.name.equalsIgnoreCase(name))
+    }
+  }
+
   // From "namedExpressions.scala": Used to construct to record position field metadata.
   private val FILE_SOURCE_GENERATED_METADATA_COL_ATTR_KEY = "__file_source_generated_metadata_col"
   private val FILE_SOURCE_METADATA_COL_ATTR_KEY = "__file_source_metadata_col"
@@ -262,8 +372,77 @@ object SparkFileFormatInternalRowReaderContext {
     metaRefCount == filter.references.length || metaRefCount == 0
   }
 
+  /**
+   * Only valid if the filter's references only include primary key columns or {@link HoodieRecord.RECORD_KEY_METADATA_FIELD}
+   */
+  def filterIsSafeForPrimaryKey(filter: Filter, recordKeyFields: Set[String]): Boolean = {
+    filter.references.forall(c => recordKeyFields.contains(c.toLowerCase) || c.equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD))
+  }
+
   private def isIndexTempColumn(field: StructField): Boolean = {
     field.name.equals(ROW_INDEX_TEMPORARY_COLUMN_NAME)
+  }
+
+  /**
+   * Detects VECTOR columns from HoodieSchema.
+   * Delegates to [[VectorConversionUtils.detectVectorColumns]].
+   * @return Map of ordinal to Vector schema for VECTOR fields.
+   */
+  private[hudi] def detectVectorColumns(schema: HoodieSchema): Map[Int, HoodieSchema.Vector] = {
+    VectorConversionUtils.detectVectorColumns(schema).asScala.map { case (k, v) => (k.intValue(), v) }.toMap
+  }
+
+  /**
+   * Detects VECTOR columns from Spark StructType metadata.
+   * Delegates to [[VectorConversionUtils.detectVectorColumnsFromMetadata]].
+   * @return Map of ordinal to Vector schema for VECTOR fields.
+   */
+  def detectVectorColumnsFromMetadata(schema: StructType): Map[Int, HoodieSchema.Vector] = {
+    VectorConversionUtils.detectVectorColumnsFromMetadata(schema).asScala.map { case (k, v) => (k.intValue(), v) }.toMap
+  }
+
+  /**
+   * Replaces ArrayType with BinaryType for VECTOR columns so the Parquet reader
+   * can read FIXED_LEN_BYTE_ARRAY data without type mismatch.
+   * Delegates to [[VectorConversionUtils.replaceVectorColumnsWithBinary]].
+   */
+  def replaceVectorColumnsWithBinary(structType: StructType, vectorColumns: Map[Int, HoodieSchema.Vector]): StructType = {
+    val javaMap = vectorColumns.map { case (k, v) => (Integer.valueOf(k), v.asInstanceOf[AnyRef]) }.asJava
+    VectorConversionUtils.replaceVectorColumnsWithBinary(structType, javaMap)
+  }
+
+  /**
+   * Wraps an iterator to convert binary VECTOR columns back to typed arrays.
+   * Unpacks bytes from FIXED_LEN_BYTE_ARRAY into GenericArrayData using the canonical vector byte order.
+   * Uses UnsafeProjection to make a defensive copy of each row.
+   */
+  private[hudi] def wrapWithVectorConversion(
+      iterator: ClosableIterator[InternalRow],
+      vectorColumns: Map[Int, HoodieSchema.Vector],
+      readSchema: StructType): ClosableIterator[InternalRow] = {
+    val javaVectorCols: java.util.Map[Integer, HoodieSchema.Vector] =
+      vectorColumns.map { case (k, v) => (Integer.valueOf(k), v) }.asJava
+    // Build output schema: replace BinaryType with the correct ArrayType for vector columns
+    val outputFields = readSchema.fields.zipWithIndex.map { case (field, i) =>
+      vectorColumns.get(i) match {
+        case Some(vec) =>
+          val elemType = vec.getVectorElementType match {
+            case HoodieSchema.Vector.VectorElementType.FLOAT => FloatType
+            case HoodieSchema.Vector.VectorElementType.DOUBLE => DoubleType
+            case HoodieSchema.Vector.VectorElementType.INT8 => ByteType
+          }
+          field.copy(dataType = ArrayType(elemType, containsNull = false))
+        case None => field
+      }
+    }
+    val outputSchema = StructType(outputFields)
+    val projection = UnsafeProjection.create(outputSchema)
+    val mapper = VectorConversionUtils.buildRowMapper(readSchema, javaVectorCols, projection.apply(_))
+    new ClosableIterator[InternalRow] {
+      override def hasNext: Boolean = iterator.hasNext
+      override def next(): InternalRow = mapper.apply(iterator.next())
+      override def close(): Unit = iterator.close()
+    }
   }
 
 }

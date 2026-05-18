@@ -78,7 +78,14 @@ public enum HoodieTableVersion {
   public static HoodieTableVersion fromVersionCode(int versionCode) {
     return Arrays.stream(HoodieTableVersion.values())
         .filter(v -> v.versionCode == versionCode).findAny()
-        .orElseThrow(() -> new HoodieException("Unknown table versionCode:" + versionCode));
+        .orElseThrow(() -> new HoodieException(
+            String.format(
+                "Unsupported table version code: %d.%n%n"
+                    + "This table version is not recognized by this Hudi version.%n%n"
+                    + "This can happen if:%n"
+                    + "  (1) The table was created with a newer version of Hudi (upgrade your readers),%n"
+                    + "  (2) The table metadata is corrupted.%n%n"
+                    + "See: https://hudi.apache.org/docs/migration_guide for more information", versionCode)));
   }
 
   public static HoodieTableVersion fromReleaseVersion(String releaseVersion) {

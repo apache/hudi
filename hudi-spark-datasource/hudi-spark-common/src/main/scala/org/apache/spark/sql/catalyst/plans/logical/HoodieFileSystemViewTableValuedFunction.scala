@@ -19,16 +19,16 @@ package org.apache.spark.sql.catalyst.plans.logical
 
 import org.apache.hudi.DataSourceReadOptions
 
-import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.LeafNode
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
 object HoodieFileSystemViewTableValuedFunctionOptionsParser {
   def parseOptions(exprs: Seq[Expression], funcName: String): (String, Map[String, String]) = {
     val args = exprs.map(_.eval().toString)
 
     if (args.size < 1 || args.size > 2) {
-      throw new AnalysisException(s"Expect arguments (table_name or table_path) for function `$funcName`")
+      throw new HoodieAnalysisException(s"Expect arguments (table_name or table_path) for function `$funcName`")
     }
 
     val identifier = args.head

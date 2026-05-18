@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.schema;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.avro.Schema;
@@ -44,6 +44,6 @@ public class RowBasedSchemaProvider extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
-    return AvroConversionUtils.convertStructTypeToAvroSchema(rowStruct, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE);
+    return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(rowStruct, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toAvroSchema();
   }
 }

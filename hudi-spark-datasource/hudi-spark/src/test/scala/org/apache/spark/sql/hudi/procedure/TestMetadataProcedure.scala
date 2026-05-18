@@ -238,20 +238,21 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
            | )
        """.stripMargin)
       // insert data to table
-      spark.sql("set hoodie.parquet.small.file.limit=0")
-      spark.sql(
-        s"""
-           |insert into table $tableName
-           |values (1, true, CAST('2021-01-01' AS DATE), CAST(3.14 AS DOUBLE), CAST(2.5 AS FLOAT),1000, 'example string', CAST('2021-02-02 00:00:00' AS TIMESTAMP))
-           |""".stripMargin)
+      withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
+        spark.sql(
+          s"""
+             |insert into table $tableName
+             |values (1, true, CAST('2021-01-01' AS DATE), CAST(3.14 AS DOUBLE), CAST(2.5 AS FLOAT),1000, 'example string', CAST('2021-02-02 00:00:00' AS TIMESTAMP))
+             |""".stripMargin)
 
-      spark.sql(
-        s"""
-           |insert into table $tableName
-           |values
-           |(10, false, CAST('2022-02-02' AS DATE),CAST(6.28 AS DOUBLE), CAST(3.14 AS FLOAT), 2000, 'another string', CAST('2022-02-02 00:00:00' AS TIMESTAMP)),
-           |(0, false, CAST('2020-02-02' AS DATE), CAST(7.28 AS DOUBLE), CAST(2.1 AS FLOAT), 3000, 'third string', CAST('2021-01-01 00:00:00' AS TIMESTAMP))
-           |""".stripMargin)
+        spark.sql(
+          s"""
+             |insert into table $tableName
+             |values
+             |(10, false, CAST('2022-02-02' AS DATE),CAST(6.28 AS DOUBLE), CAST(3.14 AS FLOAT), 2000, 'another string', CAST('2022-02-02 00:00:00' AS TIMESTAMP)),
+             |(0, false, CAST('2020-02-02' AS DATE), CAST(7.28 AS DOUBLE), CAST(2.1 AS FLOAT), 3000, 'third string', CAST('2021-01-01 00:00:00' AS TIMESTAMP))
+             |""".stripMargin)
+      }
 
       val maxResult = Array(2, 1, 2, 1, 2, 1, 2, 2)
       val valueResult = Array(3, 2, 3, 3, 3, 3, 3, 3)

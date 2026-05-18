@@ -33,6 +33,7 @@ import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 class TestSerializableIndexRecord {
@@ -89,5 +90,18 @@ class TestSerializableIndexRecord {
     // decoding again should not produce a new record
     deserialized.decodeRecord(schema);
     assertSame(parsedRecord, deserialized.getRecord());
+  }
+
+  @Test
+  void testFromAvroBytes() {
+    GenericRecord originalRecord = new GenericRecordBuilder(schema)
+        .set("field_1", "value1")
+        .set("field_2", 42)
+        .build();
+    byte[] encoded = HoodieAvroUtils.avroToBytes(originalRecord);
+    SerializableIndexedRecord serializableIndexedRecord = SerializableIndexedRecord.fromAvroBytes(schema, encoded);
+    assertEquals(originalRecord, serializableIndexedRecord.getRecord());
+
+    assertNull(SerializableIndexedRecord.fromAvroBytes(schema, new byte[0]));
   }
 }

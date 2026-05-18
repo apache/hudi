@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 
@@ -32,9 +33,11 @@ import java.util.List;
  */
 public class HoodieLogBlockMetadataScanner extends BaseHoodieLogRecordReader<IndexedRecord> {
 
-  public HoodieLogBlockMetadataScanner(HoodieTableMetaClient metaClient, List<String> logFilePaths, int bufferSize, String maxInstantTime, Option<InstantRange> instantRange) {
-    super(getReaderContext(metaClient, maxInstantTime), metaClient, metaClient.getStorage(), logFilePaths, false, bufferSize, instantRange, false, false, Option.empty(), Option.empty(), true,
-        null, false);
+  public HoodieLogBlockMetadataScanner(HoodieTableMetaClient metaClient, List<HoodieLogFile> logFiles,
+                                       int bufferSize, String maxInstantTime, Option<InstantRange> instantRange) {
+    super(getReaderContext(metaClient, maxInstantTime), metaClient, metaClient.getStorage(), logFiles,
+        false, bufferSize, instantRange, false, false, Option.empty(),
+        Option.empty(), null, false);
     scanInternal(Option.empty(), true);
   }
 

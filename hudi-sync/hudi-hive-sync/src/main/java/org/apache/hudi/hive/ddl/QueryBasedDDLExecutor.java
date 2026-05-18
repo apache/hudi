@@ -19,6 +19,7 @@
 package org.apache.hudi.hive.ddl;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -29,10 +30,8 @@ import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
-import org.apache.parquet.schema.MessageType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -51,9 +50,8 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
 /**
  * This class adds functionality for all query based DDLExecutors. The classes extending it only have to provide runSQL(sql) functions.
  */
+@Slf4j
 public abstract class QueryBasedDDLExecutor implements DDLExecutor {
-
-  private static final Logger LOG = LoggerFactory.getLogger(QueryBasedDDLExecutor.class);
 
   protected final HiveSyncConfig config;
   protected final String databaseName;
@@ -83,13 +81,13 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   }
 
   @Override
-  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
+  public void createTable(String tableName, HoodieSchema storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
                           Map<String, String> tableProperties) {
     try {
       String createSQLQuery =
           HiveSchemaUtil.generateCreateDDL(tableName, storageSchema, config, inputFormatClass,
               outputFormatClass, serdeClass, serdeProperties, tableProperties);
-      LOG.info("Creating table with " + createSQLQuery);
+      log.info("Creating table with {}", createSQLQuery);
       runSQL(createSQLQuery);
     } catch (IOException e) {
       throw new HoodieHiveSyncException("Failed to create table " + tableName, e);
@@ -97,7 +95,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   }
 
   @Override
-  public void updateTableDefinition(String tableName, MessageType newSchema) {
+  public void updateTableDefinition(String tableName, HoodieSchema newSchema) {
     try {
       String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, config.getSplitStrings(META_SYNC_PARTITION_FIELDS), config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
       // Cascade clause should not be present for non-partitioned tables
@@ -107,7 +105,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
           .append(HIVE_ESCAPE_CHARACTER).append(tableName)
           .append(HIVE_ESCAPE_CHARACTER).append(" REPLACE COLUMNS(")
           .append(newSchemaStr).append(" )").append(cascadeClause);
-      LOG.info("Updating table definition with " + sqlBuilder);
+      log.info("Updating table definition with {}", sqlBuilder);
       runSQL(sqlBuilder.toString());
     } catch (IOException e) {
       throw new HoodieHiveSyncException("Failed to update table for " + tableName, e);
@@ -117,10 +115,10 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   @Override
   public void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
     if (partitionsToAdd.isEmpty()) {
-      LOG.info("No partitions to add for " + tableName);
+      log.info("No partitions to add for {}", tableName);
       return;
     }
-    LOG.info("Adding partitions " + partitionsToAdd.size() + " to table " + tableName);
+    log.info("Adding partitions {} to table {}", partitionsToAdd.size(), tableName);
     List<String> sqls = constructAddPartitions(tableName, partitionsToAdd);
     sqls.stream().forEach(sql -> runSQL(sql));
   }
@@ -128,11 +126,11 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   @Override
   public void updatePartitionsToTable(String tableName, List<String> changedPartitions) {
     if (changedPartitions.isEmpty()) {
-      LOG.info("No partitions to change for " + tableName);
+      log.info("No partitions to change for {}", tableName);
       return;
     }
-    LOG.info("Changing partitions " + changedPartitions.size() + " on " + tableName);
-    List<String> sqls = constructChangePartitions(tableName, changedPartitions);
+    log.info("Changing partitions {} on {}", changedPartitions.size(), tableName);
+    List<String> sqls = constructPartitionAlterStatements(tableName, changedPartitions, PartitionAlterType.SET_LOCATION);
     for (String sql : sqls) {
       runSQL(sql);
     }
@@ -204,23 +202,57 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     return String.join(",", partBuilder);
   }
 
-  private List<String> constructChangePartitions(String tableName, List<String> partitions) {
-    List<String> changePartitions = new ArrayList<>();
+  @Override
+  public void touchPartitionsToTable(String tableName, List<String> touchPartitions) {
+    if (touchPartitions.isEmpty()) {
+      log.info("No partitions to touch for " + tableName);
+      return;
+    }
+    log.info("Touching partitions " + touchPartitions.size() + " on " + tableName);
+    List<String> sqls = constructPartitionAlterStatements(tableName, touchPartitions, PartitionAlterType.TOUCH);
+    for (String sql : sqls) {
+      runSQL(sql);
+    }
+  }
+
+  /**
+   * Builds SQL statements to either touch partitions or set their location.
+   * TOUCH: one ALTER TABLE ... TOUCH PARTITION (p1) PARTITION (p2) ...
+   * SET_LOCATION: one ALTER TABLE ... PARTITION (p) SET LOCATION '...' per partition.
+   */
+  private List<String> constructPartitionAlterStatements(String tableName, List<String> partitions, PartitionAlterType alterType) {
+    List<String> result = new ArrayList<>();
     // Hive 2.x doesn't like db.table name for operations, hence we need to change to using the database first
     String useDatabase = "USE " + HIVE_ESCAPE_CHARACTER + databaseName + HIVE_ESCAPE_CHARACTER;
-    changePartitions.add(useDatabase);
-    String alterTable = "ALTER TABLE " + HIVE_ESCAPE_CHARACTER + tableName + HIVE_ESCAPE_CHARACTER;
-    for (String partition : partitions) {
-      String partitionClause = getPartitionClause(partition);
-      Path partitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(config.getString(META_SYNC_BASE_PATH), partition);
-      String partitionScheme = partitionPath.toUri().getScheme();
-      String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
-          ? HadoopFSUtils.getDFSFullPartitionPath(config.getHadoopFileSystem(), partitionPath) : partitionPath.toString();
-      String changePartition =
-          alterTable + " PARTITION (" + partitionClause + ") SET LOCATION '" + fullPartitionPath + "'";
-      changePartitions.add(changePartition);
+    result.add(useDatabase);
+    String alterTablePrefix = "ALTER TABLE " + HIVE_ESCAPE_CHARACTER + tableName + HIVE_ESCAPE_CHARACTER;
+    switch (alterType) {
+      case TOUCH:
+        String alterTable = alterTablePrefix + " TOUCH";
+        for (String partition : partitions) {
+          alterTable += " PARTITION (" + getPartitionClause(partition) + ")";
+        }
+        result.add(alterTable);
+        break;
+      case SET_LOCATION:
+        for (String partition : partitions) {
+          String partitionClause = getPartitionClause(partition);
+          Path partitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(config.getString(META_SYNC_BASE_PATH), partition);
+          String partitionScheme = partitionPath.toUri().getScheme();
+          String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
+              ? HadoopFSUtils.getDFSFullPartitionPath(config.getHadoopFileSystem(), partitionPath) : partitionPath.toString();
+          result.add(alterTablePrefix + " PARTITION (" + partitionClause + ") SET LOCATION '" + fullPartitionPath + "'");
+        }
+        break;
+      default:
+        throw new HoodieHiveSyncException("Partition alter type not supported: " + alterType);
     }
-    return changePartitions;
+    return result;
+  }
+
+  private enum PartitionAlterType {
+    TOUCH,
+    SET_LOCATION
   }
 }
 

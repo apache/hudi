@@ -352,7 +352,7 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
   }
 
   @AfterAll
-  public static synchronized void cleanUpAfterAll() {
+  public static synchronized void cleanUpAfterAll() throws IOException {
     if (spark != null) {
       spark.close();
       spark = null;

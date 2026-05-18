@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.test.proto.Child;
 import org.apache.hudi.utilities.test.proto.FirstBatch;
@@ -81,69 +82,63 @@ public class TestProtoConversionUtil {
   private static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
   @Test
-  public void allFieldsSet_wellKnownTypesAndTimestampsAsRecords() throws IOException {
-    Schema.Parser parser = new Schema.Parser();
-    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_wrapped_and_timestamp_as_record.avsc"));
-    Pair<Sample, GenericRecord> inputAndOutput = createInputOutputSampleWithRandomValues(convertedSchema, true);
+  public void allFieldsSet_wellKnownTypesAndTimestampsAsRecords() {
+    HoodieSchema convertedSchema = new HoodieSchema.Parser().parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_wrapped_and_timestamp_as_record.avsc"));
+    Pair<Sample, GenericRecord> inputAndOutput = createInputOutputSampleWithRandomValues(convertedSchema.toAvroSchema(), true);
     Sample input = inputAndOutput.getLeft();
-    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, input), convertedSchema);
+    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, input), convertedSchema.toAvroSchema());
     Assertions.assertEquals(inputAndOutput.getRight(), actual);
     // assert that unsigned long is interpreted correctly
-    Schema primitiveUnsignedLongSchema = convertedSchema.getField(PRIMITIVE_UNSIGNED_LONG_FIELD_NAME).schema();
+    Schema primitiveUnsignedLongSchema = convertedSchema.getField(PRIMITIVE_UNSIGNED_LONG_FIELD_NAME).get().schema().toAvroSchema();
     assertUnsignedLongCorrectness(primitiveUnsignedLongSchema, input.getPrimitiveUnsignedLong(), (GenericFixed) actual.get(PRIMITIVE_UNSIGNED_LONG_FIELD_NAME));
-    Schema wrappedUnsignedLongSchema = convertedSchema.getField(WRAPPED_UNSIGNED_LONG_FIELD_NAME).schema().getTypes().get(1).getField("value").schema();
+    Schema wrappedUnsignedLongSchema = convertedSchema.getField(WRAPPED_UNSIGNED_LONG_FIELD_NAME).get().schema().toAvroSchema().getTypes().get(1).getField("value").schema();
     assertUnsignedLongCorrectness(wrappedUnsignedLongSchema, input.getWrappedUnsignedLong().getValue(), (GenericFixed) ((GenericRecord) actual.get(WRAPPED_UNSIGNED_LONG_FIELD_NAME)).get("value"));
   }
 
   @Test
-  public void noFieldsSet_wellKnownTypesAndTimestampsAsRecords() throws IOException {
+  public void noFieldsSet_wellKnownTypesAndTimestampsAsRecords() {
     Sample sample = Sample.newBuilder().build();
-    Schema.Parser parser = new Schema.Parser();
-    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_wrapped_and_timestamp_as_record.avsc"));
-    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, sample), convertedSchema);
-    Assertions.assertEquals(createDefaultOutput(convertedSchema), actual);
+    HoodieSchema convertedSchema = new HoodieSchema.Parser().parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_wrapped_and_timestamp_as_record.avsc"));
+    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, sample), convertedSchema.toAvroSchema());
+    Assertions.assertEquals(createDefaultOutput(convertedSchema.toAvroSchema()), actual);
   }
 
   @Test
-  public void allFieldsSet_defaultOptions() throws IOException {
-    Schema.Parser parser = new Schema.Parser();
-    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_defaults.avsc"));
-    Pair<Sample, GenericRecord> inputAndOutput = createInputOutputSampleWithRandomValues(convertedSchema, false);
+  public void allFieldsSet_defaultOptions() {
+    HoodieSchema convertedSchema = new HoodieSchema.Parser().parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_defaults.avsc"));
+    Pair<Sample, GenericRecord> inputAndOutput = createInputOutputSampleWithRandomValues(convertedSchema.toAvroSchema(), false);
     Sample input = inputAndOutput.getLeft();
-    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, input), convertedSchema);
+    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, input), convertedSchema.toAvroSchema());
     Assertions.assertEquals(inputAndOutput.getRight(), actual);
     // assert that unsigned long is interpreted correctly
-    Schema primitiveUnsignedLongSchema = convertedSchema.getField(PRIMITIVE_UNSIGNED_LONG_FIELD_NAME).schema();
+    Schema primitiveUnsignedLongSchema = convertedSchema.getField(PRIMITIVE_UNSIGNED_LONG_FIELD_NAME).get().schema().toAvroSchema();
     assertUnsignedLongCorrectness(primitiveUnsignedLongSchema, input.getPrimitiveUnsignedLong(), (GenericFixed) actual.get(PRIMITIVE_UNSIGNED_LONG_FIELD_NAME));
-    Schema wrappedUnsignedLongSchema = convertedSchema.getField(WRAPPED_UNSIGNED_LONG_FIELD_NAME).schema().getTypes().get(1);
+    Schema wrappedUnsignedLongSchema = convertedSchema.getField(WRAPPED_UNSIGNED_LONG_FIELD_NAME).get().schema().toAvroSchema().getTypes().get(1);
     assertUnsignedLongCorrectness(wrappedUnsignedLongSchema, input.getWrappedUnsignedLong().getValue(), (GenericFixed) actual.get(WRAPPED_UNSIGNED_LONG_FIELD_NAME));
   }
 
   @Test
-  public void noFieldsSet_defaultOptions() throws IOException {
+  public void noFieldsSet_defaultOptions() {
     Sample sample = Sample.newBuilder().build();
-    Schema.Parser parser = new Schema.Parser();
-    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_defaults.avsc"));
-    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, sample), convertedSchema);
-    Assertions.assertEquals(createDefaultOutput(convertedSchema), actual);
+    HoodieSchema convertedSchema = new HoodieSchema.Parser().parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_defaults.avsc"));
+    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, sample), convertedSchema.toAvroSchema());
+    Assertions.assertEquals(createDefaultOutput(convertedSchema.toAvroSchema()), actual);
   }
 
   @Test
-  public void recursiveSchema_noOverflow() throws IOException {
-    Schema.Parser parser = new Schema.Parser();
-    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive_depth_2.avsc"));
-    Pair<Parent, GenericRecord> inputAndOutput = createInputOutputForRecursiveSchemaNoOverflow(convertedSchema);
-    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, inputAndOutput.getLeft()), convertedSchema);
+  public void recursiveSchema_noOverflow() {
+    HoodieSchema convertedSchema = new HoodieSchema.Parser().parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive_depth_2.avsc"));
+    Pair<Parent, GenericRecord> inputAndOutput = createInputOutputForRecursiveSchemaNoOverflow(convertedSchema.toAvroSchema());
+    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, inputAndOutput.getLeft()), convertedSchema.toAvroSchema());
     Assertions.assertEquals(inputAndOutput.getRight(), actual);
   }
 
   @Test
   public void recursiveSchema_withOverflow() throws Exception {
-    Schema.Parser parser = new Schema.Parser();
-    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive_depth_2.avsc"));
-    Pair<Parent, GenericRecord> inputAndOutput = createInputOutputForRecursiveSchemaWithOverflow(convertedSchema);
+    HoodieSchema convertedSchema = new HoodieSchema.Parser().parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive_depth_2.avsc"));
+    Pair<Parent, GenericRecord> inputAndOutput = createInputOutputForRecursiveSchemaWithOverflow(convertedSchema.toAvroSchema());
     Parent input = inputAndOutput.getLeft();
-    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, inputAndOutput.getLeft()), convertedSchema);
+    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, inputAndOutput.getLeft()), convertedSchema.toAvroSchema());
     Assertions.assertEquals(inputAndOutput.getRight(), actual);
     // assert that overflow data can be read back into proto class
     Child parsedSingleChildOverflow = Child.parseFrom(getOverflowBytesFromChildRecord((GenericRecord) actual.get("child")));
@@ -157,13 +152,12 @@ public class TestProtoConversionUtil {
   }
 
   @Test
-  public void oneOfSchema() throws IOException {
-    Schema.Parser parser = new Schema.Parser();
-    Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/oneof_schema.avsc"));
+  public void oneOfSchema() {
+    HoodieSchema convertedSchema = new HoodieSchema.Parser().parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/oneof_schema.avsc"));
     WithOneOf input = WithOneOf.newBuilder().setLong(32L).build();
-    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, input), convertedSchema);
+    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, input), convertedSchema.toAvroSchema());
 
-    GenericData.Record expectedRecord = new GenericData.Record(convertedSchema);
+    GenericData.Record expectedRecord = new GenericData.Record(convertedSchema.toAvroSchema());
     expectedRecord.put("int", null);
     expectedRecord.put("long", 32L);
     expectedRecord.put("message", null);
@@ -185,20 +179,20 @@ public class TestProtoConversionUtil {
     // validate that a proto message can be read with a newer schema with fields added/removed
     // this case can happen when processing a mixed batch of protos during one round of StreamSync
     ProtoConversionUtil.SchemaConfig schemaConfig = new ProtoConversionUtil.SchemaConfig(true, 1, true);
-    Schema evolvedSchema = ProtoConversionUtil.getAvroSchemaForMessageClass(SecondBatch.class, schemaConfig);
+    HoodieSchema evolvedSchema = ProtoConversionUtil.getSchemaForMessageClass(SecondBatch.class, schemaConfig);
     FirstBatch message = FirstBatch.newBuilder()
         .setId(123L)
         .setName("first_last")
         .build();
-    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(evolvedSchema, message), evolvedSchema);
-    GenericData.Record expected = new GenericData.Record(evolvedSchema);
+    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(evolvedSchema, message), evolvedSchema.toAvroSchema());
+    GenericData.Record expected = new GenericData.Record(evolvedSchema.toAvroSchema());
     expected.put("id", 123L);
     // required fields will be populated with defaults
     expected.put("age", 0);
     expected.put("address", Collections.emptyList());
     expected.put("nullable_timestamp", null);
     expected.put("nullable_long", null);
-    Schema decimalSchema = evolvedSchema.getField("primitive_unsigned_long").schema();
+    Schema decimalSchema = evolvedSchema.getField("primitive_unsigned_long").get().schema().toAvroSchema();
     expected.put("primitive_unsigned_long", DECIMAL_CONVERSION.toFixed(new BigDecimal(BigInteger.ZERO), decimalSchema, decimalSchema.getLogicalType()));
     expected.put("test_enum", "FIRST");
     expected.put("binary", ByteBuffer.wrap(new byte[0]));
@@ -224,7 +218,7 @@ public class TestProtoConversionUtil {
     float primitiveFloat = RANDOM.nextFloat();
     int primitiveInt = RANDOM.nextInt();
     long primitiveLong = RANDOM.nextLong();
-    int primitiveUnsignedInt = RANDOM.nextInt();
+    int primitiveUnsignedInt = Math.abs(RANDOM.nextInt());
     long primitiveUnsignedLong = RANDOM.nextLong();
     int primitiveSignedInt = RANDOM.nextInt();
     long primitiveSignedLong = RANDOM.nextLong();
@@ -240,8 +234,8 @@ public class TestProtoConversionUtil {
     float wrappedFloat = RANDOM.nextFloat();
     int wrappedInt = RANDOM.nextInt();
     long wrappedLong = RANDOM.nextLong();
-    int wrappedUnsignedInt = RANDOM.nextInt();
-    long wrappedUnsignedLong = primitiveUnsignedLongInUnsignedRange ? RANDOM.nextLong() : Long.parseUnsignedLong(MAX_UNSIGNED_LONG) - RANDOM.nextInt(1000);
+    int wrappedUnsignedInt = Math.abs(RANDOM.nextInt());
+    long wrappedUnsignedLong = primitiveUnsignedLongInUnsignedRange ? Math.abs(RANDOM.nextLong()) : Long.parseUnsignedLong(MAX_UNSIGNED_LONG) - RANDOM.nextInt(1000);
     boolean wrappedBoolean = RANDOM.nextBoolean();
     String wrappedString = randomString(10);
     byte[] wrappedBytes = getUTF8Bytes(randomString(10));
@@ -307,7 +301,7 @@ public class TestProtoConversionUtil {
       wrappedStringOutput = getWrappedRecord(schema, "wrapped_string", wrappedString);
       wrappedIntOutput = getWrappedRecord(schema, "wrapped_int", wrappedInt);
       wrappedLongOutput = getWrappedRecord(schema, "wrapped_long", wrappedLong);
-      wrappedUIntOutput = getWrappedRecord(schema, "wrapped_unsigned_int", (long) wrappedUnsignedInt);
+      wrappedUIntOutput = getWrappedRecord(schema, "wrapped_unsigned_int", Integer.toUnsignedLong(wrappedUnsignedInt));
       wrappedULongOutput = getWrappedRecord(schema, "wrapped_unsigned_long", unsignedLongAsGenericFixed(wrappedUnsignedLong, unsignedLongSchema));
       wrappedDoubleOutput = getWrappedRecord(schema, "wrapped_double", wrappedDouble);
       wrappedFloatOutput = getWrappedRecord(schema, "wrapped_float", wrappedFloat);
@@ -318,7 +312,7 @@ public class TestProtoConversionUtil {
       wrappedStringOutput = wrappedString;
       wrappedIntOutput = wrappedInt;
       wrappedLongOutput = wrappedLong;
-      wrappedUIntOutput = (long) wrappedUnsignedInt;
+      wrappedUIntOutput = Integer.toUnsignedLong(wrappedUnsignedInt);
       wrappedULongOutput = unsignedLongAsGenericFixed(wrappedUnsignedLong, unsignedLongSchema);
       wrappedDoubleOutput = wrappedDouble;
       wrappedFloatOutput = wrappedFloat;
@@ -332,7 +326,7 @@ public class TestProtoConversionUtil {
     expectedRecord.put("primitive_float", primitiveFloat);
     expectedRecord.put("primitive_int", primitiveInt);
     expectedRecord.put("primitive_long", primitiveLong);
-    expectedRecord.put("primitive_unsigned_int", (long) primitiveUnsignedInt);
+    expectedRecord.put("primitive_unsigned_int", Integer.toUnsignedLong(primitiveUnsignedInt));
     expectedRecord.put("primitive_unsigned_long", unsignedLongAsGenericFixed(primitiveUnsignedLong, unsignedLongSchema));
     expectedRecord.put("primitive_signed_int", primitiveSignedInt);
     expectedRecord.put("primitive_signed_long", primitiveSignedLong);

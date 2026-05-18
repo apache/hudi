@@ -184,6 +184,9 @@ public class HoodieMultiTableServicesMain {
     @Parameter(names = {"--enable-archive"}, help = true)
     public Boolean enableArchive = false;
 
+    @Parameter(names = {"--enable-hive-support"}, description = "Enables hive support during spark context initialization.")
+    public Boolean enableHiveSupport = true;
+
     @Parameter(names = {"--compaction-mode"}, description = "Set job mode: Set \"schedule\" means make a compact plan; "
         + "Set \"execute\" means execute a compact plan at given instant which means --instant-time is needed here; "
         + "Set \"scheduleAndExecute\" means make a compact plan first and execute that plan immediately")
@@ -246,7 +249,7 @@ public class HoodieMultiTableServicesMain {
       cmd.usage();
       System.exit(1);
     }
-    JavaSparkContext jsc = UtilHelpers.buildSparkContext(cfg.appName, cfg.sparkMaster, cfg.sparkMemory);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext(cfg.appName, cfg.sparkMaster, cfg.sparkMemory, cfg.enableHiveSupport);
     try {
       new HoodieMultiTableServicesMain(jsc, cfg).startServices();
     } catch (Throwable throwable) {

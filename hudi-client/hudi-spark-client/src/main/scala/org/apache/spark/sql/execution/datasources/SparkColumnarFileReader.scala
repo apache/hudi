@@ -23,6 +23,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StorageConfiguration
+import org.apache.parquet.schema.MessageType
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
@@ -37,6 +38,7 @@ trait SparkColumnarFileReader extends Serializable {
    * @param internalSchemaOpt  option of internal schema for schema.on.read
    * @param filters            filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
    * @param storageConf        the hadoop conf
+   * @param tableSchemaOpt     option of table schema for timestamp precision conversion
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
   def read(file: PartitionedFile,
@@ -44,5 +46,6 @@ trait SparkColumnarFileReader extends Serializable {
            partitionSchema: StructType,
            internalSchemaOpt: util.Option[InternalSchema],
            filters: Seq[Filter],
-           storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow]
+           storageConf: StorageConfiguration[Configuration],
+           tableSchemaOpt: util.Option[MessageType] = util.Option.empty()): Iterator[InternalRow]
 }

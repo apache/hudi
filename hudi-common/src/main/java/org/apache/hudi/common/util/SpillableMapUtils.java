@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.BitCaskDiskMap.FileEntry;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
@@ -120,7 +121,7 @@ public class SpillableMapUtils {
                                                                  String[] preCombineFields,
                                                                  boolean withOperationField,
                                                                  Option<String> partitionName,
-                                                                 Option<Schema> schemaWithoutMetaFields) {
+                                                                 Option<HoodieSchema> schemaWithoutMetaFields) {
     return convertToHoodieRecordPayload(record, payloadClazz, preCombineFields,
         Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
         withOperationField, partitionName, schemaWithoutMetaFields);
@@ -134,7 +135,7 @@ public class SpillableMapUtils {
                                                                  Pair<String, String> recordKeyPartitionPathFieldPair,
                                                                  boolean withOperationField,
                                                                  Option<String> partitionName,
-                                                                 Option<Schema> schemaWithoutMetaFields) {
+                                                                 Option<HoodieSchema> schemaWithoutMetaFields) {
     final String recKey = record.get(recordKeyPartitionPathFieldPair.getKey()).toString();
     final String partitionPath = (partitionName.isPresent() ? partitionName.get() :
         record.get(recordKeyPartitionPathFieldPair.getRight()).toString());
@@ -144,10 +145,10 @@ public class SpillableMapUtils {
         ? HoodieOperation.fromName(getNullableValAsString(record, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
 
     if (schemaWithoutMetaFields.isPresent()) {
-      Schema schema = schemaWithoutMetaFields.get();
+      Schema schema = schemaWithoutMetaFields.get().toAvroSchema();
       GenericRecord recordWithoutMetaFields = new GenericData.Record(schema);
       for (Schema.Field f : schema.getFields()) {
-        recordWithoutMetaFields.put(f.name(), record.get(f.name()));
+        recordWithoutMetaFields.put(f.pos(), record.get(f.name()));
       }
       record = recordWithoutMetaFields;
     }

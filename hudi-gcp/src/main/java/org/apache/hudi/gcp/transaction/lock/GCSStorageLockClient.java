@@ -25,39 +25,39 @@ import org.apache.hudi.client.transaction.lock.models.StorageLockData;
 import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieLockException;
 
+import com.google.api.gax.retrying.RetrySettings;
 import com.google.cloud.storage.Blob;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
 import com.google.cloud.storage.StorageException;
 import com.google.cloud.storage.StorageOptions;
-import org.jetbrains.annotations.NotNull;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
 import javax.annotation.concurrent.ThreadSafe;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.channels.Channels;
 import java.util.Properties;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * A GCS-based implementation of a distributed lock provider using conditional writes
  * with generationMatch, plus local concurrency safety, heartbeat/renew, and pruning old locks.
  */
+@Slf4j
 @ThreadSafe
 public class GCSStorageLockClient implements StorageLockClient {
-  private static final Logger DEFAULT_LOGGER = LoggerFactory.getLogger(GCSStorageLockClient.class);
+
   private static final long PRECONDITION_FAILURE_ERROR_CODE = 412;
   private static final long NOT_FOUND_ERROR_CODE = 404;
   private static final long RATE_LIMIT_ERROR_CODE = 429;
@@ -68,16 +68,18 @@ public class GCSStorageLockClient implements StorageLockClient {
   private final String lockFilePath;
   private final String ownerId;
 
-  /** Constructor that is used by reflection to instantiate a GCS-based locking service.
-   * @param ownerId The owner id.
+  /**
+   * Constructor that is used by reflection to instantiate a GCS-based locking service.
+   *
+   * @param ownerId     The owner id.
    * @param lockFileUri The path within the bucket where to write lock files.
-   * @param props The properties for the lock config, can be used to customize client.
+   * @param props       The properties for the lock config, can be used to customize client.
    */
   public GCSStorageLockClient(
       String ownerId,
       String lockFileUri,
       Properties props) {
-    this(ownerId, lockFileUri, props, createDefaultGcsClient(), DEFAULT_LOGGER);
+    this(ownerId, lockFileUri, props, createDefaultGcsClient(), log);
   }
 
   @VisibleForTesting
@@ -87,39 +89,33 @@ public class GCSStorageLockClient implements StorageLockClient {
       Properties properties,
       Functions.Function1<Properties, Storage> gcsClientSupplier,
       Logger logger) {
-    try {
-      // This logic can likely be extended to other lock client implementations.
-      // Consider creating base class with utilities, incl error handling.
-      URI uri = new URI(lockFileUri);
-      this.bucketName = uri.getAuthority();
-      this.lockFilePath = uri.getPath().replaceFirst("/", "");
-      this.gcsClient = gcsClientSupplier.apply(properties);
-
-      if (StringUtils.isNullOrEmpty(this.bucketName)) {
-        throw new IllegalArgumentException("LockFileUri does not contain a valid bucket name.");
-      }
-      if (StringUtils.isNullOrEmpty(this.lockFilePath)) {
-        throw new IllegalArgumentException("LockFileUri does not contain a valid lock file path.");
-      }
-      this.ownerId = ownerId;
-      this.logger = logger;
-    } catch (URISyntaxException e) {
-      throw new HoodieLockException(e);
-    }
+    Pair<String, String> bucketAndPath = StorageLockClient.parseBucketAndPath(lockFileUri);
+    this.bucketName = bucketAndPath.getLeft();
+    this.lockFilePath = bucketAndPath.getRight();
+    this.gcsClient = gcsClientSupplier.apply(properties);
+    this.ownerId = ownerId;
+    this.logger = logger;
   }
 
   private static Functions.Function1<Properties, Storage> createDefaultGcsClient() {
     return (props) -> {
-      // Provide the option to customize the timeouts later on.
-      // For now, defaults suffice
-      return StorageOptions.newBuilder().build().getService();
+      // Configure with no retries - only one attempt per operation
+      RetrySettings retrySettings =
+          StorageOptions.getDefaultRetrySettings()
+              .toBuilder()
+              .setMaxAttempts(1)
+              .build();
+      return StorageOptions.newBuilder()
+          .setRetrySettings(retrySettings)
+          .build()
+          .getService();
     };
   }
 
   /**
    * Attempts to create or update the lock file using the given lock data and generation number.
    *
-   * @param lockData the new lock data to use.
+   * @param lockData         the new lock data to use.
    * @param generationNumber the expected generation number (0 for creation).
    * @return the updated StorageLockFile instance.
    * @throws StorageException if the update fails.
@@ -149,13 +145,13 @@ public class GCSStorageLockClient implements StorageLockClient {
       return Pair.of(LockUpsertResult.SUCCESS, Option.of(updatedFile));
     } catch (StorageException e) {
       if (e.getCode() == PRECONDITION_FAILURE_ERROR_CODE) {
-        logger.info("OwnerId: {}, Unable to write new lock file. Another process has modified this lockfile {} already.", 
+        logger.info("OwnerId: {}, Unable to write new lock file. Another process has modified this lockfile {} already.",
             ownerId, lockFilePath);
         return Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty());
       } else if (e.getCode() == RATE_LIMIT_ERROR_CODE) {
         logger.warn("OwnerId: {}, Rate limit exceeded for lock file: {}", ownerId, lockFilePath);
       } else if (e.getCode() >= INTERNAL_SERVER_ERROR_CODE_MIN) {
-        logger.warn("OwnerId: {}, GCS returned internal server error code for lock file: {}", 
+        logger.warn("OwnerId: {}, GCS returned internal server error code for lock file: {}",
             ownerId, lockFilePath, e);
       } else {
         throw e;
@@ -166,7 +162,8 @@ public class GCSStorageLockClient implements StorageLockClient {
 
   /**
    * Handling storage exception for GET request
-   * @param e The error to handle.
+   *
+   * @param e         The error to handle.
    * @param ignore404 Whether to ignore 404 as a valid exception.
    *                  When we read from stream we might see this, and
    *                  it should not be counted as NOT_EXISTS.
@@ -215,13 +212,76 @@ public class GCSStorageLockClient implements StorageLockClient {
     }
   }
 
-  private @NotNull Pair<LockGetResult, Option<StorageLockFile>> getLockFileFromBlob(Blob blob) {
+  private @Nonnull Pair<LockGetResult, Option<StorageLockFile>> getLockFileFromBlob(Blob blob) {
     try (InputStream inputStream = Channels.newInputStream(blob.reader())) {
       return Pair.of(LockGetResult.SUCCESS,
           Option.of(StorageLockFile.createFromStream(inputStream, String.valueOf(blob.getGeneration()))));
     } catch (IOException e) {
       // Our createFromStream method does not throw IOExceptions, it wraps in HoodieIOException, however Sonar requires handling this.
       throw new UncheckedIOException("Failed reading blob: " + lockFilePath, e);
+    }
+  }
+
+  @Override
+  public Option<String> readObject(String filePath, boolean checkExistsFirst) {
+    try {
+      // Parse the file path to get bucket and object path
+      Pair<String, String> bucketAndPath = StorageLockClient.parseBucketAndPath(filePath);
+      String bucket = bucketAndPath.getLeft();
+      String objectPath = bucketAndPath.getRight();
+
+      BlobId blobId = BlobId.of(bucket, objectPath);
+
+      if (checkExistsFirst) {
+        // First check if the file exists (lightweight metadata check)
+        Blob blob = gcsClient.get(blobId);
+
+        if (blob == null || !blob.exists()) {
+          // File doesn't exist - this is the common case for optional configs
+          logger.debug("JSON config file not found: {}", filePath);
+          return Option.empty();
+        }
+
+        // File exists, read its content
+        byte[] content = blob.getContent();
+        return Option.of(new String(content, UTF_8));
+      } else {
+        // Direct read without existence check
+        byte[] content = gcsClient.readAllBytes(blobId);
+        return Option.of(new String(content, UTF_8));
+      }
+    } catch (StorageException e) {
+      if (e.getCode() == NOT_FOUND_ERROR_CODE) {
+        logger.debug("JSON config file not found: {}", filePath);
+      } else {
+        logger.warn("Error reading JSON config file: {}", filePath, e);
+      }
+      return Option.empty();
+    } catch (Exception e) {
+      logger.warn("Error reading JSON config file: {}", filePath, e);
+      return Option.empty();
+    }
+  }
+
+  @Override
+  public boolean writeObject(String filePath, String content) {
+    try {
+      // Parse the file path to get bucket and object path
+      Pair<String, String> bucketAndPath = StorageLockClient.parseBucketAndPath(filePath);
+      String bucket = bucketAndPath.getLeft();
+      String objectPath = bucketAndPath.getRight();
+
+      BlobId blobId = BlobId.of(bucket, objectPath);
+      BlobInfo blobInfo = BlobInfo.newBuilder(blobId).build();
+
+      // Write the content to GCS
+      gcsClient.create(blobInfo, content.getBytes(UTF_8));
+
+      logger.debug("Successfully wrote object to: {}", filePath);
+      return true;
+    } catch (Exception e) {
+      logger.error("Error writing object to: {}", filePath, e);
+      return false;
     }
   }
 

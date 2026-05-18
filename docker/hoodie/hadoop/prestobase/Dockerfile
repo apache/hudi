@@ -20,7 +20,8 @@
 
 ARG HADOOP_VERSION=2.8.4
 ARG HIVE_VERSION=2.3.3
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest as hadoop-base
+ARG BASE_IMAGE_TAG=java11
+FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base-${BASE_IMAGE_TAG}:latest as hadoop-base
 
 ARG PRESTO_VERSION=0.271
 

@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
@@ -33,7 +33,7 @@ import org.apache.hudi.common.table.timeline.TimelinePathProvider;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
@@ -43,9 +43,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -60,8 +58,9 @@ import java.util.stream.Collectors;
  * This is a Global cache; all threads in one container/executor share the same cache.
  * A map of (tablePath, HistorySchemas) is maintained.
  */
+@Slf4j
 public class InternalSchemaCache {
-  private static final Logger LOG = LoggerFactory.getLogger(InternalSchemaCache.class);
+
   // Use segment lock to reduce competition.
   // the lock size should be powers of 2 for better hash.
   private static final Object[] LOCK_LIST = new Object[16];
@@ -198,7 +197,7 @@ public class InternalSchemaCache {
         }
       } catch (Exception e1) {
         // swallow this exception.
-        LOG.warn("Cannot find internal schema from commit file {}. Falling back to parsing historical internal schema", candidateCommitFile);
+        log.warn("Cannot find internal schema from commit file {}. Falling back to parsing historical internal schema", candidateCommitFile);
       }
     }
     // step2:
@@ -215,7 +214,7 @@ public class InternalSchemaCache {
     return fileSchema.isEmptySchema()
         ? StringUtils.isNullOrEmpty(avroSchema)
         ? InternalSchema.getEmptyInternalSchema()
-        : AvroInternalSchemaConverter.convert(HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(avroSchema)))
+        : InternalSchemaConverter.convert(HoodieSchemaUtils.createHoodieWriteSchema(avroSchema, false))
         : fileSchema;
   }
 

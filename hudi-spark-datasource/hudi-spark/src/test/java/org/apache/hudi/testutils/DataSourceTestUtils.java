@@ -22,15 +22,15 @@ import org.apache.hudi.HoodieDataSourceHelpers;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -62,12 +62,12 @@ public class DataSourceTestUtils {
 
   private static final Random RANDOM = new Random(0xDAADDEED);
 
-  public static Schema getStructTypeExampleSchema() throws IOException {
-    return new Schema.Parser().parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream("/exampleSchema.txt")));
+  public static HoodieSchema getStructTypeExampleSchema() throws IOException {
+    return HoodieSchema.parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream("/exampleSchema.txt")));
   }
 
-  public static Schema getStructTypeExampleEvolvedSchema() throws IOException {
-    return new Schema.Parser().parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream("/exampleEvolvedSchema.txt")));
+  public static HoodieSchema getStructTypeExampleEvolvedSchema() throws IOException {
+    return HoodieSchema.parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream("/exampleEvolvedSchema.txt")));
   }
 
   public static List<Row> generateRandomRows(int count) {
@@ -182,11 +182,6 @@ public class DataSourceTestUtils {
       }
     }
     return true;
-  }
-
-  public static String latestCommitCompletionTime(FileSystem fs, String basePath) {
-    return HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
-        .getLatestCompletionTime().orElse(null);
   }
 
   public static String latestCommitCompletionTime(HoodieStorage storage, String basePath) {

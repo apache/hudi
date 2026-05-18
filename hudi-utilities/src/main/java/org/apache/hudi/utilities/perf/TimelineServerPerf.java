@@ -84,7 +84,7 @@ public class TimelineServerPerf implements Serializable {
   private void setHostAddrFromSparkConf(SparkConf sparkConf) {
     String hostAddr = sparkConf.get("spark.driver.host", null);
     if (hostAddr != null) {
-      LOG.info("Overriding hostIp to (" + hostAddr + ") found in spark-conf. It was " + this.hostAddr);
+      LOG.info("Overriding hostIp to ({}) found in spark-conf. It was {}", hostAddr, this.hostAddr);
       this.hostAddr = hostAddr;
     } else {
       LOG.warn("Unable to find driver bind address from spark config");
@@ -92,7 +92,7 @@ public class TimelineServerPerf implements Serializable {
   }
 
   public void run() throws IOException {
-    JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-view-perf-" + cfg.basePath, cfg.sparkMaster);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-view-perf-" + cfg.basePath, cfg.sparkMaster, cfg.enableHiveSupport);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     if (!useExternalTimelineServer) {
@@ -281,6 +281,9 @@ public class TimelineServerPerf implements Serializable {
 
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master")
     public String sparkMaster = "local[2]";
+
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
 
     @Parameter(names = {"--server-port", "-p"}, description = " Server Port")
     public Integer serverPort = 26754;

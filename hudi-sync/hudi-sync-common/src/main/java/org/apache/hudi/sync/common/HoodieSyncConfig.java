@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HadoopConfigUtils;
+import org.apache.hudi.common.util.HoodieTableConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
@@ -33,10 +34,11 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import com.beust.jcommander.Parameter;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -50,7 +52,6 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.META_SYNC_BASE_PA
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.table.HoodieTableConfig.BASE_FILE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
 import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
@@ -59,13 +60,12 @@ import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIO
  * Configs needed to sync data into external meta stores, catalogs, etc.
  */
 @Immutable
+@Slf4j
 @ConfigClassProperty(name = "Common Metadata Sync Configs",
     groupName = ConfigGroups.Names.META_SYNC,
     areCommonConfigs = true,
     description = "")
 public class HoodieSyncConfig extends HoodieConfig {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSyncConfig.class);
 
   public static final ConfigProperty<String> META_SYNC_BASE_PATH = ConfigProperty
       .key(META_SYNC_BASE_PATH_KEY)
@@ -118,37 +118,10 @@ public class HoodieSyncConfig extends HoodieConfig {
   public static final ConfigProperty<String> META_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigProperty
       .key("hoodie.datasource.hive_sync.partition_extractor_class")
       .defaultValue("org.apache.hudi.hive.MultiPartKeysValueExtractor")
-      .withInferFunction(cfg -> {
-        Option<String> partitionFieldsOpt;
-        if (StringUtils.nonEmpty(cfg.getString(META_SYNC_PARTITION_FIELDS))) {
-          partitionFieldsOpt = Option.ofNullable(cfg.getString(META_SYNC_PARTITION_FIELDS));
-        } else {
-          partitionFieldsOpt = HoodieTableConfig.getPartitionFieldProp(cfg)
-              .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)));
-        }
-        if (!partitionFieldsOpt.isPresent()) {
-          return Option.empty();
-        }
-        String partitionFields = partitionFieldsOpt.get();
-        if (StringUtils.nonEmpty(partitionFields)) {
-          int numOfPartFields = partitionFields.split(",").length;
-          if (numOfPartFields == 1) {
-            if (cfg.contains(HIVE_STYLE_PARTITIONING_ENABLE)
-                && cfg.getString(HIVE_STYLE_PARTITIONING_ENABLE).equals("true")) {
-              return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
-            } else {
-              return Option.of("org.apache.hudi.hive.SinglePartPartitionValueExtractor");
-            }
-          } else {
-            return Option.of("org.apache.hudi.hive.MultiPartKeysValueExtractor");
-          }
-        } else {
-          return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
-        }
-      })
+      .withInferFunction(HoodieTableConfigUtils::inferPartitionValueExtractorClass)
       .markAdvanced()
       .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
-          + "default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.");
+          + "default is inferred based on partition configuration.");
 
   public static final ConfigProperty<Boolean> META_SYNC_DECODE_PARTITION = ConfigProperty
       .key("hoodie.meta.sync.decode_partition")
@@ -201,7 +174,18 @@ public class HoodieSyncConfig extends HoodieConfig {
           + "This is useful when the partition metadata is large, and the partition info can be "
           + "obtained from Hudi's internal metadata table. Note, " + HoodieMetadataConfig.ENABLE + " must be set to true.");
 
+  public static final ConfigProperty<Boolean> META_SYNC_TOUCH_PARTITIONS_ENABLED = ConfigProperty
+      .key("hoodie.meta.sync.touch.partitions.enabled")
+      .defaultValue(false)
+      .sinceVersion("1.2.0")
+      .markAdvanced()
+      .withDocumentation("If true, TOUCH partition events will be emitted during meta sync. "
+          + "TOUCH events indicate partitions that exist in both storage and metastore, no schema or location change, but the partition has received data.");
+
+  @Getter
+  @Setter
   private Configuration hadoopConf;
+  @Getter
   private final HoodieMetricsConfig metricsConfig;
 
   public HoodieSyncConfig(Properties props) {
@@ -210,8 +194,8 @@ public class HoodieSyncConfig extends HoodieConfig {
 
   public HoodieSyncConfig(Properties props, Configuration hadoopConf) {
     super(props);
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Passed in properties:\n" + props.entrySet()
+    if (log.isDebugEnabled()) {
+      log.debug("Passed in properties:\n{}", props.entrySet()
           .stream()
           .sorted(Comparator.comparing(e -> e.getKey().toString()))
           .map(e -> e.getKey() + "=" + e.getValue())
@@ -224,18 +208,6 @@ public class HoodieSyncConfig extends HoodieConfig {
 
   public String getBasePath() {
     return getString(BASE_PATH);
-  }
-
-  public void setHadoopConf(Configuration hadoopConf) {
-    this.hadoopConf = hadoopConf;
-  }
-
-  public Configuration getHadoopConf() {
-    return hadoopConf;
-  }
-
-  public HoodieMetricsConfig getMetricsConfig() {
-    return metricsConfig;
   }
 
   public FileSystem getHadoopFileSystem() {
@@ -287,12 +259,9 @@ public class HoodieSyncConfig extends HoodieConfig {
     @Parameter(names = {"--sync-no-partition-metadata"}, description = "do not sync partition metadata info to the catalog")
     public Boolean shouldNotSyncPartitionMetadata;
 
+    @Getter
     @Parameter(names = {"--help", "-h"}, help = true)
     public boolean help = false;
-
-    public boolean isHelp() {
-      return help;
-    }
 
     public TypedProperties toProps() {
       final TypedProperties props = new TypedProperties();

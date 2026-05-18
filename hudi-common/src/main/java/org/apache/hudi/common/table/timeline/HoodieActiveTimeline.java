@@ -46,7 +46,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
 
   /**
    * Return Valid extensions expected in active timeline.
-   * @return
+   * @return {@link Set<String>} of extensions that are valid in active timeline.
    */
   Set<String> getValidExtensionsInActiveTimeline();
 
@@ -146,9 +146,19 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   void deleteInstantFileIfExists(HoodieInstant instant);
 
   /**
-   * Returns most recent instant having valid schema in its {@link HoodieCommitMetadata}
+   * Returns most recent instant having valid schema in its {@link HoodieCommitMetadata},
+   * restricted to operations where {@link WriteOperationType#canUpdateSchema} is true.
    */
   Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataWithValidSchema();
+
+  /**
+   * Returns most recent instant having valid schema in its {@link HoodieCommitMetadata}.
+   *
+   * @param filterForSchemaMutableOperations if true, only considers commits where
+   *        {@link WriteOperationType#canUpdateSchema} is true (original behavior).
+   *        If false, considers any commit type with a non-empty schema.
+   */
+  Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataWithValidSchema(boolean filterForSchemaMutableOperations);
 
   /**
    * Get the last instant with valid data, and convert this to HoodieCommitMetadata
@@ -158,7 +168,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   /**
    * Read cleaner Info from instant file.
    * @param instant Instant to read from.
-   * @return
+   * @return {@link Option} of read bytes
    */
   Option<byte[]> readCleanerInfoAsBytes(HoodieInstant instant);
 
@@ -169,7 +179,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   /**
    * Read compaction Plan from instant file.
    * @param instant Instant to read from.
-   * @return
+   * @return {@link Option} of read bytes
    */
   Option<byte[]> readCompactionPlanAsBytes(HoodieInstant instant);
 
@@ -421,7 +431,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
 
   /**
    * Reloads timeline from storage
-   * @return
+   * @return {@link HoodieActiveTimeline}
    */
   HoodieActiveTimeline reload();
 
@@ -434,7 +444,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
 
   /**
    * Valid Extensions in active timeline.
-   * @return
+   * @return {@link Set<String>} of valid extensions.
    */
   Set<String> getValidExtensions();
 }

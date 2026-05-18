@@ -21,6 +21,9 @@ package org.apache.hudi.keygen;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -42,6 +45,8 @@ import java.util.List;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.apache.hudi.keygen.KeyGenerator.DEFAULT_COLUMN_VALUE_SEPARATOR;
 import static org.apache.hudi.keygen.KeyGenerator.DEFAULT_RECORD_KEY_PARTS_SEPARATOR;
 import static org.apache.hudi.keygen.KeyGenerator.EMPTY_RECORDKEY_PLACEHOLDER;
@@ -88,10 +93,10 @@ public class KeyGenUtils {
   // When auto record key gen is enabled, our inference will be based on partition path only.
   static KeyGeneratorType inferKeyGeneratorTypeFromPartitionFields(String partitionFields) {
     if (!StringUtils.isNullOrEmpty(partitionFields)) {
-      String[] partitonFields = partitionFields.split(",");
-      if (partitonFields[0].contains(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)) {
+      String[] partitionFieldsArray = partitionFields.split(",");
+      if (partitionFieldsArray[0].contains(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)) {
         return KeyGeneratorType.CUSTOM;
-      } else if (partitonFields.length == 1) {
+      } else if (partitionFieldsArray.length == 1) {
         return KeyGeneratorType.SIMPLE;
       } else {
         return KeyGeneratorType.COMPLEX;
@@ -228,8 +233,12 @@ public class KeyGenUtils {
     return constructRecordKey(recordKeyFields.toArray(new String[]{}), valueFunction);
   }
 
-  public static String getRecordPartitionPath(GenericRecord record, List<String> partitionPathFields,
-                                              boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
+  public static String getRecordPartitionPath(GenericRecord record,
+                                              List<String> partitionPathFields,
+                                              boolean hiveStylePartitioning,
+                                              boolean encodePartitionPath,
+                                              boolean slashSeparatedDatePartitioning,
+                                              boolean consistentLogicalTimestampEnabled) {
     if (partitionPathFields.isEmpty()) {
       return "";
     }
@@ -248,7 +257,10 @@ public class KeyGenUtils {
           fieldVal = PartitionPathEncodeUtils.escapePathName(fieldVal);
         }
         if (hiveStylePartitioning) {
-          partitionPath.append(partitionPathField).append("=");
+          fieldVal = partitionPathField + "=" + fieldVal;
+        }
+        if (partitionPathFields.size() == 1 && slashSeparatedDatePartitioning) {
+          fieldVal = fieldVal.replace('-', '/');
         }
         partitionPath.append(fieldVal);
       }
@@ -268,7 +280,9 @@ public class KeyGenUtils {
   }
 
   public static String getPartitionPath(GenericRecord record, String partitionPathField,
-                                        boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
+                                        boolean hiveStylePartitioning, boolean encodePartitionPath,
+                                        boolean slashSeparatedDatePartitioning,
+                                        boolean consistentLogicalTimestampEnabled) {
     String partitionPath = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true, consistentLogicalTimestampEnabled);
     if (partitionPath == null || partitionPath.isEmpty()) {
       partitionPath = HUDI_DEFAULT_PARTITION_PATH;
@@ -278,6 +292,9 @@ public class KeyGenUtils {
     }
     if (hiveStylePartitioning) {
       partitionPath = partitionPathField + "=" + partitionPath;
+    }
+    if (slashSeparatedDatePartitioning) {
+      partitionPath = partitionPath.replace('-', '/');
     }
     return partitionPath;
   }
@@ -331,5 +348,35 @@ public class KeyGenUtils {
     return !props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
         || props.getProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).equals(StringUtils.EMPTY_STRING);
     // spark-sql sets record key config to empty string for update, and couple of other statements.
+  }
+
+  public static boolean isComplexKeyGeneratorWithSingleRecordKeyField(HoodieTableConfig tableConfig) {
+    Option<String[]> recordKeyFields = tableConfig.getRecordKeyFields();
+    return KeyGeneratorType.isComplexKeyGenerator(tableConfig)
+        && recordKeyFields.isPresent() && recordKeyFields.get().length == 1;
+  }
+
+  public static String getComplexKeygenErrorMessage(String operation) {
+    return "This table uses the complex key generator with a single record "
+        + "key field. If the table is written with Hudi 0.14.1, 0.15.0, 1.0.0, 1.0.1, or 1.0.2 "
+        + "release before, the table may potentially contain duplicates due to a breaking "
+        + "change in the key encoding in the _hoodie_record_key meta field (HUDI-7001) which "
+        + "is crucial for upserts. Please take action based on the details on the deployment "
+        + "guide (https://hudi.apache.org/docs/deployment#complex-key-generator) "
+        + "before resuming the " + operation + " to the this table. If you're certain "
+        + "that the table is not affected by the key encoding change, set "
+        + "`hoodie.write.complex.keygen.validation.enable=false` to skip this validation.";
+  }
+
+  public static boolean encodeSingleKeyFieldNameForComplexKeyGen(TypedProperties props) {
+    int tableVersionCode = ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION);
+    HoodieTableVersion tableVersion = HoodieTableVersion.fromVersionCode(tableVersionCode);
+    return tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)
+        || !ConfigUtils.getBooleanWithAltKeys(props, COMPLEX_KEYGEN_NEW_ENCODING);
+  }
+
+  public static boolean mayUseNewEncodingForComplexKeyGen(HoodieTableConfig tableConfig) {
+    return tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)
+        && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig);
   }
 }

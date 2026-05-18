@@ -32,17 +32,15 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.JavaBulkInsertHelper;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
+@Slf4j
 public class JavaUpsertPreppedDeltaCommitActionExecutor<T> extends BaseJavaDeltaCommitActionExecutor<T> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(JavaUpsertPreppedDeltaCommitActionExecutor.class);
 
   private final List<HoodieRecord<T>> preppedInputRecords;
 
@@ -71,7 +69,7 @@ public class JavaUpsertPreppedDeltaCommitActionExecutor<T> extends BaseJavaDelta
         recordsByFileId.get(fileIdPartitionPath).add(record);
       }
     }
-    LOG.info(String.format("Total update fileIDs %s, total inserts %s for commit %s",
+    log.info(String.format("Total update fileIDs %s, total inserts %s for commit %s",
         recordsByFileId.size(), insertedRecords.size(), instantTime));
 
     List<WriteStatus> allWriteStatuses = new ArrayList<>();

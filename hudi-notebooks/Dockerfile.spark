@@ -1,0 +1,71 @@
+#  Licensed to the Apache Software Foundation (ASF) under one
+#  or more contributor license agreements.  See the NOTICE file
+#  distributed with this work for additional information
+#  regarding copyright ownership.  The ASF licenses this file
+#  to you under the Apache License, Version 2.0 (the
+#  "License"); you may not use this file except in compliance
+#  with the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+# limitations under the License.
+
+ARG SPARK_VERSION=${SPARK_VERSION:-3.4.4}
+ARG JAVA_VERSION=${JAVA_VERSION:-11}
+ARG SCALA_VERSION=${SCALA_VERSION:-2.12}
+ARG PYTHON_VERSION=${PYTHON_VERSION:-3}
+FROM apache/spark:$SPARK_VERSION-scala$SCALA_VERSION-java$JAVA_VERSION-python$PYTHON_VERSION-ubuntu
+
+USER root
+
+ARG SPARK_VERSION=${SPARK_VERSION:-3.4.4} \
+    HADOOP_VERSION=${HADOOP_VERSION:-3.3.4} \
+    AWS_SDK_VERSION=${AWS_SDK_VERSION:-1.12.772} \
+    MVN_REPO_URL=https://repo1.maven.org/maven2 \
+    HUDI_VERSION=${HUDI_VERSION:-1.0.2} \
+    SCALA_VERSION=${SCALA_VERSION:-2.12} \
+    HUDI_HOME=${HUDI_HOME:-/opt/hudi} \
+    NOTEBOOK_HOME=${NOTEBOOK_HOME:-/opt/notebooks}
+
+ENV SPARK_VERSION=$SPARK_VERSION \
+    SCALA_VERSION=$SCALA_VERSION \
+    PATH=$SPARK_HOME/bin:$PATH \
+    NOTEBOOK_HOME=$NOTEBOOK_HOME \
+    HUDI_HOME=$HUDI_HOME \
+    AWS_JAVA_V1_DISABLE_DEPRECATION_ANNOUNCEMENT=true
+
+ARG SPARK_MINOR_VERSION=${SPARK_VERSION%.*}
+ARG HUDI_SPARK_BUNDLE=hudi-spark${SPARK_MINOR_VERSION}-bundle_$SCALA_VERSION
+ARG HUDI_SPARK_BUNDLE_JAR=$HUDI_SPARK_BUNDLE-$HUDI_VERSION.jar
+
+RUN mkdir -p ${HUDI_HOME}/${HUDI_VERSION} $NOTEBOOK_HOME && \
+    wget -O $SPARK_HOME/jars/hadoop-aws.jar \
+        $MVN_REPO_URL/org/apache/hadoop/hadoop-aws/$HADOOP_VERSION/hadoop-aws-$HADOOP_VERSION.jar && \
+    wget -O $SPARK_HOME/jars/aws-java-sdk-bundle.jar \
+        $MVN_REPO_URL/com/amazonaws/aws-java-sdk-bundle/$AWS_SDK_VERSION/aws-java-sdk-bundle-$AWS_SDK_VERSION.jar && \
+    wget -O ${HUDI_HOME}/${HUDI_VERSION}/${HUDI_SPARK_BUNDLE_JAR} \
+        $MVN_REPO_URL/org/apache/hudi/${HUDI_SPARK_BUNDLE}/${HUDI_VERSION}/${HUDI_SPARK_BUNDLE_JAR}
+
+COPY requirements.txt /tmp/requirements.txt
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3-pip cargo && \
+    pip3 install --upgrade pip && \
+    pip3 install --no-cache-dir -r /tmp/requirements.txt && \
+    ln -sf /usr/bin/python3 /usr/bin/python && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/requirements.txt
+
+
+COPY notebooks/ $NOTEBOOK_HOME/
+COPY conf/spark/ $SPARK_HOME/conf/
+COPY entrypoint.sh $SPARK_HOME/entrypoint.sh
+RUN chmod +x /opt/spark/entrypoint.sh
+
+WORKDIR ${NOTEBOOK_HOME}
+
+CMD ["/opt/spark/entrypoint.sh"]

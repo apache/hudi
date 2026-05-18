@@ -19,7 +19,7 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -123,7 +123,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     boolean shouldSanitize = SanitizationUtils.shouldSanitize(props);
     String invalidCharMask = SanitizationUtils.getInvalidCharMask(props);
     String schemaStr = readSchemaString(schemaPath, fs);
-    return SanitizationUtils.parseAvroSchema(schemaStr, shouldSanitize, invalidCharMask);
+    return SanitizationUtils.parseAvroSchema(schemaStr, shouldSanitize, invalidCharMask).toAvroSchema();
   }
 
   private static String readSchemaString(String schemaPath, FileSystem fs) {

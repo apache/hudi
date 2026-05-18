@@ -19,30 +19,29 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
-import org.apache.avro.Schema;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.spark.api.java.JavaSparkContext;
 
+@AllArgsConstructor
+@Getter
 public class InputBatch<T> {
 
-  public static final Schema NULL_SCHEMA = Schema.create(Schema.Type.NULL);
   private final Option<T> batch;
   private final Checkpoint checkpointForNextBatch;
+  @Getter(AccessLevel.NONE)
   private final SchemaProvider schemaProvider;
 
   public InputBatch(Option<T> batch, String checkpointForNextBatch, SchemaProvider schemaProvider) {
     this(batch, new StreamerCheckpointV2(checkpointForNextBatch), schemaProvider);
-  }
-
-  public InputBatch(Option<T> batch, Checkpoint checkpointForNextBatch, SchemaProvider schemaProvider) {
-    this.batch = batch;
-    this.checkpointForNextBatch = checkpointForNextBatch;
-    this.schemaProvider = schemaProvider;
   }
 
   public InputBatch(Option<T> batch, String checkpointForNextBatch) {
@@ -53,17 +52,14 @@ public class InputBatch<T> {
     this(batch, checkpointForNextBatch, null);
   }
 
-  public Option<T> getBatch() {
-    return batch;
-  }
-
-  public Checkpoint getCheckpointForNextBatch() {
-    return checkpointForNextBatch;
-  }
-
   public SchemaProvider getSchemaProvider() {
     if (batch.isPresent() && schemaProvider == null) {
-      throw new HoodieException("Please provide a valid schema provider class!");
+      throw new HoodieException(
+          "Schema provider is required for this operation and for the source of interest. "
+              + "Please set '--schemaprovider-class' in the top level HoodieStreamer config for the source of interest. "
+              + "Based on the schema provider class chosen, additional configs might be required. "
+              + "For eg, if you choose 'org.apache.hudi.utilities.schema.SchemaRegistryProvider', "
+              + "you may need to set configs like 'hoodie.streamer.schemaprovider.registry.url'.");
     }
     return Option.ofNullable(schemaProvider).orElseGet(NullSchemaProvider::getInstance);
   }
@@ -83,8 +79,8 @@ public class InputBatch<T> {
     }
 
     @Override
-    public Schema getSourceSchema() {
-      return NULL_SCHEMA;
+    public HoodieSchema getSourceHoodieSchema() {
+      return HoodieSchema.NULL_SCHEMA;
     }
   }
 }

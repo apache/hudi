@@ -18,20 +18,21 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
-import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, ORDERING_FIELDS, RECORDKEY_FIELD}
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, HoodieSchemaConversionUtils}
+import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, RECORDKEY_FIELD}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.util.FileIOUtils
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams}
 import org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY
+import org.apache.hudi.io.util.FileIOUtils
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.util.JavaConversions
 
@@ -484,7 +485,8 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
 
     var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + ("path" -> basePath), includeLogFiles = true)
     val metadataConfig = HoodieMetadataConfig.newBuilder.withMetadataIndexColumnStats(true).enable(true).build
-    val cis = new ColumnStatsIndexSupport(spark, fileIndex.schema, metadataConfig, metaClient)
+    val hoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(fileIndex.schema, "record", "")
+    val cis = new ColumnStatsIndexSupport(spark, fileIndex.schema, hoodieSchema,  metadataConfig, metaClient)
     // unpartitioned table - get all file slices
     val fileSlices = fileIndex.prunePartitionsAndGetFileSlices(Seq.empty, Seq())
     var files = cis.getPrunedPartitionsAndFileNames(fileIndex, fileSlices._2)._2
@@ -628,11 +630,11 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
 
     var dataFilter: Expression = GreaterThan(attribute("c5"), literal("70"))
     verifyPruningFileCount(commonOpts, dataFilter)
-    dataFilter = And(dataFilter, GreaterThan(attribute("c6"), literal("'2020-03-28'")))
+    dataFilter = And(dataFilter, GreaterThan(attribute("c6"), literal("2020-03-28")))
     verifyPruningFileCount(commonOpts, dataFilter)
     dataFilter = GreaterThan(attribute("c5"), literal("90"))
     verifyPruningFileCount(commonOpts, dataFilter)
-    dataFilter = And(dataFilter, GreaterThan(attribute("c6"), literal("'2020-03-28'")))
+    dataFilter = And(dataFilter, GreaterThan(attribute("c6"), literal("2020-03-28")))
     verifyPruningFileCount(commonOpts, dataFilter)
   }
 
@@ -642,10 +644,11 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
     val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
     val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
+    val latestDataFilesCount = getLatestDataFilesCount(opts)
     if (shouldPrune) {
-      assertTrue(filteredFilesCount < getLatestDataFilesCount(opts))
+      assertTrue(filteredFilesCount < latestDataFilesCount)
     } else {
-      assertEquals(filteredFilesCount, getLatestDataFilesCount(opts))
+      assertEquals(filteredFilesCount, latestDataFilesCount)
     }
 
     // with no data skipping
@@ -721,7 +724,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     val numRecordsForSecondQueryWithDataSkipping = spark.sql(secondQuery).count()
 
     if (queryType.equals(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)) {
-      createIncrementalSQLTable(commonOpts, metaClient.reloadActiveTimeline().getInstants.get(2).getCompletionTime)
+      createIncrementalSQLTable(commonOpts, metaClient.reloadActiveTimeline().getInstants.get(1).getCompletionTime)
       assertEquals(spark.sql(firstQuery).count(), if (isLastOperationDelete) 0 else 3)
       assertEquals(spark.sql(secondQuery).count(), if (isLastOperationDelete) 0 else 2)
     }

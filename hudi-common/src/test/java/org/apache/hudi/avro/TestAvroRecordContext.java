@@ -33,8 +33,8 @@ class TestAvroRecordContext {
   private static Stream<Arguments> testConvertValueToEngineType() {
     return Stream.of(
         Arguments.of(1L, 1L),
-        Arguments.of("test", "test"),
-        Arguments.of(new Utf8("utf8_string"), "utf8_string"),
+        Arguments.of("test", new Utf8("test")),
+        Arguments.of(new Utf8("utf8_string"), new Utf8("utf8_string")),
         Arguments.of(1.23, 1.23));
   }
 

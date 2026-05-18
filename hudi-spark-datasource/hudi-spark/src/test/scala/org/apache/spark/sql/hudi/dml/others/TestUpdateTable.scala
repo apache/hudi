@@ -27,7 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
-import org.apache.spark.sql.AnalysisException
+import org.apache.spark.sql.{AnalysisException, Row}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.assertEquals
 
@@ -62,19 +62,20 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           )
 
           // test with optimized sql writes enabled / disabled.
-          spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
+          withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> sparkSqlOptimizedWrites.toString) {
 
-          // update data
-          spark.sql(s"update $tableName set price = 20 where id = 1")
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(1, "a1", 20.0, 1000)
-          )
+            // update data
+            spark.sql(s"update $tableName set price = 20 where id = 1")
+            checkAnswer(s"select id, name, price, ts from $tableName")(
+              Seq(1, "a1", 20.0, 1000)
+            )
 
-          // update data
-          spark.sql(s"update $tableName set price = price * 2 where id = 1")
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(1, "a1", 40.0, 1000)
-          )
+            // update data
+            spark.sql(s"update $tableName set price = price * 2 where id = 1")
+            checkAnswer(s"select id, name, price, ts from $tableName")(
+              Seq(1, "a1", 40.0, 1000)
+            )
+          }
         }
       }
     })
@@ -114,28 +115,29 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           )
 
           // test with optimized sql writes enabled.
-          spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
+          withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> "true") {
 
-          // update data
-          spark.sql(s"update $tableName set price = 20 where id = 1")
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(1, "a1", 20.0, 1000)
-          )
+            // update data
+            spark.sql(s"update $tableName set price = 20 where id = 1")
+            checkAnswer(s"select id, name, price, ts from $tableName")(
+              Seq(1, "a1", 20.0, 1000)
+            )
 
-          // update data
-          spark.sql(s"update $tableName set price = price * 2 where id = 1")
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(1, "a1", 40.0, 1000)
-          )
+            // update data
+            spark.sql(s"update $tableName set price = price * 2 where id = 1")
+            checkAnswer(s"select id, name, price, ts from $tableName")(
+              Seq(1, "a1", 40.0, 1000)
+            )
 
-          // verify default compaction w/ MOR
-          if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
-            spark.sql(s"update $tableName set price = price * 2 where id = 1")
-            spark.sql(s"update $tableName set price = price * 2 where id = 1")
-            spark.sql(s"update $tableName set price = price * 2 where id = 1")
-            // verify compaction is complete
-            val metaClient = createMetaClient(spark, tmp.getCanonicalPath + "/" + tableName)
-            assertEquals(metaClient.getActiveTimeline.getLastCommitMetadataWithValidData.get.getLeft.getAction, "commit")
+            // verify default compaction w/ MOR
+            if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
+              spark.sql(s"update $tableName set price = price * 2 where id = 1")
+              spark.sql(s"update $tableName set price = price * 2 where id = 1")
+              spark.sql(s"update $tableName set price = price * 2 where id = 1")
+              // verify compaction is complete
+              val metaClient = createMetaClient(spark, tmp.getCanonicalPath + "/" + tableName)
+              assertEquals(metaClient.getActiveTimeline.getLastCommitMetadataWithValidData.get.getLeft.getAction, "commit")
+            }
           }
         }
       }
@@ -301,12 +303,12 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         )
 
         // test with optimized sql writes enabled / disabled.
-        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
-
-        spark.sql(s"update $tableName set price = 22 where id = 1")
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 22.0, 1000)
-        )
+        withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> sparkSqlOptimizedWrites.toString) {
+          spark.sql(s"update $tableName set price = 22 where id = 1")
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 22.0, 1000)
+          )
+        }
       }
     }
   }
@@ -461,32 +463,124 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
              |""".stripMargin)
 
         // test with optimized sql writes enabled.
-        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
+        withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> "true") {
 
-        // insert data to table
-        spark.sql(
-          s"""
-             |insert into $tableName
-             |values
-             |  (1, 'a1', cast(10.0 as double), 1000),
-             |  (2, 'a2', cast(20.0 as double), 1000),
-             |  (3, 'a2', cast(30.0 as double), 1000)
-             |""".stripMargin)
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 10.0, 1000),
-          Seq(2, "a2", 20.0, 1000),
-          Seq(3, "a2", 30.0, 1000)
-        )
+          // insert data to table
+          spark.sql(
+            s"""
+               |insert into $tableName
+               |values
+               |  (1, 'a1', cast(10.0 as double), 1000),
+               |  (2, 'a2', cast(20.0 as double), 1000),
+               |  (3, 'a2', cast(30.0 as double), 1000)
+               |""".stripMargin)
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 10.0, 1000),
+            Seq(2, "a2", 20.0, 1000),
+            Seq(3, "a2", 30.0, 1000)
+          )
 
-        // Update the row with id = 2 by setting price to 25.0
-        spark.sql(s"update $tableName set price = cast(25.0 as double) where id = 2")
+          // Update the row with id = 2 by setting price to 25.0
+          spark.sql(s"update $tableName set price = cast(25.0 as double) where id = 2")
 
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 10.0, 1000),
-          Seq(2, "a2", 25.0, 1000),
-          Seq(3, "a2", 30.0, 1000)
-        )
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 10.0, 1000),
+            Seq(2, "a2", 25.0, 1000),
+            Seq(3, "a2", 30.0, 1000)
+          )
+        }
       }
+    }
+  }
+
+  test("Test UPDATE on VECTOR column preserves custom-type metadata") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id bigint,
+           |  embedding VECTOR(3)
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id'
+           | )
+         """.stripMargin)
+
+      spark.sql(
+        s"""
+           |insert into $tableName values
+           |  (1, array(cast(0.1 as float), cast(0.2 as float), cast(0.3 as float)))
+           """.stripMargin)
+
+      // Assigning a VECTOR column goes through castIfNeeded; without the metadata
+      // re-attach it would fail schema compat with MISSING_UNION_BRANCH.
+      spark.sql(
+        s"""
+           |update $tableName
+           |set embedding = array(cast(0.9 as float), cast(0.8 as float), cast(0.7 as float))
+           |where id = 1
+           """.stripMargin)
+
+      checkAnswer(s"select id, embedding from $tableName")(
+        Seq(1L, Seq(0.9f, 0.8f, 0.7f))
+      )
+    }
+  }
+
+  test("Test UPDATE on BLOB column preserves custom-type metadata") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id bigint,
+           |  payload BLOB
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id'
+           | )
+         """.stripMargin)
+
+      // Use OUT_OF_LINE with a concrete reference: per RFC-100 the BLOB struct's
+      // inner reference fields (external_path, managed) are non-null, and the
+      // source literal must conform to that contract.
+      spark.sql(
+        s"""
+           |insert into $tableName values
+           |  (1, named_struct(
+           |        'type', 'OUT_OF_LINE',
+           |        'data', cast(null as binary),
+           |        'reference', named_struct(
+           |          'external_path', 'blobs/seed',
+           |          'offset', 0L,
+           |          'length', 3L,
+           |          'managed', false)))
+           """.stripMargin)
+
+      // Assigning a BLOB column goes through castIfNeeded; without the metadata
+      // re-attach it would fail schema compat with MISSING_UNION_BRANCH.
+      spark.sql(
+        s"""
+           |update $tableName
+           |set payload = named_struct(
+           |  'type', 'OUT_OF_LINE',
+           |  'data', cast(null as binary),
+           |  'reference', named_struct(
+           |    'external_path', 'blobs/updated',
+           |    'offset', 10L,
+           |    'length', 100L,
+           |    'managed', true))
+           |where id = 1
+           """.stripMargin)
+
+      checkAnswer(s"select id, payload from $tableName")(
+        Seq(1L, Row("OUT_OF_LINE", null, Row("blobs/updated", 10L, 100L, true)))
+      )
     }
   }
 }

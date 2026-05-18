@@ -19,9 +19,10 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.config.HoodieCommonConfig
+import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig}
 import org.apache.hudi.common.table.HoodieTableConfig
 
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -42,5 +43,56 @@ class TestDataSourceOptions {
     assertEquals(
       HoodieTableConfig.DROP_PARTITION_COLUMNS.defaultValue(),
       DataSourceWriteOptions.DROP_PARTITION_COLUMNS.defaultValue())
+  }
+
+  @Test
+  def testReadDefaultsSupportSparkHoodieConfigs(): Unit = {
+    val params = DataSourceOptionsHelper.parametersWithReadDefaults(Map(
+      "spark.hoodie.datasource.query.type" -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL
+    ))
+
+    assertEquals(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL, params(DataSourceReadOptions.QUERY_TYPE.key))
+    assertTrue(!params.contains("spark.hoodie.datasource.query.type"))
+  }
+
+  @Test
+  def testReadDefaultsPreferHoodieOverSparkHoodieWhenBothSet(): Unit = {
+    val params = DataSourceOptionsHelper.parametersWithReadDefaults(Map(
+      "spark.hoodie.datasource.query.type" -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+      "hoodie.datasource.query.type" -> DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL
+    ))
+
+    assertEquals(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, params(DataSourceReadOptions.QUERY_TYPE.key))
+  }
+
+  @Test
+  def testReadDefaultsConfigHierarchyWithGlobalDFSProps(): Unit = {
+    // Set a config in global DFS props (lowest priority)
+    DFSPropertiesConfiguration.addToGlobalProps(
+      DataSourceReadOptions.QUERY_TYPE.key,
+      DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL
+    )
+
+    // Test 1: Global DFS props are used when no other configs are set
+    val params1 = DataSourceOptionsHelper.parametersWithReadDefaults(Map.empty)
+    assertEquals(DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, params1(DataSourceReadOptions.QUERY_TYPE.key))
+
+    // Test 2: spark.hoodie.* overrides global DFS props
+    val params2 = DataSourceOptionsHelper.parametersWithReadDefaults(Map(
+      "spark.hoodie.datasource.query.type" -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL
+    ))
+    assertEquals(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL, params2(DataSourceReadOptions.QUERY_TYPE.key))
+
+    // Test 3: hoodie.* overrides both spark.hoodie.* and global DFS props
+    val params3 = DataSourceOptionsHelper.parametersWithReadDefaults(Map(
+      "spark.hoodie.datasource.query.type" -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+      "hoodie.datasource.query.type" -> DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL
+    ))
+    assertEquals(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, params3(DataSourceReadOptions.QUERY_TYPE.key))
+  }
+
+  @AfterEach
+  def cleanup(): Unit = {
+    DFSPropertiesConfiguration.clearGlobalProps()
   }
 }

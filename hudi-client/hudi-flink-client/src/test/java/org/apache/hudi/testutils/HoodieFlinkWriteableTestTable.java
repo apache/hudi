@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -38,11 +39,9 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -55,33 +54,33 @@ import java.util.stream.Collectors;
 /**
  * Flink hoodie writable table.
  */
+@Slf4j
 public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkWriteableTestTable.class);
 
   private HoodieFlinkWriteableTestTable(String basePath, HoodieStorage storage,
-                                        HoodieTableMetaClient metaClient, Schema schema,
+                                        HoodieTableMetaClient metaClient, HoodieSchema schema,
                                         BloomFilter filter) {
     super(basePath, storage, metaClient, schema, filter);
   }
 
-  public static HoodieFlinkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema,
+  public static HoodieFlinkWriteableTestTable of(HoodieTableMetaClient metaClient, HoodieSchema schema,
                                                  BloomFilter filter) {
     return new HoodieFlinkWriteableTestTable(metaClient.getBasePath().toString(),
         metaClient.getRawStorage(), metaClient, schema, filter);
   }
 
-  public static HoodieFlinkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema) {
+  public static HoodieFlinkWriteableTestTable of(HoodieTableMetaClient metaClient, HoodieSchema schema) {
     BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1,
         BloomFilterTypeCode.SIMPLE.name());
     return of(metaClient, schema, filter);
   }
 
-  public static HoodieFlinkWriteableTestTable of(HoodieTable hoodieTable, Schema schema) {
+  public static HoodieFlinkWriteableTestTable of(HoodieTable hoodieTable, HoodieSchema schema) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     return of(metaClient, schema);
   }
 
-  public static HoodieFlinkWriteableTestTable of(HoodieTable hoodieTable, Schema schema, BloomFilter filter) {
+  public static HoodieFlinkWriteableTestTable of(HoodieTable hoodieTable, HoodieSchema schema, BloomFilter filter) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     return of(metaClient, schema, filter);
   }
@@ -147,11 +146,11 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
       logWriter.appendBlock(new HoodieAvroDataBlock(groupedRecords.stream().map(r -> {
         try {
           GenericRecord val =
-              (GenericRecord) ((HoodieRecordPayload) r.getData()).getInsertValue(schema).get();
+              (GenericRecord) ((HoodieRecordPayload) r.getData()).getInsertValue(schema.toAvroSchema()).get();
           HoodieAvroUtils.addHoodieKeyToRecord(val, r.getRecordKey(), r.getPartitionPath(), "");
           return (IndexedRecord) val;
         } catch (IOException e) {
-          LOG.warn("Failed to convert record " + r.toString(), e);
+          log.warn("Failed to convert record " + r.toString(), e);
           return null;
         }
       }).map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), header, HoodieRecord.RECORD_KEY_METADATA_FIELD));

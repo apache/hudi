@@ -30,6 +30,7 @@ import org.apache.hudi.storage.HoodieStorage;
 
 import java.util.List;
 
+import static org.apache.hudi.common.table.log.BaseHoodieLogRecordReader.BLOCK_SIZE_IN_BYTES;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 
 abstract class LogScanningRecordBufferLoader {
@@ -49,13 +50,19 @@ abstract class LogScanningRecordBufferLoader {
         .withRecordBuffer(recordBuffer)
         .withAllowInflightInstants(readerParameters.allowInflightInstants())
         .withMetaClient(hoodieTableMetaClient)
-        .withOptimizedLogBlocksScan(readerParameters.enableOptimizedLogBlockScan())
         .build()) {
       readStats.setTotalLogReadTimeMs(logRecordReader.getTotalTimeTakenToReadAndMergeBlocks());
       readStats.setTotalUpdatedRecordsCompacted(logRecordReader.getNumMergedRecordsInLog());
       readStats.setTotalLogFilesCompacted(logRecordReader.getTotalLogFiles());
       readStats.setTotalLogRecords(logRecordReader.getTotalLogRecords());
       readStats.setTotalLogBlocks(logRecordReader.getTotalLogBlocks());
+      readStats.setTotalValidLogBlocks(logRecordReader.getTotalValidLogBlocks());
+      readStats.setTotalLogBlocksSize(logRecordReader.getTotalLogBlocksSize());
+      readStats.setTotalLogBlocksScanTimeMs(logRecordReader.getBlocksScanDuration());
+      readStats.setTotalLogSizeCompacted(logRecordReader.getBlocksStats().stream()
+          .filter(blockScanMetrics -> blockScanMetrics.containsKey(BLOCK_SIZE_IN_BYTES))
+          .mapToLong(blockScanMetrics -> ((Number) blockScanMetrics.get(BLOCK_SIZE_IN_BYTES)).longValue())
+          .sum());
       readStats.setTotalCorruptLogBlock(logRecordReader.getTotalCorruptBlocks());
       readStats.setTotalRollbackBlocks(logRecordReader.getTotalRollbacks());
       return logRecordReader.getValidBlockInstants();

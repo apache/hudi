@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -45,6 +46,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.calcite.shaded.com.google.common.collect.Lists;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
+import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
 import org.apache.flink.table.catalog.CatalogPartitionSpec;
 import org.apache.flink.table.catalog.CatalogTable;
@@ -93,7 +95,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test cases for {@link HoodieHiveCatalog}.
  */
-public class TestHoodieHiveCatalog {
+public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
   Schema schema =
       Schema.newBuilder()
           .column("uuid", DataTypes.INT().notNull())
@@ -127,7 +129,7 @@ public class TestHoodieHiveCatalog {
   List<String> multiPartitions = Lists.newArrayList("par1", "par2");
 
   private static HoodieHiveCatalog hoodieCatalog;
-  private final ObjectPath tablePath = new ObjectPath("default", "test");
+  private final ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "test");
 
   @BeforeAll
   public static void createCatalog() {
@@ -219,7 +221,7 @@ public class TestHoodieHiveCatalog {
 
     // validate the full name of table create schema
     HoodieTableConfig tableConfig = StreamerUtil.getTableConfig(table1.getOptions().get(FlinkOptions.PATH.key()), hoodieCatalog.getHiveConf()).get();
-    Option<org.apache.avro.Schema> tableCreateSchema = tableConfig.getTableCreateSchema();
+    Option<HoodieSchema> tableCreateSchema = tableConfig.getTableCreateSchema();
     assertTrue(tableCreateSchema.isPresent(), "Table should have been created");
     assertThat(tableCreateSchema.get().getFullName(), is("hoodie.test.test_record"));
 
@@ -389,6 +391,19 @@ public class TestHoodieHiveCatalog {
     assertThrows(HoodieCatalogException.class, () -> hoodieCatalog.createTable(tablePath, table, false));
   }
 
+  @Test
+  public void testLanceFormatNotSupportedByHiveCatalog() {
+    HashMap<String, String> properties = new HashMap<>();
+    properties.put(FactoryUtil.CONNECTOR.key(), "hudi");
+    properties.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE");
+    CatalogTable table = CatalogUtils.createCatalogTable(schema, Collections.emptyList(), properties, "lance table");
+    // createTable wraps the HoodieValidationException in a HoodieCatalogException
+    HoodieCatalogException ex = assertThrows(HoodieCatalogException.class,
+        () -> hoodieCatalog.createTable(tablePath, table, false));
+    assertThat(ex.getCause(), instanceOf(HoodieValidationException.class));
+    assertThat(ex.getCause().getMessage(), containsString("Lance base file format is currently only supported with the Spark engine"));
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testDropTable(boolean external) throws TableAlreadyExistException, DatabaseNotExistException, TableNotExistException, IOException {
@@ -487,7 +502,7 @@ public class TestHoodieHiveCatalog {
     catalog.createTable(tablePath, table, false);
 
     Table hiveTable = hoodieCatalog.getHiveTable(tablePath);
-    assertEquals("false", hiveTable.getParameters().get("hadoop.hive.metastore.schema.verification"));
+    assertEquals("false", hiveTable.getParameters().get("hadoop.hive.metastore.sasl.enabled"));
   }
 
   @Test
@@ -532,5 +547,10 @@ public class TestHoodieHiveCatalog {
         tablePath.getObjectName(),
         HoodieCatalogUtil.getOrderedPartitionValues(
             hoodieCatalog.getName(), hoodieCatalog.getHiveConf(), partitionSpec, partitions, tablePath));
+  }
+
+  @Override
+  AbstractCatalog getCatalog() {
+    return hoodieCatalog;
   }
 }

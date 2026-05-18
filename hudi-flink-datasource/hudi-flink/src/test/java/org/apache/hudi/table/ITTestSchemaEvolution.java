@@ -22,6 +22,9 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -32,18 +35,16 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.sink.compact.CompactOperator;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanSourceFunction;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.utils.FlinkMiniCluster;
 
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -57,8 +58,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -66,6 +65,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -86,8 +86,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings({"SqlDialectInspection", "SqlNoDataSourceInspection"})
 @ExtendWith(FlinkMiniCluster.class)
+@Slf4j
 public class ITTestSchemaEvolution {
-  private static final Logger LOG = LoggerFactory.getLogger(ITTestSchemaEvolution.class);
 
   @TempDir File tempFile;
   private StreamTableEnvironment tEnv;
@@ -246,15 +246,24 @@ public class ITTestSchemaEvolution {
         doCompact(conf);
       }
 
-      Schema intType = SchemaBuilder.unionOf().nullType().and().intType().endUnion();
-      Schema longType = SchemaBuilder.unionOf().nullType().and().longType().endUnion();
-      Schema doubleType = SchemaBuilder.unionOf().nullType().and().doubleType().endUnion();
-      Schema stringType = SchemaBuilder.unionOf().nullType().and().stringType().endUnion();
-      Schema structType = SchemaBuilder.builder().record("new_row_col").fields()
-              .name("f0").type(longType).noDefault()
-              .name("f1").type(stringType).noDefault().endRecord();
-      Schema arrayType = Schema.createUnion(SchemaBuilder.builder().array().items(stringType), SchemaBuilder.builder().nullType());
-      Schema mapType = Schema.createUnion(SchemaBuilder.builder().map().values(stringType), SchemaBuilder.builder().nullType());
+      // Create nullable primitive types using HoodieSchema
+      HoodieSchema intType = HoodieSchema.createNullable(HoodieSchemaType.INT);
+      HoodieSchema longType = HoodieSchema.createNullable(HoodieSchemaType.LONG);
+      HoodieSchema doubleType = HoodieSchema.createNullable(HoodieSchemaType.DOUBLE);
+      HoodieSchema stringType = HoodieSchema.createNullable(HoodieSchemaType.STRING);
+
+      // Create struct type with fields
+      List<HoodieSchemaField> structFields = Arrays.asList(
+          HoodieSchemaField.of("f0", longType, null, HoodieSchema.NULL_VALUE),
+          HoodieSchemaField.of("f1", stringType, null, HoodieSchema.NULL_VALUE)
+      );
+      HoodieSchema structType = HoodieSchema.createRecord("new_row_col", null, null, structFields);
+
+      // Create nullable array type
+      HoodieSchema arrayType = HoodieSchema.createNullable(HoodieSchema.createArray(stringType));
+
+      // Create nullable map type
+      HoodieSchema mapType = HoodieSchema.createNullable(HoodieSchema.createMap(stringType));
 
       writeClient.addColumn("salary", doubleType, null, "name", AFTER);
       writeClient.deleteColumns("gender");
@@ -304,7 +313,7 @@ public class ITTestSchemaEvolution {
   private void writeTableWithSchema2(TableOptions tableOptions) throws ExecutionException, InterruptedException {
     tableOptions.withOption(
         FlinkOptions.SOURCE_AVRO_SCHEMA.key(),
-        AvroSchemaConverter.convertToSchema(ROW_TYPE_EVOLUTION_AFTER, "hoodie.t1.t1_record"));
+        HoodieSchemaConverter.convertToSchema(ROW_TYPE_EVOLUTION_AFTER, "hoodie.t1.t1_record"));
 
     //language=SQL
     tEnv.executeSql("drop table t1");
@@ -374,9 +383,8 @@ public class ITTestSchemaEvolution {
         KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid",
         KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition",
         KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), true,
-        HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName(),
         FlinkOptions.WRITE_BATCH_SIZE.key(), 0.000001, // each record triggers flush
-        FlinkOptions.SOURCE_AVRO_SCHEMA.key(), AvroSchemaConverter.convertToSchema(ROW_TYPE_EVOLUTION_BEFORE),
+        FlinkOptions.SOURCE_AVRO_SCHEMA.key(), HoodieSchemaConverter.convertToSchema(ROW_TYPE_EVOLUTION_BEFORE),
         FlinkOptions.READ_TASKS.key(), 1,
         FlinkOptions.WRITE_TASKS.key(), 1,
         FlinkOptions.INDEX_BOOTSTRAP_TASKS.key(), 1,
@@ -385,8 +393,7 @@ public class ITTestSchemaEvolution {
         FlinkOptions.COMPACTION_SCHEDULE_ENABLED.key(), false,
         HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED.key(), false,
         HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), true,
-        HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true",
-        HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
+        HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
   }
 
   private void checkAnswerEvolved(String... expectedResult) throws Exception {
@@ -460,7 +467,7 @@ public class ITTestSchemaEvolution {
 
   private void doCompact(Configuration conf) throws Exception {
     // use sync compaction to ensure compaction finished.
-    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.set(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED, false);
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
       HoodieFlinkTable<?> table = writeClient.getHoodieTable();
 
@@ -525,12 +532,12 @@ public class ITTestSchemaEvolution {
 
     for (String expectedItem : expected) {
       if (!actual.contains(expectedItem)) {
-        LOG.info("Not in actual: {}", expectedItem);
+        log.info("Not in actual: {}", expectedItem);
       }
     }
     for (String actualItem : actual) {
       if (!expected.contains(actualItem)) {
-        LOG.info("Not in expected: {}", actualItem);
+        log.info("Not in expected: {}", actualItem);
       }
     }
     assertEquals(expected, actual);
@@ -602,7 +609,7 @@ public class ITTestSchemaEvolution {
           "+I[id6, Emma, null, 20, +I[null, s6, 6, null, null, 6], {Emma=2020.0}, [20.0], {Emma=+I[null, s6, 6, null, null, 6]}, [+I[6, s6, , 6]], null, null, null]",
           "+I[id7, Bob, null, 44, +I[null, s7, 7, null, null, 7], {Bob=4444.0}, [44.0, 44.0], {Bob=+I[null, s7, 7, null, null, 7]}, [+I[7, s7, , 7]], null, null, null]",
           "+I[id8, Han, null, 56, +I[null, s8, 8, null, null, 8], {Han=5656.0}, [56.0, 56.0, 56.0], {Han=+I[null, s8, 8, null, null, 8]}, [+I[8, s8, , 8]], null, null, null]",
-          "+I[id9, Alice, 90000.9, unknown, +I[9, s9, 99, t9, drop_add9, 9], {Alice=9999.99}, [9999.0, 9999.0], {Alice=+I[9, s9, 99, t9, drop_add9, 9]}, [+I[9, s9, , 9]], +I[9, 9], [9], {k9=v9}]",
+          "+I[id9, Alice, 90000.9, unknown, +I[9, s9, 99, t9, drop_add9, 9], {Alice=9999.99}, [9999.0, 9999.0], {Alice=+I[9, s9, 99, t9, drop_add9, 9]}, [+I[9, s9, , 9]], +I[9, 9], [9], {k9=v9}]"
       },
       new String[] {
           "+I[1]",
@@ -640,7 +647,7 @@ public class ITTestSchemaEvolution {
           "+I[Han, null, 56, +I[null, s8, 8, null, null, 8], {Han=5656.0}, [56.0, 56.0, 56.0], {Han=+I[null, s8, 8, null, null, 8]}, [+I[8, s8, , 8]], null, null, null]",
           "+I[Alice, 90000.9, unknown, +I[9, s9, 99, t9, drop_add9, 9], {Alice=9999.99}, [9999.0, 9999.0], {Alice=+I[9, s9, 99, t9, drop_add9, 9]}, [+I[9, s9, , 9]], +I[9, 9], [9], {k9=v9}]",
           "+I[Danny, 10000.1, 23, +I[1, s1, 11, t1, drop_add1, 1], {Danny=2323.23}, [23.0, 23.0, 23.0], {Danny=+I[1, s1, 11, t1, drop_add1, 1]}, [+I[1, s1, , 1]], +I[1, 1], [1], {k1=v1}]",
-          "+I[Julian, 30000.3, 53, +I[3, s3, 33, t3, drop_add3, 3], {Julian=5353.53}, [53.0], {Julian=+I[3, s3, 33, t3, drop_add3, 3]}, [+I[3, s3, , 3]], +I[3, 3], [3], {k3=v3}]",
+          "+I[Julian, 30000.3, 53, +I[3, s3, 33, t3, drop_add3, 3], {Julian=5353.53}, [53.0], {Julian=+I[3, s3, 33, t3, drop_add3, 3]}, [+I[3, s3, , 3]], +I[3, 3], [3], {k3=v3}]"
       },
       new String[] {
           "+I[id0, Indica, null, 12, null, {Indica=1212.0}, [12.0], null, [+I[0, s0, , 0]], null, null, null]",
@@ -654,7 +661,7 @@ public class ITTestSchemaEvolution {
           "+I[id8, Han, null, 56, +I[null, s8, 8, null, null, 8], {Han=5656.0}, [56.0, 56.0, 56.0], {Han=+I[null, s8, 8, null, null, 8]}, [+I[8, s8, , 8]], null, null, null]",
           "+I[id9, Alice, 90000.9, unknown, +I[9, s9, 99, t9, drop_add9, 9], {Alice=9999.99}, [9999.0, 9999.0], {Alice=+I[9, s9, 99, t9, drop_add9, 9]}, [+I[9, s9, , 9]], +I[9, 9], [9], {k9=v9}]",
           "+I[id1, Danny, 10000.1, 23, +I[1, s1, 11, t1, drop_add1, 1], {Danny=2323.23}, [23.0, 23.0, 23.0], {Danny=+I[1, s1, 11, t1, drop_add1, 1]}, [+I[1, s1, , 1]], +I[1, 1], [1], {k1=v1}]",
-          "+I[id3, Julian, 30000.3, 53, +I[3, s3, 33, t3, drop_add3, 3], {Julian=5353.53}, [53.0], {Julian=+I[3, s3, 33, t3, drop_add3, 3]}, [+I[3, s3, , 3]], +I[3, 3], [3], {k3=v3}]",
+          "+I[id3, Julian, 30000.3, 53, +I[3, s3, 33, t3, drop_add3, 3], {Julian=5353.53}, [53.0], {Julian=+I[3, s3, 33, t3, drop_add3, 3]}, [+I[3, s3, , 3]], +I[3, 3], [3], {k3=v3}]"
       },
       new String[] {
           "+I[1]",

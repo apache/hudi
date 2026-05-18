@@ -27,14 +27,14 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -52,15 +52,16 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.isHeartbeatExpired;
-import static org.apache.hudi.common.util.FileIOUtils.closeQuietly;
+import static org.apache.hudi.io.util.FileIOUtils.closeQuietly;
 
 /**
  * A utility class for marker related operations.
  */
+@Slf4j
 public class MarkerUtils {
+
   public static final String MARKERS_FILENAME_PREFIX = "MARKERS";
   public static final String MARKER_TYPE_FILENAME = MARKERS_FILENAME_PREFIX + ".type";
-  private static final Logger LOG = LoggerFactory.getLogger(MarkerUtils.class);
 
   /**
    * Strips the folder prefix of the marker file path corresponding to a data file.
@@ -229,16 +230,15 @@ public class MarkerUtils {
     InputStream inputStream = null;
     Set<String> markers = new HashSet<>();
     try {
-      LOG.debug("Read marker file: {}", markersFilePath);
+      log.debug("Read marker file: {}", markersFilePath);
       HoodieStorage storage = HoodieStorageUtils.getStorage(markersFilePath, conf);
       inputStream = storage.open(markersFilePath);
       markers = new HashSet<>(FileIOUtils.readAsUTFStringLines(inputStream));
     } catch (IOException e) {
-      String errorMessage = "Failed to read MARKERS file " + markersFilePath;
       if (ignoreException) {
-        LOG.warn(errorMessage + ". Ignoring the exception and continue.", e);
+        log.warn("Failed to read MARKERS file {}", markersFilePath, e);
       } else {
-        throw new HoodieIOException(errorMessage, e);
+        throw new HoodieIOException("Failed to read MARKERS file " + markersFilePath, e);
       }
     } finally {
       closeQuietly(inputStream);
@@ -294,7 +294,7 @@ public class MarkerUtils {
    * Because we don't want to let pending compaction block common writer.
    *
    * @param instants
-   * @return
+   * @return {@link List} of candidate instant paths.
    */
   public static List<String> getCandidateInstants(HoodieActiveTimeline activeTimeline,
                                                   List<StoragePath> instants, String currentInstantTime,

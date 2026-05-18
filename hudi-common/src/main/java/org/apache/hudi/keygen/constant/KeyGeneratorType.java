@@ -23,13 +23,21 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.StringUtils;
+
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
@@ -37,8 +45,11 @@ import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
 /**
  * Types of {@link org.apache.hudi.keygen.KeyGenerator}.
  */
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
+@Getter
 @EnumDescription("Key generator type, indicating the key generator class to use, that implements "
     + "`org.apache.hudi.keygen.KeyGenerator`.")
+@Slf4j
 public enum KeyGeneratorType {
 
   @EnumFieldDescription("Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.")
@@ -96,26 +107,28 @@ public enum KeyGeneratorType {
   @EnumFieldDescription("Meant to be used internally for the spark sql MERGE INTO command.")
   SPARK_SQL_MERGE_INTO("org.apache.spark.sql.hudi.command.MergeIntoKeyGenerator"),
 
-  @EnumFieldDescription("A test KeyGenerator for deltastreamer tests.")
-  STREAMER_TEST("org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer$TestGenerator");
+  @EnumFieldDescription("A KeyGenerator specified from the configuration.")
+  USER_PROVIDED(StringUtils.EMPTY_STRING);
 
-  private final String className;
+  private String className;
 
-  KeyGeneratorType(String className) {
-    this.className = className;
-  }
+  private static final Set<KeyGeneratorType> NO_METAFIELDS_KEYGEN_ALLOWLIST =
+      new HashSet<>(Arrays.asList(SIMPLE, SIMPLE_AVRO, COMPLEX, COMPLEX_AVRO,NON_PARTITION, NON_PARTITION_AVRO));
 
-  public String getClassName() {
-    return className;
+  public static boolean isKeyGenValidForDisabledMetaFields(String keyGenClass) {
+    return NO_METAFIELDS_KEYGEN_ALLOWLIST.contains(KeyGeneratorType.fromClassName(keyGenClass));
   }
 
   public static KeyGeneratorType fromClassName(String className) {
+    if (StringUtils.isNullOrEmpty(className)) {
+      throw new IllegalArgumentException("Invalid keyGenerator class: " + className);
+    }
     for (KeyGeneratorType type : KeyGeneratorType.values()) {
       if (type.getClassName().equals(className)) {
         return type;
       }
     }
-    throw new IllegalArgumentException("No KeyGeneratorType found for class name: " + className);
+    return USER_PROVIDED;
   }
 
   public static List<String> getNames() {
@@ -126,28 +139,51 @@ public enum KeyGeneratorType {
   }
 
   @Nullable
+  public static String getKeyGeneratorClassName(TypedProperties props) {
+    // For USER_PROVIDED type, since we set key generator class only for this type.
+    if (ConfigUtils.containsConfigProperty(props, KEY_GENERATOR_CLASS_NAME)) {
+      return ConfigUtils.getStringWithAltKeys(props, KEY_GENERATOR_CLASS_NAME);
+    }
+    // For other types.
+    KeyGeneratorType keyGeneratorType;
+    if (ConfigUtils.containsConfigProperty(props, KEY_GENERATOR_TYPE)) {
+      keyGeneratorType = KeyGeneratorType.valueOf(ConfigUtils.getStringWithAltKeys(props, KEY_GENERATOR_TYPE));
+      // For USER_PROVIDED type, the key generator class has to be provided.
+      if (USER_PROVIDED == keyGeneratorType) {
+        throw new IllegalArgumentException("No key generator class is provided properly for type: " + USER_PROVIDED.name());
+      }
+      return keyGeneratorType.getClassName();
+    }
+    // No key generator information is provided.
+    log.info("No key generator type is set properly");
+    return null;
+  }
+
+  @Nullable
   public static String getKeyGeneratorClassName(HoodieConfig config) {
     return getKeyGeneratorClassName(config.getProps());
   }
 
   @Nullable
-  public static String getKeyGeneratorClassName(TypedProperties props) {
-    if (ConfigUtils.containsConfigProperty(props, KEY_GENERATOR_CLASS_NAME)) {
-      return ConfigUtils.getStringWithAltKeys(props, KEY_GENERATOR_CLASS_NAME);
-    }
-    if (ConfigUtils.containsConfigProperty(props, KEY_GENERATOR_TYPE)) {
-      return KeyGeneratorType.valueOf(ConfigUtils.getStringWithAltKeys(props, KEY_GENERATOR_TYPE)).getClassName();
-    }
-    return null;
+  public static String getKeyGeneratorClassName(Map<String, String> config) {
+    TypedProperties props = new TypedProperties();
+    config.forEach(props::setProperty);
+    return getKeyGeneratorClassName(props);
   }
 
-  @Nullable
-  public static String getKeyGeneratorClassName(Map<String, String> config) {
-    if (config.containsKey(KEY_GENERATOR_CLASS_NAME.key())) {
-      return config.get(KEY_GENERATOR_CLASS_NAME.key());
-    } else if (config.containsKey(KEY_GENERATOR_TYPE.key())) {
-      return KeyGeneratorType.valueOf(config.get(KEY_GENERATOR_TYPE.key())).getClassName();
+  public static boolean isComplexKeyGenerator(HoodieConfig config) {
+    KeyGeneratorType keyGeneratorType;
+    if (config.contains(KEY_GENERATOR_TYPE)) {
+      keyGeneratorType = KeyGeneratorType.valueOf(config.getString(KEY_GENERATOR_TYPE));
+    } else if (config.contains(KEY_GENERATOR_CLASS_NAME)) {
+      try {
+        keyGeneratorType = fromClassName(config.getString(KEY_GENERATOR_CLASS_NAME));
+      } catch (IllegalArgumentException e) {
+        return false;
+      }
+    } else {
+      return false;
     }
-    return null;
+    return keyGeneratorType == COMPLEX || keyGeneratorType == COMPLEX_AVRO;
   }
 }

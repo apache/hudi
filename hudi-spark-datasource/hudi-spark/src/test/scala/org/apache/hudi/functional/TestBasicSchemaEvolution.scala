@@ -17,9 +17,9 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, ScalaAssertionSupport}
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSchemaConversionUtils, ScalaAssertionSupport, SparkAdapterSupport}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
+import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.util.Option
@@ -30,7 +30,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 
 import org.apache.hadoop.fs.FileSystem
-import org.apache.spark.sql.{functions, HoodieUnsafeUtils, Row, SaveMode, SparkSession, SparkSessionExtensions}
+import org.apache.spark.sql.{functions, Row, SaveMode, SparkSession, SparkSessionExtensions}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructField, StructType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
@@ -42,7 +42,7 @@ import java.util.function.Consumer
 
 import scala.collection.JavaConverters._
 
-class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAssertionSupport {
+class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAssertionSupport with SparkAdapterSupport {
 
   var spark: SparkSession = null
   val commonOpts = Map(
@@ -55,8 +55,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-    HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true"
+    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
   val verificationCol: String = "driver"
@@ -74,14 +73,6 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     spark = sqlContext.sparkSession
     initTestDataGenerator()
     initHoodieStorage()
-  }
-
-  @AfterEach override def tearDown(): Unit = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
-    FileSystem.closeAll()
-    System.gc()
   }
 
   // TODO add test-case for upcasting
@@ -112,7 +103,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       )
 
     def appendData(schema: StructType, batch: Seq[Row], shouldAllowDroppedColumns: Boolean = false): Unit = {
-      HoodieUnsafeUtils.createDataFrameFromRows(spark, batch, schema)
+      sparkAdapter.getUnsafeUtils.createDataFrameFromRows(spark, batch, schema)
         .write
         .format("org.apache.hudi")
         .options(opts ++ Map(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> shouldAllowDroppedColumns.toString))
@@ -126,7 +117,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       tableMetaClient.reloadActiveTimeline()
 
       val resolver = new TableSchemaResolver(tableMetaClient)
-      val latestTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(resolver.getTableAvroSchema(false))
+      val latestTableSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(resolver.getTableSchema(false))
 
       val df =
         spark.read.format("org.apache.hudi")
@@ -153,7 +144,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       Row("2", "Lisi", "Wallace", 1, 1),
       Row("3", "Zhangsan", "Shu", 1, 1))
 
-    HoodieUnsafeUtils.createDataFrameFromRows(spark, firstBatch, firstSchema)
+    sparkAdapter.getUnsafeUtils.createDataFrameFromRows(spark, firstBatch, firstSchema)
       .write
       .format("org.apache.hudi")
       .options(opts)

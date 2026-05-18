@@ -26,11 +26,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.table.HoodieSparkTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Validator to run sql query and compare table state
@@ -39,8 +38,8 @@ import org.slf4j.LoggerFactory;
  * <p>
  * Expects query results do not match.
  */
+@Slf4j
 public class SqlQueryInequalityPreCommitValidator<T, I, K, O extends HoodieData<WriteStatus>> extends SqlQueryPreCommitValidator<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(SqlQueryInequalityPreCommitValidator.class);
 
   public SqlQueryInequalityPreCommitValidator(HoodieSparkTable<T> table, HoodieEngineContext engineContext, HoodieWriteConfig config) {
     super(table, engineContext, config);
@@ -55,16 +54,16 @@ public class SqlQueryInequalityPreCommitValidator<T, I, K, O extends HoodieData<
   protected void validateUsingQuery(String query, String prevTableSnapshot, String newTableSnapshot, SQLContext sqlContext) {
     Dataset<Row> prevRows = executeSqlQuery(
         sqlContext, query, prevTableSnapshot, "previous state").cache();
-    LOG.info("Total rows in prevRows " + prevRows.count());
+    log.info("Total rows in prevRows " + prevRows.count());
     Dataset<Row> newRows = executeSqlQuery(
         sqlContext, query, newTableSnapshot, "new state").cache();
-    LOG.info("Total rows in newRows " + newRows.count());
+    log.info("Total rows in newRows " + newRows.count());
     printAllRowsIfDebugEnabled(prevRows);
     printAllRowsIfDebugEnabled(newRows);
     boolean areDatasetsEqual = prevRows.intersect(newRows).count() == prevRows.count();
-    LOG.info("Completed Inequality Validation, datasets equal? " + areDatasetsEqual);
+    log.info("Completed Inequality Validation, datasets equal? " + areDatasetsEqual);
     if (areDatasetsEqual) {
-      LOG.error("query validation failed. See stdout for sample query results. Query: " + query);
+      log.error("query validation failed. See stdout for sample query results. Query: " + query);
       System.out.println("Expected query results to be different, but they are same. Result (sample records only):");
       prevRows.show();
       throw new HoodieValidationException("Query validation failed for '" + query

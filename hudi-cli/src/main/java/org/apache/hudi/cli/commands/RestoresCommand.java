@@ -28,6 +28,7 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -43,6 +44,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.RESTORE_ACTIO
  * CLI command to display info about restore actions.
  */
 @ShellComponent
+@Slf4j
 public class RestoresCommand {
 
   @ShellMethod(key = "show restores", value = "List all restore instants")
@@ -148,7 +150,7 @@ public class RestoresCommand {
         addDetailsOfCompletedRestore(activeTimeline, outputRows, restoreInstant);
       }
     } catch (IOException e) {
-      e.printStackTrace();
+      log.error("Error reading restore metadata for instant {}", restoreInstant, e);
     }
   }
 

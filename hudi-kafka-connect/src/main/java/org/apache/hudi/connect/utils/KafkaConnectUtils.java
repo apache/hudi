@@ -39,13 +39,12 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import com.google.protobuf.ByteString;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.FileVisitOption;
@@ -67,9 +66,8 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 /**
  * Helper methods for Kafka.
  */
+@Slf4j
 public class KafkaConnectUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(KafkaConnectUtils.class);
   private static final String HOODIE_CONF_PREFIX = "hoodie.";
   public static final String HADOOP_CONF_DIR = "HADOOP_CONF_DIR";
   public static final String HADOOP_HOME = "HADOOP_HOME";
@@ -82,10 +80,10 @@ public class KafkaConnectUtils {
       String hadoopHomePath = System.getenv(HADOOP_HOME);
       DEFAULT_HADOOP_CONF_FILES.addAll(getHadoopConfigFiles(hadoopConfigPath, hadoopHomePath));
       if (!DEFAULT_HADOOP_CONF_FILES.isEmpty()) {
-        LOG.info(String.format("Found Hadoop default config files %s", DEFAULT_HADOOP_CONF_FILES));
+        log.info("Found Hadoop default config files {}", DEFAULT_HADOOP_CONF_FILES);
       }
     } catch (IOException e) {
-      LOG.error("An error occurred while getting the default Hadoop configuration. "
+      log.error("An error occurred while getting the default Hadoop configuration. "
               + "Please use hadoop.conf.dir or hadoop.home to configure Hadoop environment variables", e);
     }
   }
@@ -127,7 +125,7 @@ public class KafkaConnectUtils {
       Map<String, KafkaFuture<TopicDescription>> values = result.values();
       KafkaFuture<TopicDescription> topicDescription = values.get(topicName);
       int numPartitions = topicDescription.get().partitions().size();
-      LOG.info(String.format("Latest number of partitions for topic %s is %s", topicName, numPartitions));
+      log.info("Latest number of partitions for topic {} is {}", topicName, numPartitions);
       return numPartitions;
     } catch (Exception exception) {
       throw new HoodieException("Fatal error fetching the latest partition of kafka topic name" + topicName, exception);
@@ -221,7 +219,7 @@ public class KafkaConnectUtils {
     try {
       md = MessageDigest.getInstance("MD5");
     } catch (NoSuchAlgorithmException e) {
-      LOG.error("Fatal error selecting hash algorithm", e);
+      log.error("Fatal error selecting hash algorithm", e);
       throw new HoodieException(e);
     }
     byte[] digest = Objects.requireNonNull(md).digest(getUTF8Bytes(stringToHash));

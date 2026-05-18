@@ -51,7 +51,6 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
                                 override val metaClient: HoodieTableMetaClient,
                                 override val optParams: Map[String, String],
                                 private val userSchema: Option[StructType],
-                                private val globPaths: Seq[StoragePath],
                                 private val prunedDataSchema: Option[StructType] = None)
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema)
     with SparkAdapterSupport {
@@ -110,7 +109,7 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
   }
 
   protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[HoodieBaseFileSplit] = {
-    val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
+    val fileSlices = listLatestFileSlices(partitionFilters, dataFilters)
     val fileSplits = fileSlices.flatMap { fileSlice =>
       // TODO fix, currently assuming parquet as underlying format
       val pathInfo: StoragePathInfo = fileSlice.getBaseFile.get.getPathInfo
@@ -139,7 +138,7 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
   def toHadoopFsRelation: HadoopFsRelation = {
     val enableFileIndex = HoodieSparkConfUtils.getConfigValue(optParams, sparkSession.sessionState.conf,
       ENABLE_HOODIE_FILE_INDEX.key, ENABLE_HOODIE_FILE_INDEX.defaultValue.toString).toBoolean
-    if (enableFileIndex && globPaths.isEmpty) {
+    if (enableFileIndex) {
       // NOTE: There are currently 2 ways partition values could be fetched:
       //          - Source columns (producing the values used for physical partitioning) will be read
       //          from the data file

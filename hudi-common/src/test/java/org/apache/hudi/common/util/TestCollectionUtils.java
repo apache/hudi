@@ -20,16 +20,58 @@
 package org.apache.hudi.common.util;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.CollectionUtils.batches;
+import static org.apache.hudi.common.util.CollectionUtils.containsAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class TestCollectionUtils {
+
+  private static Stream<Arguments> containsAllArgs() {
+    Map<String, String> m0 = new HashMap<>();
+    m0.put("k0", "v0");
+    m0.put("k1", "v1");
+    m0.put("k2", "v2");
+    Map<String, String> m1 = new HashMap<>();
+    m1.put("k1", "v1");
+    Map<String, String> m2 = new HashMap<>();
+    m2.put("k2", "v2");
+    m2.put("k", "v");
+    Map<String, String> m3 = Collections.emptyMap();
+    Map<String, String> m4 = new HashMap<>();
+    m4.put("k0", null);
+    Map<String, Integer> m5 = new HashMap<>();
+    m5.put("k0", 0);
+
+    List<Arguments> argsList = new ArrayList<>();
+
+    argsList.add(Arguments.of(m0, m1, true));
+    argsList.add(Arguments.of(m0, m3, true));
+    argsList.add(Arguments.of(m5, m3, true));
+    argsList.add(Arguments.of(m0, m4, false));
+    argsList.add(Arguments.of(m0, m2, false));
+    argsList.add(Arguments.of(m0, m5, false));
+
+    return argsList.stream();
+  }
+
+  @ParameterizedTest
+  @MethodSource("containsAllArgs")
+  void containsAllOnMaps(Map<?, ?> m1, Map<?, ?> m2, boolean expectedResult) {
+    assertEquals(expectedResult, containsAll(m1, m2));
+  }
 
   @Test
   void getBatchesFromList() {

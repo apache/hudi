@@ -22,7 +22,7 @@ USER root
 # Default to UTF-8 file.encoding
 ENV LANG C.UTF-8
 
-ARG HADOOP_VERSION=2.8.4 
+ARG HADOOP_VERSION=3.3.4 
 ARG HADOOP_URL=https://archive.apache.org/dist/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz
 ENV HADOOP_VERSION ${HADOOP_VERSION}
 ENV HADOOP_URL ${HADOOP_URL}
@@ -37,7 +37,7 @@ RUN set -x \
     && rm /tmp/hadoop.tar.gz* \
     && rm -r /opt/hadoop-$HADOOP_VERSION/share/doc \
     && ln -s /opt/hadoop-$HADOOP_VERSION/etc/hadoop /etc/hadoop \
-    && cp /etc/hadoop/mapred-site.xml.template /etc/hadoop/mapred-site.xml \
+    && if [[ -f /etc/hadoop/mapred-site.xml.template ]]; then cp /etc/hadoop/mapred-site.xml.template /etc/hadoop/mapred-site.xml; fi \
     && mkdir /hadoop-data
 
 ENV HADOOP_PREFIX=/opt/hadoop-$HADOOP_VERSION

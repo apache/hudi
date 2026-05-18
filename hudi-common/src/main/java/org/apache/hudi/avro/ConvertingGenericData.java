@@ -43,12 +43,10 @@ public class ConvertingGenericData extends GenericData {
   private static final TimeConversions.TimeMicrosConversion TIME_MICROS_CONVERSION = new TimeConversions.TimeMicrosConversion();
   private static final TimeConversions.TimestampMicrosConversion TIMESTAMP_MICROS_CONVERSION = new TimeConversions.TimestampMicrosConversion();
 
-  // NOTE: Those are not supported in Avro 1.8.2
-  // TODO re-enable upon upgrading to 1.10
-  // private static final TimeConversions.TimestampMillisConversion TIMESTAMP_MILLIS_CONVERSION = new TimeConversions.TimestampMillisConversion();
-  // private static final TimeConversions.TimeMillisConversion TIME_MILLIS_CONVERSION = new TimeConversions.TimeMillisConversion();
-  // private static final TimeConversions.LocalTimestampMillisConversion LOCAL_TIMESTAMP_MILLIS_CONVERSION = new TimeConversions.LocalTimestampMillisConversion();
-  // private static final TimeConversions.LocalTimestampMicrosConversion LOCAL_TIMESTAMP_MICROS_CONVERSION = new TimeConversions.LocalTimestampMicrosConversion();
+  private static final TimeConversions.TimestampMillisConversion TIMESTAMP_MILLIS_CONVERSION = new TimeConversions.TimestampMillisConversion();
+  private static final TimeConversions.TimeMillisConversion TIME_MILLIS_CONVERSION = new TimeConversions.TimeMillisConversion();
+  private static final TimeConversions.LocalTimestampMillisConversion LOCAL_TIMESTAMP_MILLIS_CONVERSION = new TimeConversions.LocalTimestampMillisConversion();
+  private static final TimeConversions.LocalTimestampMicrosConversion LOCAL_TIMESTAMP_MICROS_CONVERSION = new TimeConversions.LocalTimestampMicrosConversion();
 
   public static final GenericData INSTANCE = new ConvertingGenericData();
 
@@ -59,11 +57,10 @@ public class ConvertingGenericData extends GenericData {
     addLogicalTypeConversion(TIME_MICROS_CONVERSION);
     addLogicalTypeConversion(TIMESTAMP_MICROS_CONVERSION);
     // NOTE: Those are not supported in Avro 1.8.2
-    // TODO re-enable upon upgrading to 1.10
-    // addLogicalTypeConversion(TIME_MILLIS_CONVERSION);
-    // addLogicalTypeConversion(TIMESTAMP_MILLIS_CONVERSION);
-    // addLogicalTypeConversion(LOCAL_TIMESTAMP_MILLIS_CONVERSION);
-    // addLogicalTypeConversion(LOCAL_TIMESTAMP_MICROS_CONVERSION);
+    addLogicalTypeConversion(TIME_MILLIS_CONVERSION);
+    addLogicalTypeConversion(TIMESTAMP_MILLIS_CONVERSION);
+    addLogicalTypeConversion(LOCAL_TIMESTAMP_MILLIS_CONVERSION);
+    addLogicalTypeConversion(LOCAL_TIMESTAMP_MICROS_CONVERSION);
   }
 
   @Override
@@ -128,7 +125,10 @@ public class ConvertingGenericData extends GenericData {
       case LONG:
         return isLong(datum)
             || TIME_MICROS_CONVERSION.getConvertedType().isInstance(datum)
-            || TIMESTAMP_MICROS_CONVERSION.getConvertedType().isInstance(datum);
+            || TIMESTAMP_MICROS_CONVERSION.getConvertedType().isInstance(datum)
+            || TIMESTAMP_MILLIS_CONVERSION.getConvertedType().isInstance(datum)
+            || LOCAL_TIMESTAMP_MICROS_CONVERSION.getConvertedType().isInstance(datum)
+            || LOCAL_TIMESTAMP_MILLIS_CONVERSION.getConvertedType().isInstance(datum);
       case FLOAT:
         return isFloat(datum);
       case DOUBLE:

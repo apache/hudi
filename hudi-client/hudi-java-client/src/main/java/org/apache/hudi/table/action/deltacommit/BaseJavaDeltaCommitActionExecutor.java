@@ -34,8 +34,7 @@ import org.apache.hudi.table.action.commit.BaseJavaCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaUpsertPartitioner;
 import org.apache.hudi.table.action.commit.Partitioner;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -43,8 +42,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 abstract class BaseJavaDeltaCommitActionExecutor<T> extends BaseJavaCommitActionExecutor<T> {
-  private static final Logger LOG = LoggerFactory.getLogger(BaseJavaDeltaCommitActionExecutor.class);
 
   protected BaseJavaDeltaCommitActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable table,
                                            String instantTime, WriteOperationType operationType) {
@@ -70,10 +69,10 @@ abstract class BaseJavaDeltaCommitActionExecutor<T> extends BaseJavaCommitAction
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) throws IOException {
-    LOG.info("Merging updates for commit " + instantTime + " for file " + fileId);
+    log.info("Merging updates for commit " + instantTime + " for file " + fileId);
     if (!table.getIndex().canIndexLogFiles() && partitioner != null
         && partitioner.getSmallFileIds().contains(fileId)) {
-      LOG.info("Small file corrections for updates for commit " + instantTime + " for file " + fileId);
+      log.info("Small file corrections for updates for commit " + instantTime + " for file " + fileId);
       return super.handleUpdate(partitionPath, fileId, recordItr);
     } else {
       HoodieAppendHandle<?, ?, ?, ?> appendHandle = new HoodieAppendHandle<>(config, instantTime, table,

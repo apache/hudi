@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkUtils}
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
+import org.apache.hudi.avro.AvroSchemaCache
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecordMerger, HoodieLogFile, HoodieRecord}
@@ -30,7 +31,6 @@ import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewS
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.OrderingValues
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
@@ -124,7 +124,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   protected def generateTableName: String = {
-    s"h${tableId.incrementAndGet()}"
+    s"h${getClass.getSimpleName.toLowerCase}_${tableId.incrementAndGet()}"
   }
 
   override protected def afterAll(): Unit = {
@@ -218,7 +218,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       runnable.run()
     } catch {
-      case e: Throwable if checkMessageContains(e, errorMsg) || checkMessageContains(getRootCause(e), errorMsg) =>
+      case e: Throwable if checkMessageContains(e, errorMsg) || checkMessageContains(HoodieTestUtils.getRootCause(e), errorMsg) =>
         hasException = true
 
       case f: Throwable =>
@@ -232,7 +232,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       spark.sql(sql)
     } catch {
-      case e: Throwable if checkMessageContains(e, errorMsg) || checkMessageContains(getRootCause(e), errorMsg) =>
+      case e: Throwable if checkMessageContains(e, errorMsg) || checkMessageContains(HoodieTestUtils.getRootCause(e), errorMsg) =>
         hasException = true
 
       case f: Throwable =>
@@ -246,11 +246,11 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       spark.sql(sql)
     } catch {
-      case e: Throwable if getRootCause(e).getMessage.matches(errorMsgRegex) =>
+      case e: Throwable if HoodieTestUtils.getRootCause(e).getMessage.matches(errorMsgRegex) =>
         hasException = true
 
       case f: Throwable =>
-        fail("Exception should match pattern: " + errorMsgRegex + ", error message: " + getRootCause(f).getMessage, f)
+        fail("Exception should match pattern: " + errorMsgRegex + ", error message: " + HoodieTestUtils.getRootCause(f).getMessage, f)
     }
     assertResult(true)(hasException)
   }
@@ -266,7 +266,10 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
                                                             fieldNameTuples: Seq[(String, String, String)]): String = {
     val fieldNames = fieldNameTuples.sortBy(e => (e._1, e._2))
       .map(e => e._3).mkString("[", ", ", "]")
-    if (HoodieSparkUtils.gteqSpark3_5) {
+    if (HoodieSparkUtils.gteqSpark4_0) {
+      "[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column, variable, or function parameter with name " +
+        s"$columnName cannot be resolved. Did you mean one of the following? $fieldNames."
+    } else if (HoodieSparkUtils.gteqSpark3_5) {
       "[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name " +
         s"$columnName cannot be resolved. Did you mean one of the following? $fieldNames."
     } else {
@@ -308,6 +311,10 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     fs.exists(path)
   }
 
+  /**
+   * Please use this method to set SQL conf in a block and restore them after the block.
+   * WARN: Please don't set the SQL conf like `spark.sql("set xxx = yyy")`, replace it with this method.
+   */
   protected def withSQLConf[T](pairs: (String, String)*)(f: => T): T = {
     val conf = spark.sessionState.conf
     val currentValues = pairs.unzip._1.map { k =>
@@ -446,11 +453,11 @@ object HoodieSparkSqlTestBase {
     val logFilePathList: java.util.List[String] = HoodieTestUtils.getLogFileListFromFileSlice(fileSlice.get)
     Collections.sort(logFilePathList)
     var deleteLogBlockFound = false
-    val avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema
+    val schema = new TableSchemaResolver(metaClient).getTableSchema
     for (i <- 0 until logFilePathList.size()) {
       val logReader = new HoodieLogFileReader(
         metaClient.getStorage, new HoodieLogFile(logFilePathList.get(i)),
-        avroSchema, 1024 * 1024, false, false,
+        schema, 1024 * 1024, false, false,
         "id", null)
       assertTrue(logReader.hasNext)
       val logBlock = logReader.next()
@@ -474,6 +481,26 @@ object HoodieSparkSqlTestBase {
     })
     nonExistentConfigs.foreach(e => assertFalse(
       tableConfig.contains(e), s"$e should not be present in the table config"))
+  }
+
+  def enableComplexKeygenValidation(spark: SparkSession,
+                                    tableName: String): Unit = {
+    setComplexKeygenValidation(spark, tableName, value = true)
+  }
+
+  def disableComplexKeygenValidation(spark: SparkSession,
+                                     tableName: String): Unit = {
+    setComplexKeygenValidation(spark, tableName, value = false)
+  }
+
+  private def setComplexKeygenValidation(spark: SparkSession,
+                                         tableName: String,
+                                         value: Boolean): Unit = {
+    spark.sql(
+      s"""
+         |ALTER TABLE $tableName
+         |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = '$value')
+         |""".stripMargin)
   }
 
   private def checkMessageContains(e: Throwable, text: String): Boolean =

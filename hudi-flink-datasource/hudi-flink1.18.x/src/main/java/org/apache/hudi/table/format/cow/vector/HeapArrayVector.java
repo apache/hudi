@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.format.cow.vector;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.columnar.ColumnarArrayData;
 import org.apache.flink.table.data.columnar.vector.ArrayColumnVector;
@@ -34,6 +36,8 @@ public class HeapArrayVector extends AbstractHeapVector
   public long[] offsets;
   public long[] lengths;
   public ColumnVector child;
+  @Getter
+  @Setter
   private int size;
 
   public HeapArrayVector(int len) {
@@ -49,16 +53,39 @@ public class HeapArrayVector extends AbstractHeapVector
     this.child = vector;
   }
 
-  public int getSize() {
-    return size;
-  }
-
-  public void setSize(int size) {
-    this.size = size;
-  }
-
   public int getLen() {
     return this.isNull.length;
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Flink 2.1-compatible accessors. Backed by the existing public {@code offsets}, {@code lengths}
+  // and {@code child} fields so legacy callers continue to work; the new {@link
+  // org.apache.hudi.table.format.cow.vector.reader.NestedColumnReader} (FLINK-35702 port) and any
+  // future Flink-2.1-style caller use these accessors.
+  // ---------------------------------------------------------------------------------------------
+
+  public long[] getOffsets() {
+    return offsets;
+  }
+
+  public void setOffsets(long[] offsets) {
+    this.offsets = offsets;
+  }
+
+  public long[] getLengths() {
+    return lengths;
+  }
+
+  public void setLengths(long[] lengths) {
+    this.lengths = lengths;
+  }
+
+  public ColumnVector getChild() {
+    return child;
+  }
+
+  public void setChild(ColumnVector child) {
+    this.child = child;
   }
 
   @Override

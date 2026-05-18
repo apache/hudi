@@ -39,6 +39,7 @@ import java.util.stream.Collectors;
 public class ComplexKeyGenerator extends BuiltinKeyGenerator {
 
   private final ComplexAvroKeyGenerator complexAvroKeyGenerator;
+  private final boolean encodeSingleKeyFieldName;
 
   public ComplexKeyGenerator(TypedProperties props) {
     super(props);
@@ -48,6 +49,7 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
         .filter(s -> !s.isEmpty())
         .collect(Collectors.toList());
     this.complexAvroKeyGenerator = new ComplexAvroKeyGenerator(props);
+    this.encodeSingleKeyFieldName = KeyGenUtils.encodeSingleKeyFieldNameForComplexKeyGen(props);
   }
 
   @Override
@@ -63,13 +65,15 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
   @Override
   public String getRecordKey(Row row) {
     tryInitRowAccessor(row.schema());
-    return combineCompositeRecordKey(rowAccessor.getRecordKeyParts(row));
+    return combineCompositeRecordKey(
+        encodeSingleKeyFieldName, rowAccessor.getRecordKeyParts(row));
   }
 
   @Override
   public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
     tryInitRowAccessor(schema);
-    return combineCompositeRecordKeyUnsafe(rowAccessor.getRecordKeyParts(internalRow));
+    return combineCompositeRecordKeyUnsafe(
+        encodeSingleKeyFieldName, rowAccessor.getRecordKeyParts(internalRow));
   }
 
   @Override

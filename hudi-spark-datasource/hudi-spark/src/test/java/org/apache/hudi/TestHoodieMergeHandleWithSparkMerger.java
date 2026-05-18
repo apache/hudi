@@ -23,7 +23,6 @@ package org.apache.hudi;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -34,11 +33,13 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -46,10 +47,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
 
-import org.apache.avro.Schema;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -75,7 +74,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalTestHarness {
-  private static final Schema SCHEMA = getAvroSchema("AvroSchema", "AvroSchemaNS");
+  private static final HoodieSchema SCHEMA = getSchema("Schema", "SchemaNS");
   private final Map<String, String> properties = new HashMap<>();
   private HoodieTableMetaClient metaClient;
 
@@ -113,7 +112,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
 
   public List<HoodieRecord> generateRecords(int numOfRecords, String commitTime) throws Exception {
     Dataset<Row> rows = SparkDatasetTestUtils.getRandomRowsWithCommitTime(
-        new SQLContext(jsc()), numOfRecords, getPartitionPath(), false, commitTime);
+        sqlContext(), numOfRecords, getPartitionPath(), false, commitTime);
     List<InternalRow> internalRows = SparkDatasetTestUtils.toInternalRows(rows, SparkDatasetTestUtils.ENCODER);
     return internalRows.stream()
         .map(r -> new HoodieSparkRecord(new HoodieKey(r.getString(2), r.getString(3)),
@@ -124,7 +123,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
 
   public List<HoodieRecord> generateRecordUpdates(List<HoodieKey> keys, String commitTime) throws Exception {
     Dataset<Row> rows = SparkDatasetTestUtils.getRandomRowsWithKeys(
-        new SQLContext(jsc()), keys, false, commitTime);
+        sqlContext(), keys, false, commitTime);
     List<InternalRow> internalRows = SparkDatasetTestUtils.toInternalRows(rows, SparkDatasetTestUtils.ENCODER);
     return internalRows.stream()
         .map(r -> new HoodieSparkRecord(new HoodieKey(r.getString(2), r.getString(3)),
@@ -136,7 +135,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   public List<HoodieRecord> generateEmptyRecords(List<HoodieKey> keys) {
     List<HoodieRecord> records = new ArrayList<>();
     for (HoodieKey key : keys) {
-      records.add(new HoodieEmptyRecord(key, HoodieOperation.DELETE, key.getRecordKey(), HoodieRecord.HoodieRecordType.SPARK));
+      records.add(new HoodieEmptyRecord(key, HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.SPARK));
     }
     return records;
   }
@@ -145,11 +144,11 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     return records.stream().map(r -> r.getKey()).collect(Collectors.toList());
   }
 
-  private static Schema getAvroSchema(String schemaName, String schemaNameSpace) {
-    return AvroConversionUtils.convertStructTypeToAvroSchema(SparkDatasetTestUtils.STRUCT_TYPE, schemaName, schemaNameSpace);
+  private static HoodieSchema getSchema(String schemaName, String schemaNameSpace) {
+    return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(SparkDatasetTestUtils.STRUCT_TYPE, schemaName, schemaNameSpace);
   }
 
-  public HoodieWriteConfig getWriteConfig(Schema avroSchema, String recordMergerImplClass, String mergeStrategyId, RecordMergeMode recordMergeMode) {
+  public HoodieWriteConfig getWriteConfig(HoodieSchema schema, String recordMergerImplClass, String mergeStrategyId, RecordMergeMode recordMergeMode) {
     properties.put(RECORD_MERGE_STRATEGY_ID.key(), mergeStrategyId);
     properties.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), mergeStrategyId);
     properties.put(RECORD_MERGE_MODE.key(), recordMergeMode.name());
@@ -172,19 +171,19 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
 
     return getConfigBuilder(true)
         .withPath(basePath())
-        .withSchema(avroSchema.toString())
+        .withSchema(schema.toString())
         .withProps(properties)
         .build();
   }
 
-  public HoodieWriteConfig buildDefaultWriteConfig(Schema avroSchema) {
-    HoodieWriteConfig writeConfig = getWriteConfig(avroSchema, DefaultMerger.class.getName(), HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID, RecordMergeMode.EVENT_TIME_ORDERING);
+  public HoodieWriteConfig buildDefaultWriteConfig(HoodieSchema hoodieSchema) {
+    HoodieWriteConfig writeConfig = getWriteConfig(hoodieSchema, DefaultMerger.class.getName(), HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID, RecordMergeMode.EVENT_TIME_ORDERING);
     metaClient = getHoodieMetaClient(storageConf(), basePath(), HoodieTableType.MERGE_ON_READ, writeConfig.getProps());
     return writeConfig;
   }
 
-  public HoodieWriteConfig buildCustomWriteConfig(Schema avroSchema) {
-    HoodieWriteConfig writeConfig = getWriteConfig(avroSchema, CustomMerger.class.getName(), HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID, RecordMergeMode.CUSTOM);
+  public HoodieWriteConfig buildCustomWriteConfig(HoodieSchema schema) {
+    HoodieWriteConfig writeConfig = getWriteConfig(schema, CustomMerger.class.getName(), HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID, RecordMergeMode.CUSTOM);
     metaClient = getHoodieMetaClient(storageConf(), basePath(), HoodieTableType.MERGE_ON_READ, writeConfig.getProps());
     return writeConfig;
   }
@@ -300,22 +299,6 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   }
 
   public static class DefaultMerger extends DefaultSparkRecordMerger {
-    @Override
-    public boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) {
-      return true;
-    }
-  }
-
-  public static class NoFlushMerger extends DefaultSparkRecordMerger {
-    @Override
-    public boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) {
-      return false;
-    }
-
-    @Override
-    public String getMergingStrategy() {
-      return HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
-    }
   }
 
   public static class CustomMerger extends DefaultSparkRecordMerger {

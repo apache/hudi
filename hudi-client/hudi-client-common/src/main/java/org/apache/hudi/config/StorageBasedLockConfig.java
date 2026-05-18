@@ -42,11 +42,12 @@ public class StorageBasedLockConfig extends HoodieConfig {
               + "The lock provider will attempt to renew its lock until it successfully extends the lock lease period "
               + "or the validity timeout is reached.");
 
-  public static final ConfigProperty<Long> HEARTBEAT_POLL_SECONDS = ConfigProperty
-      .key(STORAGE_BASED_LOCK_PROPERTY_PREFIX + "heartbeat.poll.secs")
+  public static final ConfigProperty<Long> RENEW_INTERVAL_SECS = ConfigProperty
+      .key(STORAGE_BASED_LOCK_PROPERTY_PREFIX + "renew.interval.secs")
       .defaultValue(30L)
       .markAdvanced()
       .sinceVersion(SINCE_VERSION_1_0_2)
+      .withAlternatives(STORAGE_BASED_LOCK_PROPERTY_PREFIX + "heartbeat.poll.secs")
       .withDocumentation(
           "For storage-based lock provider, the amount of time in seconds to wait before renewing the lock. "
               + "Defaults to 30 seconds.");
@@ -55,8 +56,8 @@ public class StorageBasedLockConfig extends HoodieConfig {
     return getLong(VALIDITY_TIMEOUT_SECONDS);
   }
 
-  public long getHeartbeatPollSeconds() {
-    return getLong(HEARTBEAT_POLL_SECONDS);
+  public long getRenewIntervalSecs() {
+    return getLong(RENEW_INTERVAL_SECS);
   }
 
   public String getHudiTableBasePath() {
@@ -82,18 +83,18 @@ public class StorageBasedLockConfig extends HoodieConfig {
       if (!lockConfig.contains(BASE_PATH)) {
         throw new IllegalArgumentException(BASE_PATH.key() + notExistsMsg);
       }
-      if (lockConfig.getLongOrDefault(VALIDITY_TIMEOUT_SECONDS) < lockConfig.getLongOrDefault(HEARTBEAT_POLL_SECONDS)
+      if (lockConfig.getLongOrDefault(VALIDITY_TIMEOUT_SECONDS) < lockConfig.getLongOrDefault(RENEW_INTERVAL_SECS)
           * 10) {
         throw new IllegalArgumentException(
-            VALIDITY_TIMEOUT_SECONDS.key() + " should be greater than or equal to 10x " + HEARTBEAT_POLL_SECONDS.key());
+            VALIDITY_TIMEOUT_SECONDS.key() + " should be greater than or equal to 10x " + RENEW_INTERVAL_SECS.key());
       }
       if (lockConfig.getLongOrDefault(VALIDITY_TIMEOUT_SECONDS) < 10) {
         throw new IllegalArgumentException(
             VALIDITY_TIMEOUT_SECONDS.key() + " should be greater than or equal to 10 seconds.");
       }
-      if (lockConfig.getLongOrDefault(HEARTBEAT_POLL_SECONDS) < 1) {
+      if (lockConfig.getLongOrDefault(RENEW_INTERVAL_SECS) < 1) {
         throw new IllegalArgumentException(
-            HEARTBEAT_POLL_SECONDS.key() + " should be greater than or equal to 1 second.");
+            RENEW_INTERVAL_SECS.key() + " should be greater than or equal to 1 second.");
       }
     }
   }

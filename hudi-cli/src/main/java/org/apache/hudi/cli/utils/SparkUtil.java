@@ -28,6 +28,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.launcher.SparkLauncher;
+import org.apache.spark.sql.SparkSession;
 
 import java.io.File;
 import java.net.URISyntaxException;
@@ -124,7 +125,8 @@ public class SparkUtil {
   }
 
   public static JavaSparkContext initJavaSparkContext(SparkConf sparkConf) {
-    JavaSparkContext jsc = new JavaSparkContext(sparkConf);
+    SparkSession spark = SparkSession.builder().config(sparkConf).getOrCreate();
+    JavaSparkContext jsc = JavaSparkContext.fromSparkContext(spark.sparkContext());
     jsc.hadoopConfiguration().setBoolean(HoodieCliSparkConfig.CLI_PARQUET_ENABLE_SUMMARY_METADATA, false);
     HadoopFSUtils.prepareHadoopConf(jsc.hadoopConfiguration());
     return jsc;

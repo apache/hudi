@@ -83,7 +83,7 @@ class HoodieSparkKryoRegistrar extends HoodieCommonKryoRegistrar with KryoRegist
         kryo.addDefaultSerializer(classOf[Message], new ProtobufSerializer())
       }
     } catch {
-      case _: ClassNotFoundException | _: NoClassDefFoundError => log.warn("Protobuf classes not found on the classpath, skipping Protobuf serializer registration.")
+      case _: ClassNotFoundException | _: NoClassDefFoundError => log.debug("Protobuf classes not found on the classpath, skipping Protobuf serializer registration.")
     }
   }
 

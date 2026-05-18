@@ -18,16 +18,16 @@
 
 package org.apache.spark.sql.hudi.common
 
-import org.apache.hudi.AvroConversionUtils
+import org.apache.hudi.{AvroConversionUtils, SparkRowSerDe}
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.internal.schema.Types
 import org.apache.hudi.internal.schema.action.TableChanges
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils
 
-import org.apache.avro.{LogicalTypes, Schema}
 import org.apache.avro.generic.GenericData
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{HoodieInternalRowUtils, Row, SparkSession}
@@ -82,13 +82,13 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     val rowWriter1 = HoodieInternalRowUtils.genUnsafeRowWriter(mergedSchema, schema1, JCollections.emptyMap(), JCollections.emptyMap())
     val newRow1 = rowWriter1(oldRow)
 
-    val serDe1 = sparkAdapter.createSparkRowSerDe(schema1)
+    val serDe1 = createSparkRowSerDe(schema1)
     assertEquals(serDe1.deserializeRow(newRow1), Row("Andrew", 18, Row("Mission st", "SF")));
 
     val rowWriter2 = HoodieInternalRowUtils.genUnsafeRowWriter(mergedSchema, schema2, JCollections.emptyMap(), JCollections.emptyMap())
     val newRow2 = rowWriter2(oldRow)
 
-    val serDe2 = sparkAdapter.createSparkRowSerDe(schema2)
+    val serDe2 = createSparkRowSerDe(schema2)
     assertEquals(serDe2.deserializeRow(newRow2), Row("John", 19));
   }
 
@@ -98,7 +98,7 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(schema1, mergedSchema, JCollections.emptyMap(), JCollections.emptyMap())
     val newRow = rowWriter(oldRow)
 
-    val serDe = sparkAdapter.createSparkRowSerDe(mergedSchema)
+    val serDe = createSparkRowSerDe(mergedSchema)
     assertEquals(serDe.deserializeRow(newRow), Row("Rob", 18, null.asInstanceOf[StructType], null.asInstanceOf[StringType], null.asInstanceOf[IntegerType]))
   }
 
@@ -112,7 +112,7 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(mergedSchema, schema1, JCollections.emptyMap(), updatedValuesMap)
     val newRow1 = rowWriter(oldRow)
 
-    val serDe = sparkAdapter.createSparkRowSerDe(schema1)
+    val serDe = createSparkRowSerDe(schema1)
     assertEquals(serDe.deserializeRow(newRow1), Row("Andrew", 18, Row("Mission st", "SF")));
 
     // non-nul value should not be rewritten
@@ -150,7 +150,7 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(oldSchema, newSchema, renameMap, JCollections.emptyMap())
     val newRow = rowWriter(oldRow)
 
-    val serDe = sparkAdapter.createSparkRowSerDe(newSchema)
+    val serDe = createSparkRowSerDe(newSchema)
     assertEquals(Row("Alice", 30), serDe.deserializeRow(newRow))
   }
 
@@ -180,7 +180,7 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(oldSchema, newSchema, renameMap, JCollections.emptyMap())
     val newRow = rowWriter(oldRow)
 
-    val serDe = sparkAdapter.createSparkRowSerDe(newSchema)
+    val serDe = createSparkRowSerDe(newSchema)
     assertEquals(Row("Alice", 30), serDe.deserializeRow(newRow))
   }
 
@@ -222,7 +222,7 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(oldSchema, newSchema, renameMap, JCollections.emptyMap())
     val newRow = rowWriter(oldRow)
 
-    val serDe = sparkAdapter.createSparkRowSerDe(newSchema)
+    val serDe = createSparkRowSerDe(newSchema)
     assertEquals(Row("Alice", 30, Row("SF", "Mission st")), serDe.deserializeRow(newRow))
   }
 
@@ -237,7 +237,7 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
    * date => String
    */
   test("Test rewrite record with type changed") {
-    val avroSchema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"h0_record\",\"namespace\":\"hoodie.h0\",\"fields\""
+    val schema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"h0_record\",\"namespace\":\"hoodie.h0\",\"fields\""
       + ":[{\"name\":\"id\",\"type\":[\"null\",\"int\"],\"default\":null},"
       + "{\"name\":\"comb\",\"type\":[\"null\",\"int\"],\"default\":null},"
       + "{\"name\":\"com1\",\"type\":[\"null\",\"int\"],\"default\":null},"
@@ -260,7 +260,7 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
       + "{\"name\":\"col8\",\"type\":[\"null\",\"boolean\"],\"default\":null},"
       + "{\"name\":\"col9\",\"type\":[\"null\",\"bytes\"],\"default\":null},{\"name\":\"par\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null}]}")
     // create a test record with avroSchema
-    val avroRecord = new GenericData.Record(avroSchema)
+    val avroRecord = new GenericData.Record(schema.toAvroSchema)
     avroRecord.put("id", 1)
     avroRecord.put("comb", 100)
     avroRecord.put("com1", -100)
@@ -272,12 +272,12 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     avroRecord.put("col21", 5.001f)
     avroRecord.put("col3", 12.999d)
     avroRecord.put("col31", 9999.999d)
-    val currentDecimalType = avroSchema.getField("col4").schema.getTypes.get(1)
-    val bd = new java.math.BigDecimal("123.456").setScale(currentDecimalType.getLogicalType.asInstanceOf[LogicalTypes.Decimal].getScale)
-    avroRecord.put("col4", HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd, currentDecimalType, currentDecimalType.getLogicalType))
-    val currentDecimalType1 = avroSchema.getField("col41").schema.getTypes.get(1)
-    val bd1 = new java.math.BigDecimal("7890.456").setScale(currentDecimalType1.getLogicalType.asInstanceOf[LogicalTypes.Decimal].getScale)
-    avroRecord.put("col41", HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd1, currentDecimalType1, currentDecimalType1.getLogicalType))
+    val currentDecimalType = schema.getField("col4").get().schema().getNonNullType.asInstanceOf[HoodieSchema.Decimal]
+    val bd = new java.math.BigDecimal("123.456").setScale(currentDecimalType.getScale)
+    avroRecord.put("col4", HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd, currentDecimalType.toAvroSchema, currentDecimalType.toAvroSchema.getLogicalType))
+    val currentDecimalType1 = schema.getField("col41").get().schema().getNonNullType.asInstanceOf[HoodieSchema.Decimal]
+    val bd1 = new java.math.BigDecimal("7890.456").setScale(currentDecimalType1.getScale)
+    avroRecord.put("col41", HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd1, currentDecimalType1.toAvroSchema, currentDecimalType1.toAvroSchema.getLogicalType))
     avroRecord.put("col5", "2011-01-01")
     avroRecord.put("col51", "199.342")
     avroRecord.put("col6", 18987)
@@ -285,8 +285,8 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     avroRecord.put("col8", false)
     val bb = ByteBuffer.wrap(Array[Byte](97, 48, 53))
     avroRecord.put("col9", bb)
-    assert(GenericData.get.validate(avroSchema, avroRecord))
-    val internalSchema = AvroInternalSchemaConverter.convert(avroSchema)
+    assert(GenericData.get.validate(schema.toAvroSchema, avroRecord))
+    val internalSchema = InternalSchemaConverter.convert(schema)
     // do change type operation
     val updateChange = TableChanges.ColumnUpdateChange.get(internalSchema)
     updateChange.updateColumnType("id", Types.LongType.get)
@@ -306,14 +306,14 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
       .updateColumnType("col51", Types.DecimalType.get(18, 9))
       .updateColumnType("col6", Types.StringType.get)
     val newSchema = SchemaChangeUtils.applyTableChanges2Schema(internalSchema, updateChange)
-    val newAvroSchema = AvroInternalSchemaConverter.convert(newSchema, avroSchema.getName)
-    val newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema, new HashMap[String, String])
-    assert(GenericData.get.validate(newAvroSchema, newRecord))
+    val newHoodieSchema = InternalSchemaConverter.convert(newSchema, schema.getName)
+    val newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newHoodieSchema.toAvroSchema, new HashMap[String, String])
+    assert(GenericData.get.validate(newHoodieSchema.toAvroSchema, newRecord))
     // Convert avro to internalRow
-    val structTypeSchema = HoodieInternalRowUtils.getCachedSchema(avroSchema)
-    val newStructTypeSchema = HoodieInternalRowUtils.getCachedSchema(newAvroSchema)
-    val row = AvroConversionUtils.createAvroToInternalRowConverter(avroSchema, structTypeSchema).apply(avroRecord).get
-    val newRowExpected = AvroConversionUtils.createAvroToInternalRowConverter(newAvroSchema, newStructTypeSchema)
+    val structTypeSchema = HoodieInternalRowUtils.getCachedSchema(schema)
+    val newStructTypeSchema = HoodieInternalRowUtils.getCachedSchema(newHoodieSchema)
+    val row = AvroConversionUtils.createAvroToInternalRowConverter(schema, structTypeSchema).apply(avroRecord).get
+    val newRowExpected = AvroConversionUtils.createAvroToInternalRowConverter(newHoodieSchema, newStructTypeSchema)
       .apply(newRecord).get
 
     val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(structTypeSchema, newStructTypeSchema, JCollections.emptyMap(), JCollections.emptyMap())
@@ -332,20 +332,20 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
       Types.Field.get(4, false, "locations", Types.MapType.get(8, 9, Types.StringType.get(),
         Types.RecordType.get(Types.Field.get(10, false, "lat", Types.FloatType.get()), Types.Field.get(11, false, "long", Types.FloatType.get())), false))
     )
-    val schema = AvroInternalSchemaConverter.convert(record, "test1")
-    val avroRecord = new GenericData.Record(schema)
-    GenericData.get.validate(schema, avroRecord)
+    val schema = InternalSchemaConverter.convert(record, "test1")
+    val avroRecord = new GenericData.Record(schema.toAvroSchema)
+    GenericData.get.validate(schema.toAvroSchema, avroRecord)
     avroRecord.put("id", 2)
     avroRecord.put("data", "xs")
     // fill record type
-    val preferencesRecord = new GenericData.Record(AvroInternalSchemaConverter.convert(record.fieldType("preferences"), "test1_preferences"))
+    val preferencesRecord = new GenericData.Record(InternalSchemaConverter.convert(record.fieldType("preferences"), "test1_preferences").toAvroSchema)
     preferencesRecord.put("feature1", false)
     preferencesRecord.put("feature2", true)
-    assert(GenericData.get.validate(AvroInternalSchemaConverter.convert(record.fieldType("preferences"), "test1_preferences"), preferencesRecord))
+    assert(GenericData.get.validate(InternalSchemaConverter.convert(record.fieldType("preferences"), "test1_preferences").toAvroSchema, preferencesRecord))
     avroRecord.put("preferences", preferencesRecord)
     // fill mapType
     val locations = new HashMap[String, GenericData.Record]
-    val mapSchema = AvroInternalSchemaConverter.convert(record.fieldByNameCaseInsensitive("locations").`type`.asInstanceOf[Types.MapType].valueType, "test1_locations")
+    val mapSchema = InternalSchemaConverter.convert(record.fieldByNameCaseInsensitive("locations").`type`.asInstanceOf[Types.MapType].valueType, "test1_locations").toAvroSchema
     val locationsValue: GenericData.Record = new GenericData.Record(mapSchema)
     locationsValue.put("lat", 1.2f)
     locationsValue.put("long", 1.4f)
@@ -361,15 +361,15 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     avroRecord.put("doubles", doubles)
     // create newSchema
     val newRecord = Types.RecordType.get(Types.Field.get(0, false, "id", Types.IntType.get), Types.Field.get(1, true, "data", Types.StringType.get), Types.Field.get(2, true, "preferences", Types.RecordType.get(Types.Field.get(5, false, "feature1", Types.BooleanType.get), Types.Field.get(5, true, "featurex", Types.BooleanType.get), Types.Field.get(6, true, "feature2", Types.BooleanType.get))), Types.Field.get(3, false, "doubles", Types.ArrayType.get(7, false, Types.DoubleType.get)), Types.Field.get(4, false, "locations", Types.MapType.get(8, 9, Types.StringType.get, Types.RecordType.get(Types.Field.get(10, true, "laty", Types.FloatType.get), Types.Field.get(11, false, "long", Types.FloatType.get)), false)))
-    val newAvroSchema = AvroInternalSchemaConverter.convert(newRecord, schema.getName)
-    val newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema, new HashMap[String, String])
-    // test the correctly of rewrite
-    assert(GenericData.get.validate(newAvroSchema, newAvroRecord))
+    val newSchema = InternalSchemaConverter.convert(newRecord, schema.getName)
+    val newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newSchema.toAvroSchema, new HashMap[String, String])
+    // test the correctness of rewrite
+    assert(GenericData.get.validate(newSchema.toAvroSchema, newAvroRecord))
     // Convert avro to internalRow
     val structTypeSchema = HoodieInternalRowUtils.getCachedSchema(schema)
-    val newStructTypeSchema = HoodieInternalRowUtils.getCachedSchema(newAvroSchema)
+    val newStructTypeSchema = HoodieInternalRowUtils.getCachedSchema(newSchema)
     val row = AvroConversionUtils.createAvroToInternalRowConverter(schema, structTypeSchema).apply(avroRecord).get
-    val newRowExpected = AvroConversionUtils.createAvroToInternalRowConverter(newAvroSchema, newStructTypeSchema).apply(newAvroRecord).get
+    val newRowExpected = AvroConversionUtils.createAvroToInternalRowConverter(newSchema, newStructTypeSchema).apply(newAvroRecord).get
 
     val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(structTypeSchema, newStructTypeSchema, JCollections.emptyMap(), JCollections.emptyMap())
     val newRow = rowWriter(row)
@@ -413,5 +413,9 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
 
   private def checkNull(left: Any, right: Any): Boolean = {
     (left == null && right != null) || (left == null && right != null)
+  }
+
+  private def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
+    new SparkRowSerDe(sparkAdapter.getCatalystExpressionUtils.getEncoder(schema))
   }
 }

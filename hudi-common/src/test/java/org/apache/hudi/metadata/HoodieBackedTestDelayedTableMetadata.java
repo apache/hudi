@@ -23,15 +23,14 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.storage.HoodieStorage;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Table metadata provided by an internal DFS backed Hudi metadata table,
  * with an intentional delay in `reset()` to test concurrent reads and writes.
  */
+@Slf4j
 public class HoodieBackedTestDelayedTableMetadata extends HoodieBackedTableMetadata {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTestDelayedTableMetadata.class);
 
   public HoodieBackedTestDelayedTableMetadata(HoodieEngineContext engineContext,
                                               HoodieStorage storage,
@@ -43,13 +42,13 @@ public class HoodieBackedTestDelayedTableMetadata extends HoodieBackedTableMetad
 
   @Override
   public void reset() {
-    LOG.info("Sleeping for 5 seconds in reset() to simulate processing ...");
+    log.info("Sleeping for 5 seconds in reset() to simulate processing ...");
     try {
       Thread.sleep(5000);
     } catch (InterruptedException e) {
-      LOG.warn("Sleep is interrupted", e);
+      log.warn("Sleep is interrupted", e);
     }
-    LOG.info("Sleep in reset() is finished.");
+    log.info("Sleep in reset() is finished.");
     super.reset();
   }
 }

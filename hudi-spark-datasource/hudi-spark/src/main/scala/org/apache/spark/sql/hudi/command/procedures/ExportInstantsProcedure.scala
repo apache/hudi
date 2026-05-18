@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry
 import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock
@@ -120,7 +121,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
     for (fs <- statuses.asScala) {
       // read the archived file
       val reader = HoodieLogFormat.newReader(
-        storage, new HoodieLogFile(convertToStoragePath(fs.getPath)), HoodieArchivedMetaEntry.getClassSchema)
+        storage, new HoodieLogFile(convertToStoragePath(fs.getPath)), HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema))
       // read the avro blocks
       while ( {
         reader.hasNext && copyCount < limit

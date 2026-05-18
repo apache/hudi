@@ -34,8 +34,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -51,9 +50,8 @@ import java.util.stream.Stream;
 /**
  * Simple bucket index implementation, with fixed bucket number.
  */
+@Slf4j
 public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSimpleBucketIndex.class);
 
   public HoodieSimpleBucketIndex(HoodieWriteConfig config) {
     super(config);
@@ -131,7 +129,7 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
           return true;
         }
       } catch (NumberFormatException e) {
-        LOG.warn("File is not bucket file");
+        log.warn("File is not bucket file {}", fileName);
       }
     }
     return false;

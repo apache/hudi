@@ -30,6 +30,7 @@ import java.io.Serializable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * An abstraction for pairs of key in type K and value in type V to store the reference
@@ -168,6 +169,16 @@ public interface HoodiePairData<K, V> extends Serializable {
    * This is a terminal operation
    */
   List<Pair<K, V>> collectAsList();
+
+  /**
+   * Applies the given action to each pair in this dataset.
+   *
+   * <p>Implementations may execute this action in a streaming manner and avoid materializing
+   * the full dataset into memory.
+   */
+  default void forEach(Consumer<Pair<K, V>> consumer) {
+    collectAsList().forEach(consumer);
+  }
 
   /**
    * @return the deduce number of shuffle partitions

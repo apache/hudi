@@ -62,6 +62,6 @@ public class JdbcbasedSchemaProvider extends SchemaProvider {
       return sourceSchema;
     }
 
-    return UtilHelpers.getJDBCSchema(options);
+    return UtilHelpers.getJDBCSchema(options).toAvroSchema();
   }
 }

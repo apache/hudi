@@ -18,8 +18,8 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.SparkJdbcUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -67,7 +68,6 @@ import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
 import org.apache.hudi.utilities.schema.postprocessor.ChainedSchemaPostProcessor;
-import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.processor.ChainedJsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
@@ -76,7 +76,6 @@ import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.ErrorTableAwareChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -85,6 +84,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.launcher.SparkLauncher;
+import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.execution.datasources.jdbc.DriverRegistry;
 import org.apache.spark.sql.execution.datasources.jdbc.DriverWrapper;
@@ -118,8 +118,10 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SCHEMA_MAKE_COLUMNS_NULLABLE;
 
 /**
  * Bunch of helper methods.
@@ -224,13 +226,13 @@ public class UtilHelpers {
   }
 
   public static StructType getSourceSchema(SchemaProvider schemaProvider) {
-    if (schemaProvider != null && schemaProvider.getSourceSchema() != null && schemaProvider.getSourceSchema() != InputBatch.NULL_SCHEMA) {
-      return AvroConversionUtils.convertAvroSchemaToStructType(schemaProvider.getSourceSchema());
+    if (schemaProvider != null && schemaProvider.getSourceHoodieSchema() != null && schemaProvider.getSourceHoodieSchema() != HoodieSchema.NULL_SCHEMA) {
+      return HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schemaProvider.getSourceHoodieSchema());
     }
     return null;
   }
 
-  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt, Supplier<Option<Schema>> sourceSchemaSupplier,
+  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt, Supplier<Option<HoodieSchema>> sourceSchemaSupplier,
                                                       boolean isErrorTableWriterEnabled) throws IOException {
 
     try {
@@ -368,29 +370,43 @@ public class UtilHelpers {
     return sparkConf;
   }
 
-  public static JavaSparkContext buildSparkContext(String appName, Map<String, String> configs) {
-    return new JavaSparkContext(buildSparkConf(appName, configs));
+  public static JavaSparkContext buildSparkContext(String appName, boolean enableHiveSupport, Map<String, String> configs) {
+    SparkConf sparkConf = buildSparkConf(appName, configs);
+    return getJavaSparkContextFromSparkConf(sparkConf, enableHiveSupport);
   }
 
-  public static JavaSparkContext buildSparkContext(String appName, String defaultMaster, Map<String, String> configs) {
-    return new JavaSparkContext(buildSparkConf(appName, defaultMaster, configs));
+  public static JavaSparkContext buildSparkContext(String appName, String defaultMaster, boolean enableHiveSupport,
+                                                   Map<String, String> configs) {
+    SparkConf sparkConf = buildSparkConf(appName, defaultMaster, configs);
+    return getJavaSparkContextFromSparkConf(sparkConf, enableHiveSupport);
   }
 
-  public static JavaSparkContext buildSparkContext(String appName, String defaultMaster) {
-    return new JavaSparkContext(buildSparkConf(appName, defaultMaster));
+  public static JavaSparkContext buildSparkContext(String appName, String defaultMaster, boolean enableHiveSupport) {
+    SparkConf sparkConf = buildSparkConf(appName, defaultMaster);
+    return getJavaSparkContextFromSparkConf(sparkConf, enableHiveSupport);
   }
 
   /**
    * Build Spark Context for ingestion/compaction.
    *
-   * @return
+   * @return {@link JavaSparkContext}
    */
-  public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory) {
+  public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory,
+                                                   boolean enableHiveSupport) {
     SparkConf sparkConf = buildSparkConf(appName, sparkMaster);
     if (sparkMemory != null) {
       sparkConf.set("spark.executor.memory", sparkMemory);
     }
-    return new JavaSparkContext(sparkConf);
+    return getJavaSparkContextFromSparkConf(sparkConf, enableHiveSupport);
+  }
+
+  public static JavaSparkContext getJavaSparkContextFromSparkConf(SparkConf sparkConf, boolean enableHiveSupport) {
+    SparkSession.Builder sessionBuilder = SparkSession.builder().config(sparkConf);
+    if (enableHiveSupport) {
+      sessionBuilder.enableHiveSupport();
+    }
+    SparkSession sparkSession = sessionBuilder.getOrCreate();
+    return new JavaSparkContext(sparkSession.sparkContext());
   }
 
   /**
@@ -448,13 +464,13 @@ public class UtilHelpers {
   }
 
   /**
-   * Returns a factory for creating connections to the given JDBC URL.
+   * Creates a connection to the given JDBC URL.
    *
    * @param options - JDBC options that contains url, table and other information.
-   * @return
+   * @return {@link Connection}
    * @throws SQLException if the driver could not open a JDBC connection.
    */
-  private static Connection createConnectionFactory(Map<String, String> options) throws SQLException {
+  private static Connection createConnection(Map<String, String> options) throws SQLException {
     String driverClass = options.get(JDBCOptions.JDBC_DRIVER_CLASS());
     DriverRegistry.register(driverClass);
     Enumeration<Driver> drivers = DriverManager.getDrivers();
@@ -503,13 +519,13 @@ public class UtilHelpers {
    * @return
    * @throws Exception
    */
-  public static Schema getJDBCSchema(Map<String, String> options) {
+  public static HoodieSchema getJDBCSchema(Map<String, String> options) {
     Connection conn;
     String url;
     String table;
     boolean tableExists;
     try {
-      conn = createConnectionFactory(options);
+      conn = createConnection(options);
       url = options.get(JDBCOptions.JDBC_URL());
       table = options.get(JDBCOptions.JDBC_TABLE_NAME());
       tableExists = tableExists(conn, options);
@@ -528,11 +544,13 @@ public class UtilHelpers {
         try (ResultSet rs = statement.executeQuery()) {
           StructType structType;
           if (Boolean.parseBoolean(options.get("nullable"))) {
-            structType = SparkJdbcUtils.getSchema(rs, dialect, true);
+            structType = SparkAdapterSupport$.MODULE$.sparkAdapter().getSchemaUtils()
+                .getSchema(conn, rs, dialect, true, false);
           } else {
-            structType = SparkJdbcUtils.getSchema(rs, dialect, false);
+            structType = SparkAdapterSupport$.MODULE$.sparkAdapter().getSchemaUtils()
+                .getSchema(conn, rs, dialect, false, false);
           }
-          return AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table);
+          return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structType, table, "hoodie." + table);
         }
       }
     } catch (HoodieException e) {
@@ -589,15 +607,15 @@ public class UtilHelpers {
     return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc, null);
   }
 
-  public static Option<Schema> getLatestTableSchema(JavaSparkContext jssc,
-                                                    HoodieStorage storage,
-                                                    String basePath,
-                                                    HoodieTableMetaClient tableMetaClient) {
+  public static Option<HoodieSchema> getLatestTableSchema(JavaSparkContext jssc,
+                                                          HoodieStorage storage,
+                                                          String basePath,
+                                                          HoodieTableMetaClient tableMetaClient) {
     try {
       if (FSUtils.isTableExists(basePath, storage)) {
         TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(tableMetaClient);
 
-        return tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false);
+        return tableSchemaResolver.getTableSchemaFromLatestCommit(false);
       }
     } catch (Exception e) {
       LOG.warn("Failed to fetch latest table's schema", e);
@@ -624,6 +642,17 @@ public class UtilHelpers {
     }
   }
 
+  /**
+   * Extract and return the schema to use from a Dataset.
+   */
+  public static StructType extractSchemaFromDataset(Dataset dataset, TypedProperties props) {
+    StructType originalSchema = dataset.schema();
+
+    // Should we make all columns nullable?
+    final boolean allColsNullable = getBooleanWithAltKeys(props, SCHEMA_MAKE_COLUMNS_NULLABLE);
+    return allColsNullable ? originalSchema.asNullable() : originalSchema;
+  }
+
   @FunctionalInterface
   public interface CheckedSupplier<T> {
     T get() throws Throwable;
@@ -644,7 +673,7 @@ public class UtilHelpers {
 
   public static String getSchemaFromLatestInstant(HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-    Schema schema = schemaResolver.getTableAvroSchema(false);
+    HoodieSchema schema = schemaResolver.getTableSchema(false);
     return schema.toString();
   }
 }

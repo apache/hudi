@@ -20,10 +20,10 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-
-import org.apache.avro.Schema;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -34,11 +34,11 @@ public abstract class HoodieBootstrapRecordIterator<T> implements ClosableIterat
   private final Option<String[]> partitionFields;
   private final Object[] partitionValues;
 
-  protected Schema schema;
+  protected HoodieSchema schema;
 
   public HoodieBootstrapRecordIterator(ClosableIterator<HoodieRecord<T>> skeletonIterator,
                                        ClosableIterator<HoodieRecord<T>> dataFileIterator,
-                                       Schema schema,
+                                       HoodieSchema schema,
                                        Option<String[]> partitionFields,
                                        Object[] partitionValues) {
     this.skeletonIterator = skeletonIterator;
@@ -72,7 +72,10 @@ public abstract class HoodieBootstrapRecordIterator<T> implements ClosableIterat
             .setFileName(skeletonRecord.getRecordKey(schema, HoodieRecord.FILENAME_METADATA_FIELD)), null);
     if (partitionFields.isPresent()) {
       for (int i = 0; i < partitionValues.length; i++) {
-        int position = schema.getField(partitionFields.get()[i]).pos();
+        final String fieldName = partitionFields.get()[i];
+        int position = schema.getField(fieldName)
+            .orElseThrow(() -> new HoodieSchemaException("Partition field " + fieldName + " not found in schema"))
+            .pos();
         setPartitionPathField(position, partitionValues[i], ret.getData());
       }
     }

@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
@@ -32,6 +33,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.slf4j.Logger;
@@ -133,6 +135,13 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
                                                                    Types.RecordType partitionFields,
                                                                    Expression expression) throws IOException;
 
+  default List<String> getPartitionPathWithPathPrefixUsingFilterExpression(List<String> relativePathPrefixes,
+                                                                           Types.RecordType partitionFields,
+                                                                           Expression expression,
+                                                                           List<Object> partitionPredicateExpressions) throws IOException {
+    return getPartitionPathWithPathPrefixUsingFilterExpression(relativePathPrefixes, partitionFields, expression);
+  }
+
   /**
    * Fetches all partition paths that are the sub-directories of the list of provided (relative) paths.
    * <p>
@@ -153,8 +162,13 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    *
    * NOTE: Absolute partition paths are expected here
    */
-  Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths)
-      throws IOException;
+  default Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths)
+      throws IOException {
+    return getAllFilesInPartitions(partitionPaths, Option.empty());
+  }
+
+  Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths,
+                                                             Option<StoragePathFilter> pathFilterOption) throws IOException;
 
   /**
    * Get the bloom filter for the FileID from the metadata table.
@@ -250,6 +264,18 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    */
   default HoodieData<HoodieRecordGlobalLocation> readRecordIndexLocations(HoodieData<String> recordKeys) {
     return readRecordIndexLocationsWithKeys(recordKeys).values();
+  }
+
+  /**
+   * Returns the location of record keys for file slices filtered by the given file slice filter.
+   * <p>
+   * If the Metadata Table is not enabled, an exception is thrown to distinguish this from the absence of the key.
+   *
+   * @param fileSlicesFilter The file slices filter function
+   * @return Pairs of (record key, location of record) from the filtered record index file slices.
+   */
+  default HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocations(SerializableFunctionUnchecked<List<FileSlice>, List<FileSlice>> fileSlicesFilter) {
+    throw new UnsupportedOperationException("readRecordIndexLocations(fileSlicesFilter) is not supported by this implementation");
   }
 
   /**

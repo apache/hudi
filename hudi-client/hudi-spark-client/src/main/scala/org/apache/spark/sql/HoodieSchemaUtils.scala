@@ -20,7 +20,10 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.jdbc.JdbcDialect
 import org.apache.spark.sql.types.StructType
+
+import java.sql.{Connection, ResultSet}
 
 /**
  * Utils on schema, which have different implementation across Spark versions.
@@ -43,4 +46,19 @@ trait HoodieSchemaUtils {
    * Use DataTypeUtils#toAttributes for Spark 3.5+
    */
   def toAttributes(struct: StructType): Seq[Attribute]
+
+  /**
+   * Takes a [[ResultSet]] and returns its Catalyst schema.
+   *
+   * @param conn           [[Connection]] instance.
+   * @param resultSet      [[ResultSet]] instance.
+   * @param dialect        [[JdbcDialect]] instance.
+   * @param alwaysNullable If true, all the columns are nullable.
+   * @return A [[StructType]] giving the Catalyst schema.
+   */
+  def getSchema(conn: Connection,
+                resultSet: ResultSet,
+                dialect: JdbcDialect,
+                alwaysNullable: Boolean = false,
+                isTimestampNTZ: Boolean = false): StructType
 }

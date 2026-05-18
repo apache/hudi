@@ -49,13 +49,13 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -70,6 +70,8 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V1;
 import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V2;
+import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
+import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.SIX_TO_EIGHT_TIMELINE_ACTION_MAP;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.checkAndHandleMetadataTable;
 
@@ -77,9 +79,8 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.checkAndHandle
  * Version 7 is going to be placeholder version for bridge release 0.16.0.
  * Version 8 is the placeholder version to track 1.x.
  */
+@Slf4j
 public class SevenToEightUpgradeHandler implements UpgradeHandler {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SevenToEightUpgradeHandler.class);
 
   @Override
   public UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieWriteConfig config,
@@ -90,13 +91,17 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    if (config.enableComplexKeygenValidation()
+        && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
+      throw new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage("upgrade"));
+    }
     // If metadata is enabled for the data table, and existing metadata table is behind the data table, then delete it
     checkAndHandleMetadataTable(context, table, config, metaClient, true);
 
     try {
       HoodieTableMetaClient.createTableLayoutOnStorage(context.getStorageConf(), new StoragePath(config.getBasePath()), config.getProps(), TimelineLayoutVersion.VERSION_2, false);
     } catch (IOException e) {
-      LOG.error("Failed to create table layout on storage for timeline layout version {}", TimelineLayoutVersion.VERSION_2, e);
+      log.error("Failed to create table layout on storage for timeline layout version {}", TimelineLayoutVersion.VERSION_2, e);
       throw new HoodieIOException("Failed to create table layout on storage", e);
     }
 
@@ -117,7 +122,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
       instants = metaClient.scanHoodieInstantsFromFileSystem(metaClient.getTimelinePath(),
           ActiveTimelineV1.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE, false);
     } catch (IOException ioe) {
-      LOG.error("Failed to get instants from filesystem", ioe);
+      log.error("Failed to get instants from filesystem", ioe);
       throw new HoodieIOException("Failed to get instants from filesystem", ioe);
     }
 
@@ -275,7 +280,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
       if (config.isFailOnTimelineArchivingEnabled()) {
         throw new HoodieException("Failed to upgrade to LSM timeline", e);
       } else {
-        LOG.warn("Failed to upgrade to LSM timeline");
+        log.warn("Failed to upgrade to LSM timeline", e);
       }
     }
   }
@@ -299,7 +304,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     try {
       return rewriteTimelineV1InstantFileToV2Format(instant, metaClient, originalFileName, replacedFileName, commitMetadataSerDeV1, commitMetadataSerDeV2, activeTimelineV2);
     } catch (IOException e) {
-      LOG.warn("Can not to complete the upgrade from version seven to version eight. The reason for failure is {}", e.getMessage());
+      log.warn("Can not to complete the upgrade from version seven to version eight", e);
     }
     return false;
   }

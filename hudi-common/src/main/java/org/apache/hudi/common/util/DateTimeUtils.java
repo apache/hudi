@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.util;
 
+import lombok.Getter;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -52,6 +54,12 @@ public class DateTimeUtils {
     return Instant.ofEpochSecond(epochSeconds, nanoAdjustment);
   }
 
+  public static Instant nanosToInstant(long nanosFromEpoch) {
+    long epochSeconds = nanosFromEpoch / (1_000_000_000L);
+    long nanoAdjustment = nanosFromEpoch % (1_000_000_000L);
+    return Instant.ofEpochSecond(epochSeconds, nanoAdjustment);
+  }
+
   /**
    * Converts provided {@link Instant} to microseconds (from epoch)
    */
@@ -69,6 +77,44 @@ public class DateTimeUtils {
 
       return Math.addExact(micros, nanos / 1_000L);
     }
+  }
+
+  /**
+   * This is based off instantToMicros above.
+   * */
+  public static long instantToNanos(Instant instant) {
+    long seconds = instant.getEpochSecond();
+    int nanos = instant.getNano();
+
+    if (seconds < 0 && nanos > 0) {
+      // Shift seconds by +1, then subtract a full second in nanos
+      long totalNanos = Math.multiplyExact(seconds + 1, 1_000_000_000L);
+      long adjustment = nanos - 1_000_000_000L;
+      return Math.addExact(totalNanos, adjustment);
+    } else {
+      long totalNanos = Math.multiplyExact(seconds, 1_000_000_000L);
+      return Math.addExact(totalNanos, nanos);
+    }
+  }
+
+  public static final long MICROS_PER_MILLIS = 1000L;
+
+  /**
+   * Converts the timestamp to milliseconds since epoch. In Spark timestamp values have microseconds
+   * precision, so this conversion is lossy.
+   */
+  public static Long microsToMillis(Long micros) {
+    // When the timestamp is negative i.e before 1970, we need to adjust the milliseconds portion.
+    // Example - 1965-01-01 10:11:12.123456 is represented as (-157700927876544) in micro precision.
+    // In millis precision the above needs to be represented as (-157700927877).
+    return Math.floorDiv(micros, MICROS_PER_MILLIS);
+  }
+
+  /**
+   * Converts milliseconds since the epoch to microseconds.
+   */
+  public static Long millisToMicros(Long millis) {
+    return Math.multiplyExact(millis, MICROS_PER_MILLIS);
   }
 
   /**
@@ -178,7 +224,9 @@ public class DateTimeUtils {
   /**
    * Enum which defines time unit, mostly used to parse value from configuration file.
    */
+  @Getter
   private enum TimeUnit {
+
     DAYS(ChronoUnit.DAYS, singular("d"), plural("day")),
     HOURS(ChronoUnit.HOURS, singular("h"), plural("hour")),
     MINUTES(ChronoUnit.MINUTES, singular("min"), plural("minute")),
@@ -215,14 +263,6 @@ public class DateTimeUtils {
      */
     private static String[] plural(String label) {
       return new String[] {label, label + PLURAL_SUFFIX};
-    }
-
-    public List<String> getLabels() {
-      return labels;
-    }
-
-    public ChronoUnit getUnit() {
-      return unit;
     }
 
     public static String getAllUnits() {

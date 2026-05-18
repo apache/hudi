@@ -46,10 +46,9 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.compact.OperationResult;
 import org.apache.hudi.utilities.UtilHelpers;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -75,9 +74,8 @@ import static org.apache.hudi.util.JavaScalaConverters.convertJavaPropertiesToSc
  * CLI command to display compaction related options.
  */
 @ShellComponent
+@Slf4j
 public class CompactionCommand {
-
-  private static final Logger LOG = LoggerFactory.getLogger(CompactionCommand.class);
 
   private static final String TMP_DIR = "/tmp/";
 
@@ -434,7 +432,7 @@ public class CompactionCommand {
     ObjectInputStream in = new ObjectInputStream(inputStream);
     try {
       T result = (T) in.readObject();
-      LOG.info("Result : " + result);
+      log.info("Result : " + result);
       return result;
     } finally {
       in.close();

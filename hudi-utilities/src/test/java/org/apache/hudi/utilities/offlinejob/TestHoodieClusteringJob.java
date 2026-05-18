@@ -23,10 +23,14 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -37,6 +41,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
@@ -44,8 +51,12 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.TIMELINEFOLDER_
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.utilities.UtilHelpers.PURGE_PENDING_INSTANT;
+import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.deleteFileFromDfs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for {@link HoodieClusteringJob}.
@@ -135,6 +146,122 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
         "Must not contain any records w/ clustering instant time");
   }
 
+  @Test
+  public void testGetPendingClusteringInstantsForPartitions() throws Exception {
+    String tableBasePath = basePath + "/pendingClusteringPartitions";
+    Properties props = getPropertiesForKeyGen(true);
+    HoodieWriteConfig config = getWriteConfig(tableBasePath);
+    props.putAll(config.getProps());
+    metaClient = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .fromProperties(props)
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath);
+    client = new SparkRDDWriteClient(context, config);
+
+    writeData(false, 100, true);
+    writeData(false, 100, true);
+
+    // Schedule clustering only (don't execute) — leaves a pending clustering plan
+    HoodieClusteringJob hoodieCluster = init(tableBasePath, true, SCHEDULE, false, false);
+    assertEquals(0, hoodieCluster.cluster(0));
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    // Verify a pending clustering plan exists
+    assertTrue(metaClient.getActiveTimeline().getFirstPendingClusterInstant().isPresent());
+
+    // getPendingClusteringInstantsForPartitions should find the instant when queried with matching partitions
+    List<HoodieInstant> matchingInstants = HoodieClusteringJob.getPendingClusteringInstantsForPartitions(
+        metaClient, Arrays.asList(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS));
+    assertFalse(matchingInstants.isEmpty(),
+        "Should find pending clustering instants for data partitions");
+
+    // getPendingClusteringInstantsForPartitions should return empty for non-overlapping partitions
+    List<HoodieInstant> noMatchInstants = HoodieClusteringJob.getPendingClusteringInstantsForPartitions(
+        metaClient, Collections.singletonList("non/existent/partition"));
+    assertTrue(noMatchInstants.isEmpty(),
+        "Should not find pending clustering instants for non-existent partition");
+  }
+
+  @Test
+  public void testExpiredClusteringRolledBackForPartitions() throws Exception {
+    String tableBasePath = basePath + "/expiredClusteringRollback";
+    Properties props = getPropertiesForKeyGen(true);
+    HoodieWriteConfig config = getWriteConfigWithClusteringExpiration(tableBasePath);
+    props.putAll(config.getProps());
+    metaClient = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .fromProperties(props)
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath);
+    client = new SparkRDDWriteClient(context, config);
+
+    writeData(false, 100, true);
+    writeData(false, 100, true);
+
+    // Schedule clustering only
+    HoodieClusteringJob hoodieCluster = init(tableBasePath, true, SCHEDULE, false, false);
+    assertEquals(0, hoodieCluster.cluster(0));
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    Option<HoodieInstant> pendingCluster = metaClient.getActiveTimeline().getFirstPendingClusterInstant();
+    assertTrue(pendingCluster.isPresent());
+    String clusteringInstantTime = pendingCluster.get().requestedTime();
+
+    // No heartbeat file exists (simulates failed/dead clustering job) → heartbeat expired
+    // rollbackFailedClusteringForPartitions should roll it back
+    try (SparkRDDWriteClient rollbackClient = new SparkRDDWriteClient(context, config)) {
+      HoodieClusteringJob.rollbackFailedClusteringForPartitions(
+          rollbackClient, metaClient, Arrays.asList(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS));
+    }
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertFalse(metaClient.getActiveTimeline().getFirstPendingClusterInstant().isPresent(),
+        "Pending clustering instant should have been rolled back");
+  }
+
+  @Test
+  public void testClusteringExpirationSkipsInstantWithActiveHeartbeat() throws Exception {
+    String tableBasePath = basePath + "/expirationSkipsActiveHeartbeat";
+    Properties props = getPropertiesForKeyGen(true);
+    HoodieWriteConfig config = getWriteConfigWithClusteringExpiration(tableBasePath);
+    props.putAll(config.getProps());
+    metaClient = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .fromProperties(props)
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath);
+    client = new SparkRDDWriteClient(context, config);
+
+    writeData(false, 100, true);
+    writeData(false, 100, true);
+
+    // Schedule clustering only
+    HoodieClusteringJob hoodieCluster = init(tableBasePath, true, SCHEDULE, false, false);
+    assertEquals(0, hoodieCluster.cluster(0));
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    Option<HoodieInstant> pendingCluster = metaClient.getActiveTimeline().getFirstPendingClusterInstant();
+    assertTrue(pendingCluster.isPresent());
+    String clusteringInstantTime = pendingCluster.get().requestedTime();
+
+    // Start a heartbeat for the clustering instant (simulates an alive clustering job)
+    try (SparkRDDWriteClient rollbackClient = new SparkRDDWriteClient(context, config)) {
+      rollbackClient.getHeartbeatClient().start(clusteringInstantTime);
+
+      assertThrows(HoodieException.class, () ->
+          HoodieClusteringJob.rollbackFailedClusteringForPartitions(
+              rollbackClient, metaClient, Arrays.asList(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS)));
+
+      rollbackClient.getHeartbeatClient().stop(clusteringInstantTime);
+    }
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertTrue(metaClient.getActiveTimeline().getFirstPendingClusterInstant().isPresent(),
+        "Pending clustering instant should NOT be rolled back when heartbeat is active");
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -182,6 +309,30 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .withAutoClean(false).withAsyncClean(false).build())
+        .build();
+  }
+
+  private HoodieWriteConfig getWriteConfigWithClusteringExpiration(String tableBasePath) {
+    Properties extraProps = new Properties();
+    extraProps.setProperty(HoodieClusteringConfig.ENABLE_EXPIRATIONS.key(), "true");
+    extraProps.setProperty(HoodieClusteringConfig.EXPIRATION_THRESHOLD_MINS.key(), "0");
+    return HoodieWriteConfig.newBuilder()
+        .forTable("asyncClustering")
+        .withPath(tableBasePath)
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withParallelism(2, 2)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .withInlineClustering(false)
+            .withScheduleInlineClustering(false)
+            .withAsyncClustering(false).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder()
+            .logFileMaxSize(1024).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .withAutoClean(false).withAsyncClean(false).build())
+        .withProperties(extraProps)
         .build();
   }
 

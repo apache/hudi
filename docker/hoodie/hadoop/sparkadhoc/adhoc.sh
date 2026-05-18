@@ -16,9 +16,9 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-. "/spark/sbin/spark-config.sh"
+. "spark/sbin/spark-config.sh"
 
-. "/spark/bin/load-spark-env.sh"
+. "spark/bin/load-spark-env.sh"
 
 
 export SPARK_HOME=/opt/spark
@@ -29,5 +29,6 @@ date
 echo "SPARK HOME is : $SPARK_HOME"
 echo "PRESTO CLI CMD is : $PRESTO_CLI_CMD"
 echo "TRINO CLI CMD is : $TRINO_CLI_CMD"
+
 
 tail -f /dev/null

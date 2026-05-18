@@ -57,7 +57,7 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
   }
 
   @VisibleForTesting
-  Metrics getMetrics() {
+  public Metrics getMetrics() {
     return metrics;
   }
 
@@ -201,6 +201,14 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
   public void updateStreamerSourceBytesToBeIngestedInSyncRound(long sourceBytesToBeIngested) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "sourceBytesToBeIngestedInSyncRound"), sourceBytesToBeIngested);
+    }
+  }
+
+  @Override
+  public void updateHoodieIncrSourceMetrics(long numCommitsInProgress, long numUnprocessedCommits) {
+    if (writeConfig.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("deltastreamer", "numCommitsInProgress"), numCommitsInProgress);
+      metrics.registerGauge(getMetricsName("deltastreamer", "numUnprocessedCommits"), numUnprocessedCommits);
     }
   }
 

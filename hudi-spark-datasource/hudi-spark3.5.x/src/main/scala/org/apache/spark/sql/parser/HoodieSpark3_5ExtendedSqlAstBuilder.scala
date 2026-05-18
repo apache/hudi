@@ -16,6 +16,7 @@
  */
 package org.apache.spark.sql.parser
 
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.spark.sql.parser.{HoodieSqlBaseBaseVisitor, HoodieSqlBaseParser}
 import org.apache.hudi.spark.sql.parser.HoodieSqlBaseParser._
 
@@ -41,6 +42,7 @@ import org.apache.spark.sql.connector.catalog.TableChange.ColumnPosition
 import org.apache.spark.sql.connector.expressions.{ApplyTransform, BucketTransform, DaysTransform, Expression => V2Expression, FieldReference, HoursTransform, IdentityTransform, LiteralValue, MonthsTransform, Transform, YearsTransform}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.types.BlobType
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 import org.apache.spark.util.Utils.isTesting
 import org.apache.spark.util.random.RandomSampler
@@ -2589,7 +2591,7 @@ class HoodieSpark3_5ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
    * Resolve/create a primitive type.
    */
   override def visitPrimitiveDataType(ctx: PrimitiveDataTypeContext): DataType = withOrigin(ctx) {
-    val dataType = ctx.identifier.getText.toLowerCase(Locale.ROOT)
+    val dataType = ctx.typeName.getText.toLowerCase(Locale.ROOT)
     (dataType, ctx.INTEGER_VALUE().asScala.toList) match {
       case ("boolean", Nil) => BooleanType
       case ("tinyint" | "byte", Nil) => ByteType
@@ -2607,6 +2609,22 @@ class HoodieSpark3_5ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       case ("character" | "char", length :: Nil) => CharType(length.getText.toInt)
       case ("varchar", length :: Nil) => VarcharType(length.getText.toInt)
       case ("binary", Nil) => BinaryType
+      case ("blob", Nil) => BlobType()
+      case ("vector", _ :: _) =>
+        // Delegate validation to HoodieSchema.parseTypeDescriptor which handles dimension
+        // range checks, element type validation, and canonical normalization.
+        val vectorSchema = try {
+          HoodieSchema.parseTypeDescriptor(ctx.getText).asInstanceOf[HoodieSchema.Vector]
+        } catch {
+          case e: IllegalArgumentException =>
+            throw new ParseException(s"Invalid VECTOR type: ${e.getMessage}", ctx)
+        }
+        val sparkElemType = vectorSchema.getVectorElementType match {
+          case HoodieSchema.Vector.VectorElementType.FLOAT => FloatType
+          case HoodieSchema.Vector.VectorElementType.DOUBLE => DoubleType
+          case HoodieSchema.Vector.VectorElementType.INT8 => ByteType
+        }
+        ArrayType(sparkElemType, containsNull = false)
       case ("decimal" | "dec" | "numeric", Nil) => DecimalType.USER_DEFAULT
       case ("decimal" | "dec" | "numeric", precision :: Nil) =>
         DecimalType(precision.getText.toInt, 0)
@@ -2690,11 +2708,27 @@ class HoodieSpark3_5ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       builder.putString("comment", _)
     }
 
+    val dataType = typedVisit[DataType](ctx.dataType)
+
+    addMetadataForType(ctx.dataType(), builder)
+
     StructField(
       name = colName.getText,
-      dataType = typedVisit[DataType](ctx.dataType),
+      dataType = dataType,
       nullable = NULL == null,
       metadata = builder.build())
+  }
+
+  private def addMetadataForType(dataType: HoodieSqlBaseParser.DataTypeContext, builder: MetadataBuilder): Unit = {
+    val typeText = dataType.getText
+    val upperTypeText = typeText.toUpperCase(Locale.ROOT)
+    if (upperTypeText == HoodieSchemaType.BLOB.name()) {
+      builder.putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.BLOB.name())
+    } else if (upperTypeText.startsWith("VECTOR(")) {
+      // Normalize to canonical form (e.g. "VECTOR(128,FLOAT)" -> "VECTOR(128)")
+      val vectorSchema = HoodieSchema.parseTypeDescriptor(typeText).asInstanceOf[HoodieSchema.Vector]
+      builder.putString(HoodieSchema.TYPE_METADATA_FIELD, vectorSchema.toTypeDescriptor)
+    }
   }
 
   /**
@@ -2717,11 +2751,18 @@ class HoodieSpark3_5ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
    */
   override def visitComplexColType(ctx: ComplexColTypeContext): StructField = withOrigin(ctx) {
     import ctx._
-    val structField = StructField(
+    val builder = new MetadataBuilder
+    // Add comment to metadata
+    Option(commentSpec()).map(visitCommentSpec).foreach {
+      builder.putString("comment", _)
+    }
+    addMetadataForType(ctx.dataType(), builder)
+
+    StructField(
       name = identifier.getText,
       dataType = typedVisit(dataType()),
-      nullable = NULL == null)
-    Option(commentSpec).map(visitCommentSpec).map(structField.withComment).getOrElse(structField)
+      nullable = NULL == null,
+      metadata = builder.build())
   }
 
   /**
@@ -3385,14 +3426,14 @@ class HoodieSpark3_5ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
   }
 
   /**
-   * Show indexes, returning a [[ShowIndexes]] logical plan.
+   * Show indexes, returning a [[HoodieShowIndexes]] logical plan.
    * For example:
    * {{{
    *   SHOW INDEXES (FROM | IN) [TABLE] table_name
    * }}}
    */
   override def visitShowIndexes(ctx: ShowIndexesContext): LogicalPlan = withOrigin(ctx) {
-    ShowIndexes(UnresolvedRelation(visitTableIdentifier(ctx.tableIdentifier())))
+    HoodieShowIndexes(UnresolvedRelation(visitTableIdentifier(ctx.tableIdentifier())))
   }
 
   /**

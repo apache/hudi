@@ -24,10 +24,9 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
-
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.List;
@@ -55,7 +54,7 @@ public interface HoodieMergeHandle<T, I, K, O> {
   String getPartitionPath();
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  Schema getWriterSchema();
+  HoodieSchema getWriterSchema();
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   void setPartitionValues(Object[] partitionValues);

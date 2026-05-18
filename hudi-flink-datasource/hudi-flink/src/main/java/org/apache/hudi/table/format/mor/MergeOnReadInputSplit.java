@@ -21,6 +21,8 @@ package org.apache.hudi.table.format.mor;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.flink.core.io.InputSplit;
 
 import javax.annotation.Nullable;
@@ -30,6 +32,7 @@ import java.util.List;
 /**
  * Represents an input split of source, actually a data bucket.
  */
+@Getter
 public class MergeOnReadInputSplit implements InputSplit {
   private static final long serialVersionUID = 1L;
 
@@ -43,6 +46,8 @@ public class MergeOnReadInputSplit implements InputSplit {
   private final long maxCompactionMemoryInBytes;
   private final String mergeType;
   private final Option<InstantRange> instantRange;
+  private final String partitionPath;
+  @Setter
   protected String fileId;
 
   // for streaming reader to record the consumed offset,
@@ -58,7 +63,8 @@ public class MergeOnReadInputSplit implements InputSplit {
       long maxCompactionMemoryInBytes,
       String mergeType,
       @Nullable InstantRange instantRange,
-      String fileId) {
+      String fileId,
+      String partitionPath) {
     this.splitNum = splitNum;
     this.basePath = Option.ofNullable(basePath);
     this.logPaths = logPaths;
@@ -68,42 +74,7 @@ public class MergeOnReadInputSplit implements InputSplit {
     this.mergeType = mergeType;
     this.instantRange = Option.ofNullable(instantRange);
     this.fileId = fileId;
-  }
-
-  public String getFileId() {
-    return fileId;
-  }
-
-  public void setFileId(String fileId) {
-    this.fileId = fileId;
-  }
-
-  public Option<String> getBasePath() {
-    return basePath;
-  }
-
-  public Option<List<String>> getLogPaths() {
-    return logPaths;
-  }
-
-  public String getLatestCommit() {
-    return latestCommit;
-  }
-
-  public String getTablePath() {
-    return tablePath;
-  }
-
-  public long getMaxCompactionMemoryInBytes() {
-    return maxCompactionMemoryInBytes;
-  }
-
-  public String getMergeType() {
-    return mergeType;
-  }
-
-  public Option<InstantRange> getInstantRange() {
-    return this.instantRange;
+    this.partitionPath = partitionPath;
   }
 
   @Override
@@ -113,10 +84,6 @@ public class MergeOnReadInputSplit implements InputSplit {
 
   public void consume() {
     this.consumed += 1L;
-  }
-
-  public long getConsumed() {
-    return consumed;
   }
 
   public boolean isConsumed() {
@@ -134,6 +101,7 @@ public class MergeOnReadInputSplit implements InputSplit {
         + ", maxCompactionMemoryInBytes=" + maxCompactionMemoryInBytes
         + ", mergeType='" + mergeType + '\''
         + ", instantRange=" + instantRange
+        + ", partitionPath='" + partitionPath + '\''
         + '}';
   }
 }

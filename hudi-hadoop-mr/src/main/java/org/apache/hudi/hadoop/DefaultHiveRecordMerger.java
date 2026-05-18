@@ -20,14 +20,9 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.util.ConfigUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
-
-import org.apache.avro.Schema;
+import org.apache.hudi.common.table.read.BufferedRecord;
 
 import java.io.IOException;
 
@@ -36,36 +31,15 @@ import java.io.IOException;
  */
 public class DefaultHiveRecordMerger extends HoodieHiveRecordMerger {
 
-  private String[] orderingFields;
-
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    ValidationUtils.checkArgument(older.getRecordType() == HoodieRecord.HoodieRecordType.HIVE);
-    ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecord.HoodieRecordType.HIVE);
-    if (newer instanceof HoodieHiveRecord) {
-      HoodieHiveRecord newHiveRecord = (HoodieHiveRecord) newer;
-      if (newHiveRecord.isDelete(newSchema, props)) {
-        return Option.empty();
-      }
-    } else if (newer.getData() == null) {
-      return Option.empty();
+  public <T> BufferedRecord<T> merge(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+    if (HoodieRecordMerger.isCommitTimeOrderingDelete(older, newer)) {
+      return newer;
     }
-
-    if (older instanceof HoodieHiveRecord) {
-      HoodieHiveRecord oldHiveRecord = (HoodieHiveRecord) older;
-      if (oldHiveRecord.isDelete(oldSchema, props)) {
-        return Option.of(Pair.of(newer, newSchema));
-      }
-    } else if (older.getData() == null) {
-      return Option.empty();
-    }
-    if (orderingFields == null) {
-      orderingFields = ConfigUtils.getOrderingFields(props);
-    }
-    if (older.getOrderingValue(oldSchema, props, orderingFields).compareTo(newer.getOrderingValue(newSchema, props, orderingFields)) > 0) {
-      return Option.of(Pair.of(older, oldSchema));
+    if (older.getOrderingValue().compareTo(newer.getOrderingValue()) > 0) {
+      return older;
     } else {
-      return Option.of(Pair.of(newer, newSchema));
+      return newer;
     }
   }
 

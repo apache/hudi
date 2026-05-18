@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client.model;
 
+import org.apache.hudi.adapter.DataTypeAdapter;
+
 import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.MapData;
@@ -26,6 +28,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.types.RowKind;
+import org.apache.flink.types.variant.Variant;
 
 import java.util.Map;
 import java.util.function.Function;
@@ -146,5 +149,9 @@ public class BootstrapRowData implements RowData {
       return (T) partitionOrdinalToValues.get(pos);
     }
     return getter.apply(pos);
+  }
+
+  public Variant getVariant(int pos) {
+    return DataTypeAdapter.getVariant(row, pos);
   }
 }

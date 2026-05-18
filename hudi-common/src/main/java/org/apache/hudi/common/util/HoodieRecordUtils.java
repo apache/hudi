@@ -19,7 +19,6 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
@@ -42,6 +41,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -50,7 +50,6 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -90,17 +89,17 @@ public class HoodieRecordUtils {
   public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
                                                       List<String> mergerClassList, String recordMergerStrategy) {
     if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
-      return HoodieAvroRecordMerger.INSTANCE;
+      return new HoodieAvroRecordMerger();
     } else {
       return createValidRecordMerger(engineType, mergerClassList, recordMergerStrategy)
-          .orElse(HoodieAvroRecordMerger.INSTANCE);
+          .orElseGet(HoodieAvroRecordMerger::new);
     }
   }
 
   public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
                                                                    String mergerImpls, String recordMergerStrategy) {
     if (recordMergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
-      return Option.of(HoodieAvroRecordMerger.INSTANCE);
+      return Option.of(new HoodieAvroRecordMerger());
     }
     return createValidRecordMerger(engineType,ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
   }
@@ -111,7 +110,7 @@ public class HoodieRecordUtils {
     return Option.fromJavaOptional(mergeImplClassList.stream()
         .map(clazz -> loadRecordMerger(clazz))
         .filter(Objects::nonNull)
-        .filter(merger -> merger.getMergingStrategy().equals(recordMergeStrategyId))
+        .filter(merger -> StringUtils.isNullOrEmpty(recordMergeStrategyId) || merger.getMergingStrategy().equals(recordMergeStrategyId))
         .filter(merger -> recordTypeCompatibleEngine(merger.getRecordType(), engineType))
         .findFirst());
   }
@@ -157,33 +156,33 @@ public class HoodieRecordUtils {
     }
   }
 
-  public static HoodieRecord createHoodieRecord(GenericRecord data, Comparable orderingVal, HoodieKey hKey, String payloadClass, boolean requiresPayload) {
-    return createHoodieRecord(data, orderingVal, hKey, payloadClass, null, Option.empty(), requiresPayload);
+  public static HoodieRecord createHoodieRecord(GenericRecord data, Comparable orderingVal, HoodieKey hKey, String payloadClass, boolean requiresPayload, Boolean isDelete) {
+    return createHoodieRecord(data, orderingVal, hKey, payloadClass, null, Option.empty(), requiresPayload, isDelete);
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord data, Comparable orderingVal, HoodieKey hKey,
-                                                String payloadClass, HoodieOperation hoodieOperation, Option<HoodieRecordLocation> recordLocation, boolean requiresPayload) {
+                                                String payloadClass, HoodieOperation hoodieOperation, Option<HoodieRecordLocation> recordLocation, boolean requiresPayload, Boolean isDelete) {
     HoodieRecord record;
     if (!requiresPayload && isPayloadClassDeprecated(payloadClass)) {
-      record = new HoodieAvroIndexedRecord(hKey, data, orderingVal, hoodieOperation);
+      record = new HoodieAvroIndexedRecord(hKey, data, orderingVal, hoodieOperation, isDelete);
     } else {
       HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, data, orderingVal);
-      record = new HoodieAvroRecord<>(hKey, payload, hoodieOperation);
+      record = new HoodieAvroRecord<>(hKey, payload, hoodieOperation, orderingVal, isDelete);
     }
     recordLocation.ifPresent(record::setCurrentLocation);
     return record;
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord data, HoodieKey hKey,
-                                                String payloadClass, boolean requiresPayload) {
-    return createHoodieRecord(data, hKey, payloadClass, Option.empty(), requiresPayload);
+                                                String payloadClass, boolean requiresPayload, Boolean isDelete) {
+    return createHoodieRecord(data, hKey, payloadClass, Option.empty(), requiresPayload, isDelete);
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord data, HoodieKey hKey,
-                                                String payloadClass, Option<HoodieRecordLocation> recordLocation, boolean requiresPayload) {
+                                                String payloadClass, Option<HoodieRecordLocation> recordLocation, boolean requiresPayload, Boolean isDelete) {
     HoodieRecord record;
     if (!requiresPayload && isPayloadClassDeprecated(payloadClass)) {
-      record = new HoodieAvroIndexedRecord(hKey, data);
+      record = new HoodieAvroIndexedRecord(hKey, data, null, (HoodieOperation) null, isDelete);
     } else {
       HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, data);
       record = new HoodieAvroRecord<>(hKey, payload);
@@ -201,7 +200,7 @@ public class HoodieRecordUtils {
     if (isPayloadClassDeprecated(payloadClazz)) {
       return new HoodieEmptyRecord<>(key, hoodieOperation, orderingVal, HoodieRecordType.AVRO);
     }
-    return new HoodieAvroRecord<>(key, HoodieRecordUtils.loadPayload(payloadClazz, null, orderingVal), hoodieOperation, true);
+    return new HoodieAvroRecord<>(key, HoodieRecordUtils.loadPayload(payloadClazz, null, orderingVal), hoodieOperation, orderingVal, true);
   }
 
   public static boolean recordTypeCompatibleEngine(HoodieRecordType recordType, EngineType engineType) {
@@ -222,10 +221,16 @@ public class HoodieRecordUtils {
   }
 
   public static List<String> getOrderingFieldNames(RecordMergeMode mergeMode,
-                                                   TypedProperties props,
                                                    HoodieTableMetaClient metaClient) {
     return mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
         ? Collections.emptyList()
-        : Option.ofNullable(ConfigUtils.getOrderingFields(props)).map(Arrays::asList).orElseGet(() -> metaClient.getTableConfig().getOrderingFields());
+        : metaClient.getTableConfig().getOrderingFields();
+  }
+
+  public static List<String> getOrderingFieldNames(RecordMergeMode mergeMode,
+                                                   HoodieTableConfig tableConfig) {
+    return mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
+        ? Collections.emptyList()
+        : tableConfig.getOrderingFields();
   }
 }

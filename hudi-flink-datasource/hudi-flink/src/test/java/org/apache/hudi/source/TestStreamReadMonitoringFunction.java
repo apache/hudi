@@ -34,6 +34,7 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 
+import lombok.Getter;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
 import org.apache.flink.streaming.api.operators.StreamSource;
@@ -478,11 +479,11 @@ public class TestStreamReadMonitoringFunction {
       state = harness.snapshot(1, 1);
       // Stop the stream task.
       function.close();
-      assertTrue(latch.await(WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS), "Should finish splits generation");
       assertThat("Should produce the expected splits", sourceContext.getPartitionPaths(), is("par1,par2"));
       assertTrue(sourceContext.splits.stream().allMatch(split -> split.getInstantRange().isPresent()),
           "All instants should have range limit");
     }
+    conf.set(FlinkOptions.READ_SPLITS_LIMIT, Integer.MAX_VALUE);
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
     StreamReadMonitoringFunction function2 = TestUtils.getMonitorFunc(conf);
     try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function2)) {
@@ -493,11 +494,9 @@ public class TestStreamReadMonitoringFunction {
       CountDownLatch latch = new CountDownLatch(6);
       CollectingSourceContext sourceContext = new CollectingSourceContext(latch);
       runAsync(sourceContext, function2);
-      state = harness.snapshot(2, 1);
       assertTrue(latch.await(WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS), "Should finish splits generation");
       // Stop the stream task.
       function2.close();
-      assertTrue(latch.await(WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS), "Should finish splits generation");
       assertThat("Should produce the expected splits", sourceContext.getPartitionPaths(), is("par1,par2,par3,par4"));
       assertTrue(sourceContext.splits.stream().allMatch(split -> split.getInstantRange().isPresent()),
           "All the instants should have range limit");
@@ -534,6 +533,7 @@ public class TestStreamReadMonitoringFunction {
    */
   private static class CollectingSourceContext implements SourceFunctionAdapter.SourceContext<MergeOnReadInputSplit> {
     private final List<MergeOnReadInputSplit> splits = new ArrayList<>();
+    @Getter
     private final Object checkpointLock = new Object();
     private volatile CountDownLatch latch;
 
@@ -560,11 +560,6 @@ public class TestStreamReadMonitoringFunction {
     @Override
     public void markAsTemporarilyIdle() {
 
-    }
-
-    @Override
-    public Object getCheckpointLock() {
-      return checkpointLock;
     }
 
     @Override

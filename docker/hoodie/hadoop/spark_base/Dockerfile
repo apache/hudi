@@ -15,8 +15,8 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG HADOOP_VERSION=2.8.4
-ARG HIVE_VERSION=2.3.3
+ARG HADOOP_VERSION=3.3.4
+ARG HIVE_VERSION=3.1.3
 FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}
 
 ENV ENABLE_INIT_DAEMON true
@@ -41,10 +41,10 @@ RUN echo "Installing Spark-version (${SPARK_VERSION})" \
       && rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
       && cd /
 
-# Install python3 to enable and use pyspark shell
+# Install Python runtime from distro package (avoids ~400MB build toolchain)
 RUN apt-get update \
-    && apt-get -yq install python3 \
-    && ln -sf $(which python3) /usr/bin/python \
+    && apt-get install -y --no-install-recommends python3-minimal python3-pip \
+    && ln -sf /usr/bin/python3 /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
 
 #Give permission to execute scripts
@@ -66,5 +66,9 @@ ENV SPARK_BLOCKMGR_PORT 5003
 EXPOSE $SPARK_DRIVER_PORT $SPARK_UI_PORT $SPARK_BLOCKMGR_PORT
 
 # Without this spark-shell fails - Download if it is not already there in $SPARK_INSTALL
-RUN wget -nc -q -O "${SPARK_INSTALL}/jars/jersey-bundle-1.19.4.jar" "https://repo1.maven.org/maven2/com/sun/jersey/jersey-bundle/1.19.4/jersey-bundle-1.19.4.jar"
+ARG HADOOP_AWS_VERSION=3.3.4
+ARG AWS_SDK_VERSION=1.12.734
+RUN wget -nc -q -O "${SPARK_INSTALL}/jars/jersey-bundle-1.19.4.jar" "https://repo1.maven.org/maven2/com/sun/jersey/jersey-bundle/1.19.4/jersey-bundle-1.19.4.jar" && \
+    wget -O "${SPARK_INSTALL}/jars/hadoop-aws-${HADOOP_AWS_VERSION}.jar" https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/${HADOOP_AWS_VERSION}/hadoop-aws-${HADOOP_AWS_VERSION}.jar && \
+    wget -O "${SPARK_INSTALL}/jars/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar" https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/${AWS_SDK_VERSION}/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar
 

@@ -27,11 +27,13 @@ import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
 
 /**
  * Represents a compact node in the DAG of operations for a workflow.
  */
+@Slf4j
 public class CompactNode extends DagNode<JavaRDD<WriteStatus>> {
 
   public CompactNode(Config config) {

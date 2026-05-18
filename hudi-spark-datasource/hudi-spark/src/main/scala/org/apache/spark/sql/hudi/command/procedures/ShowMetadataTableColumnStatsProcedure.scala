@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport}
+import org.apache.hudi.{ColumnStatsIndexSupport, HoodieSchemaConversionUtils}
 import org.apache.hudi.avro.model._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -25,10 +25,8 @@ import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.TableSchemaResolver
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.metadata.HoodieTableMetadata
 
 import org.apache.avro.generic.IndexedRecord
 import org.apache.spark.internal.Logging
@@ -81,8 +79,9 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
       .build
     val metaClient = createMetaClient(jsc, basePath)
     val schemaUtil = new TableSchemaResolver(metaClient)
-    val schema = AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
+    val hoodieSchema = schemaUtil.getTableSchema
+    val structSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(hoodieSchema)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, structSchema, hoodieSchema, metadataConfig, metaClient)
     val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = columnStatsIndex.loadColumnStatsIndexRecords(targetColumnsSeq, shouldReadInMemory = false)
     val engineCtx = new HoodieSparkEngineContext(jsc)
     val fsView = buildFileSystemView(table, engineCtx)
@@ -152,8 +151,6 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
 object ShowMetadataTableColumnStatsProcedure {
   val NAME = "show_metadata_table_column_stats"
 
-  def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
-    override def get() = new ShowMetadataTableColumnStatsProcedure()
-  }
+  def builder: Supplier[ProcedureBuilder] = () => new ShowMetadataTableColumnStatsProcedure()
 }
 

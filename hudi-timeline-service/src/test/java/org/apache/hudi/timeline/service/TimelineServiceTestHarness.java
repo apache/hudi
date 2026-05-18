@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
+import lombok.Setter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.http.HttpResponse;
 import org.apache.http.NoHttpResponseException;
@@ -47,6 +48,7 @@ import java.util.Map;
 public class TimelineServiceTestHarness extends TimelineService {
 
   private static final String PROXY_ALL_URLS = "/*";
+  @Setter
   private int numberOfSimulatedConnectionFailures;
   private Option<Server> server;
   private int serverPort;
@@ -60,10 +62,6 @@ public class TimelineServiceTestHarness extends TimelineService {
         globalFileSystemViewManager);
     server = Option.empty();
     serverPort = 0;
-  }
-
-  public void setNumberOfSimulatedConnectionFailures(int numberOfSimulatedConnectionFailures) {
-    this.numberOfSimulatedConnectionFailures = numberOfSimulatedConnectionFailures;
   }
 
   @Override

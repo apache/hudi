@@ -17,13 +17,14 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceReadOptions, HoodieSchemaConversionUtils, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
 import org.apache.hudi.common.table.timeline.{HoodieInstantTimeGenerator, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.table.timeline.TimelineUtils.parseDateFromInstantTime
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
@@ -34,11 +35,12 @@ import org.apache.hudi.util.SparkConfigUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Cast, Expression, Literal}
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types._
 
@@ -60,11 +62,11 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   def getTableSqlSchema(metaClient: HoodieTableMetaClient,
                         includeMetadataFields: Boolean = false): Option[StructType] = {
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val avroSchema = try Some(schemaResolver.getTableAvroSchema(includeMetadataFields))
+    val schema = try Some(schemaResolver.getTableSchema(includeMetadataFields))
     catch {
       case _: Throwable => None
     }
-    avroSchema.map(AvroConversionUtils.convertAvroSchemaToStructType)
+    schema.map(HoodieSchemaConversionUtils.convertHoodieSchemaToStructType)
   }
 
   def getAllPartitionPaths(spark: SparkSession, table: CatalogTable, metaClient: HoodieTableMetaClient): Seq[String] = {
@@ -88,6 +90,19 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     FSUtils.getFilesInPartitions(sparkEngine, metaClient, metadataConfig, partitionPaths.toArray).asScala
       .map(e => (e._1, e._2.asScala.toSeq))
       .toMap
+  }
+
+  /**
+   * Determine whether slash separated date partitioning is enabled
+   */
+  def isSlashSeparatedDatePartitioning(partitionPaths: Seq[String], table: CatalogTable): Boolean = {
+    if (table.partitionColumnNames.nonEmpty) {
+      partitionPaths.forall(partitionPath => {
+        table.partitionColumnNames.size == 1 && partitionPath.split("/").length == 3
+      })
+    } else {
+      false
+    }
   }
 
   /**
@@ -234,35 +249,83 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     opts.filterKeys(isHoodieConfigKey(_,
       opts.getOrElse(COMMIT_METADATA_KEYPREFIX.key, COMMIT_METADATA_KEYPREFIX.defaultValue()))).toMap
 
+  def extractSparkPrefixedHoodieConfigs(opts: Map[String, String]): Map[String, String] =
+    opts.filter { case (k, _) => k.startsWith("spark.hoodie.") }
+      .map { case (k, v) => (k.stripPrefix("spark."), v) }
+
   /**
    * Checks whether Spark is using Hive as Session's Catalog
    */
   def isUsingHiveCatalog(sparkSession: SparkSession): Boolean =
     sparkSession.sessionState.conf.getConf(StaticSQLConf.CATALOG_IMPLEMENTATION) == "hive"
 
+  private val SUPPORTED_FORMATS_MSG: String =
+    "Supported time formats are: 'yyyyMMddHHmmss[SSS]', 'yyyy-MM-dd', " +
+      "'yyyy-MM-dd HH:mm:ss[.SSS]', 'yyyy-MM-ddTHH:mm:ss[.SSS]', " +
+      "epoch seconds (10-digit number), or epoch millis (13-digit number)"
+
+  private def isAllDigits(s: String): Boolean = s.nonEmpty && s.forall(_.isDigit)
+
   /**
-   * Convert different query instant time format to the commit time format.
-   * Currently we support three kinds of instant time format for time travel query:
-   * 1、yyyy-MM-dd HH:mm:ss
-   * 2、yyyy-MM-dd
-   *   This will convert to 'yyyyMMdd000000'.
-   * 3、yyyyMMddHHmmss
+   * Convert different query instant time format to the Hudi commit time format.
+   * Supported formats:
+   *   - yyyyMMddHHmmss or yyyyMMddHHmmssSSS (Hudi native)
+   *   - yyyy-MM-dd (ISO date)
+   *   - yyyy-MM-dd HH:mm:ss[.SSS] (ISO datetime with space separator)
+   *   - yyyy-MM-ddTHH:mm:ss[.SSS] (ISO datetime with T separator)
+   *   - 10-digit all-numeric string (epoch seconds)
+   *   - 13-digit all-numeric string (epoch millis)
    */
   def formatQueryInstant(queryInstant: String): String = {
     val instantLength = queryInstant.length
-    if (instantLength == 19 || instantLength == 23) {
-      // Handle "yyyy-MM-dd HH:mm:ss[.SSS]" format
+    if (instantLength >= 19 && instantLength <= 23 && queryInstant.contains("T")) {
+      HoodieInstantTimeGenerator.getInstantForDateString(queryInstant.replace('T', ' '))
+    } else if (instantLength == 19 || instantLength == 23) {
       HoodieInstantTimeGenerator.getInstantForDateString(queryInstant)
     } else if (instantLength == HoodieInstantTimeGenerator.SECS_INSTANT_ID_LENGTH
-      || instantLength  == HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH) {
-      // Handle already serialized "yyyyMMddHHmmss[SSS]" format
+      || instantLength == HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH) {
       validateInstant(queryInstant)
       queryInstant
-    } else if (instantLength == 10) { // for yyyy-MM-dd
+    } else if (instantLength == 10 && !isAllDigits(queryInstant)) {
       TimelineUtils.formatDate(defaultDateFormat.get().parse(queryInstant))
+    } else if (instantLength == 10 && isAllDigits(queryInstant)) {
+      TimelineUtils.formatDate(new java.util.Date(queryInstant.toLong * 1000L))
+    } else if (instantLength == 13 && isAllDigits(queryInstant)) {
+      TimelineUtils.formatDate(new java.util.Date(queryInstant.toLong))
     } else {
-      throw new IllegalArgumentException(s"Unsupported query instant time format: $queryInstant,"
-        + s"Supported time format are: 'yyyy-MM-dd: HH:mm:ss.SSS' or 'yyyy-MM-dd' or 'yyyyMMddHHmmssSSS'")
+      throw new IllegalArgumentException(
+        s"Unsupported query instant time format: $queryInstant. $SUPPORTED_FORMATS_MSG")
+    }
+  }
+
+  private val INCREMENTAL_SENTINEL_VALUES: Set[String] = Set(
+    IncrementalQueryAnalyzer.START_COMMIT_EARLIEST,
+    "000",
+    HoodieTimeline.INIT_INSTANT_TS,
+    HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS,
+    HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS
+  )
+
+  private def isLegacyZeroPrefixedInstant(instantValue: String): Boolean = {
+    instantValue.nonEmpty &&
+      instantValue.length < HoodieInstantTimeGenerator.SECS_INSTANT_ID_LENGTH &&
+      instantValue.startsWith("0") &&
+      isAllDigits(instantValue)
+  }
+
+  /**
+   * Validate and normalize an incremental query instant (begin or end).
+   * Allows sentinel values like "earliest" and "000" to pass through unchanged,
+   * and delegates all other values to [[formatQueryInstant]] for format validation
+   * and normalization to the Hudi commit time format.
+   */
+  def formatIncrementalInstant(instantValue: String): String = {
+    if (INCREMENTAL_SENTINEL_VALUES.contains(instantValue.toLowerCase(Locale.ROOT))
+      || INCREMENTAL_SENTINEL_VALUES.contains(instantValue)
+      || isLegacyZeroPrefixedInstant(instantValue)) {
+      instantValue
+    } else {
+      formatQueryInstant(instantValue)
     }
   }
 
@@ -283,7 +346,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     }
   }
 
-  // Find the origin column from schema by column name, throw an AnalysisException if the column
+  // Find the origin column from schema by column name, throw an HoodieAnalysisException if the column
   // reference is invalid.
   def findColumnByName(schema: StructType, name: String, resolver: Resolver):Option[StructField] = {
     schema.fields.collectFirst {
@@ -312,13 +375,13 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
                                  resolver: Resolver): Map[String, T] = {
     val normalizedPartSpec = partitionSpec.toSeq.map { case (key, value) =>
       val normalizedKey = partColNames.find(resolver(_, key)).getOrElse {
-        throw new AnalysisException(s"$key is not a valid partition column in table $tblName.")
+        throw new HoodieAnalysisException(s"$key is not a valid partition column in table $tblName.")
       }
       normalizedKey -> value
     }
 
     if (normalizedPartSpec.size < partColNames.size) {
-      throw new AnalysisException(
+      throw new HoodieAnalysisException(
         "All partition columns need to be specified for Hoodie's partition")
     }
 
@@ -327,7 +390,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
       val duplicateColumns = lowerPartColNames.groupBy(identity).collect {
         case (x, ys) if ys.length > 1 => s"`$x`"
       }
-      throw new AnalysisException(
+      throw new HoodieAnalysisException(
         s"Found duplicate column(s) in the partition schema: ${duplicateColumns.mkString(", ")}")
     }
 

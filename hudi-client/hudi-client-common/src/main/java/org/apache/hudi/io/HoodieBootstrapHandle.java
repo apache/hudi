@@ -20,17 +20,15 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.JsonProperties;
-import org.apache.avro.Schema;
-
 import java.util.List;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 
 /**
  * This class is essentially same as Create Handle but overrides two things
@@ -44,7 +42,7 @@ public class HoodieBootstrapHandle<T, I, K, O> extends HoodieCreateHandle<T, I, 
   // NOTE: We have to use schema containing all the meta-fields in here b/c unlike for [[HoodieAvroRecord]],
   //       [[HoodieSparkRecord]] requires records to always bear either all or no meta-fields in the
   //       record schema (ie partial inclusion of the meta-fields in the schema is not allowed)
-  public static final Schema METADATA_BOOTSTRAP_RECORD_SCHEMA = createMetadataBootstrapRecordSchema();
+  public static final HoodieSchema METADATA_BOOTSTRAP_RECORD_SCHEMA = createMetadataBootstrapRecordSchema();
 
   public HoodieBootstrapHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T, I, K, O> hoodieTable,
       String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
@@ -57,12 +55,12 @@ public class HoodieBootstrapHandle<T, I, K, O> extends HoodieCreateHandle<T, I, 
     return true;
   }
 
-  private static Schema createMetadataBootstrapRecordSchema() {
-    List<Schema.Field> fields =
+  private static HoodieSchema createMetadataBootstrapRecordSchema() {
+    List<HoodieSchemaField> fields =
         HoodieRecord.HOODIE_META_COLUMNS.stream()
             .map(metaField ->
-                new Schema.Field(metaField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE))
+                HoodieSchemaField.of(metaField, HoodieSchema.createNullable(HoodieSchemaType.STRING), "", HoodieSchema.NULL_VALUE))
             .collect(Collectors.toList());
-    return Schema.createRecord("HoodieRecordKey", "", "", false, fields);
+    return HoodieSchema.createRecord("HoodieRecordKey", "", "", false, fields);
   }
 }

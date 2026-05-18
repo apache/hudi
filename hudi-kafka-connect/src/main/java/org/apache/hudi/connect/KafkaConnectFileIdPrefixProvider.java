@@ -23,20 +23,19 @@ import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.FileIdPrefixProvider;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class KafkaConnectFileIdPrefixProvider extends FileIdPrefixProvider {
 
   public static final String KAFKA_CONNECT_PARTITION_ID = "hudi.kafka.connect.partition";
-  private static final Logger LOG = LoggerFactory.getLogger(KafkaConnectFileIdPrefixProvider.class);
 
   private final String kafkaPartition;
 
   public KafkaConnectFileIdPrefixProvider(TypedProperties props) {
     super(props);
     if (!props.containsKey(KAFKA_CONNECT_PARTITION_ID)) {
-      LOG.error("Fatal error due to Kafka Connect Partition Id is not set");
+      log.error("Fatal error due to Kafka Connect Partition Id is not set");
       throw new HoodieException("Kafka Connect Partition Key " + KAFKA_CONNECT_PARTITION_ID + " not provided");
     }
     this.kafkaPartition = props.getProperty(KAFKA_CONNECT_PARTITION_ID);
@@ -48,8 +47,7 @@ public class KafkaConnectFileIdPrefixProvider extends FileIdPrefixProvider {
     // to generate a fixed sized hash.
     String rawFileIdPrefix = kafkaPartition + partitionPath;
     String hashedPrefix = KafkaConnectUtils.hashDigest(rawFileIdPrefix);
-    LOG.info("CreateFileId for Kafka Partition " + kafkaPartition + " : " + partitionPath + " = " + rawFileIdPrefix
-        + " === " + hashedPrefix);
+    log.info("CreateFileId for Kafka Partition {} : {} = {} === {}", kafkaPartition, partitionPath, rawFileIdPrefix, hashedPrefix);
     return hashedPrefix;
   }
 }

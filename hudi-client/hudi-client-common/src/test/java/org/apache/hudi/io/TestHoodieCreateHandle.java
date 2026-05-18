@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
@@ -41,7 +42,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.TestBaseHoodieTable;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -79,7 +79,7 @@ import static org.mockito.Mockito.spy;
 public class TestHoodieCreateHandle extends HoodieCommonTestHarness {
   private static final String TEST_INSTANT_TIME = "20231201120000";
   private static final String TEST_FILE_ID = "file-001";
-  private static final Schema TEST_SCHEMA = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
+  private static final HoodieSchema TEST_SCHEMA = HoodieSchema.parse(TRIP_EXAMPLE_SCHEMA);
   private static final String TEST_PARTITION_PATH = DEFAULT_FIRST_PARTITION_PATH;
 
   private HoodieWriteConfig writeConfig;
@@ -131,12 +131,12 @@ public class TestHoodieCreateHandle extends HoodieCommonTestHarness {
 
   @Test
   public void testConstructorWithOverriddenSchema() {
-    Schema overridenSchema = new Schema.Parser().parse(TRIP_FLATTENED_SCHEMA);
+    HoodieSchema overriddenSchema = HoodieSchema.parse(TRIP_FLATTENED_SCHEMA);
 
     HoodieCreateHandle handleWithOverridenSchema = new HoodieCreateHandle<>(
         writeConfig, TEST_INSTANT_TIME, hoodieTable, TEST_PARTITION_PATH,
-        TEST_FILE_ID, Option.of(overridenSchema), taskContextSupplier);
-    assertEquals(overridenSchema, handleWithOverridenSchema.writeSchema);
+        TEST_FILE_ID, Option.of(overriddenSchema), taskContextSupplier);
+    assertEquals(overriddenSchema, handleWithOverridenSchema.writeSchema);
   }
 
   @Test

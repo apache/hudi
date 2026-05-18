@@ -98,7 +98,7 @@ public class TestHoodieIndexConfigs {
         config = clientConfigBuilder.withPath(basePath)
             .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.RECORD_INDEX).build())
             .build();
-        assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof SparkMetadataTableRecordIndex);
+        assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof SparkMetadataTableGlobalRecordLevelIndex);
         break;
       default:
         // no -op. just for checkstyle errors

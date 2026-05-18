@@ -58,7 +58,7 @@ abstract class SparkOrcReaderBase(enableVectorizedReader: Boolean,
    */
   override def read(file: PartitionedFile, requiredSchema: StructType, partitionSchema: StructType,
                     internalSchemaOpt: util.Option[InternalSchema], filters: Seq[Filter],
-                    storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
+                    storageConf: StorageConfiguration[Configuration], tableSchemaOpt: util.Option[org.apache.parquet.schema.MessageType]): Iterator[InternalRow] = {
     val resultSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     val conf = storageConf.unwrap()
 

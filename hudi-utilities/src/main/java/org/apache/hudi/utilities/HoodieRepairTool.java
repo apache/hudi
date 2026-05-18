@@ -25,7 +25,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -224,7 +224,8 @@ public class HoodieRepairTool {
       cmd.usage();
       System.exit(1);
     }
-    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-table-repair", cfg.sparkMaster, cfg.sparkMemory);
+    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-table-repair",
+        cfg.sparkMaster, cfg.sparkMemory, cfg.enableHiveSupport);
     try {
       new HoodieRepairTool(jsc, cfg).run();
     } catch (Throwable throwable) {
@@ -320,7 +321,7 @@ public class HoodieRepairTool {
             try {
               success = fs.delete(new Path(basePath, relativeFilePath), false);
             } catch (IOException e) {
-              LOG.warn("Failed to delete file " + relativeFilePath);
+              LOG.error("Failed to delete file {}", relativeFilePath);
             } finally {
               results.add(success);
             }
@@ -501,12 +502,11 @@ public class HoodieRepairTool {
   private void printRepairInfo(
       List<String> instantTimesToRepair, List<ImmutablePair<String, List<String>>> instantsWithDanglingFiles) {
     int numInstantsToRepair = instantsWithDanglingFiles.size();
-    LOG.warn("Number of instants verified based on the base and log files: "
-        + instantTimesToRepair.size());
-    LOG.warn("Instant timestamps: " + instantTimesToRepair);
-    LOG.warn("Number of instants to repair: " + numInstantsToRepair);
+    LOG.info("Number of instants verified based on the base and log files: {}", instantTimesToRepair.size());
+    LOG.info("Instant timestamps: {}", instantTimesToRepair);
+    LOG.info("Number of instants to repair: {}", numInstantsToRepair);
     if (numInstantsToRepair > 0) {
-      instantsWithDanglingFiles.forEach(e -> LOG.warn("   ** Removing files: " + e.getValue()));
+      instantsWithDanglingFiles.forEach(e -> LOG.info("   ** Removing files: {}", e.getValue()));
     }
   }
 
@@ -545,6 +545,8 @@ public class HoodieRepairTool {
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = "1g";
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
     @Parameter(names = {"--assume-date-partitioning", "-dp"}, description = "whether the partition path "
         + "is date with three levels", required = false)
     public Boolean assumeDatePartitioning = false;

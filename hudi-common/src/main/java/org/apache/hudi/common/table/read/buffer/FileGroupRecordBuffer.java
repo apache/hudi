@@ -19,11 +19,12 @@
 
 package org.apache.hudi.common.table.read.buffer;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
@@ -37,7 +38,7 @@ import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -47,9 +48,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
-
-import org.apache.avro.Schema;
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -67,7 +66,7 @@ import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetada
 
 abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   protected final HoodieReaderContext<T> readerContext;
-  protected final Schema readerSchema;
+  protected final HoodieSchema readerSchema;
   protected final List<String> orderingFieldNames;
   protected final RecordMergeMode recordMergeMode;
   protected final Option<PartialUpdateMode> partialUpdateModeOpt;
@@ -99,7 +98,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
                                   UpdateProcessor<T> updateProcessor) {
     this.readerContext = readerContext;
     this.updateProcessor = updateProcessor;
-    this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
+    this.readerSchema = HoodieSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
     this.partialUpdateModeOpt = partialUpdateModeOpt;
     this.recordMerger = readerContext.getRecordMerger();
@@ -117,7 +116,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
     this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
-        readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldNames, readerSchema, payloadClasses, props, partialUpdateModeOpt);
+        readerContext, recordMergeMode, enablePartialMerging, recordMerger, readerSchema, payloadClasses, props, partialUpdateModeOpt);
     this.deleteContext = readerContext.getSchemaHandler().getDeleteContext().withReaderSchema(this.readerSchema);
     this.bufferedRecordConverter = BufferedRecordConverter.createConverter(readerContext.getIteratorMode(), readerSchema, readerContext.getRecordContext(), orderingFieldNames);
   }
@@ -191,17 +190,20 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
    * @param keySpecOpt
    * @return
    */
-  protected Pair<ClosableIterator<T>, Schema> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) {
+  protected Pair<ClosableIterator<T>, HoodieSchema> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) {
     ClosableIterator<T> blockRecordsIterator;
-    if (keySpecOpt.isPresent()) {
-      KeySpec keySpec = keySpecOpt.get();
-      blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext, keySpec.getKeys(), keySpec.isFullKey());
-    } else {
-      blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext);
+    try {
+      if (keySpecOpt.isPresent()) {
+        KeySpec keySpec = keySpecOpt.get();
+        blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext, keySpec.getKeys(), keySpec.isFullKey());
+      } else {
+        blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext);
+      }
+      Pair<Function<T, T>, HoodieSchema> projectedTransformer = getProjectedTransformer(dataBlock);
+      return Pair.of(new CloseableMappingIterator<>(blockRecordsIterator, projectedTransformer.getLeft()), projectedTransformer.getRight());
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to deser records from log files ", e);
     }
-    Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
-    return Pair.of(new CloseableMappingIterator<>(
-        blockRecordsIterator, schemaTransformerWithEvolvedSchema.getLeft()), schemaTransformerWithEvolvedSchema.getRight());
   }
 
   /**
@@ -213,7 +215,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
    * @param dataBlock current processed block
    * @return final read schema.
    */
-  protected Option<Pair<Function<T, T>, Schema>> composeEvolvedSchemaTransformer(
+  protected Option<Pair<Function<T, T>, HoodieSchema>> composeEvolvedSchemaTransformer(
       HoodieDataBlock dataBlock) {
     if (internalSchema.isEmptySchema()) {
       return Option.empty();
@@ -223,7 +225,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient);
     Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
         true, false, false).mergeSchemaGetRenamed();
-    Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema.getLeft(), readerSchema.getFullName());
+    HoodieSchema mergedAvroSchema = HoodieSchema.fromAvroSchema(InternalSchemaConverter.convert(mergedInternalSchema.getLeft(), readerSchema.getFullName()).getAvroSchema());
     // `mergedAvroSchema` maybe not equal with `readerSchema`, case: drop a column `f_x`, and then add a new column with same name `f_x`,
     // then the new added column in `mergedAvroSchema` will have a suffix: `f_xsuffix`, distinguished from the original column `f_x`, see
     // InternalSchemaMerger#buildRecordType() for details.
@@ -264,8 +266,8 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     return false;
   }
 
-  protected Pair<Function<T, T>, Schema> getSchemaTransformerWithEvolvedSchema(HoodieDataBlock dataBlock) {
-    Option<Pair<Function<T, T>, Schema>> schemaEvolutionTransformerOpt =
+  protected Pair<Function<T, T>, HoodieSchema> getSchemaTransformerWithEvolvedSchema(HoodieDataBlock dataBlock) {
+    Option<Pair<Function<T, T>, HoodieSchema>> schemaEvolutionTransformerOpt =
         composeEvolvedSchemaTransformer(dataBlock);
 
     // In case when schema has been evolved original persisted records will have to be
@@ -274,9 +276,30 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
         schemaEvolutionTransformerOpt.map(Pair::getLeft)
             .orElse(Function.identity());
 
-    Schema evolvedSchema = schemaEvolutionTransformerOpt.map(Pair::getRight)
-        .orElseGet(dataBlock::getSchema);
+    HoodieSchema evolvedSchema = schemaEvolutionTransformerOpt.map(Pair::getRight).orElseGet(dataBlock::getSchema);
     return Pair.of(transformer, evolvedSchema);
+  }
+
+  /**
+   * Composes schema evolution then the engine's optional log-block record projection
+   * (currently only Spark 4.1's PushVariantIntoScan). Returns the evolved data-block schema
+   * — the projector preserves field shape, only rewriting variant fields, so merger
+   * metadata cols (read by ordinal) stay intact.
+   *
+   * <p>Skipped when a custom payload class is configured: {@code PayloadUpdateProcessor}
+   * round-trips through {@code convertToAvroRecord} against a schema that still types
+   * variant fields as {@code VariantType}, which would mis-decode rewritten rows.
+   */
+  protected Pair<Function<T, T>, HoodieSchema> getProjectedTransformer(HoodieDataBlock dataBlock) {
+    Pair<Function<T, T>, HoodieSchema> evolved = getSchemaTransformerWithEvolvedSchema(dataBlock);
+    if (payloadClasses.isPresent()) {
+      return evolved;
+    }
+    Option<Function<T, T>> logProjOpt = readerContext.getLogBlockRecordProjection(evolved.getRight());
+    if (!logProjOpt.isPresent()) {
+      return evolved;
+    }
+    return Pair.of(evolved.getLeft().andThen(logProjOpt.get()), evolved.getRight());
   }
 
   private static class LogRecordIterator<T> implements ClosableIterator<BufferedRecord<T>> {

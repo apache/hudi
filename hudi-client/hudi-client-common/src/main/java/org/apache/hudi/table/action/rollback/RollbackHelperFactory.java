@@ -28,7 +28,7 @@ import org.apache.hudi.table.HoodieTable;
  */
 public class RollbackHelperFactory {
 
-  public static RollbackHelper getRollBackHelper(HoodieTable table, HoodieWriteConfig config) {
+  public static RollbackHelper getRollbackHelper(HoodieTable table, HoodieWriteConfig config) {
     if (table.getMetaClient().getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
       return new RollbackHelperV1(table, config);
     }

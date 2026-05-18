@@ -20,11 +20,8 @@
 package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
-
-import org.apache.avro.Schema;
+import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.table.read.BufferedRecord;
 
 import java.io.IOException;
 
@@ -39,12 +36,11 @@ public class CommitTimeFlinkRecordMerger extends HoodieFlinkRecordMerger {
   }
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(
-      HoodieRecord older,
-      Schema oldSchema,
-      HoodieRecord newer,
-      Schema newSchema,
+  public <T> BufferedRecord<T> merge(
+      BufferedRecord<T> older,
+      BufferedRecord<T> newer,
+      RecordContext<T> recordContext,
       TypedProperties props) throws IOException {
-    return Option.of(Pair.of(newer, newSchema));
+    return newer;
   }
 }

@@ -32,6 +32,8 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
@@ -41,7 +43,6 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.avro.Schema;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,7 +58,6 @@ import java.util.HashMap;
 import java.util.Properties;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
@@ -122,10 +122,10 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
       + "    {\"name\":\"partitionColumn\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null}"
       + "  ]\n"
       + "}";
-  private static Schema SCHEMA_WITHOUT_METADATA2 = new Schema.Parser().parse(SCHEMA_WITHOUT_METADATA_STR2);
-  private static Schema SCHEMA_WITHOUT_METADATA = new Schema.Parser().parse(SCHEMA_WITHOUT_METADATA_STR);
-  private static Schema SCHEMA_WITH_METADATA = addMetadataFields(SCHEMA_WITHOUT_METADATA, false);
-  private static Schema SCHEMA_WITH_PARTITION_COLUMN = new Schema.Parser().parse(SCHEMA_WITH_PARTITION_COLUMN_STR);
+  private static final HoodieSchema SCHEMA_WITHOUT_METADATA2 = HoodieSchema.parse(SCHEMA_WITHOUT_METADATA_STR2);
+  private static final HoodieSchema SCHEMA_WITHOUT_METADATA = HoodieSchema.parse(SCHEMA_WITHOUT_METADATA_STR);
+  private static final HoodieSchema SCHEMA_WITH_METADATA = HoodieSchemaUtils.addMetadataFields(SCHEMA_WITHOUT_METADATA);
+  private static final HoodieSchema SCHEMA_WITH_PARTITION_COLUMN = HoodieSchema.parse(SCHEMA_WITH_PARTITION_COLUMN_STR);
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -195,7 +195,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     metaClient.reloadActiveTimeline();
 
     ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient);
-    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresent(false, Option.empty());
+    Option<HoodieSchema> schemaOption = resolver.getTableSchemaIfPresent(false, Option.empty());
     assertTrue(schemaOption.isPresent());
     assertEquals(SCHEMA_WITHOUT_METADATA, schemaOption.get());
   }
@@ -235,7 +235,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     metaClient.reloadActiveTimeline();
 
     ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient);
-    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresent(false, Option.empty());
+    Option<HoodieSchema> schemaOption = resolver.getTableSchemaIfPresent(false, Option.empty());
     assertTrue(schemaOption.isPresent());
     assertEquals(SCHEMA_WITHOUT_METADATA, schemaOption.get());
   }
@@ -269,14 +269,14 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
 
   @ParameterizedTest
   @MethodSource("commonTableConfigTestDimension")
-  void testGetTableAvroSchemaInternalNoSchemaFoundEmptyTimeline(HoodieTableType tableType) throws IOException {
+  void testGetTableSchemaInternalNoSchemaFoundEmptyTimeline(HoodieTableType tableType) throws IOException {
     // Don't set any schema in commit metadata or table config
     initMetaClient(false, tableType);
     testTable = HoodieTestTable.of(metaClient);
     metaClient.reloadActiveTimeline();
 
     ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient);
-    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresent(true, Option.empty());
+    Option<HoodieSchema> schemaOption = resolver.getTableSchemaIfPresent(true, Option.empty());
     assertFalse(schemaOption.isPresent());
   }
 
@@ -285,7 +285,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
   // we will only use that and ignore the other instants.
   @ParameterizedTest
   @MethodSource("commonTableConfigTestDimension")
-  void testGetTableAvroSchemaInternalNoSchemaFoundDisqualifiedInstant(HoodieTableType tableType) throws Exception {
+  void testGetTableSchemaInternalNoSchemaFoundDisqualifiedInstant(HoodieTableType tableType) throws Exception {
     // Don't set any schema in commit metadata or table config
     initMetaClient(false, tableType);
     testTable = HoodieTestTable.of(metaClient);
@@ -296,7 +296,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     metaClient.reloadActiveTimeline();
 
     ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient);
-    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresent(true, Option.empty());
+    Option<HoodieSchema> schemaOption = resolver.getTableSchemaIfPresent(true, Option.empty());
     assertTrue(schemaOption.isEmpty());
   }
 
@@ -383,7 +383,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
 
   @ParameterizedTest
   @MethodSource("schemaTestParams")
-  void testGetTableAvroSchema(Schema inputSchema, boolean includeMetadataFields, Schema expectedSchema) throws Exception {
+  void testGetTableSchema(HoodieSchema inputSchema, boolean includeMetadataFields, HoodieSchema expectedSchema) throws Exception {
     metaClient = HoodieTestUtils.getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, new Properties(),"")
         .setTableCreateSchema(SCHEMA_WITH_METADATA.toString())
         .initTable(getDefaultStorageConf(), basePath);
@@ -397,9 +397,9 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
         inputSchema.toString(),
         COMMIT_ACTION)));
 
-    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(includeMetadataFields, Option.empty()).get());
+    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableSchemaIfPresent(includeMetadataFields, Option.empty()).get());
     HoodieInstant instant = metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, "0010", "0011");
-    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(
+    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableSchemaIfPresent(
         includeMetadataFields, Option.of(instant)).get());
   }
 
@@ -412,7 +412,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
 
   @ParameterizedTest
   @MethodSource("partitionColumnSchemaTestParams")
-  void testGetTableAvroSchemaAppendPartitionColumn(boolean shouldIncludePartitionColumns, Schema expectedSchema) throws Exception {
+  void testGetTableSchemaAppendPartitionColumn(boolean shouldIncludePartitionColumns, HoodieSchema expectedSchema) throws Exception {
     metaClient = HoodieTestUtils.getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, new Properties(),"")
         .setPartitionFields("partitionColumn")
         .setShouldDropPartitionColumns(shouldIncludePartitionColumns)
@@ -427,8 +427,8 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
         SCHEMA_WITHOUT_METADATA.toString(),
         COMMIT_ACTION)));
 
-    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(false, Option.empty()).get());
-    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(
+    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableSchemaIfPresent(false, Option.empty()).get());
+    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableSchemaIfPresent(
         false, Option.of(metaClient.getInstantGenerator().createNewInstant(
             HoodieInstant.State.COMPLETED, COMMIT_ACTION, "0010", "0011"))).get());
   }
@@ -442,21 +442,21 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
 
   @ParameterizedTest
   @MethodSource("createSchemaTestParam")
-  void testGetTableCreateAvroSchema(boolean includeMetadataFields, Schema expectedSchema) throws Exception {
+  void testGetTableCreateSchema(boolean includeMetadataFields, HoodieSchema expectedSchema) throws Exception {
     metaClient = HoodieTestUtils.getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, new Properties(),"")
         .setTableCreateSchema(SCHEMA_WITH_METADATA.toString())
         .initTable(getDefaultStorageConf(), basePath);
     testTable = HoodieTestTable.of(metaClient);
 
-    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(includeMetadataFields, Option.empty()).get());
+    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableSchemaIfPresent(includeMetadataFields, Option.empty()).get());
     // getTableAvroSchemaFromLatestCommit only cares about active timeline, since it is empty, no schema is returned.
-    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(
+    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableSchemaIfPresent(
         includeMetadataFields, Option.of(metaClient.getInstantGenerator().createNewInstant(
             HoodieInstant.State.COMPLETED, COMMIT_ACTION, "0010", "0011"))).get());
   }
 
   @Test
-  public void testGetTableAvroSchemaInternalWithPartitionFields() throws IOException {
+  public void testGetTableSchemaInternalWithPartitionFields() throws IOException {
     initMetaClient(false, HoodieTableType.COPY_ON_WRITE);
     testTable = HoodieTestTable.of(metaClient);
     // Setup table config with partition fields
@@ -467,22 +467,22 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     metaClient.reloadActiveTimeline();
 
     ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient);
-    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresent(true, Option.empty());
+    Option<HoodieSchema> schemaOption = resolver.getTableSchemaIfPresent(true, Option.empty());
 
     assertTrue(schemaOption.isPresent());
-    Schema resultSchema = schemaOption.get();
+    HoodieSchema resultSchema = schemaOption.get();
     assertTrue(resultSchema.getFields().stream()
         .anyMatch(f -> f.name().equals("partition_path")));
   }
 
   @ParameterizedTest
   @MethodSource("commonTableConfigTestDimension")
-  void testGetTableAvroSchemaInternalWithSpecificInstant(HoodieTableType tableType) throws Exception {
+  void testGetTableSchemaInternalWithSpecificInstant(HoodieTableType tableType) throws Exception {
     initMetaClient(false, tableType);
     testTable = HoodieTestTable.of(metaClient);
 
-    Schema schema1 = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
-    Schema schema2 = new Schema.Parser().parse(TRIP_SCHEMA);
+    HoodieSchema schema1 = HoodieSchema.parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    HoodieSchema schema2 = HoodieSchema.parse(TRIP_SCHEMA);
 
     // Create two commits with different schemas
     int startCommitTime = 10;
@@ -514,7 +514,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
 
     // Test getting schema from first instant
     String timestamp1 = padWithLeadingZeros(Integer.toString(10), REQUEST_TIME_LENGTH);
-    Option<Schema> schema1Option = resolver.getTableAvroSchemaIfPresent(
+    Option<HoodieSchema> schema1Option = resolver.getTableSchemaIfPresent(
         false,
         Option.of(metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, timestamp1, incTimestampStrByOne(timestamp1))));
     assertTrue(schema1Option.isPresent());
@@ -522,7 +522,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
 
     // Test getting schema from second instant
     String timestamp2 = padWithLeadingZeros(Integer.toString(20), REQUEST_TIME_LENGTH);
-    Option<Schema> schema2Option = resolver.getTableAvroSchemaIfPresent(
+    Option<HoodieSchema> schema2Option = resolver.getTableSchemaIfPresent(
         false,
         Option.of(metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, timestamp2, incTimestampStrByOne(timestamp2))));
     assertTrue(schema2Option.isPresent());
@@ -534,7 +534,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
 
     for (Integer i = startCommitTime + 10; i <= endCommitTime + 10; i += 10) {
       String timestampI = padWithLeadingZeros(Integer.toString(i), REQUEST_TIME_LENGTH);
-      schema2Option = resolver.getTableAvroSchemaIfPresent(false,
+      schema2Option = resolver.getTableSchemaIfPresent(false,
           Option.of(metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, timestampI, incTimestampStrByOne(timestampI))));
       assertTrue(schema2Option.isPresent(), i::toString);
       assertEquals(schema2.toString(), schema2Option.get().toString());
@@ -542,14 +542,14 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
   }
 
   @Test
-  void testTableAvroSchemaFromTimelineCachingBehavior() throws Exception {
+  void testTableSchemaFromTimelineCachingBehavior() throws Exception {
     // Initialize with COW table type
     initMetaClient(false, HoodieTableType.COPY_ON_WRITE);
     testTable = HoodieTestTable.of(metaClient);
 
     // Create test schema
-    Schema schema1 = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
-    Schema schema2 = new Schema.Parser().parse(HoodieTestDataGenerator.SHORT_TRIP_SCHEMA);
+    HoodieSchema schema1 = HoodieSchema.parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    HoodieSchema schema2 = HoodieSchema.parse(HoodieTestDataGenerator.SHORT_TRIP_SCHEMA);
 
     // Create a commit with schema1
     String commitTime1 = "0010";
@@ -578,7 +578,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     HoodieInstant instant1 = metaClient.getCommitsTimeline().filterCompletedInstants().nthInstant(0).get();
 
     // Case 1: First call with empty instant - should fetch from timeline and cache
-    Option<Schema> schemaOption1 = resolver.getTableAvroSchemaFromTimelineWithCache(Option.empty());
+    Option<HoodieSchema> schemaOption1 = resolver.getTableSchemaFromTimelineWithCache(Option.empty());
     assertTrue(schemaOption1.isPresent());
     assertEquals(schema2, schemaOption1.get());
 
@@ -586,7 +586,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     verify(resolver, times(1)).getLastCommitMetadataWithValidSchemaFromTimeline(any(), any());
 
     // Case 2: Second call with empty instant - should use cache
-    Option<Schema> schemaOption2 = resolver.getTableAvroSchemaFromTimelineWithCache(Option.empty());
+    Option<HoodieSchema> schemaOption2 = resolver.getTableSchemaFromTimelineWithCache(Option.empty());
     assertTrue(schemaOption2.isPresent());
     assertEquals(schema2, schemaOption2.get());
 
@@ -594,7 +594,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     verify(resolver, times(1)).getLastCommitMetadataWithValidSchemaFromTimeline(any(), any());
 
     // Case 3: Call with the latest valid instant - there should be a cache hit
-    Option<Schema> schemaOption3 = resolver.getTableAvroSchemaFromTimelineWithCache(Option.of(instant2));
+    Option<HoodieSchema> schemaOption3 = resolver.getTableSchemaFromTimelineWithCache(Option.of(instant2));
     assertTrue(schemaOption3.isPresent());
     assertEquals(schema2, schemaOption3.get());
 
@@ -602,7 +602,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     verify(resolver, times(1)).getLastCommitMetadataWithValidSchemaFromTimeline(any(), any());
 
     // Case 4: Second call with some other instant - should use cache
-    Option<Schema> schemaOption4 = resolver.getTableAvroSchemaFromTimelineWithCache(Option.of(instant1));
+    Option<HoodieSchema> schemaOption4 = resolver.getTableSchemaFromTimelineWithCache(Option.of(instant1));
     assertTrue(schemaOption4.isPresent());
     assertEquals(schema1, schemaOption4.get());
 
@@ -613,7 +613,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     String nonExistentTime = "9999";
     HoodieInstant nonExistentInstant = metaClient.getInstantGenerator().createNewInstant(
         HoodieInstant.State.COMPLETED, COMMIT_ACTION, nonExistentTime, nonExistentTime);
-    Option<Schema> schemaOption5 = resolver.getTableAvroSchemaFromTimelineWithCache(Option.of(nonExistentInstant));
+    Option<HoodieSchema> schemaOption5 = resolver.getTableSchemaFromTimelineWithCache(Option.of(nonExistentInstant));
     assertEquals(schema2, schemaOption5.get());
 
     // Verify one more call to timeline for non-existent instant

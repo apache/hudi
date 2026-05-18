@@ -20,6 +20,7 @@ package org.apache.hudi.common.util.queue;
 
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import com.lmax.disruptor.EventTranslator;
@@ -28,11 +29,11 @@ import com.lmax.disruptor.TimeoutException;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
 
 /**
@@ -41,9 +42,8 @@ import java.util.function.Function;
  * @param <I> Input type.
  * @param <O> Transformed output type.
  */
+@Slf4j
 public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(DisruptorMessageQueue.class);
 
   private final Disruptor<HoodieDisruptorEvent> queue;
   private final Function<I, O> transformFunction;
@@ -56,6 +56,8 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   private static final long TIMEOUT_WAITING_SECS = 10L;
 
   public DisruptorMessageQueue(int bufferSize, Function<I, O> transformFunction, String waitStrategyId, int totalProducers, Runnable preExecuteRunnable) {
+    ValidationUtils.checkArgument((bufferSize & (bufferSize - 1)) == 0,
+        "Disruptor ring buffer size must be a power of 2, got: " + bufferSize);
     WaitStrategy waitStrategy = WaitStrategyFactory.build(waitStrategyId);
     CustomizedThreadFactory threadFactory = new CustomizedThreadFactory("disruptor", true, preExecuteRunnable);
 
@@ -109,6 +111,32 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   public void seal() {
   }
 
+  /**
+   * Waits until all published events have been consumed by the handler thread,
+   * without shutting down the disruptor. The handler thread remains alive after
+   * this method returns — this is critical when downstream components (e.g. GCS
+   * pipe) require the writing thread to stay alive during a subsequent flush.
+   *
+   * <p>Must only be called when no new events will be published (e.g. during
+   * Flink's {@code snapshotState} where {@code processElement} is guaranteed
+   * not to run concurrently).
+   *
+   * <p>The method returns early if the consumer has failed ({@link #getThrowable()})
+   * or the calling thread has been interrupted (e.g. by Flink's checkpoint timeout).
+   */
+  public void waitUntilDrained() {
+    while (!isEmpty()) {
+      if (throwable.get() != null) {
+        return;
+      }
+      if (Thread.currentThread().isInterrupted()) {
+        markAsFailed(new HoodieException("Interrupted while waiting for disruptor queue to drain"));
+        return;
+      }
+      LockSupport.parkNanos(100_000);
+    }
+  }
+
   @Override
   public void close() {
     synchronized (this) {
@@ -117,11 +145,11 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
         isStarted = false;
         if (Thread.currentThread().isInterrupted()) {
           // if current thread has been interrupted, we still give executor a chance to proceeding.
-          LOG.error("Disruptor Queue has been interrupted! Shutdown now.");
+          log.error("Disruptor Queue has been interrupted! Shutdown now.");
           try {
             queue.shutdown(TIMEOUT_WAITING_SECS, TimeUnit.SECONDS);
           } catch (TimeoutException e) {
-            LOG.error("Disruptor queue shutdown timeout: " + e);
+            log.error("Disruptor queue shutdown timeout: ", e);
             throw new HoodieException(e);
           }
           throw new HoodieException("Disruptor Queue has been interrupted! Shutdown now.");
@@ -132,17 +160,24 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
     }
   }
 
-  protected void setHandlers(HoodieConsumer<O, ?> consumer) {
+  /**
+   * Sets the consumer handler for this queue.
+   */
+  public void setHandlers(HoodieConsumer<O, ?> consumer) {
     queue.handleEventsWith((event, sequence, endOfBatch) -> {
       try {
         consumer.consume(event.get());
       } catch (Exception e) {
-        LOG.error("Failed consuming records", e);
+        log.error("Failed consuming records", e);
+        markAsFailed(e);
       }
     });
   }
 
-  protected void start() {
+  /**
+   * Starts the disruptor queue.
+   */
+  public void start() {
     synchronized (this) {
       if (!isStarted) {
         queue.start();

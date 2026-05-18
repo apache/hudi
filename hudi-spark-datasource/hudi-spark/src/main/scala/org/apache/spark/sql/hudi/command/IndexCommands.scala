@@ -152,7 +152,7 @@ case class DropIndexCommand(table: CatalogTable,
 
 /**
  * Command to show available indexes in hudi. The corresponding logical plan is available at
- * org.apache.spark.sql.catalyst.plans.logical.ShowIndexes
+ * org.apache.spark.sql.catalyst.plans.logical.HoodieShowIndexes
  */
 case class ShowIndexesCommand(table: CatalogTable,
                               override val output: Seq[Attribute]) extends IndexBaseCommand {

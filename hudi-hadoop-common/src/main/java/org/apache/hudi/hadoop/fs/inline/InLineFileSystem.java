@@ -43,6 +43,29 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
  * - Reading an inlined file at a given offset, length, read it out as if it were an independent file of that length
  * - Inlined path is of the form "inlinefs:///path/to/outer/file/<outer_file_scheme>/?start_offset=<start_offset>&length=<length>
  * <p>
+ * Example:
+ * <pre>
+ * inlinefs://tests_7af7f087-c807-4f5e-a759-65fd9c21063b/hudi_multi_fg_pt_v8_mor/.hoodie/metadata/column_stats/
+ * .col-stats-0001-0_20250429145946675.log.1_1-120-382/local/?start_offset=8036&length=6959
+ * </pre>
+ * <p>
+ * In this example:
+ * <ul>
+ *   <li>The outer file path is: {@code tests_7af7f087-c807-4f5e-a759-65fd9c21063b/hudi_multi_fg_pt_v8_mor/.hoodie/metadata/
+ *       column_stats/.col-stats-0001-0_20250429145946675.log.1_1-120-382}</li>
+ *   <li>The outer file scheme is: {@code local} (representing local file system)</li>
+ *   <li>The inline content starts at byte offset: {@code 8036}</li>
+ *   <li>The inline content length is: {@code 6959} bytes</li>
+ * </ul>
+ * <p>
+ * When this path is opened, the file system will:
+ * <ol>
+ *   <li>Extract the outer file path and scheme from the URL</li>
+ *   <li>Open the outer file using the appropriate file system</li>
+ *   <li>Seek to the start_offset (8036 in the example)</li>
+ *   <li>Present the next 'length' bytes (6959 in the example) as if they were an independent file</li>
+ * </ol>
+ * <p>
  * TODO: The reader/writer may try to use relative paths based on the inlinepath and it may not work. Need to handle
  * this gracefully eg. the parquet summary metadata reading. TODO: If this shows promise, also support directly writing
  * the inlined file to the underneath file without buffer

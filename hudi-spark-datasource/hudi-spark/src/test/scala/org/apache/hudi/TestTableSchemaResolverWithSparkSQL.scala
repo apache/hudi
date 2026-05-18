@@ -19,12 +19,12 @@ package org.apache.hudi
 
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.model.HoodieMetadataRecord
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils => HoodieCommonSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
-import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.SaveMode
@@ -57,7 +57,7 @@ class TestTableSchemaResolverWithSparkSQL extends HoodieSparkWriterTestBase {
     )
 
     // generate the inserts
-    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val records = DataSourceTestUtils.generateRandomRows(10)
     val recordsSeq = convertRowListToSeq(records)
     val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
@@ -101,7 +101,7 @@ class TestTableSchemaResolverWithSparkSQL extends HoodieSparkWriterTestBase {
     )
 
     // generate the inserts
-    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val records = DataSourceTestUtils.generateRandomRows(10)
     val recordsSeq = convertRowListToSeq(records)
     val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
@@ -122,10 +122,10 @@ class TestTableSchemaResolverWithSparkSQL extends HoodieSparkWriterTestBase {
     metaClient.reloadActiveTimeline()
     var tableSchemaResolverParsingException: Exception = null
     try {
-      val schemaFromData = new TableSchemaResolver(metaClient).getTableAvroSchemaFromDataFile
-      val structFromData = AvroConversionUtils.convertAvroSchemaToStructType(HoodieAvroUtils.removeMetadataFields(schemaFromData))
-      val schemeDesign = new Schema.Parser().parse(schemaString)
-      val structDesign = AvroConversionUtils.convertAvroSchemaToStructType(schemeDesign)
+      val schemaFromData = new TableSchemaResolver(metaClient).getTableSchemaFromDataFile
+      val structFromData = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(HoodieCommonSchemaUtils.removeMetadataFields(schemaFromData))
+      val schemeDesign = HoodieSchema.parse(schemaString)
+      val structDesign = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schemeDesign)
       assertEquals(structFromData, structDesign)
     } catch {
       case e: Exception => tableSchemaResolverParsingException = e;

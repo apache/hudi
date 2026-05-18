@@ -19,6 +19,9 @@
 package org.apache.hudi.utilities.schema.postprocessor;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
@@ -56,20 +59,26 @@ public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
 
   @Deprecated
   public static class Config {
+
     @Deprecated
     public static final String DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP =
         SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key();
   }
 
   @Override
+  @Deprecated
   public Schema processSchema(Schema schema) {
+    return processSchema(HoodieSchema.fromAvroSchema(schema)).toAvroSchema();
+  }
 
+  @Override
+  public HoodieSchema processSchema(HoodieSchema schema) {
     String columnToDeleteStr = getStringWithAltKeys(
         this.config, SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN);
 
     if (StringUtils.isNullOrEmpty(columnToDeleteStr)) {
-      LOG.warn(String.format("Param %s is null or empty, return original schema",
-          SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key()));
+      LOG.warn("Param {} is null or empty, return original schema",
+          SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key());
     }
 
     // convert field to lowerCase for compare purpose
@@ -77,12 +86,12 @@ public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
         .map(filed -> filed.toLowerCase(Locale.ROOT))
         .collect(Collectors.toSet());
 
-    List<Schema.Field> sourceFields = schema.getFields();
-    List<Schema.Field> targetFields = new LinkedList<>();
+    List<HoodieSchemaField> sourceFields = schema.getFields();
+    List<HoodieSchemaField> targetFields = new LinkedList<>();
 
-    for (Schema.Field sourceField : sourceFields) {
+    for (HoodieSchemaField sourceField : sourceFields) {
       if (!columnsToDelete.contains(sourceField.name().toLowerCase(Locale.ROOT))) {
-        targetFields.add(new Schema.Field(sourceField.name(), sourceField.schema(), sourceField.doc(), sourceField.defaultVal()));
+        targetFields.add(HoodieSchemaUtils.createNewSchemaField(sourceField));
       }
     }
 
@@ -90,7 +99,6 @@ public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
       throw new HoodieSchemaPostProcessException("Target schema is empty, you can not remove all columns!");
     }
 
-    return Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false, targetFields);
+    return HoodieSchema.createRecord(schema.getName(), schema.getDoc().orElse(null), schema.getNamespace().orElse(null), false, targetFields);
   }
-
 }

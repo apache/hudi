@@ -20,6 +20,7 @@ package org.apache.hudi.utils;
 
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
+import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
@@ -401,8 +402,9 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   }
 
   private void createCleanMetadata(String instantTime) throws IOException {
+    HoodieCleanFileInfo fileInfo = new HoodieCleanFileInfo("file1", false);
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""),
-        "", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.EMPTY_MAP);
+        "", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, Collections.singletonMap("key", Collections.singletonList(fileInfo)), new ArrayList<>(), Collections.EMPTY_MAP);
     HoodieCleanStat cleanStats = new HoodieCleanStat(
         HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
         HoodieTestUtils.DEFAULT_PARTITION_PATHS[new Random().nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)],

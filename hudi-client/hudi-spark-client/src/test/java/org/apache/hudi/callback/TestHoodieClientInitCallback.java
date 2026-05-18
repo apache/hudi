@@ -23,13 +23,16 @@ import org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback;
 import org.apache.hudi.client.BaseHoodieClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.avro.Schema;
+import org.apache.spark.SparkConf;
+import org.apache.spark.SparkContext;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -69,8 +72,20 @@ public class TestHoodieClientInitCallback {
 
   @BeforeAll
   public static void setup() {
+    // Mock JavaSparkContext and SparkContext for speculative execution check
+    JavaSparkContext mockJavaSparkContext = Mockito.mock(JavaSparkContext.class);
+    SparkContext mockSparkContext = Mockito.mock(SparkContext.class);
+    SparkConf mockSparkConf = Mockito.mock(SparkConf.class);
+
+    // Setup the mock chain
+    when(engineContext.getJavaSparkContext()).thenReturn(mockJavaSparkContext);
+    when(mockJavaSparkContext.sc()).thenReturn(mockSparkContext);
+    when(mockSparkContext.conf()).thenReturn(mockSparkConf);
+    when(mockSparkConf.getBoolean("spark.speculation", false)).thenReturn(false);
+
     StorageConfiguration storageConfToReturn = getDefaultStorageConf();
     when(engineContext.getStorageConf()).thenReturn(storageConfToReturn);
+    when(engineContext.getApplicationId()).thenReturn("test-app-id");
   }
 
   @Test
@@ -98,20 +113,20 @@ public class TestHoodieClientInitCallback {
             WRITE_SCHEMA_OVERRIDE.key(), TRIP_NESTED_EXAMPLE_SCHEMA))
         .build(false);
     assertFalse(config.contains(CUSTOM_CONFIG_KEY1));
-    assertFalse(new Schema.Parser().parse(config.getWriteSchema())
+    assertFalse(HoodieSchema.parse(config.getWriteSchema())
         .getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
 
     try (SparkRDDWriteClient<Object> writeClient = new SparkRDDWriteClient<>(engineContext, config)) {
 
       HoodieWriteConfig updatedConfig = writeClient.getConfig();
       assertFalse(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
-      Schema actualSchema = new Schema.Parser().parse(updatedConfig.getWriteSchema());
+      HoodieSchema actualSchema = HoodieSchema.parse(updatedConfig.getWriteSchema());
       assertTrue(actualSchema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
       assertEquals(CUSTOM_CONFIG_VALUE2, actualSchema.getObjectProps().get(CUSTOM_CONFIG_KEY2));
 
       updatedConfig = writeClient.getTableServiceClient().getConfig();
       assertFalse(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
-      actualSchema = new Schema.Parser().parse(updatedConfig.getWriteSchema());
+      actualSchema = HoodieSchema.parse(updatedConfig.getWriteSchema());
       assertTrue(actualSchema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
       assertEquals(CUSTOM_CONFIG_VALUE2, actualSchema.getObjectProps().get(CUSTOM_CONFIG_KEY2));
     }
@@ -129,7 +144,7 @@ public class TestHoodieClientInitCallback {
             WRITE_SCHEMA_OVERRIDE.key(), TRIP_NESTED_EXAMPLE_SCHEMA))
         .build(false);
     assertFalse(config.contains(CUSTOM_CONFIG_KEY1));
-    assertFalse(new Schema.Parser().parse(config.getWriteSchema())
+    assertFalse(HoodieSchema.parse(config.getWriteSchema())
         .getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
 
     try (SparkRDDWriteClient<Object> writeClient = new SparkRDDWriteClient<>(engineContext, config)) {
@@ -137,14 +152,14 @@ public class TestHoodieClientInitCallback {
       HoodieWriteConfig updatedConfig = writeClient.getConfig();
       assertTrue(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
       assertEquals(CUSTOM_CONFIG_VALUE1, updatedConfig.getString(CUSTOM_CONFIG_KEY1));
-      Schema actualSchema = new Schema.Parser().parse(updatedConfig.getWriteSchema());
+      HoodieSchema actualSchema = HoodieSchema.parse(updatedConfig.getWriteSchema());
       assertTrue(actualSchema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
       assertEquals(CUSTOM_CONFIG_VALUE2, actualSchema.getObjectProps().get(CUSTOM_CONFIG_KEY2));
 
       updatedConfig = writeClient.getTableServiceClient().getConfig();
       assertTrue(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
       assertEquals(CUSTOM_CONFIG_VALUE1, updatedConfig.getString(CUSTOM_CONFIG_KEY1));
-      actualSchema = new Schema.Parser().parse(updatedConfig.getWriteSchema());
+      actualSchema = HoodieSchema.parse(updatedConfig.getWriteSchema());
       assertTrue(actualSchema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
       assertEquals(CUSTOM_CONFIG_VALUE2, actualSchema.getObjectProps().get(CUSTOM_CONFIG_KEY2));
     }
@@ -217,7 +232,7 @@ public class TestHoodieClientInitCallback {
     @Override
     public void call(BaseHoodieClient hoodieClient) {
       HoodieWriteConfig config = hoodieClient.getConfig();
-      Schema schema = new Schema.Parser().parse(config.getWriteSchema());
+      HoodieSchema schema = HoodieSchema.parse(config.getWriteSchema());
       if (!schema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2)) {
         schema.addProp(CUSTOM_CONFIG_KEY2, CUSTOM_CONFIG_VALUE2);
       }

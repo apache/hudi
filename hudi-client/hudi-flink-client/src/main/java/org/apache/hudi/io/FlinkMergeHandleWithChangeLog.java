@@ -23,16 +23,15 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -44,11 +43,10 @@ import java.util.List;
  * <p>The cdc about logic is copied from {@link HoodieMergeHandleWithChangeLog},
  * we should refactor it out when there are good abstractions.
  */
+@Slf4j
 public class FlinkMergeHandleWithChangeLog<T, I, K, O>
     extends FlinkMergeHandle<T, I, K, O> {
   private final HoodieCDCLogger cdcLogger;
-
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkMergeHandleWithChangeLog.class);
 
   public FlinkMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                        Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
@@ -66,16 +64,16 @@ public class FlinkMergeHandleWithChangeLog<T, I, K, O>
   }
 
   @Override
-  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOpt, Schema writerSchema)
+  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, HoodieRecord combineRecord, HoodieSchema writerSchema)
       throws IOException {
     // TODO [HUDI-5019] Remove these unnecessary newInstance invocations
-    Option<HoodieRecord> savedCombineRecordOp = combineRecordOpt.map(HoodieRecord::newInstance);
-    final boolean result = super.writeUpdateRecord(newRecord, oldRecord, combineRecordOpt, writerSchema);
+    HoodieRecord savedCombineRecord = combineRecord.newInstance();
+    final boolean result = super.writeUpdateRecord(newRecord, oldRecord, combineRecord, writerSchema);
     if (result) {
       boolean isDelete = HoodieOperation.isDelete(newRecord.getOperation());
       GenericRecord oldAvroRecord = (GenericRecord) toAvroRecord(oldRecord, writeSchemaWithMetaFields, config.getProps()).get();
       Option<IndexedRecord> newAvroRecordOpt =
-          isDelete ? Option.empty() : savedCombineRecordOp.flatMap(r -> toAvroRecord(r, writerSchema, config.getProps()));
+          isDelete ? Option.empty() : toAvroRecord(savedCombineRecord, writerSchema, config.getProps());
       cdcLogger.put(newRecord, oldAvroRecord, newAvroRecordOpt);
     }
     return result;
@@ -83,7 +81,7 @@ public class FlinkMergeHandleWithChangeLog<T, I, K, O>
 
   @Override
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
-    Schema schema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
+    HoodieSchema schema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
     // TODO Remove these unnecessary newInstance invocations
     HoodieRecord<T> savedRecord = newRecord.newInstance();
     super.writeInsertRecord(newRecord);
