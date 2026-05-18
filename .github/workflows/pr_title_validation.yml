@@ -17,8 +17,10 @@ jobs:
     steps:
       - name: Check for legacy PR title format using JIRA or MINOR
         id: check-legacy-format
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          title="${{ github.event.pull_request.title }}"
+          title="$PR_TITLE"
           echo "Checking PR title: $title"
           
           # Check for HUDI JIRA format: [HUDI-1234] description
