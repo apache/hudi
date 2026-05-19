@@ -70,6 +70,10 @@ public class HoodieSchemaConverter {
    * <p>The "{rowName}." is used as the nested row type name prefix in order to generate
    * the right schema. Nested record types that only differ by type name are still compatible.
    *
+   * <p>On Flink 2.1+, {@code LogicalTypeRoot.VARIANT} is detected via string comparison
+   * (to avoid compile-time dependency) and mapped to {@link HoodieSchema#createVariant()}.
+   * Pre-2.1 Flink does not support Variant.
+   *
    * @param logicalType Flink logical type
    * @param rowName     the record name
    * @return HoodieSchema matching this logical type

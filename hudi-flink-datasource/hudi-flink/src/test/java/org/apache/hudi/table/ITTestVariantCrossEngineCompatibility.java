@@ -41,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+
 /**
  * Integration test for cross-engine compatibility - verifying that Flink can read Variant tables written by Spark 4.0.
  */
@@ -56,7 +57,6 @@ public class ITTestVariantCrossEngineCompatibility {
   private void verifyFlinkCanReadSparkVariantTable(String tablePath, String tableType, String testDescription) throws Exception {
     TableEnvironment tableEnv = TestTableEnvs.getBatchTableEnv();
 
-    // Create a Hudi table pointing to the Spark-written data
     String createTableDdl = String.format(
         "CREATE TABLE variant_table ("
             + "  id INT,"
@@ -73,7 +73,6 @@ public class ITTestVariantCrossEngineCompatibility {
 
     tableEnv.executeSql(createTableDdl);
 
-    // Query the table to verify Flink can read the data
     TableResult result = tableEnv.executeSql("SELECT id, name, v, ts FROM variant_table ORDER BY id");
     List<Row> rows = CollectionUtil.iteratorToList(result.collect());
 
