@@ -2100,9 +2100,25 @@ public class HoodieTableMetadataUtil {
     // For any rollbacks and restores, we cannot neglect the instants that they are rolling back.
     // The rollback instant should be more recent than the start of the timeline for it to have rolled back any
     // instant which we have a log block for.
+    //
+    // Only read rollback metadata for rollbacks newer than the latest MDT compaction.
+    // After compaction, rolled-back log blocks are already merged into base files, so pre-compaction
+    // rollback timestamps are no longer needed for log block filtering. This avoids sequential storage
+    // reads for old rollback instants that can cause long latency during metadata table reading.
     final String earliestInstantTime = validInstantTimestamps.isEmpty() ? SOLO_COMMIT_TIMESTAMP : Collections.min(validInstantTimestamps);
+    final String latestMdtCompactionTime = metadataMetaClient.getActiveTimeline()
+        .getCommitTimeline()
+        .filterCompletedInstants()
+        .lastInstant()
+        .map(HoodieInstant::requestedTime)
+        .orElse(earliestInstantTime);
+    // Only read rollback metadata for rollbacks newer than the later of:
+    // (a) the earliest completed instant, and
+    // (b) the latest MDT compaction instant
+    final String rollbackFilterThreshold = compareTimestamps(latestMdtCompactionTime,
+        GREATER_THAN, earliestInstantTime) ? latestMdtCompactionTime : earliestInstantTime;
     datasetTimeline.getRollbackAndRestoreTimeline().filterCompletedInstants().getInstantsAsStream()
-            .filter(instant -> compareTimestamps(instant.requestedTime(), GREATER_THAN, earliestInstantTime))
+            .filter(instant -> compareTimestamps(instant.requestedTime(), GREATER_THAN, rollbackFilterThreshold))
             .forEach(instant -> validInstantTimestamps.addAll(getRollbackedCommits(instant, datasetTimeline, dataMetaClient.getInstantGenerator())));
 
     // add restore and rollback instants from MDT.
