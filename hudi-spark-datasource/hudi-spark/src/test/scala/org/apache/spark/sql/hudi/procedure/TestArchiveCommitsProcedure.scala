@@ -21,77 +21,113 @@ package org.apache.spark.sql.hudi.procedure
 
 class TestArchiveCommitsProcedure extends HoodieSparkProcedureTestBase {
 
-  test("Test Call archive_commits Procedure by Table") {
+  /**
+   * Helper: create a fresh COW table at the given location with `numCommits`
+   * insert commits already written. Returns the table name for follow-up calls.
+   */
+  private def createTableWithCommits(location: String, numCommits: Int): String = {
+    val tableName = generateTableName
+    spark.sql(
+      s"""
+         |create table $tableName (
+         | id int,
+         | name string,
+         | price double,
+         | ts long
+         | ) using hudi
+         | location '$location'
+         | tblproperties (
+         |   primaryKey = 'id',
+         |   type = 'cow',
+         |   orderingFields = 'ts',
+         |   hoodie.metadata.enable = "false"
+         | )
+         |""".stripMargin)
+
+    (1 to numCommits).foreach { i =>
+      spark.sql(s"insert into $tableName values($i, 'a$i', ${i * 10}, ${i * 1000})")
+    }
+    tableName
+  }
+
+  test("Test Call archive_commits Procedure with named parameters") {
     withTempDir { tmp =>
-      val tableName = generateTableName
-      spark.sql(
-        s"""
-           |create table $tableName (
-           | id int,
-           | name string,
-           | price double,
-           | ts long
-           | ) using hudi
-           | location '${tmp.getCanonicalPath}'
-           | tblproperties (
-           |   primaryKey = 'id',
-           |   type = 'cow',
-           |   orderingFields = 'ts',
-           |   hoodie.metadata.enable = "false"
-           | )
-           |""".stripMargin)
+      val tableName = createTableWithCommits(tmp.getCanonicalPath, 6)
 
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"insert into $tableName values(2, 'a2', 20, 2000)")
-      spark.sql(s"insert into $tableName values(3, 'a3', 30, 3000)")
-      spark.sql(s"insert into $tableName values(4, 'a4', 40, 4000)")
-      spark.sql(s"insert into $tableName values(5, 'a5', 50, 5000)")
-      spark.sql(s"insert into $tableName values(6, 'a6', 60, 6000)")
-
-      val result1 = spark.sql(s"call archive_commits(table => '$tableName'" +
-        s", min_commits => 2, max_commits => 3, retain_commits => 1, enable_metadata => false)")
+      val result = spark.sql(
+        s"call archive_commits(table => '$tableName'," +
+          " min_commits => 2, max_commits => 3, retain_commits => 1, enable_metadata => false)")
         .collect()
         .map(row => Seq(row.getInt(0)))
-      assertResult(1)(result1.length)
-      assertResult(0)(result1(0).head)
+      assertResult(1)(result.length)
+      assertResult(0)(result(0).head)
 
-      // collect active commits for table
-      val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
-      assertResult(2) {
-        commits.length
-      }
+      val commits = spark.sql(s"call show_commits(table => '$tableName', limit => 10)").collect()
+      assertResult(2)(commits.length)
 
-      // collect archived commits for table
       val endTs = commits(0).get(0).toString
-      val archivedCommits = spark.sql(s"""call show_archived_commits(table => '$tableName', end_ts => '$endTs')""").collect()
-      assertResult(4) {
-        archivedCommits.length
-      }
+      val archived = spark.sql(
+        s"call show_archived_commits(table => '$tableName', end_ts => '$endTs')").collect()
+      assertResult(4)(archived.length)
+    }
+  }
 
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"insert into $tableName values(2, 'a2', 20, 2000)")
-      spark.sql(s"insert into $tableName values(3, 'a3', 30, 3000)")
+  test("Test Call archive_commits Procedure with options") {
+    withTempDir { tmp =>
+      val tableName = createTableWithCommits(tmp.getCanonicalPath, 6)
 
-      // test options
-      val result2 = spark.sql(s"call archive_commits(table => '$tableName'" +
-          s", retain_commits => 1, options => 'hoodie.keep.min.commits = 2, hoodie.keep.max.commits=3, hoodie.commits.archival.batch=1')")
+      // archival behavior is fully driven by the options string
+      val result = spark.sql(
+        s"call archive_commits(table => '$tableName'," +
+          " retain_commits => 1," +
+          " options => 'hoodie.keep.min.commits=2,hoodie.keep.max.commits=3," +
+          "hoodie.commits.archival.batch=1')")
         .collect()
         .map(row => Seq(row.getInt(0)))
-      assertResult(1)(result2.length)
-      assertResult(0)(result2(0).head)
+      assertResult(1)(result.length)
+      assertResult(0)(result(0).head)
 
-      // collect active commits for table
-      val commits2 = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
-      assertResult(3) {
-        commits2.length
-      }
+      val commits = spark.sql(s"call show_commits(table => '$tableName', limit => 10)").collect()
+      assertResult(2)(commits.length)
 
-      // collect archived commits for table
-      val endTs2 = commits2(0).get(0).toString
-      val archivedCommits2 = spark.sql(s"""call show_archived_commits(table => '$tableName', end_ts => '$endTs2')""").collect()
-      assertResult(6) {
-        archivedCommits2.length
+      val endTs = commits(0).get(0).toString
+      val archived = spark.sql(
+        s"call show_archived_commits(table => '$tableName', end_ts => '$endTs')").collect()
+      assertResult(4)(archived.length)
+    }
+  }
+
+  test("Test Call archive_commits Procedure: named parameters override options") {
+    withTempDir { tmp =>
+      val tableName = createTableWithCommits(tmp.getCanonicalPath, 6)
+
+      // options requests min=10/max=20 (which would archive nothing for 6 commits),
+      // but named min_commits=2/max_commits=3 must take precedence and trigger archival.
+      val result = spark.sql(
+        s"call archive_commits(table => '$tableName'," +
+          " min_commits => 2, max_commits => 3, retain_commits => 1, enable_metadata => false," +
+          " options => 'hoodie.keep.min.commits=10,hoodie.keep.max.commits=20')")
+        .collect()
+        .map(row => Seq(row.getInt(0)))
+      assertResult(1)(result.length)
+      assertResult(0)(result(0).head)
+
+      val commits = spark.sql(s"call show_commits(table => '$tableName', limit => 10)").collect()
+      // named params won → archival happened, only 2 active commits left
+      assertResult(2)(commits.length)
+    }
+  }
+
+  test("Test Call archive_commits Procedure: invalid options string fails fast") {
+    withTempDir { tmp =>
+      val tableName = createTableWithCommits(tmp.getCanonicalPath, 2)
+
+      val ex = intercept[IllegalArgumentException] {
+        spark.sql(
+          s"call archive_commits(table => '$tableName', options => 'invalid_token')")
+          .collect()
       }
+      assert(ex.getMessage.contains("Invalid options format"))
     }
   }
 }

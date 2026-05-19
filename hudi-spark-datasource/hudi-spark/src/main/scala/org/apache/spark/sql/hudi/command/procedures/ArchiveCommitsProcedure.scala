@@ -61,15 +61,11 @@ class ArchiveCommitsProcedure extends BaseProcedure
     val maxCommits = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[Int]
     val retainCommits = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[Int]
     val enableMetadata = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[Boolean]
-    val options = getArgValueOrDefault(args, PARAMETERS(6))
-    var confs: Map[String, String] = Map.empty
-
-    options match {
-      case Some(p) =>
-        confs = confs ++ HoodieCLIUtils.extractOptions(p.asInstanceOf[String])
-      case _ =>
-        logInfo("No options")
-    }
+    // Named parameters above (min_commits, max_commits, retain_commits, enable_metadata)
+    // take precedence over any same-name entries supplied via `options`.
+    val confs: Map[String, String] = getArgValueOrDefault(args, PARAMETERS(6))
+      .map(p => HoodieCLIUtils.extractOptions(p.toString))
+      .getOrElse(Map.empty)
 
     val basePath = getBasePath(tableName, tablePath)
 
