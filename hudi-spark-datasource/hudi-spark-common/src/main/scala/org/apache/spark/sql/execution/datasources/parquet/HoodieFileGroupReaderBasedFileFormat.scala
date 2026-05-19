@@ -102,6 +102,10 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
   private lazy val hasTimestampMillisFieldInTableSchema = HoodieSchemaRepair.hasTimestampMillisField(schema)
   private lazy val supportBatchWithTableSchema = HoodieSparkUtils.gteqSpark3_5 || !hasTimestampMillisFieldInTableSchema
+
+  // Batch size for the count(*) fast path's ColumnarBatch output. Matches Spark's default
+  // vectorized reader batch size (spark.sql.parquet.columnarReaderBatchSize).
+  private val COUNT_STAR_BATCH_SIZE: Int = 4096
   override def shortName(): String = "HudiFileGroup"
 
   override def toString: String = "HoodieFileGroupReaderBasedFileFormat"
@@ -297,10 +301,14 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     (file: PartitionedFile) => {
       // executor
       val storageConf = new HadoopStorageConfiguration(broadcastedStorageConf.value.value)
-      val iter = if (isCount) {
-        // Fast path for SELECT count(*): sum row counts from the parquet footer
-        // without opening the vectorized reader or decoding column data.
-        // Tracking: apache/hudi#18769.
+      // Fast path for SELECT count(*) on COW parquet tables: sum row counts from
+      // the parquet footer without opening the vectorized reader or decoding column
+      // data. Restricted to single-format parquet — ORC and Lance base files fall
+      // through to the regular reader.
+      val canUseCountFastPath = isCount &&
+        hoodieFileFormat == HoodieFileFormat.PARQUET &&
+        !isMultipleBaseFileFormatsEnabled
+      val iter = if (canUseCountFastPath) {
         readCountFromFooter(file, partitionSchema, storageConf)
       } else file.partitionValues match {
         // Snapshot or incremental queries.
@@ -531,24 +539,34 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   // Reads only the parquet footer (no row group decoding, no vectorized reader). The downstream
   // count aggregator counts rows in the produced batches/rows; column contents (partition
   // values) are populated as constants from file.partitionValues so codegen that touches
-  // column[i] still sees valid data. Tracking: apache/hudi#18769.
+  // column[i] still sees valid data.
   private def readCountFromFooter(file: PartitionedFile,
                                   partitionSchema: StructType,
                                   storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
     val storagePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
     val hadoopPath = HadoopFSUtils.convertToHadoopPath(storagePath)
     val footer = ParquetFileReader.readFooter(storageConf.unwrap(), hadoopPath, ParquetMetadataConverter.NO_FILTER)
-    val rowCount = footer.getBlocks.asScala.foldLeft(0L)((acc, b) => acc + b.getRowCount)
+    // The file may have been split into multiple PartitionedFile ranges by Spark
+    // (when file size > spark.sql.files.maxPartitionBytes and isSplitable=true).
+    // Count only row groups whose starting position falls inside this split — same
+    // criterion VectorizedParquetRecordReader uses internally to assign row groups
+    // to splits.
+    val splitStart = file.start
+    val splitEnd = file.start + file.length
+    val rowCount = footer.getBlocks.asScala
+      .filter(b => b.getStartingPos >= splitStart && b.getStartingPos < splitEnd)
+      .foldLeft(0L)((acc, b) => acc + b.getRowCount)
 
     // Unwrap Hudi's HoodiePartitionFileSliceMapping to get the underlying InternalRow with
     // partition values, which we replicate into each output batch/row.
     val partitionValues: InternalRow = file.partitionValues match {
+      case null => InternalRow.empty
       case m: HoodiePartitionFileSliceMapping => m.getPartitionValues
       case row: InternalRow => row
     }
 
     if (supportReturningBatch) {
-      val batchSize = 4096
+      val batchSize = COUNT_STAR_BATCH_SIZE
       val vectors: Array[org.apache.spark.sql.vectorized.ColumnVector] =
         partitionSchema.fields.zipWithIndex.map { case (field, idx) =>
           val vec = new ConstantColumnVector(batchSize, field.dataType)
