@@ -115,6 +115,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
   @Override
   protected HoodieFileWriter newLanceFileWriter(String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
                                                 TaskContextSupplier taskContextSupplier) throws IOException {
+    HoodieSparkLanceWriter.validateNoVariantColumns(schema);
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
     StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
     boolean enableBloomFilter = enableBloomFilter(populateMetaFields, config);
