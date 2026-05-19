@@ -378,4 +378,89 @@ public class TestHoodieCommitMetadata {
     writeStat.setNumDeletes(0);
     return writeStat;
   }
+
+  @Test
+  public void testGetMinAndMaxEventTimePerPartition_FoldsAcrossStatsWithinPartition() {
+    // Two stats in the same partition: per-partition rollup folds min/max across them.
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.addWriteStat("partition1", createWriteStatWithEventTime("partition1", "f1", 100L, 200L));
+    commitMetadata.addWriteStat("partition1", createWriteStatWithEventTime("partition1", "f2", 50L, 300L));
+    commitMetadata.addWriteStat("partition2", createWriteStatWithEventTime("partition2", "f3", 1000L, 2000L));
+
+    Map<String, Pair<Option<Long>, Option<Long>>> result = commitMetadata.getMinAndMaxEventTimePerPartition();
+
+    assertEquals(2, result.size());
+    assertEquals(Option.of(50L), result.get("partition1").getLeft());
+    assertEquals(Option.of(300L), result.get("partition1").getRight());
+    assertEquals(Option.of(1000L), result.get("partition2").getLeft());
+    assertEquals(Option.of(2000L), result.get("partition2").getRight());
+  }
+
+  @Test
+  public void testGetMinAndMaxEventTimePerPartition_OmitsPartitionsWithoutEventTime() {
+    // A partition whose stats carry no event time should not appear in the result map.
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.addWriteStat("partition1", createWriteStatWithEventTime("partition1", "f1", 100L, 200L));
+    commitMetadata.addWriteStat("partition2", createWriteStatWithEventTime("partition2", "f2", null, null));
+
+    Map<String, Pair<Option<Long>, Option<Long>>> result = commitMetadata.getMinAndMaxEventTimePerPartition();
+
+    assertEquals(1, result.size());
+    assertTrue(result.containsKey("partition1"));
+    assertEquals(Option.of(100L), result.get("partition1").getLeft());
+    assertEquals(Option.of(200L), result.get("partition1").getRight());
+  }
+
+  @Test
+  public void testGetMinAndMaxEventTimePerPartition_HandlesPartialEventTime() {
+    // Stats may carry only one of min/max (e.g. when folding across writers); the missing
+    // side should surface as Option.empty() in the rollup, the present side as Option.of(...).
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.addWriteStat("partition1", createWriteStatWithEventTime("partition1", "f1", 100L, null));
+    commitMetadata.addWriteStat("partition1", createWriteStatWithEventTime("partition1", "f2", null, 500L));
+
+    Map<String, Pair<Option<Long>, Option<Long>>> result = commitMetadata.getMinAndMaxEventTimePerPartition();
+
+    assertEquals(1, result.size());
+    assertEquals(Option.of(100L), result.get("partition1").getLeft());
+    assertEquals(Option.of(500L), result.get("partition1").getRight());
+  }
+
+  @Test
+  public void testGetMinAndMaxEventTimePerPartition_EmptyMetadata() {
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    assertTrue(commitMetadata.getMinAndMaxEventTimePerPartition().isEmpty());
+  }
+
+  @Test
+  public void testGetMinAndMaxEventTimePerPartition_MatchesGlobalRollup() {
+    // Sanity: collapsing the per-partition rollup yields the same min/max as the global getter.
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.addWriteStat("partition1", createWriteStatWithEventTime("partition1", "f1", 100L, 200L));
+    commitMetadata.addWriteStat("partition2", createWriteStatWithEventTime("partition2", "f2", 50L, 300L));
+    commitMetadata.addWriteStat("partition3", createWriteStatWithEventTime("partition3", "f3", 75L, 150L));
+
+    Pair<Option<Long>, Option<Long>> global = commitMetadata.getMinAndMaxEventTime();
+    Map<String, Pair<Option<Long>, Option<Long>>> perPartition = commitMetadata.getMinAndMaxEventTimePerPartition();
+
+    long minAcrossPartitions = perPartition.values().stream()
+        .mapToLong(p -> p.getLeft().orElse(Long.MAX_VALUE))
+        .min().getAsLong();
+    long maxAcrossPartitions = perPartition.values().stream()
+        .mapToLong(p -> p.getRight().orElse(Long.MIN_VALUE))
+        .max().getAsLong();
+
+    assertEquals(global.getLeft(), Option.of(minAcrossPartitions));
+    assertEquals(global.getRight(), Option.of(maxAcrossPartitions));
+  }
+
+  private HoodieWriteStat createWriteStatWithEventTime(String partitionPath, String fileId, Long minEventTime, Long maxEventTime) {
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setPartitionPath(partitionPath);
+    writeStat.setFileId(fileId);
+    writeStat.setPath(partitionPath + "/" + fileId + ".parquet");
+    writeStat.setMinEventTime(minEventTime);
+    writeStat.setMaxEventTime(maxEventTime);
+    return writeStat;
+  }
 }

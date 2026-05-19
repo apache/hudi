@@ -122,10 +122,19 @@ class TestHoodieWriteHandle {
 
   @Test
   void testShouldTrackEventTimeWaterMarkerAvroRecordTypeWithCommitTimeOrdering() {
-    // Setup: AVRO record type but with commit time ordering
+    // Watermark tracking is independent of merge mode: COMMIT_TIME_ORDERING + event time field
+    // + config enabled should still track, so freshness observability works for COW tables.
+    boolean result = mockWriteHandle(true, "ts", false, HoodieRecord.HoodieRecordType.AVRO, RecordMergeMode.COMMIT_TIME_ORDERING)
+        .isTrackingEventTimeWaterMarker();
+    assertTrue(result, "Should track event time watermark when commit time ordering is used but config + event time field are set");
+  }
+
+  @Test
+  void testShouldNotTrackEventTimeWaterMarkerWhenEventTimeFieldMissing() {
+    // No event time field configured -> no watermark, regardless of merge mode.
     boolean result = mockWriteHandle(true, null, false, HoodieRecord.HoodieRecordType.AVRO, RecordMergeMode.COMMIT_TIME_ORDERING)
         .isTrackingEventTimeWaterMarker();
-    assertFalse(result, "Should not track event time watermark when using commit time ordering");
+    assertFalse(result, "Should not track event time watermark when event time field is not configured");
   }
 
   @Test

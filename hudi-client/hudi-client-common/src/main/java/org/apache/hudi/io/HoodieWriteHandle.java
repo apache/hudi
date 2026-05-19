@@ -66,7 +66,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
@@ -140,9 +139,11 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     }
 
     // For tracking event time watermark.
+    // Watermark tracking is independent of the record merge mode: pure freshness
+    // observability is orthogonal to merge semantics, so COW / COMMIT_TIME_ORDERING
+    // tables that opt in still populate per-write-stat min/max event time.
     this.eventTimeFieldName = ConfigUtils.getEventTimeFieldName(config.getProps());
     this.isTrackingEventTimeWatermark = this.eventTimeFieldName != null
-        && hoodieTable.getMetaClient().getTableConfig().getRecordMergeMode() == EVENT_TIME_ORDERING
         && ConfigUtils.isTrackingEventTimeWatermark(config.getProps());
     this.keepConsistentLogicalTimestamp = isTrackingEventTimeWatermark && ConfigUtils.shouldKeepConsistentLogicalTimestamp(config.getProps());
     TypedProperties mergeProps = ConfigUtils.getMergeProps(config.getProps(), hoodieTable.getMetaClient().getTableConfig());
