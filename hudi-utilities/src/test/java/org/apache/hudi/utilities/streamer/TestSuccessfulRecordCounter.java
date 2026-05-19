@@ -37,8 +37,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests for {@link SuccessfulRecordCounter}. Covers the driver-side (collected list),
- * RDD-based, and error-table unification paths, plus null safety on public entry points.
+ * Tests for {@link SuccessfulRecordCounter}. Covers the driver-side (collected list)
+ * counting and error-table unification paths, plus null safety on public entry points.
  */
 public class TestSuccessfulRecordCounter {
 
@@ -159,28 +159,12 @@ public class TestSuccessfulRecordCounter {
   // ========== RDD-based path (real Spark) ==========
 
   @Test
-  public void testComputeFromRddNoUnification() {
-    WriteStatus a = stat(100L, 5L);
-    WriteStatus b = stat(200L, 10L);
-    JavaRDD<WriteStatus> rdd = jsc.parallelize(Arrays.asList(a, b));
-
-    SuccessfulRecordCounter.Counts counts = SuccessfulRecordCounter.computeFromRdd(
-        rdd, Option.empty(), false);
-
-    assertEquals(300L, counts.getTotalRecords());
-    assertEquals(15L, counts.getTotalErroredRecords());
-    assertEquals(285L, counts.getTotalSuccessfulRecords());
-  }
-
-  @Test
-  public void testComputeFromRddWithUnification() {
+  public void testUnificationWithRealSparkErrorRdd() {
     WriteStatus dataA = stat(100L, 5L);
-    JavaRDD<WriteStatus> dataRdd = jsc.parallelize(Collections.singletonList(dataA));
-    WriteStatus errA = stat(50L, 50L);
-    JavaRDD<WriteStatus> errorRdd = jsc.parallelize(Collections.singletonList(errA));
+    JavaRDD<WriteStatus> errorRdd = jsc.parallelize(Collections.singletonList(stat(50L, 50L)));
 
-    SuccessfulRecordCounter.Counts counts = SuccessfulRecordCounter.computeFromRdd(
-        dataRdd, Option.of(errorRdd), true);
+    SuccessfulRecordCounter.Counts counts = SuccessfulRecordCounter.compute(
+        Collections.singletonList(dataA), Option.of(errorRdd), true);
 
     assertEquals(150L, counts.getTotalRecords());
     assertEquals(55L, counts.getTotalErroredRecords());
@@ -199,12 +183,6 @@ public class TestSuccessfulRecordCounter {
   public void testNullErrorTableOptionRejected() {
     assertThrows(NullPointerException.class, () ->
         SuccessfulRecordCounter.compute(Collections.emptyList(), null, false));
-  }
-
-  @Test
-  public void testNullDataRddRejected() {
-    assertThrows(NullPointerException.class, () ->
-        SuccessfulRecordCounter.computeFromRdd(null, Option.empty(), false));
   }
 
   // ========== Helper ==========

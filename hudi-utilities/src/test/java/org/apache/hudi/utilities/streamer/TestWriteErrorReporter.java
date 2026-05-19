@@ -45,12 +45,6 @@ public class TestWriteErrorReporter {
   }
 
   @Test
-  public void testNullRddIsNoOp() {
-    assertDoesNotThrow(() -> WriteErrorReporter.logTopErrors((org.apache.spark.api.java.JavaRDD<WriteStatus>) null));
-    assertDoesNotThrow(() -> WriteErrorReporter.logTopErrors((org.apache.spark.api.java.JavaRDD<WriteStatus>) null, 10));
-  }
-
-  @Test
   public void testEmptyListIsNoOp() {
     assertDoesNotThrow(() -> WriteErrorReporter.logTopErrors(Collections.emptyList()));
   }

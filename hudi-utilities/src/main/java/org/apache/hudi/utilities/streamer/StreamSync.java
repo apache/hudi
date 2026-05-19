@@ -877,35 +877,30 @@ public class StreamSync implements Serializable, Closeable {
       // an explicit step here before writeClient.commit(), so the writer no longer receives a
       // callback. Step order is deliberate (see comments below).
       //
-      // We collect the write statuses only when user-configured pre-commit validators are present,
-      // because the runValidators() entry point requires a materialized List<WriteStatus>. When no
-      // validators are configured we count via distributed Spark aggregation, preserving the
-      // pre-#18750 no-overhead behavior for the default path. The cache is engaged in both paths
-      // so that the count action (or collect) and the later writeClient.commit() consume the same
-      // materialization rather than re-evaluating the upstream DAG.
-      boolean validatorsConfigured = !StringUtils.isNullOrEmpty(props.getString(
-          HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES.key(),
-          HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES.defaultValue()));
+      // The RDD is cached once and the write statuses are collected once on the driver. Both the
+      // count/error-logging steps and writeClient.commit() consume the materialized partitions
+      // rather than re-evaluating the upstream DAG. shouldUnpersist tracks whether we engaged the
+      // cache here so the finally block knows to release it.
       boolean shouldUnpersist = writeStatusRDD.getStorageLevel().equals(StorageLevel.NONE());
       if (shouldUnpersist) {
         writeStatusRDD.cache();
       }
       boolean success;
       try {
-        // Collect only when validators need the materialized list. Null marker triggers the
-        // RDD-based code paths for the writeStatuses-on-demand checks below.
-        List<WriteStatus> writeStatuses = validatorsConfigured ? writeStatusRDD.collect() : null;
+        List<WriteStatus> writeStatuses = writeStatusRDD.collect();
+        boolean validatorsConfigured = !StringUtils.isNullOrEmpty(props.getString(
+            HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES.key(),
+            HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES.defaultValue()));
 
         // Step 1: Commit the error table BEFORE running validators or the write-error gate.
         // Error records captured here are a genuine artifact of the write attempt and should
         // survive even when a validator later blocks the data-table commit (otherwise the
         // operator loses the captured errors and the next run has nothing to triage against).
-        // Note: success here means the error-table commit landed; no rollback is needed on
-        // failure because the data-table writeClient.commit() has not been called yet.
         // Latent design quirk (preserved from HSWSV): if error-table commit succeeds and any
-        // subsequent step (Step 4 gate, validator, or writeClient.commit) fails, the error
-        // table will have a committed instant for a data-table instant that never lands.
-        // Downstream consumers of the error table should tolerate this divergence.
+        // subsequent step fails (Step 2 validator including the offset validator, Step 4 gate,
+        // or writeClient.commit), the error table will have a committed instant for a data-table
+        // instant that never lands. Downstream consumers of the error table should tolerate this
+        // divergence.
         if (errorTableWriter.isPresent()) {
           boolean errorTableSuccess = ErrorTableCommitter.commit(errorTableWriter.get(),
               errorTableWriteStatusRDDOpt, isErrorTableWriteUnificationEnabled, instantTime,
@@ -913,6 +908,9 @@ public class StreamSync implements Serializable, Closeable {
           if (!errorTableSuccess) {
             switch (errorWriteFailureStrategy) {
               case ROLLBACK_COMMIT:
+                // Roll back the inflight data-table instant so it doesn't leak under LAZY
+                // failed-writes cleanup policy (preserves HSWSV behavior).
+                writeClient.rollback(instantTime);
                 throw new HoodieStreamerWriteException("Error table commit failed for instant " + instantTime);
               case LOG_ERROR:
                 LOG.error("Error table write failed for instant {}", instantTime);
@@ -932,11 +930,8 @@ public class StreamSync implements Serializable, Closeable {
         }
 
         // Step 3: Count records. Drives the runMetaSync() decision below the try/finally.
-        SuccessfulRecordCounter.Counts counts = validatorsConfigured
-            ? SuccessfulRecordCounter.compute(writeStatuses, errorTableWriteStatusRDDOpt,
-                isErrorTableWriteUnificationEnabled)
-            : SuccessfulRecordCounter.computeFromRdd(writeStatusRDD, errorTableWriteStatusRDDOpt,
-                isErrorTableWriteUnificationEnabled);
+        SuccessfulRecordCounter.Counts counts = SuccessfulRecordCounter.compute(
+            writeStatuses, errorTableWriteStatusRDDOpt, isErrorTableWriteUnificationEnabled);
         totalSuccessfulRecords.set(counts.getTotalSuccessfulRecords());
         LOG.info("instantTime={}, totalRecords={}, totalErrorRecords={}, totalSuccessfulRecords={}",
             instantTime, counts.getTotalRecords(), counts.getTotalErroredRecords(),
@@ -960,19 +955,17 @@ public class StreamSync implements Serializable, Closeable {
           } else {
             LOG.error("Delta Sync found errors when writing. Errors/Total={}/{}",
                 counts.getTotalErroredRecords(), counts.getTotalRecords());
-            // Use the already-collected list when available to avoid an extra Spark action.
-            if (writeStatuses != null) {
-              WriteErrorReporter.logTopErrors(writeStatuses);
-            } else {
-              WriteErrorReporter.logTopErrors(writeStatusRDD);
-            }
+            WriteErrorReporter.logTopErrors(writeStatuses);
+            // Roll back the inflight data-table instant so it doesn't leak under LAZY
+            // failed-writes cleanup policy (preserves HSWSV behavior).
+            writeClient.rollback(instantTime);
             throw new HoodieStreamerWriteException("Commit " + instantTime + " has write errors and commitOnErrors=false");
           }
         }
 
         // Step 5: Commit. No WriteStatusValidator callback — all checks are above.
         success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata),
-            commitActionType, partitionToReplacedFileIds, Option.empty(), Option.empty());
+            commitActionType, partitionToReplacedFileIds, Option.empty());
       } finally {
         if (shouldUnpersist) {
           writeStatusRDD.unpersist();

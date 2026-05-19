@@ -28,6 +28,8 @@ import org.apache.hudi.exception.HoodieValidationException;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.Arrays;
+
 /**
  * Pre-commit validator that fails the commit when records failed to write.
  *
@@ -79,7 +81,7 @@ public class SparkWriteErrorValidator extends BasePreCommitValidator {
           "Invalid value '%s' for %s. Allowed values: %s.",
           policyStr,
           HoodiePreCommitValidatorConfig.VALIDATION_FAILURE_POLICY.key(),
-          java.util.Arrays.toString(ValidationFailurePolicy.values())), e);
+          Arrays.toString(ValidationFailurePolicy.values())), e);
     }
   }
 

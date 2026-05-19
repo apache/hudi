@@ -35,15 +35,6 @@ import java.util.Objects;
  * <p>Extracted from {@code HoodieStreamerWriteStatusValidator} (issue #18750) so the
  * counting logic can be invoked from the explicit pre-commit orchestration in
  * {@code StreamSync} without going through the {@code WriteStatusValidator} callback.</p>
- *
- * <p>Two entry points are provided so callers can avoid a driver-side {@code collect()}
- * when no pre-commit validators are configured:</p>
- * <ul>
- *   <li>{@link #compute(List, Option, boolean)} — driver-side sum over an already-collected
- *       list. Use when a validator path needs the list anyway.</li>
- *   <li>{@link #computeFromRdd(JavaRDD, Option, boolean)} — distributed Spark aggregation
- *       over the RDD. Use when no validators are configured to keep the no-overhead path.</li>
- * </ul>
  */
 public final class SuccessfulRecordCounter {
 
@@ -72,32 +63,6 @@ public final class SuccessfulRecordCounter {
       totalRecords += ws.getTotalRecords();
       totalErroredRecords += ws.getTotalErrorRecords();
     }
-    return addErrorTable(totalRecords, totalErroredRecords,
-        errorTableWriteStatusRDDOpt, isErrorTableWriteUnificationEnabled);
-  }
-
-  /**
-   * Compute counts via distributed Spark aggregation without materializing the data-table write
-   * statuses on the driver. Use this when no pre-commit validators are configured.
-   *
-   * @param dataTableRdd Data-table write status RDD. Must not be null.
-   */
-  public static Counts computeFromRdd(JavaRDD<WriteStatus> dataTableRdd,
-                                       Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt,
-                                       boolean isErrorTableWriteUnificationEnabled) {
-    Objects.requireNonNull(dataTableRdd, "dataTableRdd");
-    Objects.requireNonNull(errorTableWriteStatusRDDOpt, "errorTableWriteStatusRDDOpt");
-
-    long totalRecords = sumLong(dataTableRdd, WriteStatusLongExtractor.TOTAL_RECORDS);
-    long totalErroredRecords = sumLong(dataTableRdd, WriteStatusLongExtractor.TOTAL_ERROR_RECORDS);
-    return addErrorTable(totalRecords, totalErroredRecords,
-        errorTableWriteStatusRDDOpt, isErrorTableWriteUnificationEnabled);
-  }
-
-  private static Counts addErrorTable(long totalRecords,
-                                      long totalErroredRecords,
-                                      Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt,
-                                      boolean isErrorTableWriteUnificationEnabled) {
     if (isErrorTableWriteUnificationEnabled && errorTableWriteStatusRDDOpt.isPresent()) {
       JavaRDD<WriteStatus> errorRdd = errorTableWriteStatusRDDOpt.get();
       totalRecords += sumLong(errorRdd, WriteStatusLongExtractor.TOTAL_RECORDS);
