@@ -54,11 +54,11 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.{OutputWriterFactory, PartitionedFile, SparkColumnarFileReader}
 import org.apache.spark.sql.execution.datasources.orc.OrcUtils
-import org.apache.spark.sql.execution.vectorized.{ColumnVectorUtils, ConstantColumnVector, OffHeapColumnVector, OnHeapColumnVector}
+import org.apache.spark.sql.execution.vectorized.{ConstantColumnVector, OffHeapColumnVector, OnHeapColumnVector}
 import org.apache.spark.sql.hudi.MultipleColumnarFileFormatReader
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{BooleanType, ByteType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, StructType, TimestampType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
 
@@ -497,6 +497,36 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     iter.map(mapper.apply(_))
   }
 
+  // Populate a ConstantColumnVector with one field from an InternalRow. Replacement for
+  // ColumnVectorUtils.populate(ConstantColumnVector, InternalRow, int), whose signature
+  // diverges across Spark 3.3 / 3.4 / 3.5 (see apache/hudi#18770).
+  private def setConstantPartitionValue(vec: ConstantColumnVector,
+                                        row: InternalRow,
+                                        idx: Int,
+                                        dataType: DataType): Unit = {
+    if (row == null || row.isNullAt(idx)) {
+      vec.setNull()
+    } else {
+      dataType match {
+        case BooleanType    => vec.setBoolean(row.getBoolean(idx))
+        case ByteType       => vec.setByte(row.getByte(idx))
+        case ShortType      => vec.setShort(row.getShort(idx))
+        case IntegerType    => vec.setInt(row.getInt(idx))
+        case DateType       => vec.setInt(row.getInt(idx))
+        case LongType       => vec.setLong(row.getLong(idx))
+        case TimestampType  => vec.setLong(row.getLong(idx))
+        case FloatType      => vec.setFloat(row.getFloat(idx))
+        case DoubleType     => vec.setDouble(row.getDouble(idx))
+        case _: StringType  => vec.setUtf8String(row.getUTF8String(idx))
+        case dt: DecimalType => vec.setDecimal(row.getDecimal(idx, dt.precision, dt.scale), dt.precision)
+        // Unsupported partition column types: leave the vector null. Acceptable here because
+        // count(*) doesn't read partition values; partition predicates are applied at planning
+        // time via the FileIndex, not by reading these vectors at execution time.
+        case _              => vec.setNull()
+      }
+    }
+  }
+
   // executor — fast path for SELECT count(*).
   // Reads only the parquet footer (no row group decoding, no vectorized reader). The downstream
   // count aggregator counts rows in the produced batches/rows; column contents (partition
@@ -522,9 +552,10 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       val vectors: Array[org.apache.spark.sql.vectorized.ColumnVector] =
         partitionSchema.fields.zipWithIndex.map { case (field, idx) =>
           val vec = new ConstantColumnVector(batchSize, field.dataType)
-          if (partitionValues != null) {
-            ColumnVectorUtils.populate(vec, partitionValues, idx)
-          }
+          // Manual populate. We don't use ColumnVectorUtils.populate because its signature
+          // differs across Spark versions (3.3 takes WritableColumnVector, 3.4/3.5 take
+          // ConstantColumnVector) and hudi-spark-common compiles against all of them.
+          setConstantPartitionValue(vec, partitionValues, idx, field.dataType)
           vec.asInstanceOf[org.apache.spark.sql.vectorized.ColumnVector]
         }.toArray
       val batch = new ColumnarBatch(vectors)
