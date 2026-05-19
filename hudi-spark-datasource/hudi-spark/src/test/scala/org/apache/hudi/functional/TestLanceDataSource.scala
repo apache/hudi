@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewS
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.io.storage.HoodieSparkLanceReader
+import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
@@ -85,6 +86,23 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertEquals(expectedRows.length, result.length, "Row count mismatch")
     expectedRows.zip(result).foreach { case (expected, actual) =>
       assertEquals(expected, actual)
+    }
+  }
+
+  // For MOR tables, a compaction is recorded on the active timeline with action == "commit"
+  // (vs. "deltacommit" for regular writes). Builds a fresh meta client so callers see the
+  // current on-disk timeline state.
+  private def assertCompactionCommitPresence(tablePath: String, expectPresent: Boolean, message: String): Unit = {
+    val compactionCommits = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+      .getActiveTimeline.filterCompletedInstants().getInstants.asScala
+      .filter(instant => instant.getAction == "commit")
+    if (expectPresent) {
+      assertTrue(compactionCommits.nonEmpty, message)
+    } else {
+      assertTrue(compactionCommits.isEmpty, message)
     }
   }
 
@@ -1149,6 +1167,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     // Disable small file handling so the next insert creates a new file group
     // and updates in MOR generate log file(s)
     spark.sql(s"alter table $tableName set tblproperties ('hoodie.merge.small.file.group.candidates.limit' = '0')")
+    spark.sql(s"alter table $tableName set tblproperties ('hoodie.compact.inline.max.delta.commits' = '6')")
 
     // Test 3: INSERT with subset of columns (null handling)
     spark.sql(s"""
@@ -1175,12 +1194,18 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     // Test 5: DELETE a row
     spark.sql(s"delete from $tableName where id = 3")
-
     checkAnswer(s"select id, name, age, score, dt from $tableName order by id")(
       Seq(1, "Alice", 31, 99.9, "2025-01-01"),
       Seq(2, "Bob", 25, 87.3, "2025-01-02"),
       Seq(4, "Diana", 40, null, "2025-01-01")
     )
+
+    // For MOR: 5 deltacommits so far (insert x3, update, delete) — below the
+    // max.delta.commits=6 threshold, so no inline compaction should have run yet.
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      assertCompactionCommitPresence(tablePath, expectPresent = false,
+        "No compaction commit should be present before max.delta.commits=6 threshold is reached")
+    }
 
     // Test 6: INSERT with static partition (only for partitioned tables)
     if (isPartitioned) {
@@ -1195,6 +1220,13 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
         Seq(4, "Diana", 40, null, "2025-01-01"),
         Seq(5, "Eve", 28, null, "2025-01-05")
       )
+
+      // For MOR: this is the 6th deltacommit, which should trigger inline compaction
+      // (HoodieSparkSqlWriter auto-enables hoodie.compact.inline for MOR batch writes).
+      if (tableType == HoodieTableType.MERGE_ON_READ) {
+        assertCompactionCommitPresence(tablePath, expectPresent = true,
+          "Inline compaction commit should be present after 6th deltacommit")
+      }
     }
 
     // Verify Lance files were created
@@ -1206,6 +1238,16 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     val baseFileFormat = metaClient.getTableConfig.getBaseFileFormat
     assertEquals(HoodieFileFormat.LANCE, baseFileFormat,
                  "Table should use Lance base file format")
+
+    // Column stats and partition stats indices are gated off for Lance base files in
+    // MetadataPartitionType — per-file column ranges aren't emitted for Lance yet, and
+    // empty ranges would silently prune everything on read. Confirm the metadata table
+    // never initialized these partitions.
+    val tableConfig = metaClient.getTableConfig
+    assertFalse(tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.COLUMN_STATS),
+      "Column stats metadata partition must not be initialized for Lance tables")
+    assertFalse(tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.PARTITION_STATS),
+      "Partition stats metadata partition must not be initialized for Lance tables")
   }
 
   /**
