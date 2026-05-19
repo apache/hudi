@@ -64,6 +64,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.AutoClosableUtils;
 import org.apache.hudi.util.CommonClientUtils;
 import org.apache.hudi.util.Lazy;
 
@@ -588,23 +589,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private void closeLogWriter(Throwable failure) throws IOException {
-    if (writer == null) {
-      return;
-    }
     try {
-      writer.close();
-    } catch (IOException ioe) {
-      if (failure != null) {
-        failure.addSuppressed(ioe);
-      } else {
-        throw ioe;
-      }
-    } catch (RuntimeException re) {
-      if (failure != null) {
-        failure.addSuppressed(re);
-      } else {
-        throw re;
-      }
+      AutoClosableUtils.closeWithSuppressed(writer, failure);
     } finally {
       writer = null;
     }
@@ -627,11 +613,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private void closeLogWriterQuietly(Throwable failure) {
-    try {
-      closeLogWriter(failure);
-    } catch (IOException ioe) {
-      failure.addSuppressed(ioe);
-    }
+    AutoClosableUtils.closeQuietlyWithSuppressed(writer, failure);
+    writer = null;
   }
 
   @Override
