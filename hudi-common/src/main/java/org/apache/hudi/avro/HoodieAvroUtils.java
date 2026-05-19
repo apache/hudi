@@ -778,6 +778,40 @@ public class HoodieAvroUtils {
   }
 
   /**
+   * If {@code schema} carries a date / timestamp logical type and {@code value} is in the Avro 1.12
+   * java.time form, normalize it back to the Avro 1.11.x primitive form ({@link Integer} for date,
+   * {@link Long} for timestamp-*/local-timestamp-*). Used at the entry of schema-evolution rewrite
+   * paths whose legacy code does unguarded {@code (Integer)} / {@code (Long)} casts on field
+   * values. For non-logical-type schemas, primitive inputs, or null, this is a no-op. The on-disk
+   * byte format is unaffected — this is purely about in-memory Java type.
+   */
+  private static Object normalizeToAvro1_11PrimitiveForLogicalType(Object value, Schema schema) {
+    if (value == null || schema == null) {
+      return value;
+    }
+    org.apache.avro.LogicalType lt = schema.getLogicalType();
+    if (lt == null) {
+      return value;
+    }
+    if (lt == LogicalTypes.date()) {
+      return value instanceof LocalDate ? (int) ((LocalDate) value).toEpochDay() : value;
+    }
+    if (lt == LogicalTypes.timestampMillis()) {
+      return value instanceof Instant ? extractEpochMillis(value) : value;
+    }
+    if (lt == LogicalTypes.timestampMicros()) {
+      return value instanceof Instant ? extractEpochMicros(value) : value;
+    }
+    if (lt == LogicalTypes.localTimestampMillis()) {
+      return value instanceof LocalDateTime ? extractLocalEpochMillis(value) : value;
+    }
+    if (lt == LogicalTypes.localTimestampMicros()) {
+      return value instanceof LocalDateTime ? extractLocalEpochMicros(value) : value;
+    }
+    return value;
+  }
+
+  /**
    * Gets record column values into object array.
    *
    * @param record  Hoodie record.
@@ -1008,6 +1042,12 @@ public class HoodieAvroUtils {
   }
 
   public static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema) {
+    // Normalize any Avro 1.12 java.time form (LocalDate / Instant / LocalDateTime) back to the
+    // Avro 1.11.x primitive form (Integer / Long) before doing any numeric/string conversion. The
+    // legacy branches below explicitly cast to Integer / Long; under Avro 1.12 those casts would
+    // fail (Spark 4.1 profile). See convertValueForAvroLogicalTypes for the broader context — this
+    // is a read-side normalization only and does not affect on-disk byte format.
+    oldValue = normalizeToAvro1_11PrimitiveForLogicalType(oldValue, oldSchema);
     if (oldSchema.getType() == newSchema.getType()) {
       switch (oldSchema.getType()) {
         case NULL:
