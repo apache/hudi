@@ -780,10 +780,11 @@ public class HoodieAvroUtils {
   /**
    * If {@code schema} carries a date / timestamp logical type and {@code value} is in the Avro 1.12
    * java.time form, normalize it back to the Avro 1.11.x primitive form ({@link Integer} for date,
-   * {@link Long} for timestamp-*/local-timestamp-*). Used at the entry of schema-evolution rewrite
-   * paths whose legacy code does unguarded {@code (Integer)} / {@code (Long)} casts on field
-   * values. For non-logical-type schemas, primitive inputs, or null, this is a no-op. The on-disk
-   * byte format is unaffected — this is purely about in-memory Java type.
+   * {@link Long} for timestamp-millis, timestamp-micros, local-timestamp-millis, and
+   * local-timestamp-micros). Used at the entry of schema-evolution rewrite paths whose legacy code
+   * does unguarded {@code (Integer)} / {@code (Long)} casts on field values. For non-logical-type
+   * schemas, primitive inputs, or null, this is a no-op. The on-disk byte format is unaffected -
+   * this is purely about in-memory Java type.
    */
   private static Object normalizeToAvro1_11PrimitiveForLogicalType(Object value, Schema schema) {
     if (value == null || schema == null) {
