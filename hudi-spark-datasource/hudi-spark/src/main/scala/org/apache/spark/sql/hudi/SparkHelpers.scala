@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig.{BLOOM_FILTER_DYNAMIC_M
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieMetaFieldFlags, HoodieRecord}
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.util.Option
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.io.storage.HoodieIOFactory
 import org.apache.hudi.io.storage.hadoop.HoodieAvroParquetWriter
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
@@ -50,6 +51,19 @@ object SparkHelpers {
                               keysToSkip: Set[String],
                               hoodieMetaFieldFlags: HoodieMetaFieldFlags = HoodieMetaFieldFlags.allPopulated(),
                               populateMetaFields: Boolean = true) {
+    // Deduplication identifies records by their on-disk _hoodie_record_key. If that meta
+    // column is not populated (populate.meta.fields=false or _hoodie_record_key in
+    // META_FIELDS_EXCLUDE_LIST), every record's key reads back as null and the skip-set
+    // logic is meaningless. Fail fast rather than silently producing wrong output (and the
+    // null.toString NPE downstream).
+    if (!populateMetaFields || !hoodieMetaFieldFlags.isRecordKeyPopulated) {
+      throw new HoodieException(
+        "Cannot deduplicate records: _hoodie_record_key is not populated on disk. "
+          + "Deduplication relies on the on-disk record-key meta column to identify "
+          + "duplicates. Re-enable hoodie.populate.meta.fields and remove "
+          + "_hoodie_record_key from hoodie.table.meta.fields.exclude.list before "
+          + "running this operation.")
+    }
     val sourceRecords = HoodieIOFactory.getIOFactory(storage)
       .getFileFormatUtils(HoodieFileFormat.PARQUET)
       .readAvroRecords(storage, sourceFile).asScala
