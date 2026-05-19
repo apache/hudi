@@ -29,6 +29,7 @@ import org.apache.parquet.hadoop.metadata.ColumnPath;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.FileMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.util.CompressionConverter;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
@@ -38,6 +39,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.io.Closeable;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -46,18 +51,21 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 /**
  * Tests for HoodieParquetBinaryCopyBase schema evolution behavior.
@@ -290,6 +298,35 @@ public class TestHoodieParquetBinaryCopyBaseSchemaEvolution {
     assertEquals(true, legacyConversionAttempted, "Legacy conversion should be attempted when schema evolution is enabled");
   }
 
+  @Test
+  public void testCloseParquetFileWriterQuietlyIgnoresWriterWithoutCloseMethod() {
+    ParquetFileWriter parquetFileWriter = mock(ParquetFileWriter.class);
+
+    assertDoesNotThrow(() -> copyBase.closeParquetFileWriterQuietlyForTesting(parquetFileWriter));
+  }
+
+  @Test
+  public void testCloseParquetFileWriterQuietlyInvokesCloseWhenAvailable() throws Exception {
+    ParquetFileWriter parquetFileWriter = mock(ParquetFileWriter.class, withSettings().extraInterfaces(Closeable.class));
+
+    copyBase.closeParquetFileWriterQuietlyForTesting(parquetFileWriter);
+
+    verify((Closeable) parquetFileWriter).close();
+  }
+
+  @Test
+  public void testCloseClearsWriterWhenEndFails() throws Exception {
+    ParquetFileWriter parquetFileWriter = mock(ParquetFileWriter.class);
+    IOException failure = new IOException("end failed");
+    doThrow(failure).when(parquetFileWriter).end(any(Map.class));
+    copyBase.setWriterForTesting(parquetFileWriter);
+
+    IOException actual = assertThrows(IOException.class, copyBase::close);
+
+    assertEquals(failure, actual);
+    assertNull(copyBase.getWriterForTesting());
+  }
+
   /**
    * Testable subclass that exposes internal methods and provides test setup.
    */
@@ -346,6 +383,26 @@ public class TestHoodieParquetBinaryCopyBaseSchemaEvolution {
         }
       }
       return false; // Legacy conversion was not attempted
+    }
+
+    public void closeParquetFileWriterQuietlyForTesting(ParquetFileWriter parquetFileWriter) throws Exception {
+      Method closeMethod = HoodieParquetBinaryCopyBase.class.getDeclaredMethod("closeParquetFileWriterQuietly", ParquetFileWriter.class);
+      closeMethod.setAccessible(true);
+      closeMethod.invoke(this, parquetFileWriter);
+    }
+
+    public void setWriterForTesting(ParquetFileWriter writer) throws Exception {
+      writerField().set(this, writer);
+    }
+
+    public ParquetFileWriter getWriterForTesting() throws Exception {
+      return (ParquetFileWriter) writerField().get(this);
+    }
+
+    private Field writerField() throws Exception {
+      Field writerField = HoodieParquetBinaryCopyBase.class.getDeclaredField("writer");
+      writerField.setAccessible(true);
+      return writerField;
     }
 
     private List<ColumnDescriptor> missedColumns(MessageType requiredSchema, MessageType fileSchema) {

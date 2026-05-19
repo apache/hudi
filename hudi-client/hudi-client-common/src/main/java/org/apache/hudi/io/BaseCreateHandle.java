@@ -128,6 +128,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
     } catch (Throwable t) {
       log.error("Error writing record {}", record, t);
       if (!config.getIgnoreWriteFailed()) {
+        closeFileWriterQuietly(t);
         throw new HoodieException(t.getMessage(), t);
       }
       writeStatus.markFailure(record, t, recordMetadata);
@@ -192,6 +193,19 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
     // Even with no file-name value to update, this projection is required to align Spark records
     // with the writer schema (for example, by dropping the temporary row-index column).
     return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
+  }
+
+  private void closeFileWriterQuietly(Throwable failure) {
+    if (fileWriter == null) {
+      return;
+    }
+    try {
+      fileWriter.close();
+    } catch (IOException ioe) {
+      failure.addSuppressed(ioe);
+    } finally {
+      fileWriter = null;
+    }
   }
 
   @Override
