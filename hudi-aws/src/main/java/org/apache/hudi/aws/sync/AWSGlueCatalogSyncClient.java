@@ -543,7 +543,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           Collections.singletonMap(HoodieVersion.HOODIE_WRITER_VERSION, HoodieVersion.get()),
           skipTableArchive);
     } catch (Exception e) {
-      throw new HoodieGlueSyncException(String.format("Failed to update hudi writer major version %s for %s",
+      throw new HoodieGlueSyncException(String.format("Failed to update hudi writer version %s for %s",
           HoodieVersion.get(), tableName), e);
     }
   }
