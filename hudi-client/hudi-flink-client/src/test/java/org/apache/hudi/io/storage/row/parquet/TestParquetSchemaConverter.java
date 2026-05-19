@@ -18,6 +18,10 @@
 
 package org.apache.hudi.io.storage.row.parquet;
 
+import org.apache.hudi.adapter.DataTypeAdapter;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.Option;
+
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.ArrayType;
@@ -27,13 +31,19 @@ import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.DoubleType;
 import org.apache.flink.table.types.logical.FloatType;
 import org.apache.flink.table.types.logical.IntType;
+import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.MapType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.SmallIntType;
 import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.table.types.logical.TinyIntType;
 import org.apache.flink.table.types.logical.VarCharType;
+import org.apache.parquet.schema.GroupType;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.PrimitiveType;
+import org.apache.parquet.schema.Type;
+import org.apache.parquet.schema.Types;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -41,6 +51,9 @@ import java.util.Collections;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for {@link ParquetSchemaConverter}.
@@ -216,4 +229,139 @@ public class TestParquetSchemaConverter {
         + "}\n";
     assertThat(messageType.toString(), is(expected));
   }
+
+  /**
+   * A Parquet group with metadata + value binary fields but NO VARIANT annotation must be
+   * treated as a plain ROW. Only the Parquet {@code VARIANT} annotation triggers variant
+   * detection in this converter; unannotated groups are never guessed as variant.
+   */
+  @Test
+  void testVariantPhysicalLayoutTreatedAsRow() {
+    MessageType variantParquet = new MessageType(
+        "test",
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32,
+            Type.Repetition.REQUIRED).named("id"),
+        Types.buildGroup(Type.Repetition.REQUIRED)
+            .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY,
+                Type.Repetition.REQUIRED).named("metadata"))
+            .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY,
+                Type.Repetition.REQUIRED).named("value"))
+            .named("data"));
+
+    RowType rowType = ParquetSchemaConverter.convertToRowType(variantParquet);
+    assertEquals(2, rowType.getFieldCount());
+    assertEquals("ROW", rowType.getTypeAt(1).getTypeRoot().name());
+  }
+
+  /**
+   * Unannotated group with metadata + value + typed_value (3 fields) is treated as a generic
+   * ROW when no annotation or schema hint is present.
+   */
+  @Test
+  void testUnannotatedShreddedGroupTreatedAsRow() {
+    MessageType shreddedNoAnnotation = new MessageType(
+        "test",
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32,
+            Type.Repetition.REQUIRED).named("id"),
+        Types.buildGroup(Type.Repetition.REQUIRED)
+            .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY,
+                Type.Repetition.REQUIRED).named("metadata"))
+            .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY,
+                Type.Repetition.REQUIRED).named("value"))
+            .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.INT32,
+                Type.Repetition.OPTIONAL).named("typed_value"))
+            .named("data"));
+
+    RowType rowType = ParquetSchemaConverter.convertToRowType(shreddedNoAnnotation);
+    assertEquals(2, rowType.getFieldCount());
+    assertEquals("ROW", rowType.getTypeAt(1).getTypeRoot().name());
+  }
+
+  /**
+   * On Flink 2.1+ with parquet 1.16.0+, converting a RowType containing a Variant column to a
+   * Parquet MessageType should produce a group with the VARIANT annotation and required binary
+   * {@code metadata} and {@code value} fields.
+   * On pre-2.1 Flink this test is skipped since VariantType does not exist.
+   * On parquet < 1.16.0 the write is expected to fail (annotation unavailable).
+   */
+  @Test
+  void testVariantWritePathProducesCorrectLayout() {
+    LogicalType variantType;
+    try {
+      variantType = DataTypeAdapter.createVariantType().getLogicalType();
+    } catch (UnsupportedOperationException e) {
+      // Pre-2.1 Flink: VariantType doesn't exist, skip
+      return;
+    }
+
+    RowType rowType = RowType.of(
+        new LogicalType[]{new IntType(), variantType},
+        new String[]{"id", "data"});
+
+    if (!DataTypeAdapter.variantParquetAnnotation().isPresent()) {
+      // parquet < 1.16.0: write must fail because annotation is unavailable
+      UnsupportedOperationException ex = org.junit.jupiter.api.Assertions.assertThrows(
+          UnsupportedOperationException.class,
+          () -> ParquetSchemaConverter.convertToParquetMessageType("test", rowType));
+      assertTrue(ex.getMessage().contains("parquet-java 1.16.0+"),
+          "Error message should mention parquet version requirement");
+      return;
+    }
+
+    // parquet 1.16.0+: write succeeds with annotation
+    MessageType messageType = ParquetSchemaConverter.convertToParquetMessageType("test", rowType);
+    assertEquals(2, messageType.getFieldCount());
+
+    Type variantField = messageType.getType("data");
+    assertTrue(variantField instanceof GroupType, "Variant column should be a Parquet group");
+    GroupType variantGroup = (GroupType) variantField;
+    assertEquals(2, variantGroup.getFieldCount());
+    assertEquals(HoodieSchema.Variant.VARIANT_METADATA_FIELD, variantGroup.getType(0).getName());
+    assertEquals(HoodieSchema.Variant.VARIANT_VALUE_FIELD, variantGroup.getType(1).getName());
+    assertTrue(variantGroup.getType(0).isPrimitive());
+    assertTrue(variantGroup.getType(1).isPrimitive());
+    assertEquals(PrimitiveType.PrimitiveTypeName.BINARY,
+        variantGroup.getType(0).asPrimitiveType().getPrimitiveTypeName());
+    assertEquals(PrimitiveType.PrimitiveTypeName.BINARY,
+        variantGroup.getType(1).asPrimitiveType().getPrimitiveTypeName());
+    assertNotNull(variantGroup.getLogicalTypeAnnotation(),
+        "Variant group must carry the VARIANT annotation");
+  }
+
+  /**
+   * Verifies that writing a Variant column fails with a clear error when parquet-java on the
+   * classpath does not support the VARIANT annotation (< 1.16.0). On pre-2.1 Flink the adapter
+   * throws directly; on Flink 2.1+ with parquet < 1.16.0 the write path throws.
+   */
+  @Test
+  void testVariantWriteFailsWithoutAnnotation() {
+    Option<LogicalTypeAnnotation> annotationOpt;
+    try {
+      annotationOpt = DataTypeAdapter.variantParquetAnnotation();
+    } catch (UnsupportedOperationException e) {
+      // Pre-2.1 Flink: expected to throw from the adapter
+      assertTrue(e.getMessage().contains("VARIANT type is only supported in Flink 2.1+"));
+      return;
+    }
+
+    if (annotationOpt.isPresent()) {
+      // parquet 1.16.0+: annotation is available, write succeeds — nothing to test here
+      return;
+    }
+
+    // Flink 2.1 + parquet < 1.16.0: annotation is null, write must fail
+    LogicalType variantType = DataTypeAdapter.createVariantType().getLogicalType();
+    RowType rowType = RowType.of(
+        new LogicalType[]{new IntType(), variantType},
+        new String[]{"id", "data"});
+
+    UnsupportedOperationException ex = org.junit.jupiter.api.Assertions.assertThrows(
+        UnsupportedOperationException.class,
+        () -> ParquetSchemaConverter.convertToParquetMessageType("test", rowType));
+    assertTrue(ex.getMessage().contains("parquet-java 1.16.0+"),
+        "Error message should mention the parquet version requirement");
+    assertTrue(ex.getMessage().contains("VARIANT"),
+        "Error message should mention VARIANT");
+  }
+
 }
