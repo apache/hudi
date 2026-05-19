@@ -924,9 +924,18 @@ public class StreamSync implements Serializable, Closeable {
         // Step 2: Run user-configured pre-commit validators (offset, custom, and the opt-in
         // SparkWriteErrorValidator). Validators are intentionally stronger than commitOnErrors
         // — a failure here aborts the data-table commit regardless of the gate in Step 4.
+        // Roll back the inflight data-table instant on validation failure so it doesn't leak
+        // under LAZY failed-writes cleanup policy (consistent with Step 1 ROLLBACK_COMMIT and
+        // the Step 4 gate below). Error-table records already committed in Step 1 are preserved
+        // by design — see Step 1's latent-quirk note.
         if (validatorsConfigured) {
-          SparkStreamerValidatorUtils.runValidators(props, instantTime, writeStatuses,
-              checkpointCommitMetadata, metaClient);
+          try {
+            SparkStreamerValidatorUtils.runValidators(props, instantTime, writeStatuses,
+                checkpointCommitMetadata, metaClient);
+          } catch (HoodieValidationException e) {
+            writeClient.rollback(instantTime);
+            throw e;
+          }
         }
 
         // Step 3: Count records. Drives the runMetaSync() decision below the try/finally.

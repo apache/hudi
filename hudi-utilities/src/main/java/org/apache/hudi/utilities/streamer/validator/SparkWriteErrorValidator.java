@@ -47,11 +47,21 @@ import java.util.Arrays;
  * means both checks run and either can block the commit — they are intentionally not mutually
  * exclusive.</p>
  *
- * <p>Behavior mapping from the legacy HSWSV:</p>
+ * <p>Behavior mapping from the legacy HSWSV (data-table only — see caveat below):</p>
  * <ul>
  *   <li>{@code commitOnErrors = false} (HSWSV default) ↔ {@code failure.policy = FAIL}</li>
  *   <li>{@code commitOnErrors = true} ↔ {@code failure.policy = WARN_LOG}</li>
  * </ul>
+ *
+ * <p><b>Unification caveat:</b> when {@code hoodie.errortable.write.unification.enabled=true},
+ * HSWSV's error check summed errors across <em>both</em> the data-table and the error-table write
+ * statuses. This validator only sees data-table stats via {@link ValidationContext} (specifically
+ * {@link ValidationContext#getTotalWriteErrors()} / {@link ValidationContext#getTotalRecordsWritten()},
+ * which are derived from {@code HoodieWriteStat} on the data table). Under unification it is
+ * therefore strictly weaker than HSWSV: error-table-only errors will not trip this validator. Users
+ * who rely on unified error counts should keep the inline {@code commitOnErrors} gate in
+ * {@code StreamSync} enabled (i.e. leave {@code --commit-on-errors} off), which still consults
+ * the unified count via {@code SuccessfulRecordCounter}.</p>
  *
  * <p>Configuration:</p>
  * <ul>

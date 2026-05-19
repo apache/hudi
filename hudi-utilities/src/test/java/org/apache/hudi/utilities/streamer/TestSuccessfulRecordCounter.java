@@ -22,7 +22,9 @@ package org.apache.hudi.utilities.streamer;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.Option;
 
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -42,14 +44,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestSuccessfulRecordCounter {
 
-  private static org.apache.spark.api.java.JavaSparkContext jsc;
+  private static JavaSparkContext jsc;
 
   @BeforeAll
   public static void setUp() {
-    org.apache.spark.SparkConf conf = new org.apache.spark.SparkConf()
+    SparkConf conf = new SparkConf()
         .setAppName("TestSuccessfulRecordCounter")
         .setMaster("local[2]");
-    jsc = new org.apache.spark.api.java.JavaSparkContext(conf);
+    jsc = new JavaSparkContext(conf);
   }
 
   @AfterAll

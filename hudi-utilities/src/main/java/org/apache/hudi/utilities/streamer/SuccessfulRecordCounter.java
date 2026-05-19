@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.function.Function;
 
 import java.util.List;
 import java.util.Objects;
@@ -65,8 +66,8 @@ public final class SuccessfulRecordCounter {
     }
     if (isErrorTableWriteUnificationEnabled && errorTableWriteStatusRDDOpt.isPresent()) {
       JavaRDD<WriteStatus> errorRdd = errorTableWriteStatusRDDOpt.get();
-      totalRecords += sumLong(errorRdd, WriteStatusLongExtractor.TOTAL_RECORDS);
-      totalErroredRecords += sumLong(errorRdd, WriteStatusLongExtractor.TOTAL_ERROR_RECORDS);
+      totalRecords += sumLong(errorRdd, WriteStatus::getTotalRecords);
+      totalErroredRecords += sumLong(errorRdd, WriteStatus::getTotalErrorRecords);
     }
     return new Counts(totalRecords, totalErroredRecords);
   }
@@ -75,25 +76,8 @@ public final class SuccessfulRecordCounter {
    * Lossless long sum over an RDD. Avoids the precision loss of {@code mapToDouble().sum()},
    * which silently rounds counts above 2^53 (about 9 quadrillion).
    */
-  private static long sumLong(JavaRDD<WriteStatus> rdd, WriteStatusLongExtractor extractor) {
-    return rdd.map(extractor::extract).fold(0L, Long::sum);
-  }
-
-  private enum WriteStatusLongExtractor {
-    TOTAL_RECORDS {
-      @Override
-      long extract(WriteStatus ws) {
-        return ws.getTotalRecords();
-      }
-    },
-    TOTAL_ERROR_RECORDS {
-      @Override
-      long extract(WriteStatus ws) {
-        return ws.getTotalErrorRecords();
-      }
-    };
-
-    abstract long extract(WriteStatus ws);
+  private static long sumLong(JavaRDD<WriteStatus> rdd, Function<WriteStatus, Long> extractor) {
+    return rdd.map(extractor).fold(0L, Long::sum);
   }
 
   /** Immutable count snapshot. */
