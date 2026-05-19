@@ -176,7 +176,22 @@ class CleanupStaleInflightCommitsProcedure extends BaseProcedure with ProcedureB
                 table.rollbackInflightClustering(instant, getPendingRollbackInstantFunc, client.getTransactionManager)
                 true
               case _ =>
-                client.rollback(instant.requestedTime)
+                // Recheck that the instant is still inflight before calling client.rollback(),
+                // which searches getCommitsTimeline() (completed + pending). Without this guard,
+                // a concurrent writer that completes the commit after detection could have its
+                // now-completed commit rolled back destructively. The table.rollbackInflight*
+                // branches above fail loudly via revertInstantFromInflightToRequested if the
+                // inflight is gone; this branch performs an equivalent safety check.
+                val stillInflight = metaClient.reloadActiveTimeline()
+                  .filterInflightsAndRequested()
+                  .containsInstant(instant.requestedTime)
+                if (!stillInflight) {
+                  logWarning(s"Instant ${instant.requestedTime} is no longer inflight; " +
+                    "skipping rollback to avoid rolling back a completed commit")
+                  false
+                } else {
+                  client.rollback(instant.requestedTime)
+                }
             }
             java.lang.Boolean.valueOf(result)
           } catch {

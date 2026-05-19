@@ -91,7 +91,7 @@ class ShowInflightCommitsProcedure extends BaseProcedure with ProcedureBuilder {
     val baseTimeline = metaClient.reloadActiveTimeline().filterInflightsAndRequested()
 
     val timeline = if (minAgeMinutes > 0) {
-      val goBackMs = Duration.ofMinutes(minAgeMinutes).getSeconds * 1000L
+      val goBackMs = Duration.ofMinutes(minAgeMinutes).toMillis
       val cutoff = HoodieInstantTimeGenerator.formatDate(new Date(System.currentTimeMillis() - goBackMs))
       baseTimeline.findInstantsBefore(cutoff)
     } else {
