@@ -125,37 +125,38 @@ object HoodieCLIUtils extends Logging {
    */
   def extractOptions(s: String): Map[String, String] = {
     if (s == null) {
-      return Map.empty
+      Map.empty
+    } else {
+      val pairs = StringUtils.split(s, ",").asScala
+        .map(_.trim)
+        .filter(_.nonEmpty)
+        .map(token => {
+          val delimiterIndex = token.indexOf('=')
+          if (delimiterIndex <= 0) {
+            throw new IllegalArgumentException(
+              s"Invalid options format: '$token'. Expected 'key=value' pairs separated by commas, "
+                + "for example: 'k1=v1,k2=v2'.")
+          }
+
+          val key = token.substring(0, delimiterIndex).trim
+          if (key.isEmpty) {
+            throw new IllegalArgumentException(
+              s"Invalid options format: '$token'. Option key must not be empty and options should "
+                + "follow 'key=value' format.")
+          }
+
+          val value = token.substring(delimiterIndex + 1).trim
+          key -> value
+        })
+        .toSeq
+
+      val duplicates = pairs.groupBy(_._1).collect { case (k, vs) if vs.size > 1 => k }
+      if (duplicates.nonEmpty) {
+        logWarning(s"Duplicate option keys detected: ${duplicates.mkString(", ")}. "
+          + "The last occurrence will take effect.")
+      }
+      pairs.toMap
     }
-    val pairs = StringUtils.split(s, ",").asScala
-      .map(_.trim)
-      .filter(_.nonEmpty)
-      .map(token => {
-        val delimiterIndex = token.indexOf('=')
-        if (delimiterIndex <= 0) {
-          throw new IllegalArgumentException(
-            s"Invalid options format: '$token'. Expected 'key=value' pairs separated by commas, "
-              + "for example: 'k1=v1,k2=v2'.")
-        }
-
-        val key = token.substring(0, delimiterIndex).trim
-        if (key.isEmpty) {
-          throw new IllegalArgumentException(
-            s"Invalid options format: '$token'. Option key must not be empty and options should "
-              + "follow 'key=value' format.")
-        }
-
-        val value = token.substring(delimiterIndex + 1).trim
-        key -> value
-      })
-      .toSeq
-
-    val duplicates = pairs.groupBy(_._1).collect { case (k, vs) if vs.size > 1 => k }
-    if (duplicates.nonEmpty) {
-      logWarning(s"Duplicate option keys detected: ${duplicates.mkString(", ")}. "
-        + "The last occurrence will take effect.")
-    }
-    pairs.toMap
   }
 
   def getLockOptions(tablePath: String, schema: String, lockConfig: TypedProperties): Map[String, String] = {
