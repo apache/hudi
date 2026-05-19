@@ -28,7 +28,7 @@ import org.apache.hudi.util.JFunction
 
 import org.apache.spark.scheduler.{SparkListener, SparkListenerTaskEnd}
 import org.apache.spark.sql.{SaveMode, SparkSession, SparkSessionExtensions}
-import org.apache.spark.sql.functions.lit
+import org.apache.spark.sql.functions.{lit, when}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -221,6 +221,70 @@ class TestCountStarFastPath extends HoodieSparkClientTestBase with ScalaAssertio
    * We assert count(*) reads less than half of SELECT *. The actual ratio is typically
    * ~10× smaller, but we keep the threshold loose to absorb MDT-setup noise.
    */
+  /**
+   * Null partition values: rows whose partition column is null land in Hudi's
+   * `__HIVE_DEFAULT_PARTITION__` directory. When Spark reads back, that partition
+   * gets parsed and `file.partitionValues` for those files carries a null at the
+   * partition column index. Exercises the `setNull()` branch in
+   * `setConstantPartitionValue`.
+   */
+  @Test
+  def testCountStarWithNullPartitionValue(): scala.Unit = {
+    val n = 1000
+    val path = basePath + "/null_partition"
+    val sparkLocal = spark; import sparkLocal.implicits._
+    // Half the rows have p=null (route to default partition), half have p="x".
+    val df = spark.range(n)
+      .withColumn("p", when($"id" % 2 === 0, lit(null).cast("string")).otherwise(lit("x")))
+      .withColumn("ts", lit(1L))
+    df.write.format("hudi").options(commonOpts).mode(SaveMode.Overwrite).save(path)
+    val count = spark.read.format("hudi").load(path).count()
+    assertEquals(n.toLong, count,
+      "count(*) must be correct when some files have null partition values " +
+      "(routed to Hudi's __HIVE_DEFAULT_PARTITION__)")
+  }
+
+  /**
+   * Integer-typed partition column: exercises `setInt` in setConstantPartitionValue
+   * rather than `setUtf8String`. Most prior tests use string-typed partition.
+   */
+  @Test
+  def testCountStarWithIntegerPartition(): scala.Unit = {
+    val n = 1000
+    val path = basePath + "/int_partition"
+    val sparkLocal = spark; import sparkLocal.implicits._
+    val df = spark.range(n)
+      .withColumn("p", ($"id" % 5).cast("int"))
+      .withColumn("ts", lit(1L))
+    df.write.format("hudi").options(commonOpts).mode(SaveMode.Overwrite).save(path)
+    val count = spark.read.format("hudi").load(path).count()
+    assertEquals(n.toLong, count,
+      "count(*) must be correct when the partition column is integer-typed " +
+      "(exercises ConstantColumnVector.setInt branch)")
+  }
+
+  /**
+   * Multi-column partitioning: exercises iteration through multiple
+   * ConstantColumnVectors and packs partition columns of mixed types into the batch.
+   */
+  @Test
+  def testCountStarWithMultiplePartitionColumns(): scala.Unit = {
+    val n = 1000
+    val path = basePath + "/multi_partition"
+    val sparkLocal = spark; import sparkLocal.implicits._
+    val df = spark.range(n)
+      .withColumn("p", ($"id" % 3).cast("string"))
+      .withColumn("q", ($"id" % 7).cast("int"))
+      .withColumn("ts", lit(1L))
+    val opts = commonOpts +
+      (DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "p,q")
+    df.write.format("hudi").options(opts).mode(SaveMode.Overwrite).save(path)
+    val count = spark.read.format("hudi").load(path).count()
+    assertEquals(n.toLong, count,
+      "count(*) must be correct on tables with multiple partition columns " +
+      "of mixed types (string + int)")
+  }
+
   @Test
   def testCountStarFastPathReadsLessThanFullScan(): scala.Unit = {
     val n = 50000
