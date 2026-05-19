@@ -18,6 +18,7 @@
 
 package org.apache.hudi.aws.sync;
 
+import org.apache.hudi.HoodieVersion;
 import org.apache.hudi.aws.testutils.GlueTestUtil;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -772,6 +773,56 @@ class TestAWSGlueSyncClient {
     assertTrue(dbTagRequest.resourceArn().contains(dbName));
     assertEquals("SomeCenter", dbTagRequest.tagsToAdd().get("CostCenter"));
     assertEquals("Production", dbTagRequest.tagsToAdd().get("Environment"));
+  }
+
+  @Test
+  void testUpdateHoodieWriterVersion() throws ExecutionException, InterruptedException {
+    String tableName = "test";
+    List<Column> columns = Arrays.asList(
+        GlueTestUtil.getColumn("name", "string", "person's name"),
+        GlueTestUtil.getColumn("age", "int", "person's age"));
+    List<Column> partitionKeys = Collections.singletonList(
+        GlueTestUtil.getColumn("city", "string", "person's city"));
+    CompletableFuture<GetTableResponse> tableResponseFuture =
+        getTableWithDefaultProps(tableName, columns, partitionKeys);
+
+    CompletableFuture<UpdateTableResponse> mockUpdateTableResponse = Mockito.mock(CompletableFuture.class);
+    Mockito.when(mockUpdateTableResponse.get()).thenReturn(UpdateTableResponse.builder().build());
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(tableResponseFuture);
+    Mockito.when(mockAwsGlue.updateTable(any(UpdateTableRequest.class))).thenReturn(mockUpdateTableResponse);
+
+    awsGlueSyncClient.updateHoodieWriterVersion(tableName);
+
+    // Capture the request to verify the writer-version parameter was set correctly
+    ArgumentCaptor<UpdateTableRequest> captor = ArgumentCaptor.forClass(UpdateTableRequest.class);
+    verify(mockAwsGlue, times(1)).updateTable(captor.capture());
+    UpdateTableRequest sent = captor.getValue();
+    assertEquals(
+        HoodieVersion.get(),
+        sent.tableInput().parameters().get(HoodieVersion.HOODIE_WRITER_VERSION),
+        "Writer version parameter should be set on the table");
+  }
+
+  @Test
+  void testUpdateHoodieWriterVersionThrowsGlueException() throws ExecutionException, InterruptedException {
+    String tableName = "test";
+    List<Column> columns = Collections.singletonList(
+        GlueTestUtil.getColumn("name", "string", "person's name"));
+    List<Column> partitionKeys = Collections.singletonList(
+        GlueTestUtil.getColumn("city", "string", "person's city"));
+    CompletableFuture<GetTableResponse> tableResponseFuture =
+        getTableWithDefaultProps(tableName, columns, partitionKeys);
+
+    CompletableFuture<UpdateTableResponse> mockUpdateTableResponse = Mockito.mock(CompletableFuture.class);
+    Mockito.when(mockUpdateTableResponse.get()).thenThrow(new InterruptedException());
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(tableResponseFuture);
+    Mockito.when(mockAwsGlue.updateTable(any(UpdateTableRequest.class))).thenReturn(mockUpdateTableResponse);
+
+    HoodieGlueSyncException ex = assertThrows(
+        HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.updateHoodieWriterVersion(tableName));
+    assertTrue(ex.getMessage().contains(tableName), "exception message should mention the table");
+    assertTrue(ex.getMessage().contains(HoodieVersion.get()), "exception message should mention the writer version");
   }
 
   private CompletableFuture<GetTableResponse> getTableWithDefaultProps(String tableName, List<Column> columns, List<Column> partitionColumns) {
