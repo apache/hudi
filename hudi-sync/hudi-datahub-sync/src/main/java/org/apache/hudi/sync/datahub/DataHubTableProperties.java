@@ -21,13 +21,15 @@ package org.apache.hudi.sync.datahub;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
-import org.apache.parquet.schema.MessageType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -42,9 +44,8 @@ import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_BA
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_SPARK_VERSION;
 
+@Slf4j
 public class DataHubTableProperties {
-
-  private static final Logger LOG = LoggerFactory.getLogger(DataHubTableProperties.class);
 
   public static final String HOODIE_META_SYNC_DATAHUB_TABLE_PROPERTIES = "hoodie.meta.sync.datahub.table.properties";
   public static final String HUDI_TABLE_TYPE = "hudi.table.type";
@@ -96,7 +97,7 @@ public class DataHubTableProperties {
 
   private static Map<String, String> getSerdeProperties(DataHubSyncConfig config, boolean readAsOptimized) {
     HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
-    String inputFormatClassName = getInputFormatClassName(baseFileFormat, false, false);
+    String inputFormatClassName = getInputFormatClassName(baseFileFormat, false);
     String outputFormatClassName = getOutputFormatClassName(baseFileFormat);
     String serDeFormatClassName = getSerDeClassName(baseFileFormat);
 
@@ -106,18 +107,16 @@ public class DataHubTableProperties {
     serdeProperties.put("serdeClass", serDeFormatClassName);
     Map<String, String> sparkSerdeProperties = SparkDataSourceTableUtils.getSparkSerdeProperties(readAsOptimized, config.getString(META_SYNC_BASE_PATH));
     sparkSerdeProperties.forEach((k, v) -> serdeProperties.putIfAbsent(k.startsWith("spark.") ? k : "spark." + k, v));
-    LOG.info("Serde Properties : {}", serdeProperties);
+    log.info("Serde Properties: {}", serdeProperties);
     return serdeProperties;
   }
 
+  @AllArgsConstructor
   public static class HoodieTableMetadata {
-    private final HoodieTableMetaClient metaClient;
-    private final MessageType schema;
 
-    public HoodieTableMetadata(HoodieTableMetaClient metaClient, MessageType schema) {
-      this.metaClient = metaClient;
-      this.schema = schema;
-    }
+    private final HoodieTableMetaClient metaClient;
+    @Getter
+    private final HoodieSchema schema;
 
     public String getTableType() {
       return metaClient.getTableType().name();
@@ -125,10 +124,6 @@ public class DataHubTableProperties {
 
     public String getTableVersion() {
       return metaClient.getTableConfig().getTableVersion().toString();
-    }
-
-    public MessageType getSchema() {
-      return schema;
     }
   }
 }

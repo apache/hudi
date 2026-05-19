@@ -26,11 +26,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.table.HoodieSparkTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Validator to run sql query and compare table state 
@@ -39,9 +38,8 @@ import org.slf4j.LoggerFactory;
  * 
  * Expects both queries to return same result.
  */
+@Slf4j
 public class SqlQueryEqualityPreCommitValidator<T, I, K, O extends HoodieData<WriteStatus>> extends SqlQueryPreCommitValidator<T, I, K, O> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SqlQueryEqualityPreCommitValidator.class);
 
   public SqlQueryEqualityPreCommitValidator(HoodieSparkTable<T> table, HoodieEngineContext engineContext, HoodieWriteConfig config) {
     super(table, engineContext, config);
@@ -54,23 +52,34 @@ public class SqlQueryEqualityPreCommitValidator<T, I, K, O extends HoodieData<Wr
 
   @Override
   protected void validateUsingQuery(String query, String prevTableSnapshot, String newTableSnapshot, SQLContext sqlContext) {
-    Dataset<Row> prevRows = executeSqlQuery(
-        sqlContext, query, prevTableSnapshot, "previous state").cache();
-    LOG.info("Total rows in prevRows " + prevRows.count());
-    Dataset<Row> newRows = executeSqlQuery(
-        sqlContext, query, newTableSnapshot, "new state").cache();
-    LOG.info("Total rows in newRows " + newRows.count());
-    printAllRowsIfDebugEnabled(prevRows);
-    printAllRowsIfDebugEnabled(newRows);
-    boolean areDatasetsEqual = prevRows.intersect(newRows).count() == prevRows.count();
-    LOG.info("Completed Equality Validation, datasets equal? " + areDatasetsEqual);
-    if (!areDatasetsEqual) {
-      LOG.error("query validation failed. See stdout for sample query results. Query: " + query);
-      System.out.println("Expected result (sample records only):");
-      prevRows.show();
-      System.out.println("Actual result (sample records only):");
-      newRows.show();
-      throw new HoodieValidationException("Query validation failed for '" + query + "'. See stdout for expected vs actual records");
+    Dataset<Row> prevRows = null;
+    Dataset<Row> newRows = null;
+    try {
+      prevRows = executeSqlQuery(
+          sqlContext, query, prevTableSnapshot, "previous state").cache();
+      log.info("Total rows in prevRows " + prevRows.count());
+      newRows = executeSqlQuery(
+          sqlContext, query, newTableSnapshot, "new state").cache();
+      log.info("Total rows in newRows " + newRows.count());
+      printAllRowsIfDebugEnabled(prevRows);
+      printAllRowsIfDebugEnabled(newRows);
+      boolean areDatasetsEqual = prevRows.intersect(newRows).count() == prevRows.count();
+      log.info("Completed Equality Validation, datasets equal? " + areDatasetsEqual);
+      if (!areDatasetsEqual) {
+        log.error("query validation failed. See stdout for sample query results. Query: " + query);
+        System.out.println("Expected result (sample records only):");
+        prevRows.show();
+        System.out.println("Actual result (sample records only):");
+        newRows.show();
+        throw new HoodieValidationException("Query validation failed for '" + query + "'. See stdout for expected vs actual records");
+      }
+    } finally {
+      if (prevRows != null) {
+        prevRows.unpersist();
+      }
+      if (newRows != null) {
+        newRows.unpersist();
+      }
     }
   }
 }

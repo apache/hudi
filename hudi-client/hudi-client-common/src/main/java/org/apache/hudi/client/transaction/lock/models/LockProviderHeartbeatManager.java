@@ -20,8 +20,8 @@ package org.apache.hudi.client.transaction.lock.models;
 
 import org.apache.hudi.common.util.VisibleForTesting;
 
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
@@ -40,6 +40,7 @@ import java.util.function.Supplier;
  * It should be responsible for the entire lifecycle of the heartbeat task.
  * Importantly, a new instance should be created for each lock provider.
  */
+@Slf4j
 @ThreadSafe
 public class LockProviderHeartbeatManager implements HeartbeatManager {
   public static long DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS = 15_000L;
@@ -69,6 +70,14 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
    *           and prevent further recurring executions</li>
    *     </ul>
    *   </li>
+   *   <li>Interrupts the monitored thread when:
+   *     <ul>
+   *       <li>heartBeatFuncToExec returns false (lock renewal failure)</li>
+   *       <li>heartBeatFuncToExec throws an exception</li>
+   *     </ul>
+   *     This allows the writer thread to detect heartbeat failures immediately and take
+   *     appropriate action (e.g., stop processing, throw exception, etc.)
+   *   </li>
    * </ul>
    *
    * <p>Requirements for heartBeatFuncToExec implementation:
@@ -91,9 +100,10 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
    *   </li>
    * </ul>
    *
-   * <p>Warning: Returning false stops all future lock renewal attempts. If the writer thread
-   * is still running, it will execute with a lock that can expire at any time, potentially
-   * leading to corrupted data.
+   * <p>Warning: Returning false stops all future lock renewal attempts and interrupts the monitored thread.
+   * The writer thread should check for interrupts (via InterruptedException or Thread.interrupted()) to
+   * detect lock renewal failures. If the writer thread ignores interrupts, it will execute with a lock
+   * that can expire at any time, potentially leading to corrupted data.
    */
   private final Supplier<Boolean> heartbeatFuncToExec;
   private final long stopHeartbeatTimeoutMs;
@@ -101,6 +111,9 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
   // We ensure within the context of LockProviderHeartbeatManager, heartbeatFuncToExec only execute in a single thread periodically.
   @GuardedBy("this")
   private ScheduledFuture<?> scheduledFuture;
+
+  // Flag to distinguish externally-cancelled heartbeats (via stopHeartbeat) from genuine failures.
+  private volatile boolean stopRequested = false;
 
   /**
    * Semaphore for managing heartbeat task execution synchronization.
@@ -123,8 +136,6 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
    */
   private final Semaphore heartbeatSemaphore;
 
-  private static final Logger DEFAULT_LOGGER = LoggerFactory.getLogger(LockProviderHeartbeatManager.class);
-
   /**
    * Initializes a heartbeat manager.
    * @param ownerId The identifier for logging of who owns this heartbeat manager.
@@ -142,7 +153,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
             DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS,
             heartbeatFuncToExec,
             new Semaphore(1),
-            DEFAULT_LOGGER);
+            log);
   }
 
   @VisibleForTesting
@@ -179,10 +190,11 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
     }
 
     if (this.hasActiveHeartbeat()) {
-      logger.warn("Owner {}: Heartbeat is already running.", ownerId);
+      logger.error("Owner {}: Heartbeat is already running.", ownerId);
       return false;
     }
     try {
+      this.stopRequested = false;
       scheduledFuture = scheduler.scheduleAtFixedRate(() -> heartbeatTaskRunner(threadToMonitor), heartbeatTimeMs, heartbeatTimeMs, TimeUnit.MILLISECONDS);
       logger.debug("Owner {}: Heartbeat started with interval: {} ms", ownerId, heartbeatTimeMs);
       return true;
@@ -213,7 +225,12 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
 
     // Call synchronized method after releasing the semaphore
     if (!heartbeatExecutionSuccessful) {
-      logger.warn("Owner {}: Heartbeat function did not succeed.", ownerId);
+      logger.error("Owner {}: Heartbeat function did not succeed.", ownerId);
+      if (!stopRequested) {
+        // Interrupt the monitored thread to notify it of heartbeat failure.
+        threadToMonitor.interrupt();
+        logger.info("Owner {}: Interrupted monitored thread due to heartbeat failure.", ownerId);
+      }
       // Unschedule self from further execution if heartbeat was unsuccessful.
       heartbeatTaskUnscheduleItself();
     }
@@ -268,7 +285,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
     if (heartbeatStillInflight) {
       // If waiting for cancellation was interrupted, do not log an error.
       if (Thread.currentThread().isInterrupted()) {
-        logger.warn("Owner {}: Heartbeat is still in flight due to interruption!", ownerId);
+        logger.info("Owner {}: Heartbeat is still in flight due to interruption!", ownerId);
       } else {
         logger.error("Owner {}: Heartbeat is still in flight!", ownerId);
       }
@@ -290,10 +307,13 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
    */
   private synchronized boolean cancelRecurringHeartbeatTask(boolean mayInterruptIfRunning) {
     if (!this.hasActiveHeartbeat()) {
-      logger.warn("Owner {}: No active heartbeat task to stop.", ownerId);
+      logger.info("Owner {}: No active heartbeat task to stop.", ownerId);
       return true;
     }
 
+    // Signal that stop was externally requested before cancelling, so the heartbeat task runner
+    // knows not to interrupt the monitored thread if the inflight heartbeat fails due to cancellation.
+    this.stopRequested = true;
     // Attempt to cancel the scheduled future
     boolean cancellationSuccessful = scheduledFuture.cancel(mayInterruptIfRunning);
     logger.debug("Owner {}: Requested termination of heartbeat task. Cancellation returned {}", ownerId, cancellationSuccessful);
@@ -310,7 +330,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
       // means we wait any inflight task execution to finish synchronously.
       heartbeatStillInflight = !heartbeatSemaphore.tryAcquire(stopHeartbeatTimeoutMs, TimeUnit.MILLISECONDS);
       if (heartbeatStillInflight) {
-        logger.warn("Owner {}: Timed out while waiting for heartbeat termination.", ownerId);
+        logger.error("Owner {}: Timed out while waiting for heartbeat termination.", ownerId);
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();

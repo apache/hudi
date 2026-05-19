@@ -21,7 +21,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>1.1.0-SNAPSHOT</version>
+    <version>1.3.0-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>hudi-integ-test</artifactId>
@@ -186,6 +186,12 @@
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-1.2-api</artifactId>
+    </dependency>
+
+    <!-- Lombok -->
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
     </dependency>
 
     <!-- Hoodie - Import -->
@@ -390,7 +396,7 @@
   <properties>
     <dockerCompose.envFile>${project.basedir}/compose_env</dockerCompose.envFile>
     <dockerCompose.file>
-      ${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark353_amd64.yml
+      ${project.basedir}/../docker/compose/docker-compose_hadoop284_hive2310_spark353_amd64.yml
     </dockerCompose.file>
     <docker.compose.skip>${skipITs}</docker.compose.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
@@ -471,7 +477,7 @@
               <executable>/bin/bash</executable>
               <arguments>
                 <argument>-c</argument>
-                <argument>export HUDI_WS=`dirname ${project.basedir}`; docker compose -f ${dockerCompose.file} up -d</argument>
+                <argument>export HUDI_WS=`dirname ${project.basedir}`; docker compose -f ${dockerCompose.file} up -d --quiet-pull</argument>
               </arguments>
             </configuration>
           </execution>
@@ -516,7 +522,7 @@
       <id>m1-mac</id>
       <properties>
         <dockerCompose.file>
-          ${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark244_mac_aarch64.yml
+          ${project.basedir}/../docker/compose/docker-compose_hadoop284_hive2310_spark353_arm64.yml
         </dockerCompose.file>
       </properties>
       <activation>

@@ -50,7 +50,7 @@ object HoodieCLIUtils extends Logging {
     val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath)
       .setConf(HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf())).build()
     val schemaUtil = new TableSchemaResolver(metaClient)
-    val schemaStr = schemaUtil.getTableAvroSchema(false).toString
+    val schemaStr = schemaUtil.getTableSchema(false).toString
 
     // If tableName is provided, we need to add catalog props
     val catalogProps = tableName match {

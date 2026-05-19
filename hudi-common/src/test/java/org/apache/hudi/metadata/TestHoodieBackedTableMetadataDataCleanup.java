@@ -193,7 +193,7 @@ public class TestHoodieBackedTableMetadataDataCleanup {
       // Setup mock behavior for V2 path
       when(mockPairData.values()).thenReturn(mockHoodieData);
       when(mockMetadata.readSecondaryIndexDataTableRecordKeysV2(any(), anyString())).thenReturn(mockHoodieData);
-      when(mockMetadata.readRecordIndexLocations(any())).thenReturn(mockHoodieData);
+      when(mockMetadata.readRecordIndexLocations(any(HoodieData.class))).thenReturn(mockHoodieData);
       
       // Call real method on the mock
       when(mockMetadata.readSecondaryIndexLocations(secondaryKeys, partitionName)).thenCallRealMethod();

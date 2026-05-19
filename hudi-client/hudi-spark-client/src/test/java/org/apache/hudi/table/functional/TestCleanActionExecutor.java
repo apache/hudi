@@ -115,6 +115,15 @@ public class TestCleanActionExecutor {
       when(storage.exists(filePath)).thenReturn(true);
     } else if (failureType == CleanFailureType.FILE_NOT_FOUND_EXC_ON_DELETE) {
       when(storage.deleteFile(filePath)).thenThrow(new FileNotFoundException("throwing file not found exception"));
+    } else if (failureType == CleanFailureType.IO_EXCEPTION) {
+      when(storage.deleteFile(filePath)).thenThrow(new IOException("throwing io exception"));
+      when(storage.exists(filePath)).thenThrow(new IOException("throwing io exception"));
+    } else if (failureType == CleanFailureType.IO_EXCEPTION_AND_EXISTS) {
+      when(storage.deleteFile(filePath)).thenThrow(new IOException("throwing io exception"));
+      when(storage.exists(filePath)).thenReturn(true);
+    } else if (failureType == CleanFailureType.IO_EXCEPTION_BUT_NOT_EXISTS) {
+      when(storage.deleteFile(filePath)).thenThrow(new IOException("throwing io exception"));
+      when(storage.exists(filePath)).thenReturn(false);
     } else {
       // run time exception
       when(storage.deleteFile(filePath)).thenThrow(new RuntimeException("throwing run time exception"));
@@ -159,6 +168,12 @@ public class TestCleanActionExecutor {
       assertCleanExecutionFailure(cleanActionExecutor);
     } else if (failureType == CleanFailureType.FILE_NOT_FOUND_EXC_ON_DELETE) {
       assertCleanExecutionSuccess(cleanActionExecutor, filePath);
+    } else if (failureType == CleanFailureType.IO_EXCEPTION) {
+      assertCleanExecutionFailure(cleanActionExecutor);
+    } else if (failureType == CleanFailureType.IO_EXCEPTION_AND_EXISTS) {
+      assertCleanExecutionFailure(cleanActionExecutor);
+    } else if (failureType == CleanFailureType.IO_EXCEPTION_BUT_NOT_EXISTS) {
+      assertCleanExecutionSuccess(cleanActionExecutor, filePath);
     } else {
       // run time exception
       assertCleanExecutionFailure(cleanActionExecutor);
@@ -189,6 +204,9 @@ public class TestCleanActionExecutor {
     FALSE_ON_DELETE_IS_EXISTS_FALSE,
     FALSE_ON_DELETE_IS_EXISTS_TRUE,
     FILE_NOT_FOUND_EXC_ON_DELETE,
+    IO_EXCEPTION,
+    IO_EXCEPTION_AND_EXISTS,
+    IO_EXCEPTION_BUT_NOT_EXISTS,
     RUNTIME_EXC_ON_DELETE
   }
 }

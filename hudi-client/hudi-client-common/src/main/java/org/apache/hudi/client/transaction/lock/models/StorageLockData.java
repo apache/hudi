@@ -20,11 +20,14 @@ package org.apache.hudi.client.transaction.lock.models;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Getter;
 
 /**
  * Pojo for conditional writes-based lock provider.
  */
+@Getter
 public class StorageLockData {
+
   private final boolean expired;
   private final long validUntil;
   private final String owner;
@@ -43,29 +46,5 @@ public class StorageLockData {
     this.expired = expired;
     this.validUntil = validUntil;
     this.owner = owner;
-  }
-
-  /**
-   * Gets the expiration.
-   * @return The long representing the expiration in ms.
-   */
-  public long getValidUntil() {
-    return this.validUntil;
-  }
-
-  /**
-   * Whether the lock is expired.
-   * @return True boolean representing whether the lock is expired.
-   */
-  public boolean isExpired() {
-    return this.expired;
-  }
-
-  /**
-   * The owner.
-   * @return A string representing the uuid of the owner of this lock.
-   */
-  public String getOwner() {
-    return this.owner;
   }
 }

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.model;
 
+import org.apache.hudi.adapter.DataTypeAdapter;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.util.ValidationUtils;
 
@@ -29,6 +30,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.types.RowKind;
+import org.apache.flink.types.variant.Variant;
 
 /**
  * RowData implementation for Hoodie Row. It wraps an {@link RowData} and keeps meta columns locally. But the {@link RowData}
@@ -166,4 +168,8 @@ public abstract class AbstractHoodieRowData implements RowData {
   }
 
   protected abstract int rebaseOrdinal(int ordinal);
+
+  public Variant getVariant(int i) {
+    return DataTypeAdapter.getVariant(row, rebaseOrdinal(i));
+  }
 }

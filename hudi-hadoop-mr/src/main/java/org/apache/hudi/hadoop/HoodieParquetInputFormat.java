@@ -27,7 +27,8 @@ import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -105,7 +106,8 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     try {
       Path inputPath = ((FileSplit) split).getPath();
       FileSystem fs = inputPath.getFileSystem(job);
-      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      HoodieStorage storage = HoodieStorageUtils.getStorage(
+          HadoopFSUtils.convertToStoragePath(inputPath), HadoopFSUtils.getStorageConf(fs.getConf()));
       return getTablePath(storage, convertToStoragePath(inputPath))
           .map(path -> isHoodieTablePath(storage, path)).orElse(false);
     } catch (IOException e) {
@@ -123,15 +125,15 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
           return super.getRecordReader(split, job, reporter);
         }
         if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
-          return new HoodieFileGroupReaderBasedRecordReader((s, j) -> {
+          return new HoodieFileGroupReaderBasedRecordReader((s, j, d) -> {
             try {
-              return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(Option.empty()), s, j, reporter);
+              return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(Option.empty(), Option.of(d)), s, j, reporter);
             } catch (InterruptedException e) {
               throw new RuntimeException(e);
             }
           }, split, job);
         } else {
-          return new HoodieFileGroupReaderBasedRecordReader((s, j) -> super.getRecordReader(s, j, reporter), split, job);
+          return new HoodieFileGroupReaderBasedRecordReader((s, j, d) -> super.getRecordReader(s, j, reporter), split, job);
         }
       } catch (final IOException e) {
         throw new RuntimeException("Cannot create a RecordReaderWrapper", e);
@@ -174,7 +176,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
                                                                             Option<InternalSchema> internalSchemaOption) throws IOException {
     try {
       if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
-        return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(internalSchemaOption), split, job, reporter);
+        return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(internalSchemaOption, Option.empty()), split, job, reporter);
       } else {
         return super.getRecordReader(split, job, reporter);
       }

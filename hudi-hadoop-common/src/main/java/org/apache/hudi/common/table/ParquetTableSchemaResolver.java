@@ -19,10 +19,12 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.avro.Schema;
+import org.apache.hudi.common.schema.HoodieSchema;
+
 import org.apache.hadoop.conf.Configuration;
-import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
+
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 public class ParquetTableSchemaResolver extends TableSchemaResolver {
 
@@ -30,37 +32,7 @@ public class ParquetTableSchemaResolver extends TableSchemaResolver {
     super(metaClient);
   }
 
-  public static MessageType convertAvroSchemaToParquet(Schema schema, Configuration hadoopConf) {
-    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(hadoopConf);
-    return avroSchemaConverter.convert(schema);
+  public static MessageType convertAvroSchemaToParquet(HoodieSchema schema, Configuration hadoopConf) {
+    return getAvroSchemaConverter(hadoopConf).convert(schema);
   }
-
-  private Schema convertParquetSchemaToAvro(MessageType parquetSchema) {
-    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(metaClient.getStorageConf().unwrapAs(Configuration.class));
-    return avroSchemaConverter.convert(parquetSchema);
-  }
-
-  private MessageType convertAvroSchemaToParquet(Schema schema) {
-    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(metaClient.getStorageConf().unwrapAs(Configuration.class));
-    return avroSchemaConverter.convert(schema);
-  }
-
-  /**
-   * Gets full schema (user + metadata) for a hoodie table in Parquet format.
-   *
-   * @return Parquet schema for the table
-   */
-  public MessageType getTableParquetSchema() throws Exception {
-    return convertAvroSchemaToParquet(getTableAvroSchema(true));
-  }
-
-  /**
-   * Gets users data schema for a hoodie table in Parquet format.
-   *
-   * @return Parquet schema for the table
-   */
-  public MessageType getTableParquetSchema(boolean includeMetadataField) throws Exception {
-    return convertAvroSchemaToParquet(getTableAvroSchema(includeMetadataField));
-  }
-
 }

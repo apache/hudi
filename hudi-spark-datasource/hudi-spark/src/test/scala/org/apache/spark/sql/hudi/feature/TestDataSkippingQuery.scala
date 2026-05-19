@@ -32,42 +32,45 @@ class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
     Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
         val tableName = generateTableName
-        spark.sql("set hoodie.metadata.enable = true")
-        spark.sql("set hoodie.metadata.index.column.stats.enable = true")
-        spark.sql("set hoodie.enable.data.skipping = true")
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  attributes map<string, string>,
-             |  price double,
-             |  ts long,
-             |  dt string
-             |) using hudi
-             | tblproperties (primaryKey = 'id', type = '$tableType')
-             | partitioned by (dt)
-             | location '${tmp.getCanonicalPath}'
+        withSQLConf(
+          "hoodie.metadata.enable" -> "true",
+          "hoodie.metadata.index.column.stats.enable" -> "true",
+          "hoodie.enable.data.skipping" -> "true"
+        ) {
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  attributes map<string, string>,
+               |  price double,
+               |  ts long,
+               |  dt string
+               |) using hudi
+               | tblproperties (primaryKey = 'id', type = '$tableType')
+               | partitioned by (dt)
+               | location '${tmp.getCanonicalPath}'
                   """.stripMargin)
-        spark.sql(
-          s"""
-             | insert into $tableName values
-             | (1, 'a1', map('color', 'red', 'size', 'M'), 10, 1000, '2021-01-05'),
-             | (2, 'a2', map('color', 'blue', 'size', 'L'), 20, 2000, '2021-01-06'),
-             | (3, 'a3', map('color', 'green', 'size', 'S'), 30, 3000, '2021-01-07')
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1, 'a1', map('color', 'red', 'size', 'M'), 10, 1000, '2021-01-05'),
+               | (2, 'a2', map('color', 'blue', 'size', 'L'), 20, 2000, '2021-01-06'),
+               | (3, 'a3', map('color', 'green', 'size', 'S'), 30, 3000, '2021-01-07')
                   """.stripMargin)
-        // Check the case where the WHERE condition only includes columns not supported by column stats
-        checkAnswer(s"select id, name, price, ts, dt from $tableName where attributes.color = 'red'")(
-          Seq(1, "a1", 10.0, 1000, "2021-01-05")
-        )
-        // Check the case where the WHERE condition only includes columns supported by column stats
-        checkAnswer(s"select id, name, price, ts, dt from $tableName where name='a1'")(
-          Seq(1, "a1", 10.0, 1000, "2021-01-05")
-        )
-        // Check the case where the WHERE condition includes both columns supported by column stats and those that are not
-        checkAnswer(s"select id, name, price, ts, dt from $tableName where attributes.color = 'red' and name='a1'")(
-          Seq(1, "a1", 10.0, 1000, "2021-01-05")
-        )
+          // Check the case where the WHERE condition only includes columns not supported by column stats
+          checkAnswer(s"select id, name, price, ts, dt from $tableName where attributes.color = 'red'")(
+            Seq(1, "a1", 10.0, 1000, "2021-01-05")
+          )
+          // Check the case where the WHERE condition only includes columns supported by column stats
+          checkAnswer(s"select id, name, price, ts, dt from $tableName where name='a1'")(
+            Seq(1, "a1", 10.0, 1000, "2021-01-05")
+          )
+          // Check the case where the WHERE condition includes both columns supported by column stats and those that are not
+          checkAnswer(s"select id, name, price, ts, dt from $tableName where attributes.color = 'red' and name='a1'")(
+            Seq(1, "a1", 10.0, 1000, "2021-01-05")
+          )
+        }
       }
     }
   }
@@ -76,48 +79,51 @@ class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
     Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
         val tableName = generateTableName
-        spark.sql("set hoodie.metadata.enable = true")
-        spark.sql("set hoodie.metadata.index.column.stats.enable = true")
-        spark.sql("set hoodie.enable.data.skipping = true")
-        spark.sql("set hoodie.metadata.index.column.stats.column.list = name")
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  attributes map<string, string>,
-             |  price double,
-             |  ts long,
-             |  dt string
-             |) using hudi
-             | tblproperties (primaryKey = 'id', type = '$tableType')
-             | partitioned by (dt)
-             | location '${tmp.getCanonicalPath}'
+        withSQLConf(
+          "hoodie.metadata.enable" -> "true",
+          "hoodie.metadata.index.column.stats.enable" -> "true",
+          "hoodie.enable.data.skipping" -> "true",
+          "hoodie.metadata.index.column.stats.column.list" -> "name"
+        ) {
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  attributes map<string, string>,
+               |  price double,
+               |  ts long,
+               |  dt string
+               |) using hudi
+               | tblproperties (primaryKey = 'id', type = '$tableType')
+               | partitioned by (dt)
+               | location '${tmp.getCanonicalPath}'
                   """.stripMargin)
-        spark.sql(
-          s"""
-             | insert into $tableName values
-             | (1, 'a1', map('color', 'red', 'size', 'M'), 10, 1000, '2021-01-05'),
-             | (2, 'a2', map('color', 'blue', 'size', 'L'), 20, 2000, '2021-01-06'),
-             | (3, 'a3', map('color', 'green', 'size', 'S'), 30, 3000, '2021-01-07')
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1, 'a1', map('color', 'red', 'size', 'M'), 10, 1000, '2021-01-05'),
+               | (2, 'a2', map('color', 'blue', 'size', 'L'), 20, 2000, '2021-01-06'),
+               | (3, 'a3', map('color', 'green', 'size', 'S'), 30, 3000, '2021-01-07')
                   """.stripMargin)
-        // Check the case where the WHERE condition only includes columns not supported by column stats
-        checkAnswer(s"select id, name, price, ts, dt from $tableName where attributes.color = 'red'")(
-          Seq(1, "a1", 10.0, 1000, "2021-01-05")
-        )
-        // Check the case where the WHERE condition only includes columns supported by column stats
-        checkAnswer(s"select id, name, price, ts, dt from $tableName where name='a1'")(
-          Seq(1, "a1", 10.0, 1000, "2021-01-05")
-        )
-        // Check the case where the WHERE condition includes both columns supported by column stats and those that are not
-        checkAnswer(s"select id, name, price, ts, dt from $tableName where attributes.color = 'red' and name='a1'")(
-          Seq(1, "a1", 10.0, 1000, "2021-01-05")
-        )
-        // Check WHERE condition that includes both columns with existing column stats and columns of types
-        // that support column stats but for which column stats do not exist
-        checkAnswer(s"select id, name, price, ts, dt from $tableName where ts=1000 and name='a1'")(
-          Seq(1, "a1", 10.0, 1000, "2021-01-05")
-        )
+          // Check the case where the WHERE condition only includes columns not supported by column stats
+          checkAnswer(s"select id, name, price, ts, dt from $tableName where attributes.color = 'red'")(
+            Seq(1, "a1", 10.0, 1000, "2021-01-05")
+          )
+          // Check the case where the WHERE condition only includes columns supported by column stats
+          checkAnswer(s"select id, name, price, ts, dt from $tableName where name='a1'")(
+            Seq(1, "a1", 10.0, 1000, "2021-01-05")
+          )
+          // Check the case where the WHERE condition includes both columns supported by column stats and those that are not
+          checkAnswer(s"select id, name, price, ts, dt from $tableName where attributes.color = 'red' and name='a1'")(
+            Seq(1, "a1", 10.0, 1000, "2021-01-05")
+          )
+          // Check WHERE condition that includes both columns with existing column stats and columns of types
+          // that support column stats but for which column stats do not exist
+          checkAnswer(s"select id, name, price, ts, dt from $tableName where ts=1000 and name='a1'")(
+            Seq(1, "a1", 10.0, 1000, "2021-01-05")
+          )
+        }
       }
     }
   }
@@ -178,26 +184,26 @@ class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
             Seq(2, "a2", 20.0, 2000, "2021-01-06"),
             Seq(3, "a3", 30.0, 3000, "2021-01-07")
           )
-          spark.sql("set hoodie.bucket.index.query.pruning = false")
-          checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 1")(
-            Seq(1, "a1", 10.0, 1000, "2021-01-05")
-          )
-          checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 1 and name = 'a1'")(
-            Seq(1, "a1", 10.0, 1000, "2021-01-05")
-          )
-          checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 2 or id = 5")(
-            Seq(2, "a2", 20.0, 2000, "2021-01-06")
-          )
-          checkAnswer(s"select id, name, price, ts, dt from $tableName where id in (2, 3)")(
-            Seq(2, "a2", 20.0, 2000, "2021-01-06"),
-            Seq(3, "a3", 30.0, 3000, "2021-01-07")
-          )
-          checkAnswer(s"select id, name, price, ts, dt from $tableName where id != 4")(
-            Seq(1, "a1", 10.0, 1000, "2021-01-05"),
-            Seq(2, "a2", 20.0, 2000, "2021-01-06"),
-            Seq(3, "a3", 30.0, 3000, "2021-01-07")
-          )
-          spark.sql("set hoodie.bucket.index.query.pruning = true")
+          withSQLConf("hoodie.bucket.index.query.pruning" -> "false") {
+            checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 1")(
+              Seq(1, "a1", 10.0, 1000, "2021-01-05")
+            )
+            checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 1 and name = 'a1'")(
+              Seq(1, "a1", 10.0, 1000, "2021-01-05")
+            )
+            checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 2 or id = 5")(
+              Seq(2, "a2", 20.0, 2000, "2021-01-06")
+            )
+            checkAnswer(s"select id, name, price, ts, dt from $tableName where id in (2, 3)")(
+              Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+              Seq(3, "a3", 30.0, 3000, "2021-01-07")
+            )
+            checkAnswer(s"select id, name, price, ts, dt from $tableName where id != 4")(
+              Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+              Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+              Seq(3, "a3", 30.0, 3000, "2021-01-07")
+            )
+          }
         }
       }
     }

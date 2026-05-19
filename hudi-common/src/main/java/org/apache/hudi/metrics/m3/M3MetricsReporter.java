@@ -27,8 +27,7 @@ import com.uber.m3.tally.Scope;
 import com.uber.m3.tally.m3.M3Reporter;
 import com.uber.m3.util.Duration;
 import com.uber.m3.util.ImmutableMap;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
 import java.util.Arrays;
@@ -39,9 +38,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * Implementation of M3 Metrics reporter, which can report metrics to a https://m3db.io/ service
  */
+@Slf4j
 public class M3MetricsReporter extends MetricsReporter {
 
-  private static final Logger LOG = LoggerFactory.getLogger(M3MetricsReporter.class);
   private final HoodieMetricsConfig metricsConfig;
   private final MetricRegistry registry;
   private final ImmutableMap<String, String> tags;
@@ -55,7 +54,7 @@ public class M3MetricsReporter extends MetricsReporter {
     tagBuilder.put("service", metricsConfig.getM3Service());
     tagBuilder.put("env", metricsConfig.getM3Env());
     this.tags = tagBuilder.build();
-    LOG.info(String.format("Building M3 Reporter with M3 tags mapping: %s", tags));
+    log.info("Building M3 Reporter with M3 tags mapping: {}", tags);
   }
 
   private static Map parseOptionalTags(String tagValueString) {
@@ -107,7 +106,7 @@ public class M3MetricsReporter extends MetricsReporter {
         scopeReporter.report();
         scopeReporter.stop();
       } catch (Exception e) {
-        LOG.error(String.format("Error reporting metrics to M3: %s", e));
+        log.error("Error reporting metrics to M3:", e);
       }
     }
   }

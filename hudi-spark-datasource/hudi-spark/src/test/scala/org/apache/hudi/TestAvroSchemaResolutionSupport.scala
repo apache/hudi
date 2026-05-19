@@ -18,8 +18,7 @@
  */
 package org.apache.hudi
 
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
-import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.SchemaCompatibilityException
@@ -28,9 +27,9 @@ import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource}
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import scala.language.postfixOps
 
@@ -74,28 +73,18 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     case 4 => df.withColumn(colToCast, df.col(colToCast).cast("string"))
   }
 
-  def initialiseTable(df: DataFrame, saveDir: String, isCow: Boolean = true): Unit = {
-    val opts = if (isCow) {
-      commonOpts ++ Map(DataSourceWriteOptions.TABLE_TYPE.key -> "COPY_ON_WRITE")
-    } else {
-      commonOpts ++ Map(DataSourceWriteOptions.TABLE_TYPE.key -> "MERGE_ON_READ")
-    }
-
+  def initialiseTable(df: DataFrame, saveDir: String, tableType: String = "COPY_ON_WRITE"): Unit = {
+    val opts = commonOpts ++ Map(DataSourceWriteOptions.TABLE_TYPE.key -> tableType)
     df.write.format("hudi")
       .options(opts)
       .mode("overwrite")
       .save(saveDir)
   }
 
-  def upsertData(df: DataFrame, saveDir: String, isCow: Boolean = true, shouldAllowDroppedColumns: Boolean = false,
+  def upsertData(df: DataFrame, saveDir: String, tableType: String = "COPY_ON_WRITE", shouldAllowDroppedColumns: Boolean = false,
                  enableSchemaValidation: Boolean = HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue().toBoolean): Unit = {
-    var opts = if (isCow) {
-      commonOpts ++ Map(DataSourceWriteOptions.TABLE_TYPE.key -> "COPY_ON_WRITE")
-    } else {
-      commonOpts ++ Map(DataSourceWriteOptions.TABLE_TYPE.key -> "MERGE_ON_READ")
-    }
-    opts = opts ++ Map(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> shouldAllowDroppedColumns.toString)
-
+    val opts = commonOpts ++ Map(DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
+      HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> shouldAllowDroppedColumns.toString)
     df.write.format("hudi")
       .options(opts)
       .mode("append")
@@ -103,8 +92,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testArgs"))
-  def testDataTypePromotions(isCow: Boolean, useFileGroupReader: Boolean): Unit = {
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testDataTypePromotions(tableType: String): Unit = {
     // test to read tables with columns that are promoted via avro schema resolution
     val tempRecordPath = basePath + "/record_tbl/"
     val _spark = spark
@@ -130,28 +119,26 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         try {
           // convert int to string first before conversion to binary
           val initDF = prepDataFrame(df1, colInitType)
-          initDF.printSchema()
-          initDF.show(false)
+          Assertions.assertNotNull(initDF.schema.toString())
+          initDF.collect
 
           // recreate table
-          initialiseTable(initDF, tempRecordPath, isCow)
+          initialiseTable(initDF, tempRecordPath, tableType)
 
           // perform avro supported casting
           var upsertDf = prepDataFrame(df2, colInitType)
           upsertDf = castColToX(a, colToCast, upsertDf)
-          upsertDf.printSchema()
-          upsertDf.show(false)
+          Assertions.assertNotNull(upsertDf.schema.toString())
+          upsertDf.collect
 
           // upsert
-          upsertData(upsertDf, tempRecordPath, isCow)
+          upsertData(upsertDf, tempRecordPath, tableType)
 
           // read out the table
           val readDf = spark.read.format("hudi")
-            .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFileGroupReader)
             .load(tempRecordPath)
-          readDf.printSchema()
-          readDf.show(false)
-          readDf.foreach(_ => {})
+          Assertions.assertNotNull(readDf.schema.toString())
+          readDf.collect
 
           assert(true)
         } catch {
@@ -177,8 +164,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testArgs"))
-  def testAddNewColumn(isCow: Boolean, useFileGroupReader: Boolean): Unit = {
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testAddNewColumn(tableType: String): Unit = {
     // test to add a column
     val tempRecordPath = basePath + "/record_tbl/"
     val _spark = spark
@@ -189,27 +176,25 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
 
     // convert int to string first before conversion to binary
     val initDF = df1
-    initDF.printSchema()
-    initDF.show(false)
+    initDF.schema.toString()
+    initDF.collect
 
     // recreate table
-    initialiseTable(initDF, tempRecordPath, isCow)
+    initialiseTable(initDF, tempRecordPath, tableType)
 
     // perform avro supported operation of adding a new column at the end of the table
     val upsertDf = df2
-    upsertDf.printSchema()
-    upsertDf.show(false)
+    upsertDf.schema.toString()
+    upsertDf.collect
 
     // upsert
-    upsertData(upsertDf, tempRecordPath, isCow)
+    upsertData(upsertDf, tempRecordPath, tableType)
 
     // read out the table
     val readDf = spark.read.format("hudi")
-      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFileGroupReader)
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
@@ -224,45 +209,42 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     val tempRecordPath = basePath + "/record_tbl/"
     val _spark = spark
     import _spark.implicits._
-    val isCow = tableType.equals(HoodieTableType.COPY_ON_WRITE.name())
 
     val df1 = Seq((1, 100, "aaa")).toDF("id", "userid", "name")
     val df2 = Seq((2, "bbb")).toDF("id", "name")
 
     // convert int to string first before conversion to binary
     val initDF = df1
-    initDF.printSchema()
-    initDF.show(false)
+    initDF.schema.toString()
+    initDF.collect
 
     // recreate table
-    initialiseTable(initDF, tempRecordPath, isCow)
+    initialiseTable(initDF, tempRecordPath, tableType)
 
     // perform avro supported operation of deleting a column
     val upsertDf = df2
-    upsertDf.printSchema()
-    upsertDf.show(false)
+    upsertDf.schema.toString()
+    upsertDf.collect
 
     // upsert
     assertThrows(classOf[SchemaCompatibilityException]) {
-      upsertData(upsertDf, tempRecordPath, isCow, enableSchemaValidation = schemaValidationEnabled)
+      upsertData(upsertDf, tempRecordPath, tableType, enableSchemaValidation = schemaValidationEnabled)
     }
 
-    upsertData(upsertDf, tempRecordPath, isCow, shouldAllowDroppedColumns = true, enableSchemaValidation = schemaValidationEnabled)
+    upsertData(upsertDf, tempRecordPath, tableType, shouldAllowDroppedColumns = true, enableSchemaValidation = schemaValidationEnabled)
 
     // read out the table
     //schemaValidationEnabled is a writer config, so we will also test the fg reader with the
     //same param since that will only affect the reader
     val readDf = spark.read.format("hudi")
-      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), schemaValidationEnabled)
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testArgs"))
-  def testColumnPositionChange(isCow: Boolean, useFileGroupReader: Boolean): Unit = {
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testColumnPositionChange(tableType: String): Unit = {
     // test to change column positions
     val tempRecordPath = basePath + "/record_tbl/"
     val _spark = spark
@@ -273,32 +255,30 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
 
     // convert int to string first before conversion to binary
     val initDF = df1
-    initDF.printSchema()
-    initDF.show(false)
+    initDF.schema.toString()
+    initDF.collect
 
     // recreate table
-    initialiseTable(initDF, tempRecordPath, isCow)
+    initialiseTable(initDF, tempRecordPath, tableType)
 
     // perform avro supported operation of deleting a column
     val upsertDf = df2
-    upsertDf.printSchema()
-    upsertDf.show(false)
+    upsertDf.schema.toString()
+    upsertDf.collect
 
     // upsert
-    upsertData(upsertDf, tempRecordPath, isCow)
+    upsertData(upsertDf, tempRecordPath, tableType)
 
     // read out the table
     val readDf = spark.read.format("hudi")
-      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFileGroupReader)
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testArgs"))
-  def testArrayOfStructsAddNewColumn(isCow: Boolean, useFileGroupReader: Boolean): Unit = {
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testArrayOfStructsAddNewColumn(tableType: String): Unit = {
     // test to add a field to a STRUCT in a column of ARRAY< STRUCT<..> > type
     val tempRecordPath = basePath + "/record_tbl/"
     val arrayStructData = Seq(
@@ -313,11 +293,11 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         .add("pages", IntegerType)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayStructData), arrayStructSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
-    initialiseTable(df1, tempRecordPath, isCow)
+    initialiseTable(df1, tempRecordPath, tableType)
 
     // add a column to array of struct
     val newArrayStructData = Seq(
@@ -334,23 +314,21 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
       ))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayStructData), newArrayStructSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
-    upsertData(df2, tempRecordPath, isCow)
+    upsertData(df2, tempRecordPath, tableType)
 
     // read out the table
     val readDf = spark.read.format("hudi")
-      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFileGroupReader)
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testArgs"))
-  def testArrayOfStructsChangeColumnType(isCow: Boolean, useFileGroupReader: Boolean): Unit = {
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testArrayOfStructsChangeColumnType(tableType: String): Unit = {
     // test to change the type of a field from a STRUCT in a column of ARRAY< STRUCT<..> > type
     val tempRecordPath = basePath + "/record_tbl/"
     val arrayStructData = Seq(
@@ -365,11 +343,11 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         .add("pages", IntegerType)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayStructData), arrayStructSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
-    initialiseTable(df1, tempRecordPath, isCow)
+    initialiseTable(df1, tempRecordPath, tableType)
 
     // add a column to array of struct
     val newArrayStructData = Seq(
@@ -384,25 +362,23 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         .add("pages", LongType)))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayStructData), newArrayStructSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
-    upsertData(df2, tempRecordPath, isCow)
+    upsertData(df2, tempRecordPath, tableType)
 
     withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
       // read out the table
       val readDf = spark.read.format("hudi")
-        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFileGroupReader)
         .load(tempRecordPath)
-      readDf.printSchema()
-      readDf.show(false)
-      readDf.foreach(_ => {})
+      readDf.schema.toString()
+      readDf.collect
     }
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testArgs"))
-  def testArrayOfStructsChangeColumnPosition(isCow: Boolean, useFileGroupReader: Boolean): Unit = {
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testArrayOfStructsChangeColumnPosition(tableType: String): Unit = {
     // test to change the position of a field from a STRUCT in a column of ARRAY< STRUCT<..> > type
     val tempRecordPath = basePath + "/record_tbl/"
     val arrayStructData = Seq(
@@ -417,11 +393,11 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         .add("pages", IntegerType)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayStructData), arrayStructSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
-    initialiseTable(df1, tempRecordPath, isCow)
+    initialiseTable(df1, tempRecordPath, tableType)
 
     // add a column to array of struct
     val newArrayStructData = Seq(
@@ -436,23 +412,21 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         .add("author", StringType)))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayStructData), newArrayStructSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
-    upsertData(df2, tempRecordPath, isCow)
+    upsertData(df2, tempRecordPath, tableType)
 
     // read out the table
     val readDf = spark.read.format("hudi")
-      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFileGroupReader)
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testArgs"))
-  def testArrayOfMapsChangeValueType(isCow: Boolean, useFileGroupReader: Boolean): Unit = {
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testArrayOfMapsChangeValueType(tableType: String): Unit = {
     // test to change the value type of a MAP in a column of ARRAY< MAP<k,v> > type
     val tempRecordPath = basePath + "/record_tbl/"
     val arrayMapData = Seq(
@@ -465,11 +439,11 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, IntegerType, true)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayMapData), arrayMapSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
-    initialiseTable(df1, tempRecordPath, isCow)
+    initialiseTable(df1, tempRecordPath, tableType)
 
     // change value type from integer to long
     val newArrayMapData = Seq(
@@ -482,25 +456,23 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, LongType, true)))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayMapData), newArrayMapSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
-    upsertData(df2, tempRecordPath, isCow)
+    upsertData(df2, tempRecordPath, tableType)
 
     withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
       // read out the table
       val readDf = spark.read.format("hudi")
-        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFileGroupReader)
         .load(tempRecordPath)
-      readDf.printSchema()
-      readDf.show(false)
-      readDf.foreach(_ => {})
+      readDf.schema.toString()
+      readDf.collect
     }
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testArgs"))
-  def testArrayOfMapsStructChangeFieldType(isCow: Boolean, useFileGroupReader: Boolean): Unit = {
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testArrayOfMapsStructChangeFieldType(tableType: String): Unit = {
     // test to change a field type of a STRUCT in a column of ARRAY< MAP< k,STRUCT<..> > > type
     val tempRecordPath = basePath + "/record_tbl/"
     val arrayMapData = Seq(
@@ -522,11 +494,11 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, innerStructSchema, true)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayMapData), arrayMapSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
-    initialiseTable(df1, tempRecordPath, isCow)
+    initialiseTable(df1, tempRecordPath, tableType)
 
     // change inner struct's type from integer to long
     val newArrayMapData = Seq(
@@ -548,25 +520,23 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, newInnerStructSchema, true)))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayMapData), newArrayMapSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
-    upsertData(df2, tempRecordPath, isCow)
+    upsertData(df2, tempRecordPath, tableType)
 
     withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
       // read out the table
       val readDf = spark.read.format("hudi")
-        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFileGroupReader)
         .load(tempRecordPath)
-      readDf.printSchema()
-      readDf.show(false)
-      readDf.foreach(_ => {})
+      readDf.schema.toString()
+      readDf.collect
     }
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testArgs"))
-  def testArrayOfMapsStructAddField(isCow: Boolean, useFileGroupReader: Boolean): Unit = {
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testArrayOfMapsStructAddField(tableType: String): Unit = {
     // test to add a field to a STRUCT in a column of ARRAY< MAP< k,STRUCT<..> > > type
     val tempRecordPath = basePath + "/record_tbl/"
     val arrayMapData = Seq(
@@ -588,11 +558,11 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, innerStructSchema, true)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayMapData), arrayMapSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
-    initialiseTable(df1, tempRecordPath, isCow)
+    initialiseTable(df1, tempRecordPath, tableType)
 
     // add a new column
     val newArrayMapData = Seq(
@@ -615,23 +585,21 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, newInnerStructSchema, true)))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayMapData), newArrayMapSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
-    upsertData(df2, tempRecordPath, isCow)
+    upsertData(df2, tempRecordPath, tableType)
 
     // read out the table
     val readDf = spark.read.format("hudi")
-      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFileGroupReader)
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testArgs"))
-  def testArrayOfMapsStructChangeFieldPosition(isCow: Boolean, useFileGroupReader: Boolean): Unit = {
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testArrayOfMapsStructChangeFieldPosition(tableType: String): Unit = {
     // test to change the position of fields of a STRUCT in a column of ARRAY< MAP< k,STRUCT<..> > > type
     val tempRecordPath = basePath + "/record_tbl/"
     val arrayMapData = Seq(
@@ -653,11 +621,11 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, innerStructSchema, true)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayMapData), arrayMapSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
-    initialiseTable(df1, tempRecordPath, isCow)
+    initialiseTable(df1, tempRecordPath, tableType)
 
     // change column position
     val newArrayMapData = Seq(
@@ -679,23 +647,21 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, newInnerStructSchema, true)))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayMapData), newArrayMapSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
-    upsertData(df2, tempRecordPath, isCow)
+    upsertData(df2, tempRecordPath, tableType)
 
     // read out the table
     val readDf = spark.read.format("hudi")
-      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFileGroupReader)
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testArgs"))
-  def testArrayOfMapsStructDeleteField(isCow: Boolean, useFileGroupReader: Boolean): Unit = {
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testArrayOfMapsStructDeleteField(tableType: String): Unit = {
     // test to delete a field of a STRUCT in a column of ARRAY< MAP< k,STRUCT<..> > > type
 
     val tempRecordPath = basePath + "/record_tbl/"
@@ -718,11 +684,11 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, innerStructSchema, true)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayMapData), arrayMapSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
-    initialiseTable(df1, tempRecordPath, isCow)
+    initialiseTable(df1, tempRecordPath, tableType)
 
     // change column position
     val newArrayMapData = Seq(
@@ -743,23 +709,21 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, newInnerStructSchema, true)))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayMapData), newArrayMapSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
-    upsertData(df2, tempRecordPath, isCow, true)
+    upsertData(df2, tempRecordPath, tableType, true)
 
     // read out the table
     val readDf = spark.read.format("hudi")
-      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFileGroupReader)
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testArgs"))
-  def testComplexOperationsOnTable(isCow: Boolean, useFileGroupReader: Boolean): Unit = {
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testComplexOperationsOnTable(tableType: String): Unit = {
     // test a series of changes on a Hudi table
 
     var defaultPartitionIdx = 0
@@ -775,42 +739,42 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
 
     // 1. Initialise table
     val df1 = Seq((1, 100, newPartition)).toDF("id", "userid", "name")
-    df1.printSchema()
-    df1.show(false)
-    initialiseTable(df1, tempRecordPath, isCow)
+    df1.schema.toString()
+    df1.collect
+    initialiseTable(df1, tempRecordPath, tableType)
 
     // 2. Promote INT type to LONG into a different partition
     val df2 = Seq((2, 200L, newPartition)).toDF("id", "userid", "name")
-    df2.printSchema()
-    df2.show(false)
-    upsertData(df2, tempRecordPath, isCow)
+    df2.schema.toString()
+    df2.collect
+    upsertData(df2, tempRecordPath, tableType)
 
     // 3. Promote LONG to FLOAT
     var df3 = Seq((3, 300, newPartition)).toDF("id", "userid", "name")
     df3 = df3.withColumn("userid", df3.col("userid").cast("float"))
-    df3.printSchema()
-    df3.show(false)
+    df3.schema.toString()
+    df3.collect
     upsertData(df3, tempRecordPath)
 
     // 4. Promote FLOAT to DOUBLE
     var df4 = Seq((4, 400, newPartition)).toDF("id", "userid", "name")
     df4 = df4.withColumn("userid", df4.col("userid").cast("float"))
-    df4.printSchema()
-    df4.show(false)
+    df4.schema.toString()
+    df4.collect
     upsertData(df4, tempRecordPath)
 
     // 5. Add two new column
     var df5 = Seq((5, 500, "newcol1", "newcol2", newPartition)).toDF("id", "userid", "newcol1", "newcol2", "name")
     df5 = df5.withColumn("userid", df5.col("userid").cast("float"))
-    df5.printSchema()
-    df5.show(false)
+    df5.schema.toString()
+    df5.collect
     upsertData(df5, tempRecordPath)
 
     // 6. Delete a column
     var df6 = Seq((6, 600, "newcol1", newPartition)).toDF("id", "userid", "newcol1", "name")
     df6 = df6.withColumn("userid", df6.col("userid").cast("float"))
-    df6.printSchema()
-    df6.show(false)
+    df6.schema.toString()
+    df6.collect
     assertThrows(classOf[SchemaCompatibilityException]) {
       upsertData(df6, tempRecordPath)
     }
@@ -819,22 +783,20 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     // 7. Rearrange column position
     var df7 = Seq((7, "newcol1", 700, newPartition)).toDF("id", "newcol1", "userid", "name")
     df7 = df7.withColumn("userid", df7.col("userid").cast("float"))
-    df7.printSchema()
-    df7.show(false)
+    df7.schema.toString()
+    df7.collect
     upsertData(df7, tempRecordPath)
 
     // read out the table
     val readDf = spark.read.format("hudi")
-      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFileGroupReader)
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testArgs"))
-  def testNestedTypeVectorizedReadWithTypeChange(isCow: Boolean, useFileGroupReader: Boolean): Unit = {
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testNestedTypeVectorizedReadWithTypeChange(tableType: String): Unit = {
     // test to change the value type of a MAP in a column of ARRAY< MAP<k,v> > type
     val tempRecordPath = basePath + "/record_tbl/"
     val arrayMapData = Seq(
@@ -847,14 +809,14 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, IntegerType, true)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayMapData), arrayMapSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
-    initialiseTable(df1, tempRecordPath, isCow)
+    initialiseTable(df1, tempRecordPath, tableType)
 
     // read out the table, will not throw any exception
-    readTable(tempRecordPath, useFileGroupReader)
+    readTable(tempRecordPath)
 
     // change value type from integer to long
     val newArrayMapData = Seq(
@@ -867,32 +829,36 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, LongType, true)))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayMapData), newArrayMapSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
-    upsertData(df2, tempRecordPath, isCow)
+    upsertData(df2, tempRecordPath, tableType)
 
     // after implicit type change, read the table with vectorized read enabled
-    assertThrows(classOf[SparkException]){
+    if (HoodieSparkUtils.gteqSpark3_4) {
+      assertThrows(classOf[SparkException]) {
+        withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
+          readTable(tempRecordPath)
+        }
+      }
+    } else {
       withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
-        readTable(tempRecordPath, useFileGroupReader)
+        readTable(tempRecordPath)
       }
     }
 
     withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
-      readTable(tempRecordPath, useFileGroupReader)
+      readTable(tempRecordPath)
     }
   }
 
 
-  private def readTable(path: String, useFileGroupReader: Boolean): Unit = {
+  private def readTable(path: String): Unit = {
     // read out the table
     val readDf = spark.read.format("hudi")
-      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFileGroupReader)
       .load(path)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   protected def withSQLConf[T](pairs: (String, String)*)(f: => T): T = {
@@ -911,15 +877,4 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     }
   }
 
-}
-
-object TestAvroSchemaResolutionSupport {
-  def testArgs: java.util.stream.Stream[Arguments] = {
-    val scenarios = Array(
-      Seq(true, true),
-      Seq(false, true),
-      Seq(false, false)
-    )
-    java.util.Arrays.stream(scenarios.map(as => Arguments.arguments(as.map(_.asInstanceOf[AnyRef]):_*)))
-  }
 }

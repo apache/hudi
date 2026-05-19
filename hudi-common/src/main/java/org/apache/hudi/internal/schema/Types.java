@@ -18,8 +18,13 @@
 
 package org.apache.hudi.internal.schema;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.internal.schema.Type.NestedType;
 import org.apache.hudi.internal.schema.Type.PrimitiveType;
+
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -33,9 +38,8 @@ import java.util.stream.Collectors;
 /**
  * Types supported in schema evolution.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class Types {
-  private Types() {
-  }
 
   /**
    * Boolean primitive type.
@@ -166,14 +170,12 @@ public class Types {
   /**
    * Time primitive type.
    */
+  @NoArgsConstructor(access = AccessLevel.PRIVATE)
   public static class TimeType extends PrimitiveType {
     private static final TimeType INSTANCE = new TimeType();
 
     public static TimeType get() {
       return INSTANCE;
-    }
-
-    private TimeType() {
     }
 
     @Override
@@ -190,14 +192,12 @@ public class Types {
   /**
    * Time primitive type.
    */
+  @NoArgsConstructor(access = AccessLevel.PRIVATE)
   public static class TimestampType extends PrimitiveType {
     private static final TimestampType INSTANCE = new TimestampType();
 
     public static TimestampType get() {
       return INSTANCE;
-    }
-
-    private TimestampType() {
     }
 
     @Override
@@ -300,17 +300,80 @@ public class Types {
   }
 
   /**
-   * Decimal primitive type.
+   * Vector type that preserves dimension, element type, and storage backing
+   * through InternalSchema round-trips.
+   *
+   * <p>This class is part of the InternalSchema type system (separate from HoodieSchema)
+   * and follows the same pattern as {@link FixedType}, {@link DecimalTypeFixed}, etc.
+   * It cannot be replaced with {@code HoodieSchema.Vector} because they belong to
+   * different type hierarchies.
    */
-  public static class DecimalType extends PrimitiveType {
-    public static DecimalType get(int precision, int scale) {
-      return new DecimalType(precision, scale);
+  public static class VectorType extends PrimitiveType {
+    private final int dimension;
+    private final String elementType;
+    private final String storageBacking;
+
+    public static VectorType get(int dimension, String elementType, String storageBacking) {
+      return new VectorType(dimension, elementType, storageBacking);
     }
 
-    private final int scale;
-    private final int precision;
+    private VectorType(int dimension, String elementType, String storageBacking) {
+      // Validate that the strings correspond to known enum values to fail fast on typos
+      HoodieSchema.Vector.VectorElementType.fromString(elementType);
+      HoodieSchema.Vector.StorageBacking.fromString(storageBacking);
+      this.dimension = dimension;
+      this.elementType = elementType;
+      this.storageBacking = storageBacking;
+    }
 
-    private DecimalType(int precision, int scale) {
+    public int getDimension() {
+      return dimension;
+    }
+
+    public String getElementType() {
+      return elementType;
+    }
+
+    public String getStorageBacking() {
+      return storageBacking;
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.VECTOR;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("vector[%d, %s, %s]", dimension, elementType, storageBacking);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      } else if (!(o instanceof VectorType)) {
+        return false;
+      }
+
+      VectorType that = (VectorType) o;
+      return dimension == that.dimension
+          && Objects.equals(elementType, that.elementType)
+          && Objects.equals(storageBacking, that.storageBacking);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(VectorType.class, dimension, elementType, storageBacking);
+    }
+  }
+
+  public abstract static class DecimalBase extends PrimitiveType {
+
+    protected final int scale;
+    protected final int precision;
+
+    protected DecimalBase(int precision, int scale) {
       this.scale = scale;
       this.precision = precision;
     }
@@ -320,12 +383,12 @@ public class Types {
      * can be casted into `this` safely without losing any precision or range.
      */
     public boolean isWiderThan(PrimitiveType other) {
-      if (other instanceof DecimalType)  {
-        DecimalType dt = (DecimalType) other;
+      if (other instanceof DecimalBase)  {
+        DecimalBase dt = (DecimalBase) other;
         return (precision - scale) >= (dt.precision - dt.scale) && scale > dt.scale;
       }
       if (other instanceof IntType) {
-        return isWiderThan(get(10, 0));
+        return (precision - scale) >= 10 && scale > 0;
       }
       return false;
     }
@@ -335,12 +398,12 @@ public class Types {
      * can be casted into `other` safely without losing any precision or range.
      */
     public boolean isTighterThan(PrimitiveType other) {
-      if (other instanceof DecimalType)  {
-        DecimalType dt = (DecimalType) other;
+      if (other instanceof DecimalBase)  {
+        DecimalBase dt = (DecimalBase) other;
         return (precision - scale) <= (dt.precision - dt.scale) && scale <= dt.scale;
       }
       if (other instanceof IntType) {
-        return isTighterThan(get(10, 0));
+        return (precision - scale) <= 10 && scale <= 0;
       }
       return false;
     }
@@ -354,24 +417,14 @@ public class Types {
     }
 
     @Override
-    public TypeID typeId() {
-      return TypeID.DECIMAL;
-    }
-
-    @Override
-    public String toString() {
-      return String.format("decimal(%d, %d)", precision, scale);
-    }
-
-    @Override
     public boolean equals(Object o) {
       if (this == o) {
         return true;
-      } else if (!(o instanceof DecimalType)) {
+      } else if (!(o instanceof DecimalBase)) {
         return false;
       }
 
-      DecimalType that = (DecimalType) o;
+      DecimalBase that = (DecimalBase) o;
       if (scale != that.scale) {
         return false;
       }
@@ -380,7 +433,110 @@ public class Types {
 
     @Override
     public int hashCode() {
-      return Objects.hash(DecimalType.class, scale, precision);
+      return Objects.hash(this.getClass(), scale, precision);
+    }
+  }
+
+  /**
+   * Decimal primitive type.
+   */
+  public static class DecimalType extends DecimalTypeFixed {
+    public static DecimalType get(int precision, int scale) {
+      return new DecimalType(precision, scale);
+    }
+
+    /**
+     * Return the minimum number of bytes needed to store a decimal with a give 'precision'.
+     * reference from Spark release 3.1 .
+     */
+    private static int computeMinBytesForDecimalPrecision(int precision) {
+      int numBytes = 1;
+      while (Math.pow(2.0, 8 * numBytes - 1) < Math.pow(10.0, precision)) {
+        numBytes += 1;
+      }
+      return numBytes;
+    }
+
+    private DecimalType(int precision, int scale) {
+      super(precision, scale, computeMinBytesForDecimalPrecision(precision));
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.DECIMAL;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("decimal(%d, %d)", precision, scale);
+    }
+  }
+
+  public static class DecimalTypeBytes extends DecimalBase {
+    public static DecimalTypeBytes get(int precision, int scale) {
+      return new DecimalTypeBytes(precision, scale);
+    }
+
+    private DecimalTypeBytes(int precision, int scale) {
+      super(precision, scale);
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.DECIMAL_BYTES;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("decimal_bytes(%d, %d)", precision, scale);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (super.equals(o)) {
+        return o instanceof DecimalTypeBytes;
+      }
+      return false;
+    }
+  }
+
+  public static class DecimalTypeFixed extends DecimalBase {
+    public static DecimalTypeFixed get(int precision, int scale, int size) {
+      return new DecimalTypeFixed(precision, scale, size);
+    }
+
+    private final int size;
+
+    public int getFixedSize() {
+      return size;
+    }
+
+    private DecimalTypeFixed(int precision, int scale, int size) {
+      super(precision, scale);
+      this.size = size;
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.DECIMAL_FIXED;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("decimal_fixed(%d, %d)[%d]", precision, scale, size);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(DecimalTypeFixed.class, scale, precision, size);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (super.equals(o)) {
+        return o instanceof DecimalTypeFixed && ((DecimalTypeFixed) o).size == size;
+      }
+      return false;
     }
   }
 
@@ -405,6 +561,78 @@ public class Types {
     }
   }
 
+  public static class TimeMillisType extends PrimitiveType {
+    private static final TimeMillisType INSTANCE = new TimeMillisType();
+
+    public static TimeMillisType get() {
+      return INSTANCE;
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.TIME_MILLIS;
+    }
+
+    @Override
+    public String toString() {
+      return "time-millis";
+    }
+  }
+
+  public static class TimestampMillisType extends PrimitiveType {
+    private static final TimestampMillisType INSTANCE = new TimestampMillisType();
+
+    public static TimestampMillisType get() {
+      return INSTANCE;
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.TIMESTAMP_MILLIS;
+    }
+
+    @Override
+    public String toString() {
+      return "timestamp-millis";
+    }
+  }
+
+  public static class LocalTimestampMillisType extends PrimitiveType {
+    private static final LocalTimestampMillisType INSTANCE = new LocalTimestampMillisType();
+
+    public static LocalTimestampMillisType get() {
+      return INSTANCE;
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.LOCAL_TIMESTAMP_MILLIS;
+    }
+
+    @Override
+    public String toString() {
+      return "local-timestamp-millis";
+    }
+  }
+
+  public static class LocalTimestampMicrosType extends PrimitiveType {
+    private static final LocalTimestampMicrosType INSTANCE = new LocalTimestampMicrosType();
+
+    public static LocalTimestampMicrosType get() {
+      return INSTANCE;
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.LOCAL_TIMESTAMP_MICROS;
+    }
+
+    @Override
+    public String toString() {
+      return "local-timestamp-micros";
+    }
+  }
+
   /** A field within a record. */
   public static class Field implements Serializable {
     // Experimental method to support defaultValue
@@ -424,12 +652,14 @@ public class Types {
       return new Field(true, id, name, type, null, null);
     }
 
+    @Getter
     private final boolean isOptional;
     private final int id;
     private final String name;
     private final Type type;
     private final String doc;
     // Experimental properties
+    @Getter
     private final Object defaultValue;
 
     private Field(boolean isOptional, int id, String name, Type type, String doc, Object defaultValue) {
@@ -439,14 +669,6 @@ public class Types {
       this.type = type;
       this.doc = doc;
       this.defaultValue = defaultValue;
-    }
-
-    public Object getDefaultValue() {
-      return defaultValue;
-    }
-
-    public boolean isOptional() {
-      return isOptional;
     }
 
     public int fieldId() {

@@ -23,10 +23,9 @@ import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -36,9 +35,9 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 /**
  * Tests {@code NoopLockProvider}.
  */
+@Slf4j
 public class TestNoopLockProvider {
 
-  private static final Logger LOG = LoggerFactory.getLogger(TestNoopLockProvider.class);
   private final StorageConfiguration<?> storageConf = getDefaultStorageConf();
   private final LockConfiguration lockConfiguration1;
   private final LockConfiguration lockConfiguration2;

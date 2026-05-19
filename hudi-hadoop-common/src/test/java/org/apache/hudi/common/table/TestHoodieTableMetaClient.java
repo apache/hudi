@@ -27,7 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieIndexVersion;
@@ -276,10 +276,11 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .withIndexOptions(Collections.emptyMap())
         .build();
     metaClient.buildIndexDefinition(indexDefinition);
+    assertTrue(metaClient.getIndexMetadata().isPresent());
     assertTrue(metaClient.getIndexForMetadataPartition(indexName).isPresent());
     assertTrue(metaClient.getStorage().exists(new StoragePath(metaClient.getIndexDefinitionPath())));
     metaClient.deleteIndexDefinition(indexName);
-    assertTrue(metaClient.getIndexMetadata().isEmpty());
+    assertFalse(metaClient.getIndexMetadata().isPresent());
     assertTrue(metaClient.getStorage().exists(new StoragePath(metaClient.getIndexDefinitionPath())));
     // Read from storage
     HoodieIndexMetadata indexMetadata = HoodieIndexMetadata.fromJson(

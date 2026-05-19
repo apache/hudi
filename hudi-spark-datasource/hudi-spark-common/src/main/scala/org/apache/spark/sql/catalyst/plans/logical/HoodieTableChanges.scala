@@ -17,16 +17,17 @@
 
 package org.apache.spark.sql.catalyst.plans.logical
 
-import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.LeafNode
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
 object HoodieTableChangesOptionsParser {
   def parseOptions(exprs: Seq[Expression], funcName: String): (String, Map[String, String]) = {
     val args = exprs.map(_.eval().toString)
 
     if (args.size < 3 || args.size > 4) {
-      throw new AnalysisException(s"Expect arguments (table_name or table_path, incremental_format, start_instant, [end_instant]) for function `$funcName`")
+      throw new HoodieAnalysisException(s"Expect arguments (table_name or table_path, incremental_format, start_instant, [end_instant]) for function `$funcName`")
     }
 
     val identifier = args.head
@@ -38,16 +39,18 @@ object HoodieTableChangesOptionsParser {
 
     val incrementalQueryFormatOpt = incrementalQueryFormat match {
       case "latest_state" | "cdc" => Map("hoodie.datasource.query.incremental.format" -> incrementalQueryFormat)
-      case _ => throw new AnalysisException(s"'hudi_table_changes' doesn't support `$incrementalQueryFormat`")
+      case _ => throw new HoodieAnalysisException(s"'hudi_table_changes' doesn't support `$incrementalQueryFormat`")
     }
 
     val startInstantTimeOpt = startInstantTime match {
       case "earliest" => Map("hoodie.datasource.read.begin.instanttime" -> "000")
-      case _ => Map("hoodie.datasource.read.begin.instanttime" -> startInstantTime)
+      case _ => Map("hoodie.datasource.read.begin.instanttime" ->
+        HoodieSqlCommonUtils.formatIncrementalInstant(startInstantTime))
     }
 
     val endInstantTimeOpt = endInstantTime match {
-      case Some(x) => Map("hoodie.datasource.read.end.instanttime" -> x)
+      case Some(x) => Map("hoodie.datasource.read.end.instanttime" ->
+        HoodieSqlCommonUtils.formatIncrementalInstant(x))
       case None => Map.empty[String, String]
     }
 

@@ -60,6 +60,11 @@ public class TimelineV1Factory extends TimelineFactory {
   }
 
   @Override
+  public HoodieArchivedTimeline createArchivedTimeline(HoodieTableMetaClient metaClient, boolean shouldLoadInstants) {
+    return new ArchivedTimelineV1(metaClient, shouldLoadInstants);
+  }
+
+  @Override
   public ArchivedTimelineLoader createArchivedTimelineLoader() {
     return new ArchivedTimelineLoaderV1();
   }
@@ -77,10 +82,5 @@ public class TimelineV1Factory extends TimelineFactory {
   @Override
   public CompletionTimeQueryView createCompletionTimeQueryView(HoodieTableMetaClient metaClient) {
     return new CompletionTimeQueryViewV1(metaClient);
-  }
-
-  @Override
-  public CompletionTimeQueryView createCompletionTimeQueryView(HoodieTableMetaClient metaClient, String eagerInstant) {
-    return new CompletionTimeQueryViewV1(metaClient, eagerInstant);
   }
 }

@@ -60,9 +60,8 @@ import org.apache.hudi.table.action.commit.SparkAutoCommitExecutor;
 import org.apache.hudi.table.action.commit.SparkBulkInsertCommitActionExecutor;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -79,10 +78,9 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 import static org.apache.hudi.table.action.bootstrap.MetadataBootstrapHandlerFactory.getMetadataHandler;
 
+@Slf4j
 public class SparkBootstrapCommitActionExecutor<T>
     extends BaseCommitActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, HoodieBootstrapWriteMetadata<HoodieData<WriteStatus>>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkBootstrapCommitActionExecutor.class);
   protected String bootstrapSchema = null;
   private transient HoodieStorage bootstrapSourceStorage;
 
@@ -206,18 +204,18 @@ public class SparkBootstrapCommitActionExecutor<T>
     HoodieTableMetaClient metaClient = table.getMetaClient();
     try (BootstrapIndex.IndexWriter indexWriter = BootstrapIndex.getBootstrapIndex(metaClient)
         .createWriter(metaClient.getTableConfig().getBootstrapBasePath().get())) {
-      LOG.info("Starting to write bootstrap index for source " + config.getBootstrapSourceBasePath() + " in table "
+      log.info("Starting to write bootstrap index for source " + config.getBootstrapSourceBasePath() + " in table "
           + config.getBasePath());
       indexWriter.begin();
       bootstrapSourceAndStats.forEach((key, value) -> indexWriter.appendNextPartition(key,
           value.stream().map(Pair::getKey).collect(Collectors.toList())));
       indexWriter.finish();
-      LOG.info("Finished writing bootstrap index for source " + config.getBootstrapSourceBasePath() + " in table "
+      log.info("Finished writing bootstrap index for source " + config.getBootstrapSourceBasePath() + " in table "
           + config.getBasePath());
     }
     commit(result, bootstrapSourceAndStats.values().stream()
         .flatMap(f -> f.stream().map(Pair::getValue)).collect(Collectors.toList()));
-    LOG.info("Committing metadata bootstrap !!");
+    log.info("Committing metadata bootstrap !!");
   }
 
   @Override
@@ -277,10 +275,10 @@ public class SparkBootstrapCommitActionExecutor<T>
     List<Pair<String, List<HoodieFileStatus>>> folders = BootstrapUtils.getAllLeafFoldersWithFiles(
         table.getBaseFileFormat(), bootstrapSourceStorage, config.getBootstrapSourceBasePath(), context);
 
-    LOG.info("Fetching Bootstrap Schema !!");
+    log.info("Fetching Bootstrap Schema !!");
     HoodieBootstrapSchemaProvider sourceSchemaProvider = new HoodieSparkBootstrapSchemaProvider(config);
     bootstrapSchema = sourceSchemaProvider.getBootstrapSchema(context, folders).toString();
-    LOG.info("Bootstrap Schema :" + bootstrapSchema);
+    log.info("Bootstrap Schema :" + bootstrapSchema);
 
     BootstrapModeSelector selector =
         (BootstrapModeSelector) ReflectionUtils.loadClass(config.getBootstrapModeSelectorClass(), config);

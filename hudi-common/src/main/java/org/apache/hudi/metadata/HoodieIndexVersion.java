@@ -85,27 +85,36 @@ public enum HoodieIndexVersion {
    * @return the appropriate HoodieIndexVersion for the given parameters
    */
   public static HoodieIndexVersion getCurrentVersion(HoodieTableVersion tableVersion, MetadataPartitionType partitionType) {
-    if (partitionType == MetadataPartitionType.RECORD_INDEX) {
-      return V1;
-    } else if (partitionType == MetadataPartitionType.COLUMN_STATS) {
-      return V1;
-    } else if (partitionType == MetadataPartitionType.BLOOM_FILTERS) {
-      return V1;
-    } else if (partitionType == MetadataPartitionType.EXPRESSION_INDEX) {
-      return V1;
-    } else if (partitionType == MetadataPartitionType.SECONDARY_INDEX) {
-      if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
+    switch (partitionType) {
+      case RECORD_INDEX:
+        return V1;
+
+      case COLUMN_STATS:
+      case PARTITION_STATS:
+      case EXPRESSION_INDEX:
+        // column stats, partition stats, expression index must be updated together
+        if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+          return V1;
+        }
         return V2;
-      }
-      return V1;
-    } else if (partitionType == MetadataPartitionType.FILES) {
-      return V1;
-    } else if (partitionType == MetadataPartitionType.PARTITION_STATS) {
-      return V1;
-    } else if (partitionType == MetadataPartitionType.ALL_PARTITIONS) {
-      return V1;
-    } else {
-      throw new HoodieException("Unknown metadata partition type: " + partitionType);
+
+      case BLOOM_FILTERS:
+        return V1;
+
+      case SECONDARY_INDEX:
+        if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
+          return V2;
+        }
+        return V1;
+
+      case FILES:
+        return V1;
+
+      case ALL_PARTITIONS:
+        return V1;
+
+      default:
+        throw new HoodieException("Unknown metadata partition type: " + partitionType);
     }
   }
 

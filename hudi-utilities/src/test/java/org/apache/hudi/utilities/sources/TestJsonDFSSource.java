@@ -62,6 +62,13 @@ public class TestJsonDFSSource extends AbstractDFSSourceTestBase {
   }
 
   @Override
+  protected Option<TypedProperties> getSourceFormatAdapterProps() {
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES.key(), "true");
+    return Option.of(properties);
+  }
+
+  @Override
   public void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException {
     UtilitiesTestBase.Helpers.saveStringsToDFS(
         Helpers.jsonifyRecords(records), storage, path.toString());
@@ -82,7 +89,7 @@ public class TestJsonDFSSource extends AbstractDFSSourceTestBase {
     corruptFile(file1Status.getPath());
     assertTrue(batch.getBatch().isPresent());
     Throwable t = assertThrows(Exception.class,
-        () -> batch.getBatch().get().show(30));
+        () -> batch.getBatch().get().limit(30).collect());
     while (t != null) {
       if (t instanceof SchemaCompatibilityException) {
         return;

@@ -43,7 +43,10 @@ public class HoodiePreCommitValidatorConfig extends HoodieConfig {
       .key("hoodie.precommit.validators")
       .defaultValue("")
       .markAdvanced()
-      .withDocumentation("Comma separated list of class names that can be invoked to validate commit");
+      .withDocumentation("Comma separated list of class names that can be invoked to validate commit. "
+          + "Available streaming offset validators: "
+          + "org.apache.hudi.sink.validator.FlinkKafkaOffsetValidator (Flink Kafka), "
+          + "org.apache.hudi.utilities.streamer.validator.SparkKafkaOffsetValidator (Spark/HoodieStreamer Kafka)");
   public static final String VALIDATOR_TABLE_VARIABLE = "<TABLE_NAME>";
 
   public static final ConfigProperty<String> EQUALITY_SQL_QUERIES = ConfigProperty
@@ -63,6 +66,41 @@ public class HoodiePreCommitValidatorConfig extends HoodieConfig {
           + "Multiple queries separated by ';' delimiter are supported."
           + "Expected result is included as part of query separated by '#'. Example query: 'query1#result1:query2#result2'"
           + "Note \\<TABLE_NAME\\> variable is expected to be present in query.");
+
+  public static final ConfigProperty<String> STREAMING_OFFSET_TOLERANCE_PERCENTAGE = ConfigProperty
+      .key("hoodie.precommit.validators.streaming.offset.tolerance.percentage")
+      .defaultValue("0.0")
+      .sinceVersion("1.2.0")
+      .markAdvanced()
+      .withDocumentation("Tolerance percentage for streaming offset validation "
+          + "(used by org.apache.hudi.client.validator.StreamingOffsetValidator "
+          + "and org.apache.hudi.sink.validator.FlinkKafkaOffsetValidator "
+          + "and org.apache.hudi.utilities.streamer.validator.SparkKafkaOffsetValidator). "
+          + "The validator compares the offset difference (expected records from source) "
+          + "with actual records written. If the deviation exceeds this percentage, "
+          + "the commit is rejected or warned depending on the validation failure policy. "
+          + "For upsert workloads with deduplication, set a higher tolerance. "
+          + "Default is 0.0 (strict mode, exact match required).");
+
+  /**
+   * Policy for handling pre-commit validation failures.
+   */
+  public enum ValidationFailurePolicy {
+    /** Validation failures block the commit with an exception. */
+    FAIL,
+    /** Validation failures emit a warning log but allow the commit to proceed. */
+    WARN_LOG
+  }
+
+  public static final ConfigProperty<String> VALIDATION_FAILURE_POLICY = ConfigProperty
+      .key("hoodie.precommit.validators.failure.policy")
+      .defaultValue(ValidationFailurePolicy.FAIL.name())
+      .sinceVersion("1.2.0")
+      .markAdvanced()
+      .withDocumentation("Policy for handling pre-commit validation failures. "
+          + "FAIL (default): validation failures block the commit with an exception. "
+          + "WARN_LOG: validation failures emit a warning log but allow the commit to proceed. "
+          + "Useful for monitoring data quality without impacting write availability.");
 
   /**
    * Spark SQL queries to run on table before committing new data to validate state before and after commit.

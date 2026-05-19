@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
@@ -30,11 +31,13 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -61,7 +64,13 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
+import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
+import org.apache.hudi.sink.FlinkCheckpointClient;
+import org.apache.hudi.sink.muttley.AthenaIngestionGateway;
+
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.storage.HoodieStorage;
@@ -70,7 +79,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -78,8 +87,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.orc.OrcFile;
 import org.apache.parquet.hadoop.ParquetFileWriter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -91,6 +98,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
@@ -104,11 +112,19 @@ import static org.apache.hudi.configuration.FlinkOptions.WRITE_FAIL_FAST;
 /**
  * Utilities for Flink stream read and write.
  */
+@Slf4j
 public class StreamerUtil {
 
-  private static final Logger LOG = LoggerFactory.getLogger(StreamerUtil.class);
-
   public static final String FLINK_CHECKPOINT_ID = "flink_checkpoint_id";
+  public static final String EMPTY_PARTITION_PATH = "";
+
+  // Kafka offset metadata constants - using Flink-specific keys with Spark-compatible format
+  public static final String HOODIE_METADATA_KEY = "HoodieMetadataKey";
+
+  // Constants for Kafka offset formatting
+  private static final String KAFKA_METADATA_PREFIX = "kafka_metadata";
+  private static final String URL_ENCODED_COLON = "%3A";
+  private static final String PARTITION_SEPARATOR = ";";
 
   public static TypedProperties appendKafkaProps(FlinkStreamerConfig config) {
     TypedProperties properties = getProps(config);
@@ -136,12 +152,24 @@ public class StreamerUtil {
     return properties;
   }
 
-  public static Schema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
+  /**
+   * Creates the metadata write client from the given write client for data table.
+   */
+  public static HoodieFlinkWriteClient createMetadataWriteClient(HoodieFlinkWriteClient dataWriteClient) {
+    // Get the metadata writer from the table and use its write client
+    Option<HoodieTableMetadataWriter> metadataWriterOpt =
+        dataWriteClient.getHoodieTable().getMetadataWriter(null, true, true);
+    ValidationUtils.checkArgument(metadataWriterOpt.isPresent(), "Failed to create the metadata writer");
+    FlinkHoodieBackedTableMetadataWriter metadataWriter = (FlinkHoodieBackedTableMetadataWriter) metadataWriterOpt.get();
+    return (HoodieFlinkWriteClient) metadataWriter.getWriteClient();
+  }
+
+  public static HoodieSchema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
     if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH).isPresent()) {
-      return new FilebasedSchemaProvider(conf).getSourceSchema();
+      return new FilebasedSchemaProvider(conf).getSourceHoodieSchema();
     } else if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA).isPresent()) {
       final String schemaStr = conf.get(FlinkOptions.SOURCE_AVRO_SCHEMA);
-      return new Schema.Parser().parse(schemaStr);
+      return HoodieSchema.parse(schemaStr);
     } else {
       final String errorMsg = String.format("Either option '%s' or '%s' "
               + "should be specified for avro schema deserialization",
@@ -158,7 +186,7 @@ public class StreamerUtil {
     DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
     try {
       if (!overriddenProps.isEmpty()) {
-        LOG.info("Adding overridden properties to file properties.");
+        log.info("Adding overridden properties to file properties.");
         conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))), cfgPath);
       }
     } catch (IOException ioe) {
@@ -174,8 +202,8 @@ public class StreamerUtil {
   public static HoodiePayloadConfig getPayloadConfig(Configuration conf) {
     return HoodiePayloadConfig.newBuilder()
         .withPayloadClass(conf.get(FlinkOptions.PAYLOAD_CLASS_NAME))
-        .withPayloadOrderingFields(conf.get(FlinkOptions.ORDERING_FIELDS))
-        .withPayloadEventTimeField(conf.get(FlinkOptions.ORDERING_FIELDS))
+        .withPayloadOrderingFields(OptionsResolver.getOrderingFieldsStr(conf))
+        .withPayloadEventTimeField(OptionsResolver.getOrderingFieldsStr(conf))
         .build();
   }
 
@@ -300,15 +328,16 @@ public class StreamerUtil {
           .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD.key(), null))
           .setKeyGeneratorClassProp(
               conf.getOptional(FlinkOptions.KEYGEN_CLASS_NAME).orElse(SimpleAvroKeyGenerator.class.getName()))
+          .setPartitionValueExtractorClass(conf.getString(FlinkOptions.PARTITION_VALUE_EXTRACTOR.key(), null))
           .setHiveStylePartitioningEnable(conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING))
           .setUrlEncodePartitioning(conf.get(FlinkOptions.URL_ENCODE_PARTITIONING))
           .setCDCEnabled(conf.get(FlinkOptions.CDC_ENABLED))
           .setCDCSupplementalLoggingMode(conf.get(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE))
           .setPopulateMetaFields(OptionsResolver.isPopulateMetaFields(conf))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(hadoopConf), basePath);
-      LOG.info("Table initialized under base path {}", basePath);
+      log.info("Table initialized under base path {}", basePath);
     } else {
-      LOG.info("Table [path={}, name={}] already exists, no need to initialize the table",
+      log.info("Table [path={}, name={}] already exists, no need to initialize the table",
           basePath, conf.get(FlinkOptions.TABLE_NAME));
     }
 
@@ -398,8 +427,7 @@ public class StreamerUtil {
         getMergeMode(conf), payloadClassName, getMergeStrategyId(conf), OptionsResolver.getOrderingFieldsStr(conf), HoodieTableVersion.current());
     String mergeMode = mergeConf.get(HoodieTableConfig.RECORD_MERGE_MODE.key());
     String mergeStrategyId = mergeConf.get(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key());
-    ValidationUtils.checkArgument(mergeMode != null && mergeStrategyId != null,
-        "Both merge mode and merge strategy id should not be null");
+    ValidationUtils.checkArgument(mergeMode != null, "Merge mode should not be null");
     return Triple.of(RecordMergeMode.valueOf(mergeMode), payloadClassName, mergeStrategyId);
   }
 
@@ -609,21 +637,21 @@ public class StreamerUtil {
     return (long) conf.get(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024;
   }
 
-  public static Schema getTableAvroSchema(HoodieTableMetaClient metaClient, boolean includeMetadataFields) throws Exception {
+  public static HoodieSchema getTableSchema(HoodieTableMetaClient metaClient, boolean includeMetadataFields) throws Exception {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-    return schemaUtil.getTableAvroSchema(includeMetadataFields);
+    return schemaUtil.getTableSchema(includeMetadataFields);
   }
 
-  public static Schema getLatestTableSchema(String path, org.apache.hadoop.conf.Configuration hadoopConf) {
+  public static HoodieSchema getLatestTableSchema(String path, org.apache.hadoop.conf.Configuration hadoopConf) {
     if (StringUtils.isNullOrEmpty(path) || !StreamerUtil.tableExists(path, hadoopConf)) {
       return null;
     }
 
     try {
       HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(path, hadoopConf);
-      return getTableAvroSchema(metaClient, false);
+      return getTableSchema(metaClient, false);
     } catch (Exception e) {
-      LOG.warn("Error while resolving the latest table schema", e);
+      log.error("Failed to resolve the latest table schema", e);
     }
     return null;
   }
@@ -654,15 +682,18 @@ public class StreamerUtil {
    */
   public static void checkOrderingFields(Configuration conf, List<String> fields) {
     String orderingFields = conf.get(FlinkOptions.ORDERING_FIELDS);
-    if (!fields.contains(orderingFields)) {
+    if (null == orderingFields || !fields.contains(orderingFields)) {
       if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
+        // default payload force set of some columns existed in schema as ordering ones
         throw new HoodieValidationException("Option '" + FlinkOptions.ORDERING_FIELDS.key()
                 + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
       }
-      if (orderingFields.equals(FlinkOptions.ORDERING_FIELDS.defaultValue())) {
+      if (null == orderingFields) {
+        // if there is no ordering fields we set them as no-precombine
         conf.set(FlinkOptions.ORDERING_FIELDS, FlinkOptions.NO_PRE_COMBINE);
       } else if (!orderingFields.equals(FlinkOptions.NO_PRE_COMBINE)) {
-        throw new HoodieValidationException("Field " + orderingFields + " does not exist in the table schema."
+        // but if no-precombine was passed initially then we shouldn't fail here on schema check
+        throw new HoodieValidationException("Field " + orderingFields + " does not exist in the table schema. "
                 + "Please check '" + FlinkOptions.ORDERING_FIELDS.key() + "' option.");
       }
     }
@@ -674,7 +705,7 @@ public class StreamerUtil {
   public static void checkKeygenGenerator(boolean isComplexHoodieKey, Configuration conf) {
     if (isComplexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
       conf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
-      LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
+      log.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
           FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
     }
   }
@@ -712,5 +743,266 @@ public class StreamerUtil {
         throw new HoodieException(String.format("Write failure occurs with hoodie key %s at Instant [%s] in append write function", entry.getKey(), currentInstant), entry.getValue());
       });
     }
+  }
+
+  /**
+   * Add Kafka offset metadata to the checkpoint metadata.
+   * Uses Flink-specific checkpoint key but same format as Spark for compatibility.
+   *
+   * <p>The Kafka offset collection is lazy — it only triggers when
+   * {@code WRITE_EXTRA_METADATA_ENABLED} is true, avoiding unnecessary
+   * Kafka/checkpoint-service access when the feature is disabled.</p>
+   *
+   * @param conf Flink configuration
+   * @param checkpointCommitMetadata commit metadata map
+   * @param checkpointId Flink checkpoint ID
+   */
+  public static void addKafkaOffsetMetaData(
+          Configuration conf,
+          HashMap<String, String> checkpointCommitMetadata,
+          long checkpointId) {
+    if (!conf.get(FlinkOptions.WRITE_EXTRA_METADATA_ENABLED)) {
+      return;
+    }
+    String kafkaOffsetCheckpoint = collectKafkaOffsetCheckpoint(conf, checkpointId);
+    if (kafkaOffsetCheckpoint != null) {
+      checkpointCommitMetadata.put(HOODIE_METADATA_KEY, kafkaOffsetCheckpoint);
+    }
+  }
+
+  /**
+   * Extracts Kafka offsets from checkpoint response.
+   *
+   * @param checkpointInfo The checkpoint info from service
+   * @param checkpointId The checkpoint ID for logging
+   * @return Map of partition ID to offset, or null if no valid offsets found
+   */
+  private static Map<Integer, Long> extractKafkaOffsets(
+      AthenaIngestionGateway.CheckpointKafkaOffsetInfo checkpointInfo,
+      long checkpointId) {
+
+    List<AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo> kafkaOffsetsInfoList =
+        checkpointInfo.getKafkaOffsetsInfo();
+
+    if (kafkaOffsetsInfoList == null || kafkaOffsetsInfoList.isEmpty()) {
+      log.warn("No Kafka offset information found in checkpoint response");
+      return null;
+    }
+
+    // Verify we have exactly one topic
+    if (kafkaOffsetsInfoList.size() > 1) {
+      throw new IllegalStateException(
+          String.format("Expected exactly one topic in checkpoint response, but found %d topics",
+              kafkaOffsetsInfoList.size()));
+    }
+
+    // Get the single topic's offsets
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo kafkaOffsetInfo =
+        kafkaOffsetsInfoList.get(0);
+
+    // Validate offset info structure
+    if (kafkaOffsetInfo.getOffsets() == null || kafkaOffsetInfo.getOffsets().getOffsets() == null) {
+      log.warn("Kafka offset info has null offsets for checkpointId={}", checkpointId);
+      return null;
+    }
+
+    Map<Integer, Long> partitionOffsets = kafkaOffsetInfo.getOffsets().getOffsets();
+
+    // Validate partition offsets
+    if (partitionOffsets.isEmpty()) {
+      log.warn("No partition offsets found for checkpointId={}", checkpointId);
+      return null;
+    }
+
+    // Validate offset values
+    for (Map.Entry<Integer, Long> entry : partitionOffsets.entrySet()) {
+      if (entry.getKey() < 0 || entry.getValue() < 0) {
+        log.error("Invalid partition ID {} for checkpointId={} or offset for offset={}",
+                entry.getKey(), checkpointId, entry.getValue());
+        return null;
+      }
+    }
+
+    return partitionOffsets;
+  }
+
+  /**
+   * Collects Kafka offset checkpoint from checkpoint service.
+   *
+   * <p>Important assumptions:
+   * <ul>
+   *   <li>Each Flink job processes only ONE Kafka topic</li>
+   *   <li>Each checkpoint ID is associated with exactly ONE topic</li>
+   *   <li>Each topic can have multiple partitions</li>
+   * </ul>
+   *
+   * <p>Fails open - if any error occurs, returns null and allows commit to proceed without Kafka offsets.
+   *
+   * @param conf             The Flink configuration
+   * @param checkpointId     The checkpoint ID
+   * @return Kafka offset checkpoint string in URL-encoded format for Hudi metadata,
+   * e.g., "kafka_metadata%3Atopic-name%3A0:100;kafka_metadata%3Atopic-name%3A1:200"
+   * where format is "kafka_metadata%3Atopic%3Apartition:offset" separated by semicolons.
+   * Returns null if not available or on error
+   * @throws IllegalStateException if more than one topic is found in the checkpoint response
+   */
+  private static String collectKafkaOffsetCheckpoint(Configuration conf, long checkpointId) {
+    return collectKafkaOffsetCheckpoint(conf, checkpointId, null);
+  }
+
+  @VisibleForTesting
+  public static String collectKafkaOffsetCheckpoint(Configuration conf, long checkpointId,
+                                                    FlinkCheckpointClient checkpointClient) {
+    // Extract topic and cluster names early
+    String topicName = conf.contains(FlinkOptions.KAFKA_TOPIC_NAME)
+        ? conf.get(FlinkOptions.KAFKA_TOPIC_NAME) : null;
+    String clusterName = conf.contains(FlinkOptions.SOURCE_KAFKA_CLUSTER)
+        ? conf.get(FlinkOptions.SOURCE_KAFKA_CLUSTER) : null;
+    Map<Integer, Long> partitionOffsets = null;
+
+    try {
+      // Validate checkpoint ID
+      if (checkpointId < 0) {
+        log.warn("Invalid checkpointId={}, must be non-negative", checkpointId);
+        return stringFy(topicName, clusterName, partitionOffsets);
+      }
+
+      // Check if all required configurations are present
+      if (!conf.contains(FlinkOptions.DC) || !conf.contains(FlinkOptions.ENV)
+          || !conf.contains(FlinkOptions.JOB_NAME) || !conf.contains(FlinkOptions.KAFKA_TOPIC_NAME)
+          || !conf.contains(FlinkOptions.TOPIC_ID) || !conf.contains(FlinkOptions.HADOOP_USER)
+          || !conf.contains(FlinkOptions.SOURCE_KAFKA_CLUSTER)) {
+        log.debug("Kafka offset collection skipped - required configurations not set. "
+            + "Need: kafka.offset.trace.dc, kafka.offset.trace.env, kafka.offset.trace.job.name, "
+            + "kafka.offset.trace.topic.name, kafka.offset.trace.topic.id, "
+            + "kafka.offset.trace.hadoop.user, kafka.offset.trace.source.cluster");
+        return stringFy(topicName, clusterName, partitionOffsets);
+      }
+
+      // Extract configuration parameters
+      String dc = conf.get(FlinkOptions.DC);
+      String env = conf.get(FlinkOptions.ENV);
+      String jobName = conf.get(FlinkOptions.JOB_NAME);
+      String hadoopUser = conf.get(FlinkOptions.HADOOP_USER);
+      String sourceCluster = conf.get(FlinkOptions.SOURCE_KAFKA_CLUSTER);
+      String targetCluster = conf.get(FlinkOptions.TARGET_KAFKA_CLUSTER);
+      String athenaService = conf.get(FlinkOptions.ATHENA_SERVICE);
+      String callerService = conf.get(FlinkOptions.CALLER_SERVICE_NAME);
+      String topicId = conf.get(FlinkOptions.TOPIC_ID);
+      String serviceTier = conf.get(FlinkOptions.SERVICE_TIER);
+      String serviceName = conf.get(FlinkOptions.SERVICE_NAME);
+
+      log.info("Fetching Kafka offsets for checkpointId={}, topicId={}, dc={}, env={}, jobName={}",
+          checkpointId, topicId, dc, env, jobName);
+
+      // Create FlinkCheckpointClient if not provided
+      if (checkpointClient == null) {
+        checkpointClient = new FlinkCheckpointClient(callerService, athenaService);
+      }
+
+      // Build checkpoint request
+      FlinkCheckpointClient.CheckpointRequest request = FlinkCheckpointClient.CheckpointRequest.builder()
+          .dc(dc)
+          .env(env)
+          .checkpointId(checkpointId)
+          .jobName(jobName)
+          .hadoopUser(hadoopUser)
+          .sourceCluster(sourceCluster)
+          .targetCluster(targetCluster)
+          .checkpointLookback(0)
+          .topicOperatorIds(Collections.singletonMap(topicName, topicId))
+          .serviceTier(serviceTier)
+          .serviceName(serviceName)
+          .build();
+
+      // Fetch checkpoint info
+      Option<AthenaIngestionGateway.CheckpointKafkaOffsetInfo> checkpointInfo =
+          checkpointClient.getKafkaCheckpointsInfo(request);
+
+      if (checkpointInfo.isPresent()) {
+        AthenaIngestionGateway.CheckpointKafkaOffsetInfo offsetInfo = checkpointInfo.get();
+        log.info("Successfully retrieved checkpoint info: checkpointId={}, checkpointTimestamp={}",
+            offsetInfo.getCheckpointId(), offsetInfo.getCheckpointTimestamp());
+
+        // Extract offsets using helper method
+        partitionOffsets = extractKafkaOffsets(offsetInfo, checkpointId);
+      } else {
+        log.warn("No checkpoint info found for checkpointId={}", checkpointId);
+      }
+    } catch (Exception e) {
+      // Swallow the exception and log error - fail open to allow commit to proceed
+      log.error("Failed to collect Kafka offset checkpoint for checkpointId={}, proceeding without offsets",
+          checkpointId, e);
+    }
+
+    // Single return point - always return stringified result
+    String ret = stringFy(topicName, clusterName, partitionOffsets);
+    log.info("Kafka offset checkpoint for checkpointId={}: {}", checkpointId, ret);
+    return ret;
+  }
+
+  /**
+   * Converts Kafka topic and partition offsets to a URL-encoded string format with cluster metadata.
+   *
+   * @param topic The Kafka topic name
+   * @param cluster The Kafka cluster name
+   * @param offsetMap Map of partition ID to offset
+   * @return URL-encoded string containing both offset and cluster metadata,
+   *         or empty string if offsetMap is empty or topic is null/empty
+   */
+  public static String stringFy(String topic, String cluster, Map<Integer, Long> offsetMap) {
+    if (topic == null || topic.isEmpty()) {
+      log.warn("Topic name is null or empty in stringFy");
+      return "";
+    }
+
+    String offsets = "";
+
+    // Create offset entries if offsetMap is not null or empty
+    if (offsetMap != null && !offsetMap.isEmpty()) {
+      offsets = offsetMap.entrySet().stream()
+              .sorted(Map.Entry.comparingByKey())
+              .map(entry -> String.format("%s%s%s%s%d:%d",
+                      KAFKA_METADATA_PREFIX, URL_ENCODED_COLON,
+                      topic, URL_ENCODED_COLON,
+                      entry.getKey(), entry.getValue()))
+              .collect(Collectors.joining(PARTITION_SEPARATOR));
+    }
+
+    // Add cluster metadata if cluster name is provided
+    if (cluster != null && !cluster.isEmpty()) {
+      String clusterMetadata = String.format("%s%skafka_cluster%s%s%s:%s",
+              KAFKA_METADATA_PREFIX, URL_ENCODED_COLON,
+              URL_ENCODED_COLON, topic, URL_ENCODED_COLON, cluster);
+
+      // If we have offsets, append cluster metadata with separator
+      // Otherwise, return just the cluster metadata
+      return offsets.isEmpty() ? clusterMetadata : offsets + PARTITION_SEPARATOR + clusterMetadata;
+    }
+
+    return offsets;
+  }
+
+  /**
+   * Get commit metadata from the last completed write commit on the timeline.
+   * Used for pre-commit validation to compare current commit against previous.
+   *
+   * @param metaClient the table meta client
+   * @return the previous write commit metadata, or empty if none exists
+   */
+  public static Option<HoodieCommitMetadata> getPreviousCommitMetadata(HoodieTableMetaClient metaClient) {
+    try {
+      HoodieTimeline completedWriteTimeline = metaClient.reloadActiveTimeline()
+          .getWriteTimeline()
+          .filterCompletedInstants();
+      Option<HoodieInstant> lastInstant = completedWriteTimeline.lastInstant();
+      if (lastInstant.isPresent()) {
+        return Option.of(completedWriteTimeline.readCommitMetadata(lastInstant.get()));
+      }
+    } catch (Exception e) {
+      log.warn("Failed to read previous commit metadata for pre-commit validation. "
+          + "Validation will skip previous-commit checks.", e);
+    }
+    return Option.empty();
   }
 }

@@ -22,8 +22,6 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.io.hfile.protobuf.generated.HFileProtos;
 
-import com.google.protobuf.ByteString;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -35,9 +33,11 @@ import java.util.Map;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
 import static org.apache.hudi.io.hfile.HFileBlock.getVariableLengthEncodedBytes;
 import static org.apache.hudi.io.hfile.HFileBlockType.TRAILER;
+import static org.apache.hudi.io.hfile.HFileInfo.KEY_VALUE_VERSION_WITH_MVCC_TS;
 import static org.apache.hudi.io.hfile.HFileInfo.LAST_KEY;
 import static org.apache.hudi.io.hfile.HFileInfo.MAX_MVCC_TS_KEY;
 import static org.apache.hudi.io.hfile.HFileTrailer.TRAILER_SIZE;
+import static org.apache.hudi.io.util.IOUtils.toBytes;
 
 /**
  * Pure Java implementation of HFile writer (HFile v3 format) for Hudi.
@@ -46,6 +46,10 @@ public class HFileWriterImpl implements HFileWriter {
   private static final String COMPARATOR_CLASS_NAME
       = "org.apache.hudi.io.storage.HoodieHBaseKVComparator";
   private static final byte HFILE_VERSION = (byte) 3;
+  // Here 21 = 4 bytes (key length) + 4 bytes (value length) + 1 byte (MVCC)
+  //           + 2 bytes (length of key length)
+  //           + 10 bytes (check sum, timestamp, key type).
+  private static final int EXTRA_BYTES_PER_DATA_ENTRY = 21;
   private final OutputStream outputStream;
   private final HFileContext context;
   // Meta Info map.
@@ -68,6 +72,8 @@ public class HFileWriterImpl implements HFileWriter {
   private long firstDataBlockOffset = -1;
   private long lastDataBlockOffset;
   private long totalNumberOfRecords = 0;
+  private long totalKeyLength = 0;
+  private long totalValueLength = 0;
 
   public HFileWriterImpl(HFileContext context, OutputStream outputStream) {
     this.outputStream = outputStream;
@@ -87,17 +93,18 @@ public class HFileWriterImpl implements HFileWriter {
   public void append(String key, byte[] value) throws IOException {
     byte[] keyBytes = StringUtils.getUTF8Bytes(key);
     lastKey = keyBytes;
+    totalKeyLength += keyBytes.length;
+    totalValueLength += value.length;
     // Records with the same key must be put into the same block.
-    // Here 9 = 4 bytes of key length + 4 bytes of value length + 1 byte MVCC.
     if (!Arrays.equals(currentDataBlock.getLastKeyContent(), keyBytes)
-        && uncompressedDataBlockBytes + keyBytes.length + value.length + 9 > blockSize) {
+        && uncompressedDataBlockBytes + keyBytes.length + value.length + EXTRA_BYTES_PER_DATA_ENTRY > blockSize) {
       flushCurrentDataBlock();
       uncompressedDataBlockBytes = 0;
     }
     currentDataBlock.add(keyBytes, value);
     int uncompressedKeyValueSize = keyBytes.length + value.length;
-    uncompressedDataBlockBytes += uncompressedKeyValueSize + 9;
-    totalUncompressedDataBlockBytes += uncompressedKeyValueSize + 9;
+    uncompressedDataBlockBytes += uncompressedKeyValueSize + EXTRA_BYTES_PER_DATA_ENTRY;
+    totalUncompressedDataBlockBytes += uncompressedKeyValueSize + EXTRA_BYTES_PER_DATA_ENTRY;
   }
 
   // Append a metadata kv pair.
@@ -170,10 +177,7 @@ public class HFileWriterImpl implements HFileWriter {
     metaIndexBlock.setStartOffsetInBuffForWrite(currentOffset);
     writeBuffer(metaIndexBuffer);
     // Write File Info.
-    fileInfoBlock.add(
-        new String(LAST_KEY.getBytes(), StandardCharsets.UTF_8),
-        addKeyLength(lastKey));
-    fileInfoBlock.setStartOffsetInBuffForWrite(currentOffset);
+    finishFileInfo();
     writeBuffer(fileInfoBlock.serialize());
   }
 
@@ -191,7 +195,6 @@ public class HFileWriterImpl implements HFileWriter {
     builder.setLastDataBlockOffset(lastDataBlockOffset);
     builder.setComparatorClassName(COMPARATOR_CLASS_NAME);
     builder.setCompressionCodec(context.getCompressionCodec().getId());
-    builder.setEncryptionKey(ByteString.EMPTY);
     HFileProtos.TrailerProto trailerProto = builder.build();
 
     ByteBuffer trailer = ByteBuffer.allocate(TRAILER_SIZE);
@@ -216,7 +219,38 @@ public class HFileWriterImpl implements HFileWriter {
   private void initFileInfo() {
     fileInfoBlock.add(
         new String(MAX_MVCC_TS_KEY.getBytes(), StandardCharsets.UTF_8),
-        new byte[]{0});
+        toBytes(0L));
+  }
+
+  protected void finishFileInfo() {
+    // Record last key.
+    fileInfoBlock.add(
+        new String(LAST_KEY.getBytes(), StandardCharsets.UTF_8),
+        addKeyLength(lastKey));
+    fileInfoBlock.setStartOffsetInBuffForWrite(currentOffset);
+
+    // Average key length.
+    int avgKeyLen = totalNumberOfRecords == 0
+        ? 0 : (int) (totalKeyLength / totalNumberOfRecords);
+    fileInfoBlock.add(
+        new String(HFileInfo.AVG_KEY_LEN.getBytes(), StandardCharsets.UTF_8),
+        toBytes(avgKeyLen));
+    fileInfoBlock.add(
+        new String(HFileInfo.FILE_CREATION_TIME_TS.getBytes(), StandardCharsets.UTF_8),
+        toBytes(context.getFileCreationTime()));
+
+    // Average value length.
+    int avgValueLen = totalNumberOfRecords == 0
+        ? 0 : (int) (totalValueLength / totalNumberOfRecords);
+    fileInfoBlock.add(
+        new String(HFileInfo.AVG_VALUE_LEN.getBytes(), StandardCharsets.UTF_8),
+        toBytes(avgValueLen));
+
+    // NOTE: Set this property to make sure the key value and MVCC timestamp
+    // pairs are properly decoded
+    appendFileInfo(
+        new String(HFileInfo.KEY_VALUE_VERSION.getBytes(), StandardCharsets.UTF_8),
+        toBytes(KEY_VALUE_VERSION_WITH_MVCC_TS));
   }
 
   // Note: HFileReaderImpl assumes that:

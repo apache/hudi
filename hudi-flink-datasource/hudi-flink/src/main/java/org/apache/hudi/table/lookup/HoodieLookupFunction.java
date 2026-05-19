@@ -22,38 +22,44 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.functions.FunctionContext;
-import org.apache.flink.table.functions.TableFunction;
+import org.apache.flink.table.functions.LookupFunction;
 import org.apache.flink.table.runtime.typeutils.InternalSerializers;
-import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.FlinkRuntimeException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
+import java.io.IOException;
+import java.io.Serializable;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
-import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Lookup function for Hoodie dimension table.
  *
  * <p>Note: reference Flink FileSystemLookupFunction to avoid additional connector jar dependencies.
+ *
+ * <p>The underlying cache can be heap-based ({@code lookup.join.cache.type=heap}, default) or
+ * RocksDB-backed ({@code lookup.join.cache.type=rocksdb}). The RocksDB option stores all dimension
+ * table rows off-heap on local disk, preventing OutOfMemoryError when the dimension table is large.
  */
-public class HoodieLookupFunction extends TableFunction<RowData> {
+@Slf4j
+public class HoodieLookupFunction extends LookupFunction implements Serializable, Closeable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieLookupFunction.class);
+  private static final long serialVersionUID = 1L;
 
   // the max number of retries before throwing exception, in case of failure to load the table
   // into cache
@@ -66,15 +72,17 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
   private final Duration reloadInterval;
   private final TypeSerializer<RowData> serializer;
   private final RowType rowType;
+  private final int[] lookupKeys;
 
   // cache for lookup data
-  private transient Map<RowData, List<RowData>> cache;
+  private transient LookupCache cache;
   // timestamp when cache expires
   private transient long nextLoadTime;
 
   private transient HoodieTableMetaClient metaClient;
   private transient HoodieInstant currentCommit;
   private final Configuration conf;
+  protected FunctionContext functionContext;
 
   public HoodieLookupFunction(
       HoodieLookupTableReader partitionReader,
@@ -84,6 +92,7 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
       Configuration conf) {
     this.partitionReader = partitionReader;
     this.rowType = rowType;
+    this.lookupKeys = lookupKeys;
     this.lookupFieldGetters = new RowData.FieldGetter[lookupKeys.length];
     for (int i = 0; i < lookupKeys.length; i++) {
       lookupFieldGetters[i] =
@@ -96,50 +105,44 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
 
   @Override
   public void open(FunctionContext context) throws Exception {
-    super.open(context);
-    cache = new HashMap<>();
+    functionContext = context;
+    cache = createCache();
     nextLoadTime = -1L;
     org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
   }
 
   @Override
-  public TypeInformation<RowData> getResultType() {
-    return InternalTypeInfo.of(rowType);
-  }
-
-  public void eval(Object... values) {
-    checkCacheReload();
-    RowData lookupKey = GenericRowData.of(values);
-    List<RowData> matchedRows = cache.get(lookupKey);
-    if (matchedRows != null) {
-      for (RowData matchedRow : matchedRows) {
-        collect(matchedRow);
-      }
+  public Collection<RowData> lookup(RowData keyRow) {
+    try {
+      checkCacheReload();
+      return cache.getRows(keyRow);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
   }
 
-  private void checkCacheReload() {
+  private void checkCacheReload() throws IOException {
     if (nextLoadTime > System.currentTimeMillis()) {
       return;
     }
     if (nextLoadTime > 0) {
-      LOG.info(
+      log.info(
           "Lookup join cache has expired after {} minute(s), reloading",
           reloadInterval.toMinutes());
     } else {
-      LOG.info("Populating lookup join cache");
+      log.info("Populating lookup join cache");
     }
 
     HoodieActiveTimeline latestCommit = metaClient.reloadActiveTimeline();
     Option<HoodieInstant> latestCommitInstant = latestCommit.getCommitsTimeline().lastInstant();
     if (latestCommit.empty()) {
-      LOG.info("No commit instant found currently.");
+      log.info("No commit instant found currently.");
       return;
     }
     // Determine whether to reload data by comparing instant
     if (latestCommitInstant.get().equals(currentCommit)) {
-      LOG.info("Ignore loading data because the commit instant " + currentCommit + " has not changed.");
+      log.info("Ignore loading data because the commit instant " + currentCommit + " has not changed.");
       return;
     }
 
@@ -155,12 +158,12 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
           count++;
           RowData rowData = serializer.copy(row);
           RowData key = extractLookupKey(rowData);
-          List<RowData> rows = cache.computeIfAbsent(key, k -> new ArrayList<>());
-          rows.add(rowData);
+          cache.addRow(key, rowData);
         }
         partitionReader.close();
+        currentCommit = latestCommitInstant.get();
         nextLoadTime = System.currentTimeMillis() + reloadInterval.toMillis();
-        LOG.info("Loaded {} row(s) into lookup join cache", count);
+        log.info("Loaded {} row(s) into lookup join cache", count);
         return;
       } catch (Exception e) {
         if (numRetry >= MAX_RETRIES) {
@@ -171,15 +174,11 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
         }
         numRetry++;
         long toSleep = numRetry * RETRY_INTERVAL.toMillis();
-        LOG.warn(
-            String.format(
-                "Failed to load table into cache, will retry in %d seconds",
-                toSleep / 1000),
-            e);
+        log.info("Failed to load table into cache, will retry in {} seconds", toSleep / 1000, e);
         try {
           Thread.sleep(toSleep);
         } catch (InterruptedException ex) {
-          LOG.warn("Interrupted while waiting to retry failed cache load, aborting");
+          log.error("Interrupted while waiting to retry failed cache load, aborting", ex);
           throw new FlinkRuntimeException(ex);
         }
       }
@@ -195,8 +194,35 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
   }
 
   @Override
-  public void close() throws Exception {
-    // no operation
+  public void close() {
+    if (cache != null) {
+      try {
+        cache.close();
+      } catch (Exception e) {
+        log.warn("Failed to close lookup cache", e);
+      }
+      cache = null;
+    }
+  }
+
+  private LookupCache createCache() {
+    String cacheType = conf.get(FlinkOptions.LOOKUP_JOIN_CACHE_TYPE);
+    if ("rocksdb".equalsIgnoreCase(cacheType)) {
+      String rocksDbPath = conf.get(FlinkOptions.LOOKUP_JOIN_ROCKSDB_PATH);
+      log.info("Creating RocksDB lookup cache at {}", rocksDbPath);
+      RowType keyRowType = buildKeyRowType();
+      TypeSerializer<RowData> keySerializer = InternalSerializers.create(keyRowType);
+      return new RocksDBLookupCache(keySerializer, serializer, rocksDbPath);
+    }
+    log.info("Creating heap lookup cache");
+    return new HeapLookupCache();
+  }
+
+  private RowType buildKeyRowType() {
+    List<RowType.RowField> keyFields = Arrays.stream(lookupKeys)
+        .mapToObj(i -> rowType.getFields().get(i))
+        .collect(Collectors.toList());
+    return new RowType(keyFields);
   }
 
   @VisibleForTesting

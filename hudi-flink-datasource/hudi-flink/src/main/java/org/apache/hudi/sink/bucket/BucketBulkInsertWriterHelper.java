@@ -28,6 +28,7 @@ import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.GenericRowData;
@@ -35,8 +36,6 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Map;
@@ -44,8 +43,8 @@ import java.util.Map;
 /**
  * Helper class for bucket index bulk insert used by Flink.
  */
+@Slf4j
 public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
-  private static final Logger LOG = LoggerFactory.getLogger(BucketBulkInsertWriterHelper.class);
   public static final String FILE_GROUP_META_FIELD = "_fg";
 
   private final int recordArity;
@@ -65,14 +64,14 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
       String partitionPath = keyGen.getPartitionPath(record);
       String fileId = tuple.getString(0).toString();
       if ((lastFileId == null) || !lastFileId.equals(fileId)) {
-        LOG.info("Creating new file for partition path " + partitionPath);
+        log.info("Creating new file for partition path " + partitionPath);
         handle = getRowCreateHandle(partitionPath, fileId);
         lastFileId = fileId;
       }
       handle.write(recordKey, partitionPath, record);
     } catch (Throwable throwable) {
       IOException ioException = new IOException("Exception happened when bulk insert.", throwable);
-      LOG.error("Global error thrown while trying to write records in HoodieRowDataCreateHandle", ioException);
+      log.error("Global error thrown while trying to write records in HoodieRowDataCreateHandle", ioException);
       throw ioException;
     }
   }

@@ -17,13 +17,17 @@
 
 package org.apache.hudi;
 
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.util.JavaScalaConverters;
 
 import org.apache.spark.SparkContext;
@@ -177,11 +181,12 @@ public class ColumnStatsIndexHelper {
                 Iterable<String> iterable = () -> paths;
                 return StreamSupport.stream(iterable.spliterator(), false)
                     .flatMap(path -> {
-                      HoodieStorage storage = new HoodieHadoopStorage(path, serializableConfiguration.value());
+                      HoodieStorage storage = HoodieStorageUtils.getStorage(path, HadoopFSUtils.getStorageConf(serializableConfiguration.value()));
                           return utils.readColumnStatsFromMetadata(
                                   storage,
                                   new StoragePath(path),
-                                  columnNames
+                                  columnNames,
+                                  HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), MetadataPartitionType.COLUMN_STATS.getPartitionPath())
                               )
                               .stream();
                         }
@@ -235,12 +240,12 @@ public class ColumnStatsIndexHelper {
                 indexRow.add(colMetadata.getNullCount());
               });
 
-              return Row$.MODULE$.apply(JavaScalaConverters.<Object>convertJavaListToScalaSeq(indexRow));
+              return Row$.MODULE$.apply(JavaScalaConverters.convertJavaListToScalaSeq(indexRow));
             })
             .filter(Objects::nonNull);
 
     StructType indexSchema = ColumnStatsIndexSupport$.MODULE$.composeIndexSchema(
-        JavaScalaConverters.<String>convertJavaListToScalaSeq(columnNames),
+        JavaScalaConverters.convertJavaListToScalaSeq(columnNames),
         JavaScalaConverters.convertJavaListToScalaList(columnNames),
           StructType$.MODULE$.apply(orderedColumnSchemas)
     )._1;

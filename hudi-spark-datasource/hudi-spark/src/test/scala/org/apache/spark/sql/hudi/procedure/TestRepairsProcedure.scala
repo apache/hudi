@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.HoodieFileFormat
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, SchemaTestUtil}
@@ -28,7 +28,6 @@ import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable
 
-import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -141,7 +140,6 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
           |[hoodie.datasource.write.hive_style_partitioning,true,null]
           |[hoodie.datasource.write.partitionpath.urlencode,false,null]
           |[hoodie.record.merge.mode,EVENT_TIME_ORDERING,null]
-          |[hoodie.record.merge.strategy.id,eeb8d96f-b1e4-49fd-bbf8-28ac514178e5,null]
           |[hoodie.table.checksum,,]
           |[hoodie.table.create.schema,,]
           |[hoodie.table.format,native,null]
@@ -509,7 +507,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
     repairedOutputPath = Paths.get(bashpath, "tmp").toString
 
     // generate 200 records
-    val schema: Schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema)
+    val schema: HoodieSchema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema)
     val testTable: HoodieSparkWriteableTestTable = HoodieSparkWriteableTestTable.of(metaClient, schema)
 
     val testUtil = new SchemaTestUtil

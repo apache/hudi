@@ -48,6 +48,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
@@ -76,10 +77,11 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
 
   @BeforeEach
   public void setUp() throws Exception {
-    bootstrapBasePath = tmpFolder.toAbsolutePath() + "/bootstrapBasePath";
-    hudiBasePath = tmpFolder.toAbsolutePath() + "/hudiBasePath";
-    bootstrapTargetPath = tmpFolder.toAbsolutePath() + "/bootstrapTargetPath";
-    initSparkContexts();
+    String randomUuid = UUID.randomUUID().toString();
+    bootstrapBasePath = tmpFolder.toAbsolutePath() + "/" + randomUuid + "/bootstrapBasePath";
+    hudiBasePath = tmpFolder.toAbsolutePath() + "/" + randomUuid + "/hudiBasePath";
+    bootstrapTargetPath = tmpFolder.toAbsolutePath() + "/" + randomUuid + "/bootstrapTargetPath";
+    initSparkContexts(this.getClass().getSimpleName() + randomUuid);
   }
 
   @AfterEach
@@ -207,8 +209,18 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
   }
 
   protected void compareDf(Dataset<Row> df1, Dataset<Row> df2) {
-    assertEquals(0, df1.except(df2).count());
-    assertEquals(0, df2.except(df1).count());
+    Dataset<Row> difference1 = df1.except(df2);
+    long diff1Count = difference1.count();
+    if (diff1Count > 0) {
+      difference1.show(100, false);
+    }
+    Dataset<Row> difference2 = df2.except(df1);
+    long diff2Count = difference2.count();
+    if (diff2Count > 0) {
+      difference2.show(100, false);
+    }
+    assertEquals(0, diff1Count);
+    assertEquals(0, diff2Count);
   }
 
   protected void setupDirs()  {

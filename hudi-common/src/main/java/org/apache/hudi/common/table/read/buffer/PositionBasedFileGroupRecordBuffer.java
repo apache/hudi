@@ -19,11 +19,12 @@
 
 package org.apache.hudi.common.table.read.buffer;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
@@ -40,7 +41,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieKeyException;
 
-import org.apache.avro.Schema;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -96,7 +96,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     // Extract positions from data block.
     List<Long> recordPositions = extractRecordPositions(dataBlock, baseFileInstantTime);
     if (recordPositions == null) {
-      LOG.warn("Falling back to key based merge for Read");
+      LOG.debug("Falling back to key based merge for data block");
       fallbackToKeyBasedBuffer();
       super.processDataBlock(dataBlock, keySpecOpt);
       return;
@@ -120,16 +120,15 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           recordMergeMode,
           true,
           recordMerger,
-          orderingFieldNames,
           readerSchema,
           payloadClasses,
           props,
           partialUpdateModeOpt);
     }
 
-    Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
+    Pair<Function<T, T>, HoodieSchema> projectedTransformer = getProjectedTransformer(dataBlock);
 
-    Schema schema = AvroSchemaCache.intern(schemaTransformerWithEvolvedSchema.getRight());
+    HoodieSchema schema = HoodieSchemaCache.intern(projectedTransformer.getRight());
 
     // TODO: Return an iterator that can generate sequence number with the record.
     //       Then we can hide this logic into data block.
@@ -145,9 +144,9 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         }
 
         long recordPosition = recordPositions.get(recordIndex++);
-        T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
-        boolean isDelete = readerContext.getRecordContext().isDeleteRecord(evolvedNextRecord, deleteContext);
-        BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(evolvedNextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
+        T projectedNextRecord = projectedTransformer.getLeft().apply(nextRecord);
+        boolean isDelete = readerContext.getRecordContext().isDeleteRecord(projectedNextRecord, deleteContext);
+        BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(projectedNextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
         processNextDataRecord(bufferedRecord, recordPosition);
       }
     }
@@ -182,7 +181,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
     List<Long> recordPositions = extractRecordPositions(deleteBlock, baseFileInstantTime);
     if (recordPositions == null) {
-      LOG.warn("Falling back to key based merge for Read");
+      LOG.debug("Falling back to key based merging for delete block");
       fallbackToKeyBasedBuffer();
       super.processDeleteBlock(deleteBlock);
       return;
@@ -260,7 +259,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
    * 1. A set of pre-specified keys exists.
    * 2. The key of the record is not contained in the set.
    */
-  protected boolean shouldSkip(T record, boolean isFullKey, Set<String> keys, Schema writerSchema) {
+  protected boolean shouldSkip(T record, boolean isFullKey, Set<String> keys, HoodieSchema writerSchema) {
     // No keys are specified. Cannot skip at all.
     if (keys.isEmpty()) {
       return false;
@@ -300,7 +299,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     }
     Roaring64NavigableMap positions = logBlock.getRecordPositions();
     if (positions == null || positions.isEmpty()) {
-      LOG.warn("No record position info is found when attempt to do position based merge.");
+      LOG.info("No record position info is found when attempting to do position based merge.");
       return null;
     }
 
@@ -310,7 +309,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     }
 
     if (blockPositions.isEmpty()) {
-      LOG.warn("No positions are extracted.");
+      LOG.info("No positions are extracted.");
       return null;
     }
 

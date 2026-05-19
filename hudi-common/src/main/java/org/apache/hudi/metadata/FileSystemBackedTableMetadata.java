@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import lombok.Getter;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.data.HoodieData;
@@ -41,8 +42,8 @@ import org.apache.hudi.expression.PartialBindVisitor;
 import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.FileNotFoundException;
@@ -64,13 +65,18 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
   private static final int DEFAULT_LISTING_PARALLELISM = 1500;
 
+  @Getter
+  private final String databaseName;
+  @Getter
+  private final String tableName;
   private final boolean hiveStylePartitioningEnabled;
   private final boolean urlEncodePartitioningEnabled;
 
   public FileSystemBackedTableMetadata(HoodieEngineContext engineContext, HoodieTableConfig tableConfig,
                                        HoodieStorage storage, String datasetBasePath) {
     super(engineContext, storage, datasetBasePath);
-
+    this.databaseName = tableConfig.getDatabaseName();
+    this.tableName = tableConfig.getTableName();
     this.hiveStylePartitioningEnabled = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled = Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
   }
@@ -83,17 +89,12 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
     StoragePath metaPath =
         new StoragePath(dataBasePath, HoodieTableMetaClient.METAFOLDER_NAME);
     HoodieTableConfig tableConfig = new HoodieTableConfig(storage, metaPath);
+    this.databaseName = tableConfig.getDatabaseName();
+    this.tableName = tableConfig.getTableName();
     this.hiveStylePartitioningEnabled =
         Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled =
         Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
-  }
-
-  public HoodieStorage getStorage() {
-    if (storage == null) {
-      storage = HoodieStorageUtils.getStorage(dataBasePath, storageConf);
-    }
-    return storage;
   }
 
   @Override
@@ -135,9 +136,9 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
     return getPartitionPathWithPathPrefixUsingFilterExpression(relativePathPrefix, null, null);
   }
 
-  private List<String> getPartitionPathWithPathPrefixUsingFilterExpression(String relativePathPrefix,
-                                                                           Types.RecordType partitionFields,
-                                                                           Expression pushedExpr) throws IOException {
+  protected List<String> getPartitionPathWithPathPrefixUsingFilterExpression(String relativePathPrefix,
+                                                                             Types.RecordType partitionFields,
+                                                                             Expression pushedExpr) throws IOException {
     List<StoragePath> pathsToList = new CopyOnWriteArrayList<>();
     pathsToList.add(StringUtils.isNullOrEmpty(relativePathPrefix)
         ? dataBasePath : new StoragePath(dataBasePath, relativePathPrefix));
@@ -161,36 +162,44 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
       needPushDownExpressions = false;
     }
 
+    int recursiveListingStep = 0;
     while (!pathsToList.isEmpty()) {
+      recursiveListingStep++;
       // TODO: Get the parallelism from HoodieWriteConfig
       int listingParallelism = Math.min(DEFAULT_LISTING_PARALLELISM, pathsToList.size());
+      String recursiveListingJobName =
+          String.format("%s recursive listing step %d", this.getClass().getSimpleName(), recursiveListingStep);
 
       // List all directories in parallel
-      engineContext.setJobStatus(this.getClass().getSimpleName(),
-          "Listing all partitions with prefix " + relativePathPrefix);
+      engineContext.setJobStatus(recursiveListingJobName,
+          "Listing all partitions on " + this.tableName
+              + " with prefix " + relativePathPrefix);
       // Need to use serializable file status here, see HUDI-5936
-      List<StoragePathInfo> dirToFileListing = engineContext.flatMap(pathsToList, path -> {
+      List<Pair<StoragePath, Boolean>> dirToFileListingPairs = engineContext.flatMap(pathsToList, path -> {
         try {
-          return getStorage().listDirectEntries(path).stream();
+          return getStorage().listDirectEntries(path).stream()
+              .map(storagePathInfo -> Pair.of(storagePathInfo.getPath(), storagePathInfo.isDirectory()));
         } catch (FileNotFoundException e) {
           // The partition may have been cleaned.
           return Stream.empty();
         }
       }, listingParallelism);
       pathsToList.clear();
+      engineContext.clearJobStatus();
 
       // if current dictionary contains PartitionMetadata, add it to result
       // if current dictionary does not contain PartitionMetadata, add it to queue to be processed.
-      int fileListingParallelism = Math.min(DEFAULT_LISTING_PARALLELISM, dirToFileListing.size());
-      if (!dirToFileListing.isEmpty()) {
+      int fileListingParallelism = Math.min(DEFAULT_LISTING_PARALLELISM, dirToFileListingPairs.size());
+      if (!dirToFileListingPairs.isEmpty()) {
         // result below holds a list of pair. first entry in the pair optionally holds the deduced list of partitions.
         // and second entry holds optionally a directory path to be processed further.
-        engineContext.setJobStatus(this.getClass().getSimpleName(), "Processing listed partitions");
+        engineContext.setJobStatus(recursiveListingJobName,
+            "Processing recursively listed partitions on " + this.tableName);
         List<Pair<Option<String>, Option<StoragePath>>> result =
-            engineContext.map(dirToFileListing,
-                fileInfo -> {
-                  StoragePath path = fileInfo.getPath();
-                  if (fileInfo.isDirectory()) {
+            engineContext.map(dirToFileListingPairs,
+                fileInfoPair -> {
+                  StoragePath path = fileInfoPair.getKey();
+                  if (fileInfoPair.getValue()) {
                     if (HoodiePartitionMetadata.hasPartitionMetadata(getStorage(), path)) {
                       return Pair.of(
                           Option.of(FSUtils.getRelativePartitionPath(dataBasePath,
@@ -208,6 +217,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
                   }
                   return Pair.of(Option.empty(), Option.empty());
                 }, fileListingParallelism);
+        engineContext.clearJobStatus();
 
         partitionPaths.addAll(result.stream().filter(entry -> entry.getKey().isPresent())
             .map(entry -> entry.getKey().get())
@@ -245,7 +255,8 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   @Override
-  public Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths)
+  public Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths,
+                                                                    Option<StoragePathFilter> pathFilterOption)
       throws IOException {
     if (partitionPaths == null || partitionPaths.isEmpty()) {
       return Collections.emptyMap();
@@ -254,15 +265,17 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
     int parallelism = Math.min(DEFAULT_LISTING_PARALLELISM, partitionPaths.size());
 
     engineContext.setJobStatus(this.getClass().getSimpleName(),
-        "Listing all files in " + partitionPaths.size() + " partitions");
+        "Listing all files in " + partitionPaths.size() + " partitions from "
+            + this.tableName);
     // Need to use serializable file status here, see HUDI-5936
     List<Pair<String, List<StoragePathInfo>>> partitionToFiles =
         engineContext.map(new ArrayList<>(partitionPaths),
             partitionPathStr -> {
               StoragePath partitionPath = new StoragePath(partitionPathStr);
               return Pair.of(partitionPathStr,
-                  FSUtils.getAllDataFilesInPartition(getStorage(), partitionPath));
+                  FSUtils.getAllDataFilesInPartitionByPathFilter(getStorage(), partitionPath, pathFilterOption));
             }, parallelism);
+    engineContext.clearJobStatus();
 
     return partitionToFiles.stream().collect(Collectors.toMap(pair -> pair.getLeft(),
         pair -> pair.getRight()));
@@ -349,16 +362,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
     for (Pair<String, StoragePath> partitionPair : partitionPathList) {
       StoragePath absolutePartitionPath = partitionPair.getRight();
-      try {
-        pathInfoMap.put(partitionPair, getStorage().listDirectEntries(absolutePartitionPath));
-      } catch (IOException e) {
-        if (!getStorage().exists(absolutePartitionPath)) {
-          pathInfoMap.put(partitionPair, Collections.emptyList());
-        } else {
-          // in case the partition path was created by another caller
-          pathInfoMap.put(partitionPair, getStorage().listDirectEntries(absolutePartitionPath));
-        }
-      }
+      pathInfoMap.put(partitionPair, getAllFilesInPartition(absolutePartitionPath));
     }
     return pathInfoMap;
   }

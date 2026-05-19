@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.common.config.DFSPropertiesConfiguration
+import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadataConfig}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
@@ -32,11 +32,22 @@ import java.nio.file.{Files, Paths}
 
 class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
 
+  // The backing mutable map field name inside java.util.Collections$unmodifiableMap,
+  // used to modify JVM environment variables at runtime via reflection
+  private val UNMODIFIABLE_MAP_FIELD = "m"
+
   def setEnv(key: String, value: String): String = {
-    val field = System.getenv().getClass.getDeclaredField("m")
+    val field = System.getenv().getClass.getDeclaredField(UNMODIFIABLE_MAP_FIELD)
     field.setAccessible(true)
     val map = field.get(System.getenv()).asInstanceOf[java.util.Map[java.lang.String, java.lang.String]]
     map.put(key, value)
+  }
+
+  def unsetEnv(key: String): String = {
+    val field = System.getenv().getClass.getDeclaredField(UNMODIFIABLE_MAP_FIELD)
+    field.setAccessible(true)
+    val map = field.get(System.getenv()).asInstanceOf[java.util.Map[java.lang.String, java.lang.String]]
+    map.remove(key)
   }
 
   test("Test Hudi Conf") {
@@ -66,11 +77,11 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, $partitionVal)")
 
       val metaClient = createMetaClient(spark, tablePath)
+      val commitCompletionTime1 = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getCompletionTime
 
       // Then insert another new record
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, $partitionVal)")
 
-      val commitCompletionTime2 = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getCompletionTime
       checkAnswer(s"select id, name, price, ts, year from $tableName")(
         Seq(1, "a1", 10.0, 1000, partitionVal),
         Seq(2, "a2", 10.0, 1000, partitionVal)
@@ -87,7 +98,7 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
       // Manually pass incremental configs to global configs to make sure Hudi query is able to load the
       // global configs
       DFSPropertiesConfiguration.addToGlobalProps(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      DFSPropertiesConfiguration.addToGlobalProps(START_COMMIT.key, commitCompletionTime2)
+      DFSPropertiesConfiguration.addToGlobalProps(START_COMMIT.key, commitCompletionTime1)
       spark.catalog.refreshTable(tableName)
       checkAnswer(s"select id, name, price, ts, year from $tableName")(
         Seq(2, "a2", 10.0, 1000, partitionVal)
@@ -104,6 +115,39 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
     }
   }
 
+  test("Test spark.hoodie.* configs propagate to write path") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | options (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      val metadataTablePath = s"$tablePath/${HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH}"
+
+      withSQLConf("spark." + HoodieMetadataConfig.ENABLE.key -> "false") {
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      }
+      assertResult(false)(existsPath(metadataTablePath))
+
+      checkAnswer(s"select id, name, price, ts from $tableName")(
+        Seq(1, "a1", 10.0, 1000)
+      )
+    }
+  }
+
   before {
     val testPropsFilePath = new File("src/test/resources/external-config").getAbsolutePath
     setEnv(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, testPropsFilePath)
@@ -111,6 +155,7 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
   }
 
   after {
+    unsetEnv(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME)
     DFSPropertiesConfiguration.clearGlobalProps()
   }
 }

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hive.HiveSyncConfig;
 
@@ -65,5 +67,19 @@ public class TestHiveSyncContext {
     configuration3.setString(HiveSyncConfig.HIVE_CREATE_MANAGED_TABLE.key(), "true");
     Properties props3 = HiveSyncContext.buildSyncConfig(configuration3);
     assertTrue(Boolean.parseBoolean(props3.getProperty(HiveSyncConfig.HIVE_CREATE_MANAGED_TABLE.key(), "false")));
+  }
+
+  /**
+   * Pins the constructor signature {@link HiveSyncContext#hiveSyncTool()} relies on via reflection.
+   * End-to-end instantiation is covered in {@code hudi-aws}'s {@code TestAwsGlueSyncTool}.
+   */
+  @Test
+  void testAwsGlueSyncToolReflectionConstructorExists() {
+    assertTrue(
+        ReflectionUtils.hasConstructor(
+            HiveSyncContext.AWS_GLUE_CATALOG_SYNC_TOOL_CLASS,
+            new Class<?>[] {Properties.class, org.apache.hadoop.conf.Configuration.class, Option.class}),
+        "AwsGlueCatalogSyncTool must expose the constructor used by HiveSyncContext#hiveSyncTool() "
+            + "via reflection; otherwise Flink GLUE sync fails with NoSuchMethodException.");
   }
 }

@@ -24,6 +24,34 @@ import org.apache.hudi.avro.model.DateWrapper;
 import org.apache.hudi.avro.model.DecimalWrapper;
 import org.apache.hudi.avro.model.DoubleWrapper;
 import org.apache.hudi.avro.model.FloatWrapper;
+import org.apache.hudi.avro.model.HoodieActionInstant;
+import org.apache.hudi.avro.model.HoodieBootstrapFilePartitionInfo;
+import org.apache.hudi.avro.model.HoodieBootstrapIndexInfo;
+import org.apache.hudi.avro.model.HoodieBootstrapPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieCleanFileInfo;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieCommitMetadata;
+import org.apache.hudi.avro.model.HoodieCompactionOperation;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieCompactionStrategy;
+import org.apache.hudi.avro.model.HoodieDeleteRecordList;
+import org.apache.hudi.avro.model.HoodieFSPermission;
+import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
+import org.apache.hudi.avro.model.HoodieMergeArchiveFilePlan;
+import org.apache.hudi.avro.model.HoodiePath;
+import org.apache.hudi.avro.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieWriteStat;
 import org.apache.hudi.avro.model.IntWrapper;
 import org.apache.hudi.avro.model.LocalDateWrapper;
 import org.apache.hudi.avro.model.LongWrapper;
@@ -34,9 +62,8 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
@@ -53,6 +80,9 @@ import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.specific.SpecificData;
+import org.apache.avro.specific.SpecificRecord;
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.avro.util.Utf8;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -60,8 +90,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -84,16 +112,13 @@ import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
-import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
-import static org.apache.hudi.avro.HoodieAvroUtils.sanitizeName;
+import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
+import static org.apache.hudi.common.schema.HoodieSchemaUtils.sanitizeName;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -102,8 +127,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests hoodie avro utilities.
  */
 public class TestHoodieAvroUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieAvroUtils.class);
 
   private static final String EVOLVED_SCHEMA = "{\"type\": \"record\",\"name\": \"testrec1\",\"fields\": [ "
       + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
@@ -119,11 +142,16 @@ public class TestHoodieAvroUtils {
       + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
       + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"}]}";
 
-  private static final String EXAMPLE_SCHEMA_WITH_PROPS = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
-      + "{\"name\": \"timestamp\",\"type\": \"double\", \"custom_field_property\":\"value\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
+  private static final String EXAMPLE_SCHEMA_WITH_META_FIELDS = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
+      + "{\"name\": \"_hoodie_commit_time\",\"type\": \"string\"},"
+      + "{\"name\": \"_hoodie_commit_seqno\",\"type\": \"string\"},"
+      + "{\"name\": \"_hoodie_record_key\",\"type\": \"string\"},"
+      + "{\"name\": \"_hoodie_partition_path\",\"type\": \"string\"},"
+      + "{\"name\": \"_hoodie_file_name\",\"type\": \"string\"},"
+      + "{\"name\": \"timestamp\",\"type\": \"double\"},"
+      + "{\"name\": \"_row_key\", \"type\": \"string\"},"
       + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
-      + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"}], "
-      + "\"custom_schema_property\": \"custom_schema_property_value\"}";
+      + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"}]}";
 
   private static final int NUM_FIELDS_IN_EXAMPLE_SCHEMA = 4;
 
@@ -195,29 +223,6 @@ public class TestHoodieAvroUtils {
 
   private static final Schema SCHEMA_WITH_AVRO_TYPES = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES_STR);
 
-  // Define schema with a nested field containing a union type
-  private static final String NESTED_SCHEMA_WITH_UNION = "{\n"
-      + "  \"type\": \"record\",\n"
-      + "  \"name\": \"NestedRecordWithUnion\",\n"
-      + "  \"fields\": [\n"
-      + "    {\n"
-      + "      \"name\": \"student\",\n"
-      + "      \"type\": [\n"
-      + "        \"null\",\n"
-      + "        {\n"
-      + "          \"type\": \"record\",\n"
-      + "          \"name\": \"Student\",\n"
-      + "          \"fields\": [\n"
-      + "            {\"name\": \"firstname\", \"type\": [\"null\", \"string\"], \"default\": null},\n"
-      + "            {\"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null}\n"
-      + "          ]\n"
-      + "        }\n"
-      + "      ],\n"
-      + "      \"default\": null\n"
-      + "    }\n"
-      + "  ]\n"
-      + "}";
-
   public static String SCHEMA_WITH_NESTED_FIELD_LARGE_STR = "{\"name\":\"MyClass\",\"type\":\"record\",\"namespace\":\"com.acme.avro\",\"fields\":["
       + "{\"name\":\"firstname\",\"type\":\"string\"},"
       + "{\"name\":\"lastname\",\"type\":\"string\"},"
@@ -227,28 +232,7 @@ public class TestHoodieAvroUtils {
 
   public static Schema SCHEMA_WITH_NESTED_FIELD_LARGE = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_LARGE_STR);
 
-  @Test
-  public void testPropsPresent() {
-    Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(EXAMPLE_SCHEMA));
-    boolean piiPresent = false;
-    for (Schema.Field field : schema.getFields()) {
-      if (HoodieAvroUtils.isMetadataField(field.name())) {
-        continue;
-      }
-
-      assertNotNull(field.name(), "field name is null");
-      Map<String, Object> props = field.getObjectProps();
-      assertNotNull(props, "The property is null");
-
-      if (field.name().equals("pii_col")) {
-        piiPresent = true;
-        assertTrue(props.containsKey("column_category"), "sensitivity_level is removed in field 'pii_col'");
-      } else {
-        assertEquals(0, props.size(), "The property shows up but not set");
-      }
-    }
-    assertTrue(piiPresent, "column pii_col doesn't show up");
-  }
+  private static final Schema NULLABLE_STRING = Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING));
 
   @Test
   public void testDefaultValue() {
@@ -257,7 +241,7 @@ public class TestHoodieAvroUtils {
     rec.put("non_pii_col", "val1");
     rec.put("pii_col", "val2");
     rec.put("timestamp", 3.5);
-    Schema schemaWithMetadata = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(EVOLVED_SCHEMA));
+    Schema schemaWithMetadata = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(EVOLVED_SCHEMA)).toAvroSchema();
     GenericRecord rec1 = HoodieAvroUtils.rewriteRecord(rec, schemaWithMetadata);
     assertEquals("dummy_val", rec1.get("new_col_not_nullable_default_dummy_val"));
     assertNull(rec1.get("new_col_nullable_wo_default"));
@@ -292,6 +276,46 @@ public class TestHoodieAvroUtils {
   }
 
   @Test
+  public void testJoinedGenericRecord() {
+    GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
+    rec.put("_row_key", "key1");
+    rec.put("non_pii_col", "val1");
+    rec.put("pii_col", "val2");
+    rec.put("timestamp", 3.5);
+
+    GenericRecord rec1 = new JoinedGenericRecord(rec, 5, new Schema.Parser().parse(EXAMPLE_SCHEMA_WITH_META_FIELDS));
+    assertNull(rec1.get("_hoodie_commit_time"));
+    assertNull(rec1.get("_hoodie_record_key"));
+
+    assertEquals(rec.get("_row_key"), rec1.get("_row_key"));
+    assertEquals(rec.get("_row_key"), rec1.get(6));
+    assertEquals(rec.get("non_pii_col"), rec1.get("non_pii_col"));
+    assertEquals(rec.get("non_pii_col"), rec1.get(7));
+    assertEquals(rec.get("pii_col"), rec1.get("pii_col"));
+    assertEquals(rec.get("pii_col"), rec1.get(8));
+    assertEquals(rec.get("timestamp"), rec1.get("timestamp"));
+    assertEquals(rec.get("timestamp"), rec1.get(5));
+
+    // lets add meta field values and validate
+    rec1.put(0, "commitTime1");
+    rec1.put(1, "commitSecNo1");
+    rec1.put(2, "recKey1");
+    rec1.put(3, "pPath1");
+    rec1.put(4, "fileName");
+
+    assertEquals("commitTime1", rec1.get(0));
+    assertEquals("commitTime1", rec1.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+    assertEquals("commitSecNo1", rec1.get(1));
+    assertEquals("commitSecNo1", rec1.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD));
+    assertEquals("recKey1", rec1.get(2));
+    assertEquals("recKey1", rec1.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+    assertEquals("pPath1", rec1.get(3));
+    assertEquals("pPath1", rec1.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+    assertEquals("fileName", rec1.get(4));
+    assertEquals("fileName", rec1.get(HoodieRecord.FILENAME_METADATA_FIELD));
+  }
+
+  @Test
   public void testNonNullableFieldWithoutDefault() {
     GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
     rec.put("_row_key", "key1");
@@ -316,9 +340,9 @@ public class TestHoodieAvroUtils {
   public void testJsonNodeNullWithDefaultValues() {
     List<Schema.Field> fields = new ArrayList<>();
     Schema initialSchema = Schema.createRecord("test_record", "test record", "org.test.namespace", false);
-    Schema.Field field1 = new Schema.Field("key", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field field2 = new Schema.Field("key1", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field field3 = new Schema.Field("key2", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+    Schema.Field field1 = new Schema.Field("key", NULLABLE_STRING, "", JsonProperties.NULL_VALUE);
+    Schema.Field field2 = new Schema.Field("key1", NULLABLE_STRING, "", JsonProperties.NULL_VALUE);
+    Schema.Field field3 = new Schema.Field("key2", NULLABLE_STRING, "", JsonProperties.NULL_VALUE);
     fields.add(field1);
     fields.add(field2);
     fields.add(field3);
@@ -330,11 +354,11 @@ public class TestHoodieAvroUtils {
 
     List<Schema.Field> evolvedFields = new ArrayList<>();
     Schema evolvedSchema = Schema.createRecord("evolved_record", "evolved record", "org.evolved.namespace", false);
-    Schema.Field evolvedField1 = new Schema.Field("key", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field evolvedField2 = new Schema.Field("key1", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field evolvedField3 = new Schema.Field("key2", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field evolvedField4 = new Schema.Field("evolved_field", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field evolvedField5 = new Schema.Field("evolved_field1", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+    Schema.Field evolvedField1 = new Schema.Field("key", NULLABLE_STRING, "", JsonProperties.NULL_VALUE);
+    Schema.Field evolvedField2 = new Schema.Field("key1", NULLABLE_STRING, "", JsonProperties.NULL_VALUE);
+    Schema.Field evolvedField3 = new Schema.Field("key2", NULLABLE_STRING, "", JsonProperties.NULL_VALUE);
+    Schema.Field evolvedField4 = new Schema.Field("evolved_field", NULLABLE_STRING, "", JsonProperties.NULL_VALUE);
+    Schema.Field evolvedField5 = new Schema.Field("evolved_field1", NULLABLE_STRING, "", JsonProperties.NULL_VALUE);
     evolvedFields.add(evolvedField1);
     evolvedFields.add(evolvedField2);
     evolvedFields.add(evolvedField3);
@@ -347,14 +371,6 @@ public class TestHoodieAvroUtils {
     assertNull(rec1.get("evolved_field"));
     //evolvedField5.defaultVal() returns null.
     assertNull(rec1.get("evolved_field1"));
-  }
-
-  @Test
-  public void testAddingAndRemovingMetadataFields() {
-    Schema schemaWithMetaCols = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(EXAMPLE_SCHEMA));
-    assertEquals(NUM_FIELDS_IN_EXAMPLE_SCHEMA + HoodieRecord.HOODIE_META_COLUMNS.size(), schemaWithMetaCols.getFields().size());
-    Schema schemaWithoutMetaCols = HoodieAvroUtils.removeMetadataFields(schemaWithMetaCols);
-    assertEquals(NUM_FIELDS_IN_EXAMPLE_SCHEMA, schemaWithoutMetaCols.getFields().size());
   }
 
   @Test
@@ -484,66 +500,6 @@ public class TestHoodieAvroUtils {
   }
 
   @Test
-  public void testGetNestedFieldSchema() throws IOException {
-    Schema schema = SchemaTestUtil.getEvolvedSchema();
-    GenericRecord rec = new GenericData.Record(schema);
-    rec.put("field1", "key1");
-    rec.put("field2", "val1");
-    rec.put("name", "val2");
-    rec.put("favorite_number", 2);
-    // test simple field schema
-    assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(rec.getSchema(), "field1"));
-
-    GenericRecord rec2 = new GenericData.Record(schema);
-    rec2.put("field1", "key1");
-    rec2.put("field2", "val1");
-    rec2.put("name", "val2");
-    rec2.put("favorite_number", 12);
-    // test comparison of non-string type
-    assertEquals(-1, GenericData.get().compare(rec.get("favorite_number"), rec2.get("favorite_number"), getNestedFieldSchemaFromWriteSchema(rec.getSchema(), "favorite_number")));
-
-    // test nested field schema
-    Schema nestedSchema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_STR);
-    GenericRecord rec3 = new GenericData.Record(nestedSchema);
-    rec3.put("firstname", "person1");
-    rec3.put("lastname", "person2");
-    GenericRecord studentRecord = new GenericData.Record(rec3.getSchema().getField("student").schema());
-    studentRecord.put("firstnameNested", "person1");
-    studentRecord.put("lastnameNested", "person2");
-    rec3.put("student", studentRecord);
-
-    assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(rec3.getSchema(), "student.firstnameNested"));
-    assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(nestedSchema, "student.firstnameNested"));
-  }
-
-  @Test
-  public void testGetNestedFieldSchemaWithUnion() {
-    Schema schema = new Schema.Parser().parse(NESTED_SCHEMA_WITH_UNION);
-    // Create a record for the schema
-    GenericRecord rec = new GenericData.Record(schema);
-    Schema studentSchema = schema.getField("student").schema().getTypes().get(1); // Resolve union schema for "student"
-    GenericRecord studentRecord = new GenericData.Record(studentSchema);
-    studentRecord.put("firstname", "John");
-    studentRecord.put("lastname", "Doe");
-    rec.put("student", studentRecord);
-
-    // Test nested field schema for "student.firstname"
-    Schema expectedFirstnameSchema = Schema.create(Schema.Type.STRING);
-    assertEquals(expectedFirstnameSchema, getNestedFieldSchemaFromWriteSchema(schema, "student.firstname"));
-
-    // Test nested field schema for "student.lastname"
-    Schema expectedLastnameSchema = Schema.create(Schema.Type.STRING);
-    assertEquals(expectedLastnameSchema, getNestedFieldSchemaFromWriteSchema(schema, "student.lastname"));
-
-    // Test nullable handling for "student" (entire field)
-    assertEquals(studentSchema, getNestedFieldSchemaFromWriteSchema(schema, "student"));
-
-    // Test exception for invalid nested field
-    Exception exception = assertThrows(HoodieException.class, () -> getNestedFieldSchemaFromWriteSchema(schema, "student.middleName"));
-    assertTrue(exception.getMessage().contains("Failed to get schema. Not a valid field name"));
-  }
-
-  @Test
   public void testReWriteAvroRecordWithNewSchema() {
     Schema nestedSchema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_STR);
     GenericRecord rec3 = new GenericData.Record(nestedSchema);
@@ -621,21 +577,6 @@ public class TestHoodieAvroUtils {
     assertEquals("a*bc", sanitizeName("a.bc", "*"));
     assertEquals("abcdef___", sanitizeName("abcdef_."));
     assertEquals("__ab__cd__", sanitizeName("1ab*cd?"));
-  }
-
-  @Test
-  public void testGenerateProjectionSchema() {
-    Schema originalSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(EXAMPLE_SCHEMA));
-
-    Schema schema1 = HoodieAvroUtils.generateProjectionSchema(originalSchema, Arrays.asList("_row_key", "timestamp"));
-    assertEquals(2, schema1.getFields().size());
-    List<String> fieldNames1 = schema1.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
-    assertTrue(fieldNames1.contains("_row_key"));
-    assertTrue(fieldNames1.contains("timestamp"));
-
-    assertTrue(assertThrows(HoodieException.class, () ->
-        HoodieAvroUtils.generateProjectionSchema(originalSchema, Arrays.asList("_row_key", "timestamp", "fake_field")))
-        .getMessage().contains("Field fake_field not found in log schema. Query cannot proceed!"));
   }
 
   @Test
@@ -787,25 +728,6 @@ public class TestHoodieAvroUtils {
   }
 
   @Test
-  public void testAddMetadataFields() {
-    Schema baseSchema = new Schema.Parser().parse(EXAMPLE_SCHEMA_WITH_PROPS);
-    Schema schemaWithMetadata = HoodieAvroUtils.addMetadataFields(baseSchema);
-    List<Schema.Field> updatedFields = schemaWithMetadata.getFields();
-    // assert fields added in expected order
-    assertEquals(HoodieRecord.COMMIT_TIME_METADATA_FIELD, updatedFields.get(0).name());
-    assertEquals(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, updatedFields.get(1).name());
-    assertEquals(HoodieRecord.RECORD_KEY_METADATA_FIELD, updatedFields.get(2).name());
-    assertEquals(HoodieRecord.PARTITION_PATH_METADATA_FIELD, updatedFields.get(3).name());
-    assertEquals(HoodieRecord.FILENAME_METADATA_FIELD, updatedFields.get(4).name());
-    // assert original fields are copied over
-    List<Schema.Field> originalFieldsInUpdatedSchema = updatedFields.subList(5, updatedFields.size());
-    assertEquals(baseSchema.getFields(), originalFieldsInUpdatedSchema);
-    // validate properties are properly copied over
-    assertEquals("custom_schema_property_value", schemaWithMetadata.getProp("custom_schema_property"));
-    assertEquals("value", originalFieldsInUpdatedSchema.get(0).getProp("custom_field_property"));
-  }
-
-  @Test
   void testSafeAvroToJsonStringMissingRequiredField() {
     Schema schema = new Schema.Parser().parse(EXAMPLE_SCHEMA);
     GenericRecord record = new GenericData.Record(schema);
@@ -831,7 +753,7 @@ public class TestHoodieAvroUtils {
   @Test
   void testConvertBytesToFixed() {
     Random rand = new Random();
-    //size calculated using AvroInternalSchemaConverter.computeMinBytesForPrecision
+    //size calculated using InternalSchemaConverter.computeMinBytesForPrecision
     testConverBytesToFixedHelper(rand.nextDouble(), 13, 7, 6);
     testConverBytesToFixedHelper(rand.nextDouble(), 4, 2, 2);
     testConverBytesToFixedHelper(rand.nextDouble(), 32, 12, 14);
@@ -846,32 +768,6 @@ public class TestHoodieAvroUtils {
     GenericData.Fixed fixed = (GenericData.Fixed) HoodieAvroUtils.convertBytesToFixed(encodedDecimal, fixedSchema);
     BigDecimal after = new Conversions.DecimalConversion().fromFixed(fixed, fixedSchema, fixedSchema.getLogicalType());
     assertEquals(decfield, after);
-  }
-
-  @Test
-  void testHasDecimalField() {
-    assertTrue(HoodieAvroUtils.hasDecimalField(new Schema.Parser().parse(SCHEMA_WITH_DECIMAL_FIELD)));
-    assertFalse(HoodieAvroUtils.hasDecimalField(new Schema.Parser().parse(EVOLVED_SCHEMA)));
-    assertFalse(HoodieAvroUtils.hasDecimalField(new Schema.Parser().parse(SCHEMA_WITH_NON_NULLABLE_FIELD)));
-    assertTrue(HoodieAvroUtils.hasDecimalField(HoodieTestDataGenerator.AVRO_SCHEMA));
-    assertTrue(HoodieAvroUtils.hasDecimalField(HoodieTestDataGenerator.AVRO_TRIP_ENCODED_DECIMAL_SCHEMA));
-    Schema recordWithMapAndArray = Schema.createRecord("recordWithMapAndArray", null, null, false,
-        Arrays.asList(new Schema.Field("mapfield", Schema.createMap(Schema.create(Schema.Type.INT)), null, null),
-            new Schema.Field("arrayfield", Schema.createArray(Schema.create(Schema.Type.INT)), null, null)
-        ));
-    assertFalse(HoodieAvroUtils.hasDecimalField(recordWithMapAndArray));
-    Schema recordWithDecMapAndArray = Schema.createRecord("recordWithDecMapAndArray", null, null, false,
-        Arrays.asList(new Schema.Field("mapfield",
-                Schema.createMap(LogicalTypes.decimal(10,6).addToSchema(Schema.create(Schema.Type.BYTES))), null, null),
-            new Schema.Field("arrayfield", Schema.createArray(Schema.create(Schema.Type.INT)), null, null)
-        ));
-    assertTrue(HoodieAvroUtils.hasDecimalField(recordWithDecMapAndArray));
-    Schema recordWithMapAndDecArray = Schema.createRecord("recordWithMapAndDecArray", null, null, false,
-        Arrays.asList(new Schema.Field("mapfield",
-            Schema.createMap(Schema.create(Schema.Type.INT)), null, null), new Schema.Field("arrayfield",
-            Schema.createArray(LogicalTypes.decimal(10,6).addToSchema(Schema.create(Schema.Type.BYTES))), null, null)
-        ));
-    assertTrue(HoodieAvroUtils.hasDecimalField(recordWithMapAndDecArray));
   }
 
   @Test
@@ -904,232 +800,12 @@ public class TestHoodieAvroUtils {
     HoodieAvroRecord avroRecord = new HoodieAvroRecord(new HoodieKey("record1", "partition1"), avroPayload);
 
     String[] userSortColumns = new String[] {"non_pii_col", "timestamp"};
-    Object[] sortColumnValues = HoodieAvroUtils.getSortColumnValuesWithPartitionPathAndRecordKey(avroRecord, userSortColumns, Schema.parse(EXAMPLE_SCHEMA), suffixRecordKey, true);
+    Object[] sortColumnValues = HoodieAvroUtils.getSortColumnValuesWithPartitionPathAndRecordKey(avroRecord, userSortColumns, HoodieSchema.parse(EXAMPLE_SCHEMA), suffixRecordKey, true);
     if (suffixRecordKey) {
       assertArrayEquals(new Object[] {"partition1", "val1", 3.5, "record1"}, sortColumnValues);
     } else {
       assertArrayEquals(new Object[] {"partition1", "val1", 3.5}, sortColumnValues);
     }
-  }
-
-  @Test
-  void testHasListOrMapField() {
-    Schema nestedList = Schema.createRecord("nestedList", null, null, false, Arrays.asList(
-        new Schema.Field("intField", Schema.create(Schema.Type.INT), null, null),
-        new Schema.Field("nested", Schema.createRecord("nestedSchema", null, null, false, Collections.singletonList(
-            new Schema.Field("listField", Schema.createArray(Schema.create(Schema.Type.INT)), null, null)
-        )), null, null)
-    ));
-    Schema nestedMap = Schema.createRecord("nestedMap", null, null, false, Arrays.asList(
-        new Schema.Field("intField", Schema.create(Schema.Type.INT), null, null),
-        new Schema.Field("nested", Schema.createUnion(Schema.create(Schema.Type.NULL),
-            Schema.createRecord("nestedSchema", null, null, false,
-                Collections.singletonList(new Schema.Field("mapField", Schema.createMap(Schema.create(Schema.Type.INT)), null, null)
-                ))), null, null)
-    ));
-    assertTrue(HoodieAvroUtils.hasListOrMapField(nestedList));
-    assertTrue(HoodieAvroUtils.hasListOrMapField(nestedMap));
-    assertFalse(HoodieAvroUtils.hasListOrMapField(new Schema.Parser().parse(EXAMPLE_SCHEMA)));
-  }
-
-  @Test
-  void testHasSmallPrecisionDecimalField() {
-    assertTrue(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(SCHEMA_WITH_DECIMAL_FIELD)));
-    assertFalse(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES_STR)));
-    assertFalse(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(EXAMPLE_SCHEMA)));
-  }
-
-  public static Stream<Arguments> getSchemaForFieldParams() {
-    Object[][] data =
-        new Object[][] {
-            {"booleanField", Schema.Type.BOOLEAN},
-            {"intField", Schema.Type.INT},
-            {"longField", Schema.Type.LONG},
-            {"floatField", Schema.Type.FLOAT},
-            {"bytesField", Schema.Type.BYTES},
-            {"stringField", Schema.Type.STRING},
-            {"decimalField", Schema.Type.BYTES},
-            {"timestampMillisField", Schema.Type.LONG}
-        };
-    return Stream.of(data).map(Arguments::of);
-  }
-
-  @ParameterizedTest
-  @MethodSource("getSchemaForFieldParams")
-  public void testGetSchemaForFieldSimple(String colName, Schema.Type schemaType) {
-    Pair<String, Schema.Field> actualColNameAndSchemaFile = HoodieAvroUtils.getSchemaForField(SCHEMA_WITH_AVRO_TYPES, colName);
-    assertEquals(colName, actualColNameAndSchemaFile.getKey());
-    assertEquals(schemaType, actualColNameAndSchemaFile.getValue().schema().getType());
-  }
-
-  public static Stream<Arguments> getSchemaForFieldParamsNested() {
-    Object[][] data =
-        new Object[][] {
-            {"student.firstname", Schema.Type.STRING},
-            {"student.lastname", Schema.Type.STRING},
-            {"nested_field.booleanField", Schema.Type.BOOLEAN},
-            {"nested_field.intField", Schema.Type.INT},
-            {"nested_field.longField", Schema.Type.LONG},
-            {"nested_field.floatField", Schema.Type.FLOAT},
-            {"nested_field.bytesField", Schema.Type.BYTES},
-            {"nested_field.stringField", Schema.Type.STRING},
-            {"nested_field.decimalField", Schema.Type.BYTES},
-            {"nested_field.timestampMillisField", Schema.Type.LONG}
-        };
-    return Stream.of(data).map(Arguments::of);
-  }
-
-  @ParameterizedTest
-  @MethodSource("getSchemaForFieldParamsNested")
-  public void testGetSchemaForFieldNested(String colName, Schema.Type schemaType) {
-    Pair<String, Schema.Field> actualColNameAndSchemaFile = HoodieAvroUtils.getSchemaForField(SCHEMA_WITH_NESTED_FIELD_LARGE, colName);
-    assertEquals(colName, actualColNameAndSchemaFile.getKey());
-    assertEquals(schemaType, resolveNullableSchema(actualColNameAndSchemaFile.getValue().schema()).getType());
-  }
-
-  public static Stream<Arguments> getExpectedSchemaForFields() {
-    // Projection of two nested fields. secondLevelField is entirely projected since both its fields are included
-    List<String> fields1 = Arrays.asList("nested_field.secondLevelField.firstname", "nested_field.secondLevelField.lastname");
-    // Expected schema - top level field and one nested field
-    String expectedSchema1 =
-        "{\n"
-            + "  \"type\": \"record\",\n"
-            + "  \"name\": \"MyClass\",\n"
-            + "  \"doc\": \"\",\n"
-            + "  \"namespace\": \"com.acme.avro\",\n"
-            + "  \"fields\": [\n"
-            + "    { \"name\": \"nested_field\", \"type\": [\"null\", {\n"
-            + "      \"type\": \"record\",\n"
-            + "      \"name\": \"TestRecordAvroTypes\",\n"
-            + "      \"fields\": [\n"
-            + "        { \"name\": \"secondLevelField\", \"type\": [\"null\", {\n"
-            + "          \"type\": \"record\",\n"
-            + "          \"name\": \"secondLevelField\",\n"
-            + "          \"fields\": [\n"
-            + "            { \"name\": \"firstname\", \"type\": [\"null\", \"string\"], \"default\": null },\n"
-            + "            { \"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null }\n"
-            + "          ]\n"
-            + "        }], \"default\": null }\n"
-            + "      ]\n"
-            + "    }], \"default\": null }\n"
-            + "  ]\n"
-            + "}";
-
-    // Projection of first level nested field and top level field which contains the nested field
-    // Also include the nested field twice
-    // Expected schema - top level field
-    List<String> fields2 = Arrays.asList("nested_field.secondLevelField.lastname", "nested_field",
-        "nested_field.secondLevelField.lastname");
-    String expectedSchema2 =
-        "{\n"
-            + "  \"type\": \"record\",\n"
-            + "  \"name\": \"MyClass\",\n"
-            + "  \"doc\": \"\",\n"
-            + "  \"namespace\": \"com.acme.avro\",\n"
-            + "  \"fields\": [\n"
-            + "    { \"name\": \"nested_field\", \"type\": [\"null\", " + SCHEMA_WITH_AVRO_TYPES_STR + "], \"default\": null }\n"
-            + "  ]\n"
-            + "}";
-
-    // Projection of non overlapping nested field and top level field with nested fields
-    // Expected schema - top level field and one nested field
-    List<String> fields3 = Arrays.asList("student.lastname", "nested_field");
-    String expectedSchema3 =
-        "{\n"
-            + "  \"type\": \"record\",\n"
-            + "  \"name\": \"MyClass\",\n"
-            + "  \"doc\": \"\",\n"
-            + "  \"namespace\": \"com.acme.avro\",\n"
-            + "  \"fields\": [\n"
-            + "    { \"name\": \"nested_field\", \"type\": [\"null\", " + SCHEMA_WITH_AVRO_TYPES_STR + "], \"default\": null },\n"
-            + "    { \"name\": \"student\", \"type\": {\n"
-            + "      \"type\": \"record\",\n"
-            + "      \"name\": \"student\",\n"
-            + "      \"fields\": [\n"
-            + "        { \"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null }\n"
-            + "      ]\n"
-            + "    }}\n"
-            + "  ]\n"
-            + "}";
-
-    // Projection of two nested fields
-    // Expected schema - two nested fields
-    List<String> fields4 = Arrays.asList("student.lastname", "nested_field.secondLevelField.lastname");
-    String expectedSchema4 =
-        "{\n"
-            + "  \"type\": \"record\",\n"
-            + "  \"name\": \"MyClass\",\n"
-            + "  \"doc\": \"\",\n"
-            + "  \"namespace\": \"com.acme.avro\",\n"
-            + "  \"fields\": [\n"
-            + "    { \"name\": \"nested_field\", \"type\": [\"null\", {\n"
-            + "      \"type\": \"record\",\n"
-            + "      \"name\": \"TestRecordAvroTypes\",\n"
-            + "      \"fields\": [\n"
-            + "        { \"name\": \"secondLevelField\", \"type\": [\"null\", {\n"
-            + "          \"type\": \"record\",\n"
-            + "          \"name\": \"secondLevelField\",\n"
-            + "          \"fields\": [\n"
-            + "            { \"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null }\n"
-            + "          ]\n"
-            + "        }], \"default\": null }\n"
-            + "      ]\n"
-            + "    }], \"default\": null },\n"
-            + "    { \"name\": \"student\", \"type\": {\n"
-            + "      \"type\": \"record\",\n"
-            + "      \"name\": \"student\",\n"
-            + "      \"namespace\": \"com.acme.avro\","
-            + "      \"fields\": [\n"
-            + "        { \"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null }\n"
-            + "      ]\n"
-            + "    }}\n"
-            + "  ]\n"
-            + "}";
-
-    // Projection of top level field and nested field column
-    List<String> fields5 = Arrays.asList("firstname", "nested_field.secondLevelField.lastname", "nested_field.longField");
-    // Expected schema - top level field and one nested field
-    String expectedSchema5 =
-        "{\n"
-            + "  \"type\": \"record\",\n"
-            + "  \"name\": \"MyClass\",\n"
-            + "  \"doc\": \"\",\n"
-            + "  \"namespace\": \"com.acme.avro\",\n"
-            + "  \"fields\": [\n"
-            + "    { \"name\": \"firstname\", \"type\": \"string\" },\n"
-            + "    { \"name\": \"nested_field\", \"type\": [\"null\", {\n"
-            + "      \"type\": \"record\",\n"
-            + "      \"name\": \"TestRecordAvroTypes\",\n"
-            + "      \"fields\": [\n"
-            + "        { \"name\": \"longField\", \"type\": \"long\" },\n"
-            + "        { \"name\": \"secondLevelField\", \"type\": [\"null\", {\n"
-            + "          \"type\": \"record\",\n"
-            + "          \"name\": \"secondLevelField\",\n"
-            + "          \"fields\": [\n"
-            + "            { \"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null }\n"
-            + "          ]\n"
-            + "        }], \"default\": null }\n"
-            + "      ]\n"
-            + "    }], \"default\": null }\n"
-            + "  ]\n"
-            + "}";
-
-    Object[][] data = new Object[][] {
-        {fields1, expectedSchema1},
-        {fields2, expectedSchema2},
-        {fields3, expectedSchema3},
-        {fields4, expectedSchema4},
-        {fields5, expectedSchema5}};
-    return Stream.of(data).map(Arguments::of);
-  }
-
-  @ParameterizedTest
-  @MethodSource("getExpectedSchemaForFields")
-  public void testProjectSchemaWithNullableAndNestedFields(List<String> projectedFields, String expectedSchemaStr) {
-    Schema expectedSchema = Schema.parse(expectedSchemaStr);
-    Schema projectedSchema = HoodieAvroUtils.projectSchema(SCHEMA_WITH_NESTED_FIELD_LARGE, projectedFields);
-    assertEquals(expectedSchema, projectedSchema);
-    assertTrue(AvroSchemaUtils.isSchemaCompatible(projectedSchema, expectedSchema, false));
   }
 
   private static Stream<Arguments> recordNeedsRewriteForExtendedAvroTypePromotion() {
@@ -1179,5 +855,156 @@ public class TestHoodieAvroUtils {
   void recordNeedsRewriteForExtendedAvroTypePromotion(Schema writerSchema, Schema readerSchema, boolean expected) {
     boolean result = HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(writerSchema, readerSchema);
     assertEquals(expected, result);
+  }
+
+  /**
+   * Utility class for generating random GenericRecord instances.
+   */
+  private static class AvroTestUtils {
+    private static final Random RANDOM = new Random(42);
+
+    /**
+     * Generate a list of random GenericRecord instances
+     */
+    public static List<GenericRecord> generateRandomRecords(Schema schema, int count) {
+      List<GenericRecord> records = new ArrayList<>();
+      for (int i = 0; i < count; i++) {
+        records.add(generateRandomRecord(schema));
+      }
+      return records;
+    }
+
+    /**
+     * Generate a random GenericRecord for the given schema
+     */
+    public static GenericRecord generateRandomRecord(Schema schema) {
+      GenericRecord record = new GenericData.Record(schema);
+      for (Schema.Field field : schema.getFields()) {
+        Object value = generateRandomValue(field.schema(), field.defaultVal());
+        record.put(field.pos(), value);
+      }
+      return record;
+    }
+
+    /**
+     * Generate a random value for the given schema type
+     */
+    private static Object generateRandomValue(Schema schema, Object defaultValue) {
+      // CASE 1: Handle default value
+      if (defaultValue != null
+          && !(defaultValue instanceof JsonProperties.Null)
+          && RANDOM.nextBoolean()) {
+        return defaultValue;
+      }
+      // Handle Union type.
+      Schema actualSchema = schema;
+      try {
+        actualSchema = getNonNullTypeFromUnion(schema);
+      } catch (Exception e) {
+        // If we can't resolve the schema, just use the original
+        // Op.
+      }
+      // CASE 2: Handle different types
+      switch (actualSchema.getType()) {
+        case NULL:
+          return null;
+        case BOOLEAN:
+          return RANDOM.nextBoolean();
+        case INT:
+          return RANDOM.nextInt(1000);
+        case LONG:
+          return RANDOM.nextLong() % 1000000L;
+        case FLOAT:
+          return RANDOM.nextFloat() * 100f;
+        case DOUBLE:
+          return RANDOM.nextDouble() * 1000.0;
+        case STRING:
+          return "test_string_" + RANDOM.nextInt(1000);
+        case BYTES:
+          byte[] bytes = new byte[RANDOM.nextInt(10) + 1];
+          RANDOM.nextBytes(bytes);
+          return ByteBuffer.wrap(bytes);
+        case RECORD:
+          return generateRandomRecord(actualSchema);
+        case ENUM:
+          List<String> symbols = actualSchema.getEnumSymbols();
+          return new GenericData.EnumSymbol(actualSchema, symbols.get(RANDOM.nextInt(symbols.size())));
+        case ARRAY:
+          List<Object> array = new ArrayList<>();
+          int arraySize = RANDOM.nextInt(3) + 1;
+          for (int i = 0; i < arraySize; i++) {
+            array.add(generateRandomValue(actualSchema.getElementType(), null));
+          }
+          return array;
+        case MAP:
+          Map<String, Object> map = new HashMap<>();
+          int mapSize = RANDOM.nextInt(3) + 1;
+          for (int i = 0; i < mapSize; i++) {
+            map.put("key_" + i, generateRandomValue(actualSchema.getValueType(), null));
+          }
+          return map;
+        case FIXED:
+          byte[] fixedBytes = new byte[actualSchema.getFixedSize()];
+          RANDOM.nextBytes(fixedBytes);
+          return new GenericData.Fixed(actualSchema, fixedBytes);
+        default:
+          return null;
+      }
+    }
+  }
+
+  /**
+   * Test convertToSpecificRecord with multiple random records for each type
+   */
+  @ParameterizedTest
+  @MethodSource("provideAvroModelClasses")
+  void testConvertToSpecificRecordMultipleRecords(Class<? extends SpecificRecord> recordClass) {
+    Schema schema = SpecificData.get().getSchema(recordClass);
+    List<GenericRecord> genericRecords = AvroTestUtils.generateRandomRecords(schema, 3);
+    for (GenericRecord genericRecord : genericRecords) {
+      Class<? extends SpecificRecordBase> specificRecordBaseClass
+          = (Class<? extends SpecificRecordBase>) recordClass;
+      SpecificRecord specificRecord =
+          HoodieAvroUtils.convertToSpecificRecord(specificRecordBaseClass, genericRecord);
+      assertEquals(recordClass, specificRecord.getClass());
+      GenericRecord copied = (GenericRecord) GenericData.get().deepCopy(schema, specificRecord);
+      assertEquals(genericRecord, copied);
+    }
+  }
+
+  /**
+   * Provide all the Avro model classes to test
+   */
+  static Stream<Arguments> provideAvroModelClasses() {
+    return Stream.of(
+        Arguments.of(HoodieRollbackPartitionMetadata.class),
+        Arguments.of(HoodieSavepointPartitionMetadata.class),
+        Arguments.of(HoodieWriteStat.class),
+        Arguments.of(HoodieCleanPartitionMetadata.class),
+        Arguments.of(HoodieCleanFileInfo.class),
+        Arguments.of(HoodieActionInstant.class),
+        Arguments.of(HoodieCompactionStrategy.class),
+        Arguments.of(HoodieCompactionOperation.class),
+        Arguments.of(HoodieFSPermission.class),
+        Arguments.of(HoodiePath.class),
+        Arguments.of(HoodieFileStatus.class),
+        Arguments.of(HoodieBootstrapFilePartitionInfo.class),
+        Arguments.of(HoodieCompactionPlan.class),
+        Arguments.of(HoodieCleanerPlan.class),
+        Arguments.of(HoodieCleanMetadata.class),
+        Arguments.of(HoodieReplaceCommitMetadata.class),
+        Arguments.of(HoodieSavepointMetadata.class),
+        Arguments.of(HoodieMergeArchiveFilePlan.class),
+        Arguments.of(HoodieRollbackMetadata.class),
+        Arguments.of(HoodieBootstrapPartitionMetadata.class),
+        Arguments.of(HoodieBootstrapIndexInfo.class),
+        Arguments.of(HoodieIndexPlan.class),
+        Arguments.of(HoodieRequestedReplaceMetadata.class),
+        Arguments.of(HoodieRestoreMetadata.class),
+        Arguments.of(HoodieRestorePlan.class),
+        Arguments.of(HoodieRollbackPlan.class),
+        Arguments.of(HoodieDeleteRecordList.class),
+        Arguments.of(HoodieCommitMetadata.class)
+    );
   }
 }

@@ -86,9 +86,7 @@ case class DropHoodieTableCommand(
       logInfo("Clean up " + basePath)
       val targetPath = new StoragePath(basePath)
       val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
-      val storage = HoodieStorageUtils.getStorage(basePath,
-        HadoopFSUtils.getStorageConf(sparkSession.sparkContext.hadoopConfiguration))
-      FSUtils.deleteDir(engineContext, storage, targetPath, sparkSession.sparkContext.defaultParallelism)
+      FSUtils.deleteDir(engineContext, hoodieCatalogTable.storage, targetPath, sparkSession.sparkContext.defaultParallelism)
     }
   }
 

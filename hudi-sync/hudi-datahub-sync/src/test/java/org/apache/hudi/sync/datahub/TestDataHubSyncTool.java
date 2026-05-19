@@ -21,6 +21,9 @@ package org.apache.hudi.sync.datahub;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -31,12 +34,10 @@ import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.PrimitiveType;
-import org.apache.parquet.schema.Type;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedConstruction;
 
+import java.util.Collections;
 import java.util.Properties;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.META_SYNC_BASE_PATH_KEY;
@@ -83,11 +84,12 @@ class TestDataHubSyncTool extends HoodieCommonTestHarness {
     HoodieTableConfig mockTableConfig = mock(HoodieTableConfig.class);
     when(mockTableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     when(mockMetaClient.getTableConfig()).thenReturn(mockTableConfig);
-    MessageType messageType = new MessageType("record", new PrimitiveType(Type.Repetition.REQUIRED, PrimitiveType.PrimitiveTypeName.INT32, "int_field"));
+    HoodieSchema schema = HoodieSchema.createRecord("record", null, null,
+        Collections.singletonList(HoodieSchemaField.of("int_field", HoodieSchema.create(HoodieSchemaType.INT))));
 
     try (MockedConstruction<DataHubSyncClient> mocked = org.mockito.Mockito.mockConstruction(DataHubSyncClient.class, (mock, context) -> {
       when(mock.getTableName()).thenReturn("test_table");
-      when(mock.getStorageSchema()).thenReturn(messageType);
+      when(mock.getStorageSchema()).thenReturn(schema);
     })) {
       DataHubSyncTool tool = new DataHubSyncTool(new Properties(), null, Option.of(mockMetaClient));
       tool.syncHoodieTable();

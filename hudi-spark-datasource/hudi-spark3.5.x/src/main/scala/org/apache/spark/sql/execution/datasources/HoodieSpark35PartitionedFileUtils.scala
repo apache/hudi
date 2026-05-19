@@ -19,6 +19,7 @@
 
 package org.apache.spark.sql.execution.datasources
 
+import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.hadoop.fs.FileStatus
@@ -41,11 +42,24 @@ object HoodieSpark35PartitionedFileUtils extends HoodieSparkPartitionedFileUtils
                                      filePath: StoragePath,
                                      start: Long,
                                      length: Long): PartitionedFile = {
-    PartitionedFile(partitionValues, SparkPath.fromUri(filePath.toUri), start, length)
+    PartitionedFile(partitionValues, SparkPath.fromUri(filePath.toUri), start, length, Array.empty)
   }
 
   override def toFileStatuses(partitionDirs: Seq[PartitionDirectory]): Seq[FileStatus] = {
-    partitionDirs.flatMap(_.files).map(_.fileStatus)
+    val files: Seq[FileStatusWithMetadata] = partitionDirs.flatMap(_.files)
+    try {
+      files.map(_.fileStatus)
+    } catch {
+      case _: NoSuchMethodException | _: NoSuchMethodError | _: IllegalArgumentException =>
+        val methodOpt = ReflectionUtils.getMethod(classOf[FileStatusWithMetadata], "toFileStatus")
+        if (methodOpt.isPresent) {
+          val method = methodOpt.get()
+          files.map(f => method.invoke(f).asInstanceOf[FileStatus])
+        } else {
+          throw new RuntimeException(
+            "Cannot find toFileStatus method on FileStatusWithMetadata in custom Spark Runtime")
+        }
+    }
   }
 
   override def newPartitionDirectory(internalRow: InternalRow, statuses: Seq[FileStatus]): PartitionDirectory = {

@@ -21,6 +21,7 @@ package org.apache.hudi.client.timeline.versioning.v2;
 
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.client.utils.ArchivalMetrics;
 import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -47,12 +48,12 @@ import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -68,9 +69,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 /**
  * Archiver to bound the growth of files under .hoodie meta path.
  */
+@Slf4j
 public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements HoodieTimelineArchiver<T, I, K, O> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TimelineArchiverV2.class);
 
   private final HoodieWriteConfig config;
   private final int maxInstantsToKeep;
@@ -80,6 +80,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
   private final TransactionManager txnManager;
 
   private final LSMTimelineWriter timelineWriter;
+  private final Map<String, Long> metrics;
 
   public TimelineArchiverV2(HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     this.config = config;
@@ -90,6 +91,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();
     this.maxInstantsToKeep = minAndMaxInstants.getRight();
+    this.metrics = new HashMap<>();
   }
 
   @Override
@@ -100,23 +102,25 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
         txnManager.beginStateChange(Option.empty(), Option.empty());
       }
     } catch (HoodieLockException e) {
-      LOG.error("Fail to begin transaction", e);
+      log.error("Fail to begin transaction", e);
       return 0;
     }
 
     try {
       // Sort again because the cleaning and rollback instants could break the sequence.
       List<ActiveAction> instantsToArchive = getInstantsToArchive().sorted().collect(Collectors.toList());
+      addArchivalCommitMetrics(instantsToArchive);
+      boolean success = true;
       if (!instantsToArchive.isEmpty()) {
-        LOG.info("Archiving and deleting instants {}", instantsToArchive);
+        log.info("Archiving and deleting instants {}", instantsToArchive);
         Consumer<Exception> exceptionHandler = e -> {
           if (this.config.isFailOnTimelineArchivingEnabled()) {
             throw new HoodieException(e);
           }
         };
         this.timelineWriter.write(instantsToArchive, Option.of(action -> deleteAnyLeftOverMarkers(context, action)), Option.of(exceptionHandler));
-        LOG.debug("Deleting archived instants");
-        deleteArchivedActions(instantsToArchive, context);
+        log.debug("Deleting archived instants");
+        success = deleteArchivedActions(instantsToArchive, context);
         // triggers compaction and cleaning only after archiving action
         this.timelineWriter.compactAndClean(context);
         Supplier<List<HoodieInstant>> archivedInstants = () -> instantsToArchive.stream()
@@ -125,14 +129,33 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
         // Call Table Format archive to allow archiving in table format.
         table.getMetaClient().getTableFormat().archive(archivedInstants, table.getContext(), table.getMetaClient(), table.getViewManager());
       } else {
-        LOG.info("No Instants to archive");
+        log.info("No Instants to archive");
       }
+      metrics.put(ArchivalMetrics.ARCHIVAL_STATUS, success ? 1L : -1L);
       return instantsToArchive.size();
+    } catch (OutOfMemoryError oom) {
+      metrics.put(ArchivalMetrics.ARCHIVAL_OOM_FAILURE, 1L);
+      throw oom;
+    } catch (Exception e) {
+      String failureMetricName = String.join(".", ArchivalMetrics.ARCHIVAL_FAILURE, e.getClass().getSimpleName());
+      metrics.put(failureMetricName, 1L);
+      throw e;
     } finally {
       if (acquireLock) {
         txnManager.endStateChange(Option.empty());
       }
     }
+  }
+
+  @Override
+  public Map<String, Long> getMetrics() {
+    return metrics;
+  }
+
+  private void addArchivalCommitMetrics(List<ActiveAction> instantsToArchive) {
+    ArchivalMetrics.addArchivalCommitMetrics(
+        instantsToArchive.stream().flatMap(action -> action.getCompletedInstants().stream()),
+        metrics);
   }
 
   private List<HoodieInstant> getCleanAndRollbackInstantsToArchive(HoodieInstant latestCommitInstantToArchive) {
@@ -221,10 +244,10 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
       try (HoodieTableMetadata tableMetadata = table.refreshAndGetTableMetadata()) {
         Option<String> latestCompactionTime = tableMetadata.getLatestCompactionTime();
         if (!latestCompactionTime.isPresent()) {
-          LOG.info("Not archiving as there is no compaction yet on the metadata table");
+          log.info("Not archiving as there is no compaction yet on the metadata table");
           return Collections.emptyList();
         } else {
-          LOG.info("Limiting archiving of instants to latest compaction on metadata table at {}", latestCompactionTime.get());
+          log.info("Limiting archiving of instants to latest compaction on metadata table at {}", latestCompactionTime.get());
           earliestInstantToRetainCandidates.add(
               completedCommitsTimeline.findInstantsModifiedAfterByCompletionTime(latestCompactionTime.get()).firstInstant());
         }
@@ -372,7 +395,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
   private void deleteAnyLeftOverMarkers(HoodieEngineContext context, ActiveAction activeAction) {
     WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, activeAction.getInstantTime());
     if (writeMarkers.deleteMarkerDir(context, config.getMarkersDeleteParallelism())) {
-      LOG.info("Cleaned up left over marker directory for instant: {}", activeAction);
+      log.info("Cleaned up left over marker directory for instant: {}", activeAction);
     }
   }
 }

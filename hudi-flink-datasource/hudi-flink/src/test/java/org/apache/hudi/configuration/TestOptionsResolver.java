@@ -20,6 +20,7 @@ package org.apache.hudi.configuration;
 
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -30,8 +31,10 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -50,6 +53,49 @@ public class TestOptionsResolver {
     // set lowercase index
     conf.set(FlinkOptions.INDEX_TYPE, "bloom");
     assertEquals(HoodieIndex.IndexType.BLOOM, OptionsResolver.getIndexType(conf));
+  }
+
+  @Test
+  void testRecordLevelIndexStreamingWrite() {
+    Configuration conf = getConf();
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+
+    assertTrue(OptionsResolver.isRecordLevelIndex(conf));
+    assertTrue(OptionsResolver.isStreamingIndexWriteEnabled(conf));
+
+    conf.set(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE.value());
+    assertFalse(OptionsResolver.isStreamingIndexWriteEnabled(conf));
+
+    conf.set(FlinkOptions.OPERATION, WriteOperationType.UPSERT.value());
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    assertFalse(OptionsResolver.isRecordLevelIndex(conf));
+    assertFalse(OptionsResolver.isStreamingIndexWriteEnabled(conf));
+  }
+
+  @Test
+  void testGetRecordKeys() {
+    Configuration conf = new Configuration();
+    assertNull(OptionsResolver.getRecordKeyStr(conf));
+    assertArrayEquals(new String[]{}, OptionsResolver.getRecordKeys(conf));
+
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "");
+    assertArrayEquals(new String[]{}, OptionsResolver.getRecordKeys(conf));
+
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid, name");
+    assertArrayEquals(new String[]{"uuid", " name"}, OptionsResolver.getRecordKeys(conf));
+  }
+
+  @Test
+  void testGetBucketIndexKeys() {
+    Configuration conf = new Configuration();
+    assertArrayEquals(new String[]{}, OptionsResolver.getBucketIndexKeys(conf));
+
+    conf.set(FlinkOptions.INDEX_KEY_FIELD, "");
+    assertArrayEquals(new String[]{}, OptionsResolver.getBucketIndexKeys(conf));
+
+    conf.set(FlinkOptions.INDEX_KEY_FIELD, "uuid, name");
+    assertArrayEquals(new String[]{"uuid", " name"}, OptionsResolver.getBucketIndexKeys(conf));
   }
 
   @Test

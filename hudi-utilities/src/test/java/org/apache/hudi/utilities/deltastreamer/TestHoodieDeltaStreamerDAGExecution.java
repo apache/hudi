@@ -22,7 +22,7 @@ package org.apache.hudi.utilities.deltastreamer;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 
@@ -95,11 +95,13 @@ public class TestHoodieDeltaStreamerDAGExecution extends HoodieDeltaStreamerTest
     deltaStreamer.sync();
     assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
     testNum++;
+    deltaStreamer.shutdownGracefully();
 
     if (shouldGenerateUpdates) {
       prepareParquetDFSUpdates(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null, dataGenerator, "001");
       HoodieDeltaStreamer updateDs = new HoodieDeltaStreamer(config, jsc);
       updateDs.sync();
+      updateDs.shutdownGracefully();
     }
   }
 

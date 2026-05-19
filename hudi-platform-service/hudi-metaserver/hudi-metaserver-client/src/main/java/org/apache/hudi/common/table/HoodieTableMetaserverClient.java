@@ -36,10 +36,10 @@ import org.apache.hudi.metaserver.thrift.NoSuchObjectException;
 import org.apache.hudi.metaserver.thrift.Table;
 import org.apache.hudi.storage.HoodieStorage;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -51,12 +51,13 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 /**
  * HoodieTableMetaClient implementation for hoodie table whose metadata is stored in the hoodie metaserver.
  */
+@Slf4j
 public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieTableMetaserverClient.class);
 
   private final String databaseName;
   private final String tableName;
   private final Table table;
+  @Getter
   private final transient HoodieMetaserverClient metaserverClient;
 
   public HoodieTableMetaserverClient(HoodieStorage storage, String basePath, ConsistencyGuardConfig consistencyGuardConfig,
@@ -85,9 +86,9 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
         try {
           user = UserGroupInformation.getCurrentUser().getShortUserName();
         } catch (IOException ioException) {
-          LOG.info("Failed to get the user", ioException);
+          log.info("Failed to get the user", ioException);
         }
-        LOG.info(String.format("Table %s.%s doesn't exist, will create it.", databaseName, tableName));
+        log.info("Table {}.{} doesn't exist, will create it.", databaseName, tableName);
         table = new Table();
         table.setDatabaseName(databaseName);
         table.setTableName(tableName);
@@ -150,10 +151,6 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
 
   public void setActiveTimeline(HoodieActiveTimeline activeTimeline) {
     throw new HoodieException("Unsupport operation");
-  }
-
-  public HoodieMetaserverClient getMetaserverClient() {
-    return metaserverClient;
   }
 
 }

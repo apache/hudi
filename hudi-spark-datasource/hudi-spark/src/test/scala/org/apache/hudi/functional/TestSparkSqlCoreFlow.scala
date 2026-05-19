@@ -67,7 +67,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
   )
 
   //extracts the params and runs each core flow test
-  forAll (params) { (paramStr: String) =>
+  forAll(params) { (paramStr: String) =>
     test(s"Core flow with params: $paramStr") {
       val splits = paramStr.split('|')
       withTempDir { basePath =>
@@ -184,30 +184,26 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
     inputDf0.selectExpr(colsToCompare.split(","): _*)
   }
 
-  private def addMinimumTimeUnit(commitCompletionTime2: String) : String = {
+  private def addMinimumTimeUnit(commitCompletionTime2: String): String = {
     String.valueOf(commitCompletionTime2.toLong + 1)
   }
 
   def doSnapshotRead(tableName: String, isMetadataEnabledOnRead: Boolean): sql.DataFrame = {
-    try {
-      spark.sql(s"set hoodie.datasource.query.type=$QUERY_TYPE_SNAPSHOT_OPT_VAL")
-      spark.sql(s"set hoodie.metadata.enable=$isMetadataEnabledOnRead")
+    withSQLConf(
+      (QUERY_TYPE.key, QUERY_TYPE_SNAPSHOT_OPT_VAL),
+      (HoodieMetadataConfig.ENABLE.key(), isMetadataEnabledOnRead.toString)
+    ) {
       spark.sql(s"select * from $tableName")
-    } finally {
-      spark.conf.unset("hoodie.datasource.query.type")
-      spark.conf.unset("hoodie.metadata.enable")
     }
   }
 
   def doInlineCompact(tableName: String, tableBasePath: String, recDf: sql.DataFrame, writeOp: WriteOperationType,
                       isMetadataEnabledOnWrite: Boolean, numDeltaCommits: String, count: Int): Unit = {
-    try {
-      spark.sql("set hoodie.compact.inline=true")
-      spark.sql(s"set hoodie.compact.inline.max.delta.commits=$numDeltaCommits")
+    withSQLConf(
+      ("hoodie.compact.inline", "true"),
+      ("hoodie.compact.inline.max.delta.commits", numDeltaCommits)
+    ) {
       insertInto(tableName, tableBasePath, recDf, writeOp, isMetadataEnabledOnWrite, count)
-    } finally {
-      spark.conf.unset("hoodie.compact.inline")
-      spark.conf.unset("hoodie.compact.inline.max.delta.commits")
     }
   }
 
@@ -251,11 +247,12 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
                  isMetadataEnabledOnWrite: Boolean, count: Int): Unit = {
     inputDf.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon", "fare",
       "_hoodie_is_deleted", "partition_path").createOrReplaceTempView("insert_temp_table")
-    try {
-      spark.sql(s"set hoodie.metadata.enable=${String.valueOf(isMetadataEnabledOnWrite)}")
-      if (writeOp.equals(UPSERT)) {
-        spark.sql("set hoodie.sql.bulk.insert.enable=false")
-        spark.sql("set hoodie.sql.insert.mode=upsert")
+    if (writeOp.equals(UPSERT)) {
+      withSQLConf(
+        HoodieMetadataConfig.ENABLE.key() -> isMetadataEnabledOnWrite.toString,
+        "hoodie.sql.bulk.insert.enable" -> "false",
+        "hoodie.sql.insert.mode" -> "upsert"
+      ) {
         spark.sql(
           s"""
              | merge into $tableName as target
@@ -265,22 +262,25 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
              | when matched then update set *
              | when not matched then insert *
              | """.stripMargin)
-      } else if (writeOp.equals(BULK_INSERT)) {
-        spark.sql("set hoodie.sql.bulk.insert.enable=true")
-        spark.sql("set hoodie.sql.insert.mode=non-strict")
-        spark.sql(s"insert into $tableName select * from insert_temp_table")
-      } else if (writeOp.equals(INSERT)) {
-        spark.sql("set hoodie.sql.bulk.insert.enable=false")
-        spark.sql("set hoodie.sql.insert.mode=non-strict")
+      }
+    } else if (writeOp.equals(BULK_INSERT)) {
+      withSQLConf(
+        HoodieMetadataConfig.ENABLE.key() -> isMetadataEnabledOnWrite.toString,
+        "hoodie.sql.bulk.insert.enable" -> "true",
+        "hoodie.sql.insert.mode" -> "non-strict"
+      ) {
         spark.sql(s"insert into $tableName select * from insert_temp_table")
       }
-      assertOperation(tableBasePath, count, writeOp)
-    } finally {
-      spark.conf.unset("hoodie.metadata.enable")
-      spark.conf.unset("hoodie.datasource.write.keygenerator.class")
-      spark.conf.unset("hoodie.sql.bulk.insert.enable")
-      spark.conf.unset("hoodie.sql.insert.mode")
+    } else if (writeOp.equals(INSERT)) {
+      withSQLConf(
+        HoodieMetadataConfig.ENABLE.key() -> isMetadataEnabledOnWrite.toString,
+        "hoodie.sql.bulk.insert.enable" -> "false",
+        "hoodie.sql.insert.mode" -> "non-strict"
+      ) {
+        spark.sql(s"insert into $tableName select * from insert_temp_table")
+      }
     }
+    assertOperation(tableBasePath, count, writeOp)
   }
 
   def createTable(tableName: String, keyGenClass: String, writeOptions: String, tableBasePath: String): Unit = {
@@ -335,8 +335,8 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
     if (schema1 != schema2) {
       throw new AssertionError(
         s"""Schemas are different:
-            |Schema 1: ${schema1.treeString}
-            |Schema 2: ${schema2.treeString}""".stripMargin)
+           |Schema 1: ${schema1.treeString}
+           |Schema 2: ${schema2.treeString}""".stripMargin)
     }
 
     // Compare all fields using schema
@@ -454,7 +454,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
           INSERT
         } else if (splits(1).equals("bulk_insert")) {
           BULK_INSERT
-        } else  {
+        } else {
           throw new UnsupportedOperationException("This test is only meant for immutable operations.")
         }
         testImmutableUserFlow(basePath,

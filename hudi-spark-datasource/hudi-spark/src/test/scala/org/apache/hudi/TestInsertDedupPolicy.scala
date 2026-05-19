@@ -75,7 +75,7 @@ class TestInsertDedupPolicy extends SparkClientFunctionalTestHarness {
       option(TABLE_TYPE.key, tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key, "test_table").
       option(HoodieCompactionConfig.INLINE_COMPACT.key, "false").
-      option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key, "true").
+      option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key, "true").
       options(opts).
       mode(SaveMode.Overwrite).
       save(basePath)
@@ -135,8 +135,6 @@ object TestInsertDedupPolicy {
   def validate(expectedDf: Dataset[Row], actualDf: Dataset[Row]): Unit = {
     val expectedMinusActual = expectedDf.except(actualDf)
     val actualMinusExpected = actualDf.except(expectedDf)
-    expectedDf.show(false)
-    actualDf.show(false)
     assertTrue(expectedMinusActual.isEmpty && actualMinusExpected.isEmpty)
   }
 }

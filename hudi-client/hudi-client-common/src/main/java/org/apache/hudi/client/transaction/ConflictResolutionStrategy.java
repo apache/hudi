@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
 
@@ -41,6 +42,18 @@ public interface ConflictResolutionStrategy {
    * @return
    */
   Stream<HoodieInstant> getCandidateInstants(HoodieTableMetaClient metaClient, HoodieInstant currentInstant, Option<HoodieInstant> lastSuccessfulInstant);
+
+  /**
+   * Overload of {@link #getCandidateInstants(HoodieTableMetaClient, HoodieInstant, Option)} that also accepts an
+   * optional {@link HoodieWriteConfig}. Implementations may use the write config to infer additional behavior
+   * (e.g., heartbeat-based blocking of clustering when pending ingestion instants exist).
+   *
+   * <p>The default implementation simply delegates to the existing method, ignoring the write config.</p>
+   */
+  default Stream<HoodieInstant> getCandidateInstants(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
+                                                     Option<HoodieInstant> lastSuccessfulInstant, Option<HoodieWriteConfig> writeConfigOpt) {
+    return getCandidateInstants(metaClient, currentInstant, lastSuccessfulInstant);
+  }
 
   /**
    * Implementations of this method will determine whether a conflict exists between 2 commits.

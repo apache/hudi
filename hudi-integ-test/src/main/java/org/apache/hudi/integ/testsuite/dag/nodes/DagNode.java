@@ -18,28 +18,31 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
+import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
+import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
+
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
-import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Base abstraction of an compute node in the DAG of operations for a workflow.
  */
+@Getter
 public abstract class DagNode<O> implements Comparable<DagNode<O>> {
 
-  protected static Logger log = LoggerFactory.getLogger(DagNode.class);
-
   protected List<DagNode<O>> childNodes;
+  @Setter
   protected List<DagNode<O>> parentNodes;
   protected O result;
   protected Config config;
-  private boolean isCompleted;
+  @Setter
+  private boolean completed;
 
   public DagNode clone() {
     List<DagNode<O>> tempChildNodes = new ArrayList<>();
@@ -48,7 +51,7 @@ public abstract class DagNode<O> implements Comparable<DagNode<O>> {
     }
     this.childNodes = tempChildNodes;
     this.result = null;
-    this.isCompleted = false;
+    this.completed = false;
     return this;
   }
 
@@ -65,10 +68,6 @@ public abstract class DagNode<O> implements Comparable<DagNode<O>> {
     return this;
   }
 
-  public O getResult() {
-    return result;
-  }
-
   public List<DagNode<O>> getChildNodes() {
     if (childNodes == null) {
       childNodes = new LinkedList<>();
@@ -83,10 +82,6 @@ public abstract class DagNode<O> implements Comparable<DagNode<O>> {
     return this.parentNodes;
   }
 
-  public void setParentNodes(List<DagNode<O>> parentNodes) {
-    this.parentNodes = parentNodes;
-  }
-
   /**
    * Execute the {@link DagNode}.
    *
@@ -95,18 +90,6 @@ public abstract class DagNode<O> implements Comparable<DagNode<O>> {
    * @throws Exception Thrown if the execution failed.
    */
   public abstract void execute(ExecutionContext context, int curItrCount) throws Exception;
-
-  public boolean isCompleted() {
-    return isCompleted;
-  }
-
-  public void setCompleted(boolean completed) {
-    isCompleted = completed;
-  }
-
-  public Config getConfig() {
-    return config;
-  }
 
   public String getName() {
     Object name = this.config.getOtherConfigs().get(Config.NODE_NAME);
@@ -139,5 +122,4 @@ public abstract class DagNode<O> implements Comparable<DagNode<O>> {
   public int compareTo(DagNode<O> thatNode) {
     return this.hashCode() - thatNode.hashCode();
   }
-
 }

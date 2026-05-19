@@ -24,6 +24,7 @@ import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.avro.Schema;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.Serializable;
@@ -49,11 +50,32 @@ public abstract class SchemaProvider implements Serializable {
   }
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  @Deprecated
   public abstract Schema getSourceSchema();
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  @Deprecated
   public Schema getTargetSchema() {
     // by default, use source schema as target for hoodie table as well
     return getSourceSchema();
+  }
+
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  public HoodieSchema getSourceHoodieSchema() {
+    Schema schema = getSourceSchema();
+    return schema == null ? null : HoodieSchema.fromAvroSchema(schema);
+  }
+
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  public HoodieSchema getTargetHoodieSchema() {
+    try {
+      // By default, delegate to legacy getTargetSchema() method
+      Schema schema = getTargetSchema();
+      return schema == null ? null : HoodieSchema.fromAvroSchema(schema);
+    } catch (UnsupportedOperationException e) {
+      // If the legacy getTargetSchema() calls getSourceSchema() which is not implemented,
+      // fall back to using getSourceHoodieSchema as target schema
+      return getSourceHoodieSchema();
+    }
   }
 }

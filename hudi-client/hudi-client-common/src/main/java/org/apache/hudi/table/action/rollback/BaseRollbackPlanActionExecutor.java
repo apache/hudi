@@ -30,8 +30,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -41,9 +40,8 @@ import java.util.List;
  * Base rollback plan action executor to assist in scheduling rollback requests. This phase serialized {@link HoodieRollbackPlan}
  * to rollback.requested instant.
  */
+@Slf4j
 public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieRollbackPlan>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BaseRollbackPlanActionExecutor.class);
 
   protected final HoodieInstant instantToRollback;
   private final boolean skipTimelinePublish;
@@ -112,15 +110,15 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
           instantToRollback.getAction()), rollbackRequests, LATEST_ROLLBACK_PLAN_VERSION);
       if (!skipTimelinePublish) {
         if (table.getRollbackTimeline().filterInflightsAndRequested().containsInstant(rollbackInstant.requestedTime())) {
-          LOG.warn("Request Rollback found with instant time " + rollbackInstant + ", hence skipping scheduling rollback");
+          log.info("Request Rollback found with instant time {}, hence skipping scheduling rollback", rollbackInstant);
         } else {
           table.getActiveTimeline().saveToRollbackRequested(rollbackInstant, rollbackPlan);
-          LOG.info("Requesting Rollback with instant time " + rollbackInstant);
+          log.info("Requesting Rollback with instant time {}", rollbackInstant);
         }
       }
       return Option.of(rollbackPlan);
     } catch (HoodieIOException e) {
-      LOG.error("Got exception when saving rollback requested file", e);
+      log.error("Got exception when saving rollback requested file", e);
       throw e;
     }
   }

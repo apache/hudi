@@ -20,20 +20,25 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.MetricsReporterType;
@@ -48,13 +53,18 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -87,12 +97,14 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
       String newInstantTime = InProcessTimeGenerator.createNewInstantTime();
       HoodieTimeline pendingTimeline = new MockHoodieTimeline(Stream.empty(), Stream.of(newInstantTime));
       when(mockMetaClient.getCommitsTimeline().filterPendingExcludingCompaction()).thenReturn(pendingTimeline);
+      when(mockMetaClient.getActiveTimeline().filterInflightsAndRequested()).thenReturn(pendingTimeline);
       when(mockMetaClient.getActiveTimeline().filterPendingRollbackTimeline().getInstants()).thenReturn(Collections.emptyList());
       expectedRollbackInfo = Collections.singletonMap(newInstantTime, Option.empty());
       when(secondTable.getActiveTimeline()).thenReturn(timeline);
     } else {
       HoodieTimeline pendingTimeline = new MockHoodieTimeline(Stream.empty(), Stream.empty());
       when(mockMetaClient.getCommitsTimeline().filterPendingExcludingCompaction()).thenReturn(pendingTimeline);
+      when(mockMetaClient.getActiveTimeline().filterInflightsAndRequested()).thenReturn(pendingTimeline);
       when(mockMetaClient.getActiveTimeline().filterPendingRollbackTimeline().getInstants()).thenReturn(Collections.emptyList());
       expectedRollbackInfo = Collections.emptyMap();
       when(firstTable.getActiveTimeline()).thenReturn(timeline);
@@ -241,6 +253,239 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     assertEquals(metadata, tableServiceClient.clean(Option.empty(), true));
     verify(mockMetaClient).reloadActiveTimeline();
   }
+
+  // --- Tests for clustering expiration logic ---
+
+  @Test
+  void isClusteringInstantEligibleForRollback_returnsFalseWhenConfigDisabled() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .build();
+    assertFalse(writeConfig.isExpirationOfClusteringEnabled());
+
+    TestTableServiceClient client = createSimpleTestClient(writeConfig);
+    HoodieInstant clusteringInstant = metaClient.getInstantGenerator()
+        .createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLUSTERING_ACTION, createOldInstantTime());
+
+    assertFalse(BaseHoodieTableServiceClient.isClusteringInstantEligibleForRollback(
+        metaClient, clusteringInstant, writeConfig, client.getHeartbeatClient()));
+  }
+
+  // preTableVersion8=true → v6 (replacecommit), false → v9 (clustering)
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void isClusteringInstantEligibleForRollback_returnsFalseWhenInstantTooRecent(boolean preTableVersion8) throws IOException {
+    initMetaClient(preTableVersion8);
+    String clusteringAction = preTableVersion8 ? HoodieTimeline.REPLACE_COMMIT_ACTION : HoodieTimeline.CLUSTERING_ACTION;
+    Properties props = new Properties();
+    props.setProperty(HoodieClusteringConfig.ENABLE_EXPIRATIONS.key(), "true");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withProperties(props)
+        .build();
+
+    TestTableServiceClient client = createSimpleTestClient(writeConfig);
+
+    String recentTime = InProcessTimeGenerator.createNewInstantTime();
+    createClusteringInstant(recentTime, clusteringAction);
+    HoodieInstant inflightInstant = metaClient.getInstantGenerator()
+        .createNewInstant(HoodieInstant.State.INFLIGHT, clusteringAction, recentTime);
+
+    assertFalse(BaseHoodieTableServiceClient.isClusteringInstantEligibleForRollback(
+        metaClient, inflightInstant, writeConfig, client.getHeartbeatClient()));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void isClusteringInstantEligibleForRollback_returnsTrueWhenEligible(boolean preTableVersion8) throws IOException {
+    initMetaClient(preTableVersion8);
+    String clusteringAction = preTableVersion8 ? HoodieTimeline.REPLACE_COMMIT_ACTION : HoodieTimeline.CLUSTERING_ACTION;
+    HoodieWriteConfig writeConfig = buildConfigWithClusteringExpiration(0L);
+
+    TestTableServiceClient client = createSimpleTestClient(writeConfig);
+
+    String oldTime = createOldInstantTime();
+    createClusteringInstant(oldTime, clusteringAction);
+    HoodieInstant inflightInstant = metaClient.getInstantGenerator()
+        .createNewInstant(HoodieInstant.State.INFLIGHT, clusteringAction, oldTime);
+
+    assertTrue(BaseHoodieTableServiceClient.isClusteringInstantEligibleForRollback(
+        metaClient, inflightInstant, writeConfig, client.getHeartbeatClient()));
+  }
+
+  @Test
+  void isClusteringInstantEligibleForRollback_returnsFalseWhenExpirationDisabled() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .build();
+
+    TestTableServiceClient client = createSimpleTestClient(writeConfig);
+
+    String oldTime = createOldInstantTime();
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    HoodieInstant requestedInstant = metaClient.getInstantGenerator()
+        .createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, oldTime);
+    timeline.createNewInstant(requestedInstant);
+    HoodieInstant inflightInstant = metaClient.getInstantGenerator()
+        .createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLUSTERING_ACTION, oldTime);
+    timeline.transitionClusterRequestedToInflight(requestedInstant, Option.empty());
+    metaClient.reloadActiveTimeline();
+
+    assertFalse(BaseHoodieTableServiceClient.isClusteringInstantEligibleForRollback(
+        metaClient, inflightInstant, writeConfig, client.getHeartbeatClient()));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void getInstantsToRollback_includesEligibleClusteringInstantsWithExpiredHeartbeat(boolean preTableVersion8) throws IOException {
+    initMetaClient(preTableVersion8);
+    String clusteringAction = preTableVersion8 ? HoodieTimeline.REPLACE_COMMIT_ACTION : HoodieTimeline.CLUSTERING_ACTION;
+    HoodieWriteConfig writeConfig = buildConfigWithClusteringExpirationAndLazy(0L);
+
+    TestTableServiceClient client = createSimpleTestClient(writeConfig);
+
+    String oldClusteringTime = createOldInstantTime();
+    createClusteringInstant(oldClusteringTime, clusteringAction);
+
+    List<String> instants = client.getInstantsToRollback(
+        metaClient, HoodieFailedWritesCleaningPolicy.LAZY, Option.empty());
+
+    assertTrue(instants.contains(oldClusteringTime),
+        "Old clustering instant with expired heartbeat should be rolled back");
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void getInstantsToRollback_skipsClusteringInstantsWithActiveHeartbeat(boolean preTableVersion8) throws IOException {
+    initMetaClient(preTableVersion8);
+    String clusteringAction = preTableVersion8 ? HoodieTimeline.REPLACE_COMMIT_ACTION : HoodieTimeline.CLUSTERING_ACTION;
+    HoodieWriteConfig writeConfig = buildConfigWithClusteringExpirationAndLazy(0L);
+
+    TestTableServiceClient client = createSimpleTestClient(writeConfig);
+
+    String oldClusteringTime = createOldInstantTime();
+    createClusteringInstant(oldClusteringTime, clusteringAction);
+
+    client.getHeartbeatClient().start(oldClusteringTime);
+
+    List<String> instants = client.getInstantsToRollback(
+        metaClient, HoodieFailedWritesCleaningPolicy.LAZY, Option.empty());
+
+    assertFalse(instants.contains(oldClusteringTime),
+        "Clustering instant with active heartbeat should NOT be rolled back");
+
+    client.getHeartbeatClient().stop(oldClusteringTime);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void getInstantsToRollback_skipsRecentClusteringInstants(boolean preTableVersion8) throws IOException {
+    initMetaClient(preTableVersion8);
+    String clusteringAction = preTableVersion8 ? HoodieTimeline.REPLACE_COMMIT_ACTION : HoodieTimeline.CLUSTERING_ACTION;
+    HoodieWriteConfig writeConfig = buildConfigWithClusteringExpirationAndLazy(60L);
+
+    TestTableServiceClient client = createSimpleTestClient(writeConfig);
+
+    String recentTime = InProcessTimeGenerator.createNewInstantTime();
+    createClusteringInstant(recentTime, clusteringAction);
+
+    List<String> instants = client.getInstantsToRollback(
+        metaClient, HoodieFailedWritesCleaningPolicy.LAZY, Option.empty());
+
+    assertFalse(instants.contains(recentTime),
+        "Recent clustering instant should NOT be rolled back (wait minutes guardrail)");
+  }
+
+  @Test
+  void getInstantsToRollback_skipsClusteringInstantsWhenConfigDisabled() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .build())
+        .build();
+    assertFalse(writeConfig.isExpirationOfClusteringEnabled());
+
+    TestTableServiceClient client = createSimpleTestClient(writeConfig);
+
+    String oldClusteringTime = createOldInstantTime();
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    HoodieInstant requestedInstant = metaClient.getInstantGenerator()
+        .createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, oldClusteringTime);
+    timeline.createNewInstant(requestedInstant);
+    timeline.transitionClusterRequestedToInflight(requestedInstant, Option.empty());
+    metaClient.reloadActiveTimeline();
+
+    List<String> instants = client.getInstantsToRollback(
+        metaClient, HoodieFailedWritesCleaningPolicy.LAZY, Option.empty());
+
+    assertFalse(instants.contains(oldClusteringTime),
+        "Clustering instants should NOT be rolled back when config is disabled");
+  }
+
+  private void createClusteringInstant(String instantTime, String clusteringAction) {
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    HoodieInstant requestedInstant = metaClient.getInstantGenerator()
+        .createNewInstant(HoodieInstant.State.REQUESTED, clusteringAction, instantTime);
+    if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(clusteringAction)) {
+      HoodieRequestedReplaceMetadata metadata = HoodieRequestedReplaceMetadata.newBuilder()
+          .setOperationType(WriteOperationType.CLUSTER.name())
+          .setExtraMetadata(Collections.emptyMap())
+          .setClusteringPlan(HoodieClusteringPlan.newBuilder()
+              .setInputGroups(Collections.emptyList())
+              .setExtraMetadata(Collections.emptyMap())
+              .setVersion(1)
+              .build())
+          .build();
+      timeline.saveToPendingClusterCommit(requestedInstant, metadata);
+    } else {
+      timeline.createNewInstant(requestedInstant);
+    }
+    timeline.transitionClusterRequestedToInflight(requestedInstant, Option.empty());
+    metaClient.reloadActiveTimeline();
+  }
+
+  private String createOldInstantTime() {
+    Date oldDate = new Date(System.currentTimeMillis() - 2 * 60 * 60 * 1000);
+    return TimelineUtils.formatDate(oldDate);
+  }
+
+  private HoodieWriteConfig buildConfigWithClusteringExpiration(long expirationMins) {
+    Properties props = new Properties();
+    props.setProperty(HoodieClusteringConfig.ENABLE_EXPIRATIONS.key(), "true");
+    props.setProperty(HoodieClusteringConfig.EXPIRATION_THRESHOLD_MINS.key(), String.valueOf(expirationMins));
+    return HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withProperties(props)
+        .build();
+  }
+
+  private HoodieWriteConfig buildConfigWithClusteringExpirationAndLazy(long expirationMins) {
+    Properties props = new Properties();
+    props.setProperty(HoodieClusteringConfig.ENABLE_EXPIRATIONS.key(), "true");
+    props.setProperty(HoodieClusteringConfig.EXPIRATION_THRESHOLD_MINS.key(), String.valueOf(expirationMins));
+    return HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withProperties(props)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .build())
+        .build();
+  }
+
+  private TestTableServiceClient createSimpleTestClient(HoodieWriteConfig writeConfig) {
+    return new TestTableServiceClient(
+        writeConfig,
+        Collections.emptyIterator(),
+        Option.empty(),
+        Collections.emptyMap(),
+        Collections.emptyIterator());
+  }
+
+  // --- End clustering expiration tests ---
 
   private static class TestTableServiceClient extends BaseHoodieTableServiceClient<String, String, String> {
     private final Iterator<HoodieTable<String, String, String, String>> tables;

@@ -114,13 +114,31 @@ public class TestWriteMarkersFactory extends HoodieCommonTestHarness {
         HoodieTableVersion.SIX, true, DirectWriteMarkersV1.class);
   }
 
+  @Test
+  public void testTimelineServerBasedMarkersWithRemoteViewStorageType() {
+    // Fallback to direct markers should happen
+    testWriteMarkersFactory(
+        MarkerType.TIMELINE_SERVER_BASED, NON_HDFS_BASE_PATH,
+        HoodieTableVersion.current(), false, true, TimelineServerBasedWriteMarkers.class);
+    testWriteMarkersFactory(
+        MarkerType.TIMELINE_SERVER_BASED, NON_HDFS_BASE_PATH,
+        HoodieTableVersion.SIX, false, true, TimelineServerBasedWriteMarkersV1.class);
+  }
+
   private void testWriteMarkersFactory(
       MarkerType markerTypeConfig, String basePath, HoodieTableVersion tableVersion,
       boolean isTimelineServerEnabled, Class<?> expectedWriteMarkersClass) {
+    testWriteMarkersFactory(markerTypeConfig, basePath, tableVersion, isTimelineServerEnabled, false, expectedWriteMarkersClass);
+  }
+
+  private void testWriteMarkersFactory(
+      MarkerType markerTypeConfig, String basePath, HoodieTableVersion tableVersion,
+      boolean isTimelineServerEnabled, boolean isRemoteViewStorageType, Class<?> expectedWriteMarkersClass) {
     String instantTime = "001";
     when(table.getConfig()).thenReturn(writeConfig);
     when(writeConfig.isEmbeddedTimelineServerEnabled())
         .thenReturn(isTimelineServerEnabled);
+    when(writeConfig.isRemoteViewStorageType()).thenReturn(isRemoteViewStorageType);
     when(table.getMetaClient()).thenReturn(metaClient);
     when(metaClient.getStorage()).thenReturn(storage);
     when(storage.getFileSystem()).thenReturn(fileSystem);

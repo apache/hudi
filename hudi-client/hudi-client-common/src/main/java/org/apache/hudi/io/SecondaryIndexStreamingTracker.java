@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -35,8 +36,6 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.avro.Schema;
 
 import javax.annotation.Nullable;
 
@@ -71,7 +70,7 @@ public class SecondaryIndexStreamingTracker {
    */
   static void trackSecondaryIndexStats(String partitionPath, String fileId, Option<FileSlice> fileSliceOpt, List<String> newLogFiles, WriteStatus status,
                                        HoodieTable hoodieTable, List<HoodieIndexDefinition> secondaryIndexDefns,
-                                       HoodieWriteConfig config, String instantTime, Schema writeSchemaWithMetaFields) {
+                                       HoodieWriteConfig config, String instantTime, HoodieSchema writeSchemaWithMetaFields) {
     // TODO: @see <a href="https://issues.apache.org/jira/browse/HUDI-9533">HUDI-9533</a> Optimise the computation for multiple secondary indexes
     HoodieReaderContext readerContext = hoodieTable.getContext().getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
 
@@ -137,7 +136,7 @@ public class SecondaryIndexStreamingTracker {
    * @param secondaryIndexDefns       Definitions for secondary index which need to be updated
    * @param config                    Hoodie write config
    */
-  static void trackSecondaryIndexStats(HoodieRecord record, WriteStatus writeStatus, Schema writeSchemaWithMetaFields,
+  static void trackSecondaryIndexStats(HoodieRecord record, WriteStatus writeStatus, HoodieSchema writeSchemaWithMetaFields,
                                        List<HoodieIndexDefinition> secondaryIndexDefns, HoodieWriteConfig config) {
     // Add secondary index records for all the inserted records (including null values)
     secondaryIndexDefns.forEach(def -> {
@@ -152,7 +151,7 @@ public class SecondaryIndexStreamingTracker {
    * secondary index stats.
    *
    * @param hoodieKey                 The hoodie key
-   * @param combinedRecordOpt         New record merged with the old record
+   * @param combinedRecord            New record merged with the old record
    * @param oldRecord                 The old record
    * @param isDelete                  Whether the record is a DELETE
    * @param writeStatus               The Write status
@@ -162,8 +161,8 @@ public class SecondaryIndexStreamingTracker {
    * @param keyGeneratorOpt           Option containing key generator
    * @param config                    Hoodie write config
    */
-  static <T> void trackSecondaryIndexStats(@Nullable HoodieKey hoodieKey, Option<HoodieRecord> combinedRecordOpt, @Nullable HoodieRecord<T> oldRecord, boolean isDelete,
-                                           WriteStatus writeStatus, Schema writeSchemaWithMetaFields, Supplier<Schema> newSchemaSupplier,
+  static <T> void trackSecondaryIndexStats(@Nullable HoodieKey hoodieKey, HoodieRecord combinedRecord, @Nullable HoodieRecord<T> oldRecord, boolean isDelete,
+                                           WriteStatus writeStatus, HoodieSchema writeSchemaWithMetaFields, Supplier<HoodieSchema> newSchemaSupplier,
                                            List<HoodieIndexDefinition> secondaryIndexDefns, Option<BaseKeyGenerator> keyGeneratorOpt, HoodieWriteConfig config) {
 
     secondaryIndexDefns.forEach(def -> {
@@ -185,9 +184,9 @@ public class SecondaryIndexStreamingTracker {
       boolean hasNewValue = false;
       Object newSecondaryKey = null;
 
-      if (combinedRecordOpt.isPresent() && !isDelete) {
-        Schema newSchema = newSchemaSupplier.get();
-        newSecondaryKey = combinedRecordOpt.get().getColumnValueAsJava(newSchema, secondaryIndexSourceField, config.getProps());
+      if (!isDelete) {
+        HoodieSchema newSchema = newSchemaSupplier.get();
+        newSecondaryKey = combinedRecord.getColumnValueAsJava(newSchema, secondaryIndexSourceField, config.getProps());
         hasNewValue = true;
       }
 
@@ -212,8 +211,7 @@ public class SecondaryIndexStreamingTracker {
       if (shouldUpdate) {
         String recordKey = Option.ofNullable(hoodieKey).map(HoodieKey::getRecordKey)
             .or(() -> Option.ofNullable(oldRecord).map(rec -> rec.getRecordKey(writeSchemaWithMetaFields, keyGeneratorOpt)))
-            .or(() -> combinedRecordOpt.map(HoodieRecord::getRecordKey))
-            .get();
+            .orElseGet(combinedRecord::getRecordKey);
 
         // Delete old secondary index entry if old record exists.
         if (hasOldValue) {
@@ -255,7 +253,7 @@ public class SecondaryIndexStreamingTracker {
       Object oldSecondaryKey = null;
 
       if (hasOldValue) {
-        Schema schema = recordContext.decodeAvroSchema(oldRecord.getSchemaId());
+        HoodieSchema schema = recordContext.decodeAvroSchema(oldRecord.getSchemaId());
         oldSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(oldRecord.getRecord(), schema, secondaryIndexSourceField));
       }
 
@@ -264,7 +262,7 @@ public class SecondaryIndexStreamingTracker {
       Object newSecondaryKey = null;
 
       if (combinedRecordOpt.isPresent() && !isDelete) {
-        Schema schema = recordContext.decodeAvroSchema(combinedRecordOpt.get().getSchemaId());
+        HoodieSchema schema = recordContext.decodeAvroSchema(combinedRecordOpt.get().getSchemaId());
         newSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(combinedRecordOpt.get().getRecord(), schema, secondaryIndexSourceField));
         hasNewValue = true;
       }

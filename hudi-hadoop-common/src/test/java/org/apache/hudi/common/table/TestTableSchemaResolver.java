@@ -18,12 +18,14 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -38,10 +40,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -81,25 +83,25 @@ class TestTableSchemaResolver {
 
   @Test
   void testRecreateSchemaWhenDropPartitionColumns() {
-    Schema originSchema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    HoodieSchema originSchema = HoodieSchema.parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
 
     // case2
     String[] pts1 = new String[0];
-    Schema s2 = TableSchemaResolver.appendPartitionColumns(originSchema, Option.of(pts1));
+    HoodieSchema s2 = TableSchemaResolver.appendPartitionColumns(originSchema, Option.of(pts1));
     assertEquals(originSchema, s2);
 
     // case3: partition_path is in originSchema
     String[] pts2 = {"partition_path"};
-    Schema s3 = TableSchemaResolver.appendPartitionColumns(originSchema, Option.of(pts2));
+    HoodieSchema s3 = TableSchemaResolver.appendPartitionColumns(originSchema, Option.of(pts2));
     assertEquals(originSchema, s3);
 
     // case4: user_partition is not in originSchema
     String[] pts3 = {"user_partition"};
-    Schema s4 = TableSchemaResolver.appendPartitionColumns(originSchema, Option.of(pts3));
+    HoodieSchema s4 = TableSchemaResolver.appendPartitionColumns(originSchema, Option.of(pts3));
     assertNotEquals(originSchema, s4);
     assertTrue(s4.getFields().stream().anyMatch(f -> f.name().equals("user_partition")));
-    Schema.Field f = s4.getField("user_partition");
-    assertEquals(f.schema(), AvroSchemaUtils.createNullableSchema(Schema.Type.STRING));
+    HoodieSchemaField f = s4.getField("user_partition").get();
+    assertEquals(f.schema(), HoodieSchema.createNullable(HoodieSchemaType.STRING));
 
     // case5: user_partition is in originSchema, but partition_path is in originSchema
     String[] pts4 = {"user_partition", "partition_path"};
@@ -114,10 +116,11 @@ class TestTableSchemaResolver {
   void testReadSchemaFromLogFile() throws IOException, URISyntaxException, InterruptedException {
     String testDir = initTestDir("read_schema_from_log_file");
     StoragePath partitionPath = new StoragePath(testDir, "partition1");
-    Schema expectedSchema = getSimpleSchema();
-    StoragePath logFilePath = writeLogFile(partitionPath, expectedSchema);
-    assertEquals(expectedSchema, TableSchemaResolver.readSchemaFromLogFile(new HoodieHadoopStorage(
-        logFilePath, HoodieTestUtils.getDefaultStorageConfWithDefaults()), logFilePath));
+    HoodieSchema expectedSchema = getSimpleSchema();
+    StoragePath logFilePath = writeLogFile(partitionPath, expectedSchema.toAvroSchema());
+    assertEquals(expectedSchema, TableSchemaResolver.readSchemaFromLogFile(
+        HoodieStorageUtils.getStorage(new StoragePath(logFilePath.toString()), HoodieTestUtils.getDefaultStorageConf()),
+        logFilePath));
   }
 
   @Test
@@ -154,15 +157,16 @@ class TestTableSchemaResolver {
     try (MockedStatic<HoodieIOFactory> ioFactoryMockedStatic = mockStatic(HoodieIOFactory.class);
          MockedStatic<TableSchemaResolver> tableSchemaResolverMockedStatic = mockStatic(TableSchemaResolver.class)) {
       // return null for first parquet file to force iteration to inspect the next file
-      Schema schema = Schema.createRecord("test_schema", null, "test_namespace", false);
-      schema.setFields(Arrays.asList(new Schema.Field("int_field", Schema.create(Schema.Type.INT)), new Schema.Field("_hoodie_operation", Schema.create(Schema.Type.STRING))));
+      HoodieSchema schema = HoodieSchema.createRecord("test_schema", null, "test_namespace", false,
+          Arrays.asList(HoodieSchemaField.of("int_field", HoodieSchema.create(HoodieSchemaType.INT)),
+              HoodieSchemaField.of("_hoodie_operation", HoodieSchema.create(HoodieSchemaType.STRING))));
 
       // mock parquet file schema reading to return null for the first base file to force iteration
       HoodieIOFactory ioFactory = mock(HoodieIOFactory.class);
       FileFormatUtils fileFormatUtils = mock(FileFormatUtils.class);
       StoragePath parquetPath = new StoragePath("/tmp/hudi_table/partition1/baseFile1.parquet");
       when(ioFactory.getFileFormatUtils(parquetPath)).thenReturn(fileFormatUtils);
-      when(fileFormatUtils.readAvroSchema(any(), eq(parquetPath))).thenReturn(null);
+      when(fileFormatUtils.readSchema(any(), eq(parquetPath))).thenReturn(null);
       ioFactoryMockedStatic.when(() -> HoodieIOFactory.getIOFactory(any())).thenReturn(ioFactory);
       // mock log file schema reading to return the expected schema
       tableSchemaResolverMockedStatic.when(() -> TableSchemaResolver.readSchemaFromLogFile(any(), eq(new StoragePath("/tmp/hudi_table/" + logFileWriteStat.getPath()))))
@@ -201,5 +205,130 @@ class TestTableSchemaResolver {
     writer.appendBlock(dataBlock);
     writer.close();
     return writer.getLogFile().getPath();
+  }
+
+  @Test
+  void testGetTableInternalSchemaFromCommitMetadataFindsLatestSchemaUpdateInstant() throws IOException {
+    // Given: A timeline with multiple instants where some can update schema and some cannot
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
+
+    HoodieInstant clusterInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, "001", InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
+    HoodieInstant insertInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "002", InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
+    HoodieInstant compactInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "003", InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
+
+    HoodieCommitMetadata clusterMetadata = new HoodieCommitMetadata();
+    clusterMetadata.setOperationType(org.apache.hudi.common.model.WriteOperationType.CLUSTER);
+
+    HoodieCommitMetadata insertMetadata = new HoodieCommitMetadata();
+    insertMetadata.setOperationType(org.apache.hudi.common.model.WriteOperationType.INSERT);
+    // Create a valid InternalSchema
+    org.apache.hudi.internal.schema.InternalSchema internalSchema = new org.apache.hudi.internal.schema.InternalSchema(
+        org.apache.hudi.internal.schema.Types.RecordType.get(
+            org.apache.hudi.internal.schema.Types.Field.get(0, false, "id", org.apache.hudi.internal.schema.Types.IntType.get())));
+    insertMetadata.addMetadata(org.apache.hudi.internal.schema.utils.SerDeHelper.LATEST_SCHEMA,
+        org.apache.hudi.internal.schema.utils.SerDeHelper.toJson(internalSchema));
+
+    HoodieCommitMetadata compactMetadata = new HoodieCommitMetadata();
+    compactMetadata.setOperationType(org.apache.hudi.common.model.WriteOperationType.COMPACT);
+
+    HoodieTimeline timeline = mock(HoodieTimeline.class);
+    when(metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()).thenReturn(timeline);
+    // Timeline in reverse order: 003 (compact), 002 (insert), 001 (cluster)
+    when(timeline.getReverseOrderedInstants()).thenReturn(Stream.of(compactInstant, insertInstant, clusterInstant));
+    when(timeline.readCommitMetadata(compactInstant)).thenReturn(compactMetadata);
+    when(timeline.readCommitMetadata(insertInstant)).thenReturn(insertMetadata);
+    when(timeline.readCommitMetadata(clusterInstant)).thenReturn(clusterMetadata);
+
+    // When: Get internal schema from commit metadata
+    Option<org.apache.hudi.internal.schema.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
+
+    // Then: Should find the insert instant (002) which is the most recent schema-updating operation
+    assertTrue(result.isPresent());
+  }
+
+  @Test
+  void testGetTableInternalSchemaFromCommitMetadataSkipsNonSchemaUpdatingOperations() throws IOException {
+    // Given: A timeline with only non-schema-updating operations (CLUSTER, COMPACT, INDEX, LOG_COMPACT)
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
+
+    HoodieInstant clusterInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, "001", InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
+    HoodieInstant compactInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "002", InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
+
+    HoodieCommitMetadata clusterMetadata = new HoodieCommitMetadata();
+    clusterMetadata.setOperationType(org.apache.hudi.common.model.WriteOperationType.CLUSTER);
+
+    HoodieCommitMetadata compactMetadata = new HoodieCommitMetadata();
+    compactMetadata.setOperationType(org.apache.hudi.common.model.WriteOperationType.COMPACT);
+
+    HoodieTimeline timeline = mock(HoodieTimeline.class);
+    when(metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()).thenReturn(timeline);
+    when(timeline.getReverseOrderedInstants()).thenReturn(Stream.of(compactInstant, clusterInstant));
+    when(timeline.readCommitMetadata(compactInstant)).thenReturn(compactMetadata);
+    when(timeline.readCommitMetadata(clusterInstant)).thenReturn(clusterMetadata);
+
+    // When: Get internal schema from commit metadata
+    Option<org.apache.hudi.internal.schema.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
+
+    // Then: Should return empty since no schema-updating operations exist
+    assertTrue(result.isEmpty());
+  }
+
+  @Test
+  void testGetTableInternalSchemaFromCommitMetadataHandlesEmptyTimeline() {
+    // Given: An empty timeline
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
+
+    HoodieTimeline timeline = mock(HoodieTimeline.class);
+    when(metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()).thenReturn(timeline);
+    when(timeline.getReverseOrderedInstants()).thenReturn(Stream.empty());
+
+    // When: Get internal schema from commit metadata
+    Option<org.apache.hudi.internal.schema.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
+
+    // Then: Should return empty for empty timeline
+    assertTrue(result.isEmpty());
+  }
+
+  @Test
+  void testGetTableInternalSchemaFromCommitMetadataStopsAtFirstMatch() throws IOException {
+    // Given: A timeline with multiple schema-updating operations
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
+
+    HoodieInstant insertInstant1 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "003", InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
+    HoodieInstant insertInstant2 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "002", InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
+    // This instant should never be read due to short-circuit behavior
+    HoodieInstant insertInstant3 = mock(HoodieInstant.class);
+
+    HoodieCommitMetadata insertMetadata1 = new HoodieCommitMetadata();
+    insertMetadata1.setOperationType(org.apache.hudi.common.model.WriteOperationType.INSERT);
+    // Create a valid InternalSchema
+    org.apache.hudi.internal.schema.InternalSchema internalSchema = new org.apache.hudi.internal.schema.InternalSchema(
+        org.apache.hudi.internal.schema.Types.RecordType.get(
+            org.apache.hudi.internal.schema.Types.Field.get(0, false, "id", org.apache.hudi.internal.schema.Types.IntType.get())));
+    insertMetadata1.addMetadata(org.apache.hudi.internal.schema.utils.SerDeHelper.LATEST_SCHEMA,
+        org.apache.hudi.internal.schema.utils.SerDeHelper.toJson(internalSchema));
+
+    HoodieCommitMetadata insertMetadata2 = new HoodieCommitMetadata();
+    insertMetadata2.setOperationType(org.apache.hudi.common.model.WriteOperationType.INSERT);
+
+    HoodieTimeline timeline = mock(HoodieTimeline.class);
+    when(metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()).thenReturn(timeline);
+    // Timeline in reverse order: 003, 002, 001
+    when(timeline.getReverseOrderedInstants()).thenReturn(Stream.of(insertInstant1, insertInstant2, insertInstant3));
+    when(timeline.readCommitMetadata(insertInstant1)).thenReturn(insertMetadata1);
+    when(timeline.readCommitMetadata(insertInstant2)).thenReturn(insertMetadata2);
+    // Should not call readCommitMetadata for insertInstant3 due to findFirst() short-circuit
+
+    // When: Get internal schema from commit metadata
+    Option<org.apache.hudi.internal.schema.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
+
+    // Then: Should find the first (most recent) schema-updating operation and stop
+    assertTrue(result.isPresent());
+    // Verify that insertInstant3 was never interacted with (proving short-circuit behavior)
+    verifyNoInteractions(insertInstant3);
   }
 }

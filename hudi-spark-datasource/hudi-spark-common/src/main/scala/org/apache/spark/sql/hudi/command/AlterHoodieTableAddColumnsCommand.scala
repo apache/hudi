@@ -17,21 +17,21 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, HoodieWriterUtils, SparkAdapterSupport}
-import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.{DataSourceUtils, HoodieSchemaConversionUtils, HoodieWriterUtils, SparkAdapterSupport}
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.util.{CommitUtils, Option}
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig}
 import org.apache.hudi.table.HoodieSparkTable
 
-import org.apache.avro.Schema
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.hudi.HoodieOptionConfig
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.types.{StructField, StructType}
 
 import scala.collection.JavaConverters._
@@ -53,14 +53,14 @@ case class AlterHoodieTableAddColumnsCommand(tableId: TableIdentifier,
         colsToAdd.map(_.name).filter(col => tableSchema.fieldNames.exists(f => resolver(f, col)))
 
       if (existsColumns.nonEmpty) {
-        throw new AnalysisException(s"Columns: [${existsColumns.mkString(",")}] already exists in the table," +
+        throw new HoodieAnalysisException(s"Columns: [${existsColumns.mkString(",")}] already exists in the table," +
           s" table columns is: [${hoodieCatalogTable.tableSchemaWithoutMetaFields.fieldNames.mkString(",")}]")
       }
       // Get the new schema
       val rearrangedSchema = hoodieCatalogTable.dataSchema ++ colsToAdd ++ hoodieCatalogTable.partitionSchema
       val newSqlSchema = StructType(rearrangedSchema)
-      val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableId.table)
-      val newSchema = AvroConversionUtils.convertStructTypeToAvroSchema(newSqlSchema, structName, nameSpace)
+      val (structName, nameSpace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(tableId.table)
+      val newSchema = HoodieSchemaConversionUtils.convertUserStructTypeToHoodieSchema(newSqlSchema, structName, nameSpace)
 
       // Commit with new schema to change the table schema
       AlterHoodieTableAddColumnsCommand.commitWithSchema(newSchema, hoodieCatalogTable, sparkSession)
@@ -89,10 +89,10 @@ object AlterHoodieTableAddColumnsCommand extends SparkAdapterSupport with Loggin
    * @param hoodieCatalogTable The hoodie catalog table.
    * @param sparkSession       The spark session.
    */
-  def commitWithSchema(schema: Schema, hoodieCatalogTable: HoodieCatalogTable,
+  def commitWithSchema(schema: HoodieSchema, hoodieCatalogTable: HoodieCatalogTable,
                        sparkSession: SparkSession): Unit = {
 
-    val writeSchema = HoodieAvroUtils.removeMetadataFields(schema);
+    val writeSchema = HoodieSchemaUtils.removeMetadataFields(schema);
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     val client = DataSourceUtils.createHoodieClient(
       jsc,
@@ -100,7 +100,7 @@ object AlterHoodieTableAddColumnsCommand extends SparkAdapterSupport with Loggin
       hoodieCatalogTable.tableLocation,
       hoodieCatalogTable.tableName,
       HoodieWriterUtils.parametersWithWriteDefaults(HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(
-        hoodieCatalogTable.catalogProperties) ++ sparkSession.sqlContext.conf.getAllConfs ++ Map(
+        hoodieCatalogTable.catalogProperties) ++ sparkSession.sessionState.conf.getAllConfs ++ Map(
         HoodieCleanConfig.AUTO_CLEAN.key -> "false",
         HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key -> HoodieFailedWritesCleaningPolicy.NEVER.name,
         HoodieArchivalConfig.AUTO_ARCHIVE.key -> "false"

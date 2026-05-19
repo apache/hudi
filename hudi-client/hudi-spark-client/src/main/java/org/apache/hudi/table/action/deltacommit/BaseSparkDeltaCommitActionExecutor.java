@@ -32,9 +32,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.Partitioner;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -42,9 +41,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 public abstract class BaseSparkDeltaCommitActionExecutor<T>
     extends BaseSparkCommitActionExecutor<T> {
-  private static final Logger LOG = LoggerFactory.getLogger(BaseSparkDeltaCommitActionExecutor.class);
 
   // UpsertPartitioner for MergeOnRead table type
   private SparkUpsertDeltaCommitPartitioner<T> mergeOnReadUpsertPartitioner;
@@ -72,10 +71,10 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
       Iterator<HoodieRecord<T>> recordItr) throws IOException {
-    LOG.info("Merging updates for commit {} for file {}", instantTime, fileId);
+    log.info("Merging updates for commit {} for file {}", instantTime, fileId);
     if (!table.getIndex().canIndexLogFiles() && mergeOnReadUpsertPartitioner != null
         && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {
-      LOG.info("Small file corrections for updates for commit {} for file {}", instantTime, fileId);
+      log.info("Small file corrections for updates for commit {} for file {}", instantTime, fileId);
       return super.handleUpdate(partitionPath, fileId, recordItr);
     } else {
       HoodieAppendHandle<?, ?, ?, ?> appendHandle = new HoodieAppendHandle<>(config, instantTime, table,

@@ -47,7 +47,10 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.metrics.DistributedRegistry;
 
+import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -68,6 +71,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -79,9 +83,17 @@ import scala.Tuple2;
 @ThreadSafe
 public class HoodieSparkEngineContext extends HoodieEngineContext {
 
+  @Getter
   private final JavaSparkContext javaSparkContext;
+  @Getter
   private final SQLContext sqlContext;
   private final Map<HoodieDataCacheKey, List<Integer>> cachedRddIds = new HashMap<>();
+
+  /**
+   * Map of all distributed registries created via getMetricRegistry().
+   * This map is passed to Spark executors to make the registries available there.
+   */
+  private static final Map<String, Registry> DISTRIBUTED_REGISTRY_MAP = new ConcurrentHashMap<>();
 
   public HoodieSparkEngineContext(JavaSparkContext jsc) {
     this(jsc, SQLContext.getOrCreate(jsc.sc()));
@@ -93,16 +105,8 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     this.sqlContext = sqlContext;
   }
 
-  public JavaSparkContext getJavaSparkContext() {
-    return javaSparkContext;
-  }
-
   public JavaSparkContext jsc() {
     return javaSparkContext;
-  }
-
-  public SQLContext getSqlContext() {
-    return sqlContext;
   }
 
   public static JavaSparkContext getSparkContext(HoodieEngineContext context) {
@@ -133,12 +137,18 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism) {
-    return javaSparkContext.parallelize(data, parallelism).map(func::apply).collect();
+    final Map<String, Registry> registries = DISTRIBUTED_REGISTRY_MAP;
+    return javaSparkContext.parallelize(data, parallelism).map(i -> {
+      setRegistries(registries);
+      return func.apply(i);
+    }).collect();
   }
 
   @Override
   public <I, K, V> List<V> mapToPairAndReduceByKey(List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
+    final Map<String, Registry> registries = DISTRIBUTED_REGISTRY_MAP;
     return javaSparkContext.parallelize(data, parallelism).mapToPair(input -> {
+      setRegistries(registries);
       Pair<K, V> pair = mapToPairFunc.call(input);
       return new Tuple2<>(pair.getLeft(), pair.getRight());
     }).reduceByKey(reduceFunc::apply).map(Tuple2::_2).collect();
@@ -148,11 +158,13 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   public <I, K, V> Stream<ImmutablePair<K, V>> mapPartitionsToPairAndReduceByKey(
       Stream<I> data, SerializablePairFlatMapFunction<Iterator<I>, K, V> flatMapToPairFunc,
       SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
+    final Map<String, Registry> registries = DISTRIBUTED_REGISTRY_MAP;
     return javaSparkContext.parallelize(data.collect(Collectors.toList()), parallelism)
-        .mapPartitionsToPair((PairFlatMapFunction<Iterator<I>, K, V>) iterator ->
-            flatMapToPairFunc.call(iterator)
-                .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator()
-        )
+        .mapPartitionsToPair((PairFlatMapFunction<Iterator<I>, K, V>) iterator -> {
+          setRegistries(registries);
+          return flatMapToPairFunc.call(iterator)
+              .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
+        })
         .reduceByKey(reduceFunc::apply, parallelism)
         .map(e -> new ImmutablePair<>(e._1, e._2))
         .collect().stream();
@@ -167,7 +179,11 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, O> List<O> flatMap(List<I> data, SerializableFunction<I, Stream<O>> func, int parallelism) {
-    return javaSparkContext.parallelize(data, parallelism).flatMap(x -> func.apply(x).iterator()).collect();
+    final Map<String, Registry> registries = DISTRIBUTED_REGISTRY_MAP;
+    return javaSparkContext.parallelize(data, parallelism).flatMap(x -> {
+      setRegistries(registries);
+      return func.apply(x).iterator();
+    }).collect();
   }
 
   @Override
@@ -177,13 +193,16 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, K, V> Map<K, V> mapToPair(List<I> data, SerializablePairFunction<I, K, V> func, Integer parallelism) {
+    final Map<String, Registry> registries = DISTRIBUTED_REGISTRY_MAP;
     if (Objects.nonNull(parallelism)) {
       return javaSparkContext.parallelize(data, parallelism).mapToPair(input -> {
+        setRegistries(registries);
         Pair<K, V> pair = func.call(input);
         return new Tuple2(pair.getLeft(), pair.getRight());
       }).collectAsMap();
     } else {
       return javaSparkContext.parallelize(data).mapToPair(input -> {
+        setRegistries(registries);
         Pair<K, V> pair = func.call(input);
         return new Tuple2(pair.getLeft(), pair.getRight());
       }).collectAsMap();
@@ -212,6 +231,11 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   @Override
   public void setJobStatus(String activeModule, String activityDescription) {
     javaSparkContext.setJobDescription(String.format("%s:%s", activeModule, activityDescription));
+  }
+
+  @Override
+  public void clearJobStatus() {
+    javaSparkContext.setJobDescription(null);
   }
 
   @Override
@@ -250,6 +274,29 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   @Override
+  public String getApplicationId() {
+    return javaSparkContext.sc().applicationId();
+  }
+
+  @Override
+  public Registry getMetricRegistry(String tableName, String registryName) {
+    final String prefixedName = tableName.isEmpty() ? registryName : tableName + "." + registryName;
+    return DISTRIBUTED_REGISTRY_MAP.computeIfAbsent(prefixedName, key -> {
+      Registry registry = Registry.getRegistryOfClass(tableName, registryName, DistributedRegistry.class.getName());
+      ((DistributedRegistry) registry).register(javaSparkContext);
+      return registry;
+    });
+  }
+
+  /**
+   * Register the distributed registries on Spark executors.
+   * This is called within Spark operations to make the registries available on executors.
+   */
+  private static void setRegistries(Map<String, Registry> registries) {
+    Registry.setRegistries(registries.values());
+  }
+
+  @Override
   public <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp) {
     Function2<O, I, O> seqOpFunc = seqOp::apply;
     Function2<O, O, O> combOpFunc = combOp::apply;
@@ -260,7 +307,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   public ReaderContextFactory<?> getReaderContextFactory(HoodieTableMetaClient metaClient) {
     // metadata table are only supported by the AvroReaderContext.
     if (metaClient.isMetadataTable()) {
-      return new AvroReaderContextFactory(metaClient);
+      return new AvroReaderContextFactory(metaClient, new TypedProperties());
     }
     return getEngineReaderContextFactory(metaClient);
   }

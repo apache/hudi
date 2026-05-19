@@ -26,14 +26,13 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * A factory to generate {@code WriteMarkers} instance based on the {@code MarkerType}.
  */
+@Slf4j
 public class WriteMarkersFactory {
-  private static final Logger LOG = LoggerFactory.getLogger(WriteMarkersFactory.class);
 
   /**
    * @param markerType the type of markers to use
@@ -42,20 +41,20 @@ public class WriteMarkersFactory {
    * @return  {@code WriteMarkers} instance based on the {@code MarkerType}
    */
   public static WriteMarkers get(MarkerType markerType, HoodieTable table, String instantTime) {
-    LOG.debug("Instantiated MarkerFiles with marker type: {}", markerType);
+    log.debug("Instantiated MarkerFiles with marker type: {}", markerType);
     switch (markerType) {
       case DIRECT:
         return getDirectWriteMarkers(table, instantTime);
       case TIMELINE_SERVER_BASED:
-        if (!table.getConfig().isEmbeddedTimelineServerEnabled()) {
-          LOG.warn("Timeline-server-based markers are configured as the marker type "
+        if (!table.getConfig().isEmbeddedTimelineServerEnabled() && !table.getConfig().isRemoteViewStorageType()) {
+          log.warn("Timeline-server-based markers are configured as the marker type "
               + "but embedded timeline server is not enabled.  Falling back to direct markers.");
           return getDirectWriteMarkers(table, instantTime);
         }
         String basePath = table.getMetaClient().getBasePath().toString();
         if (StorageSchemes.HDFS.getScheme().equals(
             HadoopFSUtils.getFs(basePath, table.getContext().getStorageConf(), true).getScheme())) {
-          LOG.warn("Timeline-server-based markers are not supported for HDFS: "
+          log.warn("Timeline-server-based markers are not supported for HDFS: "
               + "base path {}.  Falling back to direct markers.", basePath);
           return getDirectWriteMarkers(table, instantTime);
         }

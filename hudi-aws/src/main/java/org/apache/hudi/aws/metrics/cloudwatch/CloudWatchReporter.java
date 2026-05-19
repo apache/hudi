@@ -32,8 +32,7 @@ import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.ScheduledReporter;
 import com.codahale.metrics.Timer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.cloudwatch.model.Dimension;
 import software.amazon.awssdk.services.cloudwatch.model.MetricDatum;
@@ -54,14 +53,13 @@ import java.util.concurrent.TimeUnit;
  * A reporter for publishing metrics to Amazon CloudWatch. It is responsible for collecting, converting DropWizard
  * metrics to CloudWatch metrics and composing metrics payload.
  */
+@Slf4j
 public class CloudWatchReporter extends ScheduledReporter {
 
   static final String DIMENSION_TABLE_NAME_KEY = "Table";
   static final String DIMENSION_METRIC_TYPE_KEY = "Metric Type";
   static final String DIMENSION_GAUGE_TYPE_VALUE = "gauge";
   static final String DIMENSION_COUNT_TYPE_VALUE = "count";
-
-  private static final Logger LOG = LoggerFactory.getLogger(CloudWatchReporter.class);
 
   private final CloudWatchAsyncClient cloudWatchClientAsync;
   private final Clock clock;
@@ -181,7 +179,7 @@ public class CloudWatchReporter extends ScheduledReporter {
                      SortedMap<String, Histogram> histograms,
                      SortedMap<String, Meter> meters,
                      SortedMap<String, Timer> timers) {
-    LOG.info("Reporting Metrics to CloudWatch.");
+    log.info("Reporting Metrics to CloudWatch.");
 
     final long timestampMilliSec = clock.getTime();
     List<MetricDatum> metricsData = new ArrayList<>();
@@ -234,7 +232,7 @@ public class CloudWatchReporter extends ScheduledReporter {
       try {
         cloudWatchFuture.get(30, TimeUnit.SECONDS);
       } catch (final Exception ex) {
-        LOG.error("Error reporting metrics to CloudWatch. The data in this CloudWatch request "
+        log.error("Error reporting metrics to CloudWatch. The data in this CloudWatch request "
             + "may have been discarded, and not made it to CloudWatch.", ex);
         if (ex instanceof InterruptedException) {
           Thread.currentThread().interrupt();
@@ -316,7 +314,7 @@ public class CloudWatchReporter extends ScheduledReporter {
       try {
         cloudWatchClientAsync.close();
       } catch (Exception ex) {
-        LOG.warn("Exception while shutting down CloudWatch client.", ex);
+        log.warn("Exception while shutting down CloudWatch client.", ex);
       }
     }
   }

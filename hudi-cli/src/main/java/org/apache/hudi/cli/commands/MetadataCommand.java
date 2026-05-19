@@ -24,12 +24,16 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
@@ -38,12 +42,12 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -76,9 +80,8 @@ import java.util.Set;
  * > metadata list-partitions
  */
 @ShellComponent
+@Slf4j
 public class MetadataCommand {
-
-  private static final Logger LOG = LoggerFactory.getLogger(MetadataCommand.class);
   private static String metadataBaseDirectory;
   private JavaSparkContext jsc;
 
@@ -139,7 +142,7 @@ public class MetadataCommand {
   @ShellMethod(key = "metadata delete", value = "Remove the Metadata Table")
   public String delete(@ShellOption(value = "--backup", help = "Backup the metadata table before delete", defaultValue = "true", arity = 1) final boolean backup) throws Exception {
     HoodieTableMetaClient dataMetaClient = HoodieCLI.getTableMetaClient();
-    String backupPath = HoodieTableMetadataUtil.deleteMetadataTable(dataMetaClient, new HoodieSparkEngineContext(jsc), backup);
+    String backupPath = HoodieTableMetadataUtil.deleteMetadataTable(dataMetaClient, new HoodieLocalEngineContext(dataMetaClient.getStorageConf()), backup);
     if (backup) {
       return "Metadata Table has been deleted and backed up to " + backupPath;
     } else {
@@ -224,7 +227,7 @@ public class MetadataCommand {
 
       HoodieTimer timer = HoodieTimer.start();
       List<String> partitions = metadata.getAllPartitionPaths();
-      LOG.debug("Metadata Partition listing took {} ms", timer.endTimer());
+      log.debug("Metadata Partition listing took {} ms", timer.endTimer());
 
       final List<Comparable[]> rows = new ArrayList<>();
       partitions.stream().sorted(Comparator.reverseOrder()).forEach(p -> {
@@ -257,7 +260,7 @@ public class MetadataCommand {
 
       HoodieTimer timer = HoodieTimer.start();
       List<StoragePathInfo> pathInfoList = metaReader.getAllFilesInPartition(partitionPath);
-      LOG.debug("Took {} ms", timer.endTimer());
+      log.debug("Took {} ms", timer.endTimer());
 
       final List<Comparable[]> rows = new ArrayList<>();
       pathInfoList.stream()
@@ -293,7 +296,7 @@ public class MetadataCommand {
 
     HoodieTimer timer = HoodieTimer.start();
     List<String> metadataPartitions = metadataReader.getAllPartitionPaths();
-    LOG.debug("Metadata Listing partitions Took {} ms", timer.endTimer());
+    log.debug("Metadata Listing partitions Took {} ms", timer.endTimer());
     List<String> fsPartitions = fsMetaReader.getAllPartitionPaths();
     Collections.sort(fsPartitions);
     Collections.sort(metadataPartitions);
@@ -303,9 +306,9 @@ public class MetadataCommand {
     allPartitions.addAll(metadataPartitions);
 
     if (!fsPartitions.equals(metadataPartitions)) {
-      LOG.error("FS partition listing is not matching with metadata partition listing!");
-      LOG.error("All FS partitions: " + Arrays.toString(fsPartitions.toArray()));
-      LOG.error("All Metadata partitions: " + Arrays.toString(metadataPartitions.toArray()));
+      log.error("FS partition listing is not matching with metadata partition listing!");
+      log.error("All FS partitions: " + Arrays.toString(fsPartitions.toArray()));
+      log.error("All Metadata partitions: " + Arrays.toString(metadataPartitions.toArray()));
     }
 
     final List<Comparable[]> rows = new ArrayList<>();
@@ -348,18 +351,18 @@ public class MetadataCommand {
       }
 
       if (metadataPathInfoList.size() != pathInfoList.size()) {
-        LOG.error(" FS and metadata files count not matching for " + partition
+        log.error(" FS and metadata files count not matching for " + partition
             + ". FS files count " + pathInfoList.size()
             + ", metadata base files count " + metadataPathInfoList.size());
       }
 
       for (Map.Entry<String, StoragePathInfo> entry : pathInfoMap.entrySet()) {
         if (!metadataPathInfoMap.containsKey(entry.getKey())) {
-          LOG.error("FS file not found in metadata " + entry.getKey());
+          log.error("FS file not found in metadata " + entry.getKey());
         } else {
           if (entry.getValue().getLength()
               != metadataPathInfoMap.get(entry.getKey()).getLength()) {
-            LOG.error(" FS file size mismatch " + entry.getKey() + ", size equality "
+            log.error(" FS file size mismatch " + entry.getKey() + ", size equality "
                 + (entry.getValue().getLength()
                 == metadataPathInfoMap.get(entry.getKey()).getLength())
                 + ". FS size " + entry.getValue().getLength()
@@ -369,10 +372,10 @@ public class MetadataCommand {
       }
       for (Map.Entry<String, StoragePathInfo> entry : metadataPathInfoMap.entrySet()) {
         if (!pathInfoMap.containsKey(entry.getKey())) {
-          LOG.error("Metadata file not found in FS " + entry.getKey());
+          log.error("Metadata file not found in FS " + entry.getKey());
         } else {
           if (entry.getValue().getLength() != pathInfoMap.get(entry.getKey()).getLength()) {
-            LOG.error(" Metadata file size mismatch " + entry.getKey() + ", size equality "
+            log.error(" Metadata file size mismatch " + entry.getKey() + ", size equality "
                 + (entry.getValue().getLength() == pathInfoMap.get(entry.getKey()).getLength())
                 + ". Metadata size " + entry.getValue().getLength() + ", FS size "
                 + metadataPathInfoMap.get(entry.getKey()).getLength());
@@ -387,6 +390,66 @@ public class MetadataCommand {
         .addTableHeaderField(" FS size")
         .addTableHeaderField(" Metadata size");
     return HoodiePrintHelper.print(header, new HashMap<>(), "", false, Integer.MAX_VALUE, false, rows);
+  }
+
+  @ShellMethod(key = "metadata lookup-record-index", value = "Print Record index information for a record_key. "
+      + "For global RLI, only record key is required. For partitioned RLI, both record key and partition path are required.")
+  public String getRecordIndexInfo(
+      @ShellOption(value = "--record_key", help = "Record key entry whose info will be fetched")
+      final String recordKey,
+      @ShellOption(value = "--partition_path", help = "Partition path. Required for partitioned (non-global) Record Level Index.",
+          defaultValue = "") final String partitionPath) {
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    HoodieStorage storage = metaClient.getStorage();
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
+    HoodieBackedTableMetadata metaReader = new HoodieBackedTableMetadata(
+        new HoodieLocalEngineContext(HoodieCLI.conf), storage, config, HoodieCLI.basePath);
+
+    ValidationUtils.checkState(metaReader.enabled(), "[ERROR] Metadata Table not enabled/initialized\n\n");
+    ValidationUtils.checkState(metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
+        "[ERROR] Record index partition is not enabled/initialized\n\n");
+
+    // Check if RLI is partitioned from the index definition and validate partition_path is provided
+    boolean isPartitionedRLI = metaClient.getIndexMetadata()
+        .map(indexMetadata ->
+            indexMetadata.getIndexDefinitions()
+                .get(org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX))
+        .map(indexDefinition -> "true".equalsIgnoreCase(
+            indexDefinition.getIndexOptions().getOrDefault(org.apache.hudi.index.record.HoodieRecordIndex.IS_PARTITIONED_OPTION, "false")))
+        .orElse(false);
+
+    if (isPartitionedRLI) {
+      ValidationUtils.checkState(!StringUtils.isNullOrEmpty(partitionPath),
+          "[ERROR] Partitioned Record Level Index requires --partition_path to be provided\n\n");
+    }
+
+    Option<String> dataTablePartition = StringUtils.isNullOrEmpty(partitionPath) ? Option.empty() : Option.of(partitionPath);
+    HoodiePairData<String, HoodieRecordGlobalLocation> recordKeyToGlobalLocationMap =
+        metaReader.readRecordIndexLocationsWithKeys(HoodieListData.eager(Collections.singletonList(recordKey)), dataTablePartition);
+    List<Pair<String, HoodieRecordGlobalLocation>> recordLocationKeyPair = recordKeyToGlobalLocationMap.collectAsList();
+    if (recordLocationKeyPair.isEmpty()) {
+      String notFoundMessage = "[INFO] Record key " + recordKey;
+      if (!StringUtils.isNullOrEmpty(partitionPath)) {
+        notFoundMessage += " in partition " + partitionPath;
+      }
+      notFoundMessage += " not found in Record Index";
+      return notFoundMessage;
+    }
+    ValidationUtils.checkArgument(recordKey.equals(recordLocationKeyPair.get(0).getKey()),
+        "Record index lookup returned wrong key " + recordLocationKeyPair.get(0).getKey());
+    HoodieRecordGlobalLocation location = recordLocationKeyPair.get(0).getValue();
+    Comparable[] row = new Comparable[4];
+    row[0] = recordKey;
+    row[1] = location.getPartitionPath();
+    row[2] = location.getFileId();
+    row[3] = location.getInstantTime();
+    TableHeader header = new TableHeader()
+        .addTableHeaderField("Record key")
+        .addTableHeaderField("Partition path")
+        .addTableHeaderField("File Id")
+        .addTableHeaderField("Instant time");
+    return HoodiePrintHelper.print(header, new HashMap<>(), "",
+        false, Integer.MAX_VALUE, false, Collections.singletonList(row));
   }
 
   private HoodieWriteConfig getWriteConfig() {

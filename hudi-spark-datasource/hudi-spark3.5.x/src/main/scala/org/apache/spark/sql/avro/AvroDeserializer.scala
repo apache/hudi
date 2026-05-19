@@ -17,6 +17,9 @@
 
 package org.apache.spark.sql.avro
 
+import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.HoodieSchema.VectorLogicalType
+
 import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{LocalTimestampMicros, LocalTimestampMillis, TimestampMicros, TimestampMillis}
@@ -36,6 +39,7 @@ import org.apache.spark.unsafe.types.UTF8String
 
 import java.math.BigDecimal
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.TimeZone
 
 import scala.collection.JavaConverters._
@@ -162,6 +166,37 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
           updater.setLong(ordinal, micros)
         case other => throw new IncompatibleSchemaException(errorPrefix +
           s"Avro logical type $other cannot be converted to SQL type ${TimestampNTZType.sql}.")
+      }
+
+      // Handle VECTOR logical type (FLOAT, DOUBLE, INT8)
+      case (FIXED, ArrayType(elementType, false)) => avroType.getLogicalType match {
+        case vectorLogicalType: VectorLogicalType =>
+          val dimension = vectorLogicalType.getDimension
+          val vecElementType = HoodieSchema.Vector.VectorElementType.fromString(vectorLogicalType.getElementType)
+          val elementSize = vecElementType.getElementSize
+          (updater, ordinal, value) => {
+            val bytes = value.asInstanceOf[GenericData.Fixed].bytes()
+            val expectedSize = Math.multiplyExact(dimension, elementSize)
+            if (bytes.length != expectedSize) {
+              throw new IncompatibleSchemaException(
+                s"VECTOR byte size mismatch: expected=$expectedSize, actual=${bytes.length}")
+            }
+            elementType match {
+              case FloatType =>
+                val buffer = ByteBuffer.wrap(bytes).order(VectorLogicalType.VECTOR_BYTE_ORDER)
+                val floats = new Array[Float](dimension)
+                var i = 0; while (i < dimension) { floats(i) = buffer.getFloat(); i += 1 }
+                updater.set(ordinal, ArrayData.toArrayData(floats))
+              case DoubleType =>
+                val buffer = ByteBuffer.wrap(bytes).order(VectorLogicalType.VECTOR_BYTE_ORDER)
+                val doubles = new Array[Double](dimension)
+                var i = 0; while (i < dimension) { doubles(i) = buffer.getDouble(); i += 1 }
+                updater.set(ordinal, ArrayData.toArrayData(doubles))
+              case ByteType =>
+                updater.set(ordinal, ArrayData.toArrayData(bytes.clone()))
+            }
+          }
+        case _ => throw new IncompatibleSchemaException(incompatibleMsg)
       }
 
       // Before we upgrade Avro to 1.8 for logical type support, spark-avro converts Long to Date.

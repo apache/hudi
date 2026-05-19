@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.utils;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.validator.SparkPreCommitValidator;
@@ -26,8 +26,11 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTablePreCommitFileSystemView;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -35,7 +38,6 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 import org.apache.hudi.util.JavaScalaConverters;
 
 import org.apache.spark.sql.Dataset;
@@ -56,7 +58,7 @@ import java.util.stream.Stream;
  * Spark validator utils to verify and run any pre-commit validators configured.
  */
 public class SparkValidatorUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(BaseSparkCommitActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkValidatorUtils.class);
 
   /**
    * Check configured pre-commit validators and run them. Note that this only works for COW tables
@@ -75,16 +77,35 @@ public class SparkValidatorUtils {
         writeMetadata.setWriteStats(writeMetadata.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
       }
       Set<String> partitionsModified = writeMetadata.getWriteStats().get().stream().map(HoodieWriteStat::getPartitionPath).collect(Collectors.toSet());
-      SQLContext sqlContext = new SQLContext(HoodieSparkEngineContext.getSparkContext(context));
+      SQLContext sqlContext = SQLContext.getOrCreate(HoodieSparkEngineContext.getSparkContext(context).sc());
       // Refresh timeline to ensure validator sees the any other operations done on timeline (async operations such as other clustering/compaction/rollback)
       table.getMetaClient().reloadActiveTimeline();
       Dataset<Row> afterState = getRecordsFromPendingCommits(sqlContext, partitionsModified, writeMetadata, table, instantTime);
       Dataset<Row> beforeState = getRecordsFromCommittedFiles(sqlContext, partitionsModified, table, afterState.schema());
 
       Stream<SparkPreCommitValidator> validators = Arrays.stream(config.getPreCommitValidators().split(","))
-          .map(validatorClass -> ((SparkPreCommitValidator) ReflectionUtils.loadClass(validatorClass,
-              new Class<?>[] {HoodieSparkTable.class, HoodieEngineContext.class, HoodieWriteConfig.class},
-              table, context, config)));
+          .map(String::trim)
+          .filter(s -> !s.isEmpty())
+          .flatMap(validatorClass -> {
+            try {
+              Class<?> clazz = Class.forName(validatorClass);
+              if (!SparkPreCommitValidator.class.isAssignableFrom(clazz)) {
+                LOG.warn("Skipping validator {} — it does not implement SparkPreCommitValidator. "
+                    + "If this is a streaming offset validator (e.g. SparkKafkaOffsetValidator), "
+                    + "it will be invoked by SparkStreamerValidatorUtils instead.", validatorClass);
+                return Stream.empty();
+              }
+              SparkPreCommitValidator validator = (SparkPreCommitValidator) ReflectionUtils.loadClass(
+                  validatorClass,
+                  new Class<?>[] {HoodieSparkTable.class, HoodieEngineContext.class, HoodieWriteConfig.class},
+                  table, context, config);
+              return Stream.of(validator);
+            } catch (ClassNotFoundException e) {
+              throw new HoodieValidationException("Cannot find validator class: " + validatorClass, e);
+            } catch (ReflectiveOperationException e) {
+              throw new HoodieValidationException("Failed to instantiate validator: " + validatorClass, e);
+            }
+          });
 
       boolean allSuccess = validators.map(v -> runValidatorAsync(v, writeMetadata, beforeState, afterState, instantTime)).map(CompletableFuture::join)
           .reduce(true, Boolean::logicalAnd);
@@ -134,27 +155,66 @@ public class SparkValidatorUtils {
         .collect(Collectors.toList());
 
     if (committedFiles.isEmpty()) {
-      try {
-        return sqlContext.createDataFrame(
-            sqlContext.emptyDataFrame().rdd(),
-            AvroConversionUtils.convertAvroSchemaToStructType(
-                new TableSchemaResolver(table.getMetaClient()).getTableAvroSchema()));
-      } catch (Exception e) {
-        LOG.warn("Cannot get table schema from before state.", e);
-        LOG.warn("Use the schema from after state (current transaction) to create the empty Spark "
-            + "dataframe: " + newStructTypeSchema);
-        return sqlContext.createDataFrame(
-            sqlContext.emptyDataFrame().rdd(), newStructTypeSchema);
-      }
+      return createEmptyDataFrameWithTableSchema(sqlContext, table, Option.of(newStructTypeSchema));
     }
-    return readRecordsForBaseFiles(sqlContext, committedFiles);
+    return readRecordsForBaseFiles(sqlContext, committedFiles, table);
+  }
+
+  /**
+   * Creates an empty DataFrame with table schema for use when there are no files to read.
+   * If table schema cannot be resolved and a fallback schema is provided, uses that schema;
+   * otherwise returns a schema-less empty DataFrame.
+   *
+   * @param sqlContext     Spark {@link SQLContext} instance.
+   * @param table          {@link HoodieTable} instance.
+   * @param fallbackSchema Optional schema to use when table schema cannot be resolved (e.g. after state schema); empty to return schema-less empty DataFrame.
+   * @return Empty DataFrame with table or fallback schema, or schema-less if no fallback.
+   */
+  private static Dataset<Row> createEmptyDataFrameWithTableSchema(SQLContext sqlContext,
+                                                                  HoodieTable table,
+                                                                  Option<StructType> fallbackSchema) {
+    try {
+      return sqlContext.createDataFrame(
+          sqlContext.emptyDataFrame().rdd(),
+          HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(
+              new TableSchemaResolver(table.getMetaClient()).getTableSchema()));
+    } catch (Exception e) {
+      LOG.warn("Could not get table schema for empty DataFrame.", e);
+      if (fallbackSchema.isPresent()) {
+        LOG.warn("Using fallback schema to create the empty Spark DataFrame: {}", fallbackSchema.get());
+        return sqlContext.createDataFrame(sqlContext.emptyDataFrame().rdd(), fallbackSchema.get());
+      }
+      return sqlContext.emptyDataFrame();
+    }
   }
 
   /**
    * Get records from specified list of data files.
    */
-  public static Dataset<Row> readRecordsForBaseFiles(SQLContext sqlContext, List<String> baseFilePaths) {
-    return sqlContext.read().parquet(JavaScalaConverters.<String>convertJavaListToScalaSeq(baseFilePaths));
+  public static Dataset<Row> readRecordsForBaseFiles(SQLContext sqlContext, List<String> baseFilePaths,
+      HoodieTable table) {
+    final HoodieSchema readerSchema;
+    String schemaStr = table.getConfig().getWriteSchema();
+    boolean isPopulateMetaFieldsEnabled = table.getConfig().populateMetaFields();
+    if (!StringUtils.isNullOrEmpty(schemaStr)) {
+      HoodieSchema schema = HoodieSchema.parse(table.getConfig().getWriteSchema());
+      readerSchema = isPopulateMetaFieldsEnabled ? HoodieSchemaUtils.addMetadataFields(schema) : schema;
+    } else {
+      LOG.warn("Schema not found from write config, defaulting to parsing schema from latest commit.");
+      try {
+        readerSchema = new TableSchemaResolver(table.getMetaClient()).getTableSchema();
+      } catch (Exception e) {
+        LOG.warn(String.format("Failed parsing schema from latest commit with exception %s, "
+            + "defaulting to inferring schema from data files", e));
+        return sqlContext
+            .read()
+            .parquet(JavaScalaConverters.convertJavaListToScalaSeq(baseFilePaths));
+      }
+    }
+    return sqlContext
+        .read()
+        .schema(HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(readerSchema))
+        .parquet(JavaScalaConverters.convertJavaListToScalaSeq(baseFilePaths));
   }
 
   /**
@@ -179,9 +239,11 @@ public class SparkValidatorUtils {
         .collect(Collectors.toList());
 
     if (newFiles.isEmpty()) {
-      return sqlContext.emptyDataFrame();
+      // Empty write: return empty DataFrame with table schema so validators that reference
+      // columns (e.g. _row_key) do not fail with AnalysisException "Column ... does not exist".
+      return createEmptyDataFrameWithTableSchema(sqlContext, table, Option.empty());
     }
 
-    return readRecordsForBaseFiles(sqlContext, newFiles);
+    return readRecordsForBaseFiles(sqlContext, newFiles, table);
   }
 }

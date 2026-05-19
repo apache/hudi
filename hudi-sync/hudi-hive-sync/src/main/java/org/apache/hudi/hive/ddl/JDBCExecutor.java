@@ -21,8 +21,7 @@ package org.apache.hudi.hive.ddl;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -45,11 +44,19 @@ import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
 /**
  * This class offers DDL executor backed by the jdbc This class preserves the old useJDBC = true way of doing things.
  */
+@Slf4j
 public class JDBCExecutor extends QueryBasedDDLExecutor {
 
-  private static final Logger LOG = LoggerFactory.getLogger(JDBCExecutor.class);
-
   private Connection connection;
+
+  /**
+   * Returns the underlying JDBC connection for use by
+   * {@link JDBCBasedMetadataOperator} when the Thrift
+   * IMetaStoreClient is unavailable (e.g., HMS 4.x).
+   */
+  public Connection getConnection() {
+    return connection;
+  }
 
   public JDBCExecutor(HiveSyncConfig config) {
     super(config);
@@ -64,7 +71,7 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
     Statement stmt = null;
     try {
       stmt = connection.createStatement();
-      LOG.info("Executing SQL " + s);
+      log.info("Executing SQL {}", s);
       stmt.execute(s);
     } catch (SQLException e) {
       throw new HoodieHiveSyncException("Failed in executing SQL " + s, e);
@@ -79,7 +86,7 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
         stmt.close();
       }
     } catch (SQLException e) {
-      LOG.warn("Could not close the statement opened ", e);
+      log.info("Could not close the statement opened ", e);
     }
 
     try {
@@ -87,7 +94,7 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
         resultSet.close();
       }
     } catch (SQLException e) {
-      LOG.warn("Could not close the resultset opened ", e);
+      log.info("Could not close the resultset opened ", e);
     }
   }
 
@@ -96,13 +103,13 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
       try {
         Class.forName("org.apache.hive.jdbc.HiveDriver");
       } catch (ClassNotFoundException e) {
-        LOG.error("Unable to load Hive driver class", e);
+        log.error("Unable to load Hive driver class", e);
         return;
       }
 
       try {
         this.connection = DriverManager.getConnection(jdbcUrl, hiveUser, hivePass);
-        LOG.info("Successfully established Hive connection to  " + jdbcUrl);
+        log.info("Successfully established Hive connection to {}", jdbcUrl);
       } catch (SQLException e) {
         throw new HoodieHiveSyncException("Cannot create hive connection " + getHiveJdbcUrlWithDefaultDBName(jdbcUrl), e);
       }
@@ -152,10 +159,10 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
   @Override
   public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
     if (partitionsToDrop.isEmpty()) {
-      LOG.info("No partitions to add for " + tableName);
+      log.info("No partitions to add for {}", tableName);
       return;
     }
-    LOG.info("Dropping partitions " + partitionsToDrop.size() + " from table " + tableName);
+    log.info("Dropping partitions {} from table {}", partitionsToDrop.size(), tableName);
     List<String> sqls = constructDropPartitions(tableName, partitionsToDrop);
     sqls.stream().forEach(sql -> runSQL(sql));
   }
@@ -200,7 +207,7 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
         connection.close();
       }
     } catch (SQLException e) {
-      LOG.error("Could not close connection ", e);
+      log.error("Could not close connection ", e);
     }
   }
 }

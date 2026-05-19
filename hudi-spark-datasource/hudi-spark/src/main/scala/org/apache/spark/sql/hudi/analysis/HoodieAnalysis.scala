@@ -21,7 +21,7 @@ import org.apache.hudi.{HoodieSchemaUtils, HoodieSparkUtils, SparkAdapterSupport
 import org.apache.hudi.common.util.{ReflectionUtils, ValidationUtils}
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
 
-import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, HoodieCatalogTable}
@@ -33,9 +33,11 @@ import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{sparkAdapter, MatchCreateIndex, MatchCreateTableLike, MatchDropIndex, MatchInsertIntoStatement, MatchMergeIntoTable, MatchRefreshIndex, MatchShowIndexes, ResolvesToHudiTable}
+import org.apache.spark.sql.hudi.blob.ReadBlobRule
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 import org.apache.spark.sql.hudi.command.InsertIntoHoodieTableCommand.alignQueryOutput
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
 
 import java.util
@@ -55,35 +57,49 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val adaptIngestionTargetLogicalRelations: RuleBuilder = session => AdaptIngestionTargetLogicalRelations(session)
 
     rules += adaptIngestionTargetLogicalRelations
-    val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark3_5)
+    val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark4_1) {
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark41DataSourceV2ToV1Fallback"
+    } else if (HoodieSparkUtils.isSpark4_0) {
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark40DataSourceV2ToV1Fallback"
+    } else if (HoodieSparkUtils.isSpark3_5) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark35DataSourceV2ToV1Fallback"
-    else if (HoodieSparkUtils.isSpark3_4)
+    } else if (HoodieSparkUtils.isSpark3_4) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark34DataSourceV2ToV1Fallback"
-    else {
+    } else {
       // Spark 3.3.x
       "org.apache.spark.sql.hudi.analysis.HoodieSpark33DataSourceV2ToV1Fallback"
     }
     val dataSourceV2ToV1Fallback: RuleBuilder =
       session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
 
-    val spark3ResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
-    val spark3ResolveReferences: RuleBuilder =
-      session => instantiateKlass(spark3ResolveReferencesClass, session)
+    val resolveReferencesClass = "org.apache.spark.sql.hudi.analysis.ResolveReferences"
+    val resolveReferences: RuleBuilder =
+      session => instantiateKlass(resolveReferencesClass, session)
 
     // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
     //
     // It's critical for this rules to follow in this order; re-ordering this rules might lead to changes in
     // behavior of Spark's analysis phase (for ex, DataSource V2 to V1 fallback might not kick in before other rules,
     // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
-    rules ++= Seq(dataSourceV2ToV1Fallback, spark3ResolveReferences)
+    rules ++= Seq(dataSourceV2ToV1Fallback, resolveReferences)
 
-    if (HoodieSparkUtils.gteqSpark3_5) {
+    if (HoodieSparkUtils.isSpark4_1) {
+      rules += (_ => instantiateKlass(
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark41ResolveColumnsForInsertInto"))
+    } else if (HoodieSparkUtils.isSpark4_0) {
+      rules += (_ => instantiateKlass(
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark40ResolveColumnsForInsertInto"))
+    } else if (HoodieSparkUtils.isSpark3_5) {
       rules += (_ => instantiateKlass(
         "org.apache.spark.sql.hudi.analysis.HoodieSpark35ResolveColumnsForInsertInto"))
     }
 
     val resolveAlterTableCommandsClass =
-      if (HoodieSparkUtils.gteqSpark3_5) {
+      if (HoodieSparkUtils.isSpark4_1) {
+        "org.apache.spark.sql.hudi.Spark41ResolveHudiAlterTableCommand"
+      } else if (HoodieSparkUtils.isSpark4_0) {
+        "org.apache.spark.sql.hudi.Spark40ResolveHudiAlterTableCommand"
+      } else if (HoodieSparkUtils.gteqSpark3_5) {
         "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
       } else if (HoodieSparkUtils.isSpark3_4) {
         "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
@@ -114,13 +130,10 @@ object HoodieAnalysis extends SparkAdapterSupport {
       session => HoodiePostAnalysisRule(session)
     )
 
-    if (HoodieSparkUtils.isSpark3) {
-      val spark3PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3PostAnalysisRule"
-      val spark3PostHocResolution: RuleBuilder =
-        session => instantiateKlass(spark3PostHocResolutionClass, session)
-
-      rules += spark3PostHocResolution
-    }
+    val postHocResolutionClass = "org.apache.spark.sql.hudi.analysis.PostAnalysisRule"
+    val sparkBasePostHocResolution: RuleBuilder =
+      session => instantiateKlass(postHocResolutionClass, session)
+    rules += sparkBasePostHocResolution
 
     rules.toSeq
   }
@@ -131,7 +144,11 @@ object HoodieAnalysis extends SparkAdapterSupport {
     )
 
     val nestedSchemaPruningClass =
-      if (HoodieSparkUtils.gteqSpark3_5) {
+      if (HoodieSparkUtils.isSpark4_1) {
+        "org.apache.spark.sql.execution.datasources.Spark41NestedSchemaPruning"
+      } else if (HoodieSparkUtils.isSpark4_0) {
+        "org.apache.spark.sql.execution.datasources.Spark40NestedSchemaPruning"
+      } else if (HoodieSparkUtils.gteqSpark3_5) {
         "org.apache.spark.sql.execution.datasources.Spark35NestedSchemaPruning"
       } else if (HoodieSparkUtils.gteqSpark3_4) {
         "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"
@@ -152,7 +169,18 @@ object HoodieAnalysis extends SparkAdapterSupport {
     //       To work this around, we injecting this as the rule that trails pre-CBO, ie it's
     //          - Triggered before CBO, therefore have access to the same stats as CBO
     //          - Precedes actual [[customEarlyScanPushDownRules]] invocation
-    rules += (spark => HoodiePruneFileSourcePartitions(spark))
+    val pruneFileSourcePartitionsClass = if (HoodieSparkUtils.gteqSpark4_0) {
+      "org.apache.spark.sql.hudi.analysis.Spark4HoodiePruneFileSourcePartitions"
+    } else if (HoodieSparkUtils.gteqSpark3_4) {
+      // Spark 3.4 and 3.5: PhysicalOperation and ScanOperation unified (SPARK-39764)
+      "org.apache.spark.sql.hudi.analysis.Spark3HoodiePruneFileSourcePartitions"
+    } else {
+      // Spark 3.3: Use ScanOperation for better compatibility
+      "org.apache.spark.sql.hudi.analysis.Spark33HoodiePruneFileSourcePartitions"
+    }
+    rules += (spark => instantiateKlass(pruneFileSourcePartitionsClass, spark))
+
+    rules += (session => ReadBlobRule(session))
 
     rules.toSeq
   }
@@ -184,22 +212,24 @@ object HoodieAnalysis extends SparkAdapterSupport {
           // NOTE: In case of [[MergeIntoTable]] Hudi tables could be on both sides -- receiving and providing
           //       the data, as such we have to make sure that we handle both of these cases
           case mit@MatchMergeIntoTable(targetTable, query, _) =>
-            val updatedTargetTable = targetTable match {
-              //Do not remove the meta cols here anymore
-              case ResolvesToHudiTable(_) => Some(targetTable)
-              case _ => None
-            }
-
-            val updatedQuery = query match {
-              // In the producing side of the MIT, we simply check whether the query will be yielding
-              // Hudi meta-fields attributes. In cases when it does we simply project them out
-              //
-              // NOTE: We have to handle both cases when [[query]] is fully resolved and when it's not,
-              //       since, unfortunately, there's no reliable way for us to control the ordering of the
-              //       application of the rules (during next iteration we might not even reach this rule again),
-              //       therefore we have to make sure projection is handled in a single pass
-              case ProducesHudiMetaFields(output) => Some(projectOutMetaFieldsAttributes(query, output))
-              case _ => None
+            val (updatedTargetTable, updatedQuery) = targetTable match {
+              case ResolvesToHudiTable(_) => {
+                // Do not remove the meta cols here anymore
+                val updatedTarget = Some(targetTable)
+                val updatedQuery = query match {
+                  // In the producing side of the MIT, we simply check whether the query will be yielding
+                  // Hudi meta-fields attributes. In cases when it does we simply project them out
+                  //
+                  // NOTE: We have to handle both cases when [[query]] is fully resolved and when it's not,
+                  //       since, unfortunately, there's no reliable way for us to control the ordering of the
+                  //       application of the rules (during next iteration we might not even reach this rule again),
+                  //       therefore we have to make sure projection is handled in a single pass
+                  case ProducesHudiMetaFields(output) => Some(projectOutMetaFieldsAttributes(query, output))
+                  case _ => None
+                }
+                (updatedTarget, updatedQuery)
+              }
+              case _ => (None, None)
             }
 
             if (updatedTargetTable.isDefined || updatedQuery.isDefined) {
@@ -214,23 +244,25 @@ object HoodieAnalysis extends SparkAdapterSupport {
           // NOTE: In case of [[InsertIntoStatement]] Hudi tables could be on both sides -- receiving and providing
           //       the data, as such we have to make sure that we handle both of these cases
           case iis @ MatchInsertIntoStatement(targetTable, _, _, query, _, _) =>
-            val updatedTargetTable = targetTable match {
+            val (updatedTargetTable, updatedQuery) = targetTable match {
               // In the receiving side of the IIS, we can't project meta-field attributes out,
               // and instead have to explicitly remove them
-              case ResolvesToHudiTable(_) => Some(stripMetaFieldsAttributes(targetTable))
-              case _ => None
-            }
-
-            val updatedQuery = query match {
-              // In the producing side of the MIT, we simply check whether the query will be yielding
-              // Hudi meta-fields attributes. In cases when it does we simply project them out
-              //
-              // NOTE: We have to handle both cases when [[query]] is fully resolved and when it's not,
-              //       since, unfortunately, there's no reliable way for us to control the ordering of the
-              //       application of the rules (during next iteration we might not even reach this rule again),
-              //       therefore we have to make sure projection is handled in a single pass
-              case ProducesHudiMetaFields(output) => Some(projectOutMetaFieldsAttributes(query, output))
-              case _ => None
+              case ResolvesToHudiTable(_) => {
+                val updatedTarget = Some(stripMetaFieldsAttributes(targetTable))
+                val updatedQuery = query match {
+                  // In the producing side of the IIS, we simply check whether the query will be yielding
+                  // Hudi meta-fields attributes. In cases when it does we simply project them out
+                  //
+                  // NOTE: We have to handle both cases when [[query]] is fully resolved and when it's not,
+                  //       since, unfortunately, there's no reliable way for us to control the ordering of the
+                  //       application of the rules (during next iteration we might not even reach this rule again),
+                  //       therefore we have to make sure projection is handled in a single pass
+                  case ProducesHudiMetaFields(output) => Some(projectOutMetaFieldsAttributes(query, output))
+                  case _ => None
+                }
+                (updatedTarget, updatedQuery)
+              }
+              case _ => (None, None)
             }
 
             if (updatedTargetTable.isDefined || updatedQuery.isDefined) {
@@ -351,7 +383,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
   }
 
   private[sql] def failAnalysis(msg: String): Nothing = {
-    throw new AnalysisException(msg)
+    throw new HoodieAnalysisException(msg)
   }
 }
 
@@ -383,7 +415,7 @@ case class ResolveImplementationsEarly(spark: SparkSession) extends Rule[Logical
               None
             }
             val hoodieCatalogTable = new HoodieCatalogTable(spark, lr.catalogTable.get)
-            val alignedQuery = alignQueryOutput(projectByUserSpecified.getOrElse(query), hoodieCatalogTable, partition, spark.sqlContext.conf)
+            val alignedQuery = alignQueryOutput(projectByUserSpecified.getOrElse(query), hoodieCatalogTable, partition, spark.sessionState.conf)
             new InsertIntoHoodieTableCommand(lr, alignedQuery, partition, overwrite)
           case _ => iis
         }
@@ -427,11 +459,8 @@ case class ResolveImplementations(sparkSession: SparkSession) extends Rule[Logic
     AnalysisHelper.allowInvokingTransformsInAnalyzer {
       plan match {
         // Convert to MergeIntoHoodieTableCommand
-        case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(table), _, _) if mit.resolved =>
-          val catalogTable = HoodieCatalogTable(sparkSession, table)
-          val command = MergeIntoHoodieTableCommand(ReplaceExpressions(mit).asInstanceOf[MergeIntoTable], catalogTable, sparkSession, null)
-          val inputPlan = command.getProcessedInputPlan
-          command.copy(query = inputPlan)
+        case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(_), _, _) if mit.resolved =>
+          MergeIntoHoodieTableCommand(ReplaceExpressions(mit).asInstanceOf[MergeIntoTable])
 
         // Convert to UpdateHoodieTableCommand
         case ut@UpdateTable(plan@ResolvesToHudiTable(_), _, _) if ut.resolved =>
@@ -498,7 +527,7 @@ case class ResolveImplementations(sparkSession: SparkSession) extends Rule[Logic
       if (builder != null) {
         Option(builder.build)
       } else {
-        throw new AnalysisException(s"procedure: ${name.last} is not exists")
+        throw new HoodieAnalysisException(s"procedure: ${name.last} is not exists")
       }
     } else {
       None

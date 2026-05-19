@@ -23,6 +23,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.io.SeekableDataInputStream;
 
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.logging.log4j.util.Strings;
 
 import java.io.ByteArrayInputStream;
@@ -39,21 +41,23 @@ import static org.apache.hudi.io.hfile.HFileBlock.HFILEBLOCK_HEADER_SIZE;
 import static org.apache.hudi.io.hfile.HFileUtils.readMajorVersion;
 
 /**
- * An implementation a {@link HFileReader}.
+ * Base implementation of {@link HFileReader} without caching. This provides the core functionality for reading HFile format data.
  */
 public class HFileReaderImpl implements HFileReader {
-  private final SeekableDataInputStream stream;
-  private final long fileSize;
 
-  private final HFileCursor cursor;
-  private boolean isMetadataInitialized = false;
-  private HFileTrailer trailer;
-  private HFileContext context;
-  private TreeMap<Key, BlockIndexEntry> dataBlockIndexEntryMap;
-  private TreeMap<Key, BlockIndexEntry> metaBlockIndexEntryMap;
-  private HFileInfo fileInfo;
-  private Option<BlockIndexEntry> currentDataBlockEntry;
-  private Option<HFileDataBlock> currentDataBlock;
+  protected final SeekableDataInputStream stream;
+  protected final long fileSize;
+
+  protected final HFileCursor cursor;
+  protected boolean isMetadataInitialized = false;
+  @Getter(AccessLevel.PACKAGE)
+  protected HFileTrailer trailer;
+  protected HFileContext context;
+  protected TreeMap<Key, BlockIndexEntry> dataBlockIndexEntryMap;
+  protected TreeMap<Key, BlockIndexEntry> metaBlockIndexEntryMap;
+  protected HFileInfo fileInfo;
+  protected Option<BlockIndexEntry> currentDataBlockEntry;
+  protected Option<HFileDataBlock> currentDataBlock;
 
   public HFileReaderImpl(SeekableDataInputStream stream, long fileSize) {
     this.stream = stream;
@@ -149,7 +153,7 @@ public class HFileReaderImpl implements HFileReader {
         }
       }
       if (!currentDataBlockEntry.get().getNextBlockFirstKey().isPresent()) {
-        // This is the last data block.  Check against the last key.
+        // This is the last data block. Check against the last key.
         if (fileInfo.getLastKey().isPresent()) {
           int comparedLastKey = key.compareTo(fileInfo.getLastKey().get());
           if (comparedLastKey > 0) {
@@ -255,17 +259,13 @@ public class HFileReaderImpl implements HFileReader {
   public boolean isSeeked() {
     return cursor.isSeeked();
   }
-  
+
   @Override
   public void close() throws IOException {
     currentDataBlockEntry = Option.empty();
     currentDataBlock = Option.empty();
     cursor.setEof();
     stream.close();
-  }
-
-  HFileTrailer getTrailer() {
-    return trailer;
   }
 
   Map<Key, BlockIndexEntry> getDataBlockIndexMap() {
@@ -311,7 +311,14 @@ public class HFileReaderImpl implements HFileReader {
     return Option.of(keyBlockIndexEntryEntry.getValue());
   }
 
-  private HFileDataBlock instantiateHFileDataBlock(BlockIndexEntry blockToRead) throws IOException {
+  /**
+   * Creates an HFile data block.
+   *
+   * @param blockToRead the block index entry to read
+   * @return the instantiated HFile data block
+   * @throws IOException if there's an error reading the block
+   */
+  public HFileDataBlock instantiateHFileDataBlock(BlockIndexEntry blockToRead) throws IOException {
     HFileBlockReader blockReader = new HFileBlockReader(
         context, stream, blockToRead.getOffset(),
         blockToRead.getOffset() + (long) blockToRead.getSize());
@@ -326,19 +333,14 @@ public class HFileReaderImpl implements HFileReader {
   }
 
   /**
-   * Read single-level or multiple-level data block index, and load all data block
-   * information into memory in BFS fashion.
+   * Read single-level or multiple-level data block index, and load all data block information into memory in BFS fashion.
    *
-   * @param rootBlockReader a {@link HFileBlockReader} used to read root data index block;
-   *                        this reader will be used to read subsequent meta index block
-   *                        afterward
+   * @param rootBlockReader a {@link HFileBlockReader} used to read root data index block; this reader will be used to read subsequent meta index block afterward
    * @param numEntries      the number of entries in the root index block
    * @param levels          the level of the indexes
-   * @return
+   * @return single/multiple-level data block index
    */
-  private TreeMap<Key, BlockIndexEntry> readDataBlockIndex(HFileBlockReader rootBlockReader,
-                                                           int numEntries,
-                                                           int levels) throws IOException {
+  private TreeMap<Key, BlockIndexEntry> readDataBlockIndex(HFileBlockReader rootBlockReader, int numEntries, int levels) throws IOException {
     ValidationUtils.checkArgument(levels > 0,
         "levels of data block index must be greater than 0");
     // Parse root data index block

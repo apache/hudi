@@ -93,6 +93,39 @@ public class TestIOUtils {
   }
 
   @Test
+  public void testWriteVarIntRoundTrip() {
+    // Verify that writeVarInt produces bytes that readVarLong can decode correctly
+    int[] testValues = {0, 1, 127, 128, 146, 200, 255, 256, 300, 1000, 32080, 65535, 100000,
+        2034958, 632492350, Integer.MAX_VALUE};
+    for (int value : testValues) {
+      byte[] encoded = IOUtils.writeVarInt(value);
+      int size = IOUtils.decodeVarLongSizeOnDisk(encoded, 0);
+      assertEquals(encoded.length, size, "Size mismatch for value " + value);
+      long decoded = IOUtils.readVarLong(encoded, 0, size);
+      assertEquals(value, decoded, "Round-trip mismatch for value " + value);
+    }
+  }
+
+  @Test
+  public void testWriteVarIntMatchesExistingTestVectors() {
+    // Cross-check writeVarInt against known Hadoop VarLong encoding from the existing test data
+    assertEquals(1, IOUtils.writeVarInt(0).length);
+    assertEquals(0, IOUtils.writeVarInt(0)[0]);
+    assertEquals(1, IOUtils.writeVarInt(98).length);
+    assertEquals(98, IOUtils.writeVarInt(98)[0]);
+
+    // Value 208 requires 2 bytes
+    byte[] enc208 = IOUtils.writeVarInt(208);
+    assertEquals(2, enc208.length);
+    assertEquals(208, IOUtils.readVarLong(enc208, 0));
+
+    // Value 32080 requires 3 bytes
+    byte[] enc32080 = IOUtils.writeVarInt(32080);
+    assertEquals(3, enc32080.length);
+    assertEquals(32080, IOUtils.readVarLong(enc32080, 0));
+  }
+
+  @Test
   public void testByteArrayCompareTo() {
     byte[] bytes1 = new byte[] {(byte) 0x9b, 0, 0x18, 0x65, 0x2e, (byte) 0xf3};
     byte[] bytes2 = new byte[] {(byte) 0x9b, 0, 0x18, 0x65, 0x1c, 0x38, (byte) 0x53};

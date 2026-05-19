@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.DataSourceWriteOptions
+
 class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call show_fsview_all Procedure") {
     withTempDir { tmp =>
@@ -184,84 +186,88 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
   }
 
   test("Test Call show_fsview_latest Procedure with NonPartition") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      // create table
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long
-           |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  orderingFields = 'ts',
-           |  'hoodie.parquet.small.file.limit' = '0'
-           | )
+    withSQLConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key() -> "upsert") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        // create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  orderingFields = 'ts',
+             |  'hoodie.parquet.small.file.limit' = '0'
+             | )
        """.stripMargin)
-      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
-      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
-      spark.sql(s"insert into $tableName select 2, 'a3', 20, 1500")
+        spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+        spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+        spark.sql(s"insert into $tableName select 2, 'a3', 20, 1500")
 
-      val result = spark.sql(
-        s"""call show_fsview_latest(table => '$tableName', limit => 10)""".stripMargin).collect()
-      assertResult(2) {
-        result.length
+        val result = spark.sql(
+          s"""call show_fsview_latest(table => '$tableName', limit => 10)""".stripMargin).collect()
+        assertResult(2) {
+          result.length
+        }
       }
     }
   }
 
   test("Test Call show_fsview_latest Procedure with path_regex") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  name string,
-           |  ts long,
-           |  day string,
-           |  hh string
-           |) using hudi
-           | partitioned by(day, hh)
-           | location '${tmp.getCanonicalPath}/$tableName'
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  orderingFields = 'ts',
-           |  'hoodie.parquet.small.file.limit' = '0'
-           | )
+    withSQLConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key() -> "upsert") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  ts long,
+             |  day string,
+             |  hh string
+             |) using hudi
+             | partitioned by(day, hh)
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  orderingFields = 'ts',
+             |  'hoodie.parquet.small.file.limit' = '0'
+             | )
        """.stripMargin)
 
-      val result1 = spark.sql(s"call show_fsview_all(table => '$tableName')").collect()
-      assertResult(0) {
-        result1.length
-      }
+        val result1 = spark.sql(s"call show_fsview_all(table => '$tableName')").collect()
+        assertResult(0) {
+          result1.length
+        }
 
-      spark.sql(s"insert into $tableName select 1, 'a1', 1001, 'd1', 'h1'")
-      spark.sql(s"insert into $tableName select 1, 'a2', 1002, 'd1', 'h1'")
-      spark.sql(s"insert into $tableName select 2, 'a3', 1003, 'd1', 'h2'")
-      spark.sql(s"insert into $tableName select 3, 'a4', 1004, 'd1', 'h2'")
-      spark.sql(s"insert into $tableName select 4, 'a5', 1005, 'd2', 'h1'")
+        spark.sql(s"insert into $tableName select 1, 'a1', 1001, 'd1', 'h1'")
+        spark.sql(s"insert into $tableName select 1, 'a2', 1002, 'd1', 'h1'")
+        spark.sql(s"insert into $tableName select 2, 'a3', 1003, 'd1', 'h2'")
+        spark.sql(s"insert into $tableName select 3, 'a4', 1004, 'd1', 'h2'")
+        spark.sql(s"insert into $tableName select 4, 'a5', 1005, 'd2', 'h1'")
 
-      val result2 = spark.sql(
-        s"call show_fsview_latest(table => '$tableName')").collect()
-      assertResult(4) {
-        result2.length
-      }
+        val result2 = spark.sql(
+          s"call show_fsview_latest(table => '$tableName')").collect()
+        assertResult(4) {
+          result2.length
+        }
 
-      val result3 = spark.sql(
-        s"call show_fsview_latest(table => '$tableName', path_regex => 'day=d1/*/')").collect()
-      assertResult(3) {
-        result3.length
-      }
+        val result3 = spark.sql(
+          s"call show_fsview_latest(table => '$tableName', path_regex => 'day=d1/*/')").collect()
+        assertResult(3) {
+          result3.length
+        }
 
-      val result4 = spark.sql(
-        s"call show_fsview_latest(table => '$tableName', path_regex => 'day=d1/hh=h2/')").collect()
-      assertResult(2) {
-        result4.length
+        val result4 = spark.sql(
+          s"call show_fsview_latest(table => '$tableName', path_regex => 'day=d1/hh=h2/')").collect()
+        assertResult(2) {
+          result4.length
+        }
       }
     }
   }

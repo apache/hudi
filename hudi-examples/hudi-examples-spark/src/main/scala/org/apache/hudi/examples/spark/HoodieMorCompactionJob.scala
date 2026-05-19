@@ -38,8 +38,10 @@ import scala.collection.JavaConverters._
 /**
  * Simple example to run a compaction job for MOR table.
  * To run this example, you should:
+ * <pre>
  *   1. For running in IDE, set VM options `-Dspark.master=local[2]`
  *   2. For running in shell, using `spark-submit`
+ * </pre>
  *
  * Usage: HoodieMorCompactionJob <tablePath> <tableName>.
  * <tablePath> and <tableName> describe root path of hudi and table name

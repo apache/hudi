@@ -19,12 +19,15 @@
 
 package org.apache.hudi.common.engine;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -43,17 +46,17 @@ import org.apache.hudi.common.util.collection.CloseableFilterIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.expression.Predicate;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.apache.avro.Schema;
-
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
@@ -88,24 +91,36 @@ public abstract class HoodieReaderContext<T> {
 
   // should we do position based merging for mor
   private Boolean shouldMergeUseRecordPosition = null;
-  protected Option<InstantRange> instantRangeOpt = Option.empty();
+  protected Option<InstantRange> instantRangeOpt;
   private RecordMergeMode mergeMode;
   protected RecordContext<T> recordContext;
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
   // the default iterator mode is engine-specific record mode
   private IteratorMode iteratorMode = IteratorMode.ENGINE_RECORD;
+  protected final HoodieConfig hoodieReaderConfig;
+  private boolean enableLogicalTimestampFieldRepair = true;
+
+  protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
+      Option<Predicate> keyFilterOpt,
+      RecordContext<T> recordContext) {
+    this(storageConfiguration, tableConfig, instantRangeOpt, keyFilterOpt, recordContext, ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER);
+  }
 
   protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
                                 HoodieTableConfig tableConfig,
                                 Option<InstantRange> instantRangeOpt,
                                 Option<Predicate> keyFilterOpt,
-                                RecordContext<T> recordContext) {
+                                RecordContext<T> recordContext,
+                                HoodieConfig hoodieReaderConfig) {
     this.tableConfig = tableConfig;
     this.storageConfiguration = storageConfiguration;
     this.baseFileFormat = tableConfig.getBaseFileFormat();
     this.instantRangeOpt = instantRangeOpt;
     this.keyFilterOpt = keyFilterOpt;
     this.recordContext = recordContext;
+    this.hoodieReaderConfig = hoodieReaderConfig;
   }
 
   // Getter and Setter for schemaHandler
@@ -131,6 +146,10 @@ public abstract class HoodieReaderContext<T> {
       throw new IllegalStateException("Table path not set in reader context.");
     }
     return tablePath;
+  }
+
+  public void setEnableLogicalTimestampFieldRepair(boolean enableLogicalTimestampFieldRepair) {
+    this.enableLogicalTimestampFieldRepair = enableLogicalTimestampFieldRepair;
   }
 
   public void setTablePath(String tablePath) {
@@ -176,6 +195,10 @@ public abstract class HoodieReaderContext<T> {
     return needsBootstrapMerge;
   }
 
+  public boolean enableLogicalTimestampFieldRepair() {
+    return enableLogicalTimestampFieldRepair;
+  }
+
   public void setNeedsBootstrapMerge(boolean needsBootstrapMerge) {
     this.needsBootstrapMerge = needsBootstrapMerge;
   }
@@ -194,7 +217,7 @@ public abstract class HoodieReaderContext<T> {
   }
 
   public TypedProperties getMergeProps(TypedProperties props) {
-    return ConfigUtils.getMergeProps(props, this.tableConfig.getProps());
+    return ConfigUtils.getMergeProps(props, this.tableConfig);
   }
 
   public Option<Predicate> getKeyFilterOpt() {
@@ -202,7 +225,7 @@ public abstract class HoodieReaderContext<T> {
   }
 
   public SizeEstimator<BufferedRecord<T>> getRecordSizeEstimator() {
-    return new HoodieRecordSizeEstimator<>(getSchemaHandler().getRequiredSchema());
+    return new HoodieRecordSizeEstimator<>(getSchemaHandler().getSchemaForUpdates());
   }
 
   public CustomSerializer<BufferedRecord<T>> getRecordSerializer() {
@@ -213,6 +236,10 @@ public abstract class HoodieReaderContext<T> {
     return recordContext;
   }
 
+  public HoodieConfig getHoodieReaderConfig() {
+    return hoodieReaderConfig;
+  }
+
   /**
    * Gets the record iterator based on the type of engine-specific record representation from the
    * file.
@@ -220,13 +247,13 @@ public abstract class HoodieReaderContext<T> {
    * @param filePath       {@link StoragePath} instance of a file.
    * @param start          Starting byte to start reading.
    * @param length         Bytes to read.
-   * @param dataSchema     Schema of records in the file in {@link Schema}.
-   * @param requiredSchema Schema containing required fields to read in {@link Schema} for projection.
+   * @param dataSchema     Schema of records in the file in {@link HoodieSchema}.
+   * @param requiredSchema Schema containing required fields to read in {@link HoodieSchema} for projection.
    * @param storage        {@link HoodieStorage} for reading records.
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
   public abstract ClosableIterator<T> getFileRecordIterator(
-      StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema,
+      StoragePath filePath, long start, long length, HoodieSchema dataSchema, HoodieSchema requiredSchema,
       HoodieStorage storage) throws IOException;
 
   /**
@@ -236,13 +263,13 @@ public abstract class HoodieReaderContext<T> {
    * @param storagePathInfo {@link StoragePathInfo} instance of a file.
    * @param start           Starting byte to start reading.
    * @param length          Bytes to read.
-   * @param dataSchema      Schema of records in the file in {@link Schema}.
-   * @param requiredSchema  Schema containing required fields to read in {@link Schema} for projection.
+   * @param dataSchema      Schema of records in the file in {@link HoodieSchema}.
+   * @param requiredSchema  Schema containing required fields to read in {@link HoodieSchema} for projection.
    * @param storage         {@link HoodieStorage} for reading records.
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
   public ClosableIterator<T> getFileRecordIterator(
-      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
+      StoragePathInfo storagePathInfo, long start, long length, HoodieSchema dataSchema, HoodieSchema requiredSchema,
       HoodieStorage storage) throws IOException {
     return getFileRecordIterator(storagePathInfo.getPath(), start, length, dataSchema, requiredSchema, storage);
   }
@@ -332,8 +359,9 @@ public abstract class HoodieReaderContext<T> {
       return fileRecordIterator;
     }
     InstantRange instantRange = getInstantRange().get();
-    final Schema.Field commitTimeField = getSchemaHandler().getRequiredSchema().getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
-    final int commitTimePos = commitTimeField.pos();
+    final Option<HoodieSchemaField> commitTimeFieldOpt = getSchemaHandler().getRequiredSchema().getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+    final int commitTimePos = commitTimeFieldOpt.orElseThrow(() ->
+        new HoodieSchemaException("Commit time metadata field '" + HoodieRecord.COMMIT_TIME_METADATA_FIELD + "' not found in required schema")).pos();
     java.util.function.Predicate<T> instantFilter =
         row -> instantRange.isInRange(recordContext.getMetaFieldValue(row, commitTimePos));
     return new CloseableFilterIterator<>(fileRecordIterator, instantFilter);
@@ -344,17 +372,26 @@ public abstract class HoodieReaderContext<T> {
    * skeleton file iterator, followed by all columns in the data file iterator
    *
    * @param skeletonFileIterator iterator over bootstrap skeleton files that contain hudi metadata columns
-   * @param skeletonRequiredSchema the schema of the skeleton file iterator
+   * @param skeletonRequiredSchema the HoodieSchema of the skeleton file iterator
    * @param dataFileIterator iterator over data files that were bootstrapped into the hudi table
-   * @param dataRequiredSchema the schema of the data file iterator
+   * @param dataRequiredSchema the HoodieSchema of the data file iterator
    * @param requiredPartitionFieldAndValues the partition field names and their values that are required by the query
    * @return iterator that concatenates the skeletonFileIterator and dataFileIterator
    */
   public abstract ClosableIterator<T> mergeBootstrapReaders(ClosableIterator<T> skeletonFileIterator,
-                                                            Schema skeletonRequiredSchema,
+                                                            HoodieSchema skeletonRequiredSchema,
                                                             ClosableIterator<T> dataFileIterator,
-                                                            Schema dataRequiredSchema,
+                                                            HoodieSchema dataRequiredSchema,
                                                             List<Pair<String, Object>> requiredPartitionFieldAndValues);
+
+  /**
+   * Optional per-row transformer applied to log-block records before they reach the merger.
+   * Engines override this to align records with a projected read schema (e.g. Spark 4.1's
+   * PushVariantIntoScan). Default is no projection.
+   */
+  public Option<Function<T, T>> getLogBlockRecordProjection(HoodieSchema dataBlockSchema) {
+    return Option.empty();
+  }
 
   public Option<Pair<String, String>> getPayloadClasses(TypedProperties props) {
     return getRecordMerger().map(merger -> {

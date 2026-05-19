@@ -19,8 +19,12 @@
 
 package org.apache.hudi.io.hfile;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+
+import static org.apache.hudi.io.util.IOUtils.writeVarInt;
 
 public class HFileMetaIndexBlock extends HFileIndexBlock {
 
@@ -33,27 +37,25 @@ public class HFileMetaIndexBlock extends HFileIndexBlock {
   }
 
   @Override
-  public ByteBuffer getUncompressedBlockDataToWrite() {
-    ByteBuffer buf = ByteBuffer.allocate(context.getBlockSize() * 2);
-    for (BlockIndexEntry entry : entries) {
-      buf.putLong(entry.getOffset());
-      buf.putInt(entry.getSize());
-      // Key length.
-      try {
-        byte[] keyLength = getVariableLengthEncodedBytes(entry.getFirstKey().getLength());
-        buf.put(keyLength);
-      } catch (IOException e) {
-        throw new RuntimeException(
-            "Failed to serialize number: " + entry.getFirstKey().getLength());
+  public ByteBuffer getUncompressedBlockDataToWrite() throws IOException {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream(context.getBlockSize());
+    try (DataOutputStream outputStream = new DataOutputStream(baos)) {
+      for (BlockIndexEntry entry : entries) {
+        outputStream.writeLong(entry.getOffset());
+        outputStream.writeInt(entry.getSize());
+        // Key length.
+        // Use Hadoop WritableUtils VarInt encoding to match HBase's HFile format.
+        byte[] keyLength = writeVarInt(entry.getFirstKey().getLength());
+        outputStream.write(keyLength);
+        // Note that: NO two-bytes for encoding key length.
+        // Key.
+        outputStream.write(entry.getFirstKey().getBytes());
       }
-      // Note that: NO two-bytes for encoding key length.
-      // Key.
-      buf.put(entry.getFirstKey().getBytes());
     }
-    buf.flip();
 
     // Set metrics.
-    blockDataSize = buf.limit();
-    return buf;
+    byte[] allData = baos.toByteArray();
+    blockDataSize = allData.length;
+    return ByteBuffer.wrap(allData);
   }
 }

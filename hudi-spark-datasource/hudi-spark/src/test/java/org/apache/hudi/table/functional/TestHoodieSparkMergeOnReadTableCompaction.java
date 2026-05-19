@@ -26,7 +26,6 @@ import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
@@ -141,8 +140,6 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
             .withMaxNumDeltaCommitsBeforeCompaction(1)
             .compactionSmallFileSize(0)
             .build())
-        .withStorageConfig(HoodieStorageConfig.newBuilder()
-            .parquetMaxFileSize(1024).build())
         .withLayoutConfig(layoutConfig)
         .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(indexType).withBucketNum("1").build())
         .withMarkersTimelineServerBasedBatchIntervalMs(10)
@@ -183,59 +180,53 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
   @ParameterizedTest
   @MethodSource("writeLogTest")
   public void testWriteLogDuringCompaction(boolean enableMetadataTable, boolean enableTimelineServer) throws IOException {
-    try {
-      //disable for this test because it seems like we process mor in a different order?
-      jsc().hadoopConfiguration().set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
-      Properties props = getPropertiesForKeyGen(true);
-      HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
-          .forTable("test-trip-table")
-          .withPath(basePath())
-          .withSchema(TRIP_EXAMPLE_SCHEMA)
-          .withParallelism(2, 2)
-            .withEmbeddedTimelineServerEnabled(enableTimelineServer)
-          .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
-          .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-              .withMaxNumDeltaCommitsBeforeCompaction(1).build())
-          .withLayoutConfig(HoodieLayoutConfig.newBuilder()
-              .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())
-              .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
-          .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build())
-          .withMarkersTimelineServerBasedBatchIntervalMs(10)
-          .build();
-      props.putAll(config.getProps());
+    Properties props = getPropertiesForKeyGen(true);
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .forTable("test-trip-table")
+        .withPath(basePath())
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withParallelism(2, 2)
+          .withEmbeddedTimelineServerEnabled(enableTimelineServer)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withLayoutConfig(HoodieLayoutConfig.newBuilder()
+            .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())
+            .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build())
+        .withMarkersTimelineServerBasedBatchIntervalMs(10)
+        .build();
+    props.putAll(config.getProps());
 
-      metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, props);
-      client = getHoodieWriteClient(config);
+    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, props);
+    client = getHoodieWriteClient(config);
 
-      final List<HoodieRecord> records = dataGen.generateInserts("001", 100);
-      JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 2);
+    final List<HoodieRecord> records = dataGen.generateInserts("001", 100);
+    JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 2);
 
-      // initialize 100 records
-      String commit1 = client.startCommit();
-      JavaRDD writeStatuses = client.upsert(writeRecords, commit1);
-      client.commit(commit1, writeStatuses);
+    // initialize 100 records
+    String commit1 = client.startCommit();
+    JavaRDD writeStatuses = client.upsert(writeRecords, commit1);
+    client.commit(commit1, writeStatuses);
 
-      // update 100 records
-      String commit2 = client.startCommit();
-      writeStatuses = client.upsert(writeRecords, commit2);
-      client.commit(commit2, writeStatuses);
-      // schedule compaction
-      client.scheduleCompaction(Option.empty());
-      // delete 50 records
-      List<HoodieKey> toBeDeleted = records.stream().map(HoodieRecord::getKey).limit(50).collect(Collectors.toList());
-      JavaRDD<HoodieKey> deleteRecords = jsc().parallelize(toBeDeleted, 2);
-      String commit3 = client.startCommit();
-      writeStatuses = client.delete(deleteRecords, commit3);
-      client.commit(commit3, writeStatuses);
+    // update 100 records
+    String commit2 = client.startCommit();
+    writeStatuses = client.upsert(writeRecords, commit2);
+    client.commit(commit2, writeStatuses);
+    // schedule compaction
+    client.scheduleCompaction(Option.empty());
+    // delete 50 records
+    List<HoodieKey> toBeDeleted = records.stream().map(HoodieRecord::getKey).limit(50).collect(Collectors.toList());
+    JavaRDD<HoodieKey> deleteRecords = jsc().parallelize(toBeDeleted, 2);
+    String commit3 = client.startCommit();
+    writeStatuses = client.delete(deleteRecords, commit3);
+    client.commit(commit3, writeStatuses);
 
-      // insert the same 100 records again
-      String commit4 = client.startCommit();
-      writeStatuses = client.upsert(writeRecords, commit4);
-      client.commit(commit4, writeStatuses);
-      assertEquals(100, readTableTotalRecordsNum());
-    } finally {
-      jsc().hadoopConfiguration().set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true");
-    }
+    // insert the same 100 records again
+    String commit4 = client.startCommit();
+    writeStatuses = client.upsert(writeRecords, commit4);
+    client.commit(commit4, writeStatuses);
+    assertEquals(100, readTableTotalRecordsNum());
   }
 
   /**

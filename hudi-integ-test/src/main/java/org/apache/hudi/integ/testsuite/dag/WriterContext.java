@@ -33,10 +33,9 @@ import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -44,10 +43,16 @@ import java.util.concurrent.Executors;
 
 /**
  * WriterContext wraps the delta writer/data generator related configuration needed to init/reinit.
+ *
+ * Note: Getters are manually defined instead of using Lombok's @Getter annotation.
+ * This is because Scala classes in this module reference these getters, and the Scala
+ * compiler runs before Lombok annotation processing. Using @Getter would cause Scala
+ * compilation errors as the generated methods wouldn't be visible yet. To avoid
+ * complicating the build with custom compilation order configuration, we use explicit
+ * getter methods that are available during Scala compilation.
  */
+@Slf4j
 public class WriterContext {
-
-  protected static Logger log = LoggerFactory.getLogger(WriterContext.class);
 
   private final HoodieTestSuiteConfig cfg;
   private TypedProperties props;
@@ -80,7 +85,7 @@ public class WriterContext {
               HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), cfg.inputBasePath, cfg.targetBasePath,
               schemaStr, cfg.limitFileSize, inputParallelism, cfg.deleteOldInput, cfg.useHudiToGenerateUpdates),
           jsc, sparkSession, schemaStr, keyGenerator);
-      log.info(String.format("Initialized writerContext with: %s", schemaStr));
+      log.info("Initialized writerContext with: {}", schemaStr);
       if (cfg.testContinuousMode) {
         executorService = Executors.newFixedThreadPool(1);
         executorService.execute(new TestSuiteWriterRunnable(hoodieTestSuiteWriter));
@@ -149,7 +154,7 @@ public class WriterContext {
         hoodieTestSuiteWriter.getDeltaStreamerWrapper().sync();
         log.info("Completed continuous sync with deltastreamer ");
       } catch (Exception e) {
-        log.error("Deltastreamer failed in continuous mode " + e.getMessage());
+        log.error("Deltastreamer failed in continuous mode {}", e.getMessage());
         throw new HoodieException("Shutting down deltastreamer in continuous mode failed ", e);
       }
     }

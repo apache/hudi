@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # NOTE:
-# This config file defines how Azure CI runs tests with Spark 3.5 and Flink 1.18 profiles.
+# This config file defines how Azure CI runs tests with Spark 3.5 and Flink 2.1 profiles.
 # PRs will need to keep in sync with master's version to trigger the CI runs.
 # See scripts/jacoco/README.md for how aggregated code coverage report works
 # across multiple modules.
@@ -34,6 +34,7 @@ parameters:
       - 'hudi-spark-datasource'
       - 'hudi-spark-datasource/hudi-spark'
       - 'hudi-spark-datasource/hudi-spark3.5.x'
+      - 'hudi-spark-datasource/hudi-spark3-common'
       - 'hudi-spark-datasource/hudi-spark-common'
   - name: job10UTModules
     type: object
@@ -51,6 +52,7 @@ parameters:
       - '!hudi-spark-datasource'
       - '!hudi-spark-datasource/hudi-spark'
       - '!hudi-spark-datasource/hudi-spark3.5.x'
+      - '!hudi-spark-datasource/hudi-spark3-common'
       - '!hudi-spark-datasource/hudi-spark-common'
       - '!hudi-utilities'
   - name: job10FTModules
@@ -73,6 +75,8 @@ parameters:
       - 'org.apache.spark.sql.avro'
       - 'org.apache.spark.sql.execution'
       - 'org.apache.spark.sql.hudi.analysis'
+      - 'org.apache.spark.sql.hudi.blob'
+      - 'org.apache.spark.sql.hudi.catalog'
       - 'org.apache.spark.sql.hudi.command'
       - 'org.apache.spark.sql.hudi.common'
       - 'org.apache.spark.sql.hudi.ddl'
@@ -97,12 +101,12 @@ parameters:
       - '!packaging/hudi-utilities-slim-bundle'
 
 variables:
-  BUILD_PROFILES: '-Dscala-2.12 -Dspark3.5 -Dflink1.18'
+  BUILD_PROFILES: '-Dscala-2.12 -Dspark3.5 -Dflink2.1'
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
-  MVN_OPTS_INSTALL: '-T 3 -Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5'
+  MVN_OPTS_INSTALL: '-T 3 -Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5 -Dorg.eclipse.jetty.LEVEL=WARN'
   MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
-  JAVA_MVN_TEST_FILTER: '-DwildcardSuites=skipScalaTests -DfailIfNoTests=false'
-  SCALA_MVN_TEST_FILTER: '-Dtest=skipJavaTests -DfailIfNoTests=false'
+  JAVA_MVN_TEST_FILTER: '-DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false'
+  SCALA_MVN_TEST_FILTER: '-Dtest=skipJavaTests -Dsurefire.failIfNoSpecifiedTests=false'
   JOB3456_MODULES: ${{ join(',',parameters.job3456UTModules) }}
   JAVA_FUNCTIONAL_PACKAGE_TEST_FILTER: '**/org/apache/hudi/functional/**/*'
   MVN_ARG_FUNCTIONAL_PACKAGE_TEST: "-Dtest=\"$(JAVA_FUNCTIONAL_PACKAGE_TEST_FILTER)\""
@@ -123,7 +127,7 @@ stages:
     jobs:
       - job: UT_FT_1
         displayName: UT hudi-hadoop-common & UT FT client/spark-client
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -132,7 +136,7 @@ stages:
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl hudi-client/hudi-spark-client -am
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - task: Maven@4
             displayName: UT hudi-hadoop-common
             inputs:
@@ -140,7 +144,7 @@ stages:
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE1_ARG) -pl hudi-hadoop-common
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
             displayName: UT client/spark-client
@@ -149,7 +153,7 @@ stages:
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE2_ARG) -pl hudi-client/hudi-spark-client
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
             displayName: FT client/spark-client
@@ -160,7 +164,7 @@ stages:
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -Djacoco.agent.dest.filename=jacoco2.corrupt -pl hudi-client/hudi-spark-client
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
@@ -177,7 +181,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_2
         displayName: FTA hudi-spark
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -186,7 +190,7 @@ stages:
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl hudi-spark-datasource/hudi-spark -am
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - task: Maven@4
             displayName: FTA hudi-spark-datasource/hudi-spark
             inputs:
@@ -195,7 +199,7 @@ stages:
               options: $(MVN_OPTS_TEST) -Pfunctional-tests $(JACOCO_AGENT_DESTFILE1_ARG) -pl hudi-spark-datasource/hudi-spark
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
@@ -212,7 +216,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_3
         displayName: UT spark-datasource Java Test 1
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -221,7 +225,7 @@ stages:
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - task: Maven@4
             displayName: Java UT spark-datasource functional package
             inputs:
@@ -230,7 +234,7 @@ stages:
               options: $(MVN_OPTS_TEST) -Punit-tests $(JAVA_MVN_TEST_FILTER) $(MVN_ARG_FUNCTIONAL_PACKAGE_TEST) $(JACOCO_AGENT_DESTFILE2_ARG) -pl $(JOB3456_MODULES)
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
@@ -247,7 +251,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_4
         displayName: UT spark-datasource Java Test 2
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -256,7 +260,7 @@ stages:
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - task: Maven@4
             displayName: Java UT spark-datasource non-functional package
             inputs:
@@ -265,7 +269,7 @@ stages:
               options: $(MVN_OPTS_TEST) -Punit-tests $(JAVA_MVN_TEST_FILTER) $(MVN_ARG_NON_FUNCTIONAL_PACKAGE_TEST) $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
@@ -282,7 +286,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_5
         displayName: UT spark-datasource DML
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -291,7 +295,7 @@ stages:
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - task: Maven@4
             displayName: Scala UT spark-datasource DML 1
             inputs:
@@ -300,7 +304,7 @@ stages:
               options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="org.apache.spark.sql.hudi.dml.others" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
@@ -317,7 +321,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_6
         displayName: UT spark-datasource DDL & Others
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -326,7 +330,7 @@ stages:
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - task: Maven@4
             displayName: Scala UT spark-datasource DDL & Others
             inputs:
@@ -335,7 +339,7 @@ stages:
               options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="$(JOB6_SPARK_DDL_OTHERS_WILDCARD_SUITES)" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
@@ -352,7 +356,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_7
         displayName: UT Hudi Streamer & FT utilities
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Docker@2
             displayName: "login to docker hub"
@@ -375,10 +379,11 @@ stages:
               command: 'run'
               arguments: >
                 -v $(Build.SourcesDirectory):/hudi
+                -v /var/run/docker.sock:/var/run/docker.sock
                 -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
                 /bin/bash -c "mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source -pl hudi-utilities -am
-                && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE1_ARG) -Dtest="TestHoodie*" -DfailIfNoTests=false -DargLine="-Xmx4g" -pl hudi-utilities
-                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests $(JACOCO_AGENT_DESTFILE2_ARG) -DfailIfNoTests=false -DargLine="-Xmx4g" -pl hudi-utilities"
+                && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE1_ARG) -Dtest="TestHoodie*" -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities
+                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests $(JACOCO_AGENT_DESTFILE2_ARG) -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities"
           - task: PublishTestResults@2
             displayName: 'Publish Test Results'
             inputs:
@@ -401,7 +406,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_8
         displayName: UT FT Spark and SQL (additional)
-        timeoutInMinutes: '110'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -410,7 +415,7 @@ stages:
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - task: Maven@4
             displayName: Scala UT spark-datasource Hudi SQL features
             inputs:
@@ -418,7 +423,7 @@ stages:
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="org.apache.spark.sql.hudi.feature" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
             displayName: Scala UT spark-datasource DML 2
@@ -427,7 +432,7 @@ stages:
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="org.apache.spark.sql.hudi.dml.insert" $(JACOCO_AGENT_DESTFILE2_ARG) -pl $(JOB3456_MODULES)
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
             displayName: FTC hudi-spark-datasource/hudi-spark
@@ -437,7 +442,7 @@ stages:
               options: $(MVN_OPTS_TEST) -Pfunctional-tests-c $(JACOCO_AGENT_DESTFILE3_ARG) -pl hudi-spark-datasource/hudi-spark
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
@@ -454,7 +459,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_9
         displayName: FT spark 2
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -463,7 +468,7 @@ stages:
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl hudi-client/hudi-spark-client,hudi-spark-datasource/hudi-spark -am
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - task: Maven@4
             displayName: FTB hudi-spark-datasource/hudi-spark
             inputs:
@@ -472,7 +477,7 @@ stages:
               options: $(MVN_OPTS_TEST) -Pfunctional-tests-b $(JACOCO_AGENT_DESTFILE1_ARG) -pl hudi-spark-datasource/hudi-spark
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
@@ -489,7 +494,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_10
         displayName: UT FT common & other modules
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Docker@2
             displayName: "login to docker hub"
@@ -512,11 +517,12 @@ stages:
               command: 'run'
               arguments: >
                 -v $(Build.SourcesDirectory):/hudi
+                -v /var/run/docker.sock:/var/run/docker.sock
                 -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
-                /bin/bash -c "mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source
-                && mvn test  $(MVN_OPTS_TEST) -Punit-tests -DfailIfNoTests=false -DargLine="-Xmx4g" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB10_UT_MODULES)
-                && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE2_ARG) -Dtest="!TestHoodie*" -DfailIfNoTests=false -DargLine="-Xmx4g" -pl hudi-utilities
-                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -DfailIfNoTests=false -DargLine="-Xmx4g" $(JACOCO_AGENT_DESTFILE3_ARG) -pl $(JOB10_FT_MODULES)"
+                /bin/bash -c "MAVEN_OPTS='-Xmx8g' mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source
+                && mvn test  $(MVN_OPTS_TEST) -Punit-tests -Dsurefire.failIfNoSpecifiedTests=false $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB10_UT_MODULES)
+                && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE2_ARG) -Dtest="!TestHoodie*" -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities
+                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -Dsurefire.failIfNoSpecifiedTests=false  $(JACOCO_AGENT_DESTFILE3_ARG) -pl $(JOB10_FT_MODULES)"
           - task: PublishTestResults@2
             displayName: 'Publish Test Results'
             inputs:
@@ -581,7 +587,7 @@ stages:
               goals: 'clean package'
               options: $(MVN_OPTS_INSTALL) -Pcopy-files-for-jacoco -pl $(JACOCO_MODULES)
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - script: |
               ./scripts/jacoco/generate_jacoco_coverage_report.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
             displayName: 'Generate JaCoCo Code Coverage Report'

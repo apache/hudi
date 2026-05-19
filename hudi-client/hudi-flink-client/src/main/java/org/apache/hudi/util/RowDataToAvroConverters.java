@@ -18,8 +18,12 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.adapter.DataTypeAdapter;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+
 import org.apache.avro.Conversions;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
@@ -63,7 +67,7 @@ public class RowDataToAvroConverters {
    */
   @FunctionalInterface
   public interface RowDataToAvroConverter extends Serializable {
-    Object convert(Schema schema, Object object);
+    Object convert(HoodieSchema schema, Object object);
   }
 
   // --------------------------------------------------------------------------------
@@ -90,7 +94,7 @@ public class RowDataToAvroConverters {
               private static final long serialVersionUID = 1L;
 
               @Override
-              public Object convert(Schema schema, Object object) {
+              public Object convert(HoodieSchema schema, Object object) {
                 return null;
               }
             };
@@ -101,7 +105,7 @@ public class RowDataToAvroConverters {
               private static final long serialVersionUID = 1L;
 
               @Override
-              public Object convert(Schema schema, Object object) {
+              public Object convert(HoodieSchema schema, Object object) {
                 return ((Byte) object).intValue();
               }
             };
@@ -112,7 +116,7 @@ public class RowDataToAvroConverters {
               private static final long serialVersionUID = 1L;
 
               @Override
-              public Object convert(Schema schema, Object object) {
+              public Object convert(HoodieSchema schema, Object object) {
                 return ((Short) object).intValue();
               }
             };
@@ -131,7 +135,7 @@ public class RowDataToAvroConverters {
               private static final long serialVersionUID = 1L;
 
               @Override
-              public Object convert(Schema schema, Object object) {
+              public Object convert(HoodieSchema schema, Object object) {
                 return object;
               }
             };
@@ -143,7 +147,7 @@ public class RowDataToAvroConverters {
               private static final long serialVersionUID = 1L;
 
               @Override
-              public Object convert(Schema schema, Object object) {
+              public Object convert(HoodieSchema schema, Object object) {
                 return new Utf8(((BinaryStringData) object).toBytes());
               }
             };
@@ -155,7 +159,7 @@ public class RowDataToAvroConverters {
               private static final long serialVersionUID = 1L;
 
               @Override
-              public Object convert(Schema schema, Object object) {
+              public Object convert(HoodieSchema schema, Object object) {
                 return ByteBuffer.wrap((byte[]) object);
               }
             };
@@ -167,7 +171,7 @@ public class RowDataToAvroConverters {
             private static final long serialVersionUID = 1L;
 
             @Override
-            public Object convert(Schema schema, Object object) {
+            public Object convert(HoodieSchema schema, Object object) {
                 return ((TimestampData) object).toInstant().toEpochMilli();
               }
           };
@@ -176,7 +180,7 @@ public class RowDataToAvroConverters {
             private static final long serialVersionUID = 1L;
 
             @Override
-            public Object convert(Schema schema, Object object) {
+            public Object convert(HoodieSchema schema, Object object) {
               Instant instant = ((TimestampData) object).toInstant();
               return Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1000_000), instant.getNano() / 1000);
             }
@@ -193,7 +197,7 @@ public class RowDataToAvroConverters {
                 private static final long serialVersionUID = 1L;
 
                 @Override
-                public Object convert(Schema schema, Object object) {
+                public Object convert(HoodieSchema schema, Object object) {
                   return utcTimezone ? ((TimestampData) object).toInstant().toEpochMilli() : ((TimestampData) object).toTimestamp().getTime();
                 }
               };
@@ -203,7 +207,7 @@ public class RowDataToAvroConverters {
                 private static final long serialVersionUID = 1L;
 
                 @Override
-                public Object convert(Schema schema, Object object) {
+                public Object convert(HoodieSchema schema, Object object) {
                   Instant instant = utcTimezone ? ((TimestampData) object).toInstant() : ((TimestampData) object).toTimestamp().toInstant();
                   return  Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1000_000), instant.getNano() / 1000);
                 }
@@ -218,9 +222,9 @@ public class RowDataToAvroConverters {
               private static final long serialVersionUID = 1L;
 
               @Override
-              public Object convert(Schema schema, Object object) {
+              public Object convert(HoodieSchema schema, Object object) {
                 BigDecimal javaDecimal = ((DecimalData) object).toBigDecimal();
-                return DECIMAL_CONVERSION.toFixed(javaDecimal, schema, schema.getLogicalType());
+                return DECIMAL_CONVERSION.toFixed(javaDecimal, schema.toAvroSchema(), schema.toAvroSchema().getLogicalType());
               }
             };
         break;
@@ -236,6 +240,10 @@ public class RowDataToAvroConverters {
         break;
       case RAW:
       default:
+        if (DataTypeAdapter.isVariantType(type)) {
+          converter = createVariantConverter();
+          break;
+        }
         throw new UnsupportedOperationException("Unsupported type: " + type);
     }
 
@@ -244,19 +252,19 @@ public class RowDataToAvroConverters {
       private static final long serialVersionUID = 1L;
 
       @Override
-      public Object convert(Schema schema, Object object) {
+      public Object convert(HoodieSchema schema, Object object) {
         if (object == null) {
           return null;
         }
 
         // get actual schema if it is a nullable schema
-        Schema actualSchema;
-        if (schema.getType() == Schema.Type.UNION) {
-          List<Schema> types = schema.getTypes();
+        HoodieSchema actualSchema;
+        if (schema.getType() == HoodieSchemaType.UNION) {
+          List<HoodieSchema> types = schema.getTypes();
           int size = types.size();
-          if (size == 2 && types.get(1).getType() == Schema.Type.NULL) {
+          if (size == 2 && types.get(1).getType() == HoodieSchemaType.NULL) {
             actualSchema = types.get(0);
-          } else if (size == 2 && types.get(0).getType() == Schema.Type.NULL) {
+          } else if (size == 2 && types.get(0).getType() == HoodieSchemaType.NULL) {
             actualSchema = types.get(1);
           } else {
             throw new IllegalArgumentException(
@@ -289,12 +297,12 @@ public class RowDataToAvroConverters {
       private static final long serialVersionUID = 1L;
 
       @Override
-      public Object convert(Schema schema, Object object) {
+      public Object convert(HoodieSchema schema, Object object) {
         final RowData row = (RowData) object;
-        final List<Schema.Field> fields = schema.getFields();
-        final GenericRecord record = new GenericData.Record(schema);
+        final List<HoodieSchemaField> fields = schema.getFields();
+        final GenericRecord record = new GenericData.Record(schema.toAvroSchema());
         for (int i = 0; i < length; ++i) {
-          final Schema.Field schemaField = fields.get(i);
+          final HoodieSchemaField schemaField = fields.get(i);
           Object avroObject =
               fieldConverters[i].convert(
                   schemaField.schema(), fieldGetters[i].getFieldOrNull(row));
@@ -314,8 +322,8 @@ public class RowDataToAvroConverters {
       private static final long serialVersionUID = 1L;
 
       @Override
-      public Object convert(Schema schema, Object object) {
-        final Schema elementSchema = schema.getElementType();
+      public Object convert(HoodieSchema schema, Object object) {
+        final HoodieSchema elementSchema = schema.getElementType();
         ArrayData arrayData = (ArrayData) object;
         List<Object> list = new ArrayList<>();
         for (int i = 0; i < arrayData.size(); ++i) {
@@ -329,7 +337,7 @@ public class RowDataToAvroConverters {
   }
 
   private static RowDataToAvroConverter createMapConverter(LogicalType type, boolean utcTimezone) {
-    LogicalType valueType = AvroSchemaConverter.extractValueTypeToAvroMap(type);
+    LogicalType valueType = HoodieSchemaConverter.extractValueTypeToMap(type);
     final ArrayData.ElementGetter valueGetter = ArrayData.createElementGetter(valueType);
     final RowDataToAvroConverter valueConverter = createConverter(valueType, utcTimezone);
 
@@ -337,8 +345,8 @@ public class RowDataToAvroConverters {
       private static final long serialVersionUID = 1L;
 
       @Override
-      public Object convert(Schema schema, Object object) {
-        final Schema valueSchema = schema.getValueType();
+      public Object convert(HoodieSchema schema, Object object) {
+        final HoodieSchema valueSchema = schema.getValueType();
         final MapData mapData = (MapData) object;
         final ArrayData keyArray = mapData.keyArray();
         final ArrayData valueArray = mapData.valueArray();
@@ -351,6 +359,29 @@ public class RowDataToAvroConverters {
           map.put(key, value);
         }
         return map;
+      }
+    };
+  }
+
+  /**
+   * Creates a converter for Flink 2.1+ VARIANT LogicalType. The converter receives a Flink
+   * {@code Variant} object at runtime and extracts the raw metadata/value byte arrays,
+   * then packs them into an Avro GenericRecord with the Variant schema.
+   *
+   * <p>No shredded-variant check is needed here: {@code HoodieSchemaConverter.convertVariant()}
+   * already rejects shredded variants before a Flink type or converter is ever constructed,
+   * and Flink 2.1 itself only supports unshredded variants (FLIP-521).
+   */
+  private static RowDataToAvroConverter createVariantConverter() {
+    return new RowDataToAvroConverter() {
+      private static final long serialVersionUID = 1L;
+
+      @Override
+      public Object convert(HoodieSchema schema, Object object) {
+        final GenericRecord record = new GenericData.Record(schema.toAvroSchema());
+        record.put(HoodieSchema.Variant.VARIANT_METADATA_FIELD, ByteBuffer.wrap(DataTypeAdapter.getVariantMetadata(object)));
+        record.put(HoodieSchema.Variant.VARIANT_VALUE_FIELD, ByteBuffer.wrap(DataTypeAdapter.getVariantValue(object)));
+        return record;
       }
     };
   }

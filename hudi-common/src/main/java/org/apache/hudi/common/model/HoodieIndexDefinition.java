@@ -23,16 +23,18 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.StringJoiner;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
@@ -49,6 +51,10 @@ import static org.apache.hudi.index.expression.HoodieExpressionIndex.TRIM_STRING
  * Class representing the metadata for a functional or secondary index in Hudi.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Getter
+@NoArgsConstructor
+@ToString
+@EqualsAndHashCode
 public class HoodieIndexDefinition implements Serializable {
 
   // Index name is composed of 2 parts - MDT partition path prefix + user-specified index name.
@@ -68,6 +74,8 @@ public class HoodieIndexDefinition implements Serializable {
    * <p>The field should be ignored in Ser/De.
    */
   @JsonIgnore
+  @ToString.Exclude
+  @EqualsAndHashCode.Exclude
   private String sourceFieldsKey;
 
   // Any other configuration or properties specific to the index
@@ -75,10 +83,6 @@ public class HoodieIndexDefinition implements Serializable {
 
   // Version of the index
   private HoodieIndexVersion version;
-
-  // Required for jackson to properly deserialize from json.
-  public HoodieIndexDefinition() {
-  }
 
   private HoodieIndexDefinition(
       String indexName,
@@ -95,30 +99,11 @@ public class HoodieIndexDefinition implements Serializable {
     this.version = version;
   }
 
-  public String getIndexFunction() {
-    return indexFunction;
-  }
-
-  public List<String> getSourceFields() {
-    return sourceFields;
-  }
-
   public String getSourceFieldsKey() {
     if (this.sourceFieldsKey == null) {
       this.sourceFieldsKey = String.join(".", this.sourceFields);
     }
     return this.sourceFieldsKey;
-  }
-
-  public Map<String, String> getIndexOptions() {
-    return indexOptions;
-  }
-
-  /**
-   * Return the version of this index definition
-   */
-  public HoodieIndexVersion getVersion() {
-    return version;
   }
 
   public String getExpressionIndexFormatOption(String defaultValue) {
@@ -157,14 +142,6 @@ public class HoodieIndexDefinition implements Serializable {
     return indexOptions.get(TRIM_STRING_OPTION);
   }
 
-  public String getIndexName() {
-    return indexName;
-  }
-
-  public String getIndexType() {
-    return indexType;
-  }
-
   public static Builder newBuilder() {
     return new Builder();
   }
@@ -173,34 +150,31 @@ public class HoodieIndexDefinition implements Serializable {
    * Create a new Builder pre-populated with values from this instance.
    */
   public Builder toBuilder() {
-    Builder builder = new Builder();
-    builder.withIndexName(this.indexName)
+    return new Builder()
+        .withIndexName(this.indexName)
         .withIndexType(this.indexType)
         .withIndexFunction(this.indexFunction)
         .withSourceFields(new ArrayList<>(this.sourceFields))
         .withIndexOptions(new HashMap<>(this.indexOptions))
         .withVersion(this.version);
-    return builder;
   }
 
+  /**
+   * Builder for {@link HoodieIndexDefinition}.
+   */
+  @NoArgsConstructor
   public static class Builder {
 
     private String indexName;
     private String indexType;
     private String indexFunction;
-    private List<String> sourceFields;
-    private Map<String, String> indexOptions;
+    private List<String> sourceFields = new ArrayList<>();
+    private Map<String, String> indexOptions = new HashMap<>();
     private HoodieIndexVersion version;
-
-    public Builder() {
-      this.sourceFields = new ArrayList<>();
-      this.indexOptions = new HashMap<>();
-      this.version = null;
-    }
 
     public Builder withIndexName(String indexName) {
       ValidationUtils.checkArgument(MetadataPartitionType.fromPartitionPath(indexName) != null,
-              "Invalid index name");
+          "Invalid index name");
       this.indexName = indexName;
       return this;
     }
@@ -226,7 +200,6 @@ public class HoodieIndexDefinition implements Serializable {
     }
 
     public Builder withVersion(HoodieIndexVersion version) {
-      // Make sure the version enum matching the metadata partition is used.
       this.version = version;
       return this;
     }
@@ -243,39 +216,5 @@ public class HoodieIndexDefinition implements Serializable {
           version
       );
     }
-  }
-
-  @Override
-  public String toString() {
-    return new StringJoiner(", ", HoodieIndexDefinition.class.getSimpleName() + "[", "]")
-        .add("indexName='" + indexName + "'")
-        .add("indexType='" + indexType + "'")
-        .add("indexFunction='" + indexFunction + "'")
-        .add("sourceFields=" + sourceFields)
-        .add("indexOptions=" + indexOptions)
-        .add("version=" + version)
-        .toString();
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (!(o instanceof HoodieIndexDefinition)) {
-      return false;
-    }
-    HoodieIndexDefinition that = (HoodieIndexDefinition) o;
-    return Objects.equals(indexName, that.indexName)
-        && Objects.equals(indexType, that.indexType)
-        && Objects.equals(indexFunction, that.indexFunction)
-        && Objects.equals(sourceFields, that.sourceFields)
-        && Objects.equals(indexOptions, that.indexOptions)
-        && Objects.equals(version, that.version);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(indexName, indexType, indexFunction, sourceFields, indexOptions, version);
   }
 }

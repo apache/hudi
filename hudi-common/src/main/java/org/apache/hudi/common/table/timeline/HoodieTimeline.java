@@ -30,6 +30,7 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.storage.HoodieInstantWriter;
@@ -76,6 +77,10 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
   String[] VALID_ACTIONS_IN_TIMELINE = {COMMIT_ACTION, DELTA_COMMIT_ACTION,
       CLEAN_ACTION, SAVEPOINT_ACTION, RESTORE_ACTION, ROLLBACK_ACTION,
       COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION, INDEXING_ACTION};
+
+  Set<String> VALID_ACTIONS_FOR_ROLLING_METADATA = CollectionUtils.createSet(
+      COMMIT_ACTION, DELTA_COMMIT_ACTION, CLEAN_ACTION,
+      COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION);
 
   String COMMIT_EXTENSION = "." + COMMIT_ACTION;
   String DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION;
@@ -377,14 +382,14 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
   /**
    * Timeline to just include completed commits or all rewrites like compaction, logcompaction and replace actions.
    *
-   * @return
+   * @return {@link HoodieTimeline}
    */
   HoodieTimeline filterCompletedInstantsOrRewriteTimeline();
 
   /**
    * Timeline to just include commits (commit/deltacommit), compaction and replace actions.
    *
-   * @return
+   * @return {@link HoodieTimeline}
    */
   HoodieTimeline getWriteTimeline();
 
@@ -393,35 +398,35 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * For example, if timeline is [C0.completed, C1.completed, C2.completed, C3.inflight, C4.completed].
    * Then, a timeline of [C0.completed, C1.completed, C2.completed] will be returned.
    *
-   * @return
+   * @return {@link HoodieTimeline}
    */
   HoodieTimeline getContiguousCompletedWriteTimeline();
 
   /**
    * Timeline to just include replace instants that have valid (commit/deltacommit) actions.
    *
-   * @return
+   * @return {@link HoodieTimeline}
    */
   HoodieTimeline getCompletedReplaceTimeline();
 
   /**
    * Filter this timeline to just include requested and inflight compaction instants.
    *
-   * @return
+   * @return {@link HoodieTimeline}
    */
   HoodieTimeline filterPendingCompactionTimeline();
 
   /**
    * Filter this timeline to just include requested and inflight log compaction instants.
    *
-   * @return
+   * @return {@link HoodieTimeline}
    */
   HoodieTimeline filterPendingLogCompactionTimeline();
 
   /**
    * Filter this timeline to just include requested and inflight from both major and minor compaction instants.
    *
-   * @return
+   * @return {@link HoodieTimeline}
    */
   HoodieTimeline filterPendingMajorOrMinorCompactionTimeline();
 
@@ -486,6 +491,11 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * Create new timeline with all instants that were modified after specified time.
    */
   HoodieTimeline findInstantsModifiedAfterByCompletionTime(String instantTime);
+
+  /**
+   * Create new timeline with all instants that were modified before or at the specified time.
+   */
+  HoodieTimeline findInstantsModifiedBeforeOrEqualsByCompletionTime(String instantTime);
 
   /**
    * Create a new Timeline with all the instants after startTs.
@@ -557,7 +567,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
   /**
    * Get hash of timeline.
    *
-   * @return
+   * @return {@link String} timeline hash.
    */
   String getTimelineHash();
 
@@ -596,7 +606,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * First instant that matches the action and state
    * @param action
    * @param state
-   * @return
+   * @return {@link Option<HoodieInstant>}
    */
   Option<HoodieInstant> firstInstant(String action, HoodieInstant.State state);
 
@@ -745,7 +755,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
 
   /**
    * Get layout version of this timeline
-   * @return
+   * @return {@link TimelineLayoutVersion}
    */
   TimelineLayoutVersion getTimelineLayoutVersion();
 

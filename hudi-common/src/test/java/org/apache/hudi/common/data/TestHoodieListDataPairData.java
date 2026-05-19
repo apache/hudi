@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -306,6 +307,23 @@ public class TestHoodieListDataPairData {
     List<Pair<String, Pair<String, String>>> result = joined.collectAsList();
 
     assertEquals(expected, result, "Join result does not match expected output");
+  }
+
+  @Test
+  public void testForEachOnUnion() {
+    HoodiePairData<Integer, Integer> left = HoodieListPairData.lazy(
+        IntStream.range(0, 1000).mapToObj(i -> Pair.of(i, i)).collect(Collectors.toList()));
+    HoodiePairData<Integer, Integer> right = HoodieListPairData.lazy(
+        IntStream.range(1000, 2000).mapToObj(i -> Pair.of(i, i)).collect(Collectors.toList()));
+
+    HoodiePairData<Integer, Integer> unionData = left.union(right);
+    List<Pair<Integer, Integer>> actual = new ArrayList<>();
+    unionData.forEach(actual::add);
+
+    List<Pair<Integer, Integer>> expected = IntStream.range(0, 2000)
+        .mapToObj(i -> Pair.of(i, i))
+        .collect(Collectors.toList());
+    assertEquals(expected, actual);
   }
 
   @Test

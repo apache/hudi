@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -65,7 +66,8 @@ public class HoodieIndexingConfig extends HoodieConfig {
       .withValidValues(
           MetadataPartitionType.COLUMN_STATS.name(),
           MetadataPartitionType.BLOOM_FILTERS.name(),
-          MetadataPartitionType.SECONDARY_INDEX.name()
+          MetadataPartitionType.SECONDARY_INDEX.name(),
+          MetadataPartitionType.RECORD_INDEX.name()
       )
       .sinceVersion("1.0.0")
       .withDocumentation("Type of the expression index. Default is `column_stats` if there are no functions and expressions in the command. "
@@ -78,6 +80,14 @@ public class HoodieIndexingConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Function to be used for building the expression index.");
 
+  public static final ConfigProperty<String> EXPRESSION_INDEX_RANGE_METADATA_STORAGE_LEVEL_VALUE = ConfigProperty
+      .key("hoodie.expression.index.range.metadata.storage.level")
+      .defaultValue("MEMORY_AND_DISK_SER")
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("Determine what level of persistence is used to cache range metadata RDDs created to compute expression index. "
+          + "Refer to org.apache.spark.storage.StorageLevel for different values");
+
   public static final ConfigProperty<String> INDEX_DEFINITION_CHECKSUM = ConfigProperty
       .key("hoodie.table.checksum")
       .noDefaultValue()
@@ -89,6 +99,10 @@ public class HoodieIndexingConfig extends HoodieConfig {
 
   public HoodieIndexingConfig() {
     super();
+  }
+
+  public String getExpressionIndexRangeMetadataStorageLevel() {
+    return getStringOrDefault(EXPRESSION_INDEX_RANGE_METADATA_STORAGE_LEVEL_VALUE).toUpperCase(Locale.ROOT);
   }
 
   public static void update(HoodieStorage storage, StoragePath metadataFolder,

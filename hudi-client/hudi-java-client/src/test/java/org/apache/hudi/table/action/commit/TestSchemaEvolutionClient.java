@@ -21,13 +21,13 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
 
-  private static final Schema SCHEMA = getSchemaFromResource(TestSchemaEvolutionClient.class, "/exampleSchema.avsc");
+  private static final HoodieSchema SCHEMA = getSchemaFromResource(TestSchemaEvolutionClient.class, "/exampleSchema.avsc");
 
   @BeforeEach
   public void setUpClient() throws IOException {

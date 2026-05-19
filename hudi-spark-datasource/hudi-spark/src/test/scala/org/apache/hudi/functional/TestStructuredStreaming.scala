@@ -177,7 +177,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       val firstCommit = HoodieDataSourceHelpers.listCommitsSince(storage, destPath, "000").get(0)
       val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime1)
+        .option(DataSourceReadOptions.START_COMMIT.key, "000")
         .option(DataSourceReadOptions.END_COMMIT.key, commitCompletionTime1)
         .load(destPath)
       assertEquals(100, hoodieIncViewDF1.count())
@@ -189,7 +189,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       // pull the latest commit
       val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime2)
+        .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime1)
         .load(destPath)
 
       assertEquals(uniqueKeyCnt, hoodieIncViewDF2.count()) // 100 records must be pulled

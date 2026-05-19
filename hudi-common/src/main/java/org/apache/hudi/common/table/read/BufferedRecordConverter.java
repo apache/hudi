@@ -19,8 +19,7 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.engine.RecordContext;
-
-import org.apache.avro.Schema;
+import org.apache.hudi.common.schema.HoodieSchema;
 
 import java.util.List;
 
@@ -32,7 +31,7 @@ public interface BufferedRecordConverter<T> {
   BufferedRecord<T> convert(T record);
 
   static <T> BufferedRecordConverter<T> createConverter(
-      IteratorMode iteratorMode, Schema readerSchema, RecordContext<T> recordContext, List<String> orderingFieldNames) {
+      IteratorMode iteratorMode, HoodieSchema readerSchema, RecordContext<T> recordContext, List<String> orderingFieldNames) {
     switch (iteratorMode) {
       case ENGINE_RECORD:
         return new BufferedRecordConverter<T>() {

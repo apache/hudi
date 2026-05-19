@@ -34,12 +34,14 @@ import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.sink.buffer.BufferMemoryType;
 import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.HoodieFlinkIOFactory;
@@ -47,6 +49,8 @@ import org.apache.hudi.table.format.HoodieFlinkIOFactory;
 import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
+
+import javax.annotation.Nullable;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -152,12 +156,42 @@ public class OptionsResolver {
   }
 
   /**
+   * Return value of {@link FlinkOptions#RECORD_KEY_FIELD}, could be null if it is not set.
+   */
+  @Nullable
+  public static String getRecordKeyStr(Configuration conf) {
+    return conf.get(FlinkOptions.RECORD_KEY_FIELD);
+  }
+
+  /**
+   * Return the record keys as an array.
+   */
+  public static String[] getRecordKeys(Configuration conf) {
+    final String recordKeyStr = conf.get(FlinkOptions.RECORD_KEY_FIELD);
+    if (StringUtils.isNullOrEmpty(recordKeyStr)) {
+      return new String[]{};
+    }
+    return recordKeyStr.split(",");
+  }
+
+  /**
+   * Return the bucket index keys as an array.
+   */
+  public static String[] getBucketIndexKeys(Configuration conf) {
+    final String indexKeyStr = conf.get(FlinkOptions.INDEX_KEY_FIELD);
+    if (StringUtils.isNullOrEmpty(indexKeyStr)) {
+      return new String[]{};
+    }
+    return indexKeyStr.split(",");
+  }
+
+  /**
    * Returns the ordering fields as comma separated string
    * or null if the value is set as {@link FlinkOptions#NO_PRE_COMBINE}.
    */
   public static String getOrderingFieldsStr(Configuration conf) {
     final String orderingFields = conf.get(FlinkOptions.ORDERING_FIELDS);
-    return orderingFields.equals(FlinkOptions.NO_PRE_COMBINE) ? null : orderingFields;
+    return FlinkOptions.NO_PRE_COMBINE.equals(orderingFields) ? null : orderingFields;
   }
 
   /**
@@ -180,6 +214,26 @@ public class OptionsResolver {
    */
   public static boolean isBucketIndexType(Configuration conf) {
     return conf.get(FlinkOptions.INDEX_TYPE).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.name());
+  }
+
+  /**
+   * Returns whether partitioned record level index is used for bucket assigning.
+   */
+  public static boolean isRecordLevelIndex(Configuration conf) {
+    HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
+    return indexType == HoodieIndex.IndexType.RECORD_LEVEL_INDEX;
+  }
+
+  /**
+   * Returns whether the table uses metadata-table record level index.
+   */
+  public static boolean isGlobalRecordLevelIndex(Configuration conf) {
+    HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
+    return indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
+  }
+
+  public static boolean isRLIWithBootstrap(Configuration conf) {
+    return isGlobalRecordLevelIndex(conf) && conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED);
   }
 
   /**
@@ -242,8 +296,25 @@ public class OptionsResolver {
    * @param conf The flink configuration.
    */
   public static boolean needsAsyncCompaction(Configuration conf) {
-    return OptionsResolver.isMorTable(conf)
-        && conf.get(FlinkOptions.COMPACTION_ASYNC_ENABLED);
+    return OptionsResolver.isMorTable(conf) && conf.get(FlinkOptions.COMPACTION_ASYNC_ENABLED);
+  }
+
+  /**
+   * Returns whether there is need to schedule the async metadata compaction.
+   *
+   * @param conf The flink configuration.
+   */
+  public static boolean needsAsyncMetadataCompaction(Configuration conf) {
+    return isStreamingIndexWriteEnabled(conf) && conf.get(FlinkOptions.METADATA_COMPACTION_ASYNC_ENABLED);
+  }
+
+  /**
+   * Returns whether there is need to schedule the compaction plan for the metadata table.
+   *
+   * @param conf The flink configuration.
+   */
+  public static boolean needsScheduleMdtCompaction(Configuration conf) {
+    return isStreamingIndexWriteEnabled(conf) && conf.get(FlinkOptions.METADATA_COMPACTION_SCHEDULE_ENABLED);
   }
 
   /**
@@ -411,6 +482,16 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether to streaming write to metadata table is enabled.
+   */
+  public static boolean isStreamingIndexWriteEnabled(Configuration conf) {
+    return conf.get(FlinkOptions.METADATA_ENABLED)
+        && (OptionsResolver.getIndexType(conf) == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX
+        || OptionsResolver.getIndexType(conf) == HoodieIndex.IndexType.RECORD_LEVEL_INDEX)
+        && WriteOperationType.streamingWritesToMetadataSupported(WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION)));
+  }
+
+  /**
    * Returns the index type.
    */
   public static HoodieIndex.IndexType getIndexType(Configuration conf) {
@@ -421,14 +502,7 @@ public class OptionsResolver {
    * Returns the index key field.
    */
   public static String getIndexKeyField(Configuration conf) {
-    return conf.getString(FlinkOptions.INDEX_KEY_FIELD.key(), conf.get(FlinkOptions.RECORD_KEY_FIELD));
-  }
-
-  /**
-   * Returns the index key field values.
-   */
-  public static String[] getIndexKeys(Configuration conf) {
-    return getIndexKeyField(conf).split(",");
+    return conf.getString(FlinkOptions.INDEX_KEY_FIELD.key(), getRecordKeyStr(conf));
   }
 
   /**
@@ -493,9 +567,15 @@ public class OptionsResolver {
 
   /**
    * Returns whether the writers should use blocking instant time generation.
+   *
+   * <p>Blocking instant generation is enabled only for upsert workloads that require strict
+   * instant ordering, i.e. upsert on COW tables, or upsert with CDC enabled.
+   *
+   * <p>When this returns {@code true}, writer tasks wait for commit acknowledgement with timeout
+   * ({@link FlinkOptions#WRITE_COMMIT_ACK_TIMEOUT}). When this returns {@code false}.
    */
   public static boolean isBlockingInstantGeneration(Configuration conf) {
-    return isCowTable(conf) && isUpsertOperation(conf);
+    return (isCowTable(conf) || conf.get(FlinkOptions.CDC_ENABLED)) && isUpsertOperation(conf);
   }
 
   /**
@@ -517,6 +597,14 @@ public class OptionsResolver {
     } catch (Throwable e) {
       throw new HoodieException("Could not create custom insert partitioner " + insertPartitionerClass, e);
     }
+  }
+
+  /**
+   * Returns whether complex keygen encodes single record key with field name.
+   */
+  public static boolean useComplexKeygenNewEncoding(Configuration conf) {
+    return Boolean.parseBoolean(conf.getString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(),
+        HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.defaultValue().toString()));
   }
 
   // -------------------------------------------------------------------------
@@ -548,5 +636,38 @@ public class OptionsResolver {
   public static boolean isOnlyConsumingNewCommits(Configuration conf) {
     return isMorTable(conf) && conf.get(FlinkOptions.READ_STREAMING_SKIP_COMPACT) // this is only true for flink.
         || isAppendMode(conf) && conf.get(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING);
+  }
+
+  /**
+   * Return the parallelism of the index write operator.
+   */
+  public static int indexWriteParallelism(Configuration conf) {
+    return OptionsResolver.isStreamingIndexWriteEnabled(conf) ? conf.get(FlinkOptions.INDEX_WRITE_TASKS) : 0;
+  }
+
+  /**
+   * Returns the write buffer size in bytes.
+   *
+   * @param conf the Flink configuration containing write memory settings
+   * @return the calculated write buffer size in bytes
+   */
+  public static long getWriteBufferSizeInBytes(Configuration conf) {
+    long mergeReaderMem = 100; // constant 100MB
+    long mergeMapMaxMem = conf.get(FlinkOptions.WRITE_MERGE_MAX_MEMORY);
+    long maxBufferSize = (long) ((conf.get(FlinkOptions.WRITE_TASK_MAX_SIZE) - mergeReaderMem - mergeMapMaxMem) * 1024 * 1024);
+    final String errMsg = String.format("'%s' should be at least greater than '%s' plus merge reader memory(constant 100MB now)",
+        FlinkOptions.WRITE_TASK_MAX_SIZE.key(), FlinkOptions.WRITE_MERGE_MAX_MEMORY.key());
+    ValidationUtils.checkState(maxBufferSize > 0, errMsg);
+    return maxBufferSize;
+  }
+
+  /**
+   * Whether the flink managed memory is used for the write buffer.
+   *
+   * @param conf the Flink configuration
+   * @return true if the flink managed memory is used for the write buffer.
+   */
+  public static boolean isManagedMemoryBufferEnabled(Configuration conf) {
+    return BufferMemoryType.MANAGED.name().equalsIgnoreCase(conf.get(FlinkOptions.WRITE_BUFFER_MEMORY_TYPE));
   }
 }

@@ -49,6 +49,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.text.ParseException;
 import java.util.AbstractMap;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
@@ -136,7 +137,7 @@ public class TimelineUtils {
             });
           } catch (HoodieIOException e) {
             if (e.getCause() instanceof FileNotFoundException) {
-              LOG.warn("Instant {} not found in storage and has been archived", instant);
+              LOG.warn("Instant {} not found in storage and has been archived", instant, e);
             } else {
               throw e;
             }
@@ -264,6 +265,12 @@ public class TimelineUtils {
   private static Option<String> getMetadataValue(HoodieTableMetaClient metaClient, String extraMetadataKey, HoodieInstant instant) {
     try {
       LOG.info("reading checkpoint info for:" + instant + " key: " + extraMetadataKey);
+      byte[] contents = metaClient.getCommitsTimeline().getInstantDetails(instant).get();
+      if (instant.isCompleted()) {
+        if (contents == null || contents.length == 0) {
+          throw new HoodieIOException("Completed commit has no contents for instant " + instant.requestedTime());
+        }
+      }
       HoodieCommitMetadata commitMetadata =
           metaClient.getCommitsTimeline().readCommitMetadata(instant);
 
@@ -469,9 +476,8 @@ public class TimelineUtils {
             "Found hollow commit: '%s'. Adjust config `%s` accordingly if to avoid throwing this exception.",
             hollowCommitTimestamp, INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key()));
       case BLOCK:
-        LOG.warn(String.format(
-            "Found hollow commit '%s'. Config `%s` was set to `%s`: no data will be returned beyond '%s' until it's completed.",
-            hollowCommitTimestamp, INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), handlingMode, hollowCommitTimestamp));
+        LOG.warn("Found hollow commit '{}'. Config `{}` was set to `{}`: no data will be returned beyond '{}' until it's completed.",
+            hollowCommitTimestamp, INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), handlingMode, hollowCommitTimestamp);
         return completedCommitTimeline.findInstantsBefore(hollowCommitTimestamp);
       default:
         throw new HoodieException("Unexpected handling mode: " + handlingMode);
@@ -641,5 +647,31 @@ public class TimelineUtils {
       writerOption = timeline.getInstantWriter(metadata);
     }
     return writerOption;
+  }
+
+  /**
+   * Returns the latest reverse-ordered instant whose commit metadata contains at least one of the provided
+   * checkpoint metadata keys.
+   *
+   * @param timeline timeline to scan; expected to contain completed instants
+   * @param checkpointKeys checkpoint metadata keys to look for in commit metadata
+   * @return an {@link Option} containing a {@link Pair} of the matching instant's
+   *         {@link HoodieInstant#toString()} value and its
+   *         {@link HoodieCommitMetadata}; {@link Option#empty()} if no matching instant is found
+   * @throws IOException if reading commit metadata fails
+   */
+  @SuppressWarnings("unchecked")
+  public static Option<Pair<String, HoodieCommitMetadata>> getLatestInstantAndCommitMetadataWithValidCheckpointInfo(
+      HoodieTimeline timeline, String... checkpointKeys) throws IOException {
+    return (Option<Pair<String, HoodieCommitMetadata>>) timeline.getReverseOrderedInstants().map(instant -> {
+      try {
+        HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(instant);
+        boolean hasCheckpointMetadata = Arrays.stream(checkpointKeys)
+            .anyMatch(key -> !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(key)));
+        return hasCheckpointMetadata ? Option.of(Pair.of(instant.toString(), commitMetadata)) : Option.empty();
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
+      }
+    }).filter(Option::isPresent).findFirst().orElse(Option.empty());
   }
 }

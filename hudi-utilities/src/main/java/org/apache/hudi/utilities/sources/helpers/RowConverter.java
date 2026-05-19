@@ -18,9 +18,9 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 
-import org.apache.avro.Schema;
 import org.apache.spark.sql.Row;
 
 import java.io.Serializable;
@@ -35,37 +35,42 @@ import scala.util.Right;
  */
 public class RowConverter implements Serializable {
   private static final long serialVersionUID = 1L;
+
+  /**
+   * Serializable string representation of the schema.
+   */
+  private final String schemaStr;
+
   /**
    * To be lazily initialized on executors.
    */
-  private transient Schema schema;
+  private transient HoodieSchema schema;
 
-  private final String schemaStr;
   private final String invalidCharMask;
   private final boolean shouldSanitize;
+  private final boolean useJava8api;
 
   /**
    * To be lazily initialized on executors.
    */
   private transient MercifulJsonToRowConverter jsonConverter;
 
-  public RowConverter(Schema schema, boolean shouldSanitize, String invalidCharMask) {
-    this.schemaStr = schema.toString();
-    this.schema = schema;
+  public RowConverter(HoodieSchema hoodieSchema, boolean shouldSanitize, String invalidCharMask, boolean useJava8api) {
+    this.schemaStr = hoodieSchema.toString();
     this.shouldSanitize = shouldSanitize;
     this.invalidCharMask = invalidCharMask;
+    this.useJava8api = useJava8api;
   }
 
   private void initSchema() {
     if (schema == null) {
-      Schema.Parser parser = new Schema.Parser();
-      schema = parser.parse(schemaStr);
+      schema = HoodieSchema.parse(schemaStr);
     }
   }
 
   private void initJsonConvertor() {
     if (jsonConverter == null) {
-      jsonConverter = new MercifulJsonToRowConverter(this.shouldSanitize, this.invalidCharMask);
+      jsonConverter = new MercifulJsonToRowConverter(this.shouldSanitize, this.invalidCharMask, this.useJava8api);
     }
   }
 
@@ -98,11 +103,8 @@ public class RowConverter implements Serializable {
     return new Left<>(row);
   }
 
-  public Schema getSchema() {
-    try {
-      return new Schema.Parser().parse(schemaStr);
-    } catch (Exception e) {
-      throw new HoodieSchemaException("Failed to parse json schema: " + schemaStr, e);
-    }
+  public HoodieSchema getSchema() {
+    initSchema();
+    return schema;
   }
 }

@@ -24,12 +24,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -116,9 +115,8 @@ import java.util.Properties;
  *  -- 1    a1_0    11.0    1001
  * </pre>
  */
+@Slf4j
 public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvroPayload {
-
-  private static final Logger LOG = LoggerFactory.getLogger(PartialUpdateAvroPayload.class);
 
   public PartialUpdateAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
@@ -130,21 +128,21 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
 
   @Override
   public PartialUpdateAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue, Schema schema, Properties properties) {
-    if (oldValue.recordBytes.length == 0) {
+    if (isEmptyRecord()) {
       // use natural order for deleted record
       return this;
     }
     // pick the payload with greater ordering value as insert record
     final boolean shouldPickOldRecord = oldValue.orderingVal.compareTo(orderingVal) > 0;
     try {
-      GenericRecord oldRecord = HoodieAvroUtils.bytesToAvro(oldValue.recordBytes, schema);
+      GenericRecord oldRecord = (GenericRecord) oldValue.getRecord(schema).get();
       Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord, true);
       if (mergedRecord.isPresent()) {
         return new PartialUpdateAvroPayload((GenericRecord) mergedRecord.get(),
             shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
       }
     } catch (Exception ex) {
-      LOG.warn("PartialUpdateAvroPayload precombine failed with ", ex);
+      log.warn("PartialUpdateAvroPayload precombine failed with ", ex);
       return this;
     }
     return this;
@@ -211,11 +209,11 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
    * @throws IOException
    */
   public Option<IndexedRecord> getInsertValue(Schema schema, boolean isPreCombining) throws IOException {
-    if (recordBytes.length == 0 || (!isPreCombining && isDeletedRecord)) {
+    if (isEmptyRecord() || (!isPreCombining && isDeletedRecord)) {
       return Option.empty();
     }
 
-    return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+    return getRecord(schema);
   }
 
   /**

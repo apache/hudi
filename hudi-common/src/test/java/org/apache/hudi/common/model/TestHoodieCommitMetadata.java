@@ -18,22 +18,25 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.io.util.FileIOUtils;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.reflect.ReflectData;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -41,11 +44,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.isSchemaCompatible;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToByteArray;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -56,8 +60,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests hoodie commit metadata {@link HoodieCommitMetadata}.
  */
+@Slf4j
 public class TestHoodieCommitMetadata {
-  private static final Logger LOGGER = LoggerFactory.getLogger(TestHoodieCommitMetadata.class);
 
   private static final List<String> EXPECTED_FIELD_NAMES = Arrays.asList(
       "partitionToWriteStats", "compacted", "extraMetadata", "operationType");
@@ -125,7 +129,7 @@ public class TestHoodieCommitMetadata {
   }
 
   @Test
-  public void testGetFileSliceForFileGroupFromDeltaCommit() throws IOException {
+  public void testGetDependentFileSliceForFileGroupFromDeltaCommit() throws IOException {
     org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadata = new org.apache.hudi.avro.model.HoodieCommitMetadata();
     org.apache.hudi.avro.model.HoodieWriteStat writeStat1 = createWriteStat("111", "111base", Arrays.asList("1.log", "2.log"));
     org.apache.hudi.avro.model.HoodieWriteStat writeStat2 = createWriteStat("111", "111base", Arrays.asList("3.log", "4.log"));
@@ -137,21 +141,41 @@ public class TestHoodieCommitMetadata {
     byte[] serializedCommitMetadata = TimelineMetadataUtils.serializeAvroMetadata(
         commitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class).get();
 
-    Option<Pair<String, List<String>>> result = HoodieCommitMetadata.getFileSliceForFileGroupFromDeltaCommit(
-        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "111"));
+    Option<Pair<String, List<String>>> result = HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
+        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "111"), "4.log");
 
     assertTrue(result.isPresent());
     assertEquals("111base", result.get().getKey());
-    assertEquals(2, result.get().getValue().size());
+    assertEquals(1, result.get().getValue().size());
     assertEquals("3.log", result.get().getValue().get(0));
-    assertEquals("4.log", result.get().getValue().get(1));
 
-    result = HoodieCommitMetadata.getFileSliceForFileGroupFromDeltaCommit(
-        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "222"));
+    result = HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
+        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "222"), "5.log");
     assertTrue(result.isPresent());
     assertTrue(result.get().getKey().isEmpty());
+    assertEquals(0, result.get().getValue().size());
+
+    org.apache.hudi.avro.model.HoodieWriteStat writeStat4 = createWriteStat("111", null, Arrays.asList("1.log"));
+    org.apache.hudi.avro.model.HoodieWriteStat writeStat5 = createWriteStat("111", null, Arrays.asList("2.log"));
+    partitionToWriteStatsMap = new HashMap<>();
+    // simulate the scenario like eager flushing of MOR ingestion in flink writer.
+    partitionToWriteStatsMap.put("partition1", Arrays.asList(writeStat4, writeStat5));
+    commitMetadata.setPartitionToWriteStats(partitionToWriteStatsMap);
+    serializedCommitMetadata = TimelineMetadataUtils.serializeAvroMetadata(
+        commitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class).get();
+
+    result = HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
+        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "111"), "1.log");
+    assertTrue(result.isPresent());
+    assertEquals("", result.get().getKey());
+    assertEquals(0, result.get().getValue().size());
+
+    result = HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
+        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "111"), "2.log");
+    assertTrue(result.isPresent());
+    assertEquals("", result.get().getKey());
     assertEquals(1, result.get().getValue().size());
-    assertEquals("5.log", result.get().getValue().get(0));
+    assertEquals("1.log", result.get().getValue().get(0));
   }
 
   @Test
@@ -205,51 +229,153 @@ public class TestHoodieCommitMetadata {
   @Test
   public void testSchemaEqualityForHoodieCommitMetaData() {
     // Step 1: Get the schema from the Avro auto-generated class
-    Schema avroSchema = org.apache.hudi.avro.model.HoodieCommitMetadata.SCHEMA$;
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(org.apache.hudi.avro.model.HoodieCommitMetadata.SCHEMA$);
 
     // Step 2: Convert the POJO class to an Avro schema
-    Schema pojoSchema = ReflectData.get().getSchema(org.apache.hudi.common.model.HoodieCommitMetadata.class);
+    HoodieSchema pojoSchema = HoodieSchema.fromAvroSchema(ReflectData.get().getSchema(org.apache.hudi.common.model.HoodieCommitMetadata.class));
 
     // Step 3: Validate schemas
     // We need to replace ENUM with STRING to workaround inherit type mismatch of java ENUM when coverted to avro object.
-    assertTrue(isSchemaCompatible(replaceEnumWithString(pojoSchema), avroSchema, false, false));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(replaceEnumWithString(pojoSchema), schema, false, false));
   }
 
   @Test
   public void testSchemaEqualityForHoodieReplaceCommitMetaData() {
     // Step 1: Get the schema from the Avro auto-generated class
-    Schema avroSchema = org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.SCHEMA$;
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.SCHEMA$);
 
     // Step 2: Convert the POJO class to an Avro schema
-    Schema pojoSchema = ReflectData.get().getSchema(org.apache.hudi.common.model.HoodieReplaceCommitMetadata.class);
+    HoodieSchema pojoSchema = HoodieSchema.fromAvroSchema(ReflectData.get().getSchema(org.apache.hudi.common.model.HoodieReplaceCommitMetadata.class));
 
     // Step 3: Validate schemas
-    // We need to replace ENUM with STRING to workaround inherit type mismatch of java ENUM when coverted to avro object.
-    assertTrue(isSchemaCompatible(replaceEnumWithString(pojoSchema), avroSchema, false, false));
+    // We need to replace ENUM with STRING to workaround inherit type mismatch of java ENUM when converted to avro object.
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(replaceEnumWithString(pojoSchema), schema, false, false));
   }
 
   // Utility method that search for all ENUM fields and replace it with STRING.
-  private Schema replaceEnumWithString(Schema schema) {
-    if (schema.getType() == Schema.Type.ENUM) {
-      return Schema.create(Schema.Type.STRING);
-    } else if (schema.getType() == Schema.Type.RECORD) {
-      List<Schema.Field> newFields = new ArrayList<>();
-      for (Schema.Field field : schema.getFields()) {
-        Schema newFieldSchema = replaceEnumWithString(field.schema());
-        newFields.add(new Schema.Field(field.name(), newFieldSchema, field.doc(), field.defaultVal()));
+  private HoodieSchema replaceEnumWithString(HoodieSchema schema) {
+    if (schema.getType() == HoodieSchemaType.ENUM) {
+      return HoodieSchema.create(HoodieSchemaType.STRING);
+    } else if (schema.getType() == HoodieSchemaType.RECORD) {
+      List<HoodieSchemaField> newFields = new ArrayList<>();
+      for (HoodieSchemaField field : schema.getFields()) {
+        HoodieSchema newFieldSchema = replaceEnumWithString(field.schema());
+        newFields.add(HoodieSchemaUtils.createNewSchemaField(field.name(), newFieldSchema, field.doc().orElse(null), field.defaultVal().orElse(null)));
       }
-      return Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false, newFields);
-    } else if (schema.getType() == Schema.Type.UNION) {
-      List<Schema> types = new ArrayList<>();
-      for (Schema type : schema.getTypes()) {
+      return HoodieSchema.createRecord(schema.getName(), schema.getDoc().orElse(null), schema.getNamespace().orElse(null), false, newFields);
+    } else if (schema.getType() == HoodieSchemaType.UNION) {
+      List<HoodieSchema> types = new ArrayList<>();
+      for (HoodieSchema type : schema.getTypes()) {
         types.add(replaceEnumWithString(type));
       }
-      return Schema.createUnion(types);
-    } else if (schema.getType() == Schema.Type.ARRAY) {
-      return Schema.createArray(replaceEnumWithString(schema.getElementType()));
-    } else if (schema.getType() == Schema.Type.MAP) {
-      return Schema.createMap(replaceEnumWithString(schema.getValueType()));
+      return HoodieSchema.createUnion(types);
+    } else if (schema.getType() == HoodieSchemaType.ARRAY) {
+      return HoodieSchema.createArray(replaceEnumWithString(schema.getElementType()));
+    } else if (schema.getType() == HoodieSchemaType.MAP) {
+      return HoodieSchema.createMap(replaceEnumWithString(schema.getValueType()));
     }
     return schema;
+  }
+
+  @Test
+  public void testGetWritePartitionPathsWithExistingFileGroupsModified_AllInserts() {
+    // When all partitions have only insert stats (prevCommit is "null"), the result should be empty
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+
+    HoodieWriteStat insertStat1 = createWriteStatWithPrevFileId("partition1", "file1", "null");
+    HoodieWriteStat insertStat2 = createWriteStatWithPrevFileId("partition2", "file2", "null");
+
+    commitMetadata.addWriteStat("partition1", insertStat1);
+    commitMetadata.addWriteStat("partition2", insertStat2);
+
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
+    assertTrue(result.isEmpty(), "Result should be empty when all stats are inserts (prevCommit = 'null')");
+  }
+
+  @Test
+  public void testGetWritePartitionPathsWithExistingFileGroupsModified_AllUpdates() {
+    // When all partitions have update stats (prevCommit is a valid commit time), all partitions should be returned
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+
+    HoodieWriteStat updateStat1 = createWriteStatWithPrevFileId("partition1", "file1", "20240101120000");
+    HoodieWriteStat updateStat2 = createWriteStatWithPrevFileId("partition2", "file2", "20240101130000");
+
+    commitMetadata.addWriteStat("partition1", updateStat1);
+    commitMetadata.addWriteStat("partition2", updateStat2);
+
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
+    Set<String> expected = new HashSet<>(Arrays.asList("partition1", "partition2"));
+    assertEquals(expected, result, "Result should contain all partitions with updates");
+  }
+
+  @Test
+  public void testGetWritePartitionPathsWithExistingFileGroupsModified_MixedInsertsAndUpdates() {
+    // When some partitions have inserts and some have updates, only the update partitions should be returned
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+
+    HoodieWriteStat insertStat = createWriteStatWithPrevFileId("partition1", "file1", "null");
+    HoodieWriteStat updateStat = createWriteStatWithPrevFileId("partition2", "file2", "20240101120000");
+
+    commitMetadata.addWriteStat("partition1", insertStat);
+    commitMetadata.addWriteStat("partition2", updateStat);
+
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
+    Set<String> expected = new HashSet<>(Arrays.asList("partition2"));
+    assertEquals(expected, result, "Result should only contain partitions with updates");
+  }
+
+  @Test
+  public void testGetWritePartitionPathsWithExistingFileGroupsModified_PartitionWithBothInsertAndUpdate() {
+    // When a partition has both insert and update stats, it should be included
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+
+    HoodieWriteStat insertStat = createWriteStatWithPrevFileId("partition1", "file1", "null");
+    HoodieWriteStat updateStat = createWriteStatWithPrevFileId("partition1", "file2", "20240101120000");
+
+    commitMetadata.addWriteStat("partition1", insertStat);
+    commitMetadata.addWriteStat("partition1", updateStat);
+
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
+    Set<String> expected = new HashSet<>(Arrays.asList("partition1"));
+    assertEquals(expected, result, "Result should contain partition with at least one update");
+  }
+
+  @Test
+  public void testGetWritePartitionPathsWithExistingFileGroupsModified_NullPrevCommit() {
+    // When prevCommit is null (not the string "null"), the partition should not be included
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+
+    HoodieWriteStat statWithNullPrevCommit = createWriteStatWithPrevFileId("partition1", "file1", null);
+    HoodieWriteStat updateStat = createWriteStatWithPrevFileId("partition2", "file2", "20240101120000");
+
+    commitMetadata.addWriteStat("partition1", statWithNullPrevCommit);
+    commitMetadata.addWriteStat("partition2", updateStat);
+
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
+    Set<String> expected = new HashSet<>(Arrays.asList("partition2"));
+    assertEquals(expected, result, "Result should not include partitions where prevCommit is null");
+  }
+
+  @Test
+  public void testGetWritePartitionPathsWithExistingFileGroupsModified_EmptyMetadata() {
+    // When metadata is empty, result should be empty
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
+    assertTrue(result.isEmpty(), "Result should be empty for empty metadata");
+  }
+
+  /**
+   * Helper method to create a HoodieWriteStat with specified partition, fileId, and prevCommit.
+   */
+  private HoodieWriteStat createWriteStatWithPrevFileId(String partitionPath, String fileId, String prevCommit) {
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setPartitionPath(partitionPath);
+    writeStat.setFileId(fileId);
+    writeStat.setPrevCommit(prevCommit);
+    writeStat.setPath(partitionPath + "/" + fileId + ".parquet");
+    writeStat.setNumWrites(100);
+    writeStat.setNumDeletes(0);
+    return writeStat;
   }
 }

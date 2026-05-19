@@ -195,7 +195,7 @@ public class TestCleanPlanner {
     HoodieStorage storage = mock(HoodieStorage.class);
     when(mockHoodieTable.getStorage()).thenReturn(storage);
     HoodieTableMetadata hoodieTableMetadata = mock(HoodieTableMetadata.class);
-    when(mockHoodieTable.getMetadataTable()).thenReturn(hoodieTableMetadata);
+    when(mockHoodieTable.getTableMetadata()).thenReturn(hoodieTableMetadata);
     when(mockHoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant())
         .thenReturn(Option.of(INSTANT_GENERATOR.createNewInstant(COMPLETED, HoodieTimeline.CLEAN_ACTION, lastCleanInstant)));
     when(hoodieTableMetadata.getAllPartitionPaths()).thenReturn(isPartitioned ? Arrays.asList(PARTITION1, PARTITION2, PARTITION3) : Collections.singletonList(StringUtils.EMPTY_STRING));
@@ -513,6 +513,14 @@ public class TestCleanPlanner {
         Collections.singletonMap(savepoint2, Collections.singletonList(PARTITION1)), Option.empty(),
         activeInstantsPartitionsMap2, Collections.emptyList(), threePartitionsInActiveTimeline, true, Collections.emptyMap()));
 
+    // Empty cleaner plan case
+    arguments.add(Arguments.of(true, getCleanByHoursConfig(), earliestInstant, lastCompletedInLastClean, lastCleanInstant,
+        earliestInstantInLastClean, Collections.emptyList(), Collections.emptyMap(), Option.empty(),
+        activeInstantsPartitionsMap2, Collections.emptyList(), twoPartitionsInActiveTimeline, false, Collections.emptyMap()));
+    arguments.add(Arguments.of(false, getCleanByHoursConfig(), earliestInstant, lastCompletedInLastClean, lastCleanInstant,
+        earliestInstantInLastClean, Collections.emptyList(), Collections.emptyMap(), Option.empty(),
+        activeInstantsUnPartitionsMap, Collections.emptyList(), unPartitionsInActiveTimeline, false, Collections.emptyMap()));
+
     return arguments.stream();
   }
 
@@ -598,8 +606,8 @@ public class TestCleanPlanner {
         Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), false)));
     Map<String, String> extraMetadata = new HashMap<>();
     extraMetadata.put(SAVEPOINTED_TIMESTAMPS, savepointsToTrack.stream().collect(Collectors.joining(",")));
-    return new HoodieCleanMetadata(instantTime, 100L, 10, earliestCommitToRetain, lastCompletedTime, partitionMetadata,
-        CLEAN_METADATA_VERSION_2, Collections.EMPTY_MAP, extraMetadata.isEmpty() ? null : extraMetadata);
+    return new HoodieCleanMetadata(instantTime, 100L, partitionMetadata.isEmpty() ? 0 : 10, earliestCommitToRetain, lastCompletedTime,
+        partitionMetadata, CLEAN_METADATA_VERSION_2, Collections.emptyMap(), extraMetadata.isEmpty() ? null : extraMetadata);
   }
 
   private static HoodieSavepointMetadata getSavepointMetadata(List<String> partitions) {

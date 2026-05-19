@@ -19,51 +19,54 @@
 
 package org.apache.spark.sql.hudi.dml.others
 
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestTimeTravelTable extends HoodieSparkSqlTestBase {
   test("Test Insert and Update Record with time travel") {
-    Seq("cow", "mor").foreach { tableType =>
-      withRecordType()(withTempDir { tmp =>
-        val tableName1 = generateTableName
-        spark.sql(
-          s"""
-             |create table $tableName1 (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using hudi
-             | tblproperties (
-             |  type = '$tableType',
-             |  primaryKey = 'id',
-             |  preCombineField = 'ts'
-             | )
-             | location '${tmp.getCanonicalPath}/$tableName1'
-       """.stripMargin)
+    withSparkSqlSessionConfig(SPARK_SQL_INSERT_INTO_OPERATION.key -> "upsert") {
+      Seq("cow", "mor").foreach { tableType =>
+        withRecordType()(withTempDir { tmp =>
+          val tableName1 = generateTableName
+          spark.sql(
+            s"""
+               |create table $tableName1 (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
+               | location '${tmp.getCanonicalPath}/$tableName1'
+         """.stripMargin)
 
-        // 1st commit instant
-        spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
+          // 1st commit instant
+          spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
 
-        val metaClient1 = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName1")
-        val instant1 = metaClient1.getActiveTimeline.getAllCommitsTimeline
-          .lastInstant().get().requestedTime
+          val metaClient1 = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName1")
+          val instant1 = metaClient1.getActiveTimeline.getAllCommitsTimeline
+            .lastInstant().get().requestedTime
 
-        // 2nd commit instant
-        spark.sql(s"insert into $tableName1 values(1, 'a2', 20, 2000)")
+          // 2nd commit instant
+          spark.sql(s"insert into $tableName1 values(1, 'a2', 20, 2000)")
 
-        checkAnswer(s"select id, name, price, ts from $tableName1")(
-          Seq(1, "a2", 20.0, 2000)
-        )
+          checkAnswer(s"select id, name, price, ts from $tableName1")(
+            Seq(1, "a2", 20.0, 2000)
+          )
 
-        // time travel as of instant 1
-        checkAnswer(
-          s"select id, name, price, ts from $tableName1 TIMESTAMP AS OF '$instant1'")(
-          Seq(1, "a1", 10.0, 1000)
-        )
-      })
+          // time travel as of instant 1
+          checkAnswer(
+            s"select id, name, price, ts from $tableName1 TIMESTAMP AS OF '$instant1'")(
+            Seq(1, "a1", 10.0, 1000)
+          )
+        })
+      }
     }
   }
 
@@ -234,44 +237,46 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Select Record with time travel and Repartition") {
-    Seq("cow", "mor").foreach { tableType =>
-      withTempDir { tmp =>
-        val tableName = generateTableName
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using hudi
-             | tblproperties (
-             |  type = '$tableType',
-             |  primaryKey = 'id',
-             |  preCombineField = 'ts'
-             | )
-             | location '${tmp.getCanonicalPath}/$tableName'
-       """.stripMargin)
+    withSparkSqlSessionConfig(SPARK_SQL_INSERT_INTO_OPERATION.key -> "upsert") {
+      Seq("cow", "mor").foreach { tableType =>
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
+               | location '${tmp.getCanonicalPath}/$tableName'
+         """.stripMargin)
 
-        // 1st commit instant
-        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+          // 1st commit instant
+          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
 
-        val metaClient = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName")
-        val instant1 = metaClient.getActiveTimeline.getAllCommitsTimeline
-          .lastInstant().get().requestedTime
+          val metaClient = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName")
+          val instant1 = metaClient.getActiveTimeline.getAllCommitsTimeline
+            .lastInstant().get().requestedTime
 
-        // 2nd commit instant
-        spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
+          // 2nd commit instant
+          spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
 
-        checkAnswer(s"select id, name, price, ts from $tableName distribute by cast(rand() * 2 as int)")(
-          Seq(1, "a2", 20.0, 2000)
-        )
+          checkAnswer(s"select id, name, price, ts from $tableName distribute by cast(rand() * 2 as int)")(
+            Seq(1, "a2", 20.0, 2000)
+          )
 
-        // time travel as of instant 1
-        checkAnswer(
-          s"select id, name, price, ts from $tableName TIMESTAMP AS OF '$instant1' distribute by cast(rand() * 2 as int)")(
-          Seq(1, "a1", 10.0, 1000)
-        )
+          // time travel as of instant 1
+          checkAnswer(
+            s"select id, name, price, ts from $tableName TIMESTAMP AS OF '$instant1' distribute by cast(rand() * 2 as int)")(
+            Seq(1, "a1", 10.0, 1000)
+          )
+        }
       }
     }
   }
@@ -279,8 +284,9 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
   test("Test Time Travel With Schema Evolution") {
     withRecordType()(withTempDir { tmp =>
       withSparkSqlSessionConfig("hoodie.schema.on.read.enable" -> "true",
-                                "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true") {
-        spark.sql("set hoodie.schema.on.read.enable=true")
+        "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true",
+        "hoodie.schema.on.read.enable" -> "true"
+      ) {
         val tableName = generateTableName
         spark.sql(
           s"""

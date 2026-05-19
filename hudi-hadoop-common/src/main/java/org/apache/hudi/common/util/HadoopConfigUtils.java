@@ -21,17 +21,16 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.ConfigProperty;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
 /**
  * Utils on Hadoop {@link Configuration}.
  */
+@Slf4j
 public class HadoopConfigUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(HadoopConfigUtils.class);
 
   /**
    * Creates a Hadoop {@link Configuration} instance with the properties.
@@ -62,9 +61,9 @@ public class HadoopConfigUtils {
     for (String alternative : configProperty.getAlternatives()) {
       String altValue = conf.get(alternative);
       if (altValue != null) {
-        LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                + "and may be removed in the future. Please use the new key '%s' instead.",
-            alternative, configProperty.key()));
+        log.warn("The configuration key '{}' has been deprecated "
+            + "and may be removed in the future. Please use the new key '{}' instead.",
+            alternative, configProperty.key());
         return Option.of(altValue);
       }
     }

@@ -155,26 +155,26 @@ public class TestCloudObjectsSelector extends HoodieSparkClientTestHarness {
         (CloudObjectsSelector) ReflectionUtils.loadClass(clazz.getName(), props);
 
     // setup lists
-    List<Message> testSingleList = new ArrayList<>();
-    testSingleList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "1")).build());
-    testSingleList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "2")).build());
-    testSingleList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "3")).build());
-    testSingleList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "4")).build());
-    testSingleList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "5")).build());
+    List<CloudObjectsSelector.MessageTracker> testSingleList = new ArrayList<>();
+    testSingleList.add(new CloudObjectsSelector.MessageTracker(Message.builder().attributesWithStrings(createAttributeMap("id", "1")).build()));
+    testSingleList.add(new CloudObjectsSelector.MessageTracker(Message.builder().attributesWithStrings(createAttributeMap("id", "2")).build()));
+    testSingleList.add(new CloudObjectsSelector.MessageTracker(Message.builder().attributesWithStrings(createAttributeMap("id", "3")).build()));
+    testSingleList.add(new CloudObjectsSelector.MessageTracker(Message.builder().attributesWithStrings(createAttributeMap("id", "4")).build()));
+    testSingleList.add(new CloudObjectsSelector.MessageTracker(Message.builder().attributesWithStrings(createAttributeMap("id", "5")).build()));
 
-    List<Message> expectedFirstList = new ArrayList<>();
-    expectedFirstList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "1")).build());
-    expectedFirstList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "2")).build());
+    List<CloudObjectsSelector.MessageTracker> expectedFirstList = new ArrayList<>();
+    expectedFirstList.add(testSingleList.get(0));
+    expectedFirstList.add(testSingleList.get(1));
 
-    List<Message> expectedSecondList = new ArrayList<>();
-    expectedSecondList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "3")).build());
-    expectedSecondList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "4")).build());
+    List<CloudObjectsSelector.MessageTracker> expectedSecondList = new ArrayList<>();
+    expectedSecondList.add(testSingleList.get(2));
+    expectedSecondList.add(testSingleList.get(3));
 
-    List<Message> expectedFinalList = new ArrayList<>();
-    expectedFinalList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "5")).build());
+    List<CloudObjectsSelector.MessageTracker> expectedFinalList = new ArrayList<>();
+    expectedFinalList.add(testSingleList.get(4));
 
     //  test the return values
-    List<List<Message>> partitionedList = selector.createListPartitions(testSingleList, 2);
+    List<List<CloudObjectsSelector.MessageTracker>> partitionedList = selector.createListPartitions(testSingleList, 2);
 
     assertEquals(3, partitionedList.size());
     assertEquals(expectedFirstList, partitionedList.get(0));
@@ -190,12 +190,12 @@ public class TestCloudObjectsSelector extends HoodieSparkClientTestHarness {
         (CloudObjectsSelector) ReflectionUtils.loadClass(clazz.getName(), props);
 
     // setup lists
-    List<Message> testSingleList = new ArrayList<>();
-    testSingleList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "1")).build());
-    testSingleList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "2")).build());
+    List<CloudObjectsSelector.MessageTracker> testSingleList = new ArrayList<>();
+    testSingleList.add(new CloudObjectsSelector.MessageTracker(Message.builder().attributesWithStrings(createAttributeMap("id", "1")).build()));
+    testSingleList.add(new CloudObjectsSelector.MessageTracker(Message.builder().attributesWithStrings(createAttributeMap("id", "2")).build()));
 
     //  test the return values
-    List<List<Message>> partitionedList = selector.createListPartitions(testSingleList, 0);
+    List<List<CloudObjectsSelector.MessageTracker>> partitionedList = selector.createListPartitions(testSingleList, 0);
 
     assertEquals(0, partitionedList.size());
   }
@@ -208,17 +208,17 @@ public class TestCloudObjectsSelector extends HoodieSparkClientTestHarness {
         (CloudObjectsSelector) ReflectionUtils.loadClass(clazz.getName(), props);
 
     // setup lists
-    List<Message> testSingleList = new ArrayList<>();
+    List<CloudObjectsSelector.MessageTracker> testSingleList = new ArrayList<>();
     testSingleList.add(
-            Message.builder()
-                    .attributesWithStrings(createAttributeMap("MessageId", "1"))
-                    .attributesWithStrings(createAttributeMap("ReceiptHandle", "1"))
-                    .build());
+        new CloudObjectsSelector.MessageTracker(Message.builder()
+            .attributesWithStrings(createAttributeMap("MessageId", "1"))
+            .attributesWithStrings(createAttributeMap("ReceiptHandle", "1"))
+            .build()));
     testSingleList.add(
-            Message.builder()
-                    .attributesWithStrings(createAttributeMap("MessageId", "2"))
-                    .attributesWithStrings(createAttributeMap("ReceiptHandle", "1"))
-                    .build());
+        new CloudObjectsSelector.MessageTracker(Message.builder()
+            .attributesWithStrings(createAttributeMap("MessageId", "2"))
+            .attributesWithStrings(createAttributeMap("ReceiptHandle", "1"))
+            .build()));
 
     deleteMessagesInQueue(sqs);
 

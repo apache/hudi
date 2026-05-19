@@ -20,10 +20,9 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -50,7 +49,7 @@ public class TestFileWriter implements HoodieFileWriter {
   }
 
   @Override
-  public void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema, Properties props) throws IOException {
+  public void writeWithMetadata(HoodieKey key, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException {
     if (closed) {
       throw new IOException("Writer is closed");
     }
@@ -60,7 +59,7 @@ public class TestFileWriter implements HoodieFileWriter {
   }
 
   @Override
-  public void write(String recordKey, HoodieRecord record, Schema schema, Properties props) throws IOException {
+  public void write(String recordKey, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException {
     if (closed) {
       throw new IOException("Writer is closed");
     }

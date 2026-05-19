@@ -24,10 +24,11 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
 import org.apache.hudi.common.util.InternalSchemaCache
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.collection.Pair
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+import org.apache.hudi.storage.HoodieStorageUtils
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.FileSplit
@@ -175,7 +176,7 @@ class Spark35LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       val fileSchema = if (shouldUseInternalSchema) {
         val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong;
         val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
-        val storage = new HoodieHadoopStorage(tablePath, sharedConf)
+        val storage = HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(sharedConf))
         //TODO: HARDCODED TIMELINE OBJECT
         val layout = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
         InternalSchemaCache.getInternalSchemaByVersionId(
@@ -269,7 +270,7 @@ class Spark35LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
               DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
             val datetimeRebaseSpec =
               DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
-            new Spark3HoodieVectorizedParquetRecordReader(
+            new HoodieVectorizedParquetRecordReader(
               convertTz.orNull,
               datetimeRebaseSpec.mode.toString,
               datetimeRebaseSpec.timeZone,
@@ -332,9 +333,10 @@ class Spark35LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
         val datetimeRebaseSpec =
           DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
-        val readSupport = new ParquetReadSupport(
+        val readSupport = new HoodieParquetReadSupport(
           convertTz,
           enableVectorizedReader = false,
+          enableTimestampFieldRepair = true,
           datetimeRebaseSpec,
           int96RebaseSpec)
 

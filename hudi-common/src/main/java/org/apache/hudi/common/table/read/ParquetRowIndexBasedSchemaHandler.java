@@ -21,6 +21,9 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -30,12 +33,10 @@ import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.action.TableChanges;
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 
-import org.apache.avro.Schema;
-
 import java.util.Collections;
 import java.util.List;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNested;
+import static org.apache.hudi.common.schema.HoodieSchemaUtils.appendFieldsToSchemaDedupNested;
 import static org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME;
 
 /**
@@ -43,8 +44,8 @@ import static org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRec
  */
 public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaHandler<T> {
   public ParquetRowIndexBasedSchemaHandler(HoodieReaderContext<T> readerContext,
-                                           Schema dataSchema,
-                                           Schema requestedSchema,
+                                           HoodieSchema dataSchema,
+                                           HoodieSchema requestedSchema,
                                            Option<InternalSchema> internalSchemaOpt,
                                            TypedProperties properties,
                                            HoodieTableMetaClient metaClient) {
@@ -55,8 +56,8 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
   }
 
   @Override
-  protected Schema prepareRequiredSchema(DeleteContext deleteContext) {
-    Schema preMergeSchema = super.prepareRequiredSchema(deleteContext);
+  protected HoodieSchema prepareRequiredSchema(DeleteContext deleteContext) {
+    HoodieSchema preMergeSchema = super.prepareRequiredSchema(deleteContext);
     return readerContext.getShouldMergeUseRecordPosition()
         ? addPositionalMergeCol(preMergeSchema)
         : preMergeSchema;
@@ -68,7 +69,7 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
   }
 
   @Override
-  protected InternalSchema doPruneInternalSchema(Schema requiredSchema, InternalSchema internalSchema) {
+  protected InternalSchema doPruneInternalSchema(HoodieSchema requiredSchema, InternalSchema internalSchema) {
     if (!readerContext.getShouldMergeUseRecordPosition()) {
       return super.doPruneInternalSchema(requiredSchema, internalSchema);
     }
@@ -84,8 +85,8 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
   }
 
   @Override
-  public Pair<List<Schema.Field>,List<Schema.Field>> getBootstrapRequiredFields() {
-    Pair<List<Schema.Field>,List<Schema.Field>> dataAndMetaCols = super.getBootstrapRequiredFields();
+  public Pair<List<HoodieSchemaField>, List<HoodieSchemaField>> getBootstrapRequiredFields() {
+    Pair<List<HoodieSchemaField>, List<HoodieSchemaField>> dataAndMetaCols = super.getBootstrapRequiredFields();
     if (readerContext.getNeedsBootstrapMerge() || readerContext.getShouldMergeUseRecordPosition()) {
       if (!dataAndMetaCols.getLeft().isEmpty()) {
         dataAndMetaCols.getLeft().add(getPositionalMergeField());
@@ -98,13 +99,13 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
   }
 
   @VisibleForTesting
-  static Schema addPositionalMergeCol(Schema input) {
+  static HoodieSchema addPositionalMergeCol(HoodieSchema input) {
     return appendFieldsToSchemaDedupNested(input, Collections.singletonList(getPositionalMergeField()));
   }
 
   @VisibleForTesting
-  static Schema.Field getPositionalMergeField() {
-    return new Schema.Field(ROW_INDEX_TEMPORARY_COLUMN_NAME,
-        Schema.create(Schema.Type.LONG), "", -1L);
+  static HoodieSchemaField getPositionalMergeField() {
+    return HoodieSchemaField.of(ROW_INDEX_TEMPORARY_COLUMN_NAME,
+        HoodieSchema.create(HoodieSchemaType.LONG), "", -1L);
   }
 }

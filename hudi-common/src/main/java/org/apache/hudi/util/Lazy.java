@@ -18,6 +18,8 @@
 
 package org.apache.hudi.util;
 
+import lombok.Getter;
+
 import javax.annotation.concurrent.ThreadSafe;
 
 import java.util.function.Supplier;
@@ -30,6 +32,7 @@ import java.util.function.Supplier;
 @ThreadSafe
 public class Lazy<T> {
 
+  @Getter
   private volatile boolean initialized;
 
   private Supplier<T> initializer;
@@ -63,7 +66,7 @@ public class Lazy<T> {
 
   /**
    * Executes provided {@code initializer} lazily, while providing for "exactly once" semantic,
-   * to instantiate value of type {@link T} being subsequently held by the returned instance of
+   * to instantiate value of type T being subsequently held by the returned instance of
    * {@link Lazy}
    */
   public static <T> Lazy<T> lazily(Supplier<T> initializer) {
@@ -72,7 +75,7 @@ public class Lazy<T> {
 
   /**
    * Instantiates {@link Lazy} in an "eagerly" fashion setting it w/ the provided value of
-   * type {@link T} directly, bypassing lazy initialization sequence
+   * type T directly, bypassing lazy initialization sequence
    */
   public static <T> Lazy<T> eagerly(T ref) {
     return new Lazy<>(ref);

@@ -29,12 +29,6 @@ import javax.annotation.concurrent.Immutable;
     groupName = ConfigGroups.Names.READER,
     description = "Configurations that control file group reading.")
 public class HoodieReaderConfig extends HoodieConfig {
-  public static final ConfigProperty<Boolean> USE_NATIVE_HFILE_READER = ConfigProperty
-      .key("_hoodie.hfile.use.native.reader")
-      .defaultValue(true)
-      .markAdvanced()
-      .sinceVersion("1.0.0")
-      .withDocumentation("When enabled, the native HFile reader is used to read HFiles.  This is an internal config.");
 
   public static final ConfigProperty<String> COMPACTION_LAZY_BLOCK_READ_ENABLE = ConfigProperty
       .key("hoodie.compaction.lazy.block.read")
@@ -50,14 +44,6 @@ public class HoodieReaderConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("HoodieLogFormatReader reads a logfile in the forward direction starting from pos=0 to pos=file_length. "
           + "If this config is set to true, the reader reads the logfile in reverse direction, from pos=file_length to pos=0");
-
-  public static final ConfigProperty<String> ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN = ConfigProperty
-      .key("hoodie" + HoodieMetadataConfig.OPTIMIZED_LOG_BLOCKS_SCAN)
-      .defaultValue("false")
-      .markAdvanced()
-      .sinceVersion("0.13.0")
-      .withDocumentation("New optimized scan for log blocks that handles all multi-writer use-cases while appending to log files. "
-          + "It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.");
 
   public static final ConfigProperty<Boolean> FILE_GROUP_READER_ENABLED = ConfigProperty
       .key("hoodie.file.group.reader.enabled")
@@ -89,4 +75,45 @@ public class HoodieReaderConfig extends HoodieConfig {
       "hoodie.write.record.merge.custom.implementation.classes";
   public static final String RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY =
       "hoodie.datasource.write.record.merger.impls";
+
+  public static final ConfigProperty<Boolean> HFILE_BLOCK_CACHE_ENABLED = ConfigProperty
+      .key("hoodie.hfile.block.cache.enabled")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Enable HFile block-level caching for metadata files. This caches frequently "
+          + "accessed HFile blocks in memory to reduce I/O operations during metadata queries. "
+          + "Improves performance for workloads with repeated metadata access patterns.");
+
+  public static final ConfigProperty<Integer> HFILE_BLOCK_CACHE_SIZE = ConfigProperty
+      .key("hoodie.hfile.block.cache.size")
+      .defaultValue(100)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Maximum number of HFile blocks to cache in memory per metadata file reader. "
+          + "Higher values improve cache hit rates but consume more memory. "
+          + "Only effective when hfile.block.cache.enabled is true.");
+
+  public static final ConfigProperty<Integer> HFILE_BLOCK_CACHE_TTL_MINUTES = ConfigProperty
+      .key("hoodie.hfile.block.cache.ttl.minutes")
+      .defaultValue(60)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Time-to-live (TTL) in minutes for cached HFile blocks. Blocks are evicted "
+          + "from the cache after this duration to prevent memory leaks. "
+          + "Only effective when hfile.block.cache.enabled is true.");
+
+  public static final String BLOB_INLINE_READ_MODE_CONTENT = "CONTENT";
+  public static final String BLOB_INLINE_READ_MODE_DESCRIPTOR = "DESCRIPTOR";
+  public static final ConfigProperty<String> BLOB_INLINE_READ_MODE = ConfigProperty
+      .key("hoodie.read.blob.inline.mode")
+      .defaultValue(BLOB_INLINE_READ_MODE_CONTENT)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withValidValues(BLOB_INLINE_READ_MODE_CONTENT, BLOB_INLINE_READ_MODE_DESCRIPTOR)
+      .withDocumentation("How Hudi interprets INLINE BLOB values on read. "
+          + "CONTENT (default) returns the raw inline bytes. "
+          + "DESCRIPTOR returns an OUT_OF_LINE-shaped reference pointing at the backing "
+          + "Lance file with the INLINE payload's position and size, so callers can defer "
+          + "the byte read via read_blob().");
 }

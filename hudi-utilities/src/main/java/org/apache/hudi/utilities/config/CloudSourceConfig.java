@@ -57,6 +57,13 @@ public class CloudSourceConfig extends HoodieConfig {
           + "Multiple API calls with this batch size are sent to cloud events queue, until we consume hoodie.streamer.source.cloud.meta.max.num.messages.per.sync"
           + "from the queue or hoodie.streamer.source.cloud.meta.max.fetch.time.per.sync.ms amount of time has passed or queue is empty. ");
 
+  public static final ConfigProperty<Integer> META_EVENTS_PER_PARTITION = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.meta.events.per.partition")
+      .defaultValue(10000)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("Number of metadata events to be grouped into a single partition while creating dataframe from metadata events.");
+
   public static final ConfigProperty<Integer> MAX_NUM_MESSAGES_PER_SYNC = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.meta.max.num.messages.per.sync")
       .defaultValue(1000)
@@ -174,4 +181,17 @@ public class CloudSourceConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("Boolean value to allow coalesce alias columns with actual columns while reading from source");
+
+  public static final ConfigProperty<Boolean> CLOUD_INCREMENTAL_MERGE_SCHEMA = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.merge.schema.enable")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("For Parquet and ORC data files in S3/GCS incremental ingestion, merge schemas across all "
+          + "files in each read (Spark mergeSchema). Default true so mixed-schema batches during initial "
+          + "ingest/bootstrap produce a valid unified schema. Set false to restore prior behavior. "
+          + SPARK_DATASOURCE_OPTIONS.key() + " is applied after this flag and can override mergeSchema. "
+          + "Note: the per-read mergeSchema option is honored by Spark's native Parquet reader and by Spark's "
+          + "native ORC reader (Spark 3.0+, default ORC impl since Spark 2.4). On older runtimes the option is "
+          + "silently ignored.");
 }

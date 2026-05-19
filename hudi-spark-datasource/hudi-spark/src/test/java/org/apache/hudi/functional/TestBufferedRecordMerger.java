@@ -19,54 +19,64 @@
 
 package org.apache.hudi.functional;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DefaultSparkRecordMerger;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.OverwriteWithLatestSparkRecordMerger;
+import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.expression.Predicate;
+import org.apache.hudi.io.CustomMerger;
+import org.apache.hudi.io.CustomPayload;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
-import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
-import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -75,8 +85,8 @@ import java.util.stream.Stream;
 import static org.apache.hudi.BaseSparkInternalRecordContext.getFieldValueFromInternalRow;
 import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
-import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.ORDERING_FIELDS;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -89,14 +99,14 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   private static final String PARTITION_PATH = "test_partition";
   private static final long ORDERING_VALUE = 100L;
   private static final String IGNORE_MARKERS_VALUE = "__HUDI_DEFAULT_MARKER__";
-  private static final List<Schema> SCHEMAS = Arrays.asList(
+  private static final List<HoodieSchema> SCHEMAS = Arrays.asList(
       getSchema1(),
       getSchema2(),
       getSchema3(),
       getSchema4(),
       getSchema5(),
       getSchema6());
-  private static final Schema READER_SCHEMA = getSchema6();
+  private static final HoodieSchema READER_SCHEMA = getSchema6();
   private HoodieTableConfig tableConfig;
   private StorageConfiguration<?> storageConfig;
   private TypedProperties props;
@@ -586,6 +596,108 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     assertEquals(newRecord, result.getRecord());
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testCustomMerging(boolean usePayload) throws IOException {
+    // create a simple schema with _hoodie_is_delete field to track delete records
+    List<HoodieSchemaField> fields = Arrays.asList(HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("timestamp", HoodieSchema.create(HoodieSchemaType.LONG), null, null),
+        HoodieSchemaField.of(HoodieRecord.HOODIE_IS_DELETED_FIELD, HoodieSchema.create(HoodieSchemaType.BOOLEAN)));
+
+    HoodieSchema customSchema = HoodieSchema.createRecord("CustomRecord", null, null, false, fields);
+    Option<HoodieRecordMerger> recordMerger;
+    Option<String> payloadClassName;
+    if (usePayload) {
+      recordMerger = Option.of(new HoodieAvroRecordMerger());
+      payloadClassName = Option.of(CustomPayload.class.getName());
+    } else {
+      recordMerger = Option.of(new CustomMerger());
+      payloadClassName = Option.empty();
+    }
+    // Configure reader context with custom schema
+    props.setProperty(ORDERING_FIELDS.key(), "timestamp");
+    HoodieAvroReaderContext avroReaderContext = new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
+    avroReaderContext.setHasLogFiles(false);
+    avroReaderContext.setHasBootstrapBaseFile(false);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    avroReaderContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(avroReaderContext, customSchema, customSchema, Option.empty(), props, metaClient));
+    avroReaderContext.getRecordContext().encodeSchema(customSchema);
+
+    BufferedRecordMerger<IndexedRecord> merger = BufferedRecordMergerFactory.create(
+        avroReaderContext,
+        RecordMergeMode.CUSTOM,
+        false,
+        recordMerger,
+        payloadClassName,
+        customSchema,
+        props,
+        Option.empty());
+
+    GenericRecord record1 = createCustomRecord(customSchema, "1", "Alice", 1000L, false);
+    BufferedRecord<IndexedRecord> bufferedRecord1 = new BufferedRecord<>("1", 1000L, record1, 0, null);
+    GenericRecord record2 = createCustomRecord(customSchema, "1", "Bob", 2000L, false);
+    BufferedRecord<IndexedRecord> bufferedRecord2 = new BufferedRecord<>("1", 2000L, record2, 0, null);
+    GenericRecord record3 = createCustomRecord(customSchema, "1", "Charlie", 3000L, true);
+    BufferedRecord<IndexedRecord> bufferedRecord3 = new BufferedRecord<>("1", 3000L, record3, 0, HoodieOperation.DELETE);
+    GenericRecord record4 = createCustomRecord(customSchema, "1", "Dexter", 4000L, false);
+    BufferedRecord<IndexedRecord> bufferedRecord4 = new BufferedRecord<>("1", 4000L, record4, 0, null);
+
+    // Custom merger applies a reverse ordering so the earliest record is kept
+    BufferedRecord<IndexedRecord> result = merger.finalMerge(bufferedRecord1, bufferedRecord2);
+    assertEquals(bufferedRecord1, result);
+    assertFalse(result.isDelete());
+    result = merger.finalMerge(bufferedRecord2, bufferedRecord3);
+    assertEquals(bufferedRecord2, result);
+    assertFalse(result.isDelete());
+    result = merger.finalMerge(bufferedRecord3, bufferedRecord4);
+    assertEquals(bufferedRecord3, result);
+    assertTrue(result.isDelete());
+    // flip ordering with delete to ensure behavior is consistent
+    result = merger.finalMerge(bufferedRecord4, bufferedRecord3);
+    assertEquals(bufferedRecord3, result);
+    assertTrue(result.isDelete());
+
+    // Validate delta merge
+    Option<BufferedRecord<IndexedRecord>> deltaMergeResult = merger.deltaMerge(bufferedRecord1, bufferedRecord2);
+    assertTrue(deltaMergeResult.isPresent());
+    assertEquals(bufferedRecord1, deltaMergeResult.get());
+    assertFalse(deltaMergeResult.get().isDelete());
+    deltaMergeResult = merger.deltaMerge(bufferedRecord2, bufferedRecord3);
+    assertTrue(deltaMergeResult.isPresent());
+    assertEquals(bufferedRecord2, deltaMergeResult.get());
+    assertFalse(deltaMergeResult.get().isDelete());
+    deltaMergeResult = merger.deltaMerge(bufferedRecord3, bufferedRecord4);
+    assertTrue(deltaMergeResult.isPresent());
+    assertEquals(bufferedRecord3, deltaMergeResult.get());
+    assertTrue(deltaMergeResult.get().isDelete());
+    // flip ordering and expect empty option
+    assertTrue(merger.deltaMerge(bufferedRecord4, bufferedRecord3).isEmpty());
+    assertTrue(merger.deltaMerge(bufferedRecord3, bufferedRecord2).isEmpty());
+    assertTrue(merger.deltaMerge(bufferedRecord2, bufferedRecord1).isEmpty());
+
+    // Validate merge with delete records
+    DeleteRecord deleteRecordWithHigherOrderValue = DeleteRecord.create("1", "anyPath", 5000L);
+    DeleteRecord deleteRecordWithLowerOrderValue = DeleteRecord.create("1", "anyPath", 1000L);
+    Option<DeleteRecord> deleteResult = merger.deltaMerge(deleteRecordWithHigherOrderValue, bufferedRecord2);
+    // delete is skipped because custom merger prefers lower ordering value
+    assertFalse(deleteResult.isPresent());
+    deleteResult = merger.deltaMerge(deleteRecordWithLowerOrderValue, bufferedRecord2);
+    // delete is applied because lower ordering value is preferred
+    assertTrue(deleteResult.isPresent());
+    assertEquals(deleteRecordWithLowerOrderValue, deleteResult.get());
+  }
+
+  private static GenericRecord createCustomRecord(HoodieSchema customSchema, String id, String name, long timestamp, boolean isDelete) {
+    GenericRecord record = new GenericData.Record(customSchema.toAvroSchema());
+    record.put("id", id);
+    record.put("name", name);
+    record.put("timestamp", timestamp);
+    record.put("_hoodie_is_deleted", isDelete);
+    return record;
+  }
+
   // ============================================================================
   // Helper methods or class to create records for the parameterized test
   // ============================================================================
@@ -669,7 +781,6 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         mergeMode == EVENT_TIME_ORDERING
             ? Option.of(new DefaultSparkRecordMerger())
             : Option.of(new OverwriteWithLatestSparkRecordMerger()),
-        Collections.emptyList(), // orderingFieldNames
         Option.empty(), // payloadClass
         READER_SCHEMA, // readerSchema
         props, // props
@@ -686,7 +797,6 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         mergeMode == EVENT_TIME_ORDERING
             ? Option.of(new DefaultSparkRecordMerger())
             : Option.of(new OverwriteWithLatestSparkRecordMerger()),
-        Collections.emptyList(), // orderingFieldNames
         Option.empty(), // payloadClass
         READER_SCHEMA, // readerSchema
         props, // props
@@ -694,54 +804,64 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     );
   }
 
-  private static Schema getSchema1() {
-    Schema fullSchema = Schema.createRecord("TestRecord", null, null, false);
-    List<Schema.Field> fields = Arrays.asList(
-        new Schema.Field("id", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
-        new Schema.Field("name", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
-        new Schema.Field("age", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.INT), Schema.create(Schema.Type.NULL))), null, 0),
-        new Schema.Field("city", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
-        new Schema.Field("timestamp", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.LONG), Schema.create(Schema.Type.NULL))), null, 0L)
+  private static HoodieSchema getSchema1() {
+    HoodieSchema nullSchema = HoodieSchema.create(HoodieSchemaType.NULL);
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema intSchema = HoodieSchema.create(HoodieSchemaType.INT);
+    HoodieSchema longSchema = HoodieSchema.create(HoodieSchemaType.LONG);
+
+    List<HoodieSchemaField> fields = Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("name", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("age", HoodieSchema.createUnion(intSchema, nullSchema), null, 0),
+        HoodieSchemaField.of("city", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("timestamp", HoodieSchema.createUnion(longSchema, nullSchema), null, 0L)
     );
-    fullSchema.setFields(fields);
-    return fullSchema;
+    return HoodieSchema.createRecord("TestRecord", null, null, fields);
   }
 
-  private static Schema getSchema2() {
+  private static HoodieSchema getSchema2() {
     // Create a partial schema with only some fields
-    Schema partialSchema = Schema.createRecord("PartialRecord", null, null, false);
-    partialSchema.setFields(Arrays.asList(
-        new Schema.Field("precombine", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.LONG), Schema.create(Schema.Type.NULL))), null, 0),
-        new Schema.Field("id", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
-        new Schema.Field("name", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE)
-    ));
-    return partialSchema;
-  }
+    HoodieSchema nullSchema = HoodieSchema.create(HoodieSchemaType.NULL);
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema longSchema = HoodieSchema.create(HoodieSchemaType.LONG);
 
-  private static Schema getSchema3() {
-    Schema fullSchema = Schema.createRecord("TestRecord", null, null, false);
-    List<Schema.Field> fields = Arrays.asList(
-        new Schema.Field("id", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
-        new Schema.Field("name", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
-        new Schema.Field("age", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.INT), Schema.create(Schema.Type.NULL))), null, 0),
-        new Schema.Field("city", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE)
+    List<HoodieSchemaField> fields = Arrays.asList(
+        HoodieSchemaField.of("precombine", HoodieSchema.createUnion(longSchema, nullSchema), null, 0),
+        HoodieSchemaField.of("id", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("name", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE)
     );
-    fullSchema.setFields(fields);
-    return fullSchema;
+    return HoodieSchema.createRecord("PartialRecord", null, null, fields);
   }
 
-  private static Schema getSchema4() {
-    Schema fullSchema = Schema.createRecord("TestRecord", null, null, false);
-    List<Schema.Field> fields = Arrays.asList(
-        new Schema.Field("id", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
-        new Schema.Field("name", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
-        new Schema.Field("timestamp", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.LONG), Schema.create(Schema.Type.NULL))), null, 0L)
+  private static HoodieSchema getSchema3() {
+    HoodieSchema nullSchema = HoodieSchema.create(HoodieSchemaType.NULL);
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema intSchema = HoodieSchema.create(HoodieSchemaType.INT);
+
+    List<HoodieSchemaField> fields = Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("name", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("age", HoodieSchema.createUnion(intSchema, nullSchema), null, 0),
+        HoodieSchemaField.of("city", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE)
     );
-    fullSchema.setFields(fields);
-    return fullSchema;
+    return HoodieSchema.createRecord("TestRecord", null, null, fields);
   }
 
-  private static Schema getSchema5() {
+  private static HoodieSchema getSchema4() {
+    HoodieSchema nullSchema = HoodieSchema.create(HoodieSchemaType.NULL);
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema longSchema = HoodieSchema.create(HoodieSchemaType.LONG);
+
+    List<HoodieSchemaField> fields = Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("name", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("timestamp", HoodieSchema.createUnion(longSchema, nullSchema), null, 0L)
+    );
+    return HoodieSchema.createRecord("TestRecord", null, null, fields);
+  }
+
+  private static HoodieSchema getSchema5() {
     String schemaJson =
         "{\n"
           + "  \"type\": \"record\",\n"
@@ -766,21 +886,24 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
           + "    }\n"
           + "  ]\n"
           + "}";
-    return new Schema.Parser().parse(schemaJson);
+    return HoodieSchema.parse(schemaJson);
   }
 
-  private static Schema getSchema6() {
-    Schema fullSchema = Schema.createRecord("TestRecord", null, null, false);
-    List<Schema.Field> fields = Arrays.asList(
-        new Schema.Field("precombine", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.INT), Schema.create(Schema.Type.NULL))), null, 0),
-        new Schema.Field("id", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
-        new Schema.Field("name", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
-        new Schema.Field("age", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.INT), Schema.create(Schema.Type.NULL))), null, 0),
-        new Schema.Field("city", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
-        new Schema.Field("timestamp", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.LONG), Schema.create(Schema.Type.NULL))), null, 0L)
+  private static HoodieSchema getSchema6() {
+    HoodieSchema nullSchema = HoodieSchema.create(HoodieSchemaType.NULL);
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema intSchema = HoodieSchema.create(HoodieSchemaType.INT);
+    HoodieSchema longSchema = HoodieSchema.create(HoodieSchemaType.LONG);
+
+    List<HoodieSchemaField> fields = Arrays.asList(
+        HoodieSchemaField.of("precombine", HoodieSchema.createUnion(intSchema, nullSchema), null, 0),
+        HoodieSchemaField.of("id", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("name", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("age", HoodieSchema.createUnion(intSchema, nullSchema), null, 0),
+        HoodieSchemaField.of("city", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("timestamp", HoodieSchema.createUnion(longSchema, nullSchema), null, 0L)
     );
-    fullSchema.setFields(fields);
-    return fullSchema;
+    return HoodieSchema.createRecord("TestRecord", null, null, fields);
   }
 
   static class DummyRecordContext extends RecordContext<InternalRow> {
@@ -795,7 +918,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public GenericRecord convertToAvroRecord(InternalRow record, Schema schema) {
+    public GenericRecord convertToAvroRecord(InternalRow record, HoodieSchema schema) {
       return null;
     }
 
@@ -806,7 +929,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public Object getValue(InternalRow record, Schema schema, String fieldName) {
+    public Object getValue(InternalRow record, HoodieSchema schema, String fieldName) {
       return getFieldValueFromInternalRow(record, schema, fieldName);
     }
 
@@ -824,24 +947,24 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
             HoodieRecord.HoodieRecordType.SPARK);
       }
 
-      Schema schema = getSchemaFromBufferRecord(bufferedRecord);
+      HoodieSchema schema = getSchemaFromBufferRecord(bufferedRecord);
       InternalRow row = bufferedRecord.getRecord();
-      StructType sparkSchema = AvroConversionUtils.convertAvroSchemaToStructType(schema);
+      StructType sparkSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema);
       return new HoodieSparkRecord(hoodieKey, row, sparkSchema, false);
     }
 
     @Override
-    public InternalRow constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
+    public InternalRow constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
       return new GenericInternalRow(fieldValues);
     }
 
     @Override
-    public InternalRow mergeWithEngineRecord(Schema schema,
+    public InternalRow mergeWithEngineRecord(HoodieSchema schema,
                                              Map<Integer, Object> updateValues,
                                              BufferedRecord<InternalRow> baseRecord) {
-      List<Schema.Field> fields = schema.getFields();
+      List<HoodieSchemaField> fields = schema.getFields();
       Object[] values = new Object[fields.size()];
-      for (Schema.Field field : fields) {
+      for (HoodieSchemaField field : fields) {
         int pos = field.pos();
         if (updateValues.containsKey(pos)) {
           values[pos] = updateValues.get(pos);
@@ -853,7 +976,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public Schema getSchemaFromBufferRecord(BufferedRecord<InternalRow> record) {
+    public HoodieSchema getSchemaFromBufferRecord(BufferedRecord<InternalRow> record) {
       int id = record.getSchemaId();
       if (id >= 1 && id <= SCHEMAS.size()) {
         return SCHEMAS.get(id - 1);
@@ -868,13 +991,13 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public InternalRow toBinaryRow(Schema avroSchema, InternalRow record) {
+    public InternalRow toBinaryRow(HoodieSchema schema, InternalRow record) {
       return null;
     }
 
     @Override
     public UnaryOperator<InternalRow> projectRecord(
-        Schema from, Schema to, Map<String, String> renamedColumns) {
+        HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
       return null;
     }
   }
@@ -892,8 +1015,8 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     public ClosableIterator<InternalRow> getFileRecordIterator(StoragePath filePath,
                                                                long start,
                                                                long length,
-                                                               Schema dataSchema,
-                                                               Schema requiredSchema,
+                                                               HoodieSchema dataSchema,
+                                                               HoodieSchema requiredSchema,
                                                                HoodieStorage storage) throws IOException {
       return null;
     }
@@ -908,23 +1031,23 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     @Override
     public ClosableIterator<InternalRow> mergeBootstrapReaders(
         ClosableIterator<InternalRow> skeletonFileIterator,
-        Schema skeletonRequiredSchema,
+        HoodieSchema skeletonRequiredSchema,
         ClosableIterator<InternalRow> dataFileIterator,
-        Schema dataRequiredSchema,
+        HoodieSchema dataRequiredSchema,
         List<Pair<String, Object>> requiredPartitionFieldAndValues) {
       return null;
     }
   }
 
-  public static void assertRowEqual(InternalRow expected, InternalRow actual, Schema schema) {
+  public static void assertRowEqual(InternalRow expected, InternalRow actual, HoodieSchema schema) {
     assertRowEqualsRecursive(expected, actual, schema.getFields(), "");
   }
 
   private static void assertRowEqualsRecursive(InternalRow expected, InternalRow actual,
-                                               List<Schema.Field> fields, String pathPrefix) {
+                                               List<HoodieSchemaField> fields, String pathPrefix) {
     for (int i = 0; i < fields.size(); i++) {
-      Schema.Field field = fields.get(i);
-      Schema fieldSchema = getNonNullSchema(field.schema());
+      HoodieSchemaField field = fields.get(i);
+      HoodieSchema fieldSchema = field.schema().getNonNullType();
       String path = pathPrefix + field.name();
 
       if (expected.isNullAt(i) || actual.isNullAt(i)) {
@@ -962,16 +1085,5 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
           throw new UnsupportedOperationException("Unsupported type: " + fieldSchema.getType() + " at " + path);
       }
     }
-  }
-
-  private static Schema getNonNullSchema(Schema schema) {
-    if (schema.getType() == Schema.Type.UNION) {
-      for (Schema s : schema.getTypes()) {
-        if (s.getType() != Schema.Type.NULL) {
-          return s;
-        }
-      }
-    }
-    return schema;
   }
 }

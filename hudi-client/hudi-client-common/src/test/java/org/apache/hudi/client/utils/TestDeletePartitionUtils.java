@@ -69,8 +69,6 @@ public class TestDeletePartitionUtils {
       boolean hasPendingCompactionOperations,
       boolean hasPendingLogCompactionOperations,
       boolean hasFileGroupsInPendingClustering) {
-    System.out.printf("hasPendingCompactionOperations: %s, hasPendingLogCompactionOperations: %s, hasFileGroupsInPendingClustering: %s%n",
-        hasPendingCompactionOperations, hasPendingLogCompactionOperations, hasFileGroupsInPendingClustering);
     Mockito.when(table.getSliceView()).thenReturn(fileSystemView);
     Mockito.when(fileSystemView.getPendingCompactionOperations()).thenReturn(createPendingCompactionOperations(hasPendingCompactionOperations));
     Mockito.when(fileSystemView.getPendingLogCompactionOperations()).thenReturn(createPendingCompactionOperations(hasPendingLogCompactionOperations));

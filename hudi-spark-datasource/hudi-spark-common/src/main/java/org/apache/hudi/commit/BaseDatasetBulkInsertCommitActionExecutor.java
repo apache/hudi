@@ -42,6 +42,7 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import lombok.Getter;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -57,17 +58,18 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
 
   protected final transient HoodieWriteConfig writeConfig;
   protected final transient SparkRDDWriteClient writeClient;
+  @Getter
   protected String instantTime;
   protected HoodieTable table;
 
   public BaseDatasetBulkInsertCommitActionExecutor(HoodieWriteConfig config,
-                                                   SparkRDDWriteClient writeClient) {
+                                                   SparkRDDWriteClient writeClient, String instantTime) {
     this.writeConfig = config;
     this.writeClient = writeClient;
+    this.instantTime = instantTime;
   }
 
   protected void preExecute() {
-    instantTime = writeClient.startCommit(getCommitActionType());
     table = writeClient.initTable(getWriteOperationType(), Option.ofNullable(instantTime));
     table.validateInsertSchema();
     writeClient.preWrite(instantTime, getWriteOperationType(), table.getMetaClient());
@@ -139,8 +141,4 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
   }
 
   protected abstract Map<String, List<String>> getPartitionToReplacedFileIds(HoodieData<WriteStatus> writeStatuses);
-
-  public String getInstantTime() {
-    return instantTime;
-  }
 }

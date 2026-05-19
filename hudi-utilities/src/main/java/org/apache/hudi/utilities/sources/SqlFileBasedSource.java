@@ -27,14 +27,13 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -61,9 +60,9 @@ import static org.apache.hudi.utilities.config.SqlFileBasedSourceConfig.SOURCE_S
  *
  * <p>hoodie.write.meta.key.prefixes = 'deltastreamer.checkpoint.key'
  */
+@Slf4j
 public class SqlFileBasedSource extends RowSource {
 
-  private static final Logger LOG = LoggerFactory.getLogger(SqlFileBasedSource.class);
   private final String sourceSqlFile;
   private final boolean shouldEmitCheckPoint;
 
@@ -83,13 +82,12 @@ public class SqlFileBasedSource extends RowSource {
       Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     Dataset<Row> rows = null;
     final FileSystem fs = HadoopFSUtils.getFs(sourceSqlFile, sparkContext.hadoopConfiguration(), true);
-    try {
-      final Scanner scanner = new Scanner(fs.open(new Path(sourceSqlFile)));
+    try (final Scanner scanner = new Scanner(fs.open(new Path(sourceSqlFile)))) {
       scanner.useDelimiter(";");
       while (scanner.hasNext()) {
         String sqlStr = scanner.next().trim();
         if (!sqlStr.isEmpty()) {
-          LOG.info(sqlStr);
+          log.info(sqlStr);
           // overwrite the same dataset object until the last statement then return.
           rows = sparkSession.sql(sqlStr);
         }

@@ -23,6 +23,7 @@ import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, Cast}
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, LogicalPlan, Project}
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
@@ -83,14 +84,14 @@ object ResolveInsertionBase extends SparkAdapterSupport {
   def cannotWriteNotEnoughColumnsToTableError(tableName: String,
                                               expected: Seq[String],
                                               queryOutput: Seq[Attribute]): Throwable = {
-    new AnalysisException("table: " + tableName + "INSERT_COLUMN_ARITY_MISMATCH.NOT_ENOUGH_DATA_COLUMNS, expect: " +
+    new HoodieAnalysisException("table: " + tableName + "INSERT_COLUMN_ARITY_MISMATCH.NOT_ENOUGH_DATA_COLUMNS, expect: " +
       expected.mkString(",") + " queryOutput: " + queryOutput.map(attr => attr.name).mkString(","))
   }
 
   def unresolvedAttributeError(errorClass: String,
                                colName: String,
                                candidates: Seq[String]): Throwable = {
-    new AnalysisException(errorClass + " expect col is : " +
+    new HoodieAnalysisException(errorClass + " expect col is : " +
       colName + " table output is : " + candidates.mkString(","))
   }
 }

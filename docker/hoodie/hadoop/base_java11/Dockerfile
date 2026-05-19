@@ -15,8 +15,8 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM openjdk:11-jdk-slim-bullseye
-MAINTAINER Hoodie
+FROM eclipse-temurin:11-jdk-jammy
+LABEL maintainer="Hoodie"
 USER root
 
 # Default to UTF-8 file.encoding

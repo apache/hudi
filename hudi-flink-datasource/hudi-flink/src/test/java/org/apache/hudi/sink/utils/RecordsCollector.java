@@ -18,6 +18,11 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
+
+import lombok.Getter;
+import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
 
 import java.util.ArrayList;
@@ -26,29 +31,36 @@ import java.util.List;
 /**
  * A mock {@link Collector} that used in  {@link TestFunctionWrapper}.
  */
+@Getter
 class RecordsCollector<T> implements Collector<T> {
   private List<T> val;
+  private final RowDataSerializer rowDataSerializer;
 
-  public RecordsCollector() {
+  private RecordsCollector(RowDataSerializer rowDataSerializer) {
     this.val = new ArrayList<>();
+    this.rowDataSerializer = rowDataSerializer;
   }
 
   public static <T> RecordsCollector<T> getInstance() {
-    return new RecordsCollector<>();
+    return new RecordsCollector<>(null);
+  }
+
+  public static <T> RecordsCollector<T> getInstance(RowType rowType) {
+    return new RecordsCollector<>(new RowDataSerializer(rowType));
   }
 
   @Override
   public void collect(T t) {
-    this.val.add(t);
+    if (rowDataSerializer != null && t instanceof HoodieFlinkInternalRow) {
+      this.val.add((T) ((HoodieFlinkInternalRow) t).copy(rowDataSerializer));
+    } else {
+      this.val.add(t);
+    }
   }
 
   @Override
   public void close() {
     this.val.clear();
     this.val = null;
-  }
-
-  public List<T> getVal() {
-    return val;
   }
 }

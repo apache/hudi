@@ -19,24 +19,16 @@
 
 package org.apache.hudi.sync.common.model;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import java.util.List;
 
+@AllArgsConstructor
+@Getter
 public class Partition {
 
   private final List<String> values;
 
   private final String storageLocation;
-
-  public Partition(List<String> values, String storageLocation) {
-    this.values = values;
-    this.storageLocation = storageLocation;
-  }
-
-  public List<String> getValues() {
-    return values;
-  }
-
-  public String getStorageLocation() {
-    return storageLocation;
-  }
 }

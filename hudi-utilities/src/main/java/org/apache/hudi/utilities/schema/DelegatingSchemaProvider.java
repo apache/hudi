@@ -19,14 +19,14 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 
-import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
  * SchemaProvider which uses separate Schema Providers for source and target.
  */
-public class DelegatingSchemaProvider extends SchemaProvider {
+public final class DelegatingSchemaProvider extends SchemaProvider {
 
   private final SchemaProvider sourceSchemaProvider;
   private final SchemaProvider targetSchemaProvider;
@@ -40,13 +40,13 @@ public class DelegatingSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getSourceSchema() {
-    return sourceSchemaProvider.getSourceSchema();
+  public HoodieSchema getSourceHoodieSchema() {
+    return sourceSchemaProvider.getSourceHoodieSchema();
   }
 
   @Override
-  public Schema getTargetSchema() {
-    return targetSchemaProvider.getTargetSchema();
+  public HoodieSchema getTargetHoodieSchema() {
+    return targetSchemaProvider.getTargetHoodieSchema();
   }
 
   public SchemaProvider getSourceSchemaProvider() {

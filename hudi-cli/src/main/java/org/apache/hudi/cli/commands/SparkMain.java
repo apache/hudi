@@ -59,6 +59,7 @@ import org.apache.hudi.utilities.HoodieCompactor;
 import org.apache.hudi.utilities.streamer.BootstrapExecutor;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -70,8 +71,6 @@ import org.apache.spark.sql.functions;
 import org.apache.spark.sql.hudi.DeDupeType;
 import org.apache.spark.sql.hudi.DedupeSparkJob;
 import org.apache.spark.sql.types.StructType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -91,9 +90,8 @@ import static org.apache.hudi.utilities.UtilHelpers.readConfig;
 /**
  * This class deals with initializing spark context based on command entered to hudi-cli.
  */
+@Slf4j
 public class SparkMain {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkMain.class);
 
   /**
    * Commands.
@@ -144,7 +142,7 @@ public class SparkMain {
   public static void main(String[] args) {
     ValidationUtils.checkArgument(args.length >= 4);
     final String commandString = args[0];
-    LOG.info("Invoking SparkMain: {}", commandString);
+    log.info("Invoking SparkMain: {}", commandString);
     final SparkCommand cmd = SparkCommand.valueOf(commandString);
 
     JavaSparkContext jsc = SparkUtil.initJavaSparkContext("hoodie-cli-" + commandString,
@@ -255,7 +253,7 @@ public class SparkMain {
           break;
       }
     } catch (Exception exception) {
-      LOG.error("Fail to execute commandString", exception);
+      log.error("Fail to execute commandString", exception);
       returnCode = -1;
     } finally {
       jsc.stop();
@@ -282,7 +280,7 @@ public class SparkMain {
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       return 0;
     } catch (Exception e) {
-      LOG.warn(String.format("Failed: Could not clean marker instantTime: \"%s\".", instantTime), e);
+      log.warn(String.format("Failed: Could not clean marker instantTime: \"%s\".", instantTime), e);
       return -1;
     }
   }
@@ -372,7 +370,7 @@ public class SparkMain {
   private static int deduplicatePartitionPath(JavaSparkContext jsc, String duplicatedPartitionPath,
                                               String repairedOutputPath, String basePath, boolean dryRun, String dedupeType) {
     DedupeSparkJob job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath,
-        new SQLContext(jsc),
+        SQLContext.getOrCreate(jsc.sc()),
         HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration())),
         DeDupeType.withName(dedupeType));
     job.fixDuplicates(dryRun);
@@ -380,7 +378,7 @@ public class SparkMain {
   }
 
   public static int repairDeprecatedPartition(JavaSparkContext jsc, String basePath) {
-    SQLContext sqlContext = new SQLContext(jsc);
+    SQLContext sqlContext = SQLContext.getOrCreate(jsc.sc());
     Dataset<Row> recordsToRewrite = getRecordsToRewrite(basePath, PartitionPathEncodeUtils.DEPRECATED_DEFAULT_PARTITION_PATH, sqlContext);
 
     if (!recordsToRewrite.isEmpty()) {
@@ -397,7 +395,7 @@ public class SparkMain {
   }
 
   public static int renamePartition(JavaSparkContext jsc, String basePath, String oldPartition, String newPartition) {
-    SQLContext sqlContext = new SQLContext(jsc);
+    SQLContext sqlContext = SQLContext.getOrCreate(jsc.sc());
     Dataset<Row> recordsToRewrite = getRecordsToRewrite(basePath, oldPartition, sqlContext);
 
     if (!recordsToRewrite.isEmpty()) {
@@ -414,7 +412,7 @@ public class SparkMain {
       try {
         fs.delete(new Path(basePath, oldPartition), true);
       } catch (IOException e) {
-        LOG.warn("Failed to delete older partition {}", basePath);
+        log.warn("Failed to delete older partition {}", basePath);
       }
     }
     return 0;
@@ -508,10 +506,10 @@ public class SparkMain {
   private static int rollback(JavaSparkContext jsc, String instantTime, String basePath, Boolean rollbackUsingMarkers) throws Exception {
     SparkRDDWriteClient client = createHoodieClient(jsc, basePath, rollbackUsingMarkers, false);
     if (client.rollback(instantTime)) {
-      LOG.info("The commit \"{}\" rolled back.", instantTime);
+      log.info("The commit \"{}\" rolled back.", instantTime);
       return 0;
     } else {
-      LOG.warn("The commit \"{}\" failed to roll back.", instantTime);
+      log.warn("The commit \"{}\" failed to roll back.", instantTime);
       return -1;
     }
   }
@@ -520,10 +518,10 @@ public class SparkMain {
                                      String comments, String basePath) throws Exception {
     try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false)) {
       client.savepoint(commitTime, user, comments);
-      LOG.info("The commit \"{}\" has been savepointed.", commitTime);
+      log.info("The commit \"{}\" has been savepointed.", commitTime);
       return 0;
     } catch (HoodieSavepointException se) {
-      LOG.warn("Failed: Could not create savepoint \"{}\".", commitTime);
+      log.warn("Failed: Could not create savepoint \"{}\".", commitTime);
       return -1;
     }
   }
@@ -531,10 +529,10 @@ public class SparkMain {
   private static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath, boolean lazyCleanPolicy) throws Exception {
     try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, lazyCleanPolicy)) {
       client.restoreToSavepoint(savepointTime);
-      LOG.info("The commit \"{}\" rolled back.", savepointTime);
+      log.info("The commit \"{}\" rolled back.", savepointTime);
       return 0;
     } catch (Exception e) {
-      LOG.warn(String.format("The commit \"%s\" failed to roll back.", savepointTime), e);
+      log.warn(String.format("The commit \"%s\" failed to roll back.", savepointTime), e);
       return -1;
     }
   }
@@ -542,10 +540,10 @@ public class SparkMain {
   private static int deleteSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
     try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false)) {
       client.deleteSavepoint(savepointTime);
-      LOG.info("Savepoint \"{}\" deleted.", savepointTime);
+      log.info("Savepoint \"{}\" deleted.", savepointTime);
       return 0;
     } catch (Exception e) {
-      LOG.warn(String.format("Failed: Could not delete savepoint \"%s\".", savepointTime), e);
+      log.warn(String.format("Failed: Could not delete savepoint \"%s\".", savepointTime), e);
       return -1;
     }
   }
@@ -574,10 +572,10 @@ public class SparkMain {
     try {
       new UpgradeDowngrade(metaClient, updatedConfig, new HoodieSparkEngineContext(jsc), SparkUpgradeDowngradeHelper.getInstance())
           .run(HoodieTableVersion.valueOf(toVersion), null);
-      LOG.info("Table at \"{}\" upgraded / downgraded to version \"{}\".", basePath, toVersion);
+      log.info("Table at \"{}\" upgraded / downgraded to version \"{}\".", basePath, toVersion);
       return 0;
     } catch (Exception e) {
-      LOG.warn(String.format("Failed: Could not upgrade/downgrade table at \"%s\" to version \"%s\".", basePath, toVersion), e);
+      log.warn(String.format("Failed: Could not upgrade/downgrade table at \"%s\" to version \"%s\".", basePath, toVersion), e);
       return -1;
     }
   }

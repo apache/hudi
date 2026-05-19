@@ -19,7 +19,10 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.PropertiesConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
@@ -28,13 +31,14 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
-import edu.umd.cs.findbugs.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
+
+import javax.annotation.Nullable;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -51,12 +55,17 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER;
-import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
+import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
+import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
+import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
+import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
+import static org.apache.hudi.common.table.HoodieTableConfig.NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
 
+@Slf4j
 public class ConfigUtils {
+
   public static final String STREAMER_CONFIG_PREFIX = "hoodie.streamer.";
   @Deprecated
   public static final String DELTA_STREAMER_CONFIG_PREFIX = "hoodie.deltastreamer.";
@@ -76,8 +85,6 @@ public class ConfigUtils {
   public static final String TABLE_SERDE_PATH = "path";
 
   public static final HoodieConfig DEFAULT_HUDI_CONFIG_FOR_READER = new HoodieConfig();
-
-  private static final Logger LOG = LoggerFactory.getLogger(ConfigUtils.class);
 
   /**
    * Get ordering field.
@@ -143,8 +150,8 @@ public class ConfigUtils {
   /**
    * Ensures that the prefixed merge properties are populated for mergers.
    */
-  public static TypedProperties getMergeProps(TypedProperties props, TypedProperties tableProps) {
-    Map<String, String> mergeProps = extractWithPrefix(tableProps, RECORD_MERGE_PROPERTY_PREFIX);
+  public static TypedProperties getMergeProps(TypedProperties props, HoodieTableConfig tableConfig) {
+    Map<String, String> mergeProps = tableConfig.getTableMergeProperties();
     if (mergeProps.isEmpty()) {
       return props;
     }
@@ -397,9 +404,7 @@ public class ConfigUtils {
     }
     for (String alternative : configProperty.getAlternatives()) {
       if (props.containsKey(alternative)) {
-        LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                + "and may be removed in the future. Please use the new key '%s' instead.",
-            alternative, configProperty.key()));
+        deprecationWarning(alternative, configProperty);
         return Option.ofNullable(props.get(alternative));
       }
     }
@@ -522,13 +527,16 @@ public class ConfigUtils {
     for (String alternative : configProperty.getAlternatives()) {
       value = keyMapper.apply(alternative);
       if (value != null) {
-        LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                + "and may be removed in the future. Please use the new key '%s' instead.",
-            alternative, configProperty.key()));
+        deprecationWarning(alternative, configProperty);
         return value.toString();
       }
     }
     return configProperty.hasDefaultValue() ? configProperty.defaultValue().toString() : null;
+  }
+
+  private static void deprecationWarning(String alternative, ConfigProperty<?> configProperty) {
+    log.warn("The configuration key '{}' has been deprecated and may be removed in the future."
+        + " Please use the new key '{}' instead.", alternative, configProperty.key());
   }
 
   /**
@@ -673,9 +681,14 @@ public class ConfigUtils {
           }
           return props;
         } catch (IOException e) {
-          LOG.warn(String.format("Could not read properties from %s: %s", path, e));
+          if (HoodieExceptionUtil.isPermissionDeniedException(e)) {
+            log.error("Permission denied for " + path.toString() + " file.", e);
+            throw new HoodieIOException("Permission denied for " + path + " file path. User does not have read access on the dataset.", e);
+          } else {
+            log.warn("Could not read properties from {}: {}", path, e);
+          }
         } catch (IllegalArgumentException e) {
-          LOG.warn(String.format("Invalid properties file %s: %s", path, props));
+          log.warn("Invalid properties file {}: {}", path, props);
         }
       }
 
@@ -683,7 +696,7 @@ public class ConfigUtils {
       try {
         Thread.sleep(maxReadRetryDelayInMs);
       } catch (InterruptedException e) {
-        LOG.warn("Interrupted while waiting");
+        log.warn("Interrupted while waiting");
       }
     }
 
@@ -698,6 +711,16 @@ public class ConfigUtils {
     }
   }
 
+  public static boolean isPropertiesInvalid(TypedProperties props) {
+    // For older versions if checksum is not present, table name needs to be present to generate the checksum
+    if (!props.containsKey(TABLE_CHECKSUM.key())) {
+      return !props.containsKey(NAME.key());
+    }
+
+    // If checkSum is present we need to validate
+    return !HoodieTableConfig.validateChecksum(props);
+  }
+
   public static void recoverIfNeeded(HoodieStorage storage, StoragePath cfgPath,
                                      StoragePath backupCfgPath) throws IOException {
     boolean needCopy = false;
@@ -707,7 +730,7 @@ public class ConfigUtils {
       TypedProperties props = new TypedProperties();
       try (InputStream in = storage.open(cfgPath)) {
         props.load(in);
-        if (!props.containsKey(TABLE_CHECKSUM.key()) || !HoodieTableConfig.validateChecksum(props)) {
+        if (isPropertiesInvalid(props)) {
           // the cfg file is invalid
           storage.deleteFile(cfgPath);
           needCopy = true;
@@ -720,11 +743,11 @@ public class ConfigUtils {
       try (InputStream backupStream = new ByteArrayInputStream(bytes)) {
         TypedProperties backupProps = new TypedProperties();
         backupProps.load(backupStream);
-        if (!backupProps.containsKey(TABLE_CHECKSUM.key()) || !HoodieTableConfig.validateChecksum(backupProps)) {
+        if (isPropertiesInvalid(backupProps)) {
           // need to delete the backup as anyway reads will also fail
           // subsequent writes will recover and update
           storage.deleteFile(backupCfgPath);
-          LOG.warn("Invalid properties file {}: {}", backupCfgPath, backupProps);
+          log.error("Invalid properties file {}: {}", backupCfgPath, backupProps);
           throw new IOException("Corrupted backup file");
         }
         // copy over from backup
@@ -748,8 +771,25 @@ public class ConfigUtils {
   public static HoodieConfig getReaderConfigs(StorageConfiguration<?> storageConf) {
     HoodieConfig config = new HoodieConfig();
     config.setAll(DEFAULT_HUDI_CONFIG_FOR_READER.getProps());
-    config.setValue(USE_NATIVE_HFILE_READER,
-        Boolean.toString(storageConf.getBoolean(USE_NATIVE_HFILE_READER.key(), USE_NATIVE_HFILE_READER.defaultValue())));
+    return config;
+  }
+
+  /**
+   * Apply HFile cache configurations from options to a HoodieConfig.
+   * This method extracts HFile cache-related settings from the provided options map
+   * and applies them to the given HoodieConfig instance.
+   *
+   * @param options Map of options containing HFile cache configurations
+   * @return HoodieConfig with HFile reader configurations
+   */
+  public static HoodieReaderConfig getHFileCacheConfigs(Map<String, String> options) {
+    HoodieReaderConfig config = new HoodieReaderConfig();
+    config.setValue(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED,
+        getStringWithAltKeys(options, HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED));
+    config.setValue(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE,
+        getStringWithAltKeys(options, HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE));
+    config.setValue(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES,
+        getStringWithAltKeys(options, HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES));
     return config;
   }
 
@@ -788,5 +828,38 @@ public class ConfigUtils {
       mergeProperties.put(propKey, stringValue);
     }
     return mergeProperties;
+  }
+
+  /**
+   * Derive necessary properties for FG reader.
+   */
+  public static TypedProperties buildFileGroupReaderProperties(HoodieMetadataConfig metadataConfig,
+                                                               boolean shouldReuse) {
+    HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder()
+        .fromProperties(metadataConfig.getProps()).build();
+    TypedProperties props = new TypedProperties();
+    props.setProperty(
+        MAX_MEMORY_FOR_MERGE.key(),
+        Long.toString(metadataConfig.getMaxReaderMemory()));
+    props.setProperty(
+        SPILLABLE_MAP_BASE_PATH.key(),
+        metadataConfig.getSplliableMapDir());
+    props.setProperty(
+        SPILLABLE_DISK_MAP_TYPE.key(),
+        commonConfig.getSpillableDiskMapType().name());
+    props.setProperty(
+        DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
+        Boolean.toString(commonConfig.isBitCaskDiskMapCompressionEnabled()));
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(),
+        shouldReuse ? "true" : metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED));
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(),
+        metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED));
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(),
+        metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE));
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(),
+        metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES));
+    props.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB.key(),
+        metadataConfig.getStringOrDefault(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB));
+    return props;
   }
 }

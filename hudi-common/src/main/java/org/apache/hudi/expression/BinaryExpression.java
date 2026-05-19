@@ -18,35 +18,23 @@
 
 package org.apache.hudi.expression;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import java.util.Arrays;
 import java.util.List;
 
 /**
  * The expression that accept two child expressions.
  */
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
+@Getter
 public abstract class BinaryExpression implements Expression {
 
-  private final Operator operator;
   private final Expression left;
+  private final Operator operator;
   private final Expression right;
-
-  BinaryExpression(Expression left, Operator operator, Expression right) {
-    this.left = left;
-    this.operator = operator;
-    this.right = right;
-  }
-
-  public Operator getOperator() {
-    return operator;
-  }
-
-  public Expression getLeft() {
-    return left;
-  }
-
-  public Expression getRight() {
-    return right;
-  }
 
   @Override
   public List<Expression> getChildren() {

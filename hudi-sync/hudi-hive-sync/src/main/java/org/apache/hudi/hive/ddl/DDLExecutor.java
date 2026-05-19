@@ -18,9 +18,8 @@
 
 package org.apache.hudi.hive.ddl;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.Pair;
-
-import org.apache.parquet.schema.MessageType;
 
 import java.util.List;
 import java.util.Map;
@@ -48,7 +47,7 @@ public interface DDLExecutor extends AutoCloseable {
    * @param serdeProperties
    * @param tableProperties
    */
-  void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
+  void createTable(String tableName, HoodieSchema storageSchema, String inputFormatClass,
                    String outputFormatClass, String serdeClass,
                    Map<String, String> serdeProperties, Map<String, String> tableProperties);
 
@@ -58,13 +57,13 @@ public interface DDLExecutor extends AutoCloseable {
    * @param tableName
    * @param newSchema
    */
-  void updateTableDefinition(String tableName, MessageType newSchema);
+  void updateTableDefinition(String tableName, HoodieSchema newSchema);
 
   /**
    * Fetches tableSchema for a table.
    *
    * @param tableName
-   * @return
+   * @return A map containing the schema of the table.
    */
   Map<String, String> getTableSchema(String tableName);
 
@@ -83,6 +82,16 @@ public interface DDLExecutor extends AutoCloseable {
    * @param changedPartitions
    */
   void updatePartitionsToTable(String tableName, List<String> changedPartitions);
+
+  /**
+   * Touches partitions for a given table. Updates partition metadata (e.g. last modified time)
+   * in the metastore for partitions that had new data written but no schema or location change.
+   * Only invoked when {@code META_SYNC_TOUCH_PARTITIONS_ENABLED} is true.
+   *
+   * @param tableName      The table name in the metastore.
+   * @param touchPartitions List of partition paths (storage format) to touch.
+   */
+  void touchPartitionsToTable(String tableName, List<String> touchPartitions);
 
   /**
    * Drop partitions for a given table.

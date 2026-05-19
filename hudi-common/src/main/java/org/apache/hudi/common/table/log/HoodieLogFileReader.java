@@ -18,10 +18,10 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
@@ -44,7 +44,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
 
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,7 +74,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private final HoodieLogFile logFile;
   private final int bufferSize;
   private final byte[] magicBuffer = new byte[6];
-  private final Schema readerSchema;
+  private final HoodieSchema readerSchema;
   private final InternalSchema internalSchema;
   private final String keyField;
   private long reverseLogFilePosition;
@@ -85,21 +84,21 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private boolean closed = false;
   private final SeekableDataInputStream inputStream;
 
-  public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema, int bufferSize) throws IOException {
+  public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, HoodieSchema readerSchema, int bufferSize) throws IOException {
     this(storage, logFile, readerSchema, bufferSize, false);
   }
 
-  public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
+  public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, HoodieSchema readerSchema, int bufferSize,
                              boolean reverseReader) throws IOException {
     this(storage, logFile, readerSchema, bufferSize, reverseReader, false, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
-  public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema, int bufferSize, boolean reverseReader,
+  public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, HoodieSchema readerSchema, int bufferSize, boolean reverseReader,
                              boolean enableRecordLookups, String keyField) throws IOException {
     this(storage, logFile, readerSchema, bufferSize, reverseReader, enableRecordLookups, keyField, InternalSchema.getEmptyInternalSchema());
   }
 
-  public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema, int bufferSize, boolean reverseReader,
+  public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, HoodieSchema readerSchema, int bufferSize, boolean reverseReader,
                              boolean enableRecordLookups, String keyField, InternalSchema internalSchema) throws IOException {
     this.storage = storage;
     // NOTE: We repackage {@code HoodieLogFile} here to make sure that the provided path
@@ -198,9 +197,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
             String.format("HFile block could not be of version (%d)", HoodieLogFormatVersion.DEFAULT_VERSION));
         return new HoodieHFileDataBlock(
             () -> getDataInputStream(storage, this.logFile, bufferSize), content, true, logBlockContentLoc,
-            Option.ofNullable(readerSchema), header, footer, enableRecordLookups, logFile.getPath(),
-            storage.getConf().getBoolean(HoodieReaderConfig.USE_NATIVE_HFILE_READER.key(),
-                HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue()));
+            Option.ofNullable(readerSchema), header, footer, enableRecordLookups, logFile.getPath());
 
       case PARQUET_DATA_BLOCK:
         checkState(nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION,
@@ -223,7 +220,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     }
   }
 
-  private Option<Schema> getTargetReaderSchemaForBlock() {
+  private Option<HoodieSchema> getTargetReaderSchemaForBlock() {
     // we should use write schema to read log file,
     // since when we have done some DDL operation, the readerSchema maybe different from writeSchema, avro reader will throw exception.
     // eg: origin writeSchema is: "a String, b double" then we add a new column now the readerSchema will be: "a string, c int, b double". it's wrong to use readerSchema to read old log file.

@@ -21,6 +21,7 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -87,15 +88,35 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
 
   @Override
   boolean shouldInitializeFromFilesystem(Set<String> pendingDataInstants, Option<String> inflightInstantTimestamp) {
-    if (pendingDataInstants.stream()
-        .anyMatch(i -> !inflightInstantTimestamp.isPresent() || !i.equals(inflightInstantTimestamp.get()))) {
-      metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BOOTSTRAP_ERR_STR, 1));
-      LOG.warn("Cannot initialize metadata table as operation(s) are in progress on the dataset: {}",
-          Arrays.toString(pendingDataInstants.toArray()));
-      return false;
-    } else {
-      return true;
+    // Check if there are pending data instants that are not the current inflight instant
+    Set<String> blockingPendingInstants = pendingDataInstants.stream()
+        .filter(i -> !inflightInstantTimestamp.isPresent() || !i.equals(inflightInstantTimestamp.get()))
+        .collect(Collectors.toSet());
+
+    if (!blockingPendingInstants.isEmpty()) {
+      // If a pending commit is being rolled back, allow the bootstrap to proceed.
+      // Check for pending rollback instants that match the blocking pending instants.
+      Set<String> pendingRollbackInstants = dataMetaClient.getActiveTimeline()
+          .getRollbackTimeline()
+          .getInstantsAsStream()
+          .filter(i -> !i.isCompleted())
+          .map(HoodieInstant::requestedTime)
+          .collect(Collectors.toSet());
+
+      // Check if all blocking pending instants have a corresponding pending rollback
+      boolean allBlockingInstantsBeingRolledBack = !pendingRollbackInstants.isEmpty()
+          && blockingPendingInstants.stream().allMatch(pendingRollbackInstants::contains);
+
+      if (!allBlockingInstantsBeingRolledBack) {
+        metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BOOTSTRAP_ERR_STR, 1));
+        LOG.warn("Cannot initialize metadata table as operation(s) are in progress on the dataset: {}",
+            Arrays.toString(blockingPendingInstants.toArray()));
+        return false;
+      }
+      LOG.info("Allowing metadata table initialization as pending instants {} are being rolled back",
+          Arrays.toString(blockingPendingInstants.toArray()));
     }
+    return true;
   }
 
   @Override
@@ -161,8 +182,8 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
     Option<HoodieInstant> pendingCompactionInstant =
         metadataMetaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
     if (pendingLogCompactionInstant.isPresent() || pendingCompactionInstant.isPresent()) {
-      LOG.warn(String.format("Not scheduling compaction or logCompaction, since a pending compaction instant %s or logCompaction %s instant is present",
-          pendingCompactionInstant, pendingLogCompactionInstant));
+      LOG.info("Not scheduling compaction or logCompaction, since a pending compaction instant {} or logCompaction {} instant is present",
+          pendingCompactionInstant, pendingLogCompactionInstant);
       return false;
     }
     return true;
@@ -215,7 +236,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
       processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, dataMetaClient, rollbackMetadata, instantTime));
 
       String rollbackInstantTime = createRollbackTimestamp(instantTime);
-      if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
+      if (metadataMetaClient.getActiveTimeline().containsInstant(deltaCommitInstant)) {
         LOG.info("Rolling back MDT deltacommit " + commitToRollbackInstantTime);
         if (!getWriteClient().rollback(commitToRollbackInstantTime, rollbackInstantTime)) {
           throw new HoodieMetadataException("Failed to rollback deltacommit at " + commitToRollbackInstantTime);
@@ -269,7 +290,11 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
       LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
     } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
       LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
-      writeClient.compact(compactionInstantTime, true);
+      if (shouldDelegateToTableServiceManager(metadataWriteConfig, ActionType.compaction)) {
+        LOG.info("Skipping execution of compaction on MDT as it is delegated to table service manager.");
+      } else {
+        writeClient.compact(compactionInstantTime, true);
+      }
     } else if (metadataWriteConfig.isLogCompactionEnabled()) {
       // Schedule and execute log compaction with suffixes based on the same instant time. This ensures that any future
       // delta commits synced over will not have an instant time lesser than the last completed instant on the
@@ -279,7 +304,11 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
         LOG.info("Log compaction with same {} time is already present in the timeline.", logCompactionInstantTime);
       } else if (writeClient.scheduleLogCompactionAtInstant(logCompactionInstantTime, Option.empty())) {
         LOG.info("Log compaction is scheduled for timestamp {}", logCompactionInstantTime);
-        writeClient.logCompact(logCompactionInstantTime, true);
+        if (shouldDelegateToTableServiceManager(metadataWriteConfig, ActionType.logcompaction)) {
+          LOG.info("Skipping execution of log compaction on MDT as it is delegated to table service manager.");
+        } else {
+          writeClient.logCompact(logCompactionInstantTime, true);
+        }
       }
     }
   }

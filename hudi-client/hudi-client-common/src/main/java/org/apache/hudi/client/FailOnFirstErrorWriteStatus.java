@@ -22,8 +22,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
 import java.util.Map;
@@ -31,8 +30,8 @@ import java.util.Map;
 /**
  * This class can be used as WriteStatus when we want to fail fast and at the first available exception/error.
  */
+@Slf4j
 public class FailOnFirstErrorWriteStatus extends WriteStatus {
-  private static final Logger LOG = LoggerFactory.getLogger(FailOnFirstErrorWriteStatus.class);
 
   public FailOnFirstErrorWriteStatus(Boolean trackSuccessRecords, Double failureFraction) {
     super(trackSuccessRecords, failureFraction);
@@ -44,14 +43,14 @@ public class FailOnFirstErrorWriteStatus extends WriteStatus {
 
   @Override
   public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
-    LOG.error(String.format("Error writing record %s with data %s and optionalRecordMetadata %s", record, record.getData(),
+    log.error(String.format("Error writing record %s with data %s and optionalRecordMetadata %s", record, record.getData(),
         optionalRecordMetadata.orElse(Collections.emptyMap())), t);
     throw new HoodieException("Error writing record " + record, t);
   }
 
   @Override
   public void markFailure(String recordKey, String partitionPath, Throwable t) {
-    LOG.error(String.format("Error writing record %s and partition %s", recordKey, partitionPath), t);
+    log.error(String.format("Error writing record %s and partition %s", recordKey, partitionPath), t);
     throw new HoodieException("Error writing record `" + recordKey + "` partitionPath `" + partitionPath + "`", t);
   }
 }

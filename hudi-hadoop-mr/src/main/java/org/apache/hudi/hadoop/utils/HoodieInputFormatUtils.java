@@ -40,10 +40,12 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
 import org.apache.hudi.hadoop.HoodieHFileInputFormat;
+import org.apache.hudi.hadoop.HoodieLanceInputFormat;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
+import org.apache.hudi.hadoop.realtime.HoodieLanceRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimePath;
@@ -52,11 +54,9 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
@@ -125,18 +125,22 @@ public class HoodieInputFormatUtils {
           inputFormat.setConf(conf);
           return inputFormat;
         }
+      case LANCE:
+        if (realtime) {
+          HoodieLanceRealtimeInputFormat inputFormat = new HoodieLanceRealtimeInputFormat();
+          inputFormat.setConf(conf);
+          return inputFormat;
+        } else {
+          HoodieLanceInputFormat inputFormat = new HoodieLanceInputFormat();
+          inputFormat.setConf(conf);
+          return inputFormat;
+        }
       default:
         throw new HoodieIOException("Hoodie InputFormat not implemented for base file format " + baseFileFormat);
     }
   }
 
   public static String getInputFormatClassName(HoodieFileFormat baseFileFormat, boolean realtime, boolean usePreApacheFormat) {
-    if (baseFileFormat.equals(HoodieFileFormat.PARQUET) && usePreApacheFormat) {
-      // Parquet input format had an InputFormat class visible under the old naming scheme.
-      return realtime
-          ? com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat.class.getName()
-          : com.uber.hoodie.hadoop.HoodieInputFormat.class.getName();
-    }
     return getInputFormatClassName(baseFileFormat, realtime);
   }
 
@@ -154,6 +158,12 @@ public class HoodieInputFormatUtils {
         } else {
           return HoodieHFileInputFormat.class.getName();
         }
+      case LANCE:
+        if (realtime) {
+          return HoodieLanceRealtimeInputFormat.class.getName();
+        } else {
+          return HoodieLanceInputFormat.class.getName();
+        }
       case ORC:
         return OrcInputFormat.class.getName();
       default:
@@ -165,6 +175,7 @@ public class HoodieInputFormatUtils {
     switch (baseFileFormat) {
       case PARQUET:
       case HFILE:
+      case LANCE:
         return MapredParquetOutputFormat.class.getName();
       case ORC:
         return OrcOutputFormat.class.getName();
@@ -177,6 +188,7 @@ public class HoodieInputFormatUtils {
     switch (baseFileFormat) {
       case PARQUET:
       case HFILE:
+      case LANCE:
         return ParquetHiveSerDe.class.getName();
       case ORC:
         return OrcSerde.class.getName();
@@ -192,6 +204,9 @@ public class HoodieInputFormatUtils {
     }
     if (extension.equals(HoodieFileFormat.HFILE.getFileExtension())) {
       return getInputFormat(HoodieFileFormat.HFILE, realtime, conf);
+    }
+    if (extension.equals(HoodieFileFormat.LANCE.getFileExtension())) {
+      return getInputFormat(HoodieFileFormat.LANCE, realtime, conf);
     }
     // now we support read log file, try to find log file
     if (HadoopFSUtils.isLogFile(new Path(path)) && realtime) {
@@ -499,7 +514,7 @@ public class HoodieInputFormatUtils {
                                                                   List<HoodieCommitMetadata> metadataList) {
     // TODO: Use HoodieMetaTable to extract affected file directly.
     HashMap<String, StoragePathInfo> fullPathToInfoMap = new HashMap<>();
-    HoodieStorage storage = new HoodieHadoopStorage(basePath, HadoopFSUtils.getStorageConf(hadoopConf));
+    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(hadoopConf));
     // Iterate through the given commits.
     for (HoodieCommitMetadata metadata : metadataList) {
       fullPathToInfoMap.putAll(metadata.getFullPathToInfo(storage, basePath.toString()));
@@ -526,8 +541,8 @@ public class HoodieInputFormatUtils {
       return realtimeSplit.getBasePath();
     } else {
       Path inputPath = ((FileSplit) split).getPath();
-      FileSystem fs = inputPath.getFileSystem(jobConf);
-      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      HoodieStorage storage = HoodieStorageUtils.getStorage(
+              convertToStoragePath(inputPath), HadoopFSUtils.getStorageConf(jobConf));
       Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, convertToStoragePath(inputPath));
       return tablePath.get().toString();
     }

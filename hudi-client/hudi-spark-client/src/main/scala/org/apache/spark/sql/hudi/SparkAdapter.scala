@@ -18,33 +18,43 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping}
+import org.apache.hudi.client.model.HoodieInternalRow
+import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.storage.StoragePath
-import org.apache.avro.Schema
+import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
+import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.storage.StorageConfiguration
+
 import org.apache.hadoop.conf.Configuration
+import org.apache.parquet.schema.{MessageType, Type}
+import org.apache.parquet.schema.Type.Repetition
 import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
-import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
-import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
-import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.catalyst.planning.PhysicalOperation
-import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan}
-import org.apache.spark.sql.catalyst.util.DateFormatter
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate, SpecializedGetters}
+import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface}
+import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan}
+import org.apache.spark.sql.catalyst.trees.Origin
+import org.apache.spark.sql.catalyst.util.DateFormatter
+import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetReadSupport, ParquetFileFormat, ParquetFilters}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, StructType}
-import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.storage.StorageLevel
+import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.{Locale, TimeZone}
+import java.util.function.{BiConsumer, Consumer}
 
 /**
  * Interface adapting discrepancies and incompatibilities between different Spark versions
@@ -65,13 +75,18 @@ trait SparkAdapter extends Serializable {
   /**
    * Inject table-valued functions to SparkSessionExtensions
    */
-  def injectTableFunctions(extensions : SparkSessionExtensions): Unit = {}
+  def injectTableFunctions(extensions: SparkSessionExtensions): Unit = {}
 
   /**
-   * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
-   * [[TableCatalog]]s
+   * Inject scalar functions into Spark SQL function registry.
+   * These functions can be used in SQL SELECT clauses.
    */
-  def getCatalogUtils: HoodieCatalogUtils
+  def injectScalarFunctions(extensions: SparkSessionExtensions): Unit
+
+  /**
+   * Inject planner strategies to SparkSessionExtensions for converting custom logical plans into physical plans.
+   */
+  def injectPlannerStrategies(extensions: SparkSessionExtensions): Unit
 
   /**
    * Returns an instance of [[HoodieCatalystExpressionUtils]] providing for common utils operating
@@ -94,33 +109,18 @@ trait SparkAdapter extends Serializable {
    * Creates instance of [[HoodieAvroSerializer]] providing for ability to serialize
    * Spark's [[InternalRow]] into Avro payloads
    */
-  def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer
+  def createAvroSerializer(rootCatalystType: DataType, rootType: HoodieSchema, nullable: Boolean): HoodieAvroSerializer
 
   /**
    * Creates instance of [[HoodieAvroDeserializer]] providing for ability to deserialize
    * Avro payloads into Spark's [[InternalRow]]
    */
-  def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer
-
-  /**
-   * Creates instance of [[HoodieAvroSchemaConverters]] allowing to convert b/w Avro and Catalyst schemas
-   */
-  def getAvroSchemaConverters: HoodieAvroSchemaConverters
-
-  /**
-   * Create the SparkRowSerDe.
-   */
-  def createSparkRowSerDe(schema: StructType): SparkRowSerDe
+  def createAvroDeserializer(rootType: HoodieSchema, rootCatalystType: DataType): HoodieAvroDeserializer
 
   /**
    * Create the hoodie's extended spark sql parser.
    */
   def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface
-
-  /**
-   * Create the SparkParsePartitionUtil.
-   */
-  def getSparkParsePartitionUtil: SparkParsePartitionUtil
 
   /**
    * Gets the [[HoodieSparkPartitionedFileUtils]].
@@ -136,22 +136,13 @@ trait SparkAdapter extends Serializable {
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
    */
   def getFilePartitions(sparkSession: SparkSession, partitionedFiles: Seq[PartitionedFile],
-      maxSplitBytes: Long): Seq[FilePartition]
+                        maxSplitBytes: Long): Seq[FilePartition]
 
   /**
    * Checks whether [[LogicalPlan]] refers to Hudi table, and if it's the case extracts
    * corresponding [[CatalogTable]]
    */
-  def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
-    EliminateSubqueryAliases(plan) match {
-      // First, we need to weed out unresolved plans
-      case plan if !plan.resolved => None
-      // NOTE: When resolving Hudi table we allow [[Filter]]s and [[Project]]s be applied
-      //       on top of it
-      case PhysicalOperation(_, _, LogicalRelation(_, _, Some(table), _)) if isHoodieTable(table) => Some(table)
-      case _ => None
-    }
-  }
+  def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable]
 
   def isHoodieTable(map: java.util.Map[String, String]): Boolean = {
     isHoodieTable(map.getOrDefault("provider", ""))
@@ -189,8 +180,7 @@ trait SparkAdapter extends Serializable {
    */
   def createRelation(sqlContext: SQLContext,
                      metaClient: HoodieTableMetaClient,
-                     schema: Schema,
-                     globPaths: Array[StoragePath],
+                     schema: HoodieSchema,
                      parameters: java.util.Map[String, String]): BaseRelation
 
   /**
@@ -240,6 +230,35 @@ trait SparkAdapter extends Serializable {
                           dataSchema: StructType): SparkColumnarFileReader
 
   /**
+   * Get Lance file reader
+   *
+   * @param vectorized true if vectorized reading is not prohibited due to schema, reading mode, etc
+   * @param sqlConf    the [[SQLConf]] used for the read
+   * @param options    passed as a param to the file format
+   * @param hadoopConf some configs will be set for the hadoopConf
+   * @return Lance file reader wrapped in Option; None if Lance format is not supported in current Spark version (i.e 3.3)
+   */
+  def createLanceFileReader(vectorized: Boolean,
+                            sqlConf: SQLConf,
+                            options: Map[String, String],
+                            hadoopConf: Configuration): Option[SparkColumnarFileReader]
+
+  /**
+   * Build the [[HoodieParquetReadSupport]] for a parquet read. Spark 4.0 overrides to return
+   * its variant-aware subclass (variant group field reorder for the positional converter).
+   * int96 rebase mode is fixed to LEGACY (Hudi convention for timestamp compatibility).
+   */
+  def createParquetReadSupport(convertTz: Option[java.time.ZoneId],
+                               enableVectorizedReader: Boolean,
+                               enableTimestampFieldRepair: Boolean,
+                               datetimeRebaseSpec: RebaseSpec,
+                               tableSchemaOpt: HOption[MessageType])
+      : HoodieParquetReadSupport = {
+    new HoodieParquetReadSupport(convertTz, enableVectorizedReader, enableTimestampFieldRepair,
+      datetimeRebaseSpec, getRebaseSpec("LEGACY"), tableSchemaOpt)
+  }
+
+  /**
    * use new qe execute
    */
   def sqlExecutionWithNewExecutionId[T](sparkSession: SparkSession,
@@ -255,4 +274,290 @@ trait SparkAdapter extends Serializable {
    * @return
    */
   def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
+
+  def getDateTimeRebaseMode(): Object
+
+  def isLegacyBehaviorPolicy(value: Object): Boolean
+
+  def isTimestampNTZType(dataType: DataType): Boolean
+
+  def getRebaseSpec(policy: String): RebaseSpec
+
+  def createParquetFilters(schema: MessageType, storageConf: StorageConfiguration[_], sqlConf: SQLConf): ParquetFilters
+
+  /**
+   * Gets the [[UTF8String]] factory implementation for the current Spark version.
+   * [SPARK-46832] [[UTF8String]] doesn't support compareTo anymore since Spark 4.0
+   *
+   * @return [[HoodieUTF8StringFactory]] instance
+   */
+  def getUTF8StringFactory: HoodieUTF8StringFactory
+
+  /**
+   * Creates a [[HoodieInternalRow]] with meta fields.
+   *
+   * @param metaFields               Array of [[UTF8String]] meta fields to prepend
+   * @param sourceRow                The source [[InternalRow]] containing the data
+   * @param sourceContainsMetaFields Whether the source row already contains meta fields
+   * @return A new [[HoodieInternalRow]] with appropriate meta fields handling
+   */
+  def createInternalRow(metaFields: Array[UTF8String],
+                        sourceRow: InternalRow,
+                        sourceContainsMetaFields: Boolean): HoodieInternalRow
+
+  /**
+   * Creates a partition-to-CDC file group mapping for CDC operations.
+   *
+   * @param partitionValues [[InternalRow]] containing the partition values
+   * @param fileSplits      List of CDC file splits for this partition
+   * @return [[HoodiePartitionCDCFileGroupMapping]] instance
+   */
+  def createPartitionCDCFileGroupMapping(partitionValues: InternalRow,
+                                         fileSplits: List[HoodieCDCFileSplit]): HoodiePartitionCDCFileGroupMapping
+
+  /**
+   * Creates a partition-to-file slice mapping for file operations.
+   *
+   * @param values [[InternalRow]] containing the partition values
+   * @param slices Map of file IDs to FileSlice instances
+   * @return [[HoodiePartitionFileSliceMapping]] instance
+   */
+  def createPartitionFileSliceMapping(values: InternalRow,
+                                      slices: Map[String, FileSlice]): HoodiePartitionFileSliceMapping
+
+  /**
+   * Creates a [[ParseException]] with proper location information.
+   *
+   * @param command   Optional command string that caused the exception
+   * @param exception The underlying AnalysisException
+   * @param start     Start position in the input where the error occurred
+   * @param stop      End position in the input where the error occurred
+   * @return A new [[ParseException]] with location details
+   */
+  def newParseException(command: Option[String],
+                        exception: AnalysisException,
+                        start: Origin,
+                        stop: Origin): ParseException
+
+  /**
+   * Splits files in a partition directory based on size constraints.
+   *
+   * @param sparkSession       The active Spark session
+   * @param partitionDirectory The partition directory containing files to split
+   * @param isSplitable        Whether the files can be split
+   * @param maxSplitSize       Maximum size for each split in bytes
+   * @return Sequence of [[PartitionedFile]] instances after splitting
+   */
+  def splitFiles(sparkSession: SparkSession,
+                 partitionDirectory: PartitionDirectory,
+                 isSplitable: Boolean,
+                 maxSplitSize: Long): Seq[PartitionedFile]
+
+  /**
+   * Creates a [[Column]] from a Catalyst [[Expression]].
+   *
+   * @param expression The Catalyst [[Expression]] to convert
+   * @return A Spark SQL [[Column]] wrapping the expression
+   */
+  def createColumnFromExpression(expression: Expression): Column
+
+  /**
+   * Extracts the underlying [[Expression]] from a [[Column]].
+   *
+   * @param column The Spark SQL [[Column]]
+   * @return The underlying Catalyst [[Expression]]
+   */
+  def getExpressionFromColumn(column: Column): Expression
+
+  /**
+   * Gets the unsafe utilities for low-level memory operations.
+   *
+   * @return [[HoodieUnsafeUtils]] instance
+   */
+  def getUnsafeUtils: HoodieUnsafeUtils
+
+  /**
+   * Gets the DataFrame utility helper for the current Spark version.
+   * Since Spark 4.0 [[org.apache.spark.sql.classic.Dataset]] has to be used.
+   *
+   * @return [[DataFrameUtil]] instance
+   */
+  def getDataFrameUtil: DataFrameUtil
+
+  /**
+   * Creates a [[DataFrame]] from an RDD of [[InternalRow]]s.
+   *
+   * @param spark       The active Spark session
+   * @param rdd         RDD containing InternalRow instances
+   * @param schema      The schema for the [[DataFrame]]
+   * @param isStreaming Whether this is a streaming DataFrame
+   * @return A new [[DataFrame]] with the specified schema
+   */
+  def internalCreateDataFrame(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType, isStreaming: Boolean = false): DataFrame
+
+  /**
+   * Creates a streaming [[DataFrame]] from a [[HadoopFsRelation.]]
+   *
+   * @param sqlContext     The SQL context
+   * @param relation       The [[HadoopFsRelation]] to stream from
+   * @param requiredSchema The required schema for the streaming DataFrame
+   * @return A streaming [[DataFrame]]
+   */
+  def createStreamingDataFrame(sqlContext: SQLContext, relation: HadoopFsRelation, requiredSchema: StructType): DataFrame
+
+  /**
+   * Gets the VariantType DataType if supported by this Spark version.
+   * Spark 3.x returns None (VariantType not supported).
+   * Spark 4.x returns Some(VariantType).
+   *
+   * @return Option[DataType] - Some(VariantType) for Spark 4.x, None for Spark 3.x
+   */
+  def getVariantDataType: Option[DataType]
+
+  /**
+   * Checks if two data types are equal for Parquet file format purposes.
+   * This handles version-specific types like VariantType (Spark 4.0+).
+   *
+   * Returns Some(true) if types are equal, Some(false) if not equal, or None if
+   * this adapter doesn't handle this specific type comparison (fallback to default logic).
+   *
+   * @param requiredType The required/expected data type
+   * @param fileType The data type from the file
+   * @return Option[Boolean] - Some(result) if handled by adapter, None otherwise
+   */
+  def isDataTypeEqualForPhysicalSchema(requiredType: DataType, fileType: DataType): Option[Boolean]
+
+  /**
+   * Checks if the given DataType is a VariantType.
+   * Spark 3.x returns false, Spark 4.x checks for VariantType.
+   *
+   * @param dataType The data type to check
+   * @return true if it's a VariantType, false otherwise
+   */
+  def isVariantType(dataType: DataType): Boolean
+
+  /**
+   * Creates a ValueWriter function for VariantType if the data type is VariantType.
+   * Returns null for Spark 3.x or if the data type is not VariantType.
+   *
+   * The returned function accepts (SpecializedGetters, ordinal) and writes variant data.
+   *
+   * @param dataType The data type to create a writer for
+   * @param writeValue Function to write the variant value binary
+   * @param writeMetadata Function to write the variant metadata binary
+   * @return BiConsumer function or null
+   */
+  def createVariantValueWriter(
+    dataType: DataType,
+    writeValue: Consumer[Array[Byte]],
+    writeMetadata: Consumer[Array[Byte]]
+  ): BiConsumer[SpecializedGetters, Integer]
+
+  /**
+   * Converts a VariantType field to Parquet Type.
+   * Returns null for Spark 3.x or if the data type is not VariantType.
+   *
+   * @param dataType The data type to convert
+   * @param fieldName The field name
+   * @param fieldSchema The HoodieSchema for the field (to determine shredded vs unshredded)
+   * @param repetition The Parquet repetition type
+   * @return Parquet Type or null
+   */
+  def convertVariantFieldToParquetType(
+    dataType: DataType,
+    fieldName: String,
+    fieldSchema: HoodieSchema,
+    repetition: Repetition
+  ): Type
+
+  /**
+   * Checks if a StructType represents a shredded Variant schema (has special shredding metadata).
+   * This is used during writing to identify columns that need special shredding handling.
+   *
+   * For Spark 4.x, this uses SparkShreddingUtils.isVariantShreddingStruct.
+   * For Spark 3.x, this always returns false.
+   *
+   * @param structType The StructType to check
+   * @return true if this is a shredded Variant schema
+   */
+  def isVariantShreddingStruct(structType: StructType): Boolean
+
+  /**
+   * Checks if a StructType is the result of Spark 4.1's PushVariantIntoScan rewriting — i.e.,
+   * every child field carries `VariantMetadata` describing a pushed-down variant extraction.
+   *
+   * Returns false on Spark versions earlier than 4.1 (the rewriting only happens there).
+   */
+  def isVariantProjectionStruct(structType: StructType): Boolean = false
+
+  /**
+   * If `sparkRequiredSchema` contains any field that's a Spark 4.1 variant projection struct
+   * (i.e., the same-named field in `sparkDataSchema` is `VariantType`), returns a row
+   * transformer that takes an InternalRow in the data-schema shape (with full variants) and
+   * produces an InternalRow in the required-schema shape (with each variant column projected
+   * to its requested struct via VariantGet).
+   *
+   * Used on the MOR log-file path: log records carry the full variant on disk, but the merger
+   * expects rows aligned to the post-PushVariantIntoScan required schema. Returns None when
+   * there's nothing to project (cheap fast-path for Spark < 4.1 and for non-variant queries).
+   */
+  def buildVariantProjector(sparkDataSchema: StructType,
+                            sparkRequiredSchema: StructType): Option[InternalRow => InternalRow] = None
+
+  /**
+   * Generates a shredded Variant schema and marks it with write shredding metadata.
+   *
+   * For Spark 4.x, this uses SparkShreddingUtils to generate the schema and add metadata.
+   * For Spark 3.x, this throws UnsupportedOperationException.
+   *
+   * @param dataType The data type to generate the shredding schema for
+   * @param isTopLevel Whether this is the top-level schema
+   * @param isObjectField Whether this is an object field (affects value field nullability)
+   * @return The shredded schema with shredding metadata added
+   */
+  def generateVariantWriteShreddingSchema(dataType: DataType, isTopLevel: Boolean, isObjectField: Boolean): StructType
+
+  /**
+   * Creates a ValueWriter for a shredded Variant StructType.
+   * This writer converts a Variant value into its shredded components and writes them.
+   *
+   * For Spark 4.x, this uses SparkShreddingUtils.castShredded.
+   * For Spark 3.x, this throws UnsupportedOperationException.
+   *
+   * @param shreddedStructType The shredded StructType schema
+   * @param writeStruct Function to write the shredded InternalRow
+   * @return BiConsumer function that reads Variant and writes shredded components
+   */
+  def createShreddedVariantWriter(
+    shreddedStructType: StructType,
+    writeStruct: Consumer[InternalRow]
+  ): BiConsumer[SpecializedGetters, Integer]
+
+  /**
+   * Creates a [[HoodieMemoryStream]] wrapper around Spark's MemoryStream.
+   * This abstracts the package differences between Spark versions:
+   * - Spark 3.x/4.0: org.apache.spark.sql.execution.streaming.MemoryStream
+   * - Spark 4.1+: org.apache.spark.sql.execution.streaming.runtime.MemoryStream
+   *
+   * @param id           ID for the MemoryStream
+   * @param sparkSession [[SparkSession]] object
+   * @param encoder      Implicit encoder for type T
+   * @return A [[HoodieMemoryStream]] wrapper
+   */
+  def createMemoryStream[T: Encoder](id: Int, sparkSession: SparkSession): HoodieMemoryStream[T]
+}
+
+/**
+ * Wrapper trait for Spark's MemoryStream to abstract package differences across Spark versions.
+ */
+trait HoodieMemoryStream[T] {
+  /**
+   * Add data to the stream.
+   */
+  def addData(data: TraversableOnce[T]): Unit
+
+  /**
+   * Convert the stream to a Dataset.
+   */
+  def toDS(): Dataset[T]
 }

@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -46,11 +47,9 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -98,21 +97,6 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
   @BeforeEach
   public void setUpTestTable() {
     HoodieSparkWriteableTestTable.of(metaClient);
-  }
-
-  //TODO: include both the table's contents.
-  /**
-   * Cleanups resource group for the subclasses of {@link HoodieClientTestBase}.
-   */
-  @AfterEach
-  public void cleanupResources() throws IOException {
-    cleanupTimelineService();
-    cleanupClients();
-    cleanupSparkContexts();
-    cleanupTestDataGenerator();
-    cleanupFileSystem();
-    cleanupExecutorService();
-    System.gc();
   }
 
   /**
@@ -178,7 +162,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     // Verify row count.
     assertEquals(mainRecordsMap.size(), experimentRecordsMap.size());
 
-    Schema readerSchema = new Schema.Parser().parse(mainTable.config.getSchema());
+    HoodieSchema readerSchema = HoodieSchema.parse(mainTable.config.getSchema());
     List<String> excludeFields = CollectionUtils.createImmutableList(COMMIT_TIME_METADATA_FIELD, COMMIT_SEQNO_METADATA_FIELD,
         FILENAME_METADATA_FIELD, OPERATION_METADATA_FIELD, RECORD_KEY_METADATA_FIELD);
 

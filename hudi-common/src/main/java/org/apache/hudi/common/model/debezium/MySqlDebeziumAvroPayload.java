@@ -23,14 +23,16 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Objects;
+
+import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_FILE_COL_NAME;
+import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_POS_COL_NAME;
 
 /**
  * Provides support for seamlessly applying changes captured via Debezium for MysqlDB.
@@ -44,9 +46,10 @@ import java.util.Objects;
  * <p>
  * This payload implementation will issue matching insert, delete, updates against the hudi table
  */
+@Slf4j
 public class MySqlDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
 
-  private static final Logger LOG = LoggerFactory.getLogger(MySqlDebeziumAvroPayload.class);
+  public static final String ORDERING_FIELDS = FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME;
 
   public MySqlDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);

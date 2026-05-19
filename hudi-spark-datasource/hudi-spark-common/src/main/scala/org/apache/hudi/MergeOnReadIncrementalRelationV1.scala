@@ -50,7 +50,7 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
                                             override val metaClient: HoodieTableMetaClient,
                                             private val userSchema: Option[StructType],
                                             private val prunedDataSchema: Option[StructType] = None)
-  extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, Seq(), userSchema, prunedDataSchema)
+  extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, userSchema, prunedDataSchema)
     with HoodieIncrementalRelationV1Trait with MergeOnReadIncrementalRelation {
 
   override type Relation = MergeOnReadIncrementalRelationV1
@@ -86,18 +86,20 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
     val optionalFilters = filters
     val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
 
-    new HoodieMergeOnReadRDDV1(
+    new HoodieMergeOnReadRDDV2(
       sqlContext.sparkContext,
       config = jobConf,
+      sqlConf = sqlContext.sparkSession.sessionState.conf,
       fileReaders = readers,
       tableSchema = tableSchema,
       requiredSchema = requiredSchema,
       tableState = tableState,
       mergeType = mergeType,
       fileSplits = fileSplits,
-      includeStartTime = includeStartTime,
-      startTimestamp = startTs,
-      endTimestamp = endTs)
+      includedInstantTimeSet = Option(includedCommits.map(_.requestedTime).toSet),
+      optionalFilters = optionalFilters,
+      metaClient = metaClient,
+      options = optParams)
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
@@ -105,7 +107,7 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
       List()
     } else {
       val fileSlices = if (fullTableScan) {
-        listLatestFileSlices(Seq(), partitionFilters, dataFilters)
+        listLatestFileSlices(partitionFilters, dataFilters)
       } else {
         val latestCommit = includedCommits.last.requestedTime
 
@@ -128,14 +130,14 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
       List()
     } else {
       val fileSlices = if (fullTableScan) {
-        listLatestFileSlices(Seq(), partitionFilters, dataFilters)
+        listLatestFileSlices(partitionFilters, dataFilters)
       } else {
         val latestCommit = includedCommits.last.requestedTime
         val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
         val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
 
         fileIndex.listMatchingPartitionPaths(HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
-          .map(p => p.path).filter(p => modifiedPartitions.contains(p))
+          .map(p => p.getPath).filter(p => modifiedPartitions.contains(p))
           .flatMap { relativePartitionPath =>
             fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
           }

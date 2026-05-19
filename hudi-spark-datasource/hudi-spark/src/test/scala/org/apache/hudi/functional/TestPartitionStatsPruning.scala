@@ -22,8 +22,8 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, PARTITIONPATH_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, IOType}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
@@ -43,13 +43,11 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
     HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c7","c8")
 
   @ParameterizedTest
-  @MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
+  @MethodSource(Array("testMetadataPartitionStatsIndexParamsInMemory"))
   def testMetadataPSISimple(testCase: ColumnStatsTestCase): Unit = {
-
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true"
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
     )
 
     val commonOpts = Map(
@@ -57,6 +55,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString,
       RECORDKEY_FIELD.key -> "c1",
       HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> "c8",
@@ -73,12 +72,11 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
+  @MethodSource(Array("testMetadataPartitionStatsIndexParamsInMemory"))
   def testMetadataColumnStatsIndex(testCase: ColumnStatsTestCase): Unit = {
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true"
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
     )
 
     val commonOpts = Map(
@@ -86,6 +84,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString,
       RECORDKEY_FIELD.key -> "c1",
       HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> "c8",
@@ -124,7 +123,6 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
     val metadataOpts1 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
       HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c6,c7,c8" // ignore c4
     )
 
@@ -144,7 +142,6 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
     val metadataOpts2 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
       HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c7,c8" // ignore c4,c6
     )
 
@@ -162,8 +159,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
     // disable cols stats
     val metadataOpts3 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "false"
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
     )
 
     // disable col stats
@@ -180,13 +176,12 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
+  @MethodSource(Array("testMetadataPartitionStatsIndexParamsInMemory"))
   def testMetadataColumnStatsIndexInitializationWithUpserts(testCase: ColumnStatsTestCase): Unit = {
     val partitionCol : String = "c8"
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "false"
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
     )
 
     val commonOpts = Map(
@@ -194,6 +189,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       "hoodie.upsert.shuffle.parallelism" -> "1",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString,
       RECORDKEY_FIELD.key -> "c1",
       HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key -> partitionCol,
@@ -214,8 +210,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
 
     val metadataOpts0 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "false"
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
     )
 
     // updates
@@ -243,7 +238,6 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
     val metadataOpts1 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
       HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c4,c5,c6,c7,c8"
     )
 
@@ -292,7 +286,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
+  @MethodSource(Array("testMetadataPartitionStatsIndexParamsInMemory"))
   def testMetadataColumnStatsIndexInitializationWithRollbacks(testCase: ColumnStatsTestCase): Unit = {
     val partitionCol : String ="c8"
     val metadataOpts = Map(
@@ -305,6 +299,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       "hoodie.upsert.shuffle.parallelism" -> "1",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString,
       RECORDKEY_FIELD.key -> "c1",
       HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> partitionCol,
@@ -339,7 +334,6 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
     val metadataOpts1 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
       HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c4,c5,c6,c7,c8"
     )
 
@@ -395,10 +389,13 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
 
     // re-create marker for the deleted file.
     if (tableType == HoodieTableType.MERGE_ON_READ) {
+      val ioType = if (metaClient.getTableConfig.getTableVersion
+        .greaterThanOrEquals(HoodieTableVersion.EIGHT)) IOType.CREATE else IOType.APPEND
+      val markerSuffix = HoodieTableMetaClient.MARKER_EXTN + "." + ioType.name()
       if (StringUtils.isNullOrEmpty(partitionCol)) {
-        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.requestedTime + "/" + logFileName + ".marker.APPEND"))
+        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.requestedTime + "/" + logFileName + markerSuffix))
       } else {
-        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.requestedTime + "/9/" + logFileName + ".marker.APPEND"))
+        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.requestedTime + "/9/" + logFileName + markerSuffix))
       }
     } else {
       if (StringUtils.isNullOrEmpty(partitionCol)) {

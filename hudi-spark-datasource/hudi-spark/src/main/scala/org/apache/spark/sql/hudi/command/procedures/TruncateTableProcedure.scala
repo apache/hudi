@@ -30,6 +30,7 @@ import org.apache.spark.sql.{AnalysisException, Row, SaveMode}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
@@ -69,12 +70,12 @@ class TruncateTableProcedure extends BaseProcedure
     val tableId = table.identifier.quotedString
 
     if (table.tableType == CatalogTableType.VIEW) {
-      throw new AnalysisException(
+      throw new HoodieAnalysisException(
         s"Operation not allowed: TRUNCATE TABLE on views: $tableId")
     }
 
     if (table.partitionColumnNames.isEmpty && partitionsStr.nonEmpty) {
-      throw new AnalysisException(
+      throw new HoodieAnalysisException(
         s"Operation not allowed: TRUNCATE TABLE ... PARTITION is not supported " +
           s"for tables that are not partitioned: $tableId")
     }

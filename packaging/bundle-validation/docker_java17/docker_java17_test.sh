@@ -106,8 +106,9 @@ stop_hdfs() {
   $HADOOP_HOME/sbin/stop-dfs.sh
 }
 
-build_hudi_java8 () {
-  use_default_java_runtime
+build_hudi () {
+  change_java_runtime_version
+
   mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true \
     -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log \
     -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn \
@@ -115,7 +116,7 @@ build_hudi_java8 () {
     -pl packaging/hudi-spark-bundle -am
 
   if [ "$?" -ne 0 ]; then
-    echo "::error::docker_test_java17.sh Failed building Hudi with Java 8!"
+    echo "::error::docker_test_java17.sh Failed building Hudi!"
     exit 1
   fi
 
@@ -132,7 +133,7 @@ run_docker_tests() {
 
   mvn -e test -D$SPARK_PROFILE -D$SCALA_PROFILE -Djava17 -Duse.external.hdfs=true \
      -Dtest=org.apache.hudi.common.functional.TestHoodieLogFormat,org.apache.hudi.common.util.TestDFSPropertiesConfiguration,org.apache.hudi.common.fs.TestHoodieWrapperFileSystem \
-     -DfailIfNoTests=false -pl hudi-common -Pwarn-log
+     -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-common -Pwarn-log
 
   if [ "$?" -ne 0 ]; then
     echo "::error::docker_test_java17.sh Hudi maven tests failed"
@@ -162,9 +163,9 @@ whoami
 which ssh
 whoami
 
-echo "::warning::docker_test_java17.sh Building Hudi with Java 8"
-build_hudi_java8
-echo "::warning::docker_test_java17.sh Done building Hudi with Java 8"
+echo "::warning::docker_test_java17.sh Building Hudi"
+build_hudi
+echo "::warning::docker_test_java17.sh Done building Hudi"
 
 setup_hdfs
 

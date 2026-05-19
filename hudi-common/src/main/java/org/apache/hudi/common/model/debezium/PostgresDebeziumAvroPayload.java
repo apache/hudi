@@ -21,12 +21,11 @@ package org.apache.hudi.common.model.debezium;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -47,9 +46,9 @@ import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
  * <p>
  * This payload implementation will issue matching insert, delete, updates against the hudi table
  */
+@Slf4j
 public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
 
-  private static final Logger LOG = LoggerFactory.getLogger(PostgresDebeziumAvroPayload.class);
   public static final String DEBEZIUM_TOASTED_VALUE = "__debezium_unavailable_value";
 
   public PostgresDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
@@ -108,9 +107,9 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     fields.forEach(field -> {
       // There are only four avro data types that have unconstrained sizes, which are
       // NON-NULLABLE STRING, NULLABLE STRING, NON-NULLABLE BYTES, NULLABLE BYTES
-      if (((GenericData.Record) incomingRecord).get(field.name()) != null
+      if (((GenericRecord) incomingRecord).get(field.name()) != null
           && (containsStringToastedValues(incomingRecord, field) || containsBytesToastedValues(incomingRecord, field))) {
-        ((GenericData.Record) incomingRecord).put(field.name(), ((GenericData.Record) currentRecord).get(field.name()));
+        ((GenericRecord) incomingRecord).put(field.name(), ((GenericData.Record) currentRecord).get(field.name()));
       }
     });
   }
@@ -126,8 +125,8 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     return ((field.schema().getType() == Schema.Type.STRING
         || (field.schema().getType() == Schema.Type.UNION && field.schema().getTypes().stream().anyMatch(s -> s.getType() == Schema.Type.STRING)))
         // Check length first as an optimization
-        && ((CharSequence) ((GenericData.Record) incomingRecord).get(field.name())).length() == DEBEZIUM_TOASTED_VALUE.length()
-        && DEBEZIUM_TOASTED_VALUE.equals(((CharSequence) ((GenericData.Record) incomingRecord).get(field.name())).toString()));
+        && ((CharSequence) ((GenericRecord) incomingRecord).get(field.name())).length() == DEBEZIUM_TOASTED_VALUE.length()
+        && DEBEZIUM_TOASTED_VALUE.equals(((CharSequence) ((GenericRecord) incomingRecord).get(field.name())).toString()));
   }
 
   /**

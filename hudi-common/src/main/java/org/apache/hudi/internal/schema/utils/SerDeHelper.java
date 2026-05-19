@@ -29,6 +29,8 @@ import org.apache.hudi.internal.schema.Types;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
 import java.io.IOException;
 import java.io.StringWriter;
@@ -44,10 +46,8 @@ import java.util.regex.Pattern;
 /**
  * Utils of serialization and deserialization.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class SerDeHelper {
-  private SerDeHelper() {
-
-  }
 
   public static final String LATEST_SCHEMA = "latest_schema";
   public static final String SCHEMAS = "schemas";
@@ -73,6 +73,8 @@ public class SerDeHelper {
 
   private static final Pattern FIXED = Pattern.compile("fixed\\[(\\d+)\\]");
   private static final Pattern DECIMAL = Pattern.compile("decimal\\((\\d+),\\s+(\\d+)\\)");
+  private static final Pattern DECIMAL_BYTES = Pattern.compile("decimal_bytes\\((\\d+),\\s*(\\d+)\\)");
+  private static final Pattern DECIMAL_FIXED = Pattern.compile("decimal_fixed\\((\\d+),\\s*(\\d+)\\)\\[(\\d+)\\]");
 
   /**
    * Convert history internalSchemas to json.
@@ -191,10 +193,25 @@ public class SerDeHelper {
     if (jsonNode.isTextual()) {
       String type = jsonNode.asText().toLowerCase(Locale.ROOT);
       // deal with fixed and decimal
+      Matcher decimalFixed = DECIMAL_FIXED.matcher(type);
+      if (decimalFixed.matches()) {
+        return Types.DecimalTypeFixed.get(
+            Integer.parseInt(decimalFixed.group(1)),
+            Integer.parseInt(decimalFixed.group(2)),
+            Integer.parseInt(decimalFixed.group(3)));
+      }
       Matcher fixed = FIXED.matcher(type);
       if (fixed.matches()) {
         return Types.FixedType.getFixed(Integer.parseInt(fixed.group(1)));
       }
+
+      Matcher decimalBytes = DECIMAL_BYTES.matcher(type);
+      if (decimalBytes.matches()) {
+        return Types.DecimalTypeBytes.get(
+            Integer.parseInt(decimalBytes.group(1)),
+            Integer.parseInt(decimalBytes.group(2)));
+      }
+
       Matcher decimal = DECIMAL.matcher(type);
       if (decimal.matches()) {
         return Types.DecimalType.get(
@@ -217,8 +234,16 @@ public class SerDeHelper {
           return Types.DateType.get();
         case TIME:
           return Types.TimeType.get();
+        case TIME_MILLIS:
+          return Types.TimeMillisType.get();
         case TIMESTAMP:
           return Types.TimestampType.get();
+        case TIMESTAMP_MILLIS:
+          return Types.TimestampMillisType.get();
+        case LOCAL_TIMESTAMP_MICROS:
+          return Types.LocalTimestampMicrosType.get();
+        case LOCAL_TIMESTAMP_MILLIS:
+          return Types.LocalTimestampMillisType.get();
         case STRING:
           return Types.StringType.get();
         case UUID:

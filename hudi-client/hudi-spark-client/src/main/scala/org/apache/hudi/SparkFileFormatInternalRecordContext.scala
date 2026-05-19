@@ -19,9 +19,9 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
-import org.apache.hudi.avro.AvroSchemaUtils.isNullable
+import org.apache.hudi.common.engine.RecordContext
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
@@ -30,12 +30,11 @@ import org.apache.spark.sql.hudi.SparkAdapter
 
 import scala.collection.mutable
 
-class SparkFileFormatInternalRecordContext(tableConfig: HoodieTableConfig)
-  extends BaseSparkInternalRecordContext(tableConfig) {
+trait SparkFileFormatInternalRecordContext extends BaseSparkInternalRecordContext {
 
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
-  private val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
-  private val serializerMap: mutable.Map[Schema, HoodieAvroSerializer] = mutable.Map()
+  private val deserializerMap: mutable.Map[HoodieSchema, HoodieAvroDeserializer] = mutable.Map()
+  private val serializerMap: mutable.Map[HoodieSchema, HoodieAvroSerializer] = mutable.Map()
 
   override def supportsParquetRowIndex: Boolean = {
     HoodieSparkUtils.gteqSpark3_5
@@ -48,7 +47,7 @@ class SparkFileFormatInternalRecordContext(tableConfig: HoodieTableConfig)
    * @return An [[InternalRow]].
    */
   override def convertAvroRecord(avroRecord: IndexedRecord): InternalRow = {
-    val schema = avroRecord.getSchema
+    val schema = HoodieSchema.fromAvroSchema(avroRecord.getSchema)
     val structType = HoodieInternalRowUtils.getCachedSchema(schema)
     val deserializer = deserializerMap.getOrElseUpdate(schema, {
       sparkAdapter.createAvroDeserializer(schema, structType)
@@ -56,11 +55,18 @@ class SparkFileFormatInternalRecordContext(tableConfig: HoodieTableConfig)
     deserializer.deserialize(avroRecord).get.asInstanceOf[InternalRow]
   }
 
-  override def convertToAvroRecord(record: InternalRow, schema: Schema): GenericRecord = {
+  override def convertToAvroRecord(record: InternalRow, schema: HoodieSchema): GenericRecord = {
     val structType = HoodieInternalRowUtils.getCachedSchema(schema)
     val serializer = serializerMap.getOrElseUpdate(schema, {
-      sparkAdapter.createAvroSerializer(structType, schema, isNullable(schema))
+      sparkAdapter.createAvroSerializer(structType, schema, schema.isNullable)
     })
     serializer.serialize(record).asInstanceOf[GenericRecord]
   }
+}
+
+object SparkFileFormatInternalRecordContext {
+  private val FIELD_ACCESSOR_INSTANCE = SparkFileFormatInternalRecordContext.apply()
+  def getFieldAccessorInstance: RecordContext[InternalRow] = FIELD_ACCESSOR_INSTANCE
+  def apply(): SparkFileFormatInternalRecordContext = new BaseSparkInternalRecordContext() with SparkFileFormatInternalRecordContext
+  def apply(tableConfig: HoodieTableConfig): SparkFileFormatInternalRecordContext = new BaseSparkInternalRecordContext(tableConfig) with SparkFileFormatInternalRecordContext
 }

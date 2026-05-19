@@ -19,6 +19,7 @@
 package org.apache.hudi.sync.adb;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HadoopConfigUtils;
@@ -32,12 +33,10 @@ import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 
 import com.beust.jcommander.JCommander;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
-import org.apache.parquet.schema.MessageType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -70,9 +69,9 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
  * This utility will get the schema from the latest commit and will sync ADB table schema,
  * incremental partitions will be synced as well.
  */
+@Slf4j
 @SuppressWarnings("WeakerAccess")
 public class AdbSyncTool extends HoodieSyncTool {
-  private static final Logger LOG = LoggerFactory.getLogger(AdbSyncTool.class);
 
   public static final String SUFFIX_SNAPSHOT_TABLE = "_rt";
   public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
@@ -144,7 +143,7 @@ public class AdbSyncTool extends HoodieSyncTool {
   }
 
   private void syncHoodieTable(String tableName, boolean useRealtimeInputFormat, boolean readAsOptimized) throws Exception {
-    LOG.info("Try to sync hoodie table, tableName:{}, path:{}, tableType:{}",
+    log.info("Try to sync hoodie table, tableName: {}, path: {}, tableType: {}",
         tableName, syncClient.getBasePath(), syncClient.getTableType());
 
     if (config.getBoolean(ADB_SYNC_AUTO_CREATE_DATABASE)) {
@@ -163,25 +162,25 @@ public class AdbSyncTool extends HoodieSyncTool {
     }
 
     if (config.getBoolean(ADB_SYNC_DROP_TABLE_BEFORE_CREATION)) {
-      LOG.info("Drop table before creation, tableName:{}", tableName);
+      log.info("Drop table before creation, tableName: {}", tableName);
       syncClient.dropTable(tableName);
     }
 
     boolean tableExists = syncClient.tableExists(tableName);
 
     // Get the parquet schema for this table looking at the latest commit
-    MessageType schema = syncClient.getStorageSchema();
+    HoodieSchema schema = syncClient.getStorageSchema();
 
     // Sync schema if needed
     syncSchema(tableName, tableExists, useRealtimeInputFormat, readAsOptimized, schema);
-    LOG.info("Sync schema complete, start syncing partitions for table:{}", tableName);
+    log.info("Sync schema complete, start syncing partitions for table: {}", tableName);
 
     // Get the last time we successfully synced partitions
     Option<String> lastCommitTimeSynced = Option.empty();
     if (tableExists) {
       lastCommitTimeSynced = syncClient.getLastCommitTimeSynced(tableName);
     }
-    LOG.info("Last commit time synced was found:{}", lastCommitTimeSynced.orElse("null"));
+    log.info("Last commit time synced was found: {}", lastCommitTimeSynced.orElse("null"));
 
     // Scan synced partitions
     List<String> writtenPartitionsSince;
@@ -190,7 +189,7 @@ public class AdbSyncTool extends HoodieSyncTool {
     } else {
       writtenPartitionsSince = syncClient.getWrittenPartitionsSince(lastCommitTimeSynced, Option.empty());
     }
-    LOG.info("Scan partitions complete, partitionNum:{}", writtenPartitionsSince.size());
+    log.info("Scan partitions complete, partitionNum: {}", writtenPartitionsSince.size());
 
     // Sync the partitions if needed
     syncPartitions(tableName, writtenPartitionsSince);
@@ -200,7 +199,7 @@ public class AdbSyncTool extends HoodieSyncTool {
     if (!config.getBoolean(ADB_SYNC_SKIP_LAST_COMMIT_TIME_SYNC)) {
       syncClient.updateLastCommitTimeSynced(tableName);
     }
-    LOG.info("Sync complete for table:{}", tableName);
+    log.info("Sync complete for table: {}", tableName);
   }
 
   /**
@@ -214,7 +213,7 @@ public class AdbSyncTool extends HoodieSyncTool {
    * @param schema                 The extracted schema
    */
   private void syncSchema(String tableName, boolean tableExists, boolean useRealTimeInputFormat,
-      boolean readAsOptimized, MessageType schema) {
+      boolean readAsOptimized, HoodieSchema schema) {
     // Append spark table properties & serde properties
     Map<String, String> tableProperties = ConfigUtils.toMap(config.getString(ADB_SYNC_TABLE_PROPERTIES));
     Map<String, String> serdeProperties = ConfigUtils.toMap(config.getString(ADB_SYNC_SERDE_PROPERTIES));
@@ -224,13 +223,13 @@ public class AdbSyncTool extends HoodieSyncTool {
       Map<String, String> sparkSerdeProperties = SparkDataSourceTableUtils.getSparkSerdeProperties(readAsOptimized, config.getString(META_SYNC_BASE_PATH));
       tableProperties.putAll(sparkTableProperties);
       serdeProperties.putAll(sparkSerdeProperties);
-      LOG.info("Sync as spark datasource table, tableName:{}, tableExists:{}, tableProperties:{}, sederProperties:{}",
+      log.info("Sync as spark datasource table, tableName: {}, tableExists: {}, tableProperties: {}, sederProperties: {}",
           tableName, tableExists, tableProperties, serdeProperties);
     }
 
     // Check and sync schema
     if (!tableExists) {
-      LOG.info("ADB table [{}] is not found, creating it", tableName);
+      log.info("ADB table [{}] is not found, creating it", tableName);
       String inputFormatClassName = HoodieInputFormatUtils.getInputFormatClassName(HoodieFileFormat.PARQUET, useRealTimeInputFormat);
 
       // Custom serde will not work with ALTER TABLE REPLACE COLUMNS
@@ -244,10 +243,10 @@ public class AdbSyncTool extends HoodieSyncTool {
       SchemaDifference schemaDiff = HiveSchemaUtil.getSchemaDifference(schema, tableSchema, config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
           config.getBoolean(ADB_SYNC_SUPPORT_TIMESTAMP));
       if (!schemaDiff.isEmpty()) {
-        LOG.info("Schema difference found for table:{}", tableName);
+        log.info("Schema difference found for table: {}", tableName);
         syncClient.updateTableDefinition(tableName, schemaDiff);
       } else {
-        LOG.info("No Schema difference for table:{}", tableName);
+        log.info("No Schema difference for table: {}", tableName);
       }
     }
   }
@@ -259,17 +258,17 @@ public class AdbSyncTool extends HoodieSyncTool {
   private void syncPartitions(String tableName, List<String> writtenPartitionsSince) {
     try {
       if (config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
-        LOG.info("Not a partitioned table.");
+        log.info("Not a partitioned table.");
         return;
       }
 
       Map<List<String>, String> partitions = syncClient.scanTablePartitions(tableName);
       List<PartitionEvent> partitionEvents = syncClient.getPartitionEvents(partitions, writtenPartitionsSince);
       List<String> newPartitions = filterPartitions(partitionEvents, PartitionEventType.ADD);
-      LOG.info("New Partitions:{}", newPartitions);
+      log.info("New Partitions: {}", newPartitions);
       syncClient.addPartitionsToTable(tableName, newPartitions);
       List<String> updatePartitions = filterPartitions(partitionEvents, PartitionEventType.UPDATE);
-      LOG.info("Changed Partitions:{}", updatePartitions);
+      log.info("Changed Partitions: {}", updatePartitions);
       syncClient.updatePartitionsToTable(tableName, updatePartitions);
     } catch (Exception e) {
       throw new HoodieAdbSyncException("Failed to sync partitions for table:" + tableName, e);

@@ -19,8 +19,8 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.TestHoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
@@ -30,6 +30,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -43,7 +44,6 @@ import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.streamer.BaseErrorTableWriter;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -136,6 +136,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   public void teardown() throws Exception {
     super.teardown();
     TestSchemaProvider.resetTargetSchema();
+    if (deltaStreamer != null) {
+      deltaStreamer.shutdownGracefully();
+    }
   }
 
   @AfterAll
@@ -215,20 +218,23 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
           transformerClassNames, PROPS_FILENAME_TEST_AVRO_KAFKA, false,  useSchemaProvider, 100000, false, null, tableType, "timestamp", null);
     } else {
       prepareParquetDFSSource(false, hasTransformer, sourceSchemaFile, targetSchemaFile, PROPS_FILENAME_TEST_PARQUET,
-          PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps, false);
+          PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps, false, false);
       cfg = TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
           transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
           useSchemaProvider, dfsSourceLimitBytes, false, null, tableType, "timestamp", null);
     }
     cfg.forceDisableCompaction = !shouldCompact;
+    cfg.enableHiveSupport = false;
     return cfg;
   }
 
   protected void addData(Dataset<Row> df, Boolean isFirst) {
     if (useSchemaProvider) {
-      TestSchemaProvider.sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE);
+      TestSchemaProvider.sourceSchema =
+          HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(df.schema(), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE);
       if (withErrorTable && isFirst) {
-        TestSchemaProvider.setTargetSchema(AvroConversionUtils.convertStructTypeToAvroSchema(TestHoodieSparkUtils.getSchemaColumnNotNullable(df.schema(), "_row_key"),"idk", "idk"));
+        TestSchemaProvider.setTargetSchema(
+            HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(TestHoodieSparkUtils.getSchemaColumnNotNullable(df.schema(), "_row_key"),"idk", "idk"));
       }
     }
     if (useKafkaSource) {
@@ -312,24 +318,24 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   public static class TestSchemaProvider extends SchemaProvider {
 
-    public static Schema sourceSchema;
-    public static Schema targetSchema = null;
+    public static HoodieSchema sourceSchema;
+    public static HoodieSchema targetSchema = null;
 
     public TestSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
       super(props, jssc);
     }
 
     @Override
-    public Schema getSourceSchema() {
+    public HoodieSchema getSourceHoodieSchema() {
       return sourceSchema;
     }
 
     @Override
-    public Schema getTargetSchema() {
+    public HoodieSchema getTargetHoodieSchema() {
       return targetSchema != null ? targetSchema : sourceSchema;
     }
 
-    public static void setTargetSchema(Schema targetSchema) {
+    public static void setTargetSchema(HoodieSchema targetSchema) {
       TestSchemaProvider.targetSchema = targetSchema;
     }
 
@@ -381,7 +387,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     }
 
     @Override
-    public JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option commitedInstantTime) {
+    public JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option committedInstantTime) {
       if (errorEvents.size() > 0) {
         if (errorTableInstantTime.isPresent()) {
           throw new IllegalStateException("Error table instant time should be empty before calling upsert");
@@ -413,7 +419,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     }
 
     @Override
-    public boolean upsertAndCommit(String baseTableInstantTime, Option commitedInstantTime) {
+    public boolean upsertAndCommit(String baseTableInstantTime, Option committedInstantTime) {
       if (errorEvents.size() > 0) {
         JavaRDD errorsCombined = errorEvents.get(0);
         for (int i = 1; i < errorEvents.size(); i++) {
@@ -429,7 +435,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     }
 
     @Override
-    public Option<JavaRDD<HoodieAvroIndexedRecord>> getErrorEvents(String baseTableInstantTime, Option commitedInstantTime) {
+    public Option<JavaRDD<HoodieAvroIndexedRecord>> getErrorEvents(String baseTableInstantTime, Option committedInstantTime) {
       return Option.empty();
     }
   }

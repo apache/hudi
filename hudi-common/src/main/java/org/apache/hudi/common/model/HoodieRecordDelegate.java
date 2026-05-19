@@ -26,6 +26,8 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import lombok.Getter;
+import lombok.ToString;
 
 import javax.annotation.Nullable;
 
@@ -38,6 +40,8 @@ import java.io.Serializable;
  * instead of passing back the full {@link HoodieRecord}, this lean delegate
  * of it will be passed instead.
  */
+@Getter
+@ToString
 public class HoodieRecordDelegate implements Serializable, KryoSerializable {
 
   private HoodieKey hoodieKey;
@@ -113,32 +117,6 @@ public class HoodieRecordDelegate implements Serializable, KryoSerializable {
 
   public String getPartitionPath() {
     return hoodieKey.getPartitionPath();
-  }
-
-  public HoodieKey getHoodieKey() {
-    return hoodieKey;
-  }
-
-  public Option<HoodieRecordLocation> getCurrentLocation() {
-    return currentLocation;
-  }
-
-  public Option<HoodieRecordLocation> getNewLocation() {
-    return newLocation;
-  }
-
-  public boolean getIgnoreIndexUpdate() {
-    return ignoreIndexUpdate;
-  }
-
-  @Override
-  public String toString() {
-    return "HoodieRecordDelegate{"
-        + "hoodieKey=" + hoodieKey
-        + ", currentLocation=" + currentLocation
-        + ", newLocation=" + newLocation
-        + ", ignoreIndexUpdate=" + ignoreIndexUpdate
-        + '}';
   }
 
   @VisibleForTesting

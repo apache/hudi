@@ -30,13 +30,17 @@ import org.apache.hudi.common.util.StringUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -50,13 +54,25 @@ import static org.mockito.Mockito.when;
  */
 public class TestMetadataPartitionType {
 
+  private static Stream<Arguments> partitionTypeAndPartitionPairs() {
+    return Arrays.stream(MetadataPartitionType.values())
+        .flatMap(type -> {
+          if (type == MetadataPartitionType.PARTITION_STATS) {
+            // PARTITION_STATS can only be enabled if the table is partitioned
+            return Stream.of(Arguments.of(type, true));
+          }
+          return Stream.of(Arguments.of(type, true), Arguments.of(type, false));
+        });
+  }
+
   @ParameterizedTest
-  @EnumSource(MetadataPartitionType.class)
-  public void testPartitionEnabledByConfigOnly(MetadataPartitionType partitionType) {
+  @MethodSource("partitionTypeAndPartitionPairs")
+  public void testPartitionEnabledByConfigOnly(MetadataPartitionType partitionType, boolean isTablePartitioned) {
     HoodieTableMetaClient metaClient = Mockito.mock(HoodieTableMetaClient.class);
     HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
 
     // Simulate the configuration enabling given partition type, but the meta client not having it available (yet to initialize the partition)
+    Mockito.when(tableConfig.isTablePartitioned()).thenReturn(isTablePartitioned);
     Mockito.when(metaClient.getTableConfig()).thenReturn(tableConfig);
     Mockito.when(tableConfig.isMetadataPartitionAvailable(partitionType)).thenReturn(false);
     Mockito.when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
@@ -65,24 +81,27 @@ public class TestMetadataPartitionType {
     switch (partitionType) {
       case EXPRESSION_INDEX:
         metadataConfigBuilder.enable(true).withExpressionIndexEnabled(true);
-        expectedEnabledPartitions = 4;
+        expectedEnabledPartitions = 3;
         break;
       case SECONDARY_INDEX:
-        metadataConfigBuilder.enable(true).withEnableRecordIndex(true).withSecondaryIndexEnabled(true);
-        expectedEnabledPartitions = 5;
+        metadataConfigBuilder.enable(true).withEnableGlobalRecordLevelIndex(true).withSecondaryIndexEnabled(true).withSecondaryIndexForColumn("col1");
+        expectedEnabledPartitions = 4;
         break;
       case BLOOM_FILTERS:
         metadataConfigBuilder.enable(true).withMetadataIndexBloomFilter(true);
-        expectedEnabledPartitions = 4;
+        expectedEnabledPartitions = 3;
         break;
       case RECORD_INDEX:
-        metadataConfigBuilder.enable(true).withEnableRecordIndex(true);
-        expectedEnabledPartitions = 5;
+        metadataConfigBuilder.enable(true).withEnableGlobalRecordLevelIndex(true);
+        expectedEnabledPartitions = 3;
         break;
       default:
         metadataConfigBuilder.enable(true);
-        expectedEnabledPartitions = 3; // by default, FILES, COLUMN_STATS, PARTITION_STATS are enabled
+        expectedEnabledPartitions = 2; // by default, FILES, COLUMN_STATS are enabled
         break;
+    }
+    if (isTablePartitioned) {
+      expectedEnabledPartitions++; // PARTITION_STATS is enabled by default if table is partitioned
     }
 
     List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfigBuilder.build(), metaClient);
@@ -99,10 +118,11 @@ public class TestMetadataPartitionType {
 
     // Simulate the meta client having RECORD_INDEX available but config not enabling it
     Mockito.when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    Mockito.when(tableConfig.isTablePartitioned()).thenReturn(true);
     Mockito.when(tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.FILES)).thenReturn(true);
     Mockito.when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
     Mockito.when(metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)).thenReturn(true);
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withEnableRecordIndex(false).build();
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withEnableGlobalRecordLevelIndex(false).build();
 
     List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient);
 
@@ -138,6 +158,7 @@ public class TestMetadataPartitionType {
 
     // Simulate the meta client having EXPRESSION_INDEX available
     Mockito.when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    Mockito.when(tableConfig.isTablePartitioned()).thenReturn(true);
     Mockito.when(tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.FILES)).thenReturn(true);
     HoodieIndexDefinition expressionIndexDefinition = createIndexDefinition(MetadataPartitionType.EXPRESSION_INDEX, "dummy", "column_stats", "lower", Collections.singletonList("name"), null);
     HoodieIndexMetadata expressionIndexMetadata = new HoodieIndexMetadata(Collections.singletonMap("expr_index_dummy", expressionIndexDefinition));

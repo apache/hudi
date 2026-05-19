@@ -34,8 +34,7 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
 import java.util.EnumSet;
@@ -61,9 +60,8 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
  * 3. Initialize file groups for the enabled partition types within a transaction.
  * </li>
  */
+@Slf4j
 public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieIndexPlan>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ScheduleIndexActionExecutor.class);
   private static final Integer INDEX_PLAN_VERSION_1 = 1;
   private static final Integer LATEST_INDEX_PLAN_VERSION = INDEX_PLAN_VERSION_1;
 
@@ -89,18 +87,37 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     Set<String> indexesInflightOrCompleted = getInflightAndCompletedMetadataPartitions(table.getMetaClient().getTableConfig());
     InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
 
-    Set<String> requestedPartitions = partitionIndexTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
+    HoodieMetadataConfig metadataConfig = config.getMetadataConfig();
+    Set<String> requestedPartitions = partitionIndexTypes.stream().map(p -> {
+      if (MetadataPartitionType.EXPRESSION_INDEX.equals(p)) {
+        return getSecondaryOrExpressionIndexName(metadataConfig::getExpressionIndexName, PARTITION_NAME_EXPRESSION_INDEX_PREFIX, metadataConfig.getExpressionIndexColumn());
+      } else if (MetadataPartitionType.SECONDARY_INDEX.equals(p)) {
+        return getSecondaryOrExpressionIndexName(metadataConfig::getSecondaryIndexName, PARTITION_NAME_SECONDARY_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
+      }
+      return p.getPartitionPath();
+    }).collect(Collectors.toSet());
     requestedPartitions.addAll(partitionPaths);
     requestedPartitions.removeAll(indexesInflightOrCompleted);
 
     if (!requestedPartitions.isEmpty()) {
-      LOG.warn("Following partitions already exist or inflight: {}. Going to schedule indexing of only these partitions: {}", indexesInflightOrCompleted, requestedPartitions);
+      log.info("Some index partitions already exist: {}. Scheduling indexing of only these remaining partitions: {}",
+          indexesInflightOrCompleted, requestedPartitions);
     } else {
-      LOG.error("All requested index types are inflight or completed: {}", partitionIndexTypes);
+      log.info("All requested index partitions exist (either inflight or built): {}", partitionIndexTypes);
       return Option.empty();
     }
     List<MetadataPartitionType> finalPartitionsToIndex = partitionIndexTypes.stream()
-        .filter(p -> requestedPartitions.contains(p.getPartitionPath())).collect(Collectors.toList());
+        .filter(p -> {
+          String partitionName;
+          if (MetadataPartitionType.EXPRESSION_INDEX.equals(p)) {
+            partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getExpressionIndexName, PARTITION_NAME_EXPRESSION_INDEX_PREFIX, metadataConfig.getExpressionIndexColumn());
+          } else if (MetadataPartitionType.SECONDARY_INDEX.equals(p)) {
+            partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getSecondaryIndexName, PARTITION_NAME_SECONDARY_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
+          } else {
+            partitionName = p.getPartitionPath();
+          }
+          return requestedPartitions.contains(partitionName);
+        }).collect(Collectors.toList());
     final HoodieInstant indexInstant = instantGenerator.getIndexRequestedInstant(instantTime);
     try {
       // get last completed instant
@@ -116,7 +133,7 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
         return Option.of(indexPlan);
       }
     } catch (HoodieIOException e) {
-      LOG.error("Could not initialize file groups", e);
+      log.error("Could not initialize file groups", e);
       // abort gracefully
       abort(indexInstant);
     }

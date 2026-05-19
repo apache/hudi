@@ -24,6 +24,8 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
+import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -40,8 +42,12 @@ import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.table.format.cdc.CdcInputSplit;
+import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
+import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
@@ -76,6 +82,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -83,6 +91,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test cases for {@link IncrementalInputSplits}.
  */
 public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
+  // for RowData write function: to trigger buffer flush with batch size exceeded by 3 rows, each record is 48 bytes
+  private static final double BATCH_SIZE_MB = 0.00013;
 
   @BeforeEach
   void init() {
@@ -360,15 +370,14 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     conf.set(FlinkOptions.READ_AS_STREAMING, true);
     conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
     conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
-    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true");
     conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       // enable CSI for MOR table to collect col stats for delta write stats,
       // which will be used to construct partition stats then.
       conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
     }
-    metaClient = HoodieTestUtils.init(basePath, tableType);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient = StreamerUtil.createMetaClient(conf);
 
     // uuid > 'id5' and age < 30, only column stats of 'par3' matches the filter.
     ColumnStatsProbe columnStatsProbe =
@@ -559,5 +568,247 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
             .filter(i -> instants.get(i).requestedTime().equals(instant))
             .findFirst()
             .orElse(-1);
+  }
+
+  @Test
+  void testInputHoodieSourceSplits() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+
+    // Insert test data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    metaClient.reloadActiveTimeline();
+    HoodieTimeline commitsTimeline = metaClient.getActiveTimeline()
+        .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
+    HoodieInstant firstInstant = commitsTimeline.firstInstant().get();
+
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    // Test inputHoodieSourceSplits method
+    org.apache.hudi.source.split.HoodieContinuousSplitBatch result =
+        iis.inputHoodieSourceSplits(metaClient, firstInstant.getCompletionTime(), false);
+
+    assertNotNull(result, "Result should not be null");
+    assertNotNull(result.getSplits(), "Splits should not be null");
+    assertNotNull(result.getOffset(), "To instant should not be null");
+  }
+
+  @Test
+  void testInputHoodieSourceSplitsWithNullStartInstant() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+
+    // Insert test data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    // Test with null start instant (should read from earliest)
+    org.apache.hudi.source.split.HoodieContinuousSplitBatch result =
+        iis.inputHoodieSourceSplits(metaClient, null, false);
+
+    assertNotNull(result, "Result should not be null");
+    assertNotNull(result.getSplits(), "Splits should not be null");
+  }
+
+  @Test
+  void testInputHoodieSourceSplitsWithNoNewInstants() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+
+    // Insert test data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    metaClient.reloadActiveTimeline();
+    HoodieTimeline commitsTimeline = metaClient.getActiveTimeline()
+        .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
+    String lastInstant = commitsTimeline.lastInstant().get().getCompletionTime();
+
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    // Query with the last instant - should return empty since there's nothing new
+    org.apache.hudi.source.split.HoodieContinuousSplitBatch result =
+        iis.inputHoodieSourceSplits(metaClient, lastInstant, false);
+
+    assertNotNull(result, "Result should not be null");
+    assertNotNull(result.getSplits(), "Splits should not be null");
+  }
+
+  @Test
+  void testInputHoodieSourceSplitsConvertToHoodieSourceSplit() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+
+    // Insert test data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    org.apache.hudi.source.split.HoodieContinuousSplitBatch result =
+        iis.inputHoodieSourceSplits(metaClient, null, false);
+
+    // Verify that splits are converted to HoodieSourceSplit type
+    result.getSplits().forEach(split -> {
+      assertTrue(split instanceof org.apache.hudi.source.split.HoodieSourceSplit,
+          "Split should be of type HoodieSourceSplit");
+      assertNotNull(split.splitId(), "Split ID should not be null");
+    });
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testInputHoodieSourceSplitsWithDifferentTableTypes(HoodieTableType tableType) throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, tableType);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+    conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
+
+    // Insert test data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    org.apache.hudi.source.split.HoodieContinuousSplitBatch result =
+        iis.inputHoodieSourceSplits(metaClient, null, false);
+
+    assertNotNull(result, "Result should not be null for table type: " + tableType);
+    assertNotNull(result.getSplits(), "Splits should not be null for table type: " + tableType);
+  }
+
+  @Test
+  void testBatchHoodieSourceSplitsWithCDCEnabled() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+    conf.set(FlinkOptions.CHANGELOG_ENABLED, true);
+
+    // Insert test data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
+
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    org.apache.hudi.source.split.HoodieContinuousSplitBatch result =
+        iis.batchHoodieSourceSplits(metaClient, true);
+
+    assertNotNull(result, "Batch result with CDC should not be null");
+    assertNotNull(result.getSplits(), "Batch splits with CDC should not be null");
+  }
+
+  @Test
+  void testOrderingOfCDCInputSplitsWithEagerFlushing() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.WRITE_BATCH_SIZE, BATCH_SIZE_MB);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    // Insert test data
+    TestData.writeData(TestData.DATA_SET_INSERT_DUPLICATES, 1, conf);
+
+    String firstCommit = TestUtils.getFirstCompleteInstant(basePath);
+    conf.set(FlinkOptions.READ_START_COMMIT, firstCommit);
+
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    List<MergeOnReadInputSplit> splits = iis.inputSplits(metaClient, true).getInputSplits();
+    assertEquals(1, splits.size());
+    assertInstanceOf(CdcInputSplit.class, splits.get(0));
+    CdcInputSplit cdcInputSplit = (CdcInputSplit) splits.get(0);
+
+    // there are two cdc file splits since eager flushing happens.
+    HoodieCDCFileSplit[] cdcFileSplits = cdcInputSplit.getChanges();
+    assertEquals(2, cdcFileSplits.length);
+    // instant fields for these two splits are the same
+    assertEquals(cdcFileSplits[0].getInstant(), cdcFileSplits[1].getInstant());
+    assertEquals(HoodieCDCInferenceCase.LOG_FILE, cdcFileSplits[0].getCdcInferCase());
+    assertEquals(HoodieCDCInferenceCase.LOG_FILE, cdcFileSplits[1].getCdcInferCase());
+    // validate the order of splits with same instant
+    assertTrue(cdcFileSplits[0].getBeforeFileSlice().isPresent());
+    assertTrue(cdcFileSplits[1].getBeforeFileSlice().isPresent());
+    assertTrue(cdcFileSplits[0].getCdcFiles().get(0).compareTo(cdcFileSplits[1].getCdcFiles().get(0)) < 0);
+  }
+
+  @Test
+  void testBatchHoodieSourceSplitsWithEmptyTable() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+
+    // Don't write any data - test with empty table
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    org.apache.hudi.source.split.HoodieContinuousSplitBatch result =
+        iis.batchHoodieSourceSplits(metaClient, false);
+
+    assertNotNull(result, "Batch result for empty table should not be null");
+    assertNotNull(result.getSplits(), "Batch splits for empty table should not be null");
+    assertTrue(result.getSplits().isEmpty(), "Batch splits for empty table should be empty");
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testBatchHoodieSourceSplitsWithDifferentTableTypes(HoodieTableType tableType) throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, tableType);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+    conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
+
+    // Insert test data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
+
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    org.apache.hudi.source.split.HoodieContinuousSplitBatch result =
+        iis.batchHoodieSourceSplits(metaClient, false);
+
+    assertNotNull(result, "Batch result should not be null for table type: " + tableType);
+    assertNotNull(result.getSplits(), "Batch splits should not be null for table type: " + tableType);
+    assertFalse(result.getSplits().isEmpty(), "Batch splits should not be empty for table type: " + tableType);
   }
 }

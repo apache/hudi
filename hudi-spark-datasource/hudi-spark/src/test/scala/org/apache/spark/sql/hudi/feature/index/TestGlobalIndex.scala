@@ -25,7 +25,8 @@ class TestGlobalIndex extends HoodieSparkSqlTestBase {
   test("Test Type Casting with Global Index for Primary Key and Partition Key insert overwrite") {
     withRecordType()(withTempDir { tmp =>
       withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE",
-        "hoodie.simple.index.update.partition.path" -> "true") {
+        "hoodie.simple.index.update.partition.path" -> "true",
+        "hoodie.spark.sql.insert.into.operation" -> "upsert") {
         val tableName = generateTableName
 
         // Create table with both primary key and partition key

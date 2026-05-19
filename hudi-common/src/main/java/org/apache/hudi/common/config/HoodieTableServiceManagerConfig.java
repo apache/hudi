@@ -22,7 +22,10 @@ import org.apache.hudi.common.model.ActionType;
 
 import javax.annotation.concurrent.Immutable;
 
+import java.util.Arrays;
 import java.util.Properties;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Configurations used by the Hudi Table Service Manager.
@@ -171,9 +174,13 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
   }
 
   public boolean isEnabledAndActionSupported(ActionType actionType) {
-    boolean isActionSupported = getTableServiceManagerActions().contains(actionType.name());
+    Set<String> actions = Arrays.stream(getTableServiceManagerActions().split(","))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .collect(Collectors.toSet());
+    boolean isActionSupported = actions.contains(actionType.name());
     if (actionType.equals(ActionType.clustering)) {
-      isActionSupported = isActionSupported || getTableServiceManagerActions().contains(ActionType.replacecommit.name());
+      isActionSupported = isActionSupported || actions.contains(ActionType.replacecommit.name());
     }
     return isTableServiceManagerEnabled() && isActionSupported;
   }

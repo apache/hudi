@@ -22,13 +22,12 @@ import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.collection.BitCaskDiskMap;
 import org.apache.hudi.common.util.collection.RocksDbDiskMap;
 
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,11 +71,16 @@ public class TestCustomSerDe extends HoodieCommonTestHarness {
   }
 
   private static HoodieRecord createAvroRecordWithDecimalOrderingField() {
-    Schema precombineFieldSchema = LogicalTypes.decimal(20, 0)
-        .addToSchema(Schema.createFixed("fixed", null, "record.precombineField", 9));
+    HoodieSchema decimalSchema = HoodieSchema.createDecimal(
+        "fixed",                    // name
+        "record.precombineField",   // namespace
+        null,                       // doc
+        20,                         // precision
+        0,                          // scale
+        9                           // fixedSize in bytes
+    );
     byte[] decimalFieldBytes = new byte[] {0, 0, 0, 1, -122, -16, -116, -90, -32};
-    GenericFixed genericFixed = new GenericData.Fixed(precombineFieldSchema, decimalFieldBytes);
-
+    GenericFixed genericFixed = new GenericData.Fixed(decimalSchema.getAvroSchema(), decimalFieldBytes);
     // nullifying the record attribute in EventTimeAvroPayload here as it is not required in the test
     return new HoodieAvroRecord<>(new HoodieKey("recordKey", "partitionPath"),
         new EventTimeAvroPayload(null, (Comparable) genericFixed));
