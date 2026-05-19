@@ -50,6 +50,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.AutoClosableUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -227,13 +228,7 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
 
   private void closeLogWriterQuietly(Throwable failure) {
     markClosed();
-    try {
-      closeLogWriter();
-    } catch (IOException | RuntimeException e) {
-      if (e != failure) {
-        failure.addSuppressed(e);
-      }
-    }
+    AutoClosableUtils.closeQuietlyWithSuppressed(this::closeLogWriter, failure);
   }
 
   @Override

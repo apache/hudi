@@ -395,8 +395,13 @@ public class TestHoodieCreateHandle extends HoodieCommonTestHarness {
 
   @Test
   void testFileWriterClosedWhenDoWriteFails() throws Exception {
+    HoodieWriteConfig failOnWriteConfig = HoodieWriteConfig.newBuilder()
+        .withProps(writeConfig.getProps())
+        .withWriteIgnoreFailed(false)
+        .build();
+    HoodieTable failOnWriteTable = new TestBaseHoodieTable(failOnWriteConfig, getEngineContext(), metaClient);
     CreateHandleWithFileWriterWriteFailure createHandle = new CreateHandleWithFileWriterWriteFailure(
-        writeConfig, TEST_INSTANT_TIME, hoodieTable, TEST_PARTITION_PATH, TEST_FILE_ID, taskContextSupplier);
+        failOnWriteConfig, TEST_INSTANT_TIME, failOnWriteTable, TEST_PARTITION_PATH, TEST_FILE_ID, taskContextSupplier);
     HoodieRecord testRecord = dataGen.generateInserts(TEST_INSTANT_TIME, 1).get(0);
 
     HoodieException exception = assertThrows(HoodieException.class, () ->
