@@ -39,6 +39,7 @@ object HoodieProcedures {
       ,(DeleteSavepointProcedure.NAME, DeleteSavepointProcedure.builder)
       ,(RollbackToSavepointProcedure.NAME, RollbackToSavepointProcedure.builder)
       ,(RollbackToInstantTimeProcedure.NAME, RollbackToInstantTimeProcedure.builder)
+      ,(RestoreToInstantProcedure.NAME, RestoreToInstantProcedure.builder)
       ,(RunClusteringProcedure.NAME, RunClusteringProcedure.builder)
       ,(ShowClusteringProcedure.NAME, ShowClusteringProcedure.builder)
       ,(ShowCommitsProcedure.NAME, ShowCommitsProcedure.builder)
