@@ -185,6 +185,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(false) // keep sync with hoodie style
       .withDescription("If enabled, the checkpoint Id will also be written to hudi metadata.");
 
+  public static final ConfigOption<Boolean> TABLE_SERVICES_ENABLED = ConfigOptions
+      .key(HoodieWriteConfig.TABLE_SERVICES_ENABLED.key())
+      .booleanType()
+      .defaultValue(HoodieWriteConfig.TABLE_SERVICES_ENABLED.defaultValue())
+      .withDescription("Master control to disable all table services including archive, clean, compact, cluster, etc.");
+
   // ------------------------------------------------------------------------
   //  Changelog Capture Options
   // ------------------------------------------------------------------------

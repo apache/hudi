@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -43,6 +44,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.utils.TestData.insertRow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -78,7 +80,9 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
         .checkpointComplete(2)
         .end();
     HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
-    long completedCompaction = writeClient.getHoodieTable().getActiveTimeline().getCompletedCompactionTimeline().getInstants().stream().count();
+    long completedCompaction = writeClient.getHoodieTable().getActiveTimeline().getInstants().stream()
+        .filter(s -> s.getAction().equals(COMPACTION_ACTION))
+        .filter(HoodieInstant::isCompleted).count();
     long pendingCompaction = writeClient.getHoodieTable().getActiveTimeline().filterPendingCompactionTimeline().getInstants().stream().count();
     assertEquals(0, completedCompaction);
     assertEquals(0, pendingCompaction);

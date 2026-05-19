@@ -502,7 +502,7 @@ public class OptionsResolver {
    * Returns whether table services are enabled.
    */
   public static boolean areTableServicesEnabled(Configuration conf) {
-    return conf.getBoolean(HoodieWriteConfig.TABLE_SERVICES_ENABLED.key(), true);
+    return conf.get(FlinkOptions.TABLE_SERVICES_ENABLED);
   }
 
   /**
