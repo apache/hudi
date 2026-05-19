@@ -890,15 +890,20 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
 
     String commit1 = "20260101010101000";
+    String commit1CompletionTime = "20260101010101001";
     String commit2 = "20260201010101000";
+    String commit2CompletionTime = "20260201010101001";
     String commit3 = "20260301010101000";
+    String commit3CompletionTime = "20260301010101001";
     String commit4 = "20260501010101000";
+    String commit4CompletionTime = "20260501010101001";
     String commit5 = "20260601010101000";
-    testTable.addCommit(commit1);
-    testTable.addCommit(commit2);
-    testTable.addCommit(commit3);
-    testTable.addCommit(commit4);
-    testTable.addCommit(commit5);
+    String commit5CompletionTime = "20260601010101001";
+    testTable.addCommit(commit1, Option.of(commit1CompletionTime), Option.empty());
+    testTable.addCommit(commit2, Option.of(commit2CompletionTime), Option.empty());
+    testTable.addCommit(commit3, Option.of(commit3CompletionTime), Option.empty());
+    testTable.addCommit(commit4, Option.of(commit4CompletionTime), Option.empty());
+    testTable.addCommit(commit5, Option.of(commit5CompletionTime), Option.empty());
 
     // Rollbacks before MDT compaction time
     addCompletedRollback(testTable, "20260202010101000", commit2);
@@ -910,18 +915,18 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     // In a real system, the commit instant file is removed when a rollback completes, so the
     // only way these timestamps appear in validInstantTimestamps is via rollback metadata reading.
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    for (String rolledBack : Arrays.asList(commit2, commit3, commit4)) {
+    for (Pair<String, String> rolledBack : Arrays.asList(
+        Pair.of(commit2, commit2CompletionTime),
+        Pair.of(commit3, commit3CompletionTime),
+        Pair.of(commit4, commit4CompletionTime))) {
       HoodieInstant completedCommit = metaClient.getInstantGenerator()
-          .createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, rolledBack);
+          .createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION,
+              rolledBack.getKey(), rolledBack.getValue());
       metaClient.getActiveTimeline().deleteInstantFileIfExists(completedCommit);
     }
 
     // Create MDT metaClient with NO compaction initially (only delta commits)
-    String mdtBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
-    HoodieTestUtils.init(mdtBasePath, HoodieTableType.MERGE_ON_READ);
-    HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
-        .setBasePath(mdtBasePath)
-        .build();
+    HoodieTableMetaClient mdtMetaClient = createMdtMetaClient();
     HoodieTestTable mdtTestTable = HoodieTestTable.of(mdtMetaClient);
     mdtTestTable.addDeltaCommit("20260101020101000");
 
@@ -962,5 +967,14 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     rollbackPlan.setRollbackRequests(Collections.emptyList());
     testTable.addRollback(rollbackTime, rollbackMeta, rollbackPlan);
     testTable.addRollbackCompleted(rollbackTime, rollbackMeta, false);
+  }
+
+  private HoodieTableMetaClient createMdtMetaClient() throws IOException {
+    String mdtBasePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath().toString());
+    HoodieTestUtils.init(mdtBasePath, HoodieTableType.MERGE_ON_READ);
+    return HoodieTableMetaClient.builder()
+        .setConf(metaClient.getStorageConf())
+        .setBasePath(mdtBasePath)
+        .build();
   }
 }

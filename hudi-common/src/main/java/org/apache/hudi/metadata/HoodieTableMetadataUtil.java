@@ -2111,10 +2111,10 @@ public class HoodieTableMetadataUtil {
         .filterCompletedInstants()
         .lastInstant()
         .map(HoodieInstant::requestedTime)
-        .orElse(SOLO_COMMIT_TIMESTAMP);
+        .orElse(earliestInstantTime);
     // Only read rollback metadata for rollbacks newer than the later of:
-    // (a) the earliest completed instant (original filter), and
-    // (b) the latest MDT compaction instant (new optimization)
+    // (a) the earliest completed instant, and
+    // (b) the latest MDT compaction instant
     final String rollbackFilterThreshold = compareTimestamps(latestMdtCompactionTime,
         GREATER_THAN, earliestInstantTime) ? latestMdtCompactionTime : earliestInstantTime;
     datasetTimeline.getRollbackAndRestoreTimeline().filterCompletedInstants().getInstantsAsStream()
