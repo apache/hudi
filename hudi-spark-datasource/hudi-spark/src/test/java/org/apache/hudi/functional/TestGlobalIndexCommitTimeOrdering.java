@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -47,6 +48,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -390,6 +392,9 @@ public class TestGlobalIndexCommitTimeOrdering extends SparkClientFunctionalTest
   }
 
   private void readTableAndValidate(HoodieTableMetaClient metaClient, int[] expectedIds, String expectedPartition, Map<String, Long> expectedTsMap) {
+    metaClient.reloadTableConfig();
+    assertEquals(RecordMergeMode.COMMIT_TIME_ORDERING, metaClient.getTableConfig().getRecordMergeMode(),
+        "Table must be initialized with COMMIT_TIME_ORDERING for these tests to exercise the optimization");
     Dataset<Row> df = spark().read().format("hudi")
         .load(metaClient.getBasePath().toString())
         .sort("id")
@@ -418,7 +423,7 @@ public class TestGlobalIndexCommitTimeOrdering extends SparkClientFunctionalTest
       metadataConfigBuilder.enable(false);
     }
     return getConfigBuilder(false)
-        .withProperties(getKeyGenProps(payloadClass))
+        .withProperties(getCommitTimeOrderingProps(payloadClass))
         .withParallelism(2, 2)
         .withBulkInsertParallelism(2)
         .withDeleteParallelism(2)
@@ -447,7 +452,7 @@ public class TestGlobalIndexCommitTimeOrdering extends SparkClientFunctionalTest
       metadataConfigBuilder.enable(false);
     }
     return getConfigBuilder(false)
-        .withProperties(getKeyGenProps(payloadClass))
+        .withProperties(getCommitTimeOrderingProps(payloadClass))
         .withParallelism(2, 2)
         .withBulkInsertParallelism(2)
         .withDeleteParallelism(2)
@@ -467,5 +472,16 @@ public class TestGlobalIndexCommitTimeOrdering extends SparkClientFunctionalTest
         .withSchema(SCHEMA_STR)
         .withRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING)
         .build();
+  }
+
+  // HoodieWriteConfig.withRecordMergeMode writes to the writer key (hoodie.write.record.merge.mode),
+  // which is not read by HoodieTableMetaClient.fromProperties (it only reads hoodie.record.merge.mode).
+  // Also strip ORDERING_FIELDS, which would otherwise make inferMergingConfigsForPreV9Table fall back
+  // to EVENT_TIME_ORDERING when the table-level merge mode is unset.
+  private static Properties getCommitTimeOrderingProps(Class<?> payloadClass) {
+    Properties props = getKeyGenProps(payloadClass);
+    props.remove(HoodieTableConfig.ORDERING_FIELDS.key());
+    props.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.COMMIT_TIME_ORDERING.name());
+    return props;
   }
 }
