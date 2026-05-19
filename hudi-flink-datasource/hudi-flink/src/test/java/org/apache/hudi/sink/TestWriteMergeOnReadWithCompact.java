@@ -62,10 +62,10 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
   @Test
   public void testUpsertWithTableServiceDisabled() throws Exception {
     // reset the config option
-    conf.setBoolean("hoodie.table.services.enabled", false);
-    conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, true);
-    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
-    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+    conf.set(FlinkOptions.TABLE_SERVICES_ENABLED, false);
+    conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, true);
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
+    conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
 
     preparePipeline(conf)
         .consume(TestData.DATA_SET_INSERT)

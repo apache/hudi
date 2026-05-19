@@ -131,11 +131,11 @@ public class TestOptionsResolver {
     assertTrue(OptionsResolver.areTableServicesEnabled(conf));
 
     // explicitly set to true
-    conf.setBoolean(HoodieWriteConfig.TABLE_SERVICES_ENABLED.key(), true);
+    conf.set(FlinkOptions.TABLE_SERVICES_ENABLED, true);
     assertTrue(OptionsResolver.areTableServicesEnabled(conf));
 
     // explicitly set to false
-    conf.setBoolean(HoodieWriteConfig.TABLE_SERVICES_ENABLED.key(), false);
+    conf.set(FlinkOptions.TABLE_SERVICES_ENABLED, false);
     assertFalse(OptionsResolver.areTableServicesEnabled(conf));
   }
 }

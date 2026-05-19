@@ -362,11 +362,11 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testInsertWithTableServiceDisabled() throws Exception {
     // reset the config option
-    conf.setString(FlinkOptions.OPERATION, "insert");
-    conf.setBoolean("hoodie.table.services.enabled", false);
-    conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
-    conf.setBoolean(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true);
-    conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
+    conf.set(FlinkOptions.OPERATION, "insert");
+    conf.set(FlinkOptions.TABLE_SERVICES_ENABLED, false);
+    conf.set(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
+    conf.set(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true);
+    conf.set(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
 
     preparePipeline(conf)
         .consume(TestData.DATA_SET_INSERT_SAME_KEY)
