@@ -30,12 +30,11 @@ import org.apache.hudi.config.AzureStorageLockConfig;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.ContainerFetchException;
 import org.testcontainers.containers.ContainerLaunchException;
 import org.testcontainers.containers.GenericContainer;
@@ -60,10 +59,9 @@ import static org.junit.jupiter.api.Assumptions.abort;
  * tests against external container images should not gate the overall build on registry-side
  * outages that are outside the project's control.
  */
+@Slf4j
 @DisabledIfEnvironmentVariable(named = "SKIP_AZURITE_IT", matches = "true")
 public class ITAzureStorageLockClientAzurite {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ITAzureStorageLockClientAzurite.class);
 
   // Pin the Azurite version. The previous unpinned reference (implicit ":latest") was more
   // susceptible to MCR rate-limiting / WAF blocks because :latest is queried more aggressively
@@ -96,18 +94,21 @@ public class ITAzureStorageLockClientAzurite {
     } catch (ContainerFetchException | ContainerLaunchException e) {
       // Image pull / container start failure. Most commonly caused by MCR being unreachable
       // or rate-limited from CI runners. Skip the suite rather than failing the build.
-      LOG.warn("Azurite container unavailable; skipping suite. Cause: {}", e.toString());
+      log.warn("Azurite container unavailable; skipping suite.", e);
       abort("Azurite container could not be started (image pull or launch failed): " + e.getMessage());
     } catch (RuntimeException e) {
       // Testcontainers wraps a variety of Docker / network failures in plain RuntimeExceptions
       // during start(). Treat any "could not start container" failure as a skip rather than
       // an error for the same reason — these are infrastructure flakes, not test failures.
       // Re-throw if Docker itself is missing so the developer gets a clear diagnosis locally.
-      if (e.getMessage() != null && e.getMessage().toLowerCase().contains("docker")
-          && e.getMessage().toLowerCase().contains("not")) {
+      // Known messages we want to surface: "Could not find a valid Docker environment",
+      // "Docker not found", "docker: command not found".
+      String msg = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
+      if (msg.contains("docker") && (msg.contains("not found") || msg.contains("no such")
+          || msg.contains("could not find") || msg.contains("not running"))) {
         throw e;
       }
-      LOG.warn("Azurite container unavailable; skipping suite. Cause: {}", e.toString());
+      log.warn("Azurite container unavailable; skipping suite.", e);
       abort("Azurite container could not be started: " + e.getMessage());
     }
   }
