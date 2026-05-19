@@ -119,6 +119,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
     } catch (Throwable t) {
       log.error("Error writing record " + record, t);
       if (!config.getIgnoreWriteFailed()) {
+        closeFileWriterQuietly(t);
         throw new HoodieException(t.getMessage(), t);
       }
       writeStatus.markFailure(record, t, recordMetadata);
@@ -166,6 +167,19 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
   protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, HoodieSchema schema, HoodieSchema targetSchema, String fileName, Properties prop) {
     MetadataValues metadataValues = new MetadataValues().setFileName(fileName);
     return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
+  }
+
+  private void closeFileWriterQuietly(Throwable failure) {
+    if (fileWriter == null) {
+      return;
+    }
+    try {
+      fileWriter.close();
+    } catch (IOException ioe) {
+      failure.addSuppressed(ioe);
+    } finally {
+      fileWriter = null;
+    }
   }
 
   @Override

@@ -118,12 +118,24 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       log.info("Schema evolution enabled for binary copy: {}", schemaEvolutionEnabled);
       records = this.writer.binaryCopy(inputFiles, Collections.singletonList(path), writeScheMessageType, schemaEvolutionEnabled);
     } catch (IOException e) {
+      closeWriterAfterFailure(e);
       throw new HoodieIOException(e.getMessage(), e);
+    } catch (RuntimeException e) {
+      closeWriterAfterFailure(e);
+      throw e;
     } finally {
       this.recordsWritten = records;
       this.insertRecordsWritten = records;
     }
     log.info("Finish rewriting " + this.path + ". Using " + timer.endTimer() + " mills");
+  }
+
+  private void closeWriterAfterFailure(Throwable failure) {
+    try {
+      this.writer.close();
+    } catch (IOException ioe) {
+      failure.addSuppressed(ioe);
+    }
   }
 
   @Override

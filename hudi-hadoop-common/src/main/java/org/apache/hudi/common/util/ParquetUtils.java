@@ -464,13 +464,14 @@ public class ParquetUtils extends FileFormatUtils {
 
     HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
         HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType);
-    while (recordItr.hasNext()) {
-      HoodieRecord record = recordItr.next();
-      String recordKey = record.getRecordKey(readerSchema, keyFieldName);
-      parquetWriter.write(recordKey, record, writerSchema);
+    try (HoodieFileWriter writerToClose = parquetWriter) {
+      while (recordItr.hasNext()) {
+        HoodieRecord record = recordItr.next();
+        String recordKey = record.getRecordKey(readerSchema, keyFieldName);
+        parquetWriter.write(recordKey, record, writerSchema);
+      }
+      outputStream.flush();
     }
-    outputStream.flush();
-    parquetWriter.close();
     return Pair.of(outputStream, parquetWriter.getFileFormatMetadata());
   }
 
