@@ -499,6 +499,29 @@ public class TestHoodieAvroUtils {
     assertEquals(0, buffer.position());
   }
 
+  // Cross-Avro-version test fixtures: the same date / timestamp value expressed in both the Avro
+  // 1.11.x primitive form (Integer / Long) and the Avro 1.12 java.time form (LocalDate / Instant /
+  // LocalDateTime). The contract under test is that both forms produce identical downstream
+  // behavior in every Hudi read-side path that touches a logical-typed field. Sharing these
+  // fixtures across tests pins the same exact value through every path.
+  private static final long FIXTURE_EPOCH_MICROS = 1716163200_000000L + 123456L; // 2024-05-20T00:00:00.123456Z
+  private static final long FIXTURE_EPOCH_MILLIS = 1716163200_000L + 123L;       // 2024-05-20T00:00:00.123Z
+  private static final int FIXTURE_EPOCH_DAY = (int) java.time.LocalDate.of(2024, 5, 20).toEpochDay();
+  private static final java.time.Instant FIXTURE_MILLIS_INSTANT = java.time.Instant.ofEpochMilli(FIXTURE_EPOCH_MILLIS);
+  private static final java.time.Instant FIXTURE_MICROS_INSTANT = java.time.Instant.ofEpochSecond(
+      FIXTURE_EPOCH_MICROS / 1_000_000L, (FIXTURE_EPOCH_MICROS % 1_000_000L) * 1000L);
+  private static final java.time.LocalDate FIXTURE_LOCAL_DATE = java.time.LocalDate.ofEpochDay(FIXTURE_EPOCH_DAY);
+  private static final java.time.LocalDateTime FIXTURE_LOCAL_DT_MILLIS =
+      java.time.LocalDateTime.ofInstant(FIXTURE_MILLIS_INSTANT, java.time.ZoneOffset.UTC);
+  private static final java.time.LocalDateTime FIXTURE_LOCAL_DT_MICROS =
+      java.time.LocalDateTime.ofInstant(FIXTURE_MICROS_INSTANT, java.time.ZoneOffset.UTC);
+
+  private static final Schema DATE_SCHEMA = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
+  private static final Schema TS_MILLIS_SCHEMA = LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
+  private static final Schema TS_MICROS_SCHEMA = LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
+  private static final Schema LOCAL_TS_MILLIS_SCHEMA = LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
+  private static final Schema LOCAL_TS_MICROS_SCHEMA = LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
+
   /**
    * Cross-Avro-version invariant: {@link HoodieAvroUtils#convertValueForAvroLogicalTypes} must produce
    * the same canonical Java value whether the GenericRecord field holds the Avro 1.11.x primitive form
@@ -508,47 +531,31 @@ public class TestHoodieAvroUtils {
    */
   @Test
   public void testConvertValueForAvroLogicalTypesCrossAvroVersion() {
-    long epochMicros = 1716163200_000000L + 123456L; // 2024-05-20T00:00:00.123456Z
-    long epochMillis = 1716163200_000L + 123L;       // 2024-05-20T00:00:00.123Z
-    int epochDay = (int) java.time.LocalDate.of(2024, 5, 20).toEpochDay();
-    java.time.Instant microsInstant = java.time.Instant.ofEpochSecond(epochMicros / 1_000_000L,
-        (epochMicros % 1_000_000L) * 1000L);
-    java.time.Instant millisInstant = java.time.Instant.ofEpochMilli(epochMillis);
-    java.time.LocalDate localDate = java.time.LocalDate.ofEpochDay(epochDay);
-    java.time.LocalDateTime localDateTimeMicros = java.time.LocalDateTime.ofInstant(microsInstant, java.time.ZoneOffset.UTC);
-    java.time.LocalDateTime localDateTimeMillis = java.time.LocalDateTime.ofInstant(millisInstant, java.time.ZoneOffset.UTC);
-
-    Schema dateSchema = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
-    Schema tsMillisSchema = LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
-    Schema tsMicrosSchema = LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
-    Schema localTsMillisSchema = LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
-    Schema localTsMicrosSchema = LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
-
     // date
-    assertEquals(HoodieAvroUtils.convertValueForAvroLogicalTypes(dateSchema, epochDay, false),
-        HoodieAvroUtils.convertValueForAvroLogicalTypes(dateSchema, localDate, false));
+    assertEquals(HoodieAvroUtils.convertValueForAvroLogicalTypes(DATE_SCHEMA, FIXTURE_EPOCH_DAY, false),
+        HoodieAvroUtils.convertValueForAvroLogicalTypes(DATE_SCHEMA, FIXTURE_LOCAL_DATE, false));
 
     // timestamp-millis, consistent=false → epoch-millis Long
-    assertEquals(epochMillis, HoodieAvroUtils.convertValueForAvroLogicalTypes(tsMillisSchema, epochMillis, false));
-    assertEquals(epochMillis, HoodieAvroUtils.convertValueForAvroLogicalTypes(tsMillisSchema, millisInstant, false));
+    assertEquals(FIXTURE_EPOCH_MILLIS, HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MILLIS_SCHEMA, FIXTURE_EPOCH_MILLIS, false));
+    assertEquals(FIXTURE_EPOCH_MILLIS, HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MILLIS_SCHEMA, FIXTURE_MILLIS_INSTANT, false));
 
     // timestamp-millis, consistent=true → java.sql.Timestamp
-    assertEquals(HoodieAvroUtils.convertValueForAvroLogicalTypes(tsMillisSchema, epochMillis, true),
-        HoodieAvroUtils.convertValueForAvroLogicalTypes(tsMillisSchema, millisInstant, true));
+    assertEquals(HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MILLIS_SCHEMA, FIXTURE_EPOCH_MILLIS, true),
+        HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MILLIS_SCHEMA, FIXTURE_MILLIS_INSTANT, true));
 
     // timestamp-micros, consistent=false → epoch-micros Long
-    assertEquals(epochMicros, HoodieAvroUtils.convertValueForAvroLogicalTypes(tsMicrosSchema, epochMicros, false));
-    assertEquals(epochMicros, HoodieAvroUtils.convertValueForAvroLogicalTypes(tsMicrosSchema, microsInstant, false));
+    assertEquals(FIXTURE_EPOCH_MICROS, HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MICROS_SCHEMA, FIXTURE_EPOCH_MICROS, false));
+    assertEquals(FIXTURE_EPOCH_MICROS, HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MICROS_SCHEMA, FIXTURE_MICROS_INSTANT, false));
 
     // timestamp-micros, consistent=true → java.sql.Timestamp (millis precision, matches Avro 1.11 behavior)
-    assertEquals(HoodieAvroUtils.convertValueForAvroLogicalTypes(tsMicrosSchema, epochMicros, true),
-        HoodieAvroUtils.convertValueForAvroLogicalTypes(tsMicrosSchema, microsInstant, true));
+    assertEquals(HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MICROS_SCHEMA, FIXTURE_EPOCH_MICROS, true),
+        HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MICROS_SCHEMA, FIXTURE_MICROS_INSTANT, true));
 
     // local-timestamp-millis / local-timestamp-micros → Long
-    assertEquals(epochMillis, HoodieAvroUtils.convertValueForAvroLogicalTypes(localTsMillisSchema, epochMillis, false));
-    assertEquals(epochMillis, HoodieAvroUtils.convertValueForAvroLogicalTypes(localTsMillisSchema, localDateTimeMillis, false));
-    assertEquals(epochMicros, HoodieAvroUtils.convertValueForAvroLogicalTypes(localTsMicrosSchema, epochMicros, false));
-    assertEquals(epochMicros, HoodieAvroUtils.convertValueForAvroLogicalTypes(localTsMicrosSchema, localDateTimeMicros, false));
+    assertEquals(FIXTURE_EPOCH_MILLIS, HoodieAvroUtils.convertValueForAvroLogicalTypes(LOCAL_TS_MILLIS_SCHEMA, FIXTURE_EPOCH_MILLIS, false));
+    assertEquals(FIXTURE_EPOCH_MILLIS, HoodieAvroUtils.convertValueForAvroLogicalTypes(LOCAL_TS_MILLIS_SCHEMA, FIXTURE_LOCAL_DT_MILLIS, false));
+    assertEquals(FIXTURE_EPOCH_MICROS, HoodieAvroUtils.convertValueForAvroLogicalTypes(LOCAL_TS_MICROS_SCHEMA, FIXTURE_EPOCH_MICROS, false));
+    assertEquals(FIXTURE_EPOCH_MICROS, HoodieAvroUtils.convertValueForAvroLogicalTypes(LOCAL_TS_MICROS_SCHEMA, FIXTURE_LOCAL_DT_MICROS, false));
   }
 
   /**
@@ -566,19 +573,15 @@ public class TestHoodieAvroUtils {
         + "{\"name\":\"d\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}}]}";
     Schema schema = new Schema.Parser().parse(schemaStr);
 
-    long epochMicros = 1716163200_000000L + 123456L;
-    int epochDay = (int) java.time.LocalDate.of(2024, 5, 20).toEpochDay();
-
     GenericRecord avro111Form = new GenericData.Record(schema);
     avro111Form.put("id", "k");
-    avro111Form.put("ts", epochMicros);
-    avro111Form.put("d", epochDay);
+    avro111Form.put("ts", FIXTURE_EPOCH_MICROS);
+    avro111Form.put("d", FIXTURE_EPOCH_DAY);
 
     GenericRecord avro112Form = new GenericData.Record(schema);
     avro112Form.put("id", "k");
-    avro112Form.put("ts", java.time.Instant.ofEpochSecond(epochMicros / 1_000_000L,
-        (epochMicros % 1_000_000L) * 1000L));
-    avro112Form.put("d", java.time.LocalDate.ofEpochDay(epochDay));
+    avro112Form.put("ts", FIXTURE_MICROS_INSTANT);
+    avro112Form.put("d", FIXTURE_LOCAL_DATE);
 
     Object ts111 = HoodieAvroUtils.getNestedFieldVal(avro111Form, "ts", true, false);
     Object ts112 = HoodieAvroUtils.getNestedFieldVal(avro112Form, "ts", true, false);
@@ -603,62 +606,34 @@ public class TestHoodieAvroUtils {
    */
   @Test
   public void testRewritePrimaryTypeCrossAvroVersion() {
-    int epochDay = (int) java.time.LocalDate.of(2024, 5, 20).toEpochDay();
-    long epochMillis = 1716163200_000L + 123L;
-    long epochMicros = 1716163200_000000L + 123456L;
-    java.time.LocalDate localDate = java.time.LocalDate.ofEpochDay(epochDay);
-    java.time.Instant millisInstant = java.time.Instant.ofEpochMilli(epochMillis);
-    java.time.Instant microsInstant = java.time.Instant.ofEpochSecond(epochMicros / 1_000_000L,
-        (epochMicros % 1_000_000L) * 1000L);
-    java.time.LocalDateTime localTsMillis = java.time.LocalDateTime.ofInstant(millisInstant, java.time.ZoneOffset.UTC);
-    java.time.LocalDateTime localTsMicros = java.time.LocalDateTime.ofInstant(microsInstant, java.time.ZoneOffset.UTC);
-
-    Schema dateSchema = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
-    Schema tsMillisSchema = LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
-    Schema tsMicrosSchema = LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
-    Schema localTsMillisSchema = LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
-    Schema localTsMicrosSchema = LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
     Schema stringSchema = Schema.create(Schema.Type.STRING);
     Schema longSchema = Schema.create(Schema.Type.LONG);
     Schema floatSchema = Schema.create(Schema.Type.FLOAT);
     Schema doubleSchema = Schema.create(Schema.Type.DOUBLE);
 
-    // date → string (ALTER COLUMN TYPE date -> string): "yyyy-MM-dd" regardless of Avro version.
-    assertEquals(HoodieAvroUtils.rewritePrimaryType(epochDay, dateSchema, stringSchema),
-        HoodieAvroUtils.rewritePrimaryType(localDate, dateSchema, stringSchema));
+    // For each (oldSchema, target newSchema), both the primitive and java.time inputs must yield the
+    // same rewritten value — same on-disk semantics, no divergence between Spark profiles.
+    assertRewriteEquivalent(DATE_SCHEMA, stringSchema, FIXTURE_EPOCH_DAY, FIXTURE_LOCAL_DATE);
+    assertRewriteEquivalent(DATE_SCHEMA, longSchema, FIXTURE_EPOCH_DAY, FIXTURE_LOCAL_DATE);
+    assertRewriteEquivalent(DATE_SCHEMA, floatSchema, FIXTURE_EPOCH_DAY, FIXTURE_LOCAL_DATE);
+    assertRewriteEquivalent(DATE_SCHEMA, doubleSchema, FIXTURE_EPOCH_DAY, FIXTURE_LOCAL_DATE);
 
-    // date (INT physical) → long
-    assertEquals(HoodieAvroUtils.rewritePrimaryType(epochDay, dateSchema, longSchema),
-        HoodieAvroUtils.rewritePrimaryType(localDate, dateSchema, longSchema));
+    assertRewriteEquivalent(TS_MILLIS_SCHEMA, stringSchema, FIXTURE_EPOCH_MILLIS, FIXTURE_MILLIS_INSTANT);
+    assertRewriteEquivalent(TS_MILLIS_SCHEMA, floatSchema, FIXTURE_EPOCH_MILLIS, FIXTURE_MILLIS_INSTANT);
+    assertRewriteEquivalent(TS_MILLIS_SCHEMA, doubleSchema, FIXTURE_EPOCH_MILLIS, FIXTURE_MILLIS_INSTANT);
 
-    // date (INT physical) → float / double
-    assertEquals(HoodieAvroUtils.rewritePrimaryType(epochDay, dateSchema, floatSchema),
-        HoodieAvroUtils.rewritePrimaryType(localDate, dateSchema, floatSchema));
-    assertEquals(HoodieAvroUtils.rewritePrimaryType(epochDay, dateSchema, doubleSchema),
-        HoodieAvroUtils.rewritePrimaryType(localDate, dateSchema, doubleSchema));
+    // In-place logical-type changes: the LONG → LONG branches in rewritePrimaryType explicitly cast
+    // to (Long) and would fail on Instant / LocalDateTime under Avro 1.12.
+    assertRewriteEquivalent(TS_MILLIS_SCHEMA, TS_MICROS_SCHEMA, FIXTURE_EPOCH_MILLIS, FIXTURE_MILLIS_INSTANT);
+    assertRewriteEquivalent(TS_MICROS_SCHEMA, TS_MILLIS_SCHEMA, FIXTURE_EPOCH_MICROS, FIXTURE_MICROS_INSTANT);
+    assertRewriteEquivalent(LOCAL_TS_MILLIS_SCHEMA, LOCAL_TS_MICROS_SCHEMA, FIXTURE_EPOCH_MILLIS, FIXTURE_LOCAL_DT_MILLIS);
+    assertRewriteEquivalent(LOCAL_TS_MICROS_SCHEMA, LOCAL_TS_MILLIS_SCHEMA, FIXTURE_EPOCH_MICROS, FIXTURE_LOCAL_DT_MICROS);
+  }
 
-    // timestamp-millis (LONG physical) → string / float / double
-    assertEquals(HoodieAvroUtils.rewritePrimaryType(epochMillis, tsMillisSchema, stringSchema),
-        HoodieAvroUtils.rewritePrimaryType(millisInstant, tsMillisSchema, stringSchema));
-    assertEquals(HoodieAvroUtils.rewritePrimaryType(epochMillis, tsMillisSchema, floatSchema),
-        HoodieAvroUtils.rewritePrimaryType(millisInstant, tsMillisSchema, floatSchema));
-    assertEquals(HoodieAvroUtils.rewritePrimaryType(epochMillis, tsMillisSchema, doubleSchema),
-        HoodieAvroUtils.rewritePrimaryType(millisInstant, tsMillisSchema, doubleSchema));
-
-    // timestamp-millis → timestamp-micros (in-place logical type change). The original path explicitly casts
-    // to (Long); under Avro 1.12 the value would be Instant. Both must produce the same micros result.
-    assertEquals(HoodieAvroUtils.rewritePrimaryType(epochMillis, tsMillisSchema, tsMicrosSchema),
-        HoodieAvroUtils.rewritePrimaryType(millisInstant, tsMillisSchema, tsMicrosSchema));
-
-    // timestamp-micros → timestamp-millis
-    assertEquals(HoodieAvroUtils.rewritePrimaryType(epochMicros, tsMicrosSchema, tsMillisSchema),
-        HoodieAvroUtils.rewritePrimaryType(microsInstant, tsMicrosSchema, tsMillisSchema));
-
-    // local-timestamp-millis → local-timestamp-micros and vice versa
-    assertEquals(HoodieAvroUtils.rewritePrimaryType(epochMillis, localTsMillisSchema, localTsMicrosSchema),
-        HoodieAvroUtils.rewritePrimaryType(localTsMillis, localTsMillisSchema, localTsMicrosSchema));
-    assertEquals(HoodieAvroUtils.rewritePrimaryType(epochMicros, localTsMicrosSchema, localTsMillisSchema),
-        HoodieAvroUtils.rewritePrimaryType(localTsMicros, localTsMicrosSchema, localTsMillisSchema));
+  private static void assertRewriteEquivalent(Schema oldSchema, Schema newSchema,
+                                              Object avro111Value, Object avro112Value) {
+    assertEquals(HoodieAvroUtils.rewritePrimaryType(avro111Value, oldSchema, newSchema),
+        HoodieAvroUtils.rewritePrimaryType(avro112Value, oldSchema, newSchema));
   }
 
   @Test

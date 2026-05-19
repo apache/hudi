@@ -52,12 +52,12 @@ class TestSpark4_1AvroLogicalTypeBytes {
   private val epochMillis: Long = 1716163200_000L + 123L
   private val epochDay: Int = java.time.LocalDate.of(2024, 5, 20).toEpochDay.toInt
 
-  private val schemaJson: String =
+  private val avroSchema: Schema = new Schema.Parser().parse(
     """{"type":"record","name":"r","fields":[
       |{"name":"d","type":{"type":"int","logicalType":"date"}},
       |{"name":"ts_millis","type":{"type":"long","logicalType":"timestamp-millis"}},
       |{"name":"ts_micros","type":{"type":"long","logicalType":"timestamp-micros"}}
-      |]}""".stripMargin
+      |]}""".stripMargin)
 
   private val sparkSchema: StructType = StructType(Seq(
     StructField("d", DataTypes.DateType, nullable = false),
@@ -65,14 +65,16 @@ class TestSpark4_1AvroLogicalTypeBytes {
     StructField("ts_micros", DataTypes.TimestampType, nullable = false)
   ))
 
+  // Catalyst representation: epoch-day (Int) for DateType, epoch-micros (Long) for TimestampType.
+  // ts_millis is also passed as micros in catalyst — AvroSerializer converts to millis on write.
+  private def serializeFixtureRow(): GenericRecord = {
+    val serializer = new HoodieSpark4_1AvroSerializer(sparkSchema, avroSchema, nullable = false)
+    serializer.serialize(InternalRow(epochDay, epochMillis * 1000L, epochMicros)).asInstanceOf[GenericRecord]
+  }
+
   @Test
   def testSerializerEmitsPrimitivesNotJavaTime(): Unit = {
-    val avroSchema = new Schema.Parser().parse(schemaJson)
-    val serializer = new HoodieSpark4_1AvroSerializer(sparkSchema, avroSchema, nullable = false)
-
-    // Catalyst representation: epoch-day (Int) for DateType, epoch-micros (Long) for TimestampType.
-    val row = InternalRow(epochDay, epochMillis * 1000L, epochMicros)
-    val record = serializer.serialize(row).asInstanceOf[GenericRecord]
+    val record = serializeFixtureRow()
 
     // The on-disk byte stability for cross-Spark-version compatibility hinges on the GenericRecord
     // holding the Avro 1.11.x primitive form, not the Avro 1.12 java.time form. If the serializer
@@ -93,15 +95,10 @@ class TestSpark4_1AvroLogicalTypeBytes {
 
   @Test
   def testEncodedBytesMatchAvroSpec(): Unit = {
-    val avroSchema = new Schema.Parser().parse(schemaJson)
-    val serializer = new HoodieSpark4_1AvroSerializer(sparkSchema, avroSchema, nullable = false)
-    val record = serializer.serialize(InternalRow(epochDay, epochMillis * 1000L, epochMicros))
-      .asInstanceOf[GenericRecord]
-
     val baos = new ByteArrayOutputStream()
     val encoder = EncoderFactory.get().binaryEncoder(baos, null)
     val writer = new GenericDatumWriter[GenericRecord](avroSchema)
-    writer.write(record, encoder)
+    writer.write(serializeFixtureRow(), encoder)
     encoder.flush()
     val bytes = baos.toByteArray
 
