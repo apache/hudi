@@ -6,9 +6,9 @@
   The ASF licenses this file to You under the Apache License, Version 2.0
   (the "License"); you may not use this file except in compliance with
   the License.  You may obtain a copy of the License at
- 
+
        http://www.apache.org/licenses/LICENSE-2.0
- 
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -77,7 +77,15 @@
                   <!-- Azure SDK -->
                   <include>com.azure:*</include>
                   <include>com.microsoft.azure:*</include>
+                  <!-- Azure identity deps -->
+                  <include>com.nimbusds:*</include>
+                  <include>net.minidev:*</include>
+                  <!-- Reactor -->
                   <include>io.projectreactor:*</include>
+                  <include>io.projectreactor.netty:*</include>
+                  <include>org.reactivestreams:reactive-streams</include>
+                  <!-- Netty: bundled and shaded together with reactor-netty to avoid
+                       version conflicts with Spark's Netty on the classpath -->
                   <include>io.netty:*</include>
 
                   <!-- Utils -->
@@ -104,6 +112,24 @@
                 <relocation>
                   <pattern>org.openjdk.jol.</pattern>
                   <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
+                </relocation>
+                <!-- Shade Netty, Reactor, and Reactive Streams to avoid classpath
+                     conflicts with Spark's bundled Netty -->
+                <relocation>
+                  <pattern>io.netty.</pattern>
+                  <shadedPattern>org.apache.hudi.io.netty.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>io.projectreactor.</pattern>
+                  <shadedPattern>org.apache.hudi.io.projectreactor.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>reactor.</pattern>
+                  <shadedPattern>org.apache.hudi.reactor.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.reactivestreams.</pattern>
+                  <shadedPattern>org.apache.hudi.org.reactivestreams.</shadedPattern>
                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
@@ -174,6 +200,13 @@
       <version>${parquet.version}</version>
       <scope>compile</scope>
     </dependency>
+
+    <!-- Avro -->
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+      <version>${avro.version}</version>
+      <scope>compile</scope>
+    </dependency>
   </dependencies>
 </project>
-
