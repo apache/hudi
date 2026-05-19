@@ -83,7 +83,7 @@ object ScalarFunctions {
           |
           |Caveat:
           |  Throws on INLINE rows under hoodie.read.blob.inline.mode=DESCRIPTOR.
-          |  Set CONTENT mode or read col.data directly to materialize INLINE bytes.
+          |  Set CONTENT mode directly to materialize INLINE bytes.
           |
           |Performance:
           |  - Configure batching: hoodie.blob.batching.max.gap.bytes (default 4096)

@@ -229,10 +229,9 @@ class BatchedBlobReader(
                 throw new IllegalStateException(
                   s"read_blob() cannot materialize bytes for an INLINE blob under " +
                     s"DESCRIPTOR mode (row $rowIndex). Under " +
-                    s"hoodie.read.blob.inline.mode=DESCRIPTOR, INLINE blobs are returned " +
-                    s"as metadata-only (inline_data=NULL, synthesized reference). To read " +
-                    s"bytes, set hoodie.read.blob.inline.mode=CONTENT, or project " +
-                    s"col.data / col.reference.* directly instead of calling read_blob().")
+                    s"hoodie.read.blob.inline.mode=DESCRIPTOR, INLINE blobs will not return bytes via the 'data' subfield" +
+                    " and instead returns a 'reference' subfield containing metadata only." +
+                    s"In order to materialize bytes set hoodie.read.blob.inline.mode=CONTENT")
               }
             } else if (storageType  == HoodieSchema.Blob.OUT_OF_LINE) {
               // Case 2 or 3: Out-of-line — get reference struct (field 2)

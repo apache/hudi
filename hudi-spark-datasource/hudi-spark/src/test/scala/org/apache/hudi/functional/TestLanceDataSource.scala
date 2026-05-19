@@ -1084,6 +1084,260 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
   }
 
   /**
+   * Shared writer for multi-blob-column INLINE tests: writes a table with two INLINE blob
+   * columns ({@code payload_a}, {@code payload_b}) and returns the table path plus the
+   * payloads written for each column so individual tests can assert on read.
+   *
+   * Distinct byte patterns are used per column so a column-swap regression would surface
+   * immediately as a byte mismatch rather than silently passing.
+   */
+  private def writeMultiBlobInlineTable(
+      tableType: HoodieTableType,
+      tableName: String,
+      numRows: Int = 4,
+      payloadLen: Int = 512): (String, Seq[Array[Byte]], Seq[Array[Byte]]) = {
+    val tablePath = s"$basePath/$tableName"
+    val payloadsA: Seq[Array[Byte]] = (0 until numRows).map { i =>
+      (0 until payloadLen).map(j => ((i + j) % 256).toByte).toArray
+    }
+    val payloadsB: Seq[Array[Byte]] = (0 until numRows).map { i =>
+      (0 until payloadLen).map(j => ((i + j + 128) % 256).toByte).toArray
+    }
+    val sparkSess = spark
+    import sparkSess.implicits._
+
+    val baseDf = (0 until numRows).map(i => (i, payloadsA(i), payloadsB(i)))
+      .toDF("id", "bytes_a", "bytes_b")
+    val rawDf = baseDf.select(
+      $"id",
+      BlobTestHelpers.inlineBlobStructCol("payload_a", $"bytes_a"),
+      BlobTestHelpers.inlineBlobStructCol("payload_b", $"bytes_b"))
+    val canonicalSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("payload_a", BlobType().asInstanceOf[StructType], nullable = true,
+        BlobTestHelpers.blobMetadata),
+      StructField("payload_b", BlobType().asInstanceOf[StructType], nullable = true,
+        BlobTestHelpers.blobMetadata)
+    ))
+    val df = spark.createDataFrame(rawDf.rdd, canonicalSchema)
+
+    writeDataframe(tableType, tableName, tablePath, df, saveMode = SaveMode.Overwrite,
+      operation = Some("bulk_insert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id"))
+    assertLanceBlobEncoding(tablePath)
+    (tablePath, payloadsA, payloadsB)
+  }
+
+  /**
+   * Plain struct projection across two INLINE blob columns: {@code SELECT payload_a, payload_b
+   * FROM table}. Each mode independently:
+   *
+   *   - CONTENT: both columns come back with {@code type=INLINE} and {@code data=bytes}. The
+   *     {@code reference} struct may be present with all-null leaves (Lance quirk — see
+   *     {@code testBlobInlineRoundTrip}); the test only requires {@code external_path} to be
+   *     null on it so downstream consumers can't mistake it for a real OUT_OF_LINE pointer.
+   *   - DESCRIPTOR (default): both columns come back with {@code type=INLINE, data=NULL} and a
+   *     populated synthesized {@code reference} (path ending in {@code .lance}, length equal
+   *     to the written payload, {@code is_managed=true}). Asserting on both columns confirms
+   *     the descriptor synthesis is per-column, not first-column-only.
+   */
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testBlobInlineMultipleColumnsPlainSelect(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_blob_multi_plain_${tableType.name().toLowerCase}"
+    val payloadLen = 512
+    val numRows = 4
+    val (tablePath, payloadsA, payloadsB) = writeMultiBlobInlineTable(
+      tableType, tableName, numRows, payloadLen)
+    val sparkSess = spark
+    import sparkSess.implicits._
+    val modeKey = "hoodie.read.blob.inline.mode"
+
+    // CONTENT: data=bytes on both columns; reference (if present) has null external_path.
+    val contentRows = spark.read.format("hudi")
+      .option(modeKey, "CONTENT")
+      .load(tablePath)
+      .select($"id", $"payload_a", $"payload_b")
+      .orderBy($"id")
+      .collect()
+    assertEquals(numRows, contentRows.length)
+    contentRows.zipWithIndex.foreach { case (row, i) =>
+      Seq(("payload_a", payloadsA(i)), ("payload_b", payloadsB(i))).foreach {
+        case (col, expected) =>
+          val payload = row.getStruct(row.fieldIndex(col))
+          assertEquals(HoodieSchema.Blob.INLINE,
+            payload.getString(payload.fieldIndex(HoodieSchema.Blob.TYPE)),
+            s"$col: type should remain INLINE under CONTENT (id=$i)")
+          assertArrayEquals(expected,
+            payload.getAs[Array[Byte]](HoodieSchema.Blob.INLINE_DATA_FIELD),
+            s"$col: data should match written bytes under CONTENT (id=$i)")
+          val refIdx = payload.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)
+          if (!payload.isNullAt(refIdx)) {
+            val ref = payload.getStruct(refIdx)
+            assertTrue(ref.isNullAt(ref.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH)),
+              s"$col: reference.external_path should be null under CONTENT (id=$i)")
+          }
+      }
+    }
+
+    // DESCRIPTOR (default): data=NULL, populated synthesized reference on both columns.
+    val descRows = spark.read.format("hudi")
+      .load(tablePath)
+      .select($"id", $"payload_a", $"payload_b")
+      .orderBy($"id")
+      .collect()
+    assertEquals(numRows, descRows.length)
+    descRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      Seq("payload_a", "payload_b").foreach { col =>
+        val payload = row.getStruct(row.fieldIndex(col))
+        assertEquals(HoodieSchema.Blob.INLINE,
+          payload.getString(payload.fieldIndex(HoodieSchema.Blob.TYPE)),
+          s"$col: type should remain INLINE under DESCRIPTOR (id=$id)")
+        assertTrue(payload.isNullAt(payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+          s"$col: data should be null under DESCRIPTOR (id=$id)")
+        val ref = payload.getStruct(payload.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE))
+        assertNotNull(ref,
+          s"$col: reference should be populated under DESCRIPTOR (id=$id)")
+        assertEquals(payloadLen.toLong,
+          ref.getLong(ref.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH)),
+          s"$col: reference.length should equal payload length (id=$id)")
+        assertTrue(ref.getBoolean(ref.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED)),
+          s"$col: synthesized reference should be flagged managed (id=$id)")
+      }
+    }
+  }
+
+  /**
+   * Materializing both INLINE blob columns via {@code read_blob()} in a single query:
+   * {@code SELECT read_blob(payload_a), read_blob(payload_b) FROM table}.
+   *
+   *   - CONTENT: both columns resolve via the 1-hop {@code inline_data} passthrough. The bytes
+   *     for each column must match their respective written payloads — distinct byte patterns
+   *     are used per column so a cross-column aliasing regression would surface as a mismatch.
+   *   - DESCRIPTOR (default): the call throws. INLINE+DESCRIPTOR rejects {@code read_blob()}
+   *     regardless of which column trips the branch first, so the error chain must name both
+   *     INLINE and DESCRIPTOR for the failure to be actionable.
+   */
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testBlobInlineMultipleColumnsReadBlobAll(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_blob_multi_readblob_${tableType.name().toLowerCase}"
+    val numRows = 4
+    val (tablePath, payloadsA, payloadsB) = writeMultiBlobInlineTable(
+      tableType, tableName, numRows)
+    val modeKey = "hoodie.read.blob.inline.mode"
+
+    // CONTENT: read_blob() on both columns materializes correct bytes via 1-hop passthrough.
+    val contentView = s"${tableName}_content_view"
+    spark.read.format("hudi")
+      .option(modeKey, "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(contentView)
+    val materialized = spark.sql(
+      s"SELECT id, read_blob(payload_a) AS bytes_a, read_blob(payload_b) AS bytes_b " +
+        s"FROM $contentView ORDER BY id").collect()
+    assertEquals(numRows, materialized.length)
+    materialized.zipWithIndex.foreach { case (row, i) =>
+      assertEquals(i, row.getInt(row.fieldIndex("id")))
+      assertArrayEquals(payloadsA(i), row.getAs[Array[Byte]]("bytes_a"),
+        s"read_blob(payload_a) should match under CONTENT (id=$i)")
+      assertArrayEquals(payloadsB(i), row.getAs[Array[Byte]]("bytes_b"),
+        s"read_blob(payload_b) should match under CONTENT (id=$i)")
+    }
+
+    // DESCRIPTOR (default): read_blob() on either INLINE column must throw.
+    val descView = s"${tableName}_desc_view"
+    spark.read.format("hudi")
+      .load(tablePath)
+      .createOrReplaceTempView(descView)
+    val ex = assertThrows(classOf[Throwable], new Executable {
+      override def execute(): Unit = {
+        spark.sql(
+          s"SELECT id, read_blob(payload_a) AS bytes_a, read_blob(payload_b) AS bytes_b " +
+            s"FROM $descView ORDER BY id").collect()
+      }
+    })
+    val msgChain = Iterator.iterate[Throwable](ex)(_.getCause).takeWhile(_ != null)
+      .flatMap(t => Option(t.getMessage)).mkString(" | ")
+    assertTrue(msgChain.contains("INLINE") && msgChain.contains("DESCRIPTOR"),
+      s"read_blob() on either INLINE column under DESCRIPTOR must throw with " +
+        s"INLINE+DESCRIPTOR error; got: $msgChain")
+  }
+
+  /**
+   * Mixed projection across two INLINE blob columns: {@code SELECT read_blob(payload_a),
+   * payload_b FROM table}. One column is materialized via {@code read_blob()}, the other is
+   * left as a struct. This is the case explicitly raised in PR review — under the DESCRIPTOR
+   * default, a mixed query asking for bytes on one column and a pointer on another must fail
+   * loudly rather than silently returning one materialized and one synthesized shape.
+   *
+   *   - CONTENT: {@code payload_a} resolves to bytes (1-hop), {@code payload_b} comes back as
+   *     the same content-shape struct as {@code testBlobInlineMultipleColumnsPlainSelect}
+   *     (data=bytes, reference present-but-empty). Pinning both shapes in the same row
+   *     confirms the projection doesn't bleed across columns.
+   *   - DESCRIPTOR (default): the {@code read_blob()} call on {@code payload_a} still hits
+   *     the INLINE+DESCRIPTOR branch even though {@code payload_b} is only being projected as
+   *     a struct. {@code payload_b}'s shape doesn't soften the failure.
+   */
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testBlobInlineMultipleColumnsMixedSelect(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_blob_multi_mixed_${tableType.name().toLowerCase}"
+    val numRows = 4
+    val (tablePath, payloadsA, payloadsB) = writeMultiBlobInlineTable(
+      tableType, tableName, numRows)
+    val modeKey = "hoodie.read.blob.inline.mode"
+
+    // CONTENT: read_blob() materializes payload_a; payload_b returned as content-shape struct.
+    val contentView = s"${tableName}_content_view"
+    spark.read.format("hudi")
+      .option(modeKey, "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(contentView)
+    val rows = spark.sql(
+      s"SELECT id, read_blob(payload_a) AS bytes_a, payload_b " +
+        s"FROM $contentView ORDER BY id").collect()
+    assertEquals(numRows, rows.length)
+    rows.zipWithIndex.foreach { case (row, i) =>
+      assertEquals(i, row.getInt(row.fieldIndex("id")))
+      assertArrayEquals(payloadsA(i), row.getAs[Array[Byte]]("bytes_a"),
+        s"read_blob(payload_a) should return bytes under CONTENT (id=$i)")
+      val payloadB = row.getStruct(row.fieldIndex("payload_b"))
+      assertEquals(HoodieSchema.Blob.INLINE,
+        payloadB.getString(payloadB.fieldIndex(HoodieSchema.Blob.TYPE)),
+        s"payload_b: type should remain INLINE under CONTENT (id=$i)")
+      assertArrayEquals(payloadsB(i),
+        payloadB.getAs[Array[Byte]](HoodieSchema.Blob.INLINE_DATA_FIELD),
+        s"payload_b: data should match written bytes under CONTENT (id=$i)")
+      val refIdx = payloadB.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)
+      if (!payloadB.isNullAt(refIdx)) {
+        val ref = payloadB.getStruct(refIdx)
+        assertTrue(ref.isNullAt(ref.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH)),
+          s"payload_b: reference.external_path should be null under CONTENT (id=$i)")
+      }
+    }
+
+    // DESCRIPTOR (default): read_blob(payload_a) trips even though payload_b is just a struct.
+    val descView = s"${tableName}_desc_view"
+    spark.read.format("hudi")
+      .load(tablePath)
+      .createOrReplaceTempView(descView)
+    val ex = assertThrows(classOf[Throwable], new Executable {
+      override def execute(): Unit = {
+        spark.sql(
+          s"SELECT id, read_blob(payload_a) AS bytes_a, payload_b " +
+            s"FROM $descView ORDER BY id").collect()
+      }
+    })
+    val msgChain = Iterator.iterate[Throwable](ex)(_.getCause).takeWhile(_ != null)
+      .flatMap(t => Option(t.getMessage)).mkString(" | ")
+    assertTrue(msgChain.contains("INLINE") && msgChain.contains("DESCRIPTOR"),
+      s"read_blob(payload_a) under DESCRIPTOR must throw INLINE+DESCRIPTOR error even when " +
+        s"mixed with a struct projection of another blob column; got: $msgChain")
+  }
+
+  /**
    * Compaction must preserve INLINE blob bytes under the DESCRIPTOR default. MOR compaction reads
    * the base file via {@link HoodieSparkLanceReader}, which hard-pins CONTENT regardless of the
    * user-facing {@code hoodie.read.blob.inline.mode}. If that pin were to honor the default
@@ -1144,9 +1398,39 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .setConf(HoodieTestUtils.getDefaultStorageConf)
       .setBasePath(tablePath)
       .build()
-    val compactionCommits = metaClient.reloadActiveTimeline().filterCompletedInstants()
-      .getInstants.asScala.filter(_.getAction == "commit")
+    val completedInstants = metaClient.reloadActiveTimeline().filterCompletedInstants()
+      .getInstants.asScala
+    val deltaCommits = completedInstants.filter(_.getAction == "deltacommit")
+    assertTrue(deltaCommits.nonEmpty,
+      "Upsert must have written a deltacommit on MOR — without log files the compaction " +
+        "round-trip below would be a no-op and the test would silently pass even if the " +
+        "CONTENT-pin in HoodieSparkLanceReader were broken.")
+    val compactionCommits = completedInstants.filter(_.getAction == "commit")
     assertTrue(compactionCommits.nonEmpty, "Compaction commit should be present after upsert")
+
+    // Walk file groups in the (non-partitioned) table and verify at least one historical file
+    // slice carries log files. After compaction the latest slice is post-compaction (no logs),
+    // but the pre-compaction slice is still in the FSV's history, so `hasLogFiles` will flag
+    // it. This catches a regression where the upsert silently fell into a CoW-like path.
+    val engineCtx = new HoodieLocalEngineContext(metaClient.getStorageConf)
+    val metadataCfg = HoodieMetadataConfig.newBuilder.build
+    val viewManager = FileSystemViewManager.createViewManager(
+      engineCtx, metadataCfg, FileSystemViewStorageConfig.newBuilder.build,
+      HoodieCommonConfig.newBuilder.build,
+      (mc: HoodieTableMetaClient) => metaClient.getTableFormat
+        .getMetadataFactory.create(engineCtx, mc.getStorage, metadataCfg, tablePath))
+    val fsView = viewManager.getFileSystemView(metaClient)
+    try {
+      fsView.loadAllPartitions()
+      val anyHadLogs = fsView.getAllFileGroups("").iterator().asScala.exists { fg =>
+        fg.getAllFileSlices.iterator().asScala.exists(_.hasLogFiles)
+      }
+      assertTrue(anyHadLogs,
+        s"MOR upsert must have produced log files in at least one file slice at $tablePath; " +
+          s"none observed — upsert may have silently bypassed the deltacommit path")
+    } finally {
+      fsView.close()
+    }
 
     val expected: Map[Int, Array[Byte]] = (
       updatedIds.map(i => i -> Array.fill[Byte](payloadLen)(updatedPayloadByte)) ++
