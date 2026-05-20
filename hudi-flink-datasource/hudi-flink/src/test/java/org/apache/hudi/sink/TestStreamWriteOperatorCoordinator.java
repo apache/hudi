@@ -72,6 +72,7 @@ import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -305,6 +306,18 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.notifyCheckpointComplete(1);
     lastCompleted = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
     assertThat("Recommits the instant with partial uncommitted events", lastCompleted, is(instant));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"GLOBAL_RECORD_LEVEL_INDEX", "RECORD_LEVEL_INDEX"})
+  public void testRecordLevelIndexFlag(String indexType) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(new File(tempFile, indexType).getAbsolutePath());
+    conf.set(FlinkOptions.INDEX_TYPE, indexType);
+    conf.set(FlinkOptions.INDEX_WRITE_TASKS, 1);
+
+    try (StreamWriteOperatorCoordinator coordinator = createCoordinator(conf, 1)) {
+      assertTrue(getRecordLevelIndexFlag(coordinator));
+    }
   }
 
   @Test
@@ -774,6 +787,16 @@ public class TestStreamWriteOperatorCoordinator {
     assertThat(coordinator.getContext(), instanceOf(MockOperatorCoordinatorContext.class));
     MockOperatorCoordinatorContext context = (MockOperatorCoordinatorContext) coordinator.getContext();
     assertTrue(context.isJobFailed(), message);
+  }
+
+  private static boolean getRecordLevelIndexFlag(StreamWriteOperatorCoordinator coordinator) throws Exception {
+    Field tableStateField = StreamWriteOperatorCoordinator.class.getDeclaredField("tableState");
+    tableStateField.setAccessible(true);
+    Object tableState = tableStateField.get(coordinator);
+
+    Field recordLevelIndexField = tableState.getClass().getDeclaredField("isRecordLevelIndex");
+    recordLevelIndexField.setAccessible(true);
+    return recordLevelIndexField.getBoolean(tableState);
   }
 
   // -------------------------------------------------------------------------
