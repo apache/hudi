@@ -99,7 +99,10 @@ import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -507,15 +510,15 @@ public class TestHoodieAvroUtils {
   // field. Sharing these fixtures across tests pins the same exact value through every path.
   private static final long FIXTURE_EPOCH_MICROS = 1716163200_000000L + 123456L; // 2024-05-20T00:00:00.123456Z
   private static final long FIXTURE_EPOCH_MILLIS = 1716163200_000L + 123L;       // 2024-05-20T00:00:00.123Z
-  private static final int FIXTURE_EPOCH_DAY = (int) java.time.LocalDate.of(2024, 5, 20).toEpochDay();
-  private static final java.time.Instant FIXTURE_MILLIS_INSTANT = java.time.Instant.ofEpochMilli(FIXTURE_EPOCH_MILLIS);
-  private static final java.time.Instant FIXTURE_MICROS_INSTANT = java.time.Instant.ofEpochSecond(
+  private static final int FIXTURE_EPOCH_DAY = (int) LocalDate.of(2024, 5, 20).toEpochDay();
+  private static final Instant FIXTURE_MILLIS_INSTANT = Instant.ofEpochMilli(FIXTURE_EPOCH_MILLIS);
+  private static final Instant FIXTURE_MICROS_INSTANT = Instant.ofEpochSecond(
       FIXTURE_EPOCH_MICROS / 1_000_000L, (FIXTURE_EPOCH_MICROS % 1_000_000L) * 1000L);
-  private static final java.time.LocalDate FIXTURE_LOCAL_DATE = java.time.LocalDate.ofEpochDay(FIXTURE_EPOCH_DAY);
-  private static final java.time.LocalDateTime FIXTURE_LOCAL_DT_MILLIS =
-      java.time.LocalDateTime.ofInstant(FIXTURE_MILLIS_INSTANT, java.time.ZoneOffset.UTC);
-  private static final java.time.LocalDateTime FIXTURE_LOCAL_DT_MICROS =
-      java.time.LocalDateTime.ofInstant(FIXTURE_MICROS_INSTANT, java.time.ZoneOffset.UTC);
+  private static final LocalDate FIXTURE_LOCAL_DATE = LocalDate.ofEpochDay(FIXTURE_EPOCH_DAY);
+  private static final LocalDateTime FIXTURE_LOCAL_DT_MILLIS =
+      LocalDateTime.ofInstant(FIXTURE_MILLIS_INSTANT, ZoneOffset.UTC);
+  private static final LocalDateTime FIXTURE_LOCAL_DT_MICROS =
+      LocalDateTime.ofInstant(FIXTURE_MICROS_INSTANT, ZoneOffset.UTC);
 
   private static final Schema DATE_SCHEMA = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
   private static final Schema TS_MILLIS_SCHEMA = LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG));

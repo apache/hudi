@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
 import java.io.ByteArrayOutputStream
+import java.time.LocalDate
 
 /**
  * Validates the storage-byte invariant under the Spark 4.1 profile, which pulls in Avro 1.12.1.
@@ -50,7 +51,7 @@ class TestSpark4_1AvroLogicalTypeBytes {
   // 2024-05-20T00:00:00.123456Z
   private val epochMicros: Long = 1716163200_000000L + 123456L
   private val epochMillis: Long = 1716163200_000L + 123L
-  private val epochDay: Int = java.time.LocalDate.of(2024, 5, 20).toEpochDay.toInt
+  private val epochDay: Int = LocalDate.of(2024, 5, 20).toEpochDay.toInt
 
   private val avroSchema: Schema = new Schema.Parser().parse(
     """{"type":"record","name":"r","fields":[
