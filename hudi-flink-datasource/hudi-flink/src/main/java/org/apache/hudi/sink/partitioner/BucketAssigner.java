@@ -233,6 +233,8 @@ public class BucketAssigner implements AutoCloseable {
 
   public void close() {
     reset();
+    smallFileAssignMap.clear();
+    newFileAssignStates.clear();
     WriteProfiles.clean(config.getBasePath());
   }
 

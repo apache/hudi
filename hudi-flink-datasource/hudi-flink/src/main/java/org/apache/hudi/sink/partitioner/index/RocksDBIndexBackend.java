@@ -32,10 +32,10 @@ import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * An implementation of {@link IndexBackend} based on RocksDB.
+ * An implementation of {@link GlobalIndexBackend} based on RocksDB.
  */
 @Slf4j
-public class RocksDBIndexBackend implements IndexBackend {
+public class RocksDBIndexBackend implements GlobalIndexBackend {
   private static final String COLUMN_FAMILY = "index_cache";
 
   private final RocksDBDAO rocksDBDAO;

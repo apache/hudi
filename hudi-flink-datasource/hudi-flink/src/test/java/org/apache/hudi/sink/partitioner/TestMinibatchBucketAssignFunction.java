@@ -58,8 +58,8 @@ public class TestMinibatchBucketAssignFunction {
     final String basePath = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(basePath);
     conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
-    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
   }
 
   @BeforeEach

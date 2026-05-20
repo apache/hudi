@@ -51,6 +51,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * A Flink stream writing function that handles writing index records to the metadata table.
@@ -83,6 +84,8 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
    */
   private transient HoodieFlinkTable<?> flinkTable;
 
+  private transient Function<RowData, String> dedupKeyExtractor;
+
   public IndexWriteFunction(Configuration conf) {
     super(conf, true);
   }
@@ -95,6 +98,8 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
         config,
         config.get(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE) * 1024 * 1024);
     this.indexDataBuffer = BufferUtils.createBuffer(IndexRowUtils.INDEX_ROW_TYPE, memorySegmentPool);
+    this.dedupKeyExtractor = this.writeClient.getConfig().isRecordLevelIndexEnabled()
+        ? IndexWriteFunction::getPartitionedDedupKey : IndexRowUtils::getRecordKey;
   }
 
   @Override
@@ -171,11 +176,17 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
     Map<String, HoodieRecord> keyAndRecordMap = new LinkedHashMap<>();
     while (rowItr.hasNext()) {
       RowData indexRow = rowItr.next();
-      String recordKey = IndexRowUtils.getRecordKey(indexRow);
-      keyAndRecordMap.put(recordKey, IndexRowUtils.convertToHoodieRecord(this.currentInstant, indexRow, writeConfig));
+      keyAndRecordMap.put(
+          dedupKeyExtractor.apply(indexRow),
+          IndexRowUtils.convertToHoodieRecord(this.currentInstant, indexRow, writeConfig));
       dataPartitions.add(IndexRowUtils.getPartition(indexRow));
     }
     return Pair.of(new ArrayList<>(keyAndRecordMap.values()), dataPartitions);
+  }
+
+  private static String getPartitionedDedupKey(RowData indexRow) {
+    String recordKey = IndexRowUtils.getRecordKey(indexRow);
+    return IndexRowUtils.getPartition(indexRow) + "/" + recordKey;
   }
 
   @Override

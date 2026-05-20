@@ -48,6 +48,7 @@ public final class FlinkHoodieIndexFactory {
         // instantiates an in-memory HoodieIndex component as a placeholder.
       case GLOBAL_RECORD_LEVEL_INDEX:
         // todo: aligned with flink state index currently, may need further improving.
+      case RECORD_LEVEL_INDEX:
       case INMEMORY:
         return new FlinkInMemoryStateIndex(context, config);
       case BLOOM:

@@ -29,6 +29,7 @@ import org.apache.hudi.client.RunsTableService;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
@@ -1478,6 +1479,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    */
   protected Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> tagRecordsWithLocationForStreamingWrites(HoodieData<HoodieRecord> untaggedRecords,
                                                                                                              Set<String> enabledMetadataPartitions) {
+    // no need to tag of the incoming records is empty.
+    if (untaggedRecords instanceof HoodieListData && untaggedRecords.isEmpty()) {
+      return Pair.of(Collections.emptyList(), untaggedRecords);
+    }
     List<HoodieFileGroupId> updatedFileGroupIds = new ArrayList<>();
     // Fetch latest file slices for all enabled MDT partitions
     Map<String, List<FileSlice>> partitionToLatestFileSlices = new HashMap<>();
