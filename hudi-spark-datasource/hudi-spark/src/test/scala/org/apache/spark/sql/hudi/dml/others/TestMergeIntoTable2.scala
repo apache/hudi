@@ -377,13 +377,8 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
              |""".stripMargin
         if (HoodieSparkUtils.gteqSpark4_0) {
           checkExceptionContain(mergeSql)("[COLUMN_ALIASES_NOT_ALLOWED] Column aliases are not allowed in MERGE")
-        } else if (HoodieSparkUtils.gteqSpark3_3_2) {
-          checkExceptionContain(mergeSql)("Columns aliases are not allowed in MERGE")
         } else {
-          spark.sql(mergeSql)
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(1, "a1", 10.0, 1000)
-          )
+          checkExceptionContain(mergeSql)("Columns aliases are not allowed in MERGE")
         }
       }
     }

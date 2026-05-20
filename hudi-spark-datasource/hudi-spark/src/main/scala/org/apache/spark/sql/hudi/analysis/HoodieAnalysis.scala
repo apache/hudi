@@ -66,8 +66,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     } else if (HoodieSparkUtils.isSpark3_4) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark34DataSourceV2ToV1Fallback"
     } else {
-      // Spark 3.3.x
-      "org.apache.spark.sql.hudi.analysis.HoodieSpark33DataSourceV2ToV1Fallback"
+      throw new IllegalStateException("Unsupported Spark version")
     }
     val dataSourceV2ToV1Fallback: RuleBuilder =
       session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
@@ -103,8 +102,6 @@ object HoodieAnalysis extends SparkAdapterSupport {
         "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
       } else if (HoodieSparkUtils.isSpark3_4) {
         "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
-      } else if (HoodieSparkUtils.isSpark3_3) {
-        "org.apache.spark.sql.hudi.Spark33ResolveHudiAlterTableCommand"
       } else {
         throw new IllegalStateException("Unsupported Spark version")
       }
@@ -153,8 +150,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
       } else if (HoodieSparkUtils.gteqSpark3_4) {
         "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"
       } else {
-        // spark 3.3
-        "org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning"
+        throw new IllegalStateException("Unsupported Spark version")
       }
 
     val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]
@@ -175,8 +171,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
       // Spark 3.4 and 3.5: PhysicalOperation and ScanOperation unified (SPARK-39764)
       "org.apache.spark.sql.hudi.analysis.Spark3HoodiePruneFileSourcePartitions"
     } else {
-      // Spark 3.3: Use ScanOperation for better compatibility
-      "org.apache.spark.sql.hudi.analysis.Spark33HoodiePruneFileSourcePartitions"
+      throw new IllegalStateException("Unsupported Spark version")
     }
     rules += (spark => instantiateKlass(pruneFileSourcePartitionsClass, spark))
 

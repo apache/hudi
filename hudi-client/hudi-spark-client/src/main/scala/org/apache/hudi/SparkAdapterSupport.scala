@@ -42,7 +42,8 @@ object SparkAdapterSupport {
     } else if (HoodieSparkUtils.isSpark3_4) {
       "org.apache.spark.sql.adapter.Spark3_4Adapter"
     } else {
-      "org.apache.spark.sql.adapter.Spark3_3Adapter"
+      throw new IllegalStateException(
+        s"Unsupported Spark version: ${HoodieSparkUtils.getSparkVersion}. Hudi supports Spark 3.4, 3.5, 4.0, and 4.1.")
     }
     getClass.getClassLoader.loadClass(adapterClass)
       .newInstance().asInstanceOf[SparkAdapter]

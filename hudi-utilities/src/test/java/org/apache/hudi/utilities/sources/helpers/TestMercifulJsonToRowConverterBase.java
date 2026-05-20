@@ -19,7 +19,6 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.HoodieSchemaConversionUtils;
-import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.MercifulJsonConverterTestBase;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -356,25 +355,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
   }
 
   public static void timestampNTZCompatibility(ThrowingRunnable r) throws Exception {
-    // TODO: Remove this when we get rid of spark3.3. TimestampNTZ needs this config
-    //  to be set to true to work.
-    boolean isSpark33 = HoodieSparkUtils.isSpark3_3();
-    String propertyValue = null;
-    if (isSpark33) {
-      propertyValue = System.getProperty("spark.testing");
-      System.setProperty("spark.testing", "true");
-    }
-    try {
-      r.run();
-    } finally {
-      if (isSpark33) {
-        if (propertyValue == null) {
-          System.clearProperty("spark.testing");
-        } else {
-          System.setProperty("spark.testing", propertyValue);
-        }
-      }
-    }
+    r.run();
   }
 
   /**
