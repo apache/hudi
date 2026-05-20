@@ -39,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestGlobalRecordIndexPartitioner {
 
   private static GlobalRecordIndexPartitioner partitioner;
+  private static Configuration conf;
 
   @TempDir
   static File tempFile;
@@ -46,7 +47,7 @@ public class TestGlobalRecordIndexPartitioner {
   @BeforeAll
   public static void beforeAll() throws Exception {
     final String basePath = tempFile.getAbsolutePath();
-    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf = TestConfigurations.getDefaultConf(basePath);
     conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     partitioner = new GlobalRecordIndexPartitioner(conf);
@@ -100,8 +101,83 @@ public class TestGlobalRecordIndexPartitioner {
   void testLargeNumberOfPartitions() {
     HoodieKey key = new HoodieKey("test_key_for_large_partition", "partition_path");
     int numPartitions = 100; // Large number of partitions
-    
+
     int partition = partitioner.partition(key, numPartitions);
     assertTrue(partition >= 0 && partition < numPartitions);
+  }
+
+  @Test
+  void testComputeNumShardsAssignedEvenDistribution() {
+    // 10 shards, 5 tasks: each task gets exactly 2 shards
+    for (int taskIndex = 0; taskIndex < 5; taskIndex++) {
+      assertEquals(2, GlobalRecordIndexPartitioner.computeNumShardsAssigned(taskIndex, 5, 10));
+    }
+  }
+
+  @Test
+  void testComputeNumShardsAssignedUnevenDistribution() {
+    // 11 shards, 4 tasks: tasks 0-2 get 3 shards, task 3 gets 2
+    assertEquals(3, GlobalRecordIndexPartitioner.computeNumShardsAssigned(0, 4, 11));
+    assertEquals(3, GlobalRecordIndexPartitioner.computeNumShardsAssigned(1, 4, 11));
+    assertEquals(3, GlobalRecordIndexPartitioner.computeNumShardsAssigned(2, 4, 11));
+    assertEquals(2, GlobalRecordIndexPartitioner.computeNumShardsAssigned(3, 4, 11));
+  }
+
+  @Test
+  void testComputeNumShardsAssignedTotalMatchesNumFileGroups() {
+    // The sum across all tasks must equal numFileGroups
+    int numFileGroups = 13;
+    int numPartitions = 5;
+    int total = 0;
+    for (int t = 0; t < numPartitions; t++) {
+      total += GlobalRecordIndexPartitioner.computeNumShardsAssigned(t, numPartitions, numFileGroups);
+    }
+    assertEquals(numFileGroups, total);
+  }
+
+  @Test
+  void testComputeNumShardsAssignedConsistentWithPartitionMethod() {
+    // Verify that computeNumShardsAssigned matches the actual partition() routing
+    int numPartitions = 3;
+    int numFileGroups = 8;
+    int[] shardCountPerTask = new int[numPartitions];
+    for (int fgIndex = 0; fgIndex < numFileGroups; fgIndex++) {
+      shardCountPerTask[fgIndex % numPartitions]++;
+    }
+    for (int taskIndex = 0; taskIndex < numPartitions; taskIndex++) {
+      assertEquals(shardCountPerTask[taskIndex],
+          GlobalRecordIndexPartitioner.computeNumShardsAssigned(taskIndex, numPartitions, numFileGroups));
+    }
+  }
+
+  @Test
+  void testComputeNumShardsAssignedFewerFileGroupsThanPartitions() {
+    // 2 file groups, 5 partitions: tasks 0 and 1 own 1 shard each; tasks 2-4 own 0.
+    assertEquals(1, GlobalRecordIndexPartitioner.computeNumShardsAssigned(0, 5, 2));
+    assertEquals(1, GlobalRecordIndexPartitioner.computeNumShardsAssigned(1, 5, 2));
+    assertEquals(0, GlobalRecordIndexPartitioner.computeNumShardsAssigned(2, 5, 2));
+    assertEquals(0, GlobalRecordIndexPartitioner.computeNumShardsAssigned(3, 5, 2));
+    assertEquals(0, GlobalRecordIndexPartitioner.computeNumShardsAssigned(4, 5, 2));
+  }
+
+  @Test
+  void testComputeNumShardsAssignedZeroFileGroups() {
+    // 0 file groups: every task gets 0 shards.
+    for (int taskIndex = 0; taskIndex < 4; taskIndex++) {
+      assertEquals(0, GlobalRecordIndexPartitioner.computeNumShardsAssigned(taskIndex, 4, 0));
+    }
+  }
+
+  @Test
+  void testFetchNumFileGroupsForRecordIndexPartitionReturnsPositiveValue() {
+    int count = GlobalRecordIndexPartitioner.fetchNumFileGroupsForRecordIndexPartition(conf);
+    assertTrue(count > 0, "File group count must be positive for a table with global RLI enabled");
+  }
+
+  @Test
+  void testFetchNumFileGroupsForRecordIndexPartitionIsCached() {
+    int first = GlobalRecordIndexPartitioner.fetchNumFileGroupsForRecordIndexPartition(conf);
+    int second = GlobalRecordIndexPartitioner.fetchNumFileGroupsForRecordIndexPartition(conf);
+    assertEquals(first, second, "Repeated calls must return the same cached result");
   }
 }

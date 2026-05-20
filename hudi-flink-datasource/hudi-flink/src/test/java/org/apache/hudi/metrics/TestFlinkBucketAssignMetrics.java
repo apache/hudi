@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.flink.metrics.Gauge;
 import org.apache.flink.metrics.Histogram;
 import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 
@@ -117,8 +118,37 @@ class TestFlinkBucketAssignMetrics {
     assertEquals(110, metrics.getRecordBufferingCount());
   }
 
+  @Test
+  void testNumShardsAssignedGaugeDefaultIsNegativeOne() {
+    Gauge<?> gauge = metricGroup.getGauge("numShardsAssigned");
+    assertNotNull(gauge, "numShardsAssigned gauge should be registered");
+    assertEquals(-1, gauge.getValue(), "Default numShardsAssigned must be -1 (unset sentinel)");
+  }
+
+  @Test
+  void testSetNumShardsAssignedUpdatesGetterAndGauge() {
+    metrics.setNumShardsAssigned(7);
+    assertEquals(7, metrics.getNumShardsAssigned());
+    assertEquals(7, metricGroup.getGauge("numShardsAssigned").getValue());
+  }
+
+  @Test
+  void testSetNumShardsAssignedOverwrite() {
+    metrics.setNumShardsAssigned(3);
+    metrics.setNumShardsAssigned(5);
+    assertEquals(5, metrics.getNumShardsAssigned());
+    assertEquals(5, metricGroup.getGauge("numShardsAssigned").getValue());
+  }
+
+  @Test
+  void testGetNumShardsAssignedDefaultIsNegativeOne() {
+    assertEquals(-1, metrics.getNumShardsAssigned(),
+        "numShardsAssigned must return -1 before setNumShardsAssigned is called");
+  }
+
   private static class CapturingMetricGroup extends UnregisteredMetricsGroup {
     private final Map<String, Histogram> histograms = new HashMap<>();
+    private final Map<String, Gauge<?>> gauges = new HashMap<>();
 
     @Override
     public <H extends Histogram> H histogram(String name, H histogram) {
@@ -126,8 +156,18 @@ class TestFlinkBucketAssignMetrics {
       return histogram;
     }
 
+    @Override
+    public <T, G extends Gauge<T>> G gauge(String name, G gauge) {
+      gauges.put(name, gauge);
+      return gauge;
+    }
+
     Histogram getHistogram(String name) {
       return histograms.get(name);
+    }
+
+    Gauge<?> getGauge(String name) {
+      return gauges.get(name);
     }
   }
 }

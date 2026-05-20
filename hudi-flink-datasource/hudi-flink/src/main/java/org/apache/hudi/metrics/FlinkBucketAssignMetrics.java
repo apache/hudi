@@ -24,9 +24,11 @@ import org.apache.flink.metrics.Histogram;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.hudi.common.util.VisibleForTesting;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 /**
  * Metrics for flink bucket assign functions (BucketAssignFunction, MinibatchBucketAssignFunction,
- * DynamicBucketAssignFunction). Tracks record buffering time.
+ * DynamicBucketAssignFunction). Tracks record buffering time and RLI shard assignment distribution.
  */
 public class FlinkBucketAssignMetrics extends HoodieFlinkMetrics {
   private static final int HISTOGRAM_WINDOW_SIZE = 100;
@@ -38,6 +40,13 @@ public class FlinkBucketAssignMetrics extends HoodieFlinkMetrics {
    */
   private final Histogram recordBufferingTime;
 
+  /**
+   * Number of RLI file group shards assigned to this bucket assign task.
+   * Set once during open() when global RLI is active; remains -1 otherwise.
+   * Compare across task subtasks to detect skew in shard distribution.
+   */
+  private final AtomicInteger numShardsAssigned = new AtomicInteger(-1);
+
   public FlinkBucketAssignMetrics(MetricGroup metricGroup) {
     super(metricGroup);
     this.recordBufferingTime = new DropwizardHistogramWrapper(
@@ -47,6 +56,11 @@ public class FlinkBucketAssignMetrics extends HoodieFlinkMetrics {
   @Override
   public void registerMetrics() {
     metricGroup.histogram("recordBufferingTime", recordBufferingTime);
+    metricGroup.gauge("numShardsAssigned", numShardsAssigned::get);
+  }
+
+  public void setNumShardsAssigned(int count) {
+    numShardsAssigned.set(count);
   }
 
   public void startRecordBuffering() {
@@ -60,5 +74,10 @@ public class FlinkBucketAssignMetrics extends HoodieFlinkMetrics {
   @VisibleForTesting
   public long getRecordBufferingCount() {
     return recordBufferingTime.getCount();
+  }
+
+  @VisibleForTesting
+  public int getNumShardsAssigned() {
+    return numShardsAssigned.get();
   }
 }
