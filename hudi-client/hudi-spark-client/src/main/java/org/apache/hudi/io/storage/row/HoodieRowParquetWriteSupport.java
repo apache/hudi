@@ -901,6 +901,13 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
    * Note that {@link HoodieConfig#contains(ConfigProperty)} returns true even for default-
    * populated keys, so distinguishing user-explicit from default requires checking the
    * raw properties map before defaults are merged.
+   *
+   * <p>Known limitation: because HoodieConfig conflates user-set with default-populated
+   * values, we treat the Hudi key as "user-explicit" only when it differs from the
+   * default. If a user explicitly sets the Hudi key to the default value
+   * ({@code TIMESTAMP_MICROS}) while also setting a different Spark conf, the Spark
+   * conf wins. There is no clean way to detect that edge case without plumbing the
+   * original user options Map all the way through the writer construction path.
    */
   static String resolveOutputTimestampType(Configuration conf, HoodieConfig config) {
     // Priority:

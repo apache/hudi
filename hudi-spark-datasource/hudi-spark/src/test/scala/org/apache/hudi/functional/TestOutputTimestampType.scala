@@ -27,6 +27,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.util.HadoopInputFile
+import org.apache.parquet.schema.LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.types.{IntegerType, StructField, StructType, TimestampType}
@@ -59,9 +60,17 @@ class TestOutputTimestampType extends HoodieSparkClientTestBase {
     StructField("ts_tz", TimestampType, nullable = false)
   ))
 
-  // 2026-05-15 12:34:56.123456 UTC.
+  // 2026-05-15 12:34:56.123456 UTC. Sub-millisecond precision is required to
+  // distinguish TIMESTAMP_MICROS from TIMESTAMP_MILLIS in the round-trip check.
   private val testTimestampMicros = 1779193296123456L
-  private val testRow = Row(1, new Timestamp(testTimestampMicros / 1000L))
+  private val testRow = {
+    val ts = new Timestamp(testTimestampMicros / 1000L)  // ms since epoch
+    // new Timestamp(long) seeds nanos from (ms % 1000) * 1000000, which only covers
+    // millisecond precision. Replace nanos with the full sub-second portion in nanos
+    // so the value carries all 6 microseconds of fractional precision.
+    ts.setNanos(((testTimestampMicros % 1000000L) * 1000L).toInt)
+    Row(1, ts)
+  }
 
   private val baseOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "2",
@@ -92,16 +101,28 @@ class TestOutputTimestampType extends HoodieSparkClientTestBase {
     cleanupFileSystem()
   }
 
-  /** Inspects the first parquet file written under {@code path} and returns
-   * the primitive type and logical-type annotation of the {@code ts_tz} column. */
-  private def parquetTimestampType(path: String): (PrimitiveTypeName, String) = {
+  /** Inspects the first parquet file written under {@code path} and returns the
+   * primitive type and (for TIMESTAMP-annotated columns) the structural
+   * (timeUnit, isAdjustedToUTC) tuple of the {@code ts_tz} column.
+   *
+   * Structural comparison is required because parquet-mr changed the {@code toString}
+   * casing of TimestampLogicalTypeAnnotation in 1.13+ ("TIMESTAMP(MICROS,true)" vs
+   * older "timestamp(MICROS,true)"); a string match would be brittle across the
+   * Spark versions we support (3.3 ships parquet-mr 1.12, 3.5+ ships 1.13+). The
+   * structural fields (unit + isAdjustedToUTC) are stable. */
+  private def parquetTimestampType(path: String): (PrimitiveTypeName, Option[(String, Boolean)]) = {
     val pq = listParquetFiles(path).head
     val reader = ParquetFileReader.open(HadoopInputFile.fromPath(new Path(pq), spark.sparkContext.hadoopConfiguration))
     try {
-      val field = reader.getFooter.getFileMetaData.getSchema.getColumns.asScalaCollection
-        .find(_.getPath()(0) == "ts_tz").get
-      val annotation = Option(field.getPrimitiveType.getLogicalTypeAnnotation).map(_.toString).getOrElse("(none)")
-      (field.getPrimitiveType.getPrimitiveTypeName, annotation)
+      // Read the field from the MessageType (the schema as written), not from
+      // ColumnDescriptor.getPrimitiveType() — the latter does not reliably preserve
+      // the logical-type annotation in some parquet-mr versions.
+      val schema = reader.getFooter.getFileMetaData.getSchema
+      val field = schema.getFields.asScalaCollection.find(_.getName == "ts_tz").get.asPrimitiveType
+      val annotation = Option(field.getLogicalTypeAnnotation).collect {
+        case t: TimestampLogicalTypeAnnotation => (t.getUnit.name(), t.isAdjustedToUTC)
+      }
+      (field.getPrimitiveTypeName, annotation)
     } finally {
       reader.close()
     }
@@ -123,11 +144,12 @@ class TestOutputTimestampType extends HoodieSparkClientTestBase {
    */
   @ParameterizedTest
   @CsvSource(Array(
-    "TIMESTAMP_MICROS, INT64,  timestamp(MICROS,true)",
-    "TIMESTAMP_MILLIS, INT64,  timestamp(MILLIS,true)",
-    "INT96,            INT96,  (none)"
+    // outputType,      expectedPrimitive, expectedUnit (empty = no TIMESTAMP annotation, INT96 case)
+    "TIMESTAMP_MICROS,  INT64,             MICROS",
+    "TIMESTAMP_MILLIS,  INT64,             MILLIS",
+    "INT96,             INT96,             "
   ))
-  def testBulkInsertHonorsOutputTimestampType(outputType: String, expectedPrimitive: String, expectedAnnotation: String): Unit = {
+  def testBulkInsertHonorsOutputTimestampType(outputType: String, expectedPrimitive: String, expectedUnit: String): Unit = {
     spark.conf.set("spark.sql.parquet.outputTimestampType", outputType)
     spark.createDataFrame(java.util.Arrays.asList(testRow), schema)
       .write.format("org.apache.hudi")
@@ -138,8 +160,9 @@ class TestOutputTimestampType extends HoodieSparkClientTestBase {
     val (primitive, annotation) = parquetTimestampType(basePath)
     assertEquals(PrimitiveTypeName.valueOf(expectedPrimitive.trim), primitive,
       s"bulk_insert with outputTimestampType=$outputType produced wrong parquet primitive type")
-    assertEquals(expectedAnnotation.trim, annotation,
-      s"bulk_insert with outputTimestampType=$outputType produced wrong parquet logical type annotation")
+    val expectedAnnotation = Option(expectedUnit).map(_.trim).filter(_.nonEmpty).map((_, true))
+    assertEquals(expectedAnnotation, annotation,
+      s"bulk_insert with outputTimestampType=$outputType produced wrong TIMESTAMP annotation (unit, isAdjustedToUTC)")
 
     // Round-trip check: value should be preserved at the precision the schema implies.
     val readBack = spark.read.format("org.apache.hudi").load(basePath)
@@ -163,10 +186,10 @@ class TestOutputTimestampType extends HoodieSparkClientTestBase {
    */
   @ParameterizedTest
   @CsvSource(Array(
-    "TIMESTAMP_MICROS, INT64,  timestamp(MICROS,true)",
-    "TIMESTAMP_MILLIS, INT64,  timestamp(MILLIS,true)"
+    "TIMESTAMP_MICROS, INT64, MICROS",
+    "TIMESTAMP_MILLIS, INT64, MILLIS"
   ))
-  def testUpsertHonorsOutputTimestampType(outputType: String, expectedPrimitive: String, expectedAnnotation: String): Unit = {
+  def testUpsertHonorsOutputTimestampType(outputType: String, expectedPrimitive: String, expectedUnit: String): Unit = {
     spark.conf.set("spark.sql.parquet.outputTimestampType", outputType)
     spark.createDataFrame(java.util.Arrays.asList(testRow), schema)
       .write.format("org.apache.hudi")
@@ -177,22 +200,28 @@ class TestOutputTimestampType extends HoodieSparkClientTestBase {
     val (primitive, annotation) = parquetTimestampType(basePath)
     assertEquals(PrimitiveTypeName.valueOf(expectedPrimitive.trim), primitive,
       s"upsert with outputTimestampType=$outputType produced wrong parquet primitive type")
-    assertEquals(expectedAnnotation.trim, annotation,
-      s"upsert with outputTimestampType=$outputType produced wrong parquet logical type annotation")
+    assertEquals(Some((expectedUnit.trim, true)), annotation,
+      s"upsert with outputTimestampType=$outputType produced wrong TIMESTAMP annotation (unit, isAdjustedToUTC)")
   }
 
   /**
-   * If the user explicitly sets the Hudi-specific {@code hoodie.parquet.outputtimestamptype},
-   * it overrides spark.sql.parquet.outputTimestampType. Verifies the priority chain of
-   * the resolver (documented in HoodieRowParquetWriteSupport.resolveOutputTimestampType).
+   * If the user explicitly sets the Hudi-specific {@code hoodie.parquet.outputtimestamptype}
+   * to a NON-DEFAULT value, it overrides spark.sql.parquet.outputTimestampType. Verifies
+   * the priority chain of the resolver (documented in
+   * HoodieRowParquetWriteSupport.resolveOutputTimestampType).
+   *
+   * Known limitation: HoodieConfig populates defaults indistinguishably from user-set
+   * values, so the resolver can only treat the Hudi key as "user-explicit" when it
+   * differs from the default ({@code TIMESTAMP_MICROS}). Setting the Hudi key to its
+   * default value while also setting a different spark conf is an undetectable case —
+   * the spark conf wins. That edge case is not tested here.
    */
   @ParameterizedTest
   @CsvSource(Array(
-    // spark conf,         hoodie override,    expected
-    "TIMESTAMP_MICROS,     TIMESTAMP_MILLIS,   timestamp(MILLIS,true)",
-    "TIMESTAMP_MILLIS,     TIMESTAMP_MICROS,   timestamp(MICROS,true)"
+    // spark conf,        hoodie override,    expected unit
+    "TIMESTAMP_MICROS,    TIMESTAMP_MILLIS,   MILLIS"
   ))
-  def testHoodieConfigOverridesSparkSqlConf(sparkConfVal: String, hoodieConfVal: String, expectedAnnotation: String): Unit = {
+  def testHoodieConfigOverridesSparkSqlConf(sparkConfVal: String, hoodieConfVal: String, expectedUnit: String): Unit = {
     spark.conf.set("spark.sql.parquet.outputTimestampType", sparkConfVal)
     spark.createDataFrame(java.util.Arrays.asList(testRow), schema)
       .write.format("org.apache.hudi")
@@ -202,7 +231,7 @@ class TestOutputTimestampType extends HoodieSparkClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
     val (_, annotation) = parquetTimestampType(basePath)
-    assertEquals(expectedAnnotation.trim, annotation,
+    assertEquals(Some((expectedUnit.trim, true)), annotation,
       s"hoodie config=$hoodieConfVal should override spark conf=$sparkConfVal")
   }
 
