@@ -40,7 +40,7 @@ import org.apache.hudi.util.JFunction.toJavaSerializableFunctionUnchecked
 import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, Dataset, Row}
+import org.apache.spark.sql.{DataFrame, Dataset, Row, functions}
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{NestedFieldPath, composeNestedFieldPath, getNestedInternalRowValue}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
@@ -94,44 +94,85 @@ object HoodieDatasetBulkInsertHelper
       val keyGeneratorClassName = config.getStringOrThrow(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME,
         "Key-generator class name is required")
 
-      val prependedRdd: RDD[InternalRow] = {
-        injectSQLConf(df.queryExecution.toRdd.mapPartitions { iter =>
-          val typedProps = TypedProperties.copy(config.getProps)
-          if (autoGenerateRecordKeys) {
+      if (autoGenerateRecordKeys) {
+        // Auto-keygen needs per-task partitionId from TaskContext and is stateful (rowId++),
+        // so it can't live in a driver-side UDF closure. Keep the RDD path for this case only.
+        val prependedRdd: RDD[InternalRow] = {
+          injectSQLConf(df.queryExecution.toRdd.mapPartitions { iter =>
+            val typedProps = TypedProperties.copy(config.getProps)
             typedProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()))
             typedProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)
-          }
-          val sparkKeyGenerator =
-            ReflectionUtils.loadClass(HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(keyGeneratorClassName), typedProps)
-              .asInstanceOf[BuiltinKeyGenerator]
-              val keyGenerator: BuiltinKeyGenerator = if (autoGenerateRecordKeys) {
-                new AutoRecordGenWrapperKeyGenerator(typedProps, sparkKeyGenerator).asInstanceOf[BuiltinKeyGenerator]
-              } else {
-                sparkKeyGenerator
-              }
+            val sparkKeyGenerator =
+              ReflectionUtils.loadClass(HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(keyGeneratorClassName), typedProps)
+                .asInstanceOf[BuiltinKeyGenerator]
+            val keyGenerator: BuiltinKeyGenerator =
+              new AutoRecordGenWrapperKeyGenerator(typedProps, sparkKeyGenerator).asInstanceOf[BuiltinKeyGenerator]
 
-          iter.map { row =>
-            // auto generate record keys if needed
-            val metaFields = new Array[UTF8String](5)
-            metaFields(2) = keyGenerator.getRecordKey(row, schema)
-            metaFields(3) = keyGenerator.getPartitionPath(row, schema)
-            metaFields(0) = UTF8String.EMPTY_UTF8
-            metaFields(1) = UTF8String.EMPTY_UTF8
-            metaFields(4) = UTF8String.EMPTY_UTF8
+            iter.map { row =>
+              val metaFields = new Array[UTF8String](5)
+              metaFields(2) = keyGenerator.getRecordKey(row, schema)
+              metaFields(3) = keyGenerator.getPartitionPath(row, schema)
+              metaFields(0) = UTF8String.EMPTY_UTF8
+              metaFields(1) = UTF8String.EMPTY_UTF8
+              metaFields(4) = UTF8String.EMPTY_UTF8
+              sparkAdapter.createInternalRow(metaFields, row, false)
+            }
+          }, SQLConf.get)
+        }
 
-            // TODO use mutable row, avoid re-allocating
-            sparkAdapter.createInternalRow(metaFields, row, false)
-          }
-        }, SQLConf.get)
-      }
+        val dedupedRdd = if (config.shouldCombineBeforeInsert) {
+          dedupeRows(prependedRdd, updatedSchema, tableConfig.getOrderingFields.asScala.toList, SparkHoodieIndexFactory.isGlobalIndex(config), targetParallelism)
+        } else {
+          prependedRdd
+        }
 
-      val dedupedRdd = if (config.shouldCombineBeforeInsert) {
-        dedupeRows(prependedRdd, updatedSchema, tableConfig.getOrderingFields.asScala.toList, SparkHoodieIndexFactory.isGlobalIndex(config), targetParallelism)
+        sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(df.sparkSession, dedupedRdd, updatedSchema)
       } else {
-        prependedRdd
-      }
+        // UDF-based key-gen path. Avoids the toRdd.mapPartitions round-trip on the hot path
+        // by registering record-key / partition-path UDFs against the DataFrame directly.
+        val typedProps = TypedProperties.copy(config.getProps)
+        val keyGenerator = ReflectionUtils
+          .loadClass(HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(keyGeneratorClassName), typedProps)
+          .asInstanceOf[BuiltinKeyGenerator]
 
-      sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(df.sparkSession, dedupedRdd, updatedSchema)
+        val tableName = config.getString(HoodieWriteConfig.TBL_NAME.key)
+        val recordKeyFn = s"hudi_recordkey_gen_${tableName}_$instantTime"
+        val partitionPathFn = s"hudi_partition_gen_${tableName}_$instantTime"
+
+        val spark = df.sparkSession
+        spark.udf.register(recordKeyFn, (r: Row) => keyGenerator.getRecordKey(r))
+        spark.udf.register(partitionPathFn, (r: Row) => keyGenerator.getPartitionPath(r))
+
+        val originalCols = df.schema.fieldNames.map(functions.col)
+        val rowStruct = functions.struct(originalCols: _*)
+
+        val withMetaCols = df
+          .withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD,
+            functions.callUDF(recordKeyFn, rowStruct))
+          .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
+            functions.callUDF(partitionPathFn, rowStruct))
+          .withColumn(HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+            functions.lit("").cast(StringType))
+          .withColumn(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD,
+            functions.lit("").cast(StringType))
+          .withColumn(HoodieRecord.FILENAME_METADATA_FIELD,
+            functions.lit("").cast(StringType))
+
+        val orderedCols = updatedSchema.fieldNames.map(functions.col)
+        val orderedDF = withMetaCols.select(orderedCols: _*)
+
+        if (config.shouldCombineBeforeInsert) {
+          val dedupedRdd = dedupeRows(
+            injectSQLConf(orderedDF.queryExecution.toRdd, SQLConf.get),
+            updatedSchema,
+            tableConfig.getOrderingFields.asScala.toList,
+            SparkHoodieIndexFactory.isGlobalIndex(config),
+            targetParallelism)
+          sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(spark, dedupedRdd, updatedSchema)
+        } else {
+          orderedDF
+        }
+      }
     } else {
       // NOTE: In cases when we're not populating meta-fields we actually don't
       //       need access to the [[InternalRow]] and therefore can avoid the need
