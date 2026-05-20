@@ -196,7 +196,7 @@ public class TestAzureStorageLockClient {
   }
 
   @Test
-  void testTryUpsertLockFile_rateLimit_returnsUnknownError() {
+  void testTryUpsertLockFile_rateLimit_returnsThrottled() {
     StorageLockData lockData = new StorageLockData(false, 999L, "owner");
     BlobStorageException ex = mock(BlobStorageException.class);
     when(ex.getStatusCode()).thenReturn(429);
@@ -204,7 +204,7 @@ public class TestAzureStorageLockClient {
 
     Pair<LockUpsertResult, Option<StorageLockFile>> result = lockClient.tryUpsertLockFile(lockData, Option.empty());
 
-    assertEquals(LockUpsertResult.UNKNOWN_ERROR, result.getLeft());
+    assertEquals(LockUpsertResult.THROTTLED, result.getLeft());
     assertTrue(result.getRight().isEmpty());
     verify(mockLogger).warn(contains("Rate limit exceeded"), eq(OWNER_ID), eq(LOCK_FILE_URI));
   }

@@ -49,6 +49,7 @@ import java.nio.ByteBuffer;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -187,8 +188,8 @@ public class TestGCSStorageLockClient {
 
     Pair<LockUpsertResult, Option<StorageLockFile>> result = lockService.tryUpsertLockFile(lockData, Option.empty());
 
-    assertEquals(LockUpsertResult.UNKNOWN_ERROR, result.getLeft());
-    assertTrue(result.getRight().isEmpty(), "Should return empty when a 429 occurs");
+    assertEquals(LockUpsertResult.THROTTLED, result.getLeft());
+    assertFalse(result.getRight().isPresent(), "Should return empty when a 429 occurs");
     verify(mockLogger).warn(contains("Rate limit exceeded"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 

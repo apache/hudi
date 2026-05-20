@@ -150,6 +150,7 @@ public class GCSStorageLockClient implements StorageLockClient {
         return Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty());
       } else if (e.getCode() == RATE_LIMIT_ERROR_CODE) {
         logger.warn("OwnerId: {}, Rate limit exceeded for lock file: {}", ownerId, lockFilePath);
+        return Pair.of(LockUpsertResult.THROTTLED, Option.empty());
       } else if (e.getCode() >= INTERNAL_SERVER_ERROR_CODE_MIN) {
         logger.warn("OwnerId: {}, GCS returned internal server error code for lock file: {}",
             ownerId, lockFilePath, e);
