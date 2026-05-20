@@ -23,7 +23,7 @@ class TestArchiveCommitsProcedure extends HoodieSparkProcedureTestBase {
 
   /**
    * Helper: create a fresh COW table at the given location with `numCommits`
-   * insert commits already written. Returns the table name for follow-up calls.
+   * insert commits already written. Returns the table name.
    */
   private def createTableWithCommits(location: String, numCommits: Int): String = {
     val tableName = generateTableName
@@ -72,16 +72,19 @@ class TestArchiveCommitsProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
-  test("Test Call archive_commits Procedure with options") {
+  test("Test Call archive_commits Procedure driven only by options") {
     withTempDir { tmp =>
       val tableName = createTableWithCommits(tmp.getCanonicalPath, 6)
 
-      // archival behavior is fully driven by the options string
+      // No min/max named params — archival behavior must come from `options` alone.
+      // This used to fail (Expected 2, but got 6) because withArchivalConfig#putAll
+      // would overwrite hoodie.keep.min.commits/hoodie.keep.max.commits from
+      // user props with the procedure's named-default min=20/max=30.
       val result = spark.sql(
         s"call archive_commits(table => '$tableName'," +
           " retain_commits => 1," +
           " options => 'hoodie.keep.min.commits=2,hoodie.keep.max.commits=3," +
-          "hoodie.commits.archival.batch=1')")
+          "hoodie.commits.archival.batch=1,hoodie.metadata.enable=false')")
         .collect()
         .map(row => Seq(row.getInt(0)))
       assertResult(1)(result.length)
@@ -101,8 +104,8 @@ class TestArchiveCommitsProcedure extends HoodieSparkProcedureTestBase {
     withTempDir { tmp =>
       val tableName = createTableWithCommits(tmp.getCanonicalPath, 6)
 
-      // options requests min=10/max=20 (which would archive nothing for 6 commits),
-      // but named min_commits=2/max_commits=3 must take precedence and trigger archival.
+      // options requests min=10/max=20 (would archive nothing for 6 commits),
+      // but named min_commits=2/max_commits=3 must take precedence.
       val result = spark.sql(
         s"call archive_commits(table => '$tableName'," +
           " min_commits => 2, max_commits => 3, retain_commits => 1, enable_metadata => false," +
@@ -115,6 +118,11 @@ class TestArchiveCommitsProcedure extends HoodieSparkProcedureTestBase {
       val commits = spark.sql(s"call show_commits(table => '$tableName', limit => 10)").collect()
       // named params won → archival happened, only 2 active commits left
       assertResult(2)(commits.length)
+
+      val endTs = commits(0).get(0).toString
+      val archived = spark.sql(
+        s"call show_archived_commits(table => '$tableName', end_ts => '$endTs')").collect()
+      assertResult(4)(archived.length)
     }
   }
 

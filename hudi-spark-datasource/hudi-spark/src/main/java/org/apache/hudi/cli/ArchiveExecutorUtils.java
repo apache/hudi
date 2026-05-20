@@ -56,11 +56,24 @@ public final class ArchiveExecutorUtils {
                             boolean enableMetadata,
                             String basePath,
                             Map<String, String> conf) throws IOException {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withProps(conf).withPath(basePath)
+    // NOTE on builder ordering:
+    //   `withArchivalConfig`/`withCleanConfig`/`withMetadataConfig` each call
+    //   `putAll(subConfig.getProps())` onto `writeConfig.getProps()`, which
+    //   includes every key filled in by `setDefaults` during the sub-config's
+    //   `build()`. If `withProps(conf)` ran BEFORE them, those defaults would
+    //   overwrite the user's options (e.g. `hoodie.keep.min.commits`).
+    //
+    //   Therefore `withProps(conf)` is intentionally placed LAST so user-supplied
+    //   options reliably win over sub-config defaults. Named procedure params
+    //   (min/max/retain/enableMetadata) are forwarded via the dedicated builders
+    //   below; if the caller wants those to win over a same-name key in `conf`,
+    //   the procedure layer is responsible for not putting that key into `conf`.
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(minCommits, maxCommits).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(commitsRetained).build())
         .withEmbeddedTimelineServerEnabled(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build())
+        .withProps(conf)
         .build();
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     HoodieSparkTable<HoodieAvroPayload> table = HoodieSparkTable.create(config, context);
