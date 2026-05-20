@@ -18,6 +18,8 @@
 
 package org.apache.hudi.sink.partitioner.index;
 
+import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
@@ -28,6 +30,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metrics.FlinkIndexBackendMetrics;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -56,6 +59,7 @@ public class GlobalRecordLevelIndexBackend implements MinibatchIndexBackend {
   private final Configuration conf;
   private final HoodieTableMetaClient metaClient;
   private HoodieTableMetadata metadataTable;
+  private FlinkIndexBackendMetrics metrics;
 
   /**
    * Creates a global RLI backend with a checkpoint-aware cache.
@@ -67,7 +71,14 @@ public class GlobalRecordLevelIndexBackend implements MinibatchIndexBackend {
     this.metaClient = StreamerUtil.createMetaClient(conf);
     this.conf = conf;
     this.recordIndexCache = new RecordIndexCache(conf, initCheckpointId);
+    registerMetrics(new UnregisteredMetricsGroup());
     reloadMetadataTable();
+  }
+
+  @Override
+  public void registerMetrics(MetricGroup metricGroup) {
+    this.metrics = new FlinkIndexBackendMetrics(metricGroup);
+    this.metrics.registerMetrics();
   }
 
   @Override
@@ -84,7 +95,9 @@ public class GlobalRecordLevelIndexBackend implements MinibatchIndexBackend {
   public Map<String, HoodieRecordGlobalLocation> get(List<String> recordKeys) throws IOException {
     Map<String, HoodieRecordGlobalLocation> keysAndLocations = new HashMap<>();
     List<String> missedKeys = new ArrayList<>();
-    for (String key: recordKeys) {
+
+    metrics.startLocalIndexLookup();
+    for (String key : recordKeys) {
       HoodieRecordGlobalLocation location = recordIndexCache.get(key);
       if (location == null) {
         missedKeys.add(key);
@@ -92,13 +105,21 @@ public class GlobalRecordLevelIndexBackend implements MinibatchIndexBackend {
         keysAndLocations.put(key, location);
       }
     }
+
+    metrics.endLocalIndexLookup();
+    metrics.updateLocalLookupKeysCount(recordKeys.size() - missedKeys.size());
+
     if (!missedKeys.isEmpty()) {
+      metrics.startRemoteIndexLookup();
       HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
           metadataTable.readRecordIndexLocationsWithKeys(HoodieListData.eager(missedKeys));
       recordIndexData.forEach(keyAndLocation -> {
         recordIndexCache.update(keyAndLocation.getKey(), keyAndLocation.getValue());
         keysAndLocations.put(keyAndLocation.getKey(), keyAndLocation.getValue());
       });
+
+      metrics.endRemoteIndexLookup();
+      metrics.updateRemoteLookupKeysCount(missedKeys.size());
     }
     return keysAndLocations;
   }

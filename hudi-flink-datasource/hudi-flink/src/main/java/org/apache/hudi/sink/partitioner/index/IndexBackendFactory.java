@@ -53,7 +53,10 @@ public class IndexBackendFactory {
    * @param runtimeContext Flink runtime context for job and attempt metadata
    * @return global index backend for record-key lookups
    */
-  public static GlobalIndexBackend create(Configuration conf, FunctionInitializationContext context, RuntimeContext runtimeContext) throws Exception {
+  public static GlobalIndexBackend create(
+          Configuration conf,
+          FunctionInitializationContext context,
+          RuntimeContext runtimeContext) throws Exception {
     HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
     switch (indexType) {
       case FLINK_STATE:

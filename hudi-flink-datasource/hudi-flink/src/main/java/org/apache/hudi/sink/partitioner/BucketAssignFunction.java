@@ -30,6 +30,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.metrics.FlinkBucketAssignMetrics;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.partitioner.index.GlobalIndexBackend;
 import org.apache.hudi.sink.partitioner.index.IndexBackendFactory;
@@ -87,6 +88,9 @@ public class BucketAssignFunction
   @Getter
   private transient GlobalIndexBackend indexBackend;
 
+  @Getter
+  protected transient FlinkBucketAssignMetrics metrics;
+
   /**
    * Bucket assigner to assign new bucket IDs or reuse existing ones.
    */
@@ -139,6 +143,8 @@ public class BucketAssignFunction
         context,
         writeConfig);
     this.recordProcessor = initRecordProcessor();
+    this.metrics = new FlinkBucketAssignMetrics(getRuntimeContext().getMetricGroup());
+    this.metrics.registerMetrics();
   }
 
   @Override
