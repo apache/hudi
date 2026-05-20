@@ -933,8 +933,9 @@ public class StreamSync implements Serializable, Closeable {
             SparkStreamerValidatorUtils.runValidators(props, instantTime, writeStatuses,
                 checkpointCommitMetadata, metaClient);
           } catch (HoodieValidationException e) {
+            LOG.error("Pre-commit validators failed for instant {}", instantTime, e);
             writeClient.rollback(instantTime);
-            throw e;
+            throw new HoodieStreamerWriteException("Pre-commit validators failed for instant " + instantTime, e);
           }
         }
 
