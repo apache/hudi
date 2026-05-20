@@ -86,11 +86,15 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   // However, since our lock leases are pretty long, we can use a high buffer.
   private static final long CLOCK_DRIFT_BUFFER_MS = 500;
 
-  // How long to wait before retrying the lock-expire write after a THROTTLED response. Tuned to be
-  // longer than typical cloud-storage rate-limit windows (e.g., GCS's 1-write/sec per object) so
-  // a single retry has a reasonable chance of succeeding.
+  // Max number of retry attempts on the lock-expire write after a THROTTLED response.
   @VisibleForTesting
-  static final long THROTTLE_RETRY_DELAY_SECONDS = 1;
+  static final int THROTTLE_MAX_RETRIES = 3;
+
+  // Initial backoff delay; doubles on each subsequent retry (e.g. 1s, 2s, 4s for 3 retries).
+  // The base of 1s is tuned to outlast typical cloud-storage rate-limit windows
+  // (e.g., GCS's 1-write/sec per object limit) so the first retry has a reasonable chance of succeeding.
+  @VisibleForTesting
+  static final long THROTTLE_INITIAL_RETRY_DELAY_SECONDS = 1;
 
   // Use for testing
   private final Logger logger;
@@ -471,15 +475,17 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       expireResult = tryExpireCurrentLock(false);
     }
 
-    // If throttled, retry once after sleeping outside the monitor to avoid blocking other threads.
+    // If throttled, retry up to THROTTLE_MAX_RETRIES times with exponential backoff. Each sleep
+    // happens outside the monitor so other threads aren't blocked during the wait.
     // Note: when unlock() is called via close() -> shutdown(), the outer synchronized caller still
     // holds the provider monitor through reentrant locking, so other threads remain blocked in
     // that scenario. This is acceptable since close() is a shutdown path, not the hot path.
-    if (expireResult == ExpireLockResult.THROTTLED) {
-      logger.warn("Owner {}: Lock expiration was throttled, retrying after {} seconds.",
-          ownerId, THROTTLE_RETRY_DELAY_SECONDS);
+    for (int attempt = 1; attempt <= THROTTLE_MAX_RETRIES && expireResult == ExpireLockResult.THROTTLED; attempt++) {
+      long delaySeconds = THROTTLE_INITIAL_RETRY_DELAY_SECONDS << (attempt - 1);
+      logger.warn("Owner {}: Lock expiration was throttled (retry {}/{}), backing off for {} seconds.",
+          ownerId, attempt, THROTTLE_MAX_RETRIES, delaySeconds);
       try {
-        TimeUnit.SECONDS.sleep(THROTTLE_RETRY_DELAY_SECONDS);
+        sleepForThrottleRetry(delaySeconds);
       } catch (InterruptedException ie) {
         // Re-set the interrupt flag and abandon the retry — an interrupted thread shouldn't keep
         // doing work. The caller will see FAILED_TO_RELEASE below.
@@ -699,6 +705,11 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   @VisibleForTesting
   long getCurrentEpochMs() {
     return System.currentTimeMillis();
+  }
+
+  @VisibleForTesting
+  void sleepForThrottleRetry(long delaySeconds) throws InterruptedException {
+    TimeUnit.SECONDS.sleep(delaySeconds);
   }
 
   /**

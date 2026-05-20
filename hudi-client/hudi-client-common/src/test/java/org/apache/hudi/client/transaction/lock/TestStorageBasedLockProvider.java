@@ -38,6 +38,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.slf4j.Logger;
 
 import java.lang.reflect.Method;
@@ -64,6 +65,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.refEq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -412,7 +414,7 @@ class TestStorageBasedLockProvider {
   }
 
   @Test
-  void testUnlockSucceedsAfterThrottledRetry() {
+  void testUnlockSucceedsAfterThrottledRetry() throws InterruptedException {
     // Simulates the GCP 1-write/sec limit: the first expire attempt gets THROTTLED,
     // the retry (after sleeping outside the monitor) succeeds.
     when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
@@ -425,6 +427,8 @@ class TestStorageBasedLockProvider {
 
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
     when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true).thenReturn(false);
+    // Skip the real sleep so the test runs instantly.
+    doNothing().when(lockProvider).sleepForThrottleRetry(anyLong());
     StorageLockFile expiredLockFile = new StorageLockFile(new StorageLockData(true, data.getValidUntil(), ownerId), "v2");
     when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(realLockFile))))
         .thenReturn(Pair.of(LockUpsertResult.THROTTLED, Option.empty()))
@@ -437,7 +441,7 @@ class TestStorageBasedLockProvider {
   }
 
   @Test
-  void testUnlockBailsOutWhenLockReplacedDuringRetrySleep() {
+  void testUnlockBailsOutWhenLockReplacedDuringRetrySleep() throws InterruptedException {
     // Race: the first expire attempt returns THROTTLED. While unlock() is sleeping outside
     // the monitor, the original lock expires and a concurrent tryLock() acquires a fresh
     // lock (currentLockObj is replaced from lock1 -> lock2). The retry MUST detect this
@@ -454,6 +458,8 @@ class TestStorageBasedLockProvider {
 
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
     when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true).thenReturn(false);
+    // Skip the real sleep so the test runs instantly.
+    doNothing().when(lockProvider).sleepForThrottleRetry(anyLong());
     // Simulate the race in the same answer that returns THROTTLED: by the time the sleep
     // ends, getLock() returns lock2 (the lock a concurrent tryLock() would have acquired).
     when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(lock1))))
@@ -472,8 +478,10 @@ class TestStorageBasedLockProvider {
   }
 
   @Test
-  void testUnlockThrowsExceptionWhenStillThrottledAfterRetry() {
-    // Both the initial attempt and the retry get THROTTLED — unlock should fail.
+  void testUnlockThrowsExceptionWhenStillThrottledAfterAllRetries() throws InterruptedException {
+    // Every attempt (initial + THROTTLE_MAX_RETRIES retries) gets THROTTLED — unlock should
+    // exhaust the retry budget, throw FAILED_TO_RELEASE, and the backoff sequence should
+    // follow the exponential schedule 1s, 2s, 4s.
     when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     StorageLockFile realLockFile = new StorageLockFile(data, "v1");
@@ -484,12 +492,23 @@ class TestStorageBasedLockProvider {
 
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
     when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true).thenReturn(false);
+    // Capture sleep durations to verify the backoff sequence; skip the real sleep so the
+    // test runs instantly.
+    ArgumentCaptor<Long> sleepCaptor = ArgumentCaptor.forClass(Long.class);
+    doNothing().when(lockProvider).sleepForThrottleRetry(sleepCaptor.capture());
     when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(realLockFile))))
         .thenReturn(Pair.of(LockUpsertResult.THROTTLED, Option.empty()));
 
     HoodieLockException exception = assertThrows(HoodieLockException.class, () -> lockProvider.unlock());
     assertTrue(exception.getMessage().contains("FAILED_TO_RELEASE"));
-    verify(mockLockService, times(2)).tryUpsertLockFile(any(), eq(Option.of(realLockFile)));
+    // 1 initial attempt + THROTTLE_MAX_RETRIES retries.
+    verify(mockLockService, times(1 + StorageBasedLockProvider.THROTTLE_MAX_RETRIES))
+        .tryUpsertLockFile(any(), eq(Option.of(realLockFile)));
+    // Backoff doubles each retry: 1s, 2s, 4s.
+    assertEquals(StorageBasedLockProvider.THROTTLE_MAX_RETRIES, sleepCaptor.getAllValues().size());
+    assertEquals(1L, sleepCaptor.getAllValues().get(0));
+    assertEquals(2L, sleepCaptor.getAllValues().get(1));
+    assertEquals(4L, sleepCaptor.getAllValues().get(2));
     when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
   }
 
