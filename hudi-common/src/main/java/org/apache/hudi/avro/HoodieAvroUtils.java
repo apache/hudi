@@ -36,6 +36,7 @@ import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Conversions;
 import org.apache.avro.Conversions.DecimalConversion;
 import org.apache.avro.JsonProperties;
+import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.LogicalTypes.Decimal;
 import org.apache.avro.Schema;
@@ -70,8 +71,11 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -671,20 +675,42 @@ public class HoodieAvroUtils {
    * <p>
    * Decimal Data Type is converted to actual decimal value instead of bytes/fixed which is how it is
    * represented/stored in parquet.
+   * <p>
+   * <b>Avro version compatibility:</b> Avro 1.12.1 (pulled in by the Spark 4.1 profile) flipped the
+   * default of {@code GenericData}'s {@code fastReaderEnabled} flag from {@code false} to
+   * {@code true} (the {@code org.apache.avro.fastread} system property now defaults to
+   * {@code "true"}). With the fast reader enabled, {@code GenericDatumReader} applies the
+   * registered {@code Conversion}s during decode and materializes {@link LocalDate} for date,
+   * {@link Instant} for timestamp-millis / timestamp-micros, and {@link LocalDateTime} for
+   * local-timestamp-millis / local-timestamp-micros. Avro 1.12.0 (Spark 4.0) and Avro 1.11.x
+   * (Spark 3.5 and earlier) left the fast reader off by default, so those profiles exposed the raw
+   * {@link Integer} / {@link Long}. This method normalizes both forms to the same stable
+   * representation, so callers (precombine/ordering comparison, partition-path and record-key
+   * derivation, etc.) behave identically across Avro versions and across writer/reader Spark
+   * version combinations. The on-disk byte format is unaffected by this normalization: Avro's wire
+   * encoding for these logical types is fixed by spec to int / long and is identical across Avro
+   * versions; only the in-memory Java type returned by the reader changed.
    *
    * @param fieldSchema avro field schema
    * @param fieldValue  avro field value
    * @return field value either converted (for certain data types) or as it is.
    */
   public static Object convertValueForAvroLogicalTypes(Schema fieldSchema, Object fieldValue, boolean consistentLogicalTimestampEnabled) {
-    if (fieldSchema.getLogicalType() == LogicalTypes.date()) {
-      return LocalDate.ofEpochDay(Long.parseLong(fieldValue.toString()));
-    } else if (fieldSchema.getLogicalType() == LogicalTypes.timestampMillis() && consistentLogicalTimestampEnabled) {
-      return new Timestamp(Long.parseLong(fieldValue.toString()));
-    } else if (fieldSchema.getLogicalType() == LogicalTypes.timestampMicros() && consistentLogicalTimestampEnabled) {
-      return new Timestamp(Long.parseLong(fieldValue.toString()) / 1000);
-    } else if (fieldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
-      Decimal dc = (Decimal) fieldSchema.getLogicalType();
+    LogicalType logicalType = fieldSchema.getLogicalType();
+    if (logicalType == LogicalTypes.date()) {
+      return LocalDate.ofEpochDay(extractEpochDay(fieldValue));
+    } else if (logicalType == LogicalTypes.timestampMillis()) {
+      long millis = extractEpochMillis(fieldValue);
+      return consistentLogicalTimestampEnabled ? new Timestamp(millis) : millis;
+    } else if (logicalType == LogicalTypes.timestampMicros()) {
+      long micros = extractEpochMicros(fieldValue);
+      return consistentLogicalTimestampEnabled ? new Timestamp(micros / 1000) : micros;
+    } else if (logicalType == LogicalTypes.localTimestampMillis()) {
+      return extractLocalEpochMillis(fieldValue);
+    } else if (logicalType == LogicalTypes.localTimestampMicros()) {
+      return extractLocalEpochMicros(fieldValue);
+    } else if (logicalType instanceof LogicalTypes.Decimal) {
+      Decimal dc = (Decimal) logicalType;
       DecimalConversion decimalConversion = new DecimalConversion();
       if (fieldSchema.getType() == Schema.Type.FIXED) {
         return decimalConversion.fromFixed((GenericFixed) fieldValue, fieldSchema,
@@ -698,6 +724,101 @@ public class HoodieAvroUtils {
       }
     }
     return fieldValue;
+  }
+
+  // The extract* helpers below accept either the Avro primitive form (Integer / Long, returned by
+  // Avro 1.12.0 / 1.11.x) or the java.time form (returned by Avro 1.12.1 with its default
+  // fastReaderEnabled=true), and return the canonical primitive for the same underlying bytes.
+  // See the javadoc on convertValueForAvroLogicalTypes for context.
+
+  private static long extractEpochDay(Object fieldValue) {
+    if (fieldValue instanceof LocalDate) {
+      return ((LocalDate) fieldValue).toEpochDay();
+    }
+    if (fieldValue instanceof Number) {
+      return ((Number) fieldValue).longValue();
+    }
+    return Long.parseLong(fieldValue.toString());
+  }
+
+  private static long extractEpochMillis(Object fieldValue) {
+    if (fieldValue instanceof Instant) {
+      return ((Instant) fieldValue).toEpochMilli();
+    }
+    if (fieldValue instanceof Number) {
+      return ((Number) fieldValue).longValue();
+    }
+    return Long.parseLong(fieldValue.toString());
+  }
+
+  private static long extractEpochMicros(Object fieldValue) {
+    if (fieldValue instanceof Instant) {
+      Instant instant = (Instant) fieldValue;
+      return Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1_000_000L), instant.getNano() / 1000L);
+    }
+    if (fieldValue instanceof Number) {
+      return ((Number) fieldValue).longValue();
+    }
+    return Long.parseLong(fieldValue.toString());
+  }
+
+  private static long extractLocalEpochMillis(Object fieldValue) {
+    if (fieldValue instanceof LocalDateTime) {
+      return ((LocalDateTime) fieldValue).toInstant(ZoneOffset.UTC).toEpochMilli();
+    }
+    if (fieldValue instanceof Number) {
+      return ((Number) fieldValue).longValue();
+    }
+    return Long.parseLong(fieldValue.toString());
+  }
+
+  private static long extractLocalEpochMicros(Object fieldValue) {
+    if (fieldValue instanceof LocalDateTime) {
+      Instant instant = ((LocalDateTime) fieldValue).toInstant(ZoneOffset.UTC);
+      return Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1_000_000L), instant.getNano() / 1000L);
+    }
+    if (fieldValue instanceof Number) {
+      return ((Number) fieldValue).longValue();
+    }
+    return Long.parseLong(fieldValue.toString());
+  }
+
+  /**
+   * If {@code schema} carries a date / timestamp logical type and {@code value} is in the
+   * java.time form ({@link LocalDate} / {@link Instant} / {@link LocalDateTime}), normalize it
+   * to the Avro primitive form ({@link Integer} for date, {@link Long} for timestamp-millis,
+   * timestamp-micros, local-timestamp-millis, and local-timestamp-micros). Used at the entry of
+   * schema-evolution rewrite paths whose legacy code does unguarded {@code (Integer)} /
+   * {@code (Long)} casts on field values, which would otherwise fail under Avro 1.12.1 (Spark
+   * 4.1) where the {@code fastReaderEnabled} default is {@code true} and {@code GenericDatumReader}
+   * materializes java.time types instead of primitives. For non-logical-type schemas, primitive
+   * inputs, or null, this is a no-op. The on-disk byte format is unaffected - this is purely
+   * about in-memory Java type.
+   */
+  private static Object normalizeAvroLogicalTypeToPrimitive(Object value, Schema schema) {
+    if (value == null || schema == null) {
+      return value;
+    }
+    LogicalType lt = schema.getLogicalType();
+    if (lt == null) {
+      return value;
+    }
+    if (lt == LogicalTypes.date()) {
+      return value instanceof LocalDate ? (int) ((LocalDate) value).toEpochDay() : value;
+    }
+    if (lt == LogicalTypes.timestampMillis()) {
+      return value instanceof Instant ? extractEpochMillis(value) : value;
+    }
+    if (lt == LogicalTypes.timestampMicros()) {
+      return value instanceof Instant ? extractEpochMicros(value) : value;
+    }
+    if (lt == LogicalTypes.localTimestampMillis()) {
+      return value instanceof LocalDateTime ? extractLocalEpochMillis(value) : value;
+    }
+    if (lt == LogicalTypes.localTimestampMicros()) {
+      return value instanceof LocalDateTime ? extractLocalEpochMicros(value) : value;
+    }
+    return value;
   }
 
   /**
@@ -931,6 +1052,14 @@ public class HoodieAvroUtils {
   }
 
   public static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema) {
+    // Normalize any java.time form (LocalDate / Instant / LocalDateTime) to the Avro primitive
+    // form (Integer / Long) before doing any numeric / string conversion. The legacy branches
+    // below explicitly cast to Integer / Long; under Avro 1.12.1 (Spark 4.1 profile) the
+    // fastReaderEnabled default flipped to true and GenericDatumReader materializes java.time
+    // types for date / timestamp logical fields, which would break those casts. See
+    // convertValueForAvroLogicalTypes for the broader context — this is a read-side normalization
+    // only and does not affect on-disk byte format.
+    oldValue = normalizeAvroLogicalTypeToPrimitive(oldValue, oldSchema);
     if (oldSchema.getType() == newSchema.getType()) {
       switch (oldSchema.getType()) {
         case NULL:
