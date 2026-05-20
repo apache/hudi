@@ -907,12 +907,10 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
    * DESCRIPTOR mode on INLINE rows: user writes `data` bytes; on read with
    * `hoodie.read.blob.inline.mode=DESCRIPTOR` each row comes back with type still set to
    * {@code INLINE} (preserving the original storage mode) but with {@code data=null} and a
-   * populated synthesized {@code reference} pointing at the Lance file. A pure
-   * {@code SELECT read_blob(col)} query still resolves bytes — {@code BatchedBlobReader}
-   * materializes them via a 2-hop pread against the synthesized reference, reusing the same
-   * range-merged pread path used for OUT_OF_LINE rows. The synthesized reference is treated
-   * as an internal pointer; the mixed-projection variants are pinned separately in
-   * {@code testBlobInlineMixedProjection*}.
+   * populated synthesized {@code reference} pointing at the Lance file. The synthesized
+   * reference is an internal pointer, not user-facing storage. {@code read_blob()} is
+   * therefore unsupported on INLINE rows in this mode and must throw a clear error so
+   * callers don't conflate the synthesized pointer with durable metadata.
    */
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
@@ -972,22 +970,24 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
         s"synthetic reference to the Lance file should be flagged managed (id=$i)")
     }
 
-    // read_blob() under DESCRIPTOR mode resolves bytes via the 2-hop pread against the
-    // synthesized reference. The bytes must equal what was written — proves the synthesized
-    // reference points at the correct (path, offset, length) tuple inside the .lance file.
+    // read_blob() on INLINE rows under DESCRIPTOR mode is unsupported by design: DESCRIPTOR
+    // is metadata-only and the synthesized reference is an internal pointer into the .lance
+    // file's storage layout, not user-facing metadata. BatchedBlobReader must throw with a
+    // message that names both INLINE and DESCRIPTOR so the failure is actionable.
     val viewName = s"${tableName}_view"
     spark.read.format("hudi")
       .option(modeKey, "DESCRIPTOR")
       .load(tablePath)
       .createOrReplaceTempView(viewName)
-    val materialized = spark.sql(
-      s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
-    assertEquals(numRows, materialized.length)
-    materialized.zipWithIndex.foreach { case (row, i) =>
-      assertEquals(i, row.getInt(row.fieldIndex("id")))
-      assertArrayEquals(expectedPayloads(i), row.getAs[Array[Byte]]("bytes"),
-        s"read_blob() under DESCRIPTOR must return original bytes via 2-hop pread (id=$i)")
-    }
+    val ex = assertThrows(classOf[Throwable], new Executable {
+      override def execute(): Unit = {
+        spark.sql(s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
+      }
+    })
+    val msgChain = Iterator.iterate[Throwable](ex)(_.getCause).takeWhile(_ != null)
+      .flatMap(t => Option(t.getMessage)).mkString(" | ")
+    assertTrue(msgChain.contains("INLINE") && msgChain.contains("DESCRIPTOR"),
+      s"error must mention INLINE and DESCRIPTOR; got: $msgChain")
   }
 
   /**
@@ -1174,16 +1174,15 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
   }
 
   /**
-   * Materializing both INLINE blob columns via {@code read_blob()} in a single query:
-   * {@code SELECT read_blob(payload_a), read_blob(payload_b) FROM table}.
+   * Materializing both INLINE blob columns via {@code read_blob()} in a single query under
+   * CONTENT mode: {@code SELECT read_blob(payload_a), read_blob(payload_b) FROM table}. Each
+   * column must resolve via the 1-hop {@code inline_data} passthrough with its own bytes —
+   * distinct byte patterns per column would surface a cross-column aliasing regression.
    *
-   *   - CONTENT: both columns resolve via the 1-hop {@code inline_data} passthrough.
-   *   - DESCRIPTOR (default): the projection wraps every blob column in {@code read_blob()}
-   *     (no direct blob projection), so the analyzer's mixed-projection check does not fire
-   *     and {@code BatchedBlobReader} materializes bytes via the 2-hop pread against each
-   *     row's synthesized reference.
-   *
-   * Distinct byte patterns per column guard against cross-column aliasing under both modes.
+   * The DESCRIPTOR-mode failure path for {@code read_blob()} on INLINE rows is pinned by
+   * {@code testBlobInlineDescriptorMode} (single column) and {@code
+   * testBlobInlineMultipleColumnsMixedSelect} (one read_blob + one struct projection); it is
+   * not re-asserted here.
    */
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
@@ -1199,50 +1198,33 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .option(modeKey, "CONTENT")
       .load(tablePath)
       .createOrReplaceTempView(contentView)
-    val contentMaterialized = spark.sql(
+    val materialized = spark.sql(
       s"SELECT id, read_blob(payload_a) AS bytes_a, read_blob(payload_b) AS bytes_b " +
         s"FROM $contentView ORDER BY id").collect()
-    assertEquals(numRows, contentMaterialized.length)
-    contentMaterialized.zipWithIndex.foreach { case (row, i) =>
+    assertEquals(numRows, materialized.length)
+    materialized.zipWithIndex.foreach { case (row, i) =>
       assertEquals(i, row.getInt(row.fieldIndex("id")))
       assertArrayEquals(payloadsA(i), row.getAs[Array[Byte]]("bytes_a"),
         s"read_blob(payload_a) should match under CONTENT (id=$i)")
       assertArrayEquals(payloadsB(i), row.getAs[Array[Byte]]("bytes_b"),
         s"read_blob(payload_b) should match under CONTENT (id=$i)")
     }
-
-    // DESCRIPTOR (default): both columns wrapped in read_blob() — no direct projection, so
-    // the mixed-projection analyzer error does not fire. BatchedBlobReader resolves bytes
-    // via the 2-hop pread against each row's synthesized reference. Bytes must match.
-    val descView = s"${tableName}_desc_view"
-    spark.read.format("hudi")
-      .load(tablePath)
-      .createOrReplaceTempView(descView)
-    val descMaterialized = spark.sql(
-      s"SELECT id, read_blob(payload_a) AS bytes_a, read_blob(payload_b) AS bytes_b " +
-        s"FROM $descView ORDER BY id").collect()
-    assertEquals(numRows, descMaterialized.length)
-    descMaterialized.zipWithIndex.foreach { case (row, i) =>
-      assertEquals(i, row.getInt(row.fieldIndex("id")))
-      assertArrayEquals(payloadsA(i), row.getAs[Array[Byte]]("bytes_a"),
-        s"read_blob(payload_a) should match under DESCRIPTOR via 2-hop pread (id=$i)")
-      assertArrayEquals(payloadsB(i), row.getAs[Array[Byte]]("bytes_b"),
-        s"read_blob(payload_b) should match under DESCRIPTOR via 2-hop pread (id=$i)")
-    }
   }
 
   /**
    * Mixed projection across two INLINE blob columns: {@code SELECT read_blob(payload_a),
    * payload_b FROM table}. One column is materialized via {@code read_blob()}, the other is
-   * left as a struct.
+   * left as a struct. This is the case explicitly raised in PR review — under the DESCRIPTOR
+   * default, a mixed query asking for bytes on one column and a pointer on another must fail
+   * loudly rather than silently returning one materialized and one synthesized shape.
    *
    *   - CONTENT: {@code payload_a} resolves to bytes (1-hop), {@code payload_b} comes back as
    *     the same content-shape struct as {@code testBlobInlineMultipleColumnsPlainSelect}
-   *     (data=bytes, reference present-but-empty).
-   *   - DESCRIPTOR (default): {@code ReadBlobRule} rejects the query at plan time with an
-   *     {@code AnalysisException}. Returning materialized bytes for one column alongside a
-   *     synthesized descriptor reference for another in the same row is misleading — the
-   *     synthesized reference is an internal Lance pointer, not durable metadata.
+   *     (data=bytes, reference present-but-empty). Pinning both shapes in the same row
+   *     confirms the projection doesn't bleed across columns.
+   *   - DESCRIPTOR (default): the {@code read_blob()} call on {@code payload_a} still hits
+   *     the INLINE+DESCRIPTOR branch even though {@code payload_b} is only being projected as
+   *     a struct. {@code payload_b}'s shape doesn't soften the failure.
    */
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
@@ -1282,9 +1264,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       }
     }
 
-    // DESCRIPTOR (default): the mixed projection is rejected at plan time by ReadBlobRule.
-    // The error must be analyzer-time (AnalysisException), not a runtime BatchedBlobReader
-    // throw, and the message must name both blob columns and the config key so it's actionable.
+    // DESCRIPTOR (default): read_blob(payload_a) trips even though payload_b is just a struct.
     val descView = s"${tableName}_desc_view"
     spark.read.format("hudi")
       .load(tablePath)
@@ -1298,96 +1278,9 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     })
     val msgChain = Iterator.iterate[Throwable](ex)(_.getCause).takeWhile(_ != null)
       .flatMap(t => Option(t.getMessage)).mkString(" | ")
-    assertTrue(msgChain.contains("mix read_blob()") && msgChain.contains("payload_a") &&
-      msgChain.contains("payload_b") && msgChain.contains("DESCRIPTOR"),
-      s"mixed projection under DESCRIPTOR must throw an analyzer error naming both columns " +
-        s"and the mode; got: $msgChain")
-  }
-
-  /**
-   * Mixed projection on the **same** blob column: {@code SELECT read_blob(payload), payload
-   * FROM table}. This is the variant of {@code testBlobInlineMultipleColumnsMixedSelect}
-   * that uses a single blob column twice — once wrapped in {@code read_blob()} and once
-   * projected directly.
-   *
-   *   - CONTENT: succeeds. {@code read_blob(payload)} returns bytes (1-hop) and the direct
-   *     {@code payload} projection returns the content-shape struct. Both come from the
-   *     same source row but Spark resolves each independently.
-   *   - DESCRIPTOR (default): rejected at plan time by {@code ReadBlobRule}. The error must
-   *     name the column and the config key.
-   */
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieTableType])
-  def testBlobInlineMixedProjectionSameColumn(tableType: HoodieTableType): Unit = {
-    val tableName = s"test_lance_blob_mixed_same_col_${tableType.name().toLowerCase}"
-    val tablePath = s"$basePath/$tableName"
-
-    val payloadLen = 512
-    val numRows = 4
-    val expectedPayloads: Seq[Array[Byte]] = (0 until numRows).map { i =>
-      (0 until payloadLen).map(j => ((i + j) % 256).toByte).toArray
-    }
-    val sparkSess = spark
-    import sparkSess.implicits._
-
-    val rawDf = expectedPayloads.zipWithIndex.map { case (b, i) => (i, b) }
-      .toDF("id", "bytes")
-      .select($"id", BlobTestHelpers.inlineBlobStructCol("payload", $"bytes"))
-    val canonicalSchema = StructType(Seq(
-      StructField("id", IntegerType, nullable = false),
-      StructField("payload", BlobType().asInstanceOf[StructType], nullable = true,
-        BlobTestHelpers.blobMetadata)
-    ))
-    val df = spark.createDataFrame(rawDf.rdd, canonicalSchema)
-    writeDataframe(tableType, tableName, tablePath, df, saveMode = SaveMode.Overwrite,
-      operation = Some("bulk_insert"),
-      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id"))
-    assertLanceBlobEncoding(tablePath)
-
-    val modeKey = "hoodie.read.blob.inline.mode"
-
-    // CONTENT: both projections resolve independently — read_blob(payload) returns bytes,
-    // direct payload returns content-shape struct.
-    val contentView = s"${tableName}_content_view"
-    spark.read.format("hudi")
-      .option(modeKey, "CONTENT")
-      .load(tablePath)
-      .createOrReplaceTempView(contentView)
-    val rows = spark.sql(
-      s"SELECT id, read_blob(payload) AS bytes, payload " +
-        s"FROM $contentView ORDER BY id").collect()
-    assertEquals(numRows, rows.length)
-    rows.zipWithIndex.foreach { case (row, i) =>
-      assertEquals(i, row.getInt(row.fieldIndex("id")))
-      assertArrayEquals(expectedPayloads(i), row.getAs[Array[Byte]]("bytes"),
-        s"read_blob(payload) should return bytes under CONTENT (id=$i)")
-      val payload = row.getStruct(row.fieldIndex("payload"))
-      assertEquals(HoodieSchema.Blob.INLINE,
-        payload.getString(payload.fieldIndex(HoodieSchema.Blob.TYPE)),
-        s"direct payload: type should remain INLINE under CONTENT (id=$i)")
-      assertArrayEquals(expectedPayloads(i),
-        payload.getAs[Array[Byte]](HoodieSchema.Blob.INLINE_DATA_FIELD),
-        s"direct payload: data should match written bytes under CONTENT (id=$i)")
-    }
-
-    // DESCRIPTOR (default): analyzer rejects with a structured message naming the column.
-    val descView = s"${tableName}_desc_view"
-    spark.read.format("hudi")
-      .load(tablePath)
-      .createOrReplaceTempView(descView)
-    val ex = assertThrows(classOf[Throwable], new Executable {
-      override def execute(): Unit = {
-        spark.sql(
-          s"SELECT id, read_blob(payload) AS bytes, payload " +
-            s"FROM $descView ORDER BY id").collect()
-      }
-    })
-    val msgChain = Iterator.iterate[Throwable](ex)(_.getCause).takeWhile(_ != null)
-      .flatMap(t => Option(t.getMessage)).mkString(" | ")
-    assertTrue(msgChain.contains("mix read_blob()") && msgChain.contains("payload") &&
-      msgChain.contains("DESCRIPTOR"),
-      s"same-column mixed projection under DESCRIPTOR must throw an analyzer error naming " +
-        s"the column and the mode; got: $msgChain")
+    assertTrue(msgChain.contains("INLINE") && msgChain.contains("DESCRIPTOR"),
+      s"read_blob(payload_a) under DESCRIPTOR must throw INLINE+DESCRIPTOR error even when " +
+        s"mixed with a struct projection of another blob column; got: $msgChain")
   }
 
   /**
