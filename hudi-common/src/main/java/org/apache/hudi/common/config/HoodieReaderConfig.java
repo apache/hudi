@@ -114,6 +114,6 @@ public class HoodieReaderConfig extends HoodieConfig {
       .withDocumentation("How Hudi interprets INLINE BLOB values on read. "
           + "DESCRIPTOR (default) returns an OUT_OF_LINE-shaped reference pointing at the "
           + "backing Lance file with the INLINE payload's position and size, so callers can "
-          + "defer the byte read via read_blob(). "
+          + "skip the byte content read. "
           + "CONTENT returns the raw inline bytes directly in the data field on every read.");
 }
