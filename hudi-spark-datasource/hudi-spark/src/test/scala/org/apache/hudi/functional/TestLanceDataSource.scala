@@ -988,24 +988,6 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .flatMap(t => Option(t.getMessage)).mkString(" | ")
     assertTrue(msgChain.contains("INLINE") && msgChain.contains("DESCRIPTOR"),
       s"error must mention INLINE and DESCRIPTOR; got: $msgChain")
-
-    // Same table, same rows, but read under CONTENT mode: read_blob() takes the 1-hop
-    // passthrough of inline_data and must return the originally-written bytes. This pins the
-    // write -> read roundtrip integrity for INLINE blobs (compaction/merge included for MOR)
-    // independently of the DESCRIPTOR-shape verification above.
-    val contentViewName = s"${tableName}_content_view"
-    spark.read.format("hudi")
-      .option(modeKey, "CONTENT")
-      .load(tablePath)
-      .createOrReplaceTempView(contentViewName)
-    val materialized = spark.sql(
-      s"SELECT id, read_blob(payload) AS bytes FROM $contentViewName ORDER BY id").collect()
-    assertEquals(numRows, materialized.length)
-    materialized.zipWithIndex.foreach { case (row, i) =>
-      assertEquals(i, row.getInt(row.fieldIndex("id")))
-      assertArrayEquals(expectedPayloads(i), row.getAs[Array[Byte]]("bytes"),
-        s"read_blob() bytes mismatch under CONTENT mode (id=$i)")
-    }
   }
 
   /**
@@ -1130,16 +1112,15 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
   /**
    * Plain struct projection across two INLINE blob columns: {@code SELECT payload_a, payload_b
-   * FROM table}. Each mode independently:
+   * FROM table}. The single-column shape is already pinned by {@code testBlobInlineRoundTrip}
+   * (CONTENT) and {@code testBlobInlineDescriptorMode} (DESCRIPTOR); this test only asserts the
+   * per-column-independence properties that are unique to the multi-column case:
    *
-   *   - CONTENT: both columns come back with {@code type=INLINE} and {@code data=bytes}. The
-   *     {@code reference} struct may be present with all-null leaves (Lance quirk — see
-   *     {@code testBlobInlineRoundTrip}); the test only requires {@code external_path} to be
-   *     null on it so downstream consumers can't mistake it for a real OUT_OF_LINE pointer.
-   *   - DESCRIPTOR (default): both columns come back with {@code type=INLINE, data=NULL} and a
-   *     populated synthesized {@code reference} (path ending in {@code .lance}, length equal
-   *     to the written payload, {@code is_managed=true}). Asserting on both columns confirms
-   *     the descriptor synthesis is per-column, not first-column-only.
+   *   - CONTENT: each column's {@code data} carries its own written bytes (distinct byte
+   *     patterns per column rule out cross-column aliasing).
+   *   - DESCRIPTOR (default): both columns independently get {@code data=null} and a populated
+   *     synthesized {@code reference} — i.e. the synthesis fires per-column, not just on the
+   *     first blob column.
    */
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
@@ -1153,7 +1134,8 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     import sparkSess.implicits._
     val modeKey = "hoodie.read.blob.inline.mode"
 
-    // CONTENT: data=bytes on both columns; reference (if present) has null external_path.
+    // CONTENT: per-column bytes must not alias — payload_a carries payloadsA, payload_b carries
+    // payloadsB. The byte patterns differ by construction (see writeMultiBlobInlineTable).
     val contentRows = spark.read.format("hudi")
       .option(modeKey, "CONTENT")
       .load(tablePath)
@@ -1162,25 +1144,17 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .collect()
     assertEquals(numRows, contentRows.length)
     contentRows.zipWithIndex.foreach { case (row, i) =>
-      Seq(("payload_a", payloadsA(i)), ("payload_b", payloadsB(i))).foreach {
-        case (col, expected) =>
-          val payload = row.getStruct(row.fieldIndex(col))
-          assertEquals(HoodieSchema.Blob.INLINE,
-            payload.getString(payload.fieldIndex(HoodieSchema.Blob.TYPE)),
-            s"$col: type should remain INLINE under CONTENT (id=$i)")
-          assertArrayEquals(expected,
-            payload.getAs[Array[Byte]](HoodieSchema.Blob.INLINE_DATA_FIELD),
-            s"$col: data should match written bytes under CONTENT (id=$i)")
-          val refIdx = payload.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)
-          if (!payload.isNullAt(refIdx)) {
-            val ref = payload.getStruct(refIdx)
-            assertTrue(ref.isNullAt(ref.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH)),
-              s"$col: reference.external_path should be null under CONTENT (id=$i)")
-          }
-      }
+      val a = row.getStruct(row.fieldIndex("payload_a"))
+      val b = row.getStruct(row.fieldIndex("payload_b"))
+      assertArrayEquals(payloadsA(i), a.getAs[Array[Byte]](HoodieSchema.Blob.INLINE_DATA_FIELD),
+        s"payload_a: bytes must match written payloadsA under CONTENT (id=$i)")
+      assertArrayEquals(payloadsB(i), b.getAs[Array[Byte]](HoodieSchema.Blob.INLINE_DATA_FIELD),
+        s"payload_b: bytes must match written payloadsB under CONTENT (id=$i)")
     }
 
-    // DESCRIPTOR (default): data=NULL, populated synthesized reference on both columns.
+    // DESCRIPTOR (default): descriptor synthesis must fire per-column. data=null and a
+    // populated reference on BOTH columns is the property that distinguishes this from the
+    // single-column DESCRIPTOR test.
     val descRows = spark.read.format("hudi")
       .load(tablePath)
       .select($"id", $"payload_a", $"payload_b")
@@ -1191,33 +1165,24 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       val id = row.getInt(row.fieldIndex("id"))
       Seq("payload_a", "payload_b").foreach { col =>
         val payload = row.getStruct(row.fieldIndex(col))
-        assertEquals(HoodieSchema.Blob.INLINE,
-          payload.getString(payload.fieldIndex(HoodieSchema.Blob.TYPE)),
-          s"$col: type should remain INLINE under DESCRIPTOR (id=$id)")
         assertTrue(payload.isNullAt(payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
           s"$col: data should be null under DESCRIPTOR (id=$id)")
-        val ref = payload.getStruct(payload.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE))
-        assertNotNull(ref,
+        assertNotNull(payload.getStruct(payload.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)),
           s"$col: reference should be populated under DESCRIPTOR (id=$id)")
-        assertEquals(payloadLen.toLong,
-          ref.getLong(ref.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH)),
-          s"$col: reference.length should equal payload length (id=$id)")
-        assertTrue(ref.getBoolean(ref.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED)),
-          s"$col: synthesized reference should be flagged managed (id=$id)")
       }
     }
   }
 
   /**
-   * Materializing both INLINE blob columns via {@code read_blob()} in a single query:
-   * {@code SELECT read_blob(payload_a), read_blob(payload_b) FROM table}.
+   * Materializing both INLINE blob columns via {@code read_blob()} in a single query under
+   * CONTENT mode: {@code SELECT read_blob(payload_a), read_blob(payload_b) FROM table}. Each
+   * column must resolve via the 1-hop {@code inline_data} passthrough with its own bytes —
+   * distinct byte patterns per column would surface a cross-column aliasing regression.
    *
-   *   - CONTENT: both columns resolve via the 1-hop {@code inline_data} passthrough. The bytes
-   *     for each column must match their respective written payloads — distinct byte patterns
-   *     are used per column so a cross-column aliasing regression would surface as a mismatch.
-   *   - DESCRIPTOR (default): the call throws. INLINE+DESCRIPTOR rejects {@code read_blob()}
-   *     regardless of which column trips the branch first, so the error chain must name both
-   *     INLINE and DESCRIPTOR for the failure to be actionable.
+   * The DESCRIPTOR-mode failure path for {@code read_blob()} on INLINE rows is pinned by
+   * {@code testBlobInlineDescriptorMode} (single column) and {@code
+   * testBlobInlineMultipleColumnsMixedSelect} (one read_blob + one struct projection); it is
+   * not re-asserted here.
    */
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
@@ -1228,7 +1193,6 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       tableType, tableName, numRows)
     val modeKey = "hoodie.read.blob.inline.mode"
 
-    // CONTENT: read_blob() on both columns materializes correct bytes via 1-hop passthrough.
     val contentView = s"${tableName}_content_view"
     spark.read.format("hudi")
       .option(modeKey, "CONTENT")
@@ -1245,24 +1209,6 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       assertArrayEquals(payloadsB(i), row.getAs[Array[Byte]]("bytes_b"),
         s"read_blob(payload_b) should match under CONTENT (id=$i)")
     }
-
-    // DESCRIPTOR (default): read_blob() on either INLINE column must throw.
-    val descView = s"${tableName}_desc_view"
-    spark.read.format("hudi")
-      .load(tablePath)
-      .createOrReplaceTempView(descView)
-    val ex = assertThrows(classOf[Throwable], new Executable {
-      override def execute(): Unit = {
-        spark.sql(
-          s"SELECT id, read_blob(payload_a) AS bytes_a, read_blob(payload_b) AS bytes_b " +
-            s"FROM $descView ORDER BY id").collect()
-      }
-    })
-    val msgChain = Iterator.iterate[Throwable](ex)(_.getCause).takeWhile(_ != null)
-      .flatMap(t => Option(t.getMessage)).mkString(" | ")
-    assertTrue(msgChain.contains("INLINE") && msgChain.contains("DESCRIPTOR"),
-      s"read_blob() on either INLINE column under DESCRIPTOR must throw with " +
-        s"INLINE+DESCRIPTOR error; got: $msgChain")
   }
 
   /**
