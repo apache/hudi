@@ -317,10 +317,11 @@ public class AzureStorageLockClient implements StorageLockClient {
       logger.info("OwnerId: {}, Unable to write new lock file. Another process has modified this lockfile {} already.",
           ownerId, lockFileUri);
       return LockUpsertResult.ACQUIRED_BY_OTHERS;
-    } else if (code == CONFLICT_ERROR_CODE) {
-      logger.info("OwnerId: {}, Retriable conditional request conflict error: {}", ownerId, lockFileUri);
     } else if (code == RATE_LIMIT_ERROR_CODE) {
       logger.warn("OwnerId: {}, Rate limit exceeded for lock file: {}", ownerId, lockFileUri);
+      return LockUpsertResult.THROTTLED;
+    } else if (code == CONFLICT_ERROR_CODE) {
+      logger.info("OwnerId: {}, Retriable conditional request conflict error: {}", ownerId, lockFileUri);
     } else if (code >= INTERNAL_SERVER_ERROR_CODE_MIN) {
       logger.warn("OwnerId: {}, Azure returned internal server error code for lock file: {}", ownerId, lockFileUri, e);
     } else {
