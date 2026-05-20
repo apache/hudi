@@ -253,7 +253,8 @@ public class HoodieTableMetadataUtil {
     }
   }
 
-  private static boolean isFloatingPointNaN(Object value) {
+  // Package-private for testing.
+  static boolean isFloatingPointNaN(Object value) {
     if (value instanceof Double) {
       return Double.isNaN((Double) value);
     }

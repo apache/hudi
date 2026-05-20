@@ -352,4 +352,34 @@ class TestHoodieTableMetadataUtil {
           "STRING should remain supported for record type " + recordType);
     }
   }
+
+  /**
+   * Verifies the NaN-detection helper used by {@code collectColumnRangeMetadata} to skip
+   * NaN values during streaming min/max accumulation (#18754, writer-side). Without this
+   * gate, {@code Double.compare(NaN, x) == +1} would let a single NaN poison the running
+   * max forever, and the persisted stats would mislead read-side data-skipping into
+   * pruning files that contain matching values.
+   */
+  @Test
+  void testIsFloatingPointNaN() {
+    // The two cases the gate must catch
+    assertTrue(HoodieTableMetadataUtil.isFloatingPointNaN(Double.NaN));
+    assertTrue(HoodieTableMetadataUtil.isFloatingPointNaN(Float.NaN));
+
+    // Everything else must pass through unchanged — including the legitimate Inf values
+    // that parquet-mr treats as valid stats (see #18754 issue body).
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(null));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(0.0));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(0.0f));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(123.45));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(-123.45f));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(Double.POSITIVE_INFINITY));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(Double.NEGATIVE_INFINITY));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(Float.POSITIVE_INFINITY));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(Float.NEGATIVE_INFINITY));
+    // Non-floating-point values are not NaN regardless of value
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(42));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(42L));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN("NaN"));
+  }
 }
