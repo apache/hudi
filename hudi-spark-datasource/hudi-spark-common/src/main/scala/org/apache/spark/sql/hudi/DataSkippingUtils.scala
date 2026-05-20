@@ -488,12 +488,21 @@ object ColumnStatsExpressionUtils {
    * were omitted due to value-size truncation), Hudi's writer persists min/max as null so the
    * stats can't be trusted. A bare `colA_maxValue > X` predicate would evaluate to null in that
    * case, which Spark treats as false in WHERE — silently pruning a file that may contain
-   * matching rows. Wrapping with `OR colA_minValue IS NULL` makes the file pass through and be
-   * scanned, preserving correctness at the cost of skipping an opportunity. min/max are written
-   * jointly (both null or both non-null), so checking min is sufficient.
+   * matching rows. Adding an `OR colA_minValue IS NULL` term makes the file pass through and
+   * be scanned, preserving correctness at the cost of skipping an opportunity.
+   *
+   * The OR-IsNull term must NOT fire for a legitimately all-null column (no non-null values
+   * to bound), where min/max are correctly null and any non-null predicate should still prune.
+   * We distinguish the two cases with {@code valueCount > nullCount}: the unreliable case has
+   * non-null values whose bounds we couldn't determine, the all-null case has none.
+   *
+   * Note: min/max are written jointly (both null or both non-null), so checking min is sufficient.
    */
   @inline def withStatsAvailable(skipExpr: Expression, colName: String): Expression = {
-    Or(skipExpr, IsNull(genColMinValueExpr(colName)))
+    Or(
+      skipExpr,
+      And(IsNull(genColMinValueExpr(colName)),
+          GreaterThan(genColValueCountExpr, genColNumNullsExpr(colName))))
   }
 
   @inline def genColumnValuesEqualToExpression(colName: String,
