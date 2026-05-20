@@ -543,7 +543,7 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   private static void modify(HoodieStorage storage, StoragePath metadataFolder, Properties modifyProps, BiConsumer<Properties, Properties> propsToUpdate,
-                             Set<String> propsToDelete) {
+                             Set<String> propsToDelete, PreModifyHook preModifyHook) {
     StoragePath cfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE);
     StoragePath backupCfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE_BACKUP);
     try {
@@ -553,12 +553,12 @@ public class HoodieTableConfig extends HoodieConfig {
       // 1. Read the existing config
       TypedProperties props = fetchConfigs(storage, metadataFolder, HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
 
-      // 1a. Validate meta-field-population state transitions BEFORE any destructive write,
-      // so a rejected transition leaves hoodie.properties (and the backup) untouched.
-      // Also yields any extra keys to delete (currently: META_FIELDS_EXCLUDE_LIST when
-      // populate flips true->false) so the persisted state stays internally consistent.
-      Set<String> extraDeletes =
-          validateAndNormalizeMetaFieldsTransition(props, modifyProps, propsToUpdate, propsToDelete);
+      // 1a. Run the pre-modify hook BEFORE any destructive write so a rejected validation
+      // leaves hoodie.properties (and the backup) untouched. The hook may also yield extra
+      // keys to delete (e.g. META_FIELDS_EXCLUDE_LIST when populate flips true->false) so
+      // the persisted state stays internally consistent. Keeping the hook external lets
+      // modify() remain purely the on-disk mutation protocol.
+      Set<String> extraDeletes = preModifyHook.run(props, modifyProps, propsToUpdate, propsToDelete);
 
       // 2. backup the existing properties.
       try (OutputStream out = storage.create(backupCfgPath, false)) {
@@ -604,6 +604,24 @@ public class HoodieTableConfig extends HoodieConfig {
     storage.deleteFile(cfgPath);
     LOG.info("Deleted properties file at " + cfgPath);
   }
+
+  /**
+   * Pre-modification hook invoked by {@link #modify} after the current on-disk props are
+   * read but before any destructive write. Implementations may throw to abort the update
+   * (the on-disk file remains untouched) and may return additional property keys to delete
+   * during the same write to keep persisted state internally consistent.
+   */
+  @FunctionalInterface
+  private interface PreModifyHook {
+    Set<String> run(Properties currentProps,
+                    Properties modifyProps,
+                    BiConsumer<Properties, Properties> propsToUpdate,
+                    Set<String> propsToDelete);
+  }
+
+  /** No-op pre-modify hook: no validation, no extra deletes. */
+  private static final PreModifyHook NOOP_PRE_MODIFY_HOOK =
+      (currentProps, modifyProps, propsToUpdate, propsToDelete) -> Collections.emptySet();
 
   /**
    * Computes the (populate, exclude) state before and after the requested modification
@@ -661,18 +679,21 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public static void update(HoodieStorage storage, StoragePath metadataFolder,
                             Properties updatedProps) {
-    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties, Collections.EMPTY_SET);
+    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties, Collections.EMPTY_SET,
+        HoodieTableConfig::validateAndNormalizeMetaFieldsTransition);
   }
 
   public static void updateAndDeleteProps(HoodieStorage storage, StoragePath metadataFolder,
                                           Properties updatedProps, Set<String> propstoDelete) {
-    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties, propstoDelete);
+    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties, propstoDelete,
+        HoodieTableConfig::validateAndNormalizeMetaFieldsTransition);
   }
 
   public static void delete(HoodieStorage storage, StoragePath metadataFolder, Set<String> deletedProps) {
     Properties props = new Properties();
     deletedProps.forEach(p -> props.setProperty(p, ""));
-    modify(storage, metadataFolder, props, ConfigUtils::deleteProperties, Collections.EMPTY_SET);
+    modify(storage, metadataFolder, props, ConfigUtils::deleteProperties, Collections.EMPTY_SET,
+        HoodieTableConfig::validateAndNormalizeMetaFieldsTransition);
   }
 
   /**
@@ -1277,15 +1298,32 @@ public class HoodieTableConfig extends HoodieConfig {
         .contains(metaFieldName);
   }
 
+  // Lazily-computed cache for HoodieMetaFieldFlags. The flags object itself is immutable;
+  // recomputing on every call is wasteful in the hot write path (every record write reads
+  // the per-field populated flags). Cached lazily to keep the no-arg constructor cheap.
+  // Volatile is sufficient because the flags object is a value object (final fields), so
+  // any thread that observes a non-null reference also observes a fully-initialized object.
+  private transient volatile HoodieMetaFieldFlags cachedMetaFieldFlags;
+
   /**
    * Returns the {@link HoodieMetaFieldFlags} reflecting POPULATE_META_FIELDS and
    * META_FIELDS_EXCLUDE_LIST as persisted on this table. This is the source of truth
    * for both writers and readers - {@link HoodieMetaFieldFlags} should never be sourced
    * from a writer-side config since the persisted table state is what determines on-disk
    * meta-field availability across commits.
+   *
+   * <p>The result is memoized on first call. Callers that mutate POPULATE_META_FIELDS or
+   * META_FIELDS_EXCLUDE_LIST on an existing {@code HoodieTableConfig} instance after the
+   * first call will not see the change reflected in subsequent calls; in practice the
+   * meta-field props are set during table init / metaclient load and not mutated after.
    */
   public HoodieMetaFieldFlags getHoodieMetaFieldFlags() {
-    return HoodieMetaFieldFlags.fromConfig(this);
+    HoodieMetaFieldFlags flags = cachedMetaFieldFlags;
+    if (flags == null) {
+      flags = HoodieMetaFieldFlags.fromConfig(this);
+      cachedMetaFieldFlags = flags;
+    }
+    return flags;
   }
 
   /**
