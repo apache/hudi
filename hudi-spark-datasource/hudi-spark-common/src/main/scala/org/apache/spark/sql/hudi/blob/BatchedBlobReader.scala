@@ -210,11 +210,10 @@ class BatchedBlobReader(
             if (storageType == HoodieSchema.Blob.INLINE) {
               // INLINE + CONTENT: inline_data is populated; return bytes directly (1-hop).
               // INLINE + DESCRIPTOR: inline_data is null and the scan synthesized a
-              // reference pointing into the backing file's storage layout. We refuse to
-              // materialize bytes here — DESCRIPTOR is a metadata-only mode for INLINE
-              // rows, and the synthesized reference is an internal pointer, not
-              // user-facing storage info. Callers must switch to CONTENT mode or stop
-              // using read_blob() on INLINE columns under DESCRIPTOR.
+              // reference pointing into the backing file. Fall through to the same
+              // range-merged pread path used for OUT_OF_LINE rows — the synthesized
+              // reference is structurally identical to a user-supplied OUT_OF_LINE
+              // reference (external_path, offset, length, is_managed=true).
               if (!accessor.isNullAt(blobStruct, 1)) {
                 val bytes = accessor.getBytes(blobStruct, 1)
                 batch += RowInfo[R](
@@ -226,46 +225,11 @@ class BatchedBlobReader(
                   inlineBytes = Some(bytes)
                 )
               } else {
-                throw new IllegalStateException(
-                  s"read_blob() cannot materialize bytes for an INLINE blob under " +
-                    s"DESCRIPTOR mode (row $rowIndex). Under " +
-                    s"hoodie.read.blob.inline.mode=DESCRIPTOR, INLINE blobs will not return bytes via the 'data' subfield" +
-                    " and instead returns a 'reference' subfield containing metadata only." +
-                    s"In order to materialize bytes set hoodie.read.blob.inline.mode=CONTENT")
+                addRowInfoFromReference(row, blobStruct, batch)
               }
             } else if (storageType  == HoodieSchema.Blob.OUT_OF_LINE) {
               // Case 2 or 3: Out-of-line — get reference struct (field 2)
-              require(!accessor.isNullAt(blobStruct, 2), s"Out-of-line blob at row $rowIndex must set reference")
-              val referenceStruct = accessor.getStruct(blobStruct, 2, HoodieSchema.Blob.getReferenceFieldCount)
-              val filePath = accessor.getString(referenceStruct, 0)
-              require(filePath != null && filePath.nonEmpty, s"Blob reference must have non-empty external_path at row $rowIndex")
-              val offsetIsNull = accessor.isNullAt(referenceStruct, 1)
-              val lengthIsNull = accessor.isNullAt(referenceStruct, 2)
-              if (offsetIsNull && lengthIsNull) {
-                // Case 2: Whole-file read — no offset/length specified; sentinel length = -1
-                batch += RowInfo[R](
-                  originalRow = row,
-                  filePath = filePath,
-                  offset = 0,
-                  length = -1,
-                  index = rowIndex
-                )
-              } else if (offsetIsNull || lengthIsNull) {
-                throw new IllegalArgumentException(s"Blob reference for '$filePath' must set both offset and length, or neither")
-              } else {
-                // Case 3: Regular range read
-                val offset = accessor.getLong(referenceStruct, 1)
-                val length = accessor.getLong(referenceStruct, 2)
-                require(offset >= 0, s"Blob offset must be non-negative for '$filePath': $offset")
-                require(length >= 0, s"Blob length must be non-negative for '$filePath': $length")
-                batch += RowInfo[R](
-                  originalRow = row,
-                  filePath = filePath,
-                  offset = offset,
-                  length = length,
-                  index = rowIndex
-                )
-              }
+              addRowInfoFromReference(row, blobStruct, batch)
             } else {
               throw new IllegalArgumentException(s"Unsupported blob storage_type at row $rowIndex: $storageType")
             }
@@ -274,6 +238,55 @@ class BatchedBlobReader(
           }
         }
         batch.toSeq
+      }
+
+      /**
+       * Extract an external/synthesized reference (path/offset/length) from a blob
+       * struct's reference subfield (field 2) and append the corresponding RowInfo
+       * to the batch. Shared by two paths:
+       *   - OUT_OF_LINE rows: the user-supplied external reference.
+       *   - INLINE rows under DESCRIPTOR mode: the Lance-synthesized reference into
+       *     the backing .lance file. Structurally identical to OUT_OF_LINE, so the
+       *     same range-merged pread infrastructure materializes bytes via read_blob().
+       */
+      private def addRowInfoFromReference(
+          row: R,
+          blobStruct: R,
+          batch: ArrayBuffer[RowInfo[R]]): Unit = {
+        require(!accessor.isNullAt(blobStruct, 2),
+          s"Blob at row $rowIndex must set reference (got both inline_data=NULL and " +
+            s"reference=NULL — malformed row)")
+        val referenceStruct = accessor.getStruct(blobStruct, 2, HoodieSchema.Blob.getReferenceFieldCount)
+        val filePath = accessor.getString(referenceStruct, 0)
+        require(filePath != null && filePath.nonEmpty,
+          s"Blob reference must have non-empty external_path at row $rowIndex")
+        val offsetIsNull = accessor.isNullAt(referenceStruct, 1)
+        val lengthIsNull = accessor.isNullAt(referenceStruct, 2)
+        if (offsetIsNull && lengthIsNull) {
+          // Whole-file read — sentinel length = -1
+          batch += RowInfo[R](
+            originalRow = row,
+            filePath = filePath,
+            offset = 0,
+            length = -1,
+            index = rowIndex
+          )
+        } else if (offsetIsNull || lengthIsNull) {
+          throw new IllegalArgumentException(
+            s"Blob reference for '$filePath' must set both offset and length, or neither")
+        } else {
+          val offset = accessor.getLong(referenceStruct, 1)
+          val length = accessor.getLong(referenceStruct, 2)
+          require(offset >= 0, s"Blob offset must be non-negative for '$filePath': $offset")
+          require(length >= 0, s"Blob length must be non-negative for '$filePath': $length")
+          batch += RowInfo[R](
+            originalRow = row,
+            filePath = filePath,
+            offset = offset,
+            length = length,
+            index = rowIndex
+          )
+        }
       }
     }
 

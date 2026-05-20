@@ -19,11 +19,14 @@
 
 package org.apache.spark.sql.hudi.blob
 
+import org.apache.hudi.common.config.HoodieReaderConfig
+
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, ExprId, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.types.{DataType, StructType}
 
 import scala.collection.mutable
@@ -46,6 +49,7 @@ case class ReadBlobRule(spark: SparkSession) extends Rule[LogicalPlan] {
       if containsReadBlobExpression(projectList)
         && containsReadBlobInExpression(condition)
         && !child.isInstanceOf[BatchedBlobRead] =>
+      rejectMixedBlobProjection(projectList, child)
       val projectBlobCols = extractAllBlobColumns(projectList)
       val filterBlobCols = extractBlobColumnsFromExpression(condition)
       val blobColumns = (projectBlobCols ++ filterBlobCols)
@@ -71,6 +75,7 @@ case class ReadBlobRule(spark: SparkSession) extends Rule[LogicalPlan] {
       if containsReadBlobExpression(projectList)
         && !child.isInstanceOf[BatchedBlobRead] =>
 
+      rejectMixedBlobProjection(projectList, child)
       val blobColumns = extractAllBlobColumns(projectList)
       val (wrappedPlan, blobToDataAttr) = wrapWithBlobReads(blobColumns, child)
       val newProjectList = transformNamedExpressions(projectList, blobToDataAttr)
@@ -169,5 +174,95 @@ case class ReadBlobRule(spark: SparkSession) extends Rule[LogicalPlan] {
       throw new IllegalStateException("read_blob() must be called on a direct column reference")
     case other =>
       other.mapChildren(replaceReadBlobExpression(_, blobToDataAttr))
+  }
+
+  /**
+   * Reject queries that mix `read_blob(blob_col)` with a direct projection of any blob
+   * column when the effective inline read mode resolves to DESCRIPTOR.
+   */
+  private def rejectMixedBlobProjection(
+      projectList: Seq[Expression],
+      child: LogicalPlan): Unit = {
+    val directBlobRefs = collectDirectBlobRefs(projectList)
+    val readBlobCols = extractAllBlobColumns(projectList)
+    if (directBlobRefs.nonEmpty && readBlobCols.nonEmpty && effectiveModeIsDescriptor(child)) {
+      val readBlobNames = readBlobCols.map(_.name).distinct.mkString(", ")
+      val directNames = directBlobRefs.map(_.name).distinct.mkString(", ")
+      throw new AnalysisException(
+        s"Cannot mix read_blob() with direct blob-column projection under " +
+          s"${HoodieReaderConfig.BLOB_INLINE_READ_MODE.key()}=" +
+          s"${HoodieReaderConfig.BLOB_INLINE_READ_MODE_DESCRIPTOR}. read_blob() is " +
+          s"called on [$readBlobNames] while [$directNames] is projected directly in " +
+          s"the same query. Either set " +
+          s"${HoodieReaderConfig.BLOB_INLINE_READ_MODE.key()}=" +
+          s"${HoodieReaderConfig.BLOB_INLINE_READ_MODE_CONTENT} (returns inline bytes " +
+          s"for all INLINE rows), or remove the direct blob-column projection from " +
+          s"this query.")
+    }
+  }
+
+  /**
+   * Collect all blob columns referenced directly (i.e. NOT inside a `read_blob()`) in
+   * the given expression list. A blob column is an `AttributeReference` whose dataType
+   * is the `BlobType` struct.
+   */
+  private def collectDirectBlobRefs(
+      expressions: Seq[Expression]): Seq[AttributeReference] = {
+    val seen = mutable.LinkedHashSet.empty[ExprId]
+    val result = ArrayBuffer.empty[AttributeReference]
+    expressions.foreach(walkDirectBlobRefs(_, seen, result))
+    result.toSeq
+  }
+
+  private def walkDirectBlobRefs(
+      expr: Expression,
+      seen: mutable.Set[ExprId],
+      result: ArrayBuffer[AttributeReference]): Unit = expr match {
+    // Skip subtrees rooted at read_blob() — its argument is wrapped, not direct.
+    case _: ReadBlobExpression =>
+    case attr: AttributeReference if isBlobAttr(attr) =>
+      if (seen.add(attr.exprId)) result += attr
+    case other =>
+      other.children.foreach(walkDirectBlobRefs(_, seen, result))
+  }
+
+  private def isBlobAttr(attr: AttributeReference): Boolean = attr.dataType match {
+    case struct: StructType =>
+      DataType.equalsIgnoreCaseAndNullability(struct, org.apache.spark.sql.types.BlobType.dataType)
+    case _ => false
+  }
+
+  /**
+   * Resolve the effective value of `hoodie.read.blob.inline.mode` at plan time and
+   * return true if it is DESCRIPTOR.
+   *
+   * Precedence (highest first): per-read DataFrame option on a `HadoopFsRelation` →
+   * Spark session conf → catalog-table property (when present) → default (DESCRIPTOR).
+   * The per-read option captures `.option("hoodie.read.blob.inline.mode", "CONTENT")`
+   * on `spark.read.format("hudi")`, which is the typical way users disable this check
+   * for a single query.
+   *
+   * Returns true (DESCRIPTOR) when no relation can be located — i.e., the rule prefers
+   * to fail noisily for an unrecognized relation shape rather than silently let a
+   * mixed projection through. The error message tells the user how to opt out.
+   */
+  private def effectiveModeIsDescriptor(plan: LogicalPlan): Boolean = {
+    val modeKey = HoodieReaderConfig.BLOB_INLINE_READ_MODE.key()
+    val maybeLr: Option[LogicalRelation] = plan.collectFirst { case lr: LogicalRelation => lr }
+    val relationOpt: Option[String] = maybeLr.flatMap { lr =>
+      lr.relation match {
+        case hfs: HadoopFsRelation => hfs.options.get(modeKey)
+        case _ => None
+      }
+    }
+    val tableProps: Map[String, String] = maybeLr
+      .flatMap(_.catalogTable)
+      .map(_.properties.toMap)
+      .getOrElse(Map.empty)
+    val effective = relationOpt
+      .orElse(spark.conf.getOption(modeKey))
+      .orElse(tableProps.get(modeKey))
+      .getOrElse(HoodieReaderConfig.BLOB_INLINE_READ_MODE.defaultValue())
+    effective.equalsIgnoreCase(HoodieReaderConfig.BLOB_INLINE_READ_MODE_DESCRIPTOR)
   }
 }

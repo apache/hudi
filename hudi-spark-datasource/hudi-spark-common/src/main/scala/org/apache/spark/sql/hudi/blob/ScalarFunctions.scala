@@ -82,8 +82,12 @@ object ScalarFunctions {
           |  Binary data read from the file
           |
           |Caveat:
-          |  Throws on INLINE rows under hoodie.read.blob.inline.mode=DESCRIPTOR.
-          |  Set CONTENT mode directly to materialize INLINE bytes.
+          |  On Lance tables under hoodie.read.blob.inline.mode=DESCRIPTOR (the default),
+          |  read_blob() materializes bytes via a 2-hop pread against the synthesized
+          |  reference. A query that mixes read_blob(col) with a direct projection of
+          |  any blob column in the same SELECT is rejected at plan time. Either set
+          |  hoodie.read.blob.inline.mode=CONTENT or restructure the projection.
+          |  Parquet currently ignores this mode and is unaffected.
           |
           |Performance:
           |  - Configure batching: hoodie.blob.batching.max.gap.bytes (default 4096)
