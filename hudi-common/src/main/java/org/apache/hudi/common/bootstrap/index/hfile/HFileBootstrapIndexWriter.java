@@ -179,28 +179,11 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
     if (closed) {
       return;
     }
-    IOException failure = null;
-    try {
-      if (indexByPartitionWriter != null) {
-        indexByPartitionWriter.close();
-      }
-    } catch (IOException ioe) {
-      failure = ioe;
-    }
-    try {
-      if (indexByFileIdWriter != null) {
-        indexByFileIdWriter.close();
-      }
-    } catch (IOException ioe) {
-      if (failure == null) {
-        failure = ioe;
-      } else {
-        failure.addSuppressed(ioe);
-      }
-    }
+    Exception failure = closeWriter(indexByPartitionWriter, null);
+    failure = closeWriter(indexByFileIdWriter, failure);
     closed = true;
     if (failure != null) {
-      throw new HoodieIOException(failure.getMessage(), failure);
+      throw new HoodieException(failure.getMessage(), failure);
     }
   }
 
@@ -232,10 +215,25 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
     }
   }
 
+  private Exception closeWriter(HFileWriter writer, Exception failure) {
+    if (writer == null) {
+      return failure;
+    }
+    try {
+      writer.close();
+    } catch (IOException | RuntimeException e) {
+      if (failure == null) {
+        return e;
+      }
+      failure.addSuppressed(e);
+    }
+    return failure;
+  }
+
   private void closeAfterFailedBegin(Throwable failure) {
     try {
       close();
-    } catch (HoodieIOException closeException) {
+    } catch (Throwable closeException) {
       failure.addSuppressed(closeException);
     }
   }

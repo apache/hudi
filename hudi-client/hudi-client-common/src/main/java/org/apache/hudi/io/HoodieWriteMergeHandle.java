@@ -51,7 +51,7 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.HoodieMergeHelper;
-import org.apache.hudi.util.AutoClosableUtils;
+import org.apache.hudi.util.AutoCloseableUtils;
 
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -496,14 +496,14 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
 
   private void closeFileWriter(Throwable failure) throws IOException {
     try {
-      AutoClosableUtils.closeWithSuppressed(fileWriter, failure);
+      AutoCloseableUtils.closeWithSuppressed(fileWriter, failure);
     } finally {
       fileWriter = null;
     }
   }
 
   private void closeFileWriterQuietly(Throwable failure) {
-    AutoClosableUtils.closeQuietlyWithSuppressed(fileWriter, failure);
+    AutoCloseableUtils.closeQuietlyWithSuppressed(fileWriter, failure);
     fileWriter = null;
   }
 
