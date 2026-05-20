@@ -474,14 +474,20 @@ public class TestGlobalIndexCommitTimeOrdering extends SparkClientFunctionalTest
         .build();
   }
 
-  // HoodieWriteConfig.withRecordMergeMode writes to the writer key (hoodie.write.record.merge.mode),
-  // which is not read by HoodieTableMetaClient.fromProperties (it only reads hoodie.record.merge.mode).
-  // Also strip ORDERING_FIELDS, which would otherwise make inferMergingConfigsForPreV9Table fall back
-  // to EVENT_TIME_ORDERING when the table-level merge mode is unset.
+  // Two things are needed to make HoodieTableMetaClient persist COMMIT_TIME_ORDERING:
+  //   (1) HoodieWriteConfig.withRecordMergeMode writes hoodie.write.record.merge.mode, but the
+  //       meta client only reads hoodie.record.merge.mode (no alt keys), so set it explicitly.
+  //   (2) HoodieWriteConfig.build() runs HoodiePayloadConfig defaulting, which sets
+  //       hoodie.compaction.payload.class -> DefaultHoodieRecordPayload. Then
+  //       inferMergingConfigsForV9TableCreation sees DefaultHoodieRecordPayload as a deprecated
+  //       payload and silently re-infers the mode to EVENT_TIME_ORDERING. Pin the payload class
+  //       to OverwriteWithLatestAvroPayload (commit-time-compatible) so the inference is stable.
+  // Also strip ORDERING_FIELDS, which is meaningless under commit-time ordering.
   private static Properties getCommitTimeOrderingProps(Class<?> payloadClass) {
     Properties props = getKeyGenProps(payloadClass);
     props.remove(HoodieTableConfig.ORDERING_FIELDS.key());
     props.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.COMMIT_TIME_ORDERING.name());
+    props.put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), OverwriteWithLatestAvroPayload.class.getName());
     return props;
   }
 }
