@@ -63,10 +63,8 @@ object HoodieAnalysis extends SparkAdapterSupport {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark40DataSourceV2ToV1Fallback"
     } else if (HoodieSparkUtils.isSpark3_5) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark35DataSourceV2ToV1Fallback"
-    } else if (HoodieSparkUtils.isSpark3_4) {
-      "org.apache.spark.sql.hudi.analysis.HoodieSpark34DataSourceV2ToV1Fallback"
     } else {
-      throw new IllegalStateException("Unsupported Spark version")
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark34DataSourceV2ToV1Fallback"
     }
     val dataSourceV2ToV1Fallback: RuleBuilder =
       session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
@@ -100,10 +98,8 @@ object HoodieAnalysis extends SparkAdapterSupport {
         "org.apache.spark.sql.hudi.Spark40ResolveHudiAlterTableCommand"
       } else if (HoodieSparkUtils.gteqSpark3_5) {
         "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
-      } else if (HoodieSparkUtils.isSpark3_4) {
-        "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
       } else {
-        throw new IllegalStateException("Unsupported Spark version")
+        "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
       }
 
     val resolveAlterTableCommands: RuleBuilder =
@@ -147,10 +143,8 @@ object HoodieAnalysis extends SparkAdapterSupport {
         "org.apache.spark.sql.execution.datasources.Spark40NestedSchemaPruning"
       } else if (HoodieSparkUtils.gteqSpark3_5) {
         "org.apache.spark.sql.execution.datasources.Spark35NestedSchemaPruning"
-      } else if (HoodieSparkUtils.gteqSpark3_4) {
-        "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"
       } else {
-        throw new IllegalStateException("Unsupported Spark version")
+        "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"
       }
 
     val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]
@@ -167,11 +161,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
     //          - Precedes actual [[customEarlyScanPushDownRules]] invocation
     val pruneFileSourcePartitionsClass = if (HoodieSparkUtils.gteqSpark4_0) {
       "org.apache.spark.sql.hudi.analysis.Spark4HoodiePruneFileSourcePartitions"
-    } else if (HoodieSparkUtils.gteqSpark3_4) {
+    } else {
       // Spark 3.4 and 3.5: PhysicalOperation and ScanOperation unified (SPARK-39764)
       "org.apache.spark.sql.hudi.analysis.Spark3HoodiePruneFileSourcePartitions"
-    } else {
-      throw new IllegalStateException("Unsupported Spark version")
     }
     rules += (spark => instantiateKlass(pruneFileSourcePartitionsClass, spark))
 

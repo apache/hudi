@@ -349,15 +349,6 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
 
   private static final String LOCAL_TIME_AVRO_FILE_PATH = "/local-timestamp-logical-type.avsc";
 
-  @FunctionalInterface
-  public interface ThrowingRunnable {
-    void run() throws Exception;
-  }
-
-  public static void timestampNTZCompatibility(ThrowingRunnable r) throws Exception {
-    r.run();
-  }
-
   /**
    * Covered case:
    * Avro Logical Type: localTimestampMillisField & localTimestampMillisField
@@ -369,24 +360,22 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
   @MethodSource("localTimestampGoodCaseProvider")
   void localTimestampLogicalTypeGoodCaseTest(
       Long expectedMicroSecOfDay, Object timeMilli, Object timeMicro) throws Exception {
-    timestampNTZCompatibility(() -> {
-      // Example inputs
-      long microSecOfDay = expectedMicroSecOfDay;
-      long milliSecOfDay = expectedMicroSecOfDay / 1000; // Represents 12h 30 min since the start of the day
+    // Example inputs
+    long microSecOfDay = expectedMicroSecOfDay;
+    long milliSecOfDay = expectedMicroSecOfDay / 1000; // Represents 12h 30 min since the start of the day
 
-      // Define the schema for the date logical type
-      HoodieSchema schema = SchemaTestUtil.getSchema(LOCAL_TIME_AVRO_FILE_PATH);
+    // Define the schema for the date logical type
+    HoodieSchema schema = SchemaTestUtil.getSchema(LOCAL_TIME_AVRO_FILE_PATH);
 
-      Map<String, Object> data = new HashMap<>();
-      data.put("localTimestampMillisField", timeMilli);
-      data.put("localTimestampMicrosField", timeMicro);
-      String json = MAPPER.writeValueAsString(data);
+    Map<String, Object> data = new HashMap<>();
+    data.put("localTimestampMillisField", timeMilli);
+    data.put("localTimestampMicrosField", timeMicro);
+    String json = MAPPER.writeValueAsString(data);
 
-      Row rec = RowFactory.create(ValueType.castToLocalTimestampMillis(milliSecOfDay, null), ValueType.castToLocalTimestampMicros(microSecOfDay, null));
-      Row actualRow = getConverter().convertToRow(json, schema);
-      validateSchemaCompatibility(Collections.singletonList(actualRow), schema);
-      assertEquals(rec, actualRow);
-    });
+    Row rec = RowFactory.create(ValueType.castToLocalTimestampMillis(milliSecOfDay, null), ValueType.castToLocalTimestampMicros(microSecOfDay, null));
+    Row actualRow = getConverter().convertToRow(json, schema);
+    validateSchemaCompatibility(Collections.singletonList(actualRow), schema);
+    assertEquals(rec, actualRow);
   }
 
   @ParameterizedTest
