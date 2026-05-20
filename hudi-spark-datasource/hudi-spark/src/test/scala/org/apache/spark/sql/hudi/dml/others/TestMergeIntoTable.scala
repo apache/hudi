@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.hudi.dml.others
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils, ScalaAssertionSupport}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
@@ -1089,8 +1089,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   }
 
   test("Test Different Type of PreCombineField") {
-    // TODO: Fix reading ordering field with logical type on Spark 4.1 (https://github.com/apache/hudi/issues/18606)
-    assume(!HoodieSparkUtils.gteqSpark4_1, "Disabled on Spark 4.1 - see HUDI-18606")
     withTempDir { tmp =>
       withSQLConf("hoodie.payload.combined.schema.validate" -> "true") {
         val typeAndValue = Seq(
