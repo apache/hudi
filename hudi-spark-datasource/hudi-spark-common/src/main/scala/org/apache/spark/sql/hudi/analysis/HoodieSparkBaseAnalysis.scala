@@ -156,7 +156,8 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
       val searchAlgorithm = HoodieVectorSearchPlanBuilder.resolveAlgorithm(a.algorithm)
       val corpusDf = resolveTableToDf(a.table, HoodieVectorSearchTableValuedFunction.FUNC_NAME)
       val queryVector = evaluateQueryVector(a.queryVectorExpr)
-      searchAlgorithm.buildSingleQueryPlan(spark, corpusDf, a.embeddingCol, queryVector, a.k, a.metric)
+      searchAlgorithm.buildSingleQueryPlan(
+        spark, corpusDf, a.embeddingCol, queryVector, a.k, a.metric, a.filter, a.maxDistance)
 
     case HoodieVectorSearchBatchTableValuedFunction(args) =>
       val a = HoodieVectorSearchBatchTableValuedFunction.parseArgs(args)
@@ -164,7 +165,8 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
       val corpusDf = resolveTableToDf(a.corpusTable, HoodieVectorSearchBatchTableValuedFunction.FUNC_NAME)
       val queryDf = resolveTableToDf(a.queryTable, HoodieVectorSearchBatchTableValuedFunction.FUNC_NAME)
       searchAlgorithm.buildBatchQueryPlan(
-        spark, corpusDf, a.corpusEmbeddingCol, queryDf, a.queryEmbeddingCol, a.k, a.metric)
+        spark, corpusDf, a.corpusEmbeddingCol, queryDf, a.queryEmbeddingCol,
+        a.k, a.metric, a.filter, a.maxDistance)
 
     case mO@MatchMergeIntoTable(targetTableO, sourceTableO, _)
       // START: custom Hudi change: don't want to go to the spark mit resolution so we resolve the source and target
