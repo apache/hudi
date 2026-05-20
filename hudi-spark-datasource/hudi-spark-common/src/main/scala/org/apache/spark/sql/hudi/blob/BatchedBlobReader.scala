@@ -208,16 +208,31 @@ class BatchedBlobReader(
             // Dispatch based on storage_type (field 0)
             val storageType = accessor.getString(blobStruct, 0)
             if (storageType == HoodieSchema.Blob.INLINE) {
-              // Case 1: Inline — bytes are in field 1
-              val bytes = accessor.getBytes(blobStruct, 1)
-              batch += RowInfo[R](
-                originalRow = row,
-                filePath = "",
-                offset = -1,
-                length = -1,
-                index = rowIndex,
-                inlineBytes = Some(bytes)
-              )
+              // INLINE + CONTENT: inline_data is populated; return bytes directly (1-hop).
+              // INLINE + DESCRIPTOR: inline_data is null and the scan synthesized a
+              // reference pointing into the backing file's storage layout. We refuse to
+              // materialize bytes here — DESCRIPTOR is a metadata-only mode for INLINE
+              // rows, and the synthesized reference is an internal pointer, not
+              // user-facing storage info. Callers must switch to CONTENT mode or stop
+              // using read_blob() on INLINE columns under DESCRIPTOR.
+              if (!accessor.isNullAt(blobStruct, 1)) {
+                val bytes = accessor.getBytes(blobStruct, 1)
+                batch += RowInfo[R](
+                  originalRow = row,
+                  filePath = "",
+                  offset = -1,
+                  length = -1,
+                  index = rowIndex,
+                  inlineBytes = Some(bytes)
+                )
+              } else {
+                throw new IllegalStateException(
+                  s"read_blob() cannot materialize bytes for an INLINE blob under " +
+                    s"DESCRIPTOR mode. Under hoodie.read.blob.inline.mode=DESCRIPTOR, " +
+                    s"INLINE blobs are returned as metadata-only (inline_data=NULL, " +
+                    s"synthesized reference). To read bytes, set " +
+                    s"hoodie.read.blob.inline.mode=CONTENT")
+              }
             } else if (storageType  == HoodieSchema.Blob.OUT_OF_LINE) {
               // Case 2 or 3: Out-of-line — get reference struct (field 2)
               require(!accessor.isNullAt(blobStruct, 2), s"Out-of-line blob at row $rowIndex must set reference")
