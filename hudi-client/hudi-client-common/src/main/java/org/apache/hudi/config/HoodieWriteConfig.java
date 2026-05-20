@@ -2023,6 +2023,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieArchivalConfig.BLOCK_ARCHIVAL_ON_LATEST_CLEAN_ECTR);
   }
 
+  public String getRollbackOrphanGuardMode() {
+    return getString(HoodieArchivalConfig.ROLLBACK_ORPHAN_GUARD_MODE);
+  }
+
   public Boolean shouldCleanBootstrapBaseFile() {
     return getBoolean(HoodieCleanConfig.CLEANER_BOOTSTRAP_BASE_FILE_ENABLE);
   }
