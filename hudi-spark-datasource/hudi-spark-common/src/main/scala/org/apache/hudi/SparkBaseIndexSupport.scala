@@ -118,7 +118,7 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
        fileNamesFromPrunedPartitions
     } else {
       // The stats-unreliability null-safety is applied at the per-predicate translation
-      // level (DataSkippingUtils.withStatsAvailable), so the indexFilter here already
+      // level (DataSkippingUtils.withUnreliableStatsGuard), so the indexFilter here already
       // includes the right "OR colMin IS NULL AND valueCount > nullCount" guards.
       // only lookup in col stats if all filters are eligible to be looked up in col stats index in MDT
       val prunedCandidateFileNames =

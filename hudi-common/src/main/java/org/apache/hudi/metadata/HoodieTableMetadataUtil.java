@@ -272,7 +272,7 @@ public class HoodieTableMetadataUtil {
    * lower than valueCount but min/max are still null — that's the case partition-stats
    * aggregation must NOT silently drop.
    */
-  private static boolean isStatsUnreliable(HoodieMetadataColumnStats stats, Comparable unwrappedValue) {
+  static boolean isStatsUnreliable(HoodieMetadataColumnStats stats, Comparable unwrappedValue) {
     if (unwrappedValue != null) {
       return false;
     }
@@ -281,8 +281,11 @@ public class HoodieTableMetadataUtil {
     if (nullCount == null || valueCount == null) {
       return true;
     }
-    // All-null column: stats are legitimately empty for min/max.
-    return nullCount != valueCount;
+    // Unreliable: min/max are null but the column is not all-null (nullCount < valueCount).
+    // NOTE: must use .equals() — these are boxed Long (from Avro ["null","long"]) and Long.valueOf
+    //       only caches values in [-128, 127], so `!=` is reference equality and would return true
+    //       for any realistic row count.
+    return !nullCount.equals(valueCount);
   }
 
   /**

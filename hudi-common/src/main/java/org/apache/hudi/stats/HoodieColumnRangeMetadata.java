@@ -161,7 +161,9 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     if (value != null) {
       return false;
     }
-    // All-null column: stats are legitimately empty for min/max — safe to ignore in merge.
+    // Unreliable: min/max are null but the column is not all-null (nullCount < valueCount).
+    // The all-null case (nullCount == valueCount) is legitimately empty stats — safe to ignore in merge.
+    // NOTE: primitive long here, so != is value equality (unlike the sibling helper in HoodieTableMetadataUtil).
     return range.getNullCount() != range.getValueCount();
   }
 
