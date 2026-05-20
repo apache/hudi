@@ -15,10 +15,9 @@ env:
 jobs:
   validate-release-candidate-bundles:
     runs-on: ubuntu-latest
-    if: false
     env:
-      HUDI_VERSION: 1.1.0
-      STAGING_REPO_NUM: 1164
+      HUDI_VERSION: 1.2.0-rc2
+      STAGING_REPO_NUM: 1181
     strategy:
       matrix:
         include:
@@ -66,10 +65,9 @@ jobs:
 
   validate-release-candidate-bundles-spark4:
     runs-on: ubuntu-latest
-    if: false
     env:
-      HUDI_VERSION: 1.1.0
-      STAGING_REPO_NUM: 1164
+      HUDI_VERSION: 1.2.0-rc2
+      STAGING_REPO_NUM: 1181
     strategy:
       matrix:
         include:
@@ -77,6 +75,10 @@ jobs:
             flinkProfile: 'flink1.20'
             sparkProfile: 'spark4.0'
             sparkRuntime: 'spark4.0.0'
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.20'
+            sparkProfile: 'spark4.1'
+            sparkRuntime: 'spark4.1.1'
     steps:
       - uses: actions/checkout@v5
       - name: Set up JDK 17
@@ -97,15 +99,18 @@ jobs:
 
   validate-release-candidate-bundles-flink2:
     runs-on: ubuntu-latest
-    if: false
     env:
-      HUDI_VERSION: 1.1.0
-      STAGING_REPO_NUM: 1164
+      HUDI_VERSION: 1.2.0-rc2
+      STAGING_REPO_NUM: 1181
     strategy:
       matrix:
         include:
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink2.0'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.1'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink2.1'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.1'
     steps:
