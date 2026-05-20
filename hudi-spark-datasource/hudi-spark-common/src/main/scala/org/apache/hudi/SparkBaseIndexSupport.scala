@@ -29,8 +29,9 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_ST
 
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.apache.spark.sql.catalyst.expressions.{And, Expression}
+import org.apache.spark.sql.catalyst.expressions.{And, Expression, IsNull, Or}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
+import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 
 import scala.collection.JavaConverters._
@@ -117,9 +118,25 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
       // if there are any non indexed cols or we can't translate source expr, we have to read all files and may not benefit from col stats lookup.
        fileNamesFromPrunedPartitions
     } else {
+      // When parquet-mr clears stats (NaN in FLOAT/DOUBLE, value-size truncation), Hudi
+      // persists min/max as null. A bare `colA_max > X` then evaluates to null and the file
+      // is silently pruned. Augment the filter so a row passes whenever ANY column referenced
+      // in queryFilters has a null min stat (=> stats unreliable, must scan file). We use
+      // queryFilters' referenced columns rather than all valid indexed columns so that an
+      // unreliable but irrelevant column doesn't force every file to be scanned.
+      val referencedCols = queryFilters
+        .flatMap(_.references.map(_.name))
+        .toSet
+        .intersect(validIndexedColumns.toSet)
+      val statsUnreliableExpr: Option[Expression] = referencedCols
+        .map(cn => IsNull(ColumnStatsExpressionUtils.genColMinValueExpr(cn)).asInstanceOf[Expression])
+        .reduceOption((a, b) => Or(a, b))
+      val effectiveIndexFilter = statsUnreliableExpr
+        .map(unreliable => Or(indexFilter, unreliable))
+        .getOrElse(indexFilter)
       // only lookup in col stats if all filters are eligible to be looked up in col stats index in MDT
       val prunedCandidateFileNames =
-        indexDf.where(sparkAdapter.createColumnFromExpression(indexFilter))
+        indexDf.where(sparkAdapter.createColumnFromExpression(effectiveIndexFilter))
           .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
           .collect()
           .map(_.getString(0))

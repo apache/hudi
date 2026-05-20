@@ -133,14 +133,36 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
         "Column names should be the same for merging column ranges");
     String filePath = left.getFilePath();
     String columnName = left.getColumnName();
-    T min = minVal(left.getMinValue(), right.getMinValue());
-    T max = maxVal(left.getMaxValue(), right.getMaxValue());
+    // When a child range has null min/max, distinguish two cases:
+    //   (a) all-null column: nullCount == valueCount AND valueCount > 0. min/max are
+    //       legitimately null because the column has no non-null values. Safe to drop
+    //       this side from the merge (the other side's bounds remain valid).
+    //   (b) stats unreliable: nullCount < valueCount but min/max are still null (e.g.
+    //       parquet-mr cleared stats due to NaN, or stats were omitted due to value-size
+    //       truncation; see ParquetUtils#readColumnStatsFromMetadata). Dropping null here
+    //       would let data-skipping prune the partition based on a partial bound that
+    //       excludes the unbounded values of this file. Propagate null so the merged
+    //       partition reflects the worst-case unknown.
+    boolean leftMinUnreliable = isStatsUnreliable(left, left.getMinValue());
+    boolean rightMinUnreliable = isStatsUnreliable(right, right.getMinValue());
+    boolean leftMaxUnreliable = isStatsUnreliable(left, left.getMaxValue());
+    boolean rightMaxUnreliable = isStatsUnreliable(right, right.getMaxValue());
+    T min = (leftMinUnreliable || rightMinUnreliable) ? null : minVal(left.getMinValue(), right.getMinValue());
+    T max = (leftMaxUnreliable || rightMaxUnreliable) ? null : maxVal(left.getMaxValue(), right.getMaxValue());
     long nullCount = left.getNullCount() + right.getNullCount();
     long valueCount = left.getValueCount() + right.getValueCount();
     long totalSize = left.getTotalSize() + right.getTotalSize();
     long totalUncompressedSize = left.getTotalUncompressedSize() + right.getTotalUncompressedSize();
 
     return new HoodieColumnRangeMetadata<>(filePath, columnName, min, max, nullCount, valueCount, totalSize, totalUncompressedSize, left.getValueMetadata());
+  }
+
+  private static <T extends Comparable<T>> boolean isStatsUnreliable(HoodieColumnRangeMetadata<T> range, T value) {
+    if (value != null) {
+      return false;
+    }
+    // All-null column: stats are legitimately empty for min/max — safe to ignore in merge.
+    return range.getNullCount() != range.getValueCount();
   }
 
   private static <T extends Comparable<T>> T minVal(T val1, T val2) {

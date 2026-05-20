@@ -312,21 +312,42 @@ public class ParquetUtils extends FileFormatUtils {
                   ValueMetadata valueMetadata = ValueMetadata.getValueMetadata(columnChunkMetaData.getPrimitiveType(), indexVersion);
                   // Normalize column name to canonical .list.element format for consistent MDT storage
                   String canonicalColumnName = convertArrayToListElement(columnChunkMetaData.getPath().toDotString());
+                  // Parquet exposes two orthogonal flags we must respect to decide what to record:
+                  //   - stats.hasNonNullValue() is false when Parquet considers min/max unreliable
+                  //     (notably for FLOAT/DOUBLE columns containing any NaN: parquet-mr clears
+                  //     hasNonNullValue but leaves min/max at their default 0.0). Treating these as
+                  //     valid stats would let data-skipping prune files that actually match.
+                  //   - stats.isNumNullsSet() is false when the underlying Parquet column omitted
+                  //     statistics entirely (e.g. a value exceeded the parquet-mr stats truncation
+                  //     threshold, ~1 KB for binary/string). In that case we have no information
+                  //     about nulls, so we must NOT equate nullCount to valueCount.
+                  boolean minMaxReliable = stats.hasNonNullValue();
+                  Comparable<?> minVal = minMaxReliable
+                      ? convertToNativeJavaType(columnChunkMetaData.getPrimitiveType(), stats.genericGetMin(), valueMetadata)
+                      : null;
+                  Comparable<?> maxVal = minMaxReliable
+                      ? convertToNativeJavaType(columnChunkMetaData.getPrimitiveType(), stats.genericGetMax(), valueMetadata)
+                      : null;
+                  long nullCount;
+                  if (stats.isEmpty()) {
+                    if (stats.isNumNullsSet()) {
+                      // Genuine all-null column: parquet explicitly recorded num_nulls and chose
+                      // not to write min/max for an all-null column.
+                      nullCount = columnChunkMetaData.getValueCount();
+                    } else {
+                      // Statistics fully absent (e.g. truncation): null count is unknown.
+                      // Treat as 0 so data-skipping doesn't conclude "all rows are null".
+                      nullCount = 0;
+                    }
+                  } else {
+                    nullCount = stats.getNumNulls();
+                  }
                   return (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.<Comparable>create(
                       filePath,
                       canonicalColumnName,
-                      convertToNativeJavaType(
-                          columnChunkMetaData.getPrimitiveType(),
-                          stats.genericGetMin(),
-                          valueMetadata),
-                      convertToNativeJavaType(
-                          columnChunkMetaData.getPrimitiveType(),
-                          stats.genericGetMax(),
-                          valueMetadata),
-                      // NOTE: In case when column contains only nulls Parquet won't be creating
-                      //       stats for it instead returning stubbed (empty) object. In that case
-                      //       we have to equate number of nulls to the value count ourselves
-                      stats.isEmpty() ? columnChunkMetaData.getValueCount() : stats.getNumNulls(),
+                      minVal,
+                      maxVal,
+                      nullCount,
                       columnChunkMetaData.getValueCount(),
                       columnChunkMetaData.getTotalSize(),
                       columnChunkMetaData.getTotalUncompressedSize(),
