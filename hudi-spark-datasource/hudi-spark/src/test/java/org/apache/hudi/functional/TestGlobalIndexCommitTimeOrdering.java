@@ -416,35 +416,17 @@ public class TestGlobalIndexCommitTimeOrdering extends SparkClientFunctionalTest
   }
 
   private HoodieWriteConfig getWriteConfig(Class<?> payloadClass, IndexType indexType) {
-    HoodieMetadataConfig.Builder metadataConfigBuilder = HoodieMetadataConfig.newBuilder();
-    if (indexType == IndexType.RECORD_INDEX) {
-      metadataConfigBuilder.enable(true).withEnableGlobalRecordLevelIndex(true);
-    } else {
-      metadataConfigBuilder.enable(false);
-    }
-    return getConfigBuilder(false)
-        .withProperties(getCommitTimeOrderingProps(payloadClass))
-        .withParallelism(2, 2)
-        .withBulkInsertParallelism(2)
-        .withDeleteParallelism(2)
-        .withMetadataConfig(metadataConfigBuilder.build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder()
-            .withIndexType(indexType)
-            .bloomIndexParallelism(2)
-            .withSimpleIndexParallelism(2)
-            .withGlobalSimpleIndexParallelism(2)
-            .withGlobalIndexReconcileParallelism(2)
-            .withGlobalBloomIndexUpdatePartitionPath(true)
-            .withGlobalSimpleIndexUpdatePartitionPath(true)
-            .withRecordIndexUpdatePartitionPath(true).build())
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withMaxNumDeltaCommitsBeforeCompaction(4).build())
-        .withSchema(SCHEMA_STR)
-        .withRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING)
-        .build();
+    return getWriteConfig(payloadClass, indexType, HoodieCompactionConfig.newBuilder()
+        .withMaxNumDeltaCommitsBeforeCompaction(4).build());
   }
 
   private HoodieWriteConfig getWriteConfigWithInlineCompaction(Class<?> payloadClass, IndexType indexType) {
+    return getWriteConfig(payloadClass, indexType, HoodieCompactionConfig.newBuilder()
+        .withInlineCompaction(true)
+        .withMaxNumDeltaCommitsBeforeCompaction(2).build());
+  }
+
+  private HoodieWriteConfig getWriteConfig(Class<?> payloadClass, IndexType indexType, HoodieCompactionConfig compactionConfig) {
     HoodieMetadataConfig.Builder metadataConfigBuilder = HoodieMetadataConfig.newBuilder();
     if (indexType == IndexType.RECORD_INDEX) {
       metadataConfigBuilder.enable(true).withEnableGlobalRecordLevelIndex(true);
@@ -466,9 +448,7 @@ public class TestGlobalIndexCommitTimeOrdering extends SparkClientFunctionalTest
             .withGlobalBloomIndexUpdatePartitionPath(true)
             .withGlobalSimpleIndexUpdatePartitionPath(true)
             .withRecordIndexUpdatePartitionPath(true).build())
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withInlineCompaction(true)
-            .withMaxNumDeltaCommitsBeforeCompaction(2).build())
+        .withCompactionConfig(compactionConfig)
         .withSchema(SCHEMA_STR)
         .withRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING)
         .build();
