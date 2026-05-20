@@ -26,11 +26,11 @@ import java.io.IOException;
 /**
  * Utility methods for closing {@link AutoCloseable} resources.
  */
-public final class AutoClosableUtils {
+public final class AutoCloseableUtils {
 
-  private static final Logger LOG = LoggerFactory.getLogger(AutoClosableUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AutoCloseableUtils.class);
 
-  private AutoClosableUtils() {
+  private AutoCloseableUtils() {
   }
 
   public static void closeWithSuppressed(AutoCloseable closeable, Throwable failure) throws IOException {
@@ -64,11 +64,7 @@ public final class AutoClosableUtils {
     try {
       closeWithSuppressed(closeable, failure);
     } catch (IOException | RuntimeException e) {
-      if (failure != null) {
-        failure.addSuppressed(e);
-      } else {
-        LOG.warn("Failed to close resource", e);
-      }
+      LOG.warn("Failed to close resource", e);
     }
   }
 }

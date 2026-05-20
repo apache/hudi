@@ -38,7 +38,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.AutoClosableUtils;
+import org.apache.hudi.util.AutoCloseableUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -197,7 +197,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
   }
 
   private void closeFileWriterQuietly(Throwable failure) {
-    AutoClosableUtils.closeQuietlyWithSuppressed(fileWriter, failure);
+    AutoCloseableUtils.closeQuietlyWithSuppressed(fileWriter, failure);
     fileWriter = null;
   }
 

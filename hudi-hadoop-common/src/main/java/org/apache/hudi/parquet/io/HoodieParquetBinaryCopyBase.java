@@ -197,6 +197,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
     }
     Method closeMethod;
     try {
+      // ParquetFileWriter does not implement Closeable in all versions, so attempt close() reflectively.
       closeMethod = parquetFileWriter.getClass().getMethod("close");
     } catch (NoSuchMethodException e) {
       return;
