@@ -206,15 +206,17 @@ public class HoodieAvroWrapperUtils {
       return null;
     } else if (DateWrapper.class.getSimpleName().equals(wrapperClassName)) {
       ValidationUtils.checkArgument(avroValueWrapper instanceof GenericRecord);
-      // Avro 1.12 (Spark 4.1 profile) returns java.time.LocalDate for date logical types; Avro 1.11.x returns
-      // Integer. Accept both — see HoodieAvroUtils#convertValueForAvroLogicalTypes for the broader context.
+      // Avro 1.12.1 (Spark 4.1 profile) defaults fastReaderEnabled=true, so GenericDatumReader returns
+      // java.time.LocalDate for date logical types; Avro 1.12.0 (Spark 4.0) and earlier return Integer.
+      // Accept both — see HoodieAvroUtils#convertValueForAvroLogicalTypes for the broader context.
       return Date.valueOf(LocalDate.ofEpochDay(toEpochDay(((GenericRecord) avroValueWrapper).get(0))));
     } else if (LocalDateWrapper.class.getSimpleName().equals(wrapperClassName)) {
       ValidationUtils.checkArgument(avroValueWrapper instanceof GenericRecord);
       return LocalDate.ofEpochDay(toEpochDay(((GenericRecord) avroValueWrapper).get(0)));
     } else if (TimestampMicrosWrapper.class.getSimpleName().equals(wrapperClassName)) {
       ValidationUtils.checkArgument(avroValueWrapper instanceof GenericRecord);
-      // Avro 1.12 (Spark 4.1 profile) returns java.time.Instant for timestamp-micros; Avro 1.11.x returns Long.
+      // Avro 1.12.1 (Spark 4.1 profile) defaults fastReaderEnabled=true, so timestamp-micros decodes
+      // to java.time.Instant; Avro 1.12.0 (Spark 4.0) and earlier return Long.
       return Timestamp.from(toInstantFromMicros(((GenericRecord) avroValueWrapper).get(0)));
     } else if (DecimalWrapper.class.getSimpleName().equals(wrapperClassName)) {
       Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();

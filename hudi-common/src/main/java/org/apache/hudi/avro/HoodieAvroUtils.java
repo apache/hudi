@@ -36,6 +36,7 @@ import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Conversions;
 import org.apache.avro.Conversions.DecimalConversion;
 import org.apache.avro.JsonProperties;
+import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.LogicalTypes.Decimal;
 import org.apache.avro.Schema;
@@ -675,23 +676,27 @@ public class HoodieAvroUtils {
    * Decimal Data Type is converted to actual decimal value instead of bytes/fixed which is how it is
    * represented/stored in parquet.
    * <p>
-   * <b>Avro version compatibility:</b> Avro 1.12 (pulled in by the Spark 4.1 profile) installs default
-   * {@code Conversion}s on {@code GenericData.get()} for date/time logical types. As a result, records
-   * read by {@code GenericDatumReader} now materialize {@link LocalDate} for date, {@link Instant} for
-   * timestamp-millis / timestamp-micros, and {@link LocalDateTime} for local-timestamp-* — where Avro
-   * 1.11.x (used by Spark 3.5 / 4.0 and earlier) exposed the raw {@link Integer} / {@link Long}. This
-   * method normalizes both forms to the same stable representation, so callers (precombine/ordering
-   * comparison, partition-path and record-key derivation, etc.) behave identically across Avro versions
-   * and across writer/reader Spark version combinations. The on-disk byte format is unaffected by this
-   * normalization: Avro's wire encoding for these logical types is fixed by spec to int / long and is
-   * identical across Avro versions; only the in-memory Java type returned by the reader changed.
+   * <b>Avro version compatibility:</b> Avro 1.12.1 (pulled in by the Spark 4.1 profile) flipped the
+   * default of {@code GenericData}'s {@code fastReaderEnabled} flag from {@code false} to
+   * {@code true} (the {@code org.apache.avro.fastread} system property now defaults to
+   * {@code "true"}). With the fast reader enabled, {@code GenericDatumReader} applies the
+   * registered {@code Conversion}s during decode and materializes {@link LocalDate} for date,
+   * {@link Instant} for timestamp-millis / timestamp-micros, and {@link LocalDateTime} for
+   * local-timestamp-millis / local-timestamp-micros. Avro 1.12.0 (Spark 4.0) and Avro 1.11.x
+   * (Spark 3.5 and earlier) left the fast reader off by default, so those profiles exposed the raw
+   * {@link Integer} / {@link Long}. This method normalizes both forms to the same stable
+   * representation, so callers (precombine/ordering comparison, partition-path and record-key
+   * derivation, etc.) behave identically across Avro versions and across writer/reader Spark
+   * version combinations. The on-disk byte format is unaffected by this normalization: Avro's wire
+   * encoding for these logical types is fixed by spec to int / long and is identical across Avro
+   * versions; only the in-memory Java type returned by the reader changed.
    *
    * @param fieldSchema avro field schema
    * @param fieldValue  avro field value
    * @return field value either converted (for certain data types) or as it is.
    */
   public static Object convertValueForAvroLogicalTypes(Schema fieldSchema, Object fieldValue, boolean consistentLogicalTimestampEnabled) {
-    org.apache.avro.LogicalType logicalType = fieldSchema.getLogicalType();
+    LogicalType logicalType = fieldSchema.getLogicalType();
     if (logicalType == LogicalTypes.date()) {
       return LocalDate.ofEpochDay(extractEpochDay(fieldValue));
     } else if (logicalType == LogicalTypes.timestampMillis()) {
@@ -721,9 +726,10 @@ public class HoodieAvroUtils {
     return fieldValue;
   }
 
-  // The extract* helpers below accept either the Avro 1.11.x primitive form (Integer / Long) or the
-  // Avro 1.12 java.time form, and return the canonical primitive that Avro 1.11.x would have produced
-  // for the same underlying bytes. See the javadoc on convertValueForAvroLogicalTypes for context.
+  // The extract* helpers below accept either the Avro primitive form (Integer / Long, returned by
+  // Avro 1.12.0 / 1.11.x) or the java.time form (returned by Avro 1.12.1 with its default
+  // fastReaderEnabled=true), and return the canonical primitive for the same underlying bytes.
+  // See the javadoc on convertValueForAvroLogicalTypes for context.
 
   private static long extractEpochDay(Object fieldValue) {
     if (fieldValue instanceof LocalDate) {
@@ -778,19 +784,22 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * If {@code schema} carries a date / timestamp logical type and {@code value} is in the Avro 1.12
-   * java.time form, normalize it back to the Avro 1.11.x primitive form ({@link Integer} for date,
-   * {@link Long} for timestamp-millis, timestamp-micros, local-timestamp-millis, and
-   * local-timestamp-micros). Used at the entry of schema-evolution rewrite paths whose legacy code
-   * does unguarded {@code (Integer)} / {@code (Long)} casts on field values. For non-logical-type
-   * schemas, primitive inputs, or null, this is a no-op. The on-disk byte format is unaffected -
-   * this is purely about in-memory Java type.
+   * If {@code schema} carries a date / timestamp logical type and {@code value} is in the
+   * java.time form ({@link LocalDate} / {@link Instant} / {@link LocalDateTime}), normalize it
+   * to the Avro primitive form ({@link Integer} for date, {@link Long} for timestamp-millis,
+   * timestamp-micros, local-timestamp-millis, and local-timestamp-micros). Used at the entry of
+   * schema-evolution rewrite paths whose legacy code does unguarded {@code (Integer)} /
+   * {@code (Long)} casts on field values, which would otherwise fail under Avro 1.12.1 (Spark
+   * 4.1) where the {@code fastReaderEnabled} default is {@code true} and {@code GenericDatumReader}
+   * materializes java.time types instead of primitives. For non-logical-type schemas, primitive
+   * inputs, or null, this is a no-op. The on-disk byte format is unaffected - this is purely
+   * about in-memory Java type.
    */
-  private static Object normalizeToAvro1_11PrimitiveForLogicalType(Object value, Schema schema) {
+  private static Object normalizeAvroLogicalTypeToPrimitive(Object value, Schema schema) {
     if (value == null || schema == null) {
       return value;
     }
-    org.apache.avro.LogicalType lt = schema.getLogicalType();
+    LogicalType lt = schema.getLogicalType();
     if (lt == null) {
       return value;
     }
@@ -1043,12 +1052,14 @@ public class HoodieAvroUtils {
   }
 
   public static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema) {
-    // Normalize any Avro 1.12 java.time form (LocalDate / Instant / LocalDateTime) back to the
-    // Avro 1.11.x primitive form (Integer / Long) before doing any numeric/string conversion. The
-    // legacy branches below explicitly cast to Integer / Long; under Avro 1.12 those casts would
-    // fail (Spark 4.1 profile). See convertValueForAvroLogicalTypes for the broader context — this
-    // is a read-side normalization only and does not affect on-disk byte format.
-    oldValue = normalizeToAvro1_11PrimitiveForLogicalType(oldValue, oldSchema);
+    // Normalize any java.time form (LocalDate / Instant / LocalDateTime) to the Avro primitive
+    // form (Integer / Long) before doing any numeric / string conversion. The legacy branches
+    // below explicitly cast to Integer / Long; under Avro 1.12.1 (Spark 4.1 profile) the
+    // fastReaderEnabled default flipped to true and GenericDatumReader materializes java.time
+    // types for date / timestamp logical fields, which would break those casts. See
+    // convertValueForAvroLogicalTypes for the broader context — this is a read-side normalization
+    // only and does not affect on-disk byte format.
+    oldValue = normalizeAvroLogicalTypeToPrimitive(oldValue, oldSchema);
     if (oldSchema.getType() == newSchema.getType()) {
       switch (oldSchema.getType()) {
         case NULL:

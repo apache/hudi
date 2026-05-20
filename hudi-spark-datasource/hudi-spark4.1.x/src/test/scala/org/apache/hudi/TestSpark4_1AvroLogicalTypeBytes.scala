@@ -31,15 +31,15 @@ import org.junit.jupiter.api.Test
 import java.io.ByteArrayOutputStream
 
 /**
- * Validates the storage-byte invariant under the Spark 4.1 profile, which pulls in Avro 1.12.
+ * Validates the storage-byte invariant under the Spark 4.1 profile, which pulls in Avro 1.12.1.
  *
  * The Avro on-wire encoding for `date`, `timestamp-millis`, and `timestamp-micros` logical types
- * is fixed by spec to int / long, and is identical across Avro 1.11.x and Avro 1.12. As long as
- * Hudi's Spark→Avro path (`HoodieSpark4_1AvroSerializer` → `AvroSerializer`) emits raw
- * `java.lang.Long` / `java.lang.Integer` into the `GenericRecord` — and never `java.time.Instant` /
- * `java.time.LocalDate` — the bytes Hudi writes on Spark 4.1 are bit-identical to what it writes
- * on Spark 3.5 / 4.0 (which use Avro 1.11.4), preserving forward/backward compatibility for
- * readers across profiles.
+ * is fixed by spec to int / long, and is identical across all Avro versions Hudi supports
+ * (1.11.x, 1.12.0, 1.12.1). As long as Hudi's Spark→Avro path (`HoodieSpark4_1AvroSerializer` →
+ * `AvroSerializer`) emits raw `java.lang.Long` / `java.lang.Integer` into the `GenericRecord` —
+ * and never `java.time.Instant` / `java.time.LocalDate` — the bytes Hudi writes on Spark 4.1 are
+ * bit-identical to what it writes on Spark 3.5 / 4.0, preserving forward/backward compatibility
+ * for readers across profiles.
  *
  * This test pins that invariant down:
  *   1. The serializer outputs raw primitives in the GenericRecord (not java.time types).
@@ -77,8 +77,8 @@ class TestSpark4_1AvroLogicalTypeBytes {
     val record = serializeFixtureRow()
 
     // The on-disk byte stability for cross-Spark-version compatibility hinges on the GenericRecord
-    // holding the Avro 1.11.x primitive form, not the Avro 1.12 java.time form. If the serializer
-    // ever started emitting Instants/LocalDates, Avro 1.12's GenericDatumWriter would route the
+    // holding the Avro primitive form (Integer / Long), not the java.time form. If the serializer
+    // ever started emitting Instants/LocalDates, Avro 1.12.1's GenericDatumWriter would route the
     // value through a Conversion before encoding. Even though the resulting bytes would still be
     // spec-compliant, that path is harder to reason about, so we pin the primitive contract here.
     assertTrue(record.get("d").isInstanceOf[java.lang.Integer],
@@ -103,8 +103,8 @@ class TestSpark4_1AvroLogicalTypeBytes {
     val bytes = baos.toByteArray
 
     // Compute the expected canonical bytes manually using Avro's zig-zag varlong encoding (spec).
-    // This independent computation is independent of the running Avro version and proves that
-    // whatever bytes Avro 1.12 writes here equal what Avro 1.11.x would write.
+    // This computation is independent of the running Avro version and proves that whatever bytes
+    // Avro 1.12.1 writes here equal what Avro 1.12.0 / 1.11.x would write.
     val expected = new ByteArrayOutputStream()
     writeZigZagLong(expected, epochDay.toLong)
     writeZigZagLong(expected, epochMillis)

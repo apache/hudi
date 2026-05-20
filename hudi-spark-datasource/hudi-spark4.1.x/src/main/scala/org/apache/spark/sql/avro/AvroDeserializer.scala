@@ -130,16 +130,19 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
         updater.setBoolean(ordinal, value.asInstanceOf[Boolean])
 
       //////////////////////////////////////////////////////////////////////////////////////////////
-      // BEGIN Hudi customization for Avro 1.12 (Spark 4.1)
+      // BEGIN Hudi customization for Avro 1.12.1 (Spark 4.1)
       //
-      // The Spark 4.1 profile pulls in Avro 1.12.x, which installs default `Conversion`s on
-      // `GenericData.get()` for date/time logical types. As a result, records read by
-      // `GenericDatumReader` now materialize `java.time.LocalDate` for date, `java.time.Instant`
-      // for timestamp-millis/timestamp-micros, and `java.time.LocalDateTime` for
-      // local-timestamp-* — where Avro 1.11.x (used by Spark 3.5 / 4.0 and earlier) exposed the
-      // raw `Integer` / `Long`. The blanket `value.asInstanceOf[Long]` / `asInstanceOf[Int]` used
-      // by the upstream Spark 4.0 deserializer fails on the 1.12 java.time forms. The fallbacks
-      // below accept either form and normalize to Catalyst's epoch-micros Long / epoch-day Int.
+      // The Spark 4.1 profile pulls in Avro 1.12.1, which flipped the default of
+      // `GenericData`'s `fastReaderEnabled` flag from false to true (the
+      // `org.apache.avro.fastread` system property now defaults to "true"). With the fast reader
+      // enabled, `GenericDatumReader` applies the registered `Conversion`s and materializes
+      // `java.time.LocalDate` for date, `java.time.Instant` for timestamp-millis /
+      // timestamp-micros, and `java.time.LocalDateTime` for local-timestamp-millis /
+      // local-timestamp-micros. Avro 1.12.0 (Spark 4.0) and Avro 1.11.x (Spark 3.5 and earlier)
+      // left the fast reader off, so those profiles exposed the raw `Integer` / `Long`. The
+      // blanket `value.asInstanceOf[Long]` / `asInstanceOf[Int]` used by the upstream Spark 4.0
+      // deserializer fails on the java.time forms. The fallbacks below accept either form and
+      // normalize to Catalyst's epoch-micros Long / epoch-day Int.
       //
       // This change is read-side only — the on-wire encoding for these logical types is fixed by
       // the Avro spec (int / long) and is identical across Avro versions, so storage bytes are
@@ -213,7 +216,7 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
         case other => throw new IncompatibleSchemaException(errorPrefix +
           s"Avro logical type $other cannot be converted to SQL type ${TimestampNTZType.sql}.")
       }
-      // END Hudi customization for Avro 1.12 (Spark 4.1)
+      // END Hudi customization for Avro 1.12.1 (Spark 4.1)
       //////////////////////////////////////////////////////////////////////////////////////////////
 
       // Before we upgrade Avro to 1.8 for logical type support, spark-avro converts Long to Date.

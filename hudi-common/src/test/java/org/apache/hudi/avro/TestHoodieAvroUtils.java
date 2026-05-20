@@ -500,10 +500,11 @@ public class TestHoodieAvroUtils {
   }
 
   // Cross-Avro-version test fixtures: the same date / timestamp value expressed in both the Avro
-  // 1.11.x primitive form (Integer / Long) and the Avro 1.12 java.time form (LocalDate / Instant /
-  // LocalDateTime). The contract under test is that both forms produce identical downstream
-  // behavior in every Hudi read-side path that touches a logical-typed field. Sharing these
-  // fixtures across tests pins the same exact value through every path.
+  // primitive form (Integer / Long) — what GenericDatumReader returns under Avro 1.12.0 / 1.11.x —
+  // and the java.time form (LocalDate / Instant / LocalDateTime) — what it returns under Avro
+  // 1.12.1 with its default fastReaderEnabled=true. The contract under test is that both forms
+  // produce identical downstream behavior in every Hudi read-side path that touches a logical-typed
+  // field. Sharing these fixtures across tests pins the same exact value through every path.
   private static final long FIXTURE_EPOCH_MICROS = 1716163200_000000L + 123456L; // 2024-05-20T00:00:00.123456Z
   private static final long FIXTURE_EPOCH_MILLIS = 1716163200_000L + 123L;       // 2024-05-20T00:00:00.123Z
   private static final int FIXTURE_EPOCH_DAY = (int) java.time.LocalDate.of(2024, 5, 20).toEpochDay();
@@ -524,10 +525,11 @@ public class TestHoodieAvroUtils {
 
   /**
    * Cross-Avro-version invariant: {@link HoodieAvroUtils#convertValueForAvroLogicalTypes} must produce
-   * the same canonical Java value whether the GenericRecord field holds the Avro 1.11.x primitive form
-   * ({@code Long}/{@code Integer}) or the Avro 1.12 java.time form ({@code Instant}/{@code LocalDate}/
-   * {@code LocalDateTime}). This is the contract that lets a Spark 4.1 reader (Avro 1.12) compare
-   * ordering values against a Spark 3.5 / 4.0 writer's records (Avro 1.11.x) without divergence.
+   * the same canonical Java value whether the GenericRecord field holds the Avro primitive form
+   * ({@code Long}/{@code Integer}, returned by Avro 1.12.0 and 1.11.x) or the java.time form
+   * ({@code Instant}/{@code LocalDate}/{@code LocalDateTime}, returned by Avro 1.12.1 with its
+   * default {@code fastReaderEnabled=true}). This is the contract that lets a Spark 4.1 reader
+   * compare ordering values against records written by any earlier Spark profile without divergence.
    */
   @Test
   public void testConvertValueForAvroLogicalTypesCrossAvroVersion() {
@@ -560,10 +562,11 @@ public class TestHoodieAvroUtils {
 
   /**
    * Cross-Avro-version invariant for ordering-value extraction: a record whose timestamp/date field
-   * holds the Avro 1.12 java.time form must yield the same comparable ordering value as one holding
-   * the Avro 1.11.x primitive form. Without this property, {@code DefaultHoodieRecordPayload.compareOrderingVal}
-   * throws ClassCastException when one side of the comparison was read via Avro 1.12 and the other
-   * built from a Long (which is what Hudi's Spark→Avro serializer always produces).
+   * holds the java.time form (Avro 1.12.1 fast reader) must yield the same comparable ordering value
+   * as one holding the primitive form (Avro 1.12.0 / 1.11.x). Without this property,
+   * {@code DefaultHoodieRecordPayload.compareOrderingVal} throws ClassCastException when one side of
+   * the comparison was read via Avro 1.12.1 and the other built from a Long (which is what Hudi's
+   * Spark→Avro serializer always produces).
    */
   @Test
   public void testGetNestedFieldValOrderingInvariantAcrossAvroVersions() {
@@ -600,9 +603,10 @@ public class TestHoodieAvroUtils {
   /**
    * Cross-Avro-version invariant for {@link HoodieAvroUtils#rewritePrimaryType}: schema-evolution
    * paths that legacy-cast {@code (Integer) oldValue} / {@code (Long) oldValue} (e.g. ALTER COLUMN
-   * TYPE from date → string, or timestamp-millis → timestamp-micros) must accept the Avro 1.12
-   * java.time form as well as the Avro 1.11.x primitive form, since the on-disk byte format is
-   * identical and a Spark 4.1 reader can be evolving records written by any version.
+   * TYPE from date → string, or timestamp-millis → timestamp-micros) must accept the java.time
+   * form (Avro 1.12.1 fast reader) as well as the primitive form (Avro 1.12.0 / 1.11.x), since the
+   * on-disk byte format is identical and a Spark 4.1 reader can be evolving records written by any
+   * version.
    */
   @Test
   public void testRewritePrimaryTypeCrossAvroVersion() {
@@ -623,7 +627,7 @@ public class TestHoodieAvroUtils {
     assertRewriteEquivalent(TS_MILLIS_SCHEMA, doubleSchema, FIXTURE_EPOCH_MILLIS, FIXTURE_MILLIS_INSTANT);
 
     // In-place logical-type changes: the LONG → LONG branches in rewritePrimaryType explicitly cast
-    // to (Long) and would fail on Instant / LocalDateTime under Avro 1.12.
+    // to (Long) and would fail on Instant / LocalDateTime under Avro 1.12.1.
     assertRewriteEquivalent(TS_MILLIS_SCHEMA, TS_MICROS_SCHEMA, FIXTURE_EPOCH_MILLIS, FIXTURE_MILLIS_INSTANT);
     assertRewriteEquivalent(TS_MICROS_SCHEMA, TS_MILLIS_SCHEMA, FIXTURE_EPOCH_MICROS, FIXTURE_MICROS_INSTANT);
     assertRewriteEquivalent(LOCAL_TS_MILLIS_SCHEMA, LOCAL_TS_MICROS_SCHEMA, FIXTURE_EPOCH_MILLIS, FIXTURE_LOCAL_DT_MILLIS);
