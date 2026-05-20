@@ -360,7 +360,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           break;
         case THROTTLED:
           // The write was rejected; we did not acquire. Transient — caller may retry.
-          hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockStateUnknownMetric);
+          hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockThrottledMetric);
           break;
         case UNKNOWN_ERROR:
           // Lock state is unknown after the upsert attempt; surface it as such.
@@ -558,7 +558,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         return ExpireLockResult.FAILED;
       case THROTTLED:
         logWarnLockState(FAILED_TO_RELEASE, "Lock expiration write was throttled.");
-        hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockStateUnknownMetric);
+        hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockThrottledMetric);
         return ExpireLockResult.THROTTLED;
       case SUCCESS:
         logInfoLockState(RELEASED);
@@ -628,7 +628,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         case THROTTLED:
           // Throttling is transient, let the heartbeat retry on its next cycle.
           logger.warn("Owner {}: Unable to renew lock due to throttling, will retry on next heartbeat.", ownerId);
-          hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockStateUnknownMetric);
+          hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockThrottledMetric);
           // Let heartbeat retry later.
           return true;
         case SUCCESS:
