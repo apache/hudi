@@ -24,17 +24,21 @@ import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.parquet.schema.{GroupType, LogicalTypeAnnotation, Types}
+import org.apache.spark.SparkEnv
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, ResolvedTable}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, CreateNamedStruct, Expression, Literal, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.variant.VariantGet
 import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface}
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.trees.Origin
+import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.catalyst.util.{METADATA_COL_ATTR_KEY, RebaseDateTime}
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
@@ -48,7 +52,7 @@ import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.hudi.blob.{BatchedBlobReaderStrategy, ScalarFunctions}
 import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark4_2ExtendedSqlParser}
-import org.apache.spark.sql.types.{DataType, DataTypes, Metadata, MetadataBuilder, StructType}
+import org.apache.spark.sql.types.{DataType, DataTypes, Metadata, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
@@ -226,7 +230,15 @@ class Spark4_2Adapter extends BaseSpark4Adapter {
   }
 
   override def getDateTimeRebaseMode(): LegacyBehaviorPolicy.Value = {
-    SQLConf.get.getConf(SQLConf.PARQUET_REBASE_MODE_IN_WRITE)
+    // See Spark3_5Adapter.getDateTimeRebaseMode for the rationale. In Spark 4.1+
+    // the ConfigEntry returns LegacyBehaviorPolicy.Value directly, so the
+    // SparkConf string is parsed via withName before the orElse chain.
+    val fromSqlConf = Option(SQLConf.get.getConf(SQLConf.PARQUET_REBASE_MODE_IN_WRITE, null))
+    val fromSparkConf = Option(SparkEnv.get)
+      .flatMap(env => Option(env.conf.get(SQLConf.PARQUET_REBASE_MODE_IN_WRITE.key, null)))
+      .map(LegacyBehaviorPolicy.withName)
+    fromSqlConf.orElse(fromSparkConf)
+      .getOrElse(SQLConf.get.getConf(SQLConf.PARQUET_REBASE_MODE_IN_WRITE))
   }
 
   override def isLegacyBehaviorPolicy(value: Object): Boolean = {
@@ -239,6 +251,58 @@ class Spark4_2Adapter extends BaseSpark4Adapter {
 
   override def getRebaseSpec(policy: String): RebaseDateTime.RebaseSpec = {
     RebaseDateTime.RebaseSpec(LegacyBehaviorPolicy.withName(policy))
+  }
+
+  override def isVariantProjectionStruct(structType: StructType): Boolean = {
+    VariantMetadata.isVariantStruct(structType)
+  }
+
+  override def buildVariantProjector(sparkDataSchema: StructType,
+                                     sparkRequiredSchema: StructType): Option[InternalRow => InternalRow] = {
+    // Quick check: any required field a variant projection struct?
+    if (!sparkRequiredSchema.fields.exists(f => VariantMetadata.isVariantStruct(f.dataType))) {
+      None
+    } else {
+      // Surface mismatched schemas with both field lists rather than Spark's bare
+      // IllegalArgumentException from fieldIndex.
+      def lookupDataField(name: String): (Int, StructField) = {
+        val idx = sparkDataSchema.getFieldIndex(name).getOrElse(
+          throw new IllegalStateException(
+            s"Required field '$name' is absent from sparkDataSchema; " +
+              s"required=${sparkRequiredSchema.fieldNames.mkString("[", ",", "]")}, " +
+              s"data=${sparkDataSchema.fieldNames.mkString("[", ",", "]")}"))
+        (idx, sparkDataSchema.fields(idx))
+      }
+      val exprs: Array[Expression] = sparkRequiredSchema.fields.map { rf =>
+        rf.dataType match {
+          case projectedStruct: StructType if VariantMetadata.isVariantStruct(projectedStruct) =>
+            val (dataIdx, dataField) = lookupDataField(rf.name)
+            require(isVariantType(dataField.dataType),
+              s"Expected VariantType for field '${rf.name}' in data schema, got ${dataField.dataType}")
+            val variantRef: Expression = BoundReference(dataIdx, dataField.dataType, dataField.nullable)
+            val childExprs: Seq[Expression] = projectedStruct.fields.toSeq.flatMap { child =>
+              val vm = VariantMetadata.fromMetadata(child.metadata)
+              val pathLit = Literal(UTF8String.fromString(vm.path), DataTypes.StringType)
+              val tz: Option[String] = Option(vm.timeZoneId)
+              val variantGet: Expression = VariantGet(variantRef, pathLit, child.dataType, vm.failOnError, tz)
+              Seq(Literal(UTF8String.fromString(child.name), DataTypes.StringType), variantGet)
+            }
+            CreateNamedStruct(childExprs)
+          case _ =>
+            val (dataIdx, dataField) = lookupDataField(rf.name)
+            BoundReference(dataIdx, dataField.dataType, dataField.nullable)
+        }
+      }
+
+      val projection = UnsafeProjection.create(exprs.toIndexedSeq, DataTypeUtils.toAttributes(sparkDataSchema))
+      Some(row => projection(row))
+    }
+  }
+
+  // Apply LogicalTypeAnnotation.variantType((byte) 1) to the variant group, matching parquet 1.16+'s
+  // SparkToParquetSchemaConverter convention.
+  override protected def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = {
+    builder.as(LogicalTypeAnnotation.variantType(1.toByte))
   }
 
   override def createMemoryStream[T: Encoder](id: Int, sparkSession: SparkSession): HoodieMemoryStream[T] = {
