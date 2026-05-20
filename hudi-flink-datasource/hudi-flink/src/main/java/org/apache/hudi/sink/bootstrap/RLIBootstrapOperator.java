@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.metrics.FlinkRLIBootstrapMetrics;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.RuntimeContextUtils;
@@ -54,7 +55,7 @@ public class RLIBootstrapOperator
     extends AbstractBootstrapOperator {
 
   private transient HoodieBackedTableMetadata tableMetadata;
-  private transient long loadedCnt;
+  private transient FlinkRLIBootstrapMetrics metrics;
 
   public RLIBootstrapOperator(Configuration conf) {
     super(conf);
@@ -62,7 +63,8 @@ public class RLIBootstrapOperator
 
   @Override
   public void initializeState(StateInitializationContext context) throws Exception {
-    loadedCnt = 0;
+    metrics = new FlinkRLIBootstrapMetrics(getMetricGroup());
+    metrics.registerMetrics();
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
     this.tableMetadata = new HoodieBackedTableMetadata(
         HoodieFlinkEngineContext.DEFAULT,
@@ -106,17 +108,22 @@ public class RLIBootstrapOperator
           filteredFileSlices.add(fileSlices.get(i));
         }
       }
+      metrics.updateFileSliceMetrics(filteredFileSlices);
       log.info("Subtask: {} will load record index records from file groups: {}, total file groups: {}.",
           taskID, filteredFileSlices.stream().map(FileSlice::getFileId).collect(Collectors.joining(",")), fileSlices.size());
       return filteredFileSlices;
     };
 
     // Each subtask loads buckets assigned to it
-    long startTime = System.currentTimeMillis();
-    HoodiePairData<String, HoodieRecordGlobalLocation> rliData = tableMetadata.readRecordIndexLocations(fileSlicesFilter);
-    rliData.forEach(locationPair -> emitIndexRecord(locationPair.getLeft(), locationPair.getRight()));
-    long costMs = System.currentTimeMillis() - startTime;
-    log.info("Finish loading RLI records, total records: {}, cost: {} ms, taskId = {}", loadedCnt, costMs, taskID);
+    metrics.startScan();
+    try {
+      HoodiePairData<String, HoodieRecordGlobalLocation> rliData = tableMetadata.readRecordIndexLocations(fileSlicesFilter);
+      rliData.forEach(locationPair -> emitIndexRecord(locationPair.getLeft(), locationPair.getRight()));
+    } finally {
+      metrics.endScan();
+    }
+    log.info("Finish loading RLI records, total records: {}, cost: {} ms, rli shards: {}, scan bytes: {}, taskId = {}",
+        metrics.getScanRecords(), metrics.getScanLatency(), metrics.getRliShards(), metrics.getScanBytes(), taskID);
 
     // Wait for other tasks to complete
     waitForBootstrapReady(taskID);
@@ -140,7 +147,7 @@ public class RLIBootstrapOperator
             location.getPartitionPath(),
             location.getFileId(),
             String.valueOf(location.getInstantTime()))));
-    loadedCnt += 1;
+    metrics.markRecordScanned();
   }
 
   private void closeMetadataTable() {

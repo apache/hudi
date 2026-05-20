@@ -73,6 +73,7 @@ public class TestRLIBootstrapOperator {
 
   private Configuration getRLIConf() {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString("hadoop.fs.defaultFS", "file:///");
     conf.set(FlinkOptions.METADATA_ENABLED, true);
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
     return conf;
