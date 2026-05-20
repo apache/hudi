@@ -59,17 +59,17 @@ public final class SuccessfulRecordCounter {
     Objects.requireNonNull(errorTableWriteStatusRDDOpt, "errorTableWriteStatusRDDOpt");
 
     long totalRecords = 0L;
-    long totalErroredRecords = 0L;
+    long totalErrorRecords = 0L;
     for (WriteStatus ws : dataTableWriteStatuses) {
       totalRecords += ws.getTotalRecords();
-      totalErroredRecords += ws.getTotalErrorRecords();
+      totalErrorRecords += ws.getTotalErrorRecords();
     }
     if (isErrorTableWriteUnificationEnabled && errorTableWriteStatusRDDOpt.isPresent()) {
       JavaRDD<WriteStatus> errorRdd = errorTableWriteStatusRDDOpt.get();
       totalRecords += sumLong(errorRdd, WriteStatus::getTotalRecords);
-      totalErroredRecords += sumLong(errorRdd, WriteStatus::getTotalErrorRecords);
+      totalErrorRecords += sumLong(errorRdd, WriteStatus::getTotalErrorRecords);
     }
-    return new Counts(totalRecords, totalErroredRecords);
+    return new Counts(totalRecords, totalErrorRecords);
   }
 
   /**
@@ -85,27 +85,27 @@ public final class SuccessfulRecordCounter {
     public static final Counts ZERO = new Counts(0L, 0L);
 
     private final long totalRecords;
-    private final long totalErroredRecords;
+    private final long totalErrorRecords;
 
-    public Counts(long totalRecords, long totalErroredRecords) {
+    public Counts(long totalRecords, long totalErrorRecords) {
       this.totalRecords = totalRecords;
-      this.totalErroredRecords = totalErroredRecords;
+      this.totalErrorRecords = totalErrorRecords;
     }
 
     public long getTotalRecords() {
       return totalRecords;
     }
 
-    public long getTotalErroredRecords() {
-      return totalErroredRecords;
+    public long getTotalErrorRecords() {
+      return totalErrorRecords;
     }
 
     public long getTotalSuccessfulRecords() {
-      return totalRecords - totalErroredRecords;
+      return totalRecords - totalErrorRecords;
     }
 
     public boolean hasErrors() {
-      return totalErroredRecords > 0;
+      return totalErrorRecords > 0;
     }
   }
 }

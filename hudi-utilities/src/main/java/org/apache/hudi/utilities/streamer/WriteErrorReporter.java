@@ -21,7 +21,8 @@ package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.client.WriteStatus;
 
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -30,8 +31,9 @@ import java.util.List;
  *
  * <p>Extracted from {@code HoodieStreamerWriteStatusValidator} (#18750).</p>
  */
-@Slf4j
 public final class WriteErrorReporter {
+
+  private static final Logger LOG = LoggerFactory.getLogger(WriteErrorReporter.class);
 
   private static final int DEFAULT_MAX_ERRORS = 100;
 
@@ -51,7 +53,7 @@ public final class WriteErrorReporter {
     if (writeStatuses == null || maxErrors <= 0) {
       return;
     }
-    log.info("Printing out the top {} errored write statuses", maxErrors);
+    LOG.info("Printing out the top {} errored write statuses", maxErrors);
     writeStatuses.stream()
         .filter(WriteStatus::hasErrors)
         .limit(maxErrors)
@@ -59,9 +61,9 @@ public final class WriteErrorReporter {
   }
 
   private static void logOne(WriteStatus writeStatus) {
-    log.error("Global error: {}", writeStatus.getGlobalError());
+    LOG.error("Global error: {}", writeStatus.getGlobalError());
     if (!writeStatus.getErrors().isEmpty()) {
-      writeStatus.getErrors().forEach((k, v) -> log.trace("Error for key {} : {}", k, v));
+      writeStatus.getErrors().forEach((k, v) -> LOG.trace("Error for key {} : {}", k, v));
     }
   }
 }

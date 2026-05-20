@@ -67,7 +67,7 @@ public class TestSuccessfulRecordCounter {
         Collections.emptyList(), Option.empty(), false);
 
     assertEquals(0L, counts.getTotalRecords());
-    assertEquals(0L, counts.getTotalErroredRecords());
+    assertEquals(0L, counts.getTotalErrorRecords());
     assertEquals(0L, counts.getTotalSuccessfulRecords());
     assertFalse(counts.hasErrors());
   }
@@ -82,7 +82,7 @@ public class TestSuccessfulRecordCounter {
         Collections.singletonList(ws), Option.empty(), false);
 
     assertEquals(1000L, counts.getTotalRecords());
-    assertEquals(0L, counts.getTotalErroredRecords());
+    assertEquals(0L, counts.getTotalErrorRecords());
     assertEquals(1000L, counts.getTotalSuccessfulRecords());
     assertFalse(counts.hasErrors());
   }
@@ -101,7 +101,7 @@ public class TestSuccessfulRecordCounter {
         Arrays.asList(a, b), Option.empty(), false);
 
     assertEquals(300L, counts.getTotalRecords());
-    assertEquals(15L, counts.getTotalErroredRecords());
+    assertEquals(15L, counts.getTotalErrorRecords());
     assertEquals(285L, counts.getTotalSuccessfulRecords());
     assertTrue(counts.hasErrors());
   }
@@ -123,7 +123,7 @@ public class TestSuccessfulRecordCounter {
         Collections.singletonList(ws), Option.of(rdd), false);
 
     assertEquals(50L, counts.getTotalRecords());
-    assertEquals(2L, counts.getTotalErroredRecords());
+    assertEquals(2L, counts.getTotalErrorRecords());
     assertEquals(48L, counts.getTotalSuccessfulRecords());
   }
 
@@ -153,7 +153,7 @@ public class TestSuccessfulRecordCounter {
         Arrays.asList(dataA, dataB), Option.of(errorRdd), true);
 
     assertEquals(375L, counts.getTotalRecords());        // 100 + 200 + 50 + 25
-    assertEquals(90L, counts.getTotalErroredRecords());  // 5 + 10 + 50 + 25
+    assertEquals(90L, counts.getTotalErrorRecords());  // 5 + 10 + 50 + 25
     assertEquals(285L, counts.getTotalSuccessfulRecords());
     assertTrue(counts.hasErrors());
   }
@@ -169,7 +169,7 @@ public class TestSuccessfulRecordCounter {
         Collections.singletonList(dataA), Option.of(errorRdd), true);
 
     assertEquals(150L, counts.getTotalRecords());
-    assertEquals(55L, counts.getTotalErroredRecords());
+    assertEquals(55L, counts.getTotalErrorRecords());
     assertEquals(95L, counts.getTotalSuccessfulRecords());
   }
 

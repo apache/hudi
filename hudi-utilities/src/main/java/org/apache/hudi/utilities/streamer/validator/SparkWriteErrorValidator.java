@@ -26,7 +26,8 @@ import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig.ValidationFailurePolicy;
 import org.apache.hudi.exception.HoodieValidationException;
 
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 
@@ -34,7 +35,7 @@ import java.util.Arrays;
  * Pre-commit validator that fails the commit when records failed to write.
  *
  * <p>Equivalent of the legacy {@code HoodieStreamerWriteStatusValidator}'s boolean error check
- * ({@code hasErrorRecords = totalErroredRecords > 0}), wired through the pre-commit validator
+ * ({@code hasErrorRecords = totalErrorRecords > 0}), wired through the pre-commit validator
  * framework (issue #18750). Pure validation: no side effects (no error-table commit, no
  * top-100 error logging, no instant rollback). Those side effects are handled separately by
  * {@code StreamSync}'s pre-commit orchestration.</p>
@@ -74,8 +75,9 @@ import java.util.Arrays;
  * and must be invoked via {@link SparkStreamerValidatorUtils} — not {@code SparkValidatorUtils},
  * which expects a different constructor signature.</p>
  */
-@Slf4j
 public class SparkWriteErrorValidator extends BasePreCommitValidator {
+
+  private static final Logger LOG = LoggerFactory.getLogger(SparkWriteErrorValidator.class);
 
   private final ValidationFailurePolicy failurePolicy;
 
@@ -106,13 +108,13 @@ public class SparkWriteErrorValidator extends BasePreCommitValidator {
 
     if (totalRecords == 0) {
       // Empty commit (mirrors HSWSV "No new data, perform empty commit.").
-      log.info("Empty commit (no records written, no errors). Skipping write-error validation "
+      LOG.info("Empty commit (no records written, no errors). Skipping write-error validation "
           + "for instant {}.", context.getInstantTime());
       return;
     }
 
     if (totalErrors == 0) {
-      log.info("Write-error validation passed for instant {}: 0 errors out of {} records.",
+      LOG.info("Write-error validation passed for instant {}: 0 errors out of {} records.",
           context.getInstantTime(), totalRecords);
       return;
     }
@@ -126,7 +128,7 @@ public class SparkWriteErrorValidator extends BasePreCommitValidator {
         HoodiePreCommitValidatorConfig.VALIDATION_FAILURE_POLICY.key());
 
     if (failurePolicy == ValidationFailurePolicy.WARN_LOG) {
-      log.warn("{} (failure policy is WARN_LOG, commit will proceed)", errorMsg);
+      LOG.warn("{} (failure policy is WARN_LOG, commit will proceed)", errorMsg);
     } else {
       throw new HoodieValidationException(errorMsg);
     }

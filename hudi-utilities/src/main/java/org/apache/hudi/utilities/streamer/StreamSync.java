@@ -944,7 +944,7 @@ public class StreamSync implements Serializable, Closeable {
             writeStatuses, errorTableWriteStatusRDDOpt, isErrorTableWriteUnificationEnabled);
         totalSuccessfulRecords.set(counts.getTotalSuccessfulRecords());
         LOG.info("instantTime={}, totalRecords={}, totalErrorRecords={}, totalSuccessfulRecords={}",
-            instantTime, counts.getTotalRecords(), counts.getTotalErroredRecords(),
+            instantTime, counts.getTotalRecords(), counts.getTotalErrorRecords(),
             counts.getTotalSuccessfulRecords());
         if (counts.getTotalRecords() == 0) {
           LOG.info("No new data, perform empty commit.");
@@ -961,10 +961,10 @@ public class StreamSync implements Serializable, Closeable {
         if (counts.hasErrors()) {
           if (cfg.commitOnErrors) {
             LOG.warn("Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total={}/{}",
-                counts.getTotalErroredRecords(), counts.getTotalRecords());
+                counts.getTotalErrorRecords(), counts.getTotalRecords());
           } else {
             LOG.error("Delta Sync found errors when writing. Errors/Total={}/{}",
-                counts.getTotalErroredRecords(), counts.getTotalRecords());
+                counts.getTotalErrorRecords(), counts.getTotalRecords());
             WriteErrorReporter.logTopErrors(writeStatuses);
             // Roll back the inflight data-table instant so it doesn't leak under LAZY
             // failed-writes cleanup policy (preserves HSWSV behavior).
