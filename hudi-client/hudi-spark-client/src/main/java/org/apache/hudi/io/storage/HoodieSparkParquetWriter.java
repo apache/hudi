@@ -46,7 +46,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
   private final UTF8String instantTime;
 
   private final boolean populateMetaFields;
-  private final HoodieMetaFieldFlags hoodieMetaFieldFlags;
+  private final HoodieMetaFieldFlags metaFieldFlags;
 
   private final HoodieRowParquetWriteSupport writeSupport;
 
@@ -57,13 +57,13 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                   String instantTime,
                                   TaskContextSupplier taskContextSupplier,
                                   boolean populateMetaFields,
-                                  HoodieMetaFieldFlags hoodieMetaFieldFlags) throws IOException {
+                                  HoodieMetaFieldFlags metaFieldFlags) throws IOException {
     super(file, parquetConfig);
     this.writeSupport = parquetConfig.getWriteSupport();
     this.fileName = UTF8String.fromString(file.getName());
     this.instantTime = UTF8String.fromString(instantTime);
     this.populateMetaFields = populateMetaFields;
-    this.hoodieMetaFieldFlags = Objects.requireNonNull(hoodieMetaFieldFlags, "hoodieMetaFieldFlags must not be null");
+    this.metaFieldFlags = Objects.requireNonNull(metaFieldFlags, "metaFieldFlags must not be null");
     this.seqIdGenerator = recordIndex -> {
       Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
       return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
@@ -100,14 +100,14 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                       UTF8String recordKey,
                                       String partitionPath,
                                       long recordCount)  {
-    UTF8String seqId = hoodieMetaFieldFlags.isCommitSeqNoPopulated()
+    UTF8String seqId = metaFieldFlags.isCommitSeqNoPopulated()
         ? UTF8String.fromString(seqIdGenerator.apply(recordCount)) : null;
-    UTF8String partitionPathUtf8 = hoodieMetaFieldFlags.isPartitionPathPopulated()
+    UTF8String partitionPathUtf8 = metaFieldFlags.isPartitionPathPopulated()
         ? UTF8String.fromString(partitionPath) : null;
-    row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), hoodieMetaFieldFlags.isCommitTimePopulated() ? instantTime : null);
+    row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), metaFieldFlags.isCommitTimePopulated() ? instantTime : null);
     row.update(COMMIT_SEQNO_METADATA_FIELD.ordinal(), seqId);
-    row.update(RECORD_KEY_METADATA_FIELD.ordinal(), hoodieMetaFieldFlags.isRecordKeyPopulated() ? recordKey : null);
+    row.update(RECORD_KEY_METADATA_FIELD.ordinal(), metaFieldFlags.isRecordKeyPopulated() ? recordKey : null);
     row.update(PARTITION_PATH_METADATA_FIELD.ordinal(), partitionPathUtf8);
-    row.update(FILENAME_METADATA_FIELD.ordinal(), hoodieMetaFieldFlags.isFileNamePopulated() ? fileName : null);
+    row.update(FILENAME_METADATA_FIELD.ordinal(), metaFieldFlags.isFileNamePopulated() ? fileName : null);
   }
 }

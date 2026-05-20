@@ -49,14 +49,14 @@ object SparkHelpers {
                               sourceFile: StoragePath,
                               destinationFile: StoragePath,
                               keysToSkip: Set[String],
-                              hoodieMetaFieldFlags: HoodieMetaFieldFlags = HoodieMetaFieldFlags.allPopulated(),
+                              metaFieldFlags: HoodieMetaFieldFlags = HoodieMetaFieldFlags.allPopulated(),
                               populateMetaFields: Boolean = true) {
     // Deduplication identifies records by their on-disk _hoodie_record_key. If that meta
     // column is not populated (populate.meta.fields=false or _hoodie_record_key in
     // META_FIELDS_EXCLUDE_LIST), every record's key reads back as null and the skip-set
     // logic is meaningless. Fail fast rather than silently producing wrong output (and the
     // null.toString NPE downstream).
-    if (!populateMetaFields || !hoodieMetaFieldFlags.isRecordKeyPopulated) {
+    if (!populateMetaFields || !metaFieldFlags.isRecordKeyPopulated) {
       throw new HoodieException(
         "Cannot deduplicate records: _hoodie_record_key is not populated on disk. "
           + "Deduplication relies on the on-disk record-key meta column to identify "
@@ -88,7 +88,7 @@ object SparkHelpers {
     conf.unwrap().setClassLoader(Thread.currentThread.getContextClassLoader)
 
     val writer = new HoodieAvroParquetWriter(destinationFile, parquetConfig, instantTime, new SparkTaskContextSupplier(),
-      populateMetaFields, hoodieMetaFieldFlags)
+      populateMetaFields, metaFieldFlags)
     for (rec <- sourceRecords) {
       val key: String = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
       if (!keysToSkip.contains(key)) {

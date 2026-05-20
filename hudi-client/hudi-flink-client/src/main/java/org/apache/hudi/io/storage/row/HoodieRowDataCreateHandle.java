@@ -78,7 +78,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
   private final String fileId;
   private final boolean preserveHoodieMetadata;
   private final boolean skipMetadataWrite;
-  private final HoodieMetaFieldFlags hoodieMetaFieldFlags;
+  private final HoodieMetaFieldFlags metaFieldFlags;
   private final HoodieStorage storage;
   protected final WriteStatus writeStatus;
   private final HoodieRecordLocation newRecordLocation;
@@ -102,7 +102,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.preserveHoodieMetadata = preserveHoodieMetadata;
     this.skipMetadataWrite = skipMetadataWrite;
-    this.hoodieMetaFieldFlags = table.getMetaClient().getTableConfig().getHoodieMetaFieldFlags();
+    this.metaFieldFlags = table.getMetaClient().getTableConfig().getHoodieMetaFieldFlags();
     this.currTimer = HoodieTimer.start();
     this.storage = table.getStorage();
     this.path = makeNewPath(partitionPath);
@@ -146,27 +146,31 @@ public class HoodieRowDataCreateHandle implements Serializable {
       String commitInstant;
       RowData rowData;
       if (!skipMetadataWrite) {
-        if (hoodieMetaFieldFlags.isCommitTimePopulated()) {
-          if (preserveHoodieMetadata && !record.isNullAt(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD)) {
-            commitInstant = record.getString(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD).toString();
-          } else {
-            commitInstant = instantTime;
-          }
-        } else {
+        if (!metaFieldFlags.isCommitTimePopulated()) {
           commitInstant = null;
-        }
-        if (hoodieMetaFieldFlags.isCommitSeqNoPopulated()) {
-          if (preserveHoodieMetadata && !record.isNullAt(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)) {
-            seqId = record.getString(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD).toString();
-          } else {
-            seqId = HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement());
-          }
+        } else if (preserveHoodieMetadata) {
+          // preserveHoodieMetadata is the read-side contract that the source row already carries
+          // the meta values to retain (e.g. clustering / bootstrap). Always read from the record,
+          // including a null value - regenerating instantTime here would silently overwrite a
+          // deliberately-null meta column from an upstream table where the field was excluded.
+          commitInstant = record.isNullAt(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD)
+              ? null
+              : record.getString(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD).toString();
         } else {
-          seqId = null;
+          commitInstant = instantTime;
         }
-        String effectiveRecordKey = hoodieMetaFieldFlags.isRecordKeyPopulated() ? recordKey : null;
-        String effectivePartitionPath = hoodieMetaFieldFlags.isPartitionPathPopulated() ? partitionPath : null;
-        String effectiveFileName = hoodieMetaFieldFlags.isFileNamePopulated() ? path.getName() : null;
+        if (!metaFieldFlags.isCommitSeqNoPopulated()) {
+          seqId = null;
+        } else if (preserveHoodieMetadata) {
+          seqId = record.isNullAt(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
+              ? null
+              : record.getString(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD).toString();
+        } else {
+          seqId = HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement());
+        }
+        String effectiveRecordKey = metaFieldFlags.isRecordKeyPopulated() ? recordKey : null;
+        String effectivePartitionPath = metaFieldFlags.isPartitionPathPopulated() ? partitionPath : null;
+        String effectiveFileName = metaFieldFlags.isFileNamePopulated() ? path.getName() : null;
         rowData = HoodieRowDataCreation.create(commitInstant, seqId, effectiveRecordKey, effectivePartitionPath, effectiveFileName,
             record, writeConfig.allowOperationMetadataField(), preserveHoodieMetadata);
       } else {

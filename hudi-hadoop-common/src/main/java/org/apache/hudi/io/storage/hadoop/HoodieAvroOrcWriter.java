@@ -72,12 +72,12 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   private final TaskContextSupplier taskContextSupplier;
 
   private final HoodieOrcConfig orcConfig;
-  private final HoodieMetaFieldFlags hoodieMetaFieldFlags;
+  private final HoodieMetaFieldFlags metaFieldFlags;
   private String minRecordKey;
   private String maxRecordKey;
 
   public HoodieAvroOrcWriter(String instantTime, StoragePath file, HoodieOrcConfig config, HoodieSchema schema,
-                             TaskContextSupplier taskContextSupplier, HoodieMetaFieldFlags hoodieMetaFieldFlags) throws IOException {
+                             TaskContextSupplier taskContextSupplier, HoodieMetaFieldFlags metaFieldFlags) throws IOException {
 
     Configuration conf = HadoopFSUtils.registerFileSystem(file, config.getStorageConf().unwrapAs(Configuration.class));
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
@@ -86,7 +86,7 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
     this.wrapperFs = this.isWrapperFileSystem ? Option.of((HoodieWrapperFileSystem) fs) : Option.empty();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
-    this.hoodieMetaFieldFlags = Objects.requireNonNull(hoodieMetaFieldFlags, "hoodieMetaFieldFlags must not be null");
+    this.metaFieldFlags = Objects.requireNonNull(metaFieldFlags, "metaFieldFlags must not be null");
 
     this.schema = schema;
     final TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(this.schema);
@@ -108,7 +108,7 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   @Override
   public void writeAvroWithMetadata(HoodieKey key, IndexedRecord avroRecord) throws IOException {
     prepRecordWithMetadata(key, avroRecord, instantTime,
-        taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX.getAndIncrement(), file.getName(), hoodieMetaFieldFlags);
+        taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX.getAndIncrement(), file.getName(), metaFieldFlags);
     writeAvro(key.getRecordKey(), avroRecord);
   }
 
