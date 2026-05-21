@@ -766,12 +766,9 @@ public class StreamWriteOperatorCoordinator
       this.commitAction = CommitUtils.getCommitActionType(this.operationType,
           HoodieTableType.valueOf(conf.get(FlinkOptions.TABLE_TYPE).toUpperCase(Locale.ROOT)));
       this.isOverwrite = WriteOperationType.isOverwrite(this.operationType);
-      this.scheduleCompaction = OptionsResolver.areTableServicesEnabled(conf)
-          && OptionsResolver.needsScheduleCompaction(conf);
-      this.scheduleClustering = OptionsResolver.areTableServicesEnabled(conf)
-          && OptionsResolver.needsScheduleClustering(conf);
-      this.scheduleMdtCompaction = OptionsResolver.areTableServicesEnabled(conf)
-          && OptionsResolver.needsScheduleMdtCompaction(conf); 
+      this.scheduleCompaction = OptionsResolver.needsScheduleCompaction(conf);
+      this.scheduleClustering = OptionsResolver.needsScheduleClustering(conf);
+      this.scheduleMdtCompaction = OptionsResolver.needsScheduleMdtCompaction(conf);
       this.syncHive = conf.get(FlinkOptions.HIVE_SYNC_ENABLED);
       this.syncMetadata = conf.get(FlinkOptions.METADATA_ENABLED);
       this.isDeltaTimeCompaction = OptionsResolver.isDeltaTimeCompaction(conf);

@@ -117,12 +117,9 @@ public class PipelinesV2 {
       // close compaction for append mode
       conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
       DataStream<RowData> pipeline = Pipelines.append(conf, rowType, dataStream);
-      if (!OptionsResolver.areTableServicesEnabled(conf)) {
-        return pipeline;
-      }
       if (OptionsResolver.needsAsyncClustering(conf)) {
         return clusterV2(conf, rowType, pipeline);
-      } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
+      } else if (OptionsResolver.isLazyFailedWritesCleaning(conf)) {
         // add clean function to rollback failed writes for lazy failed writes cleaning policy
         return cleanV2(conf, pipeline);
       } else {
@@ -134,9 +131,6 @@ public class PipelinesV2 {
     DataStream<RowData> pipeline;
     final DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream, isBounded, overwrite);
     pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
-    if (!OptionsResolver.areTableServicesEnabled(conf)) {
-      return pipeline;
-    }
     // compaction
     if (OptionsResolver.needsAsyncCompaction(conf)) {
       // use synchronous compaction for bounded source.
@@ -144,8 +138,10 @@ public class PipelinesV2 {
         conf.set(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED, false);
       }
       return compactV2(conf, pipeline);
-    } else {
+    } else if (OptionsResolver.needsAsyncCleaning(conf)) {
       return cleanV2(conf, pipeline);
+    } else {
+      return pipeline;
     }
   }
 
@@ -162,7 +158,7 @@ public class PipelinesV2 {
     if (OptionsResolver.isBulkInsertOperation(conf)) {
       return conf.get(FlinkOptions.WRITE_TASKS);
     } else if (OptionsResolver.isAppendMode(conf)) {
-      return OptionsResolver.needsAsyncClustering(conf) || OptionsResolver.isLazyFailedWritesCleanPolicy(conf)
+      return OptionsResolver.needsAsyncClustering(conf) || OptionsResolver.isLazyFailedWritesCleaning(conf)
           ? 1 : conf.get(FlinkOptions.WRITE_TASKS);
     } else {
       return 1;

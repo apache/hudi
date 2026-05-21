@@ -296,7 +296,7 @@ public class OptionsResolver {
    * @param conf The flink configuration.
    */
   public static boolean needsAsyncCompaction(Configuration conf) {
-    return OptionsResolver.isMorTable(conf) && conf.get(FlinkOptions.COMPACTION_ASYNC_ENABLED);
+    return OptionsResolver.isMorTable(conf) && areTableServicesEnabled(conf) && conf.get(FlinkOptions.COMPACTION_ASYNC_ENABLED);
   }
 
   /**
@@ -305,7 +305,7 @@ public class OptionsResolver {
    * @param conf The flink configuration.
    */
   public static boolean needsAsyncMetadataCompaction(Configuration conf) {
-    return isStreamingIndexWriteEnabled(conf) && conf.get(FlinkOptions.METADATA_COMPACTION_ASYNC_ENABLED);
+    return isStreamingIndexWriteEnabled(conf) && areTableServicesEnabled(conf) && conf.get(FlinkOptions.METADATA_COMPACTION_ASYNC_ENABLED);
   }
 
   /**
@@ -314,7 +314,7 @@ public class OptionsResolver {
    * @param conf The flink configuration.
    */
   public static boolean needsScheduleMdtCompaction(Configuration conf) {
-    return isStreamingIndexWriteEnabled(conf) && conf.get(FlinkOptions.METADATA_COMPACTION_SCHEDULE_ENABLED);
+    return isStreamingIndexWriteEnabled(conf) && areTableServicesEnabled(conf) && conf.get(FlinkOptions.METADATA_COMPACTION_SCHEDULE_ENABLED);
   }
 
   /**
@@ -324,7 +324,9 @@ public class OptionsResolver {
    */
   public static boolean needsScheduleCompaction(Configuration conf) {
     return OptionsResolver.isMorTable(conf)
-        && conf.get(FlinkOptions.COMPACTION_SCHEDULE_ENABLED) && !isAppendMode(conf);
+        && areTableServicesEnabled(conf)
+        && conf.get(FlinkOptions.COMPACTION_SCHEDULE_ENABLED)
+        && !isAppendMode(conf);
   }
 
   /**
@@ -333,7 +335,7 @@ public class OptionsResolver {
    * @param conf The flink configuration.
    */
   public static boolean needsAsyncClustering(Configuration conf) {
-    return isInsertOperation(conf) && conf.get(FlinkOptions.CLUSTERING_ASYNC_ENABLED);
+    return isInsertOperation(conf) && areTableServicesEnabled(conf) && conf.get(FlinkOptions.CLUSTERING_ASYNC_ENABLED);
   }
 
   /**
@@ -342,6 +344,9 @@ public class OptionsResolver {
    * @param conf The flink configuration.
    */
   public static boolean needsScheduleClustering(Configuration conf) {
+    if (!areTableServicesEnabled(conf)) {
+      return false;
+    }
     if (!conf.get(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED)) {
       return false;
     }
@@ -546,6 +551,20 @@ public class OptionsResolver {
    */
   public static boolean isNonBlockingConcurrencyControl(Configuration config) {
     return WriteConcurrencyMode.isNonBlockingConcurrencyControl(config.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()));
+  }
+
+  /**
+   * Returns whether the cleaning for failed writes is enabled as lazy.
+   */
+  public static boolean isLazyFailedWritesCleaning(Configuration conf) {
+    return needsAsyncCleaning(conf) && isLazyFailedWritesCleanPolicy(conf);
+  }
+
+  /**
+   * Returns whether there is need for async cleaning (planning & execution).
+   */
+  public static boolean needsAsyncCleaning(Configuration conf) {
+    return areTableServicesEnabled(conf);
   }
 
   /**

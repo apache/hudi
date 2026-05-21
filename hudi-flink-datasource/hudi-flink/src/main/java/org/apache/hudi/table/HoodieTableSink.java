@@ -110,12 +110,9 @@ public class HoodieTableSink implements
         // close compaction for append mode
         conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
         DataStream<RowData> pipeline = Pipelines.append(conf, rowType, dataStream);
-        if (!OptionsResolver.areTableServicesEnabled(conf)) {
-          return Pipelines.dummySink(pipeline);
-        }
         if (OptionsResolver.needsAsyncClustering(conf)) {
           return Pipelines.cluster(conf, rowType, pipeline);
-        } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
+        } else if (OptionsResolver.isLazyFailedWritesCleaning(conf)) {
           // add clean function to rollback failed writes for lazy failed writes cleaning policy
           return Pipelines.clean(conf, pipeline);
         } else {
@@ -127,9 +124,6 @@ public class HoodieTableSink implements
       DataStream<RowData> pipeline;
       final DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream, context.isBounded(), overwrite);
       pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
-      if (!OptionsResolver.areTableServicesEnabled(conf)) {
-        return Pipelines.dummySink(pipeline);
-      }
       // compaction
       if (OptionsResolver.needsAsyncCompaction(conf) || OptionsResolver.needsAsyncMetadataCompaction(conf)) {
         // use synchronous compaction for bounded source.
@@ -137,8 +131,10 @@ public class HoodieTableSink implements
           conf.set(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED, false);
         }
         return Pipelines.compact(conf, pipeline);
-      } else {
+      } else if (OptionsResolver.needsAsyncCleaning(conf)) {
         return Pipelines.clean(conf, pipeline);
+      } else {
+        return Pipelines.dummySink(pipeline);
       }
     };
   }
