@@ -269,4 +269,28 @@ class TestHoodieMetadataConfig {
             .withTableServiceManagerEnabled(true)
             .build());
   }
+
+  @Test
+  void testMetricsConfig() {
+    // Test default value
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
+    assertFalse(config.isMetricsEnabled());
+
+    Properties props = new Properties();
+    props.put(HoodieMetadataConfig.METRICS_ENABLE.key(), true);
+    config = HoodieMetadataConfig.newBuilder()
+        .fromProperties(props)
+        .build();
+    assertTrue(config.isMetricsEnabled());
+    assertFalse(config.shouldEnableDetailedMetrics());
+
+    props = new Properties();
+    props.put(HoodieMetadataConfig.METRICS_ENABLE.key(), true);
+    props.put(HoodieMetadataConfig.ENABLE_DETAILED_METRICS.key(), true);
+    config = HoodieMetadataConfig.newBuilder()
+        .fromProperties(props)
+        .build();
+    assertTrue(config.isMetricsEnabled());
+    assertTrue(config.shouldEnableDetailedMetrics());
+  }
 }

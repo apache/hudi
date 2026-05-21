@@ -98,7 +98,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
     super(context, config, table, instantTime);
     this.txnManager = new TransactionManager(config, table.getStorage());
     if (config.getMetadataConfig().isMetricsEnabled()) {
-      this.metrics = Option.of(new HoodieMetadataMetrics(config.getMetricsConfig(), table.getStorage()));
+      this.metrics = Option.of(new HoodieMetadataMetrics(config.getMetricsConfig(), table.getStorage(), config.getMetadataConfig().shouldEnableDetailedMetrics()));
     } else {
       this.metrics = Option.empty();
     }
