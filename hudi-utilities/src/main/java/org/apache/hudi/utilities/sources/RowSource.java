@@ -66,7 +66,7 @@ public abstract class RowSource extends Source<Dataset<Row>> {
       SchemaProvider rowSchemaProvider = UtilHelpers.createRowBasedSchemaProvider(datasetSchema, props, sparkContext);
       Dataset<Row> wrappedDf = HoodieSparkUtils.maybeWrapDataFrameWithException(sanitizedRows, HoodieReadFromSourceException.class.getName(),
           "Failed to read from row source", ConfigUtils.getBooleanWithAltKeys(props, ROW_THROW_EXPLICIT_EXCEPTIONS));
-      return new InputBatch<>(Option.of(wrappedDf), res.getValue(), rowSchemaProvider);
-    }).orElseGet(() -> new InputBatch<>(res.getKey(), res.getValue()));
+      return new InputBatch<>(Option.of(wrappedDf), res.getValue(), rowSchemaProvider, getUpstreamEventTimeWatermarks());
+    }).orElseGet(() -> new InputBatch<>(res.getKey(), res.getValue(), null, getUpstreamEventTimeWatermarks()));
   }
 }
