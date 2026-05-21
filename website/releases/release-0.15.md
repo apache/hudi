@@ -9,6 +9,7 @@ import TabItem from '@theme/TabItem';
 This page contains release notes for all Apache Hudi 0.15.x releases, including:
 
 - [Release 0.15.0](#release-0150)
+- [Release 0.15.1](#release-0151)
 
 ---
 
@@ -335,3 +336,48 @@ Avoid upgrading any existing table to 0.14.1 and 0.15.0 from any prior version i
 
 The raw release notes are
 available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12353381).
+
+## [Release 0.15.1](https://github.com/apache/hudi/releases/tag/release-0.15.1)
+
+## Migration Guide
+* This release (0.15.1) does not introduce any new table version, thus no migration is needed if you are on 0.15.0.
+* If migrating from an older release, please check the migration guide from the previous release notes, specifically
+  the upgrade instructions in [0.6.0](/releases/release-0.6.0),
+  [0.9.0](/releases/release-0.9.0), [0.10.0](/releases/release-0.10.0),
+  [0.11.0](/releases/release-0.11.0), [0.12.0](/releases/release-0.12.0), [0.13.0](/releases/release-0.13.0), [0.14.0](/releases/release-0.14#release-0140), and
+  [0.15.0](/releases/release-0.15#release-0150)
+
+### Bug fixes
+
+0.15.1 release is primarily intended for bug fixes and stability. Notable fixes include:
+
+* Fix for the [Complex Key Generator regression](#known-regressions) flagged in 0.15.0, which could silently ingest
+  duplicates when the record key consists of a single field
+  ([HUDI-9666](https://issues.apache.org/jira/browse/HUDI-9666)).
+* Databricks Spark runtime compatibility for reading Hudi tables, including partition predicate handling and incremental
+  query with full scan mode on MOR tables.
+* Storage-based lock provider implementations for [S3](https://issues.apache.org/jira/browse/HUDI-9159),
+  [GCS](https://issues.apache.org/jira/browse/HUDI-9160), and
+  [DynamoDB](https://issues.apache.org/jira/browse/HUDI-8490).
+* Column stats index correctness with metadata table
+  ([HUDI-8371](https://issues.apache.org/jira/browse/HUDI-8371)) and timestamp column logical type fixes.
+* Schema evolution improvements for nested data types, MOR tables with timestamp columns
+  ([HUDI-8175](https://issues.apache.org/jira/browse/HUDI-8175)), and avoiding unnecessary schema evolution when only
+  the version id changes ([HUDI-9597](https://issues.apache.org/jira/browse/HUDI-9597)).
+* Rollback and cleaning now acquire locks as needed
+  ([HUDI-7507](https://issues.apache.org/jira/browse/HUDI-7507)); cleaner NPE on plan deserialization
+  ([HUDI-8772](https://issues.apache.org/jira/browse/HUDI-8772)).
+* Hive/Glue sync emits drop partition events when partitions are removed
+  ([HUDI-9770](https://issues.apache.org/jira/browse/HUDI-9770)); meta sync recreates tables on certain exceptions.
+* MERGE INTO on Spark no longer scans the target table unnecessarily
+  ([HUDI-9088](https://issues.apache.org/jira/browse/HUDI-9088)).
+* DataHub meta sync improvements ([HUDI-8616](https://issues.apache.org/jira/browse/HUDI-8616),
+  [HUDI-9377](https://issues.apache.org/jira/browse/HUDI-9377)).
+* Flink bug fix cherry-picks from 0.14.2.
+* Security fixes for [CVE-2023-39410 and CVE-2020-13956](https://issues.apache.org/jira/browse/HUDI-8402).
+
+## Known Regressions
+
+No known regressions at the time of release. The Complex Key Generator regression reported in 0.15.0 is fixed in 0.15.1
+via [HUDI-9666](https://issues.apache.org/jira/browse/HUDI-9666); users on 0.14.1 / 0.15.0 with `ComplexKeyGenerator`
+and a single record key field are encouraged to upgrade.
