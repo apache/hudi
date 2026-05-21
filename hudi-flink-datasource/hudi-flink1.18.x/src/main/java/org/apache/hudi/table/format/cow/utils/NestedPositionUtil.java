@@ -87,8 +87,8 @@ public class NestedPositionUtil {
    *
    * @param field field that contains array/map column message include max repetition level and
    *     definition level.
-   * @param definitionLevels int array with each value's repetition level.
-   * @param repetitionLevels int array with each value's definition level.
+   * @param definitionLevels int array with each value's definition level.
+   * @param repetitionLevels int array with each value's repetition level.
    * @return {@link CollectionPosition} contains collections offset array, length array and isNull
    *     array.
    */
