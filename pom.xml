@@ -59,7 +59,6 @@
     <module>packaging/hudi-utilities-bundle</module>
     <module>packaging/hudi-utilities-slim-bundle</module>
     <module>packaging/hudi-timeline-server-bundle</module>
-    <module>packaging/hudi-trino-bundle</module>
     <module>hudi-examples</module>
     <module>hudi-flink-datasource</module>
     <module>hudi-kafka-connect</module>
@@ -130,6 +129,8 @@
     <hive.avro.version>1.11.4</hive.avro.version>
     <presto.version>0.273</presto.version>
     <trino.version>390</trino.version>
+    <!-- Trino SPI version that hudi-trino-plugin (RFC-105) compiles against. -->
+    <trino.connector.version>472</trino.connector.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
     <orc.spark.version>1.6.0</orc.spark.version>
@@ -682,7 +683,6 @@
               <!-- local files not in version control -->
               <exclude>**/*.iml</exclude>
               <exclude>.mvn/**</exclude>
-              <exclude>hudi-trino-plugin/**</exclude>
             </excludes>
           </configuration>
           <executions>
@@ -2269,6 +2269,15 @@
       <modules>
         <module>hudi-platform-service</module>
         <module>packaging/hudi-metaserver-server-bundle</module>
+      </modules>
+    </profile>
+    <profile>
+      <!-- RFC-105: builds the Trino connector and its publishable shaded bundle.
+           Excluded from default builds because it requires JDK 25 and the Trino SPI. -->
+      <id>hudi-trino</id>
+      <modules>
+        <module>hudi-trino-plugin</module>
+        <module>packaging/hudi-trino-bundle</module>
       </modules>
     </profile>
     <profile>

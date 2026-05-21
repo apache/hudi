@@ -1,0 +1,55 @@
+name: Hudi Trino SPI Compatibility
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+env:
+  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip
+
+jobs:
+  compile-against-trino-master:
+    name: Compile hudi-trino-plugin against trinodb/trino master
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Hudi
+        uses: actions/checkout@v5
+        with:
+          path: hudi
+      - name: Checkout trinodb/trino master
+        uses: actions/checkout@v5
+        with:
+          repository: trinodb/trino
+          ref: master
+          path: trino
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+      - name: Read Trino SPI version
+        id: trino-version
+        run: |
+          # trinodb/trino's root pom declares <version>NNN-SNAPSHOT</version>; strip the suffix.
+          VERSION=$(grep -m1 '<version>' trino/pom.xml | sed -E 's|.*<version>([0-9]+)(-SNAPSHOT)?</version>.*|\1|')
+          echo "trino_version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Detected Trino version: $VERSION"
+      - name: Compile hudi-trino-plugin against current Trino SPI
+        working-directory: hudi
+        run: |
+          ./mvnw $MVN_ARGS -Phudi-trino \
+            -Dtrino.connector.version=${{ steps.trino-version.outputs.trino_version }} \
+            -pl hudi-trino-plugin -am compile
+      - name: Open issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `hudi-trino-plugin SPI drift detected against Trino ${{ steps.trino-version.outputs.trino_version }}`,
+              body: `Nightly compatibility build failed. See run ${context.runId}.`
+            });
