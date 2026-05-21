@@ -19,7 +19,7 @@ package org.apache.spark.sql.catalyst.plans.logical
 
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Literal}
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
-import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.types.{NumericType, StringType}
 
 object HoodieVectorSearchTableValuedFunction {
 
@@ -65,8 +65,10 @@ object HoodieVectorSearchTableValuedFunction {
    *   hudi_vector_search('table', 'embedding_col', ARRAY(1.0, 2.0, ...), k
    *     [, 'metric'] [, 'algorithm'] [, 'filter_predicate' | NULL] [, max_distance | NULL])
    *   metric defaults to 'cosine'; algorithm defaults to 'brute_force'.
-   *   filter is a SQL predicate applied to the corpus before distance computation.
-   *   max_distance excludes results whose distance exceeds the given threshold.
+   *   filter is a SQL predicate applied to the corpus before distance computation;
+   *     NULL, the empty string, and whitespace-only strings all mean "no filter."
+   *   max_distance excludes results whose distance exceeds the given threshold;
+   *     NULL means "no threshold." Must be a numeric literal when specified.
    */
   def parseArgs(exprs: Seq[Expression]): ParsedArgs = {
     if (exprs.size < 4 || exprs.size > 8) {
@@ -125,18 +127,16 @@ object HoodieVectorSearchTableValuedFunction {
       s"Function '$funcName': argument '$argName' must be a string literal or NULL, got: ${expr.sql}")
   }
 
-  /** Parses a numeric argument that may be NULL (meaning "not specified"). */
+  /**
+   * Parses a numeric argument that may be NULL (meaning "not specified"). Accepts
+   * any [[NumericType]] literal (Int/Long/Float/Double/Decimal/Short/Byte) and
+   * widens to Double. String literals — even ones whose contents parse as a
+   * number — are rejected so the type contract surfaces at parse time.
+   */
   private[logical] def parseOptionalDouble(
       funcName: String, expr: Expression, argName: String): Option[Double] = expr match {
     case Literal(null, _) => None
-    case Literal(v, _) if v != null =>
-      try {
-        Some(v.toString.toDouble)
-      } catch {
-        case _: NumberFormatException =>
-          throw new HoodieAnalysisException(
-            s"Function '$funcName': argument '$argName' must be a numeric value or NULL, got '$v'")
-      }
+    case Literal(v, _: NumericType) if v != null => Some(v.toString.toDouble)
     case _ => throw new HoodieAnalysisException(
       s"Function '$funcName': argument '$argName' must be a numeric literal or NULL, got: ${expr.sql}")
   }
@@ -188,8 +188,10 @@ object HoodieVectorSearchBatchTableValuedFunction {
    *   hudi_vector_search_batch('corpus_table', 'corpus_col', 'query_table', 'query_col', k
    *     [, 'metric'] [, 'algorithm'] [, 'filter_predicate' | NULL] [, max_distance | NULL])
    *   metric defaults to 'cosine'; algorithm defaults to 'brute_force'.
-   *   filter is a SQL predicate applied to the corpus before distance computation.
-   *   max_distance excludes results whose distance exceeds the given threshold.
+   *   filter is a SQL predicate applied to the corpus before distance computation;
+   *     NULL, the empty string, and whitespace-only strings all mean "no filter."
+   *   max_distance excludes results whose distance exceeds the given threshold;
+   *     NULL means "no threshold." Must be a numeric literal when specified.
    */
   def parseArgs(exprs: Seq[Expression]): ParsedArgs = {
     if (exprs.size < 5 || exprs.size > 9) {

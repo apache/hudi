@@ -1723,4 +1723,188 @@ class TestHoodieVectorSearchFunction extends HoodieSparkClientTestBase {
     spark.catalog.dropTempView("filter_test_view")
   }
 
+  // ─── Failure-mode tests for filter + max_distance ───
+
+  @Test
+  def testInvalidFilterSyntaxIsWrapped(): Unit = {
+    // Garbage predicate text should surface as a HoodieAnalysisException whose
+    // message includes the offending expression.
+    val ex = assertThrows(classOf[Exception], () => {
+      spark.sql(
+        s"""
+           |SELECT * FROM hudi_vector_search(
+           |  '$corpusViewName', 'embedding', ARRAY(1.0, 0.0, 0.0), 5,
+           |  'cosine', 'brute_force',
+           |  'this is not valid SQL !!'
+           |)
+           |""".stripMargin
+      ).collect()
+    })
+    val msg = if (ex.getCause != null) ex.getCause.getMessage else ex.getMessage
+    assertTrue(msg.contains("Invalid pre-filter expression"),
+      s"Expected wrapped pre-filter error, got: $msg")
+    assertTrue(msg.contains("this is not valid SQL"),
+      s"Expected error message to echo the offending expression, got: $msg")
+  }
+
+  @Test
+  def testFilterReferencingUnknownColumnIsWrapped(): Unit = {
+    // Unknown column in the filter should also be surfaced as a wrapped error.
+    val ex = assertThrows(classOf[Exception], () => {
+      spark.sql(
+        s"""
+           |SELECT * FROM hudi_vector_search(
+           |  '$corpusViewName', 'embedding', ARRAY(1.0, 0.0, 0.0), 5,
+           |  'cosine', 'brute_force',
+           |  'no_such_column = "x"'
+           |)
+           |""".stripMargin
+      ).collect()
+    })
+    val msg = if (ex.getCause != null) ex.getCause.getMessage else ex.getMessage
+    assertTrue(msg.contains("Invalid pre-filter expression"),
+      s"Expected wrapped pre-filter error, got: $msg")
+    assertTrue(msg.contains("no_such_column"),
+      s"Expected error message to echo the offending expression, got: $msg")
+  }
+
+  @Test
+  def testFilterMustBeStringOrNull(): Unit = {
+    // Passing an integer literal where a string filter is expected must throw.
+    val ex = assertThrows(classOf[Exception], () => {
+      spark.sql(
+        s"""
+           |SELECT * FROM hudi_vector_search(
+           |  '$corpusViewName', 'embedding', ARRAY(1.0, 0.0, 0.0), 5,
+           |  'cosine', 'brute_force',
+           |  42
+           |)
+           |""".stripMargin
+      ).collect()
+    })
+    val msg = if (ex.getCause != null) ex.getCause.getMessage else ex.getMessage
+    assertTrue(msg.contains("must be a string literal or NULL"),
+      s"Expected filter-type error, got: $msg")
+  }
+
+  @Test
+  def testMaxDistanceMustBeNumericOrNull(): Unit = {
+    // Passing a string literal where a numeric max_distance is expected must throw.
+    val ex = assertThrows(classOf[Exception], () => {
+      spark.sql(
+        s"""
+           |SELECT * FROM hudi_vector_search(
+           |  '$corpusViewName', 'embedding', ARRAY(1.0, 0.0, 0.0), 5,
+           |  'cosine', 'brute_force',
+           |  NULL,
+           |  'not_a_number'
+           |)
+           |""".stripMargin
+      ).collect()
+    })
+    val msg = if (ex.getCause != null) ex.getCause.getMessage else ex.getMessage
+    assertTrue(msg.contains("must be a numeric literal or NULL"),
+      s"Expected max_distance-type error, got: $msg")
+  }
+
+  @Test
+  def testMaxDistanceAcceptsIntegerLiteral(): Unit = {
+    // An integer literal (no decimal point) for max_distance should be accepted
+    // and widened to Double — regression guard for the parseOptionalDouble path.
+    val result = spark.sql(
+      s"""
+         |SELECT id, _hudi_distance
+         |FROM hudi_vector_search(
+         |  '$corpusViewName', 'embedding', ARRAY(1.0, 0.0, 0.0), 5,
+         |  'cosine', 'brute_force',
+         |  NULL,
+         |  1
+         |)
+         |ORDER BY _hudi_distance
+         |""".stripMargin
+    ).collect()
+
+    // max_distance = 1 admits everything since cosine distance ∈ [0, 2] but our
+    // corpus produces values in [0, 1]; all 5 rows survive.
+    assertEquals(5, result.length)
+  }
+
+  @Test
+  def testNegativeMaxDistanceExcludesAll(): Unit = {
+    // Distances are always >= 0 for cosine/L2, so a negative threshold means
+    // no row can satisfy <= d. The user gets an empty result, not an error.
+    val result = spark.sql(
+      s"""
+         |SELECT id FROM hudi_vector_search(
+         |  '$corpusViewName', 'embedding', ARRAY(1.0, 0.0, 0.0), 5,
+         |  'cosine', 'brute_force',
+         |  NULL,
+         |  -0.5
+         |)
+         |""".stripMargin
+    ).collect()
+
+    assertEquals(0, result.length)
+  }
+
+  @Test
+  def testEmptyAndWhitespaceFilterTreatedAsNoFilter(): Unit = {
+    // The Javadoc on parseArgs documents that "", "   ", and NULL are equivalent
+    // — all mean "no filter." Verify each variant returns all rows.
+    val baseline = spark.sql(
+      s"""
+         |SELECT id FROM hudi_vector_search(
+         |  '$corpusViewName', 'embedding', ARRAY(1.0, 0.0, 0.0), 5, 'cosine'
+         |)
+         |""".stripMargin
+    ).collect().map(_.getAs[String]("id")).toSet
+
+    val emptyFilter = spark.sql(
+      s"""
+         |SELECT id FROM hudi_vector_search(
+         |  '$corpusViewName', 'embedding', ARRAY(1.0, 0.0, 0.0), 5,
+         |  'cosine', 'brute_force', ''
+         |)
+         |""".stripMargin
+    ).collect().map(_.getAs[String]("id")).toSet
+
+    val whitespaceFilter = spark.sql(
+      s"""
+         |SELECT id FROM hudi_vector_search(
+         |  '$corpusViewName', 'embedding', ARRAY(1.0, 0.0, 0.0), 5,
+         |  'cosine', 'brute_force', '   '
+         |)
+         |""".stripMargin
+    ).collect().map(_.getAs[String]("id")).toSet
+
+    assertEquals(baseline, emptyFilter, "empty filter must behave like no filter")
+    assertEquals(baseline, whitespaceFilter, "whitespace filter must behave like no filter")
+  }
+
+  @Test
+  def testBatchQueryInvalidFilterIsWrapped(): Unit = {
+    // Batch mode should also wrap predicate parse / analysis errors.
+    createFloatQueryView("batch_invalid_filter_queries", "qid", "qvec", Seq(
+      ("q_x", Seq(1.0f, 0.0f, 0.0f))
+    ))
+
+    val ex = assertThrows(classOf[Exception], () => {
+      spark.sql(
+        s"""
+           |SELECT * FROM hudi_vector_search_batch(
+           |  '$corpusViewName', 'embedding',
+           |  'batch_invalid_filter_queries', 'qvec',
+           |  5, 'cosine', 'brute_force',
+           |  'no_such_column = "x"'
+           |)
+           |""".stripMargin
+      ).collect()
+    })
+    val msg = if (ex.getCause != null) ex.getCause.getMessage else ex.getMessage
+    assertTrue(msg.contains("Invalid pre-filter expression"),
+      s"Expected wrapped pre-filter error, got: $msg")
+
+    spark.catalog.dropTempView("batch_invalid_filter_queries")
+  }
+
 }

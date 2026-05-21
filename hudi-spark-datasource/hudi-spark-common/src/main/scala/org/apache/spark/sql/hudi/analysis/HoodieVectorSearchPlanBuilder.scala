@@ -19,7 +19,8 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.common.schema.HoodieSchema
 
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.{AnalysisException, DataFrame, SparkSession}
+import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.plans.logical.HoodieVectorSearchTableValuedFunction.{DistanceMetric, SearchAlgorithm}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.expressions.Window
@@ -262,15 +263,17 @@ object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
   override val name: String = "brute_force"
 
   /**
-   * Applies a user-supplied SQL predicate to the corpus DataFrame, wrapping any
-   * analyzer / parser failure in a [[HoodieAnalysisException]] with the offending
-   * expression for easier debugging.
+   * Applies a user-supplied SQL predicate to the corpus DataFrame, wrapping
+   * [[ParseException]] (predicate syntax error) and [[AnalysisException]]
+   * (unknown column, type mismatch, etc.) in a [[HoodieAnalysisException]] that
+   * echoes the offending expression. Other exception types are allowed to
+   * propagate untouched so they aren't misreported as a filter problem.
    */
   private def applyFilter(df: DataFrame, filterExpr: String): DataFrame = {
     try {
       df.filter(filterExpr)
     } catch {
-      case e: Exception =>
+      case e @ (_: ParseException | _: AnalysisException) =>
         throw new HoodieAnalysisException(
           s"Invalid pre-filter expression '$filterExpr': ${e.getMessage}")
     }
