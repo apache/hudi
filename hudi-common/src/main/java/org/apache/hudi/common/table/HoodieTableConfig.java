@@ -1327,24 +1327,6 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   /**
-   * Overlays the persisted {@link #POPULATE_META_FIELDS} and {@link #META_FIELDS_EXCLUDE_LIST}
-   * values onto the supplied {@link HoodieConfig} so that downstream consumers - in particular
-   * the file-writer factories that only see a {@code HoodieConfig} - read the on-disk state
-   * even if the writer config was constructed without the table-config merge step.
-   *
-   * <p>Mutates and returns the input. Call sites that need to preserve the original config
-   * should pass in a copy. The two keys are always written, including {@code META_FIELDS_EXCLUDE_LIST}
-   * being set to an empty string when the table has no exclusion configured, so a stale value
-   * on the input cannot leak through.
-   */
-  public HoodieConfig overlayMetaFieldProps(HoodieConfig target) {
-    target.setValue(POPULATE_META_FIELDS, Boolean.toString(populateMetaFields()));
-    String excludeList = getString(META_FIELDS_EXCLUDE_LIST);
-    target.setValue(META_FIELDS_EXCLUDE_LIST, excludeList == null ? "" : excludeList);
-    return target;
-  }
-
-  /**
    * @returns the record key field prop.
    */
   public String getRecordKeyFieldProp() {

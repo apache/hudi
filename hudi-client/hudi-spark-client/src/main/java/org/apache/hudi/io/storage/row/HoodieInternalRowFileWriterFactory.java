@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieSparkLanceWriter;
@@ -63,7 +62,7 @@ public class HoodieInternalRowFileWriterFactory {
       throws IOException {
     final String extension = FSUtils.getFileExtension(path.getName());
     if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetInternalRowFileWriter(path, hoodieTable, writeConfig, schema, tryInstantiateBloomFilter(writeConfig));
+      return newParquetInternalRowFileWriter(path, hoodieTable, writeConfig, schema, tryInstantiateBloomFilter(writeConfig, hoodieTable));
     } else if (LANCE.getFileExtension().equals(extension)) {
       long maxFileSize = writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_MAX_FILE_SIZE);
       long allocatorSize = writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_ALLOCATOR_SIZE_BYTES);
@@ -115,11 +114,13 @@ public class HoodieInternalRowFileWriterFactory {
         .build();
   }
 
-  private static Option<BloomFilter> tryInstantiateBloomFilter(HoodieWriteConfig writeConfig) {
+  private static Option<BloomFilter> tryInstantiateBloomFilter(HoodieWriteConfig writeConfig, HoodieTable hoodieTable) {
     // Bloom filter indexes the _hoodie_record_key value passed at write time. It is only
     // viable when that meta column is populated on disk - either populateMetaFields=false
-    // or _hoodie_record_key in META_FIELDS_EXCLUDE_LIST disables it.
-    if (HoodieMetaFieldFlags.fromConfig(writeConfig).isRecordKeyPopulated()) {
+    // or _hoodie_record_key in META_FIELDS_EXCLUDE_LIST disables it. Source the population
+    // state from the persisted table config (the on-disk source of truth) rather than the
+    // writer config.
+    if (hoodieTable.getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isRecordKeyPopulated()) {
       BloomFilter bloomFilter = BloomFilterFactory.createBloomFilter(
           writeConfig.getBloomFilterNumEntries(),
           writeConfig.getBloomFilterFPP(),

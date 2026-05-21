@@ -237,7 +237,13 @@ public class TestHoodieNativeAvroHFileReaderCaching {
 
     return (HoodieAvroHFileWriter) HoodieFileWriterFactory.getFileWriter(
         instantTime, getFilePath(), storage, HoodieStorageConfig.newBuilder().fromProperties(props).build(), HoodieSchema.fromAvroSchema(avroSchema),
-        mockTaskContextSupplier, HoodieRecord.HoodieRecordType.AVRO);
+        mockTaskContextSupplier, HoodieRecord.HoodieRecordType.AVRO, syntheticTableConfig(populateMetaFields));
+  }
+
+  private static HoodieTableConfig syntheticTableConfig(boolean populateMetaFields) {
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
+    return tableConfig;
   }
 
   private static StoragePath getFilePath() {

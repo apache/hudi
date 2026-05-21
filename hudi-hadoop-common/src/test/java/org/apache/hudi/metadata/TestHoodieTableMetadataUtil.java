@@ -340,7 +340,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         metaClient.getTableConfig(),
         HOODIE_SCHEMA_WITH_METADATA_FIELDS,
         engineContext.getTaskContextSupplier(),
-        HoodieRecord.HoodieRecordType.AVRO);
+        HoodieRecord.HoodieRecordType.AVRO,
+        metaClient.getTableConfig());
     for (HoodieRecord record : records) {
       writer.writeWithMetadata(record.getKey(),
               record.rewriteRecordWithNewSchema(HOODIE_SCHEMA, CollectionUtils.emptyProps(), HOODIE_SCHEMA_WITH_METADATA_FIELDS),

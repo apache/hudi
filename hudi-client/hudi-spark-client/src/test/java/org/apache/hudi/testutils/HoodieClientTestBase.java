@@ -115,9 +115,9 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
       final HoodieWriteConfig writeConfig,
       final Function2<List<HoodieRecord>, String, Integer> recordsGenFunction) {
     return (commit, numRecords) -> {
-      final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig);
-      List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords);
       final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
+      final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig, metaClient);
+      List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords);
       HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
       JavaRDD<HoodieRecord> taggedRecords = tagLocation(index, context, context.getJavaSparkContext().parallelize(records, 1), table);
       return taggedRecords.collect();
@@ -140,9 +140,9 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
       final HoodieWriteConfig writeConfig,
       final Function3<List<HoodieRecord>, String, Integer, String> recordsGenFunction) {
     return (commit, numRecords, partition) -> {
-      final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig);
-      List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords, partition);
       final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
+      final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig, metaClient);
+      List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords, partition);
       HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
       JavaRDD<HoodieRecord> taggedRecords = tagLocation(index, context, context.getJavaSparkContext().parallelize(records, 1), table);
       return taggedRecords.collect();
@@ -165,9 +165,9 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
       final HoodieWriteConfig writeConfig,
       final Function<Integer, List<HoodieKey>> keyGenFunction) {
     return (numRecords) -> {
-      final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig);
-      List<HoodieKey> records = keyGenFunction.apply(numRecords);
       final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
+      final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig, metaClient);
+      List<HoodieKey> records = keyGenFunction.apply(numRecords);
       HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
       JavaRDD<HoodieRecord> recordsToDelete = context.getJavaSparkContext().parallelize(records, 1)
           .map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));

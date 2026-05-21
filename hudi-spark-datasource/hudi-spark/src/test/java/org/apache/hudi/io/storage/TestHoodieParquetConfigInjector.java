@@ -127,7 +127,7 @@ public class TestHoodieParquetConfigInjector extends HoodieClientTestBase {
     // Create writer and write some data
     HoodieFileWriter writer = HoodieFileWriterFactory.getFileWriter(
         instantTime, parquetPath, table.getStorage(), cfg.getStorageConfig(),
-        schema, supplier, HoodieRecordType.SPARK);
+        schema, supplier, HoodieRecordType.SPARK, metaClient.getTableConfig());
 
     assertTrue(writer instanceof HoodieSparkParquetWriter);
 
@@ -193,7 +193,7 @@ public class TestHoodieParquetConfigInjector extends HoodieClientTestBase {
     assertThrows(Exception.class, () -> {
       HoodieFileWriterFactory.getFileWriter(
           instantTime, parquetPath, table.getStorage(), cfg.getStorageConfig(),
-          schema, supplier, HoodieRecordType.SPARK);
+          schema, supplier, HoodieRecordType.SPARK, metaClient.getTableConfig());
     });
   }
 
@@ -218,7 +218,7 @@ public class TestHoodieParquetConfigInjector extends HoodieClientTestBase {
     // Create writer and write some data
     HoodieFileWriter writer = HoodieFileWriterFactory.getFileWriter(
         instantTime, parquetPath, table.getStorage(), cfg.getStorageConfig(),
-        schema, supplier, HoodieRecordType.SPARK);
+        schema, supplier, HoodieRecordType.SPARK, metaClient.getTableConfig());
 
     assertTrue(writer instanceof HoodieSparkParquetWriter);
 

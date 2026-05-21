@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -47,42 +48,43 @@ public class HoodieFileWriterFactory {
 
   public static <T, I, K, O> HoodieFileWriter getFileWriter(
       String instantTime, StoragePath path, HoodieStorage storage, HoodieConfig config, HoodieSchema schema,
-      TaskContextSupplier taskContextSupplier, HoodieRecordType recordType) throws IOException {
+      TaskContextSupplier taskContextSupplier, HoodieRecordType recordType, HoodieTableConfig tableConfig) throws IOException {
     final String extension = FSUtils.getFileExtension(path.getName());
     HoodieFileWriterFactory factory = HoodieIOFactory.getIOFactory(storage).getWriterFactory(recordType);
-    return factory.getFileWriterByFormat(extension, instantTime, path, config, schema, taskContextSupplier);
+    return factory.getFileWriterByFormat(extension, instantTime, path, config, schema, taskContextSupplier, tableConfig);
   }
 
   public static <T, I, K, O> HoodieFileWriter getFileWriter(HoodieFileFormat format, OutputStream outputStream,
-                                                            HoodieStorage storage, HoodieConfig config, HoodieSchema schema, HoodieRecordType recordType)
+                                                            HoodieStorage storage, HoodieConfig config, HoodieSchema schema, HoodieRecordType recordType,
+                                                            HoodieTableConfig tableConfig)
       throws IOException {
     HoodieFileWriterFactory factory = HoodieIOFactory.getIOFactory(storage).getWriterFactory(recordType);
-    return factory.getFileWriterByFormat(format, outputStream, config, schema);
+    return factory.getFileWriterByFormat(format, outputStream, config, schema, tableConfig);
   }
 
   protected <T, I, K, O> HoodieFileWriter getFileWriterByFormat(
       String extension, String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
-      TaskContextSupplier taskContextSupplier) throws IOException {
+      TaskContextSupplier taskContextSupplier, HoodieTableConfig tableConfig) throws IOException {
     if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetFileWriter(instantTime, path, config, schema, taskContextSupplier);
+      return newParquetFileWriter(instantTime, path, config, schema, taskContextSupplier, tableConfig);
     }
     if (HFILE.getFileExtension().equals(extension)) {
-      return newHFileFileWriter(instantTime, path, config, schema, taskContextSupplier);
+      return newHFileFileWriter(instantTime, path, config, schema, taskContextSupplier, tableConfig);
     }
     if (ORC.getFileExtension().equals(extension)) {
-      return newOrcFileWriter(instantTime, path, config, schema, taskContextSupplier);
+      return newOrcFileWriter(instantTime, path, config, schema, taskContextSupplier, tableConfig);
     }
     if (LANCE.getFileExtension().equals(extension)) {
-      return newLanceFileWriter(instantTime, path, config, schema, taskContextSupplier);
+      return newLanceFileWriter(instantTime, path, config, schema, taskContextSupplier, tableConfig);
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
   protected <T, I, K, O> HoodieFileWriter getFileWriterByFormat(HoodieFileFormat format, OutputStream outputStream,
-                                                                HoodieConfig config, HoodieSchema schema) throws IOException {
+                                                                HoodieConfig config, HoodieSchema schema, HoodieTableConfig tableConfig) throws IOException {
     switch (format) {
       case PARQUET:
-        return newParquetFileWriter(outputStream, config, schema);
+        return newParquetFileWriter(outputStream, config, schema, tableConfig);
       default:
         throw new UnsupportedOperationException(format + " format not supported yet.");
     }
@@ -90,30 +92,30 @@ public class HoodieFileWriterFactory {
 
   protected HoodieFileWriter newParquetFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
-      TaskContextSupplier taskContextSupplier) throws IOException {
+      TaskContextSupplier taskContextSupplier, HoodieTableConfig tableConfig) throws IOException {
     throw new UnsupportedOperationException();
   }
 
   protected HoodieFileWriter newParquetFileWriter(
-      OutputStream outputStream, HoodieConfig config, HoodieSchema schema) throws IOException {
+      OutputStream outputStream, HoodieConfig config, HoodieSchema schema, HoodieTableConfig tableConfig) throws IOException {
     throw new UnsupportedOperationException();
   }
 
   protected HoodieFileWriter newHFileFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
-      TaskContextSupplier taskContextSupplier) throws IOException {
+      TaskContextSupplier taskContextSupplier, HoodieTableConfig tableConfig) throws IOException {
     throw new UnsupportedOperationException();
   }
 
   protected HoodieFileWriter newOrcFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
-      TaskContextSupplier taskContextSupplier) throws IOException {
+      TaskContextSupplier taskContextSupplier, HoodieTableConfig tableConfig) throws IOException {
     throw new UnsupportedOperationException();
   }
 
   protected HoodieFileWriter newLanceFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
-      TaskContextSupplier taskContextSupplier) throws IOException {
+      TaskContextSupplier taskContextSupplier, HoodieTableConfig tableConfig) throws IOException {
     throw new UnsupportedOperationException(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG);
   }
 

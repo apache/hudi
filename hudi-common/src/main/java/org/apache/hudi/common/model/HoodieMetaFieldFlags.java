@@ -59,20 +59,29 @@ public class HoodieMetaFieldFlags implements Serializable {
 
   /**
    * Returns an instance where all meta fields are populated.
+   *
+   * <p>Package-private: instances should be sourced via
+   * {@link HoodieTableConfig#getHoodieMetaFieldFlags()}. This factory is exposed only for the
+   * internal {@link #fromConfig} path and same-package tests; external callers must go through
+   * the table config so the on-disk persisted state is the single source of truth.
    */
-  public static HoodieMetaFieldFlags allPopulated() {
+  static HoodieMetaFieldFlags allPopulated() {
     return ALL_POPULATED;
   }
 
   /**
    * Returns an instance where no meta fields are populated.
+   *
+   * <p>Package-private; see {@link #allPopulated()}.
    */
-  public static HoodieMetaFieldFlags nonePopulated() {
+  static HoodieMetaFieldFlags nonePopulated() {
     return NONE_POPULATED;
   }
 
   /**
    * Creates an instance from a set of excluded field names.
+   *
+   * <p>Package-private; see {@link #allPopulated()}.
    *
    * @param excluded set of meta field names to exclude (e.g. "_hoodie_record_key")
    * @return HoodieMetaFieldFlags with excluded fields marked as not populated
@@ -80,7 +89,7 @@ public class HoodieMetaFieldFlags implements Serializable {
    *         {@link HoodieRecord#HOODIE_META_COLUMNS}, so configuration typos fail fast
    *         rather than being silently ignored.
    */
-  public static HoodieMetaFieldFlags fromExcludedFields(Set<String> excluded) {
+  static HoodieMetaFieldFlags fromExcludedFields(Set<String> excluded) {
     if (excluded == null || excluded.isEmpty()) {
       return ALL_POPULATED;
     }
@@ -105,6 +114,11 @@ public class HoodieMetaFieldFlags implements Serializable {
    * config or the table config). Reads {@link HoodieTableConfig#POPULATE_META_FIELDS}
    * and {@link HoodieTableConfig#META_FIELDS_EXCLUDE_LIST}; the exclusion list is
    * a comma-separated list of meta-field names with whitespace tolerated.
+   *
+   * <p><b>Internal only.</b> The intended (and only supported) caller is
+   * {@link HoodieTableConfig#getHoodieMetaFieldFlags()}. All write- and read-side code
+   * should reach the flags through {@code HoodieTableConfig.getHoodieMetaFieldFlags()}
+   * so the persisted table state remains the single source of truth.
    */
   public static HoodieMetaFieldFlags fromConfig(HoodieConfig config) {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);

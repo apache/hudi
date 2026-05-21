@@ -82,7 +82,7 @@ public class HoodieJavaWriteClient<T> extends
 
   @Override
   protected HoodieIndex createIndex(HoodieWriteConfig writeConfig) {
-    return JavaHoodieIndexFactory.createIndex(config);
+    return JavaHoodieIndexFactory.createIndex(config, createMetaClient(true));
   }
 
   @Override

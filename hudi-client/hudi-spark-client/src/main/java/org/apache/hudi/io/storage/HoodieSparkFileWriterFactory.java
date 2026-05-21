@@ -22,7 +22,6 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
@@ -53,8 +52,8 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
   @Override
   protected HoodieFileWriter newParquetFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
-      TaskContextSupplier taskContextSupplier) throws IOException {
-    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+      TaskContextSupplier taskContextSupplier, HoodieTableConfig tableConfig) throws IOException {
+    boolean populateMetaFields = tableConfig.populateMetaFields();
 
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs = HoodieParquetConfigInjector.applyConfigInjector(path, storage.getConf(), config);
     StorageConfiguration storageConfiguration = injectedConfigs.getLeft();
@@ -79,11 +78,11 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
     parquetConfig.getHadoopConf().addResource(writeSupport.getHadoopConf());
 
     return new HoodieSparkParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields,
-        HoodieMetaFieldFlags.fromConfig(config));
+        tableConfig.getHoodieMetaFieldFlags());
   }
 
   protected HoodieFileWriter newParquetFileWriter(OutputStream outputStream, HoodieConfig config,
-                                                  HoodieSchema schema) throws IOException {
+                                                  HoodieSchema schema, HoodieTableConfig tableConfig) throws IOException {
     boolean enableBloomFilter = false;
     HoodieRowParquetWriteSupport writeSupport = getHoodieRowParquetWriteSupport(storage.getConf(), schema, config, enableBloomFilter);
     String compressionCodecName = config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
@@ -104,21 +103,21 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
 
   @Override
   protected HoodieFileWriter newHFileFileWriter(String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
-                                                TaskContextSupplier taskContextSupplier) throws IOException {
+                                                TaskContextSupplier taskContextSupplier, HoodieTableConfig tableConfig) throws IOException {
     throw new HoodieIOException("Not support write to HFile");
   }
 
   @Override
   protected HoodieFileWriter newOrcFileWriter(String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
-                                              TaskContextSupplier taskContextSupplier) throws IOException {
+                                              TaskContextSupplier taskContextSupplier, HoodieTableConfig tableConfig) throws IOException {
     throw new HoodieIOException("Not support write to Orc file");
   }
 
   @Override
   protected HoodieFileWriter newLanceFileWriter(String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
-                                                TaskContextSupplier taskContextSupplier) throws IOException {
+                                                TaskContextSupplier taskContextSupplier, HoodieTableConfig tableConfig) throws IOException {
     HoodieSparkLanceWriter.validateNoVariantColumns(schema);
-    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    boolean populateMetaFields = tableConfig.populateMetaFields();
     StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
     boolean enableBloomFilter = enableBloomFilter(populateMetaFields, config);
     Option<BloomFilter> bloomFilter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();

@@ -76,7 +76,7 @@ public class TestHoodieAvroParquetWriter {
 
     try (HoodieAvroParquetWriter writer =
              new HoodieAvroParquetWriter(filePath, parquetConfig, "001", new LocalTaskContextSupplier(), true,
-                 org.apache.hudi.common.model.HoodieMetaFieldFlags.allPopulated())) {
+                 new org.apache.hudi.common.table.HoodieTableConfig().getHoodieMetaFieldFlags())) {
       for (GenericRecord record : records) {
         writer.writeAvro((String) record.get("_row_key"), record);
       }

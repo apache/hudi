@@ -207,7 +207,7 @@ public abstract class AbstractHoodieLogRecordScanner {
       // META_FIELDS_EXCLUDE_LIST (even with populate.meta.fields=true); in that case the
       // reader must read the configured source record-key field instead. Partition path uses
       // the analogous flag.
-      HoodieMetaFieldFlags flags = HoodieMetaFieldFlags.fromConfig(tableConfig);
+      HoodieMetaFieldFlags flags = tableConfig.getHoodieMetaFieldFlags();
       this.populateMetaFields = flags.isRecordKeyPopulated();
       this.recordKeyField = flags.isRecordKeyPopulated()
           ? HoodieRecord.RECORD_KEY_METADATA_FIELD

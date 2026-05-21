@@ -25,7 +25,6 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
@@ -66,8 +65,8 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
   @Override
   protected HoodieFileWriter newParquetFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
-      TaskContextSupplier taskContextSupplier) throws IOException {
-    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+      TaskContextSupplier taskContextSupplier, HoodieTableConfig tableConfig) throws IOException {
+    boolean populateMetaFields = tableConfig.populateMetaFields();
 
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs = HoodieParquetConfigInjector.applyConfigInjector(path, storage.getConf(), config);
     StorageConfiguration storageConfiguration = injectedConfigs.getLeft();
@@ -88,11 +87,11 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         storageConfiguration, hoodieConfig.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
         hoodieConfig.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
     return new HoodieAvroParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields,
-        HoodieMetaFieldFlags.fromConfig(hoodieConfig));
+        tableConfig.getHoodieMetaFieldFlags());
   }
 
   protected HoodieFileWriter newParquetFileWriter(
-      OutputStream outputStream, HoodieConfig config, HoodieSchema schema) throws IOException {
+      OutputStream outputStream, HoodieConfig config, HoodieSchema schema, HoodieTableConfig tableConfig) throws IOException {
     String configInjectorClass = config.getStringOrDefault(HoodieStorageConfig.HOODIE_PARQUET_CONFIG_INJECTOR_CLASS, StringUtils.EMPTY_STRING);
     if (!StringUtils.isNullOrEmpty(configInjectorClass)) {
       throw new HoodieException("hoodie.parquet.write.config.injector.class is not supported with streaming writes with parquet");
@@ -110,7 +109,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
 
   protected HoodieFileWriter newHFileFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
-      TaskContextSupplier taskContextSupplier) throws IOException {
+      TaskContextSupplier taskContextSupplier, HoodieTableConfig tableConfig) throws IOException {
     BloomFilter filter = createBloomFilter(config);
     HoodieHFileConfig hfileConfig = new HoodieHFileConfig(
         storage.getConf(),
@@ -122,12 +121,12 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         filter,
         config.getBoolean(HFILE_WRITER_TO_ALLOW_DUPLICATES));
     return new HoodieAvroHFileWriter(instantTime, path, hfileConfig, schema, taskContextSupplier,
-        config.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS), HoodieMetaFieldFlags.fromConfig(config));
+        tableConfig.populateMetaFields(), tableConfig.getHoodieMetaFieldFlags());
   }
 
   protected HoodieFileWriter newOrcFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
-      TaskContextSupplier taskContextSupplier) throws IOException {
+      TaskContextSupplier taskContextSupplier, HoodieTableConfig tableConfig) throws IOException {
     BloomFilter filter = createBloomFilter(config);
     HoodieOrcConfig orcConfig = new HoodieOrcConfig(storage.getConf(),
         CompressionKind.valueOf(config.getString(HoodieStorageConfig.ORC_COMPRESSION_CODEC_NAME)),
@@ -135,7 +134,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         config.getInt(HoodieStorageConfig.ORC_BLOCK_SIZE),
         config.getLong(HoodieStorageConfig.ORC_FILE_MAX_SIZE), filter);
     return new HoodieAvroOrcWriter(instantTime, path, orcConfig, schema, taskContextSupplier,
-        HoodieMetaFieldFlags.fromConfig(config));
+        tableConfig.getHoodieMetaFieldFlags());
   }
 
   private HoodieAvroWriteSupport getHoodieAvroWriteSupport(HoodieSchema schema,

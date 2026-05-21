@@ -49,8 +49,8 @@ object SparkHelpers {
                               sourceFile: StoragePath,
                               destinationFile: StoragePath,
                               keysToSkip: Set[String],
-                              metaFieldFlags: HoodieMetaFieldFlags = HoodieMetaFieldFlags.allPopulated(),
-                              populateMetaFields: Boolean = true) {
+                              metaFieldFlags: HoodieMetaFieldFlags,
+                              populateMetaFields: Boolean) {
     // Deduplication identifies records by their on-disk _hoodie_record_key. If that meta
     // column is not populated (populate.meta.fields=false or _hoodie_record_key in
     // META_FIELDS_EXCLUDE_LIST), every record's key reads back as null and the skip-set

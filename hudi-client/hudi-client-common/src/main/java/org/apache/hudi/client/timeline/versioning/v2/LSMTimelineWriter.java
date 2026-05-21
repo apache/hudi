@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLSMTimelineManifest;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.table.timeline.LSMTimeline;
@@ -454,8 +455,15 @@ public class LSMTimelineWriter {
 
   private HoodieFileWriter openWriter(StoragePath filePath) {
     try {
+      // The archive writer writes LSM timeline instants, not user records. It does not need to
+      // honor the user table's META_FIELDS_EXCLUDE_LIST - the archive schema has its own shape
+      // and the writer config is built with populateMetaFields=false. Pass a synthesized table
+      // config so the writer factory derives nonePopulated() flags.
+      HoodieTableConfig archiveTableConfig = new HoodieTableConfig();
+      archiveTableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(false));
       return HoodieFileWriterFactory.getFileWriter("", filePath, metaClient.getStorage(), getOrCreateWriterConfig(),
-          HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema()), taskContextSupplier, HoodieRecord.HoodieRecordType.AVRO);
+          HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema()), taskContextSupplier,
+          HoodieRecord.HoodieRecordType.AVRO, archiveTableConfig);
     } catch (IOException e) {
       throw new HoodieException("Unable to initialize archiving writer", e);
     }

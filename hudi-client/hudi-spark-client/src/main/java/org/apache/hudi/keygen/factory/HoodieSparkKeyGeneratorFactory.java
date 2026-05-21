@@ -19,7 +19,6 @@
 package org.apache.hudi.keygen.factory;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -106,24 +105,13 @@ public class HoodieSparkKeyGeneratorFactory {
    * derivations, so a single instance covers either missing column. Returning
    * {@link Option#empty()} signals that callers should read both directly from the meta columns.
    *
-   * <p>Prefer {@link #createBaseKeyGenerator(HoodieWriteConfig, boolean)} when the caller has
-   * a {@link org.apache.hudi.common.table.HoodieTableMetaClient} in scope; the persisted
-   * table config is the source of truth for meta-field population state. This overload reads
-   * the population state off the writer config, which mirrors the persisted state (the
-   * writer-side conflict check enforces that).
+   * <p>The "key generator required" flag must be sourced from the persisted
+   * {@link org.apache.hudi.common.table.HoodieTableConfig} via
+   * {@code tableConfig.getHoodieMetaFieldFlags().isKeyGeneratorRequired()} - readers and
+   * writers must agree on the on-disk meta-field shape, and only the table config is the
+   * source of truth.
    *
    * @throws HoodieException if unable instantiate or cast class to {@link BaseKeyGenerator}.
-   */
-  public static Option<BaseKeyGenerator> createBaseKeyGenerator(HoodieWriteConfig writeConfig) {
-    return createBaseKeyGenerator(writeConfig,
-        HoodieMetaFieldFlags.fromConfig(writeConfig).isKeyGeneratorRequired());
-  }
-
-  /**
-   * Overload that takes the "key generator required" flag explicitly. Callers that hold a
-   * {@link org.apache.hudi.common.table.HoodieTableMetaClient} should source the flag from
-   * {@code metaClient.getTableConfig().getHoodieMetaFieldFlags().isKeyGeneratorRequired()}
-   * to read directly from the persisted table state rather than the merged writer config.
    */
   public static Option<BaseKeyGenerator> createBaseKeyGenerator(HoodieWriteConfig writeConfig,
                                                                  boolean keyGeneratorRequired) {

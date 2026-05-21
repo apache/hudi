@@ -1647,7 +1647,7 @@ public class HoodieTableMetadataUtil {
                                                       Option<HoodieRecordType> recordType,
                                                       HoodieIndexVersion indexVersion) {
     Map<String, HoodieSchema> columnsToIndexWithoutRequiredMetas = getColumnsToIndexWithoutRequiredMetaFields(metadataConfig, tableSchemaLazyOpt, isTableInitializing, recordType, indexVersion);
-    HoodieMetaFieldFlags flags = HoodieMetaFieldFlags.fromConfig(tableConfig);
+    HoodieMetaFieldFlags flags = tableConfig.getHoodieMetaFieldFlags();
     if (!flags.isAnyPopulated()) {
       return columnsToIndexWithoutRequiredMetas;
     }

@@ -112,7 +112,7 @@ public class SparkRDDReadClient<T> implements Serializable {
     this.context = context;
     this.storageConf = context.getStorageConf();
     this.hoodieTable = HoodieSparkTable.create(clientConfig, context);
-    this.index = SparkHoodieIndexFactory.createIndex(clientConfig);
+    this.index = SparkHoodieIndexFactory.createIndex(clientConfig, hoodieTable.getMetaClient());
     this.sqlContextOpt = Option.empty();
   }
 

@@ -131,7 +131,7 @@ object HoodieDatasetBulkInsertHelper
       }
 
       val dedupedRdd = if (config.shouldCombineBeforeInsert) {
-        dedupeRows(prependedRdd, updatedSchema, tableConfig.getOrderingFields.asScala.toList, SparkHoodieIndexFactory.isGlobalIndex(config), targetParallelism)
+        dedupeRows(prependedRdd, updatedSchema, tableConfig.getOrderingFields.asScala.toList, SparkHoodieIndexFactory.isGlobalIndex(config, tableConfig), targetParallelism)
       } else {
         prependedRdd
       }

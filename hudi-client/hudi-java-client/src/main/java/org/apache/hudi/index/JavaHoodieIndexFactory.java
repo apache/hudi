@@ -18,7 +18,7 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hudi.common.model.HoodieMetaFieldFlags;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -39,7 +39,7 @@ import java.io.IOException;
  */
 public final class JavaHoodieIndexFactory {
 
-  public static HoodieIndex createIndex(HoodieWriteConfig config) {
+  public static HoodieIndex createIndex(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
     // first use index class config to create index.
     if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
       return HoodieIndexUtils.createUserDefinedIndex(config);
@@ -48,9 +48,9 @@ public final class JavaHoodieIndexFactory {
     // TODO more indexes to be added
     switch (config.getIndexType()) {
       case SIMPLE:
-        return new HoodieSimpleIndex(config, getKeyGeneratorForSimpleIndex(config));
+        return new HoodieSimpleIndex(config, getKeyGeneratorForSimpleIndex(config, metaClient));
       case GLOBAL_SIMPLE:
-        return new HoodieGlobalSimpleIndex(config, getKeyGeneratorForSimpleIndex(config));
+        return new HoodieGlobalSimpleIndex(config, getKeyGeneratorForSimpleIndex(config, metaClient));
       case INMEMORY:
         return new HoodieInMemoryHashIndex(config);
       case BLOOM:
@@ -60,12 +60,14 @@ public final class JavaHoodieIndexFactory {
     }
   }
 
-  private static Option<BaseKeyGenerator> getKeyGeneratorForSimpleIndex(HoodieWriteConfig config) {
+  private static Option<BaseKeyGenerator> getKeyGeneratorForSimpleIndex(HoodieWriteConfig config,
+                                                                         HoodieTableMetaClient metaClient) {
     // The simple-index lookup reads the _hoodie_record_key column from base files; a key
     // generator is needed only when that column is not populated on disk (either
-    // populate.meta.fields=false or _hoodie_record_key in META_FIELDS_EXCLUDE_LIST).
+    // populate.meta.fields=false or _hoodie_record_key in META_FIELDS_EXCLUDE_LIST). The
+    // persisted table config is the source of truth for which meta fields are populated.
     try {
-      return HoodieMetaFieldFlags.fromConfig(config).isKeyGeneratorRequired()
+      return metaClient.getTableConfig().getHoodieMetaFieldFlags().isKeyGeneratorRequired()
           ? Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps()))
           : Option.empty();
     } catch (IOException e) {

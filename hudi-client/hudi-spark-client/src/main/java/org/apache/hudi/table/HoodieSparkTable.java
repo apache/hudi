@@ -80,7 +80,7 @@ public abstract class HoodieSparkTable<T>
 
   @Override
   protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
-    return SparkHoodieIndexFactory.createIndex(config);
+    return SparkHoodieIndexFactory.createIndex(config, getMetaClient());
   }
 
   /**

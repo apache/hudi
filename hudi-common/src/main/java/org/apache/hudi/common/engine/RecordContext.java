@@ -21,7 +21,6 @@ package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -74,7 +73,7 @@ public abstract class RecordContext<T> implements Serializable {
     // Use the metadata-based key extractor only when _hoodie_record_key is populated on disk.
     // When the column is null (populate.meta.fields=false, or _hoodie_record_key in
     // META_FIELDS_EXCLUDE_LIST), fall back to recomputing the key from configured record key fields.
-    this.recordKeyExtractor = HoodieMetaFieldFlags.fromConfig(tableConfig).isRecordKeyPopulated()
+    this.recordKeyExtractor = tableConfig.getHoodieMetaFieldFlags().isRecordKeyPopulated()
         ? metadataKeyExtractor()
         : virtualKeyExtractor(tableConfig.getRecordKeyFields()
         .orElseThrow(() -> new IllegalArgumentException("No record keys specified and _hoodie_record_key meta field is not populated")));

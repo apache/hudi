@@ -837,9 +837,9 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       final HoodieWriteConfig writeConfig,
       final Function2<List<HoodieRecord>, String, Integer> recordsGenFunction) {
     return (commit, numRecords) -> {
-      final HoodieIndex index = JavaHoodieIndexFactory.createIndex(writeConfig);
-      List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords);
       final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
+      final HoodieIndex index = JavaHoodieIndexFactory.createIndex(writeConfig, metaClient);
+      List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords);
       HoodieJavaTable table = HoodieJavaTable.create(writeConfig, context, metaClient);
       return tagLocation(index, context, records, table);
     };
@@ -861,9 +861,9 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       final HoodieWriteConfig writeConfig,
       final Function3<List<HoodieRecord>, String, Integer, String> recordsGenFunction) {
     return (commit, numRecords, partition) -> {
-      final HoodieIndex index = JavaHoodieIndexFactory.createIndex(writeConfig);
-      List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords, partition);
       final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
+      final HoodieIndex index = JavaHoodieIndexFactory.createIndex(writeConfig, metaClient);
+      List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords, partition);
       HoodieJavaTable table = HoodieJavaTable.create(writeConfig, context, metaClient);
       return tagLocation(index, context, records, table);
     };
@@ -902,9 +902,9 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       final HoodieWriteConfig writeConfig,
       final Function<Integer, List<HoodieKey>> keyGenFunction) {
     return (numRecords) -> {
-      final HoodieIndex index = JavaHoodieIndexFactory.createIndex(writeConfig);
-      List<HoodieKey> records = keyGenFunction.apply(numRecords);
       final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
+      final HoodieIndex index = JavaHoodieIndexFactory.createIndex(writeConfig, metaClient);
+      List<HoodieKey> records = keyGenFunction.apply(numRecords);
       HoodieTable table = HoodieJavaTable.create(writeConfig, context, metaClient);
       List<HoodieRecord> recordsToDelete = records.stream()
           .map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload())).collect(Collectors.toList());

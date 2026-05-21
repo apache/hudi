@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -189,7 +188,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
       // Fall back to the configured source record-key field when _hoodie_record_key is null
       // on disk (either populate.meta.fields=false or _hoodie_record_key in
       // META_FIELDS_EXCLUDE_LIST).
-      this.recordKeyField = HoodieMetaFieldFlags.fromConfig(tableConfig).isRecordKeyPopulated()
+      this.recordKeyField = tableConfig.getHoodieMetaFieldFlags().isRecordKeyPopulated()
           ? HoodieRecord.RECORD_KEY_METADATA_FIELD
           : tableConfig.getRecordKeyFieldProp();
     }

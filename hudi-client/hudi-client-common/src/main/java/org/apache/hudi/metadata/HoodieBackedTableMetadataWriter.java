@@ -48,7 +48,6 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -977,7 +976,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       // disk. With selective exclusion (META_FIELDS_EXCLUDE_LIST), the column is null and
       // we must project the configured source record-key fields instead so the record-index
       // is rebuilt from the user data columns.
-      HoodieSchema requestedSchema = HoodieMetaFieldFlags.fromConfig(metaClient.getTableConfig()).isRecordKeyPopulated()
+      HoodieSchema requestedSchema = metaClient.getTableConfig().getHoodieMetaFieldFlags().isRecordKeyPopulated()
           ? getRecordKeySchema()
           : HoodieSchemaUtils.projectSchema(dataSchema, Arrays.asList(metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0])));
       Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(dataWriteConfig.getInternalSchema());
