@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.callback.SourceCommitCallback;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
@@ -46,6 +47,8 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.storage.StorageLevel;
 
 import java.io.Serializable;
+import java.util.Collections;
+import java.util.Map;
 
 import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.shouldTargetCheckpointV2;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD;
@@ -212,5 +215,23 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
     } else if (cachedSourceRdd != null && cachedSourceRdd.isRight()) {
       cachedSourceRdd.asRight().unpersist();
     }
+  }
+
+  /**
+   * Per-partition (min, max) event time propagated from the most recently fetched upstream batch,
+   * for sources that read from a Hudi table and opted into
+   * {@code hoodie.write.track.event.time.propagate.from.upstream}.
+   *
+   * <p>The downstream streamer folds these values into the per-partition write stats of the
+   * downstream commit via {@code BaseHoodieWriteClient}'s {@code extraPreCommitFunc} hook, so
+   * derived tables inherit upstream freshness without retaining the event-time column.
+   *
+   * <p>Default implementation returns an empty map (no propagation). Concrete sources override
+   * when they have batch-scoped upstream watermark data to propagate. Always reflects the latest
+   * call to {@link #fetchNext}.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public Map<String, Pair<Long, Long>> getUpstreamEventTimeWatermarks() {
+    return Collections.emptyMap();
   }
 }
