@@ -1,0 +1,50 @@
+name: Hudi Trino Connector CI
+
+on:
+  push:
+    branches:
+      - master
+      - 'release-*'
+    paths:
+      - 'hudi-trino-plugin/**'
+      - 'packaging/hudi-trino-bundle/**'
+      - '.github/workflows/hudi_trino_ci.yml'
+  pull_request:
+    branches:
+      - master
+      - 'release-*'
+    paths:
+      - 'hudi-trino-plugin/**'
+      - 'packaging/hudi-trino-bundle/**'
+      - '.github/workflows/hudi_trino_ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: hudi-trino-ci-${{ github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'release-') }}
+
+env:
+  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log
+
+jobs:
+  build-and-test:
+    name: Build and Test (JDK 25)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+      - name: Build connector and bundle
+        run: ./mvnw $MVN_ARGS -Phudi-trino -pl hudi-trino-plugin,packaging/hudi-trino-bundle -am install -DskipTests
+      - name: Verify bundle contains connector classes
+        run: |
+          BUNDLE_JAR=$(ls packaging/hudi-trino-bundle/target/hudi-trino-bundle-*.jar | grep -v sources | head -n 1)
+          echo "Inspecting $BUNDLE_JAR"
+          jar tf "$BUNDLE_JAR" | grep -E 'io/trino/plugin/hudi/HudiConnectorFactory\.class$' \
+            || (echo "ERROR: HudiConnectorFactory not present in bundle"; exit 1)
+      - name: Run connector tests
+        run: ./mvnw $MVN_ARGS -Phudi-trino -pl hudi-trino-plugin test
