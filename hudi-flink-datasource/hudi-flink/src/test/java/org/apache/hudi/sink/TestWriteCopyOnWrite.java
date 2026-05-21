@@ -360,6 +360,35 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   }
 
   @Test
+  public void testInsertWithTableServiceDisabled() throws Exception {
+    // reset the config option
+    conf.set(FlinkOptions.OPERATION, "insert");
+    conf.set(FlinkOptions.TABLE_SERVICES_ENABLED, false);
+    conf.set(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
+    conf.set(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true);
+    conf.set(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
+
+    preparePipeline(conf)
+        .consume(TestData.DATA_SET_INSERT_SAME_KEY)
+        .checkpoint(1)
+        .handleEvents(1)
+        .checkpointComplete(1)
+        .checkWrittenData(EXPECTED4, 1)
+        // insert duplicates again
+        .consume(TestData.DATA_SET_INSERT_SAME_KEY)
+        .checkpoint(2)
+        .handleEvents(1)
+        .checkpointComplete(2)
+        .checkWrittenDataCOW(EXPECTED5)
+        .end();
+    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
+    long completedReplaceCommit = writeClient.getHoodieTable().getActiveTimeline().getCompletedReplaceTimeline().getInstants().stream().count();
+    long pendingReplaceCommit = writeClient.getHoodieTable().getActiveTimeline().filterPendingReplaceTimeline().getInstants().stream().count();
+    assertEquals(0, completedReplaceCommit);
+    assertEquals(0, pendingReplaceCommit);
+  }
+
+  @Test
   public void testUpsert() throws Exception {
     // open the function and ingest data
     preparePipeline()
