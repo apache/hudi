@@ -217,8 +217,8 @@ public class ParquetSchemaConverter {
 
   /**
    * Checks whether the group carries the Parquet {@code VARIANT} logical type annotation.
-   * Uses class-name matching so this compiles against parquet-java versions that predate the
-   * {@code VariantLogicalTypeAnnotation} class (< 1.15.2).
+   * Uses class-name matching so this compiles against parquet-java versions that do not expose
+   * {@code VariantLogicalTypeAnnotation} as a public type on the classpath used for compilation.
    */
   private static boolean hasVariantAnnotation(LogicalTypeAnnotation logicalType) {
     // needs to ensure the writer attach the variant annotation in 1.3.
