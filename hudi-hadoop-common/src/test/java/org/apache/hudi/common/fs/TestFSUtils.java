@@ -712,6 +712,13 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals("gs://my-bucket/path/", FSUtils.normalizeBasePathForLocking("gs://my-bucket/path//"));
     // Inner consecutive slashes are intentionally NOT touched (could be a real S3 key).
     assertEquals("s3://my-bucket//inner/path/", FSUtils.normalizeBasePathForLocking("s3://my-bucket//inner/path"));
+    // S3 object keys are allowed to end with ':' — a final-segment colon must NOT be
+    // mis-classified as the "scheme-only" case. The trailing ':' is part of the key and
+    // is preserved before the single trailing slash is appended.
+    assertEquals("s3://my-bucket/foo:/", FSUtils.normalizeBasePathForLocking("s3://my-bucket/foo:"));
+    assertEquals("s3://my-bucket/foo:/", FSUtils.normalizeBasePathForLocking("s3://my-bucket/foo:/"));
+    assertEquals("s3://my-bucket/foo:bar:/", FSUtils.normalizeBasePathForLocking("s3://my-bucket/foo:bar:/"));
+    assertEquals("s3://my-bucket/foo:/", FSUtils.normalizeBasePathForLocking("s3a://my-bucket/foo:///"));
     // Random ASCII chars (URL-unsafe and equals/colon/plus/hash/ampersand/space) pass through
     // unchanged except for the trailing-slash and s3a-scheme rules. Hudi does not re-encode
     // paths internally so the lock key must be byte-stable across these characters.

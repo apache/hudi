@@ -770,7 +770,9 @@ public class FSUtils {
    *
    * <p>Scheme-only inputs (e.g. {@code "s3://"}, {@code "s3a:///"}) and all-slash inputs
    * (e.g. {@code "///"}) are rejected — stripping the trailing slashes from those leaves
-   * nothing meaningful to lock against.
+   * nothing meaningful to lock against. Paths whose final key segment legitimately ends
+   * with {@code ':'} (e.g. {@code "s3://bucket/foo:/"}) are preserved — S3 object keys
+   * are allowed to contain {@code ':'}.
    */
   public static String normalizeBasePathForLocking(String basePath) {
     if (basePath == null) {
@@ -785,9 +787,13 @@ public class FSUtils {
     while (end > 0 && schemeNormalized.charAt(end - 1) == '/') {
       end--;
     }
-    // Reject "///"-style inputs (nothing left) and "s3://"/"s3a:///"-style scheme-only
-    // inputs (stripping the slashes leaves only the scheme prefix ending in ':').
-    if (end == 0 || schemeNormalized.charAt(end - 1) == ':') {
+    // Reject "///"-style inputs (nothing left after stripping) and scheme-only inputs
+    // like "s3://" / "s3a:///" — those collapse to just "<scheme>:" with no '/' character
+    // remaining. Real paths that end with ':' (e.g. "s3://bucket/foo:/") keep the '/'
+    // characters from the scheme's "://" separator, so they pass this check.
+    if (end == 0
+        || (schemeNormalized.charAt(end - 1) == ':'
+            && schemeNormalized.lastIndexOf('/', end - 1) < 0)) {
       throw new IllegalArgumentException(
           "Hudi table base path is not a valid lockable path: '" + basePath + "'");
     }
