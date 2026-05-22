@@ -75,7 +75,10 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
   // classloader, causing ClassNotFoundExceptions. We use a custom pool whose thread factory
   // explicitly sets the correct classloader.
   // See: https://stackoverflow.com/questions/66240365/java-11-upgrade-from-8-parallel-streams-throws-classnotfoundexception
-  private static final ForkJoinPool FORK_JOIN_POOL = initForkJoinPool();
+  // Lazy holder — initialized on first use, not at class-load time (JLS 12.4.2 guarantees thread safety).
+  private static class PoolHolder {
+    static final ForkJoinPool INSTANCE = initForkJoinPool();
+  }
 
   private static ForkJoinPool initForkJoinPool() {
     int javaVersion = 0;
@@ -106,7 +109,7 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
       final ForkJoinWorkerThread worker = ForkJoinPool.defaultForkJoinWorkerThreadFactory.newThread(pool);
       worker.setName(prefix + worker.getPoolIndex());
       worker.setContextClassLoader(HoodieLocalEngineContext.class.getClassLoader());
-      LOG.info("Creating worker thread {} with class loader {}", worker.getName(), worker.getContextClassLoader());
+      LOG.debug("Creating worker thread {} with class loader {}", worker.getName(), worker.getContextClassLoader());
       return worker;
     };
   }
@@ -118,7 +121,7 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
    */
   public static <I, O> List<O> mapParallel(List<I> data, SerializableFunction<I, O> func) {
     try {
-      return FORK_JOIN_POOL.submit(
+      return PoolHolder.INSTANCE.submit(
           () -> data.stream().parallel().map(throwingMapWrapper(func)).collect(toList())).get();
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
@@ -162,8 +165,7 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism) {
-    // parallelism is advisory; actual pool size is fixed at class-load time via FORK_JOIN_POOL
-    return mapParallel(data, func);
+    return data.stream().parallel().map(throwingMapWrapper(func)).collect(toList());
   }
 
   @Override
