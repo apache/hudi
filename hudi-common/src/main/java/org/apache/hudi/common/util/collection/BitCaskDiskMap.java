@@ -58,6 +58,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
+import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
 
 import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
@@ -408,6 +409,14 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
     private final ByteArrayOutputStream compressBaos;
     private final ByteArrayOutputStream decompressBaos;
     private final byte[] decompressIntermediateBuffer;
+    // Reusable zlib engines. Each CompressionHandler is held in a ThreadLocal,
+    // so a single Deflater/Inflater pair per worker thread is sufficient and
+    // avoids per-call construction. On JDK 8 every new Deflater/Inflater
+    // registers a finalizer; under concurrent disk-map traffic the Finalizer
+    // thread cannot drain the queue, pinning native zlib handles in old gen
+    // and driving the JVM into a GC death spiral.
+    private transient Deflater deflater;
+    private transient Inflater inflater;
 
     CompressionHandler() {
       compressBaos = new ByteArrayOutputStream(DISK_COMPRESSION_INITIAL_BUFFER_SIZE);
@@ -415,22 +424,42 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
       decompressIntermediateBuffer = new byte[DECOMPRESS_INTERMEDIATE_BUFFER_SIZE];
     }
 
+    // Lazy accessors so the handler stays usable after Java deserialization
+    // (transient fields come back null).
+    private Deflater deflater() {
+      if (deflater == null) {
+        deflater = new Deflater(Deflater.BEST_COMPRESSION);
+      }
+      return deflater;
+    }
+
+    private Inflater inflater() {
+      if (inflater == null) {
+        inflater = new Inflater();
+      }
+      return inflater;
+    }
+
     private byte[] compressBytes(final byte[] value) throws IOException {
       compressBaos.reset();
-      Deflater deflater = new Deflater(Deflater.BEST_COMPRESSION);
-      DeflaterOutputStream dos = new DeflaterOutputStream(compressBaos, deflater);
-      try {
+      Deflater def = deflater();
+      def.reset();
+      // Passing our own Deflater puts DeflaterOutputStream in usesDefaultDeflater=false
+      // mode, so close() will finish() the stream but will NOT call def.end() —
+      // exactly what we want for reuse.
+      try (DeflaterOutputStream dos = new DeflaterOutputStream(compressBaos, def)) {
         dos.write(value);
-      } finally {
-        dos.close();
-        deflater.end();
       }
       return compressBaos.toByteArray();
     }
 
     private byte[] decompressBytes(final byte[] bytes) throws IOException {
       decompressBaos.reset();
-      try (InputStream in = new InflaterInputStream(new ByteArrayInputStream(bytes))) {
+      Inflater inf = inflater();
+      inf.reset();
+      // Passing our own Inflater puts InflaterInputStream in usesDefaultInflater=false
+      // mode, so close() will not call inf.end() — exactly what we want for reuse.
+      try (InputStream in = new InflaterInputStream(new ByteArrayInputStream(bytes), inf)) {
         int len;
         while ((len = in.read(decompressIntermediateBuffer)) > 0) {
           decompressBaos.write(decompressIntermediateBuffer, 0, len);
