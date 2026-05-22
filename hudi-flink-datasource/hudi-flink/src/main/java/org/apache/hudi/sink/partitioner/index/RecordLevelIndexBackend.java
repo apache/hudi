@@ -176,30 +176,21 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
       return cache;
     }
 
-    // Time the remote metadata-table reads (RLI bucket listing + record index location read) so
-    // operators can observe per-partition bootstrap latency. The local cache fill is excluded so
-    // the histogram tracks remote cost only, matching remoteIndexLookupLatency on the global RLI path.
+    // Time the remote metadata-table reads. readRecordIndexLocations returns a lazy HoodieListData
+    // whose underlying file-slice scan only runs during the forEach below, so the timer must span
+    // the iteration as well to capture the bulk of the remote cost. This matches the bracketing
+    // used by GlobalRecordLevelIndexBackend around its remote lookup.
     metrics.startRemoteIndexLookup();
-    final HoodiePairData<String, HoodieRecordGlobalLocation> locations;
     try {
       Map<String, List<FileSlice>> partitionedFileGroups =
           metadataTable.getBucketizedFileGroupsForPartitionedRLI(MetadataPartitionType.RECORD_INDEX);
       List<FileSlice> fileSlices = partitionedFileGroups.get(partitionPath);
       if (fileSlices == null || fileSlices.isEmpty()) {
-        metrics.endRemoteIndexLookup();
         metrics.updateRemoteLookupKeysCount(0L);
         return cache;
       }
-      locations = metadataTable.readRecordIndexLocations(fileSlicesToFilter -> fileSlices);
-      metrics.endRemoteIndexLookup();
-    } catch (Exception e) {
-      // Stop the timer to avoid leaking the start timestamp into the next bootstrap call.
-      metrics.endRemoteIndexLookup();
-      cache.close();
-      throw new HoodieException("Failed to bootstrap partitioned RLI cache for partition " + partitionPath, e);
-    }
-
-    try {
+      HoodiePairData<String, HoodieRecordGlobalLocation> locations =
+          metadataTable.readRecordIndexLocations(fileSlicesToFilter -> fileSlices);
       final AtomicLong totalCnt = new AtomicLong();
       locations.forEach(locationPair -> {
         String recordKey = locationPair.getLeft();
@@ -216,6 +207,8 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
     } catch (Exception e) {
       cache.close();
       throw new HoodieException("Failed to bootstrap partitioned RLI cache for partition " + partitionPath, e);
+    } finally {
+      metrics.endRemoteIndexLookup();
     }
   }
 
