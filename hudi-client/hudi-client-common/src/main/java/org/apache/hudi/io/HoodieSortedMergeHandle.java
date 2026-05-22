@@ -19,7 +19,6 @@
 package org.apache.hudi.io;
 
 import org.apache.avro.Schema;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -33,7 +32,6 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
@@ -104,10 +102,10 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
   }
 
   @Override
-  public List<WriteStatus> close() {
+  protected void writeIncomingRecords() throws IOException {
     // write out any pending records (this can happen when inserts are turned into updates)
-    while (!newRecordKeysSorted.isEmpty()) {
-      try {
+    try {
+      while (!newRecordKeysSorted.isEmpty()) {
         String key = newRecordKeysSorted.poll();
         HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key);
         if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
@@ -119,13 +117,9 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
           insertRecordsWritten++;
           writtenRecordKeys.add(hoodieRecord.getRecordKey());
         }
-      } catch (IOException e) {
-        throw new HoodieUpsertException("Failed to close UpdateHandle", e);
       }
+    } finally {
+      newRecordKeysSorted.clear();
     }
-
-    newRecordKeysSorted.clear();
-
-    return super.close();
   }
 }

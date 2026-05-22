@@ -514,14 +514,14 @@ public class HFileBootstrapIndex extends BootstrapIndex {
      * Close Writer Handles.
      */
     public void close() {
-      try {
-        if (!closed) {
-          indexByPartitionWriter.close();
-          indexByFileIdWriter.close();
-          closed = true;
-        }
-      } catch (IOException ioe) {
-        throw new HoodieIOException(ioe.getMessage(), ioe);
+      if (closed) {
+        return;
+      }
+      Exception failure = closeWriter(indexByPartitionWriter, null);
+      failure = closeWriter(indexByFileIdWriter, failure);
+      closed = true;
+      if (failure != null) {
+        throw new HoodieException(failure.getMessage(), failure);
       }
     }
 
@@ -538,6 +538,21 @@ public class HFileBootstrapIndex extends BootstrapIndex {
       } catch (IOException ioe) {
         throw new HoodieIOException(ioe.getMessage(), ioe);
       }
+    }
+
+    private Exception closeWriter(HFile.Writer writer, Exception failure) {
+      if (writer == null) {
+        return failure;
+      }
+      try {
+        writer.close();
+      } catch (IOException | RuntimeException e) {
+        if (failure == null) {
+          return e;
+        }
+        failure.addSuppressed(e);
+      }
+      return failure;
     }
 
     @Override
