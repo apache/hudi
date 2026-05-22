@@ -712,10 +712,25 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals("gs://my-bucket/path/", FSUtils.normalizeBasePathForLocking("gs://my-bucket/path//"));
     // Inner consecutive slashes are intentionally NOT touched (could be a real S3 key).
     assertEquals("s3://my-bucket//inner/path/", FSUtils.normalizeBasePathForLocking("s3://my-bucket//inner/path"));
+    // Random ASCII chars (URL-unsafe and equals/colon/plus/hash/ampersand/space) pass through
+    // unchanged except for the trailing-slash and s3a-scheme rules. Hudi does not re-encode
+    // paths internally so the lock key must be byte-stable across these characters.
+    assertEquals(
+        "s3://my-bucket/datalake/db=foo:bar/dt=2024-01-01T00:00:00+05:30/region=us east/category=a&b=c/vehicle#1/file/",
+        FSUtils.normalizeBasePathForLocking(
+            "s3a://my-bucket/datalake/db=foo:bar/dt=2024-01-01T00:00:00+05:30/region=us east/category=a&b=c/vehicle#1/file"));
     // Null and empty are rejected.
     assertThrows(IllegalArgumentException.class, () -> FSUtils.normalizeBasePathForLocking(null));
     assertThrows(IllegalArgumentException.class, () -> FSUtils.normalizeBasePathForLocking(""));
     assertThrows(IllegalArgumentException.class, () -> FSUtils.normalizeBasePathForLocking("   "));
+    // Scheme-only inputs and all-slash inputs are rejected — stripping leaves nothing
+    // meaningful to lock against.
+    assertThrows(IllegalArgumentException.class, () -> FSUtils.normalizeBasePathForLocking("s3://"));
+    assertThrows(IllegalArgumentException.class, () -> FSUtils.normalizeBasePathForLocking("s3:///"));
+    assertThrows(IllegalArgumentException.class, () -> FSUtils.normalizeBasePathForLocking("s3a://"));
+    assertThrows(IllegalArgumentException.class, () -> FSUtils.normalizeBasePathForLocking("s3a:///"));
+    assertThrows(IllegalArgumentException.class, () -> FSUtils.normalizeBasePathForLocking("///"));
+    assertThrows(IllegalArgumentException.class, () -> FSUtils.normalizeBasePathForLocking("/"));
   }
 
   private StoragePath getHoodieTempDir() {

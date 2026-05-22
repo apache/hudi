@@ -767,6 +767,10 @@ public class FSUtils {
    * hash, so any benign formatting drift in the basePath has to be eliminated before hashing.
    * This method trims surrounding whitespace, normalizes s3a:// to s3://, then forces exactly
    * one trailing slash. Inner double slashes are intentionally preserved.
+   *
+   * <p>Scheme-only inputs (e.g. {@code "s3://"}, {@code "s3a:///"}) and all-slash inputs
+   * (e.g. {@code "///"}) are rejected — stripping the trailing slashes from those leaves
+   * nothing meaningful to lock against.
    */
   public static String normalizeBasePathForLocking(String basePath) {
     if (basePath == null) {
@@ -780,6 +784,12 @@ public class FSUtils {
     int end = schemeNormalized.length();
     while (end > 0 && schemeNormalized.charAt(end - 1) == '/') {
       end--;
+    }
+    // Reject "///"-style inputs (nothing left) and "s3://"/"s3a:///"-style scheme-only
+    // inputs (stripping the slashes leaves only the scheme prefix ending in ':').
+    if (end == 0 || schemeNormalized.charAt(end - 1) == ':') {
+      throw new IllegalArgumentException(
+          "Hudi table base path is not a valid lockable path: '" + basePath + "'");
     }
     return schemeNormalized.substring(0, end) + "/";
   }

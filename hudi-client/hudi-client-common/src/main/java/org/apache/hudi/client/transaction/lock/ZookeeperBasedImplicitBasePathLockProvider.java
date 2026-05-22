@@ -46,6 +46,13 @@ public class ZookeeperBasedImplicitBasePathLockProvider extends BaseZookeeperBas
   public static final String LOCK_KEY = "lock_key";
   private final String hudiTableBasePath;
 
+  /**
+   * Compute the Zookeeper lock base path for a given Hudi table base path.
+   *
+   * <p>Accepts a raw basePath — normalization is applied here. {@code normalizeBasePathForLocking}
+   * is idempotent, so callers that already hold a normalized value (e.g. the constructor's
+   * {@code hudiTableBasePath} field) can pass it through without harm.
+   */
   public static String getLockBasePath(String hudiTableBasePath) {
     String normalized = normalizeBasePathForLocking(hudiTableBasePath);
     String lockBasePath = "/tmp/" + HashID.generateXXHashAsString(normalized, HashID.Size.BITS_64);
