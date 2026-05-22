@@ -56,6 +56,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.AutoCloseableUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -522,7 +523,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       appendDataAndDeleteBlocks(header, true);
       recordItr = null;
 
-      writer.close();
+      closeLogWriter(null);
 
       // update final size, once for all log files
       // TODO we can actually deduce file size purely from AppendResult (based on offset and size
@@ -534,8 +535,27 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
       return statuses;
     } catch (IOException e) {
+      closeLogWriterQuietly(e);
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
+    } catch (RuntimeException e) {
+      closeLogWriterQuietly(e);
+      throw e;
+    } finally {
+      recordItr = null;
     }
+  }
+
+  private void closeLogWriter(Throwable failure) throws IOException {
+    try {
+      AutoCloseableUtils.closeWithSuppressed(writer, failure);
+    } finally {
+      writer = null;
+    }
+  }
+
+  private void closeLogWriterQuietly(Throwable failure) {
+    AutoCloseableUtils.closeQuietlyWithSuppressed(writer, failure);
+    writer = null;
   }
 
   public void write(Map<String, HoodieRecord<T>> recordMap) {
@@ -549,6 +569,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       appendDataAndDeleteBlocks(header, true);
       estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;
     } catch (Exception e) {
+      closeLogWriterQuietly(e);
       throw new HoodieUpsertException("Failed to compact blocks for fileId " + fileId, e);
     }
   }

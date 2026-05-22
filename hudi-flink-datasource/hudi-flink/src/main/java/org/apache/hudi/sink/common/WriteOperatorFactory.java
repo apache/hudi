@@ -20,6 +20,7 @@ package org.apache.hudi.sink.common;
 
 import org.apache.hudi.sink.StreamWriteOperator;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
+import org.apache.hudi.sink.event.Correspondent;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.OperatorID;
@@ -58,6 +59,8 @@ public class WriteOperatorFactory<I>
     final OperatorID operatorID = parameters.getStreamConfig().getOperatorID();
     final OperatorEventDispatcher eventDispatcher = parameters.getOperatorEventDispatcher();
 
+    this.operator.setCorrespondent(Correspondent.getInstance(operatorID,
+        parameters.getContainingTask().getEnvironment().getOperatorCoordinatorEventGateway()));
     this.operator.setOperatorEventGateway(eventDispatcher.getOperatorEventGateway(operatorID));
     this.operator.setup(parameters.getContainingTask(), parameters.getStreamConfig(), parameters.getOutput());
     this.operator.setProcessingTimeService(this.processingTimeService);

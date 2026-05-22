@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import java.io.IOException;
 import java.util.Properties;
 
-public interface HoodieFileWriter {
+public interface HoodieFileWriter extends AutoCloseable {
   boolean canWrite();
 
   void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema, Properties props) throws IOException;
