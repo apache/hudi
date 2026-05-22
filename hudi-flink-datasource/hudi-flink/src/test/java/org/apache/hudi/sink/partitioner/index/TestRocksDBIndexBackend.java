@@ -180,4 +180,36 @@ public class TestRocksDBIndexBackend {
     assertEquals(0D, ((Number) gauges.get(FlinkRocksDBIndexMetrics.ROCKSDB_BLOCK_CACHE_HIT_RATIO).getValue()).doubleValue());
     assertEquals(0D, ((Number) gauges.get(FlinkRocksDBIndexMetrics.ROCKSDB_MEMTABLE_HIT_RATIO).getValue()).doubleValue());
   }
+
+  @Test
+  void testMultipleInstancesSamePathShareSingleDAO() throws Exception {
+    // Two backends pointing at the same rocksDbBasePath share the same RocksDBDAO.
+    // A record written through one must be immediately visible through the other.
+    try (RocksDBIndexBackend backend1 = new RocksDBIndexBackend(tempFile.getAbsolutePath(), false);
+         RocksDBIndexBackend backend2 = new RocksDBIndexBackend(tempFile.getAbsolutePath(), false)) {
+
+      HoodieRecordGlobalLocation location = new HoodieRecordGlobalLocation("", "001", UUID.randomUUID().toString());
+      backend1.update("shared_key", location);
+
+      assertEquals(location, backend2.get("shared_key"),
+          "Backend2 must see records written by backend1 when they share the same DAO");
+    }
+  }
+
+  @Test
+  void testDaoRemainsUsableUntilLastInstanceCloses() throws Exception {
+    // The underlying DAO must stay open as long as at least one backend holds a reference.
+    RocksDBIndexBackend backend1 = new RocksDBIndexBackend(tempFile.getAbsolutePath(), false);
+    RocksDBIndexBackend backend2 = new RocksDBIndexBackend(tempFile.getAbsolutePath(), false);
+
+    HoodieRecordGlobalLocation location = new HoodieRecordGlobalLocation("", "001", UUID.randomUUID().toString());
+    backend1.update("key1", location);
+
+    // Closing backend1 must not close the DAO while backend2 still holds a reference.
+    backend1.close();
+    assertEquals(location, backend2.get("key1"),
+        "DAO must remain usable after the first backend closes while a second still holds a reference");
+
+    backend2.close();
+  }
 }
