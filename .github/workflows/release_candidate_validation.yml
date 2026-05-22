@@ -16,8 +16,8 @@ jobs:
   validate-release-candidate-bundles:
     runs-on: ubuntu-latest
     env:
-      HUDI_VERSION: 1.2.0-rc2
-      STAGING_REPO_NUM: 1181
+      HUDI_VERSION: 1.2.0
+      STAGING_REPO_NUM: 1183
     strategy:
       matrix:
         include:
@@ -66,8 +66,8 @@ jobs:
   validate-release-candidate-bundles-spark4:
     runs-on: ubuntu-latest
     env:
-      HUDI_VERSION: 1.2.0-rc2
-      STAGING_REPO_NUM: 1181
+      HUDI_VERSION: 1.2.0
+      STAGING_REPO_NUM: 1183
     strategy:
       matrix:
         include:
@@ -100,8 +100,8 @@ jobs:
   validate-release-candidate-bundles-flink2:
     runs-on: ubuntu-latest
     env:
-      HUDI_VERSION: 1.2.0-rc2
-      STAGING_REPO_NUM: 1181
+      HUDI_VERSION: 1.2.0
+      STAGING_REPO_NUM: 1183
     strategy:
       matrix:
         include:
