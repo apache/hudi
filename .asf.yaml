@@ -34,7 +34,6 @@ github:
     issues: true
     projects: true
     discussions: true
-    automerge_allowed: true
   enabled_merge_buttons:
     squash:  true
     merge:   false
