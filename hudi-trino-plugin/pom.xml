@@ -79,8 +79,10 @@
         </dependency>
 
         <dependency>
+            <!-- Trino bundles guice as the classes-only classifier; the BOM does not manage the plain jar. -->
             <groupId>com.google.inject</groupId>
             <artifactId>guice</artifactId>
+            <classifier>classes</classifier>
         </dependency>
 
         <dependency>
@@ -375,8 +377,10 @@
         </dependency>
 
         <dependency>
+            <!-- BOM does not manage test-jar coordinate; declare the version explicitly. -->
             <groupId>io.trino</groupId>
             <artifactId>trino-spi</artifactId>
+            <version>${dep.trino.version}</version>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
