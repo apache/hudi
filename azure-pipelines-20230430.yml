@@ -43,7 +43,6 @@ parameters:
       - '!hudi-hadoop-mr'
       - '!hudi-client/hudi-java-client'
       - '!hudi-client/hudi-spark-client'
-      - '!hudi-cli'
       - '!hudi-examples'
       - '!hudi-examples/hudi-examples-common'
       - '!hudi-examples/hudi-examples-flink'
@@ -59,7 +58,6 @@ parameters:
     type: object
     default:
       - '!hudi-client/hudi-spark-client'
-      - '!hudi-cli'
       - '!hudi-examples'
       - '!hudi-examples/hudi-examples-common'
       - '!hudi-examples/hudi-examples-flink'
