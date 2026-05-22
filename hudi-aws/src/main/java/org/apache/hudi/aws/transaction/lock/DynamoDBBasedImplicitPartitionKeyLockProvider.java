@@ -42,7 +42,7 @@ import static org.apache.hudi.common.fs.FSUtils.normalizeBasePathForLocking;
 public class DynamoDBBasedImplicitPartitionKeyLockProvider extends DynamoDBBasedLockProviderBase {
   protected static final Logger LOG = LoggerFactory.getLogger(DynamoDBBasedImplicitPartitionKeyLockProvider.class);
 
-  private final String hudiTableBasePath;
+  private final String normalizedHudiTableBasePath;
 
   public DynamoDBBasedImplicitPartitionKeyLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
     this(lockConfiguration, conf, null);
@@ -51,7 +51,7 @@ public class DynamoDBBasedImplicitPartitionKeyLockProvider extends DynamoDBBased
   public DynamoDBBasedImplicitPartitionKeyLockProvider(
       final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf, DynamoDbClient dynamoDB) {
     super(lockConfiguration, conf, dynamoDB);
-    hudiTableBasePath = normalizeBasePathForLocking(
+    normalizedHudiTableBasePath = normalizeBasePathForLocking(
         lockConfiguration.getConfig().getString(HoodieCommonConfig.BASE_PATH.key()));
   }
 
@@ -61,8 +61,8 @@ public class DynamoDBBasedImplicitPartitionKeyLockProvider extends DynamoDBBased
    *
    * <p>Accepts a raw basePath — normalization is applied here. {@code normalizeBasePathForLocking}
    * is idempotent, so passing an already-normalized path is safe. Note that the instance field
-   * {@code hudiTableBasePath} cannot be used here: the parent constructor invokes this through
-   * {@code getDynamoDBPartitionKey} before the subclass has a chance to assign the field.
+   * {@code normalizedHudiTableBasePath} cannot be used here: the parent constructor invokes this
+   * through {@code getDynamoDBPartitionKey} before the subclass has a chance to assign the field.
    */
   public static String derivePartitionKey(String hudiTableBasePath) {
     String normalized = normalizeBasePathForLocking(hudiTableBasePath);
@@ -81,6 +81,6 @@ public class DynamoDBBasedImplicitPartitionKeyLockProvider extends DynamoDBBased
   protected String generateLogSuffixString() {
     return StringUtils.join("DynamoDb table = ", tableName,
         ", partition key = ", dynamoDBPartitionKey,
-        ", hudi table base path = ", hudiTableBasePath);
+        ", hudi table base path = ", normalizedHudiTableBasePath);
   }
 }

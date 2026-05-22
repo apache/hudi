@@ -44,14 +44,14 @@ import static org.apache.hudi.common.fs.FSUtils.normalizeBasePathForLocking;
 public class ZookeeperBasedImplicitBasePathLockProvider extends BaseZookeeperBasedLockProvider {
 
   public static final String LOCK_KEY = "lock_key";
-  private final String hudiTableBasePath;
+  private final String normalizedHudiTableBasePath;
 
   /**
    * Compute the Zookeeper lock base path for a given Hudi table base path.
    *
    * <p>Accepts a raw basePath — normalization is applied here. {@code normalizeBasePathForLocking}
    * is idempotent, so callers that already hold a normalized value (e.g. the constructor's
-   * {@code hudiTableBasePath} field) can pass it through without harm.
+   * {@code normalizedHudiTableBasePath} field) can pass it through without harm.
    */
   public static String getLockBasePath(String hudiTableBasePath) {
     String normalized = normalizeBasePathForLocking(hudiTableBasePath);
@@ -63,7 +63,7 @@ public class ZookeeperBasedImplicitBasePathLockProvider extends BaseZookeeperBas
 
   public ZookeeperBasedImplicitBasePathLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
     super(lockConfiguration, conf);
-    hudiTableBasePath = normalizeBasePathForLocking(
+    normalizedHudiTableBasePath = normalizeBasePathForLocking(
         lockConfiguration.getConfig().getString(HoodieCommonConfig.BASE_PATH.key()));
   }
 
@@ -82,6 +82,6 @@ public class ZookeeperBasedImplicitBasePathLockProvider extends BaseZookeeperBas
   @Override
   protected String generateLogSuffixString() {
     return StringUtils.join("ZkBasePath = ", zkBasePath,
-        ", lock key = ", lockKey, ", hudi table base path = ", hudiTableBasePath);
+        ", lock key = ", lockKey, ", hudi table base path = ", normalizedHudiTableBasePath);
   }
 }
