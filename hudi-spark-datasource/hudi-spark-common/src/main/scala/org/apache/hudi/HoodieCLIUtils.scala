@@ -127,36 +127,43 @@ object HoodieCLIUtils extends Logging {
     if (s == null) {
       Map.empty
     } else {
-      val pairs = StringUtils.split(s, ",").asScala
+      // Single pass: build the result Map and collect duplicate keys at the
+      // same time, avoiding an intermediate Seq + groupBy + toMap chain.
+      val (result, duplicates) = StringUtils.split(s, ",").asScala
         .map(_.trim)
         .filter(_.nonEmpty)
-        .map(token => {
-          val delimiterIndex = token.indexOf('=')
-          if (delimiterIndex <= 0) {
-            throw new IllegalArgumentException(
-              s"Invalid options format: '$token'. Expected 'key=value' pairs separated by commas, "
-                + "for example: 'k1=v1,k2=v2'.")
-          }
+        .map(parseOptionToken)
+        .foldLeft((Map.empty[String, String], Set.empty[String])) {
+          case ((acc, dups), (key, value)) =>
+            val newDups = if (acc.contains(key)) dups + key else dups
+            (acc + (key -> value), newDups)
+        }
 
-          val key = token.substring(0, delimiterIndex).trim
-          if (key.isEmpty) {
-            throw new IllegalArgumentException(
-              s"Invalid options format: '$token'. Option key must not be empty and options should "
-                + "follow 'key=value' format.")
-          }
-
-          val value = token.substring(delimiterIndex + 1).trim
-          key -> value
-        })
-        .toSeq
-
-      val duplicates = pairs.groupBy(_._1).collect { case (k, vs) if vs.size > 1 => k }
       if (duplicates.nonEmpty) {
         logWarning(s"Duplicate option keys detected: ${duplicates.mkString(", ")}. "
           + "The last occurrence will take effect.")
       }
-      pairs.toMap
+      result
     }
+  }
+
+  private def parseOptionToken(token: String): (String, String) = {
+    val delimiterIndex = token.indexOf('=')
+    if (delimiterIndex <= 0) {
+      throw new IllegalArgumentException(
+        s"Invalid options format: '$token'. Expected 'key=value' pairs separated by commas, "
+          + "for example: 'k1=v1,k2=v2'.")
+    }
+
+    val key = token.substring(0, delimiterIndex).trim
+    if (key.isEmpty) {
+      throw new IllegalArgumentException(
+        s"Invalid options format: '$token'. Option key must not be empty and options should "
+          + "follow 'key=value' format.")
+    }
+
+    val value = token.substring(delimiterIndex + 1).trim
+    key -> value
   }
 
   def getLockOptions(tablePath: String, schema: String, lockConfig: TypedProperties): Map[String, String] = {

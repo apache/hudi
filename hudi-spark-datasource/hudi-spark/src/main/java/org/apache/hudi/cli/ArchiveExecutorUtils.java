@@ -55,7 +55,7 @@ public final class ArchiveExecutorUtils {
                             int commitsRetained,
                             boolean enableMetadata,
                             String basePath,
-                            Map<String, String> conf) throws IOException {
+                            Map<String, String> options) throws IOException {
     // NOTE on builder ordering:
     //   `withArchivalConfig`/`withCleanConfig`/`withMetadataConfig` each call
     //   `putAll(subConfig.getProps())` onto `writeConfig.getProps()`, which
@@ -73,7 +73,7 @@ public final class ArchiveExecutorUtils {
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(commitsRetained).build())
         .withEmbeddedTimelineServerEnabled(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build())
-        .withProps(conf)
+        .withProps(options)
         .build();
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     HoodieSparkTable<HoodieAvroPayload> table = HoodieSparkTable.create(config, context);
