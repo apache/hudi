@@ -1,0 +1,192 @@
+[[1;34mINFO[m] Scanning for projects...
+[[1;33mWARNING[m] 
+[[1;33mWARNING[m] Some problems were encountered while building the effective model for org.apache.hudi:hudi-common:jar:1.3.0-SNAPSHOT
+[[1;33mWARNING[m] 'dependencies.dependency.(groupId:artifactId:type:classifier)' must be unique: com.fasterxml.jackson.module:jackson-module-afterburner:jar -> duplicate declaration of version (?) @ line 158, column 17
+[[1;33mWARNING[m] 'dependencyManagement.dependencies.dependency.(groupId:artifactId:type:classifier)' must be unique: com.fasterxml.jackson.module:jackson-module-afterburner:jar -> version ${fasterxml.version} vs ${fasterxml.jackson.databind.version} @ org.apache.hudi:hudi:1.3.0-SNAPSHOT, /home/kavya/apache-hudi/hudi/pom.xml, line 889, column 19
+[[1;33mWARNING[m] 
+[[1;33mWARNING[m] Some problems were encountered while building the effective model for org.apache.hudi:hudi-aws:jar:1.3.0-SNAPSHOT
+[[1;33mWARNING[m] 'dependencies.dependency.(groupId:artifactId:type:classifier)' must be unique: software.amazon.awssdk:sts:jar -> duplicate declaration of version ${aws.sdk.version} @ line 229, column 21
+[[1;33mWARNING[m] 
+[[1;33mWARNING[m] Some problems were encountered while building the effective model for org.apache.hudi:hudi-spark-common_2.12:jar:1.3.0-SNAPSHOT
+[[1;33mWARNING[m] 'artifactId' contains an expression but should be a constant. @ org.apache.hudi:hudi-spark-common_${scala.binary.version}:1.3.0-SNAPSHOT, /home/kavya/apache-hudi/hudi/hudi-spark-datasource/hudi-spark-common/pom.xml, line 24, column 15
+[[1;33mWARNING[m] 
+[[1;33mWARNING[m] Some problems were encountered while building the effective model for org.apache.hudi:hudi-spark_2.12:jar:1.3.0-SNAPSHOT
+[[1;33mWARNING[m] 'artifactId' contains an expression but should be a constant. @ org.apache.hudi:hudi-spark_${scala.binary.version}:1.3.0-SNAPSHOT, /home/kavya/apache-hudi/hudi/hudi-spark-datasource/hudi-spark/pom.xml, line 26, column 15
+[[1;33mWARNING[m] 
+[[1;33mWARNING[m] Some problems were encountered while building the effective model for org.apache.hudi:hudi-utilities_2.12:jar:1.3.0-SNAPSHOT
+[[1;33mWARNING[m] 'artifactId' contains an expression but should be a constant. @ org.apache.hudi:hudi-utilities_${scala.binary.version}:1.3.0-SNAPSHOT, /home/kavya/apache-hudi/hudi/hudi-utilities/pom.xml, line 26, column 15
+[[1;33mWARNING[m] 'dependencies.dependency.(groupId:artifactId:type:classifier)' must be unique: org.apache.httpcomponents:httpcore:jar -> version ${aws.sdk.httpcore.version} vs (?) @ org.apache.hudi:hudi-utilities_${scala.binary.version}:1.3.0-SNAPSHOT, /home/kavya/apache-hudi/hudi/hudi-utilities/pom.xml, line 396, column 17
+[[1;33mWARNING[m] 
+[[1;33mWARNING[m] Some problems were encountered while building the effective model for org.apache.hudi:hudi-spark3.5-bundle_2.12:jar:1.3.0-SNAPSHOT
+[[1;33mWARNING[m] 'artifactId' contains an expression but should be a constant. @ org.apache.hudi:hudi-spark${sparkbundle.version}-bundle_${scala.binary.version}:1.3.0-SNAPSHOT, /home/kavya/apache-hudi/hudi/packaging/hudi-spark-bundle/pom.xml, line 26, column 15
+[[1;33mWARNING[m] 
+[[1;33mWARNING[m] Some problems were encountered while building the effective model for org.apache.hudi:hudi-utilities-bundle_2.12:jar:1.3.0-SNAPSHOT
+[[1;33mWARNING[m] 'artifactId' contains an expression but should be a constant. @ org.apache.hudi:hudi-utilities-bundle_${scala.binary.version}:1.3.0-SNAPSHOT, /home/kavya/apache-hudi/hudi/packaging/hudi-utilities-bundle/pom.xml, line 26, column 15
+[[1;33mWARNING[m] 
+[[1;33mWARNING[m] Some problems were encountered while building the effective model for org.apache.hudi:hudi-utilities-slim-bundle_2.12:jar:1.3.0-SNAPSHOT
+[[1;33mWARNING[m] 'artifactId' contains an expression but should be a constant. @ org.apache.hudi:hudi-utilities-slim-bundle_${scala.binary.version}:1.3.0-SNAPSHOT, /home/kavya/apache-hudi/hudi/packaging/hudi-utilities-slim-bundle/pom.xml, line 26, column 15
+[[1;33mWARNING[m] 
+[[1;33mWARNING[m] Some problems were encountered while building the effective model for org.apache.hudi:hudi-flink1.20-bundle:jar:1.3.0-SNAPSHOT
+[[1;33mWARNING[m] 'artifactId' contains an expression but should be a constant. @ org.apache.hudi:hudi-flink${flink.bundle.version}-bundle:1.3.0-SNAPSHOT, /home/kavya/apache-hudi/hudi/packaging/hudi-flink-bundle/pom.xml, line 28, column 15
+[[1;33mWARNING[m] 
+[[1;33mWARNING[m] Some problems were encountered while building the effective model for org.apache.hudi:hudi-cli-bundle_2.12:jar:1.3.0-SNAPSHOT
+[[1;33mWARNING[m] 'artifactId' contains an expression but should be a constant. @ org.apache.hudi:hudi-cli-bundle_${scala.binary.version}:1.3.0-SNAPSHOT, /home/kavya/apache-hudi/hudi/packaging/hudi-cli-bundle/pom.xml, line 26, column 15
+[[1;33mWARNING[m] 
+[[1;33mWARNING[m] Some problems were encountered while building the effective model for org.apache.hudi:hudi-spark3.5.x_2.12:jar:1.3.0-SNAPSHOT
+[[1;33mWARNING[m] 'artifactId' contains an expression but should be a constant. @ org.apache.hudi:hudi-spark3.5.x_${scala.binary.version}:1.3.0-SNAPSHOT, /home/kavya/apache-hudi/hudi/hudi-spark-datasource/hudi-spark3.5.x/pom.xml, line 24, column 15
+[[1;33mWARNING[m] 
+[[1;33mWARNING[m] Some problems were encountered while building the effective model for org.apache.hudi:hudi:pom:1.3.0-SNAPSHOT
+[[1;33mWARNING[m] 'dependencyManagement.dependencies.dependency.(groupId:artifactId:type:classifier)' must be unique: com.fasterxml.jackson.module:jackson-module-afterburner:jar -> version ${fasterxml.version} vs ${fasterxml.jackson.databind.version} @ line 889, column 19
+[[1;33mWARNING[m] 
+[[1;33mWARNING[m] It is highly recommended to fix these problems because they threaten the stability of your build.
+[[1;33mWARNING[m] 
+[[1;33mWARNING[m] For this reason, future Maven versions might no longer support building such malformed projects.
+[[1;33mWARNING[m] 
+[[1;34mINFO[m] ------------------------------------------------------------------------
+[[1;34mINFO[m] Detecting the operating system and CPU architecture
+[[1;34mINFO[m] ------------------------------------------------------------------------
+[[1;34mINFO[m] os.detected.name: linux
+[[1;34mINFO[m] os.detected.arch: x86_64
+[[1;34mINFO[m] os.detected.version: 6.6
+[[1;34mINFO[m] os.detected.version.major: 6
+[[1;34mINFO[m] os.detected.version.minor: 6
+[[1;34mINFO[m] os.detected.release: ubuntu
+[[1;34mINFO[m] os.detected.release.version: 24.04
+[[1;34mINFO[m] os.detected.release.like.ubuntu: true
+[[1;34mINFO[m] os.detected.release.like.debian: true
+[[1;34mINFO[m] os.detected.classifier: linux-x86_64
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] [1mReactor Build Order:[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] Hudi                                                               [pom]
+[[1;34mINFO[m] hudi-tests-common                                                  [jar]
+[[1;34mINFO[m] hudi-io                                                            [jar]
+[[1;34mINFO[m] hudi-common                                                        [jar]
+[[1;34mINFO[m] hudi-hadoop-common                                                 [jar]
+[[1;34mINFO[m] hudi-timeline-service                                              [jar]
+[[1;34mINFO[m] hudi-hadoop-mr                                                     [jar]
+[[1;34mINFO[m] hudi-client                                                        [pom]
+[[1;34mINFO[m] hudi-client-common                                                 [jar]
+[[1;34mINFO[m] hudi-spark-client                                                  [jar]
+[[1;34mINFO[m] hudi-sync-common                                                   [jar]
+[[1;34mINFO[m] hudi-hive-sync                                                     [jar]
+[[1;34mINFO[m] hudi-spark-datasource                                              [pom]
+[[1;34mINFO[m] hudi-spark-common_2.12                                             [jar]
+[[1;34mINFO[m] hudi-spark3-common                                                 [jar]
+[[1;34mINFO[m] hudi-spark3.5.x_2.12                                               [jar]
+[[1;34mINFO[m] hudi-java-client                                                   [jar]
+[[1;34mINFO[m] hudi-spark_2.12                                                    [jar]
+[[1;34mINFO[m] hudi-aws                                                           [jar]
+[[1;34mINFO[m] hudi-gcp                                                           [jar]
+[[1;34mINFO[m] hudi-utilities_2.12                                                [jar]
+[[1;34mINFO[m] hudi-utilities-bundle_2.12                                         [jar]
+[[1;34mINFO[m] hudi-cli                                                           [jar]
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m------------------------< [0;36morg.apache.hudi:hudi[0;1m >------------------------[m
+[[1;34mINFO[m] [1mBuilding Hudi 1.3.0-SNAPSHOT                                      [1/23][m
+[[1;34mINFO[m] [1m--------------------------------[ pom ]---------------------------------[m
+[[1;33mWARNING[m] The artifact org.slf4j:slf4j-log4j12:jar:2.0.7 has been relocated to org.slf4j:slf4j-reload4j:jar:2.0.7
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-enforcer-plugin:3.6.2:enforce[m [1m(enforce-maven-version)[m @ [36mhudi[0;1m ---[m
+[[1;34mINFO[m] Rule 0: org.apache.maven.enforcer.rules.version.RequireMavenVersion passed
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-enforcer-plugin:3.6.2:enforce[m [1m(enforce-logging)[m @ [36mhudi[0;1m ---[m
+[[1;34mINFO[m] Rule 0: org.apache.maven.enforcer.rules.dependency.BannedDependencies passed
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-enforcer-plugin:3.6.2:enforce[m [1m(enforce-versions)[m @ [36mhudi[0;1m ---[m
+[[1;34mINFO[m] Rule 0: org.apache.maven.enforcer.rules.dependency.BannedDependencies passed
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-remote-resources-plugin:1.5:process[m [1m(process-resource-bundles)[m @ [36mhudi[0;1m ---[m
+[[1;33mWARNING[m] While downloading org.slf4j:slf4j-log4j12:2.0.7
+  This artifact has been relocated to org.slf4j:slf4j-reload4j:2.0.7.
+
+
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-checkstyle-plugin:3.6.0:check[m [1m(default)[m @ [36mhudi[0;1m ---[m
+[[1;34mINFO[m] You have 0 Checkstyle violations.
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m-----------------< [0;36morg.apache.hudi:hudi-tests-common[0;1m >------------------[m
+[[1;34mINFO[m] [1mBuilding hudi-tests-common 1.3.0-SNAPSHOT                         [2/23][m
+[[1;34mINFO[m] [1m--------------------------------[ jar ]---------------------------------[m
+[[1;33mWARNING[m] The artifact org.slf4j:slf4j-log4j12:jar:2.0.7 has been relocated to org.slf4j:slf4j-reload4j:jar:2.0.7
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-enforcer-plugin:3.6.2:enforce[m [1m(enforce-maven-version)[m @ [36mhudi-tests-common[0;1m ---[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-enforcer-plugin:3.6.2:enforce[m [1m(enforce-logging)[m @ [36mhudi-tests-common[0;1m ---[m
+[[1;34mINFO[m] Rule 0: org.apache.maven.enforcer.rules.dependency.BannedDependencies passed
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-enforcer-plugin:3.6.2:enforce[m [1m(enforce-versions)[m @ [36mhudi-tests-common[0;1m ---[m
+[[1;34mINFO[m] Rule 0: org.apache.maven.enforcer.rules.dependency.BannedDependencies passed
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-remote-resources-plugin:1.5:process[m [1m(process-resource-bundles)[m @ [36mhudi-tests-common[0;1m ---[m
+[[1;33mWARNING[m] While downloading org.slf4j:slf4j-log4j12:2.0.7
+  This artifact has been relocated to org.slf4j:slf4j-reload4j:2.0.7.
+
+
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:3.1.0:resources[m [1m(default-resources)[m @ [36mhudi-tests-common[0;1m ---[m
+[[1;34mINFO[m] Using 'UTF-8' encoding to copy filtered resources.
+[[1;34mINFO[m] Copying 3 resources
+[[1;34mINFO[m] Copying 3 resources
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.14.1:compile[m [1m(default-compile)[m @ [36mhudi-tests-common[0;1m ---[m
+[[1;34mINFO[m] No sources to compile
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-checkstyle-plugin:3.6.0:check[m [1m(default)[m @ [36mhudi-tests-common[0;1m ---[m
+[[1;34mINFO[m] You have 0 Checkstyle violations.
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mapache-rat-plugin:0.16.1:check[m [1m(default)[m @ [36mhudi-tests-common[0;1m ---[m
+[[1;33mWARNING[m] Configuration uses deprecated configuration.  Please upgrade to v0.17 configuration options
+[[1;34mINFO[m] Rat check: Summary over all files. Unapproved: 0, unknown: 0, generated: 0, approved: 4 licenses.
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:3.1.0:testResources[m [1m(default-testResources)[m @ [36mhudi-tests-common[0;1m ---[m
+[[1;34mINFO[m] Using 'UTF-8' encoding to copy filtered resources.
+[[1;34mINFO[m] skip non existing resourceDirectory /home/kavya/apache-hudi/hudi/hudi-tests-common/src/test/resources
+[[1;34mINFO[m] Copying 3 resources
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.14.1:testCompile[m [1m(default-testCompile)[m @ [36mhudi-tests-common[0;1m ---[m
+[[1;34mINFO[m] No sources to compile
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-surefire-plugin:3.5.4:test[m [1m(default-test)[m @ [36mhudi-tests-common[0;1m ---[m
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] [1mReactor Summary for Hudi 1.3.0-SNAPSHOT:[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] Hudi ............................................... [1;32mSUCCESS[m [  1.973 s]
+[[1;34mINFO[m] hudi-tests-common .................................. [1;31mFAILURE[m [  3.681 s]
+[[1;34mINFO[m] hudi-io ............................................ [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-common ........................................ [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-hadoop-common ................................. [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-timeline-service .............................. [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-hadoop-mr ..................................... [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-client ........................................ [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-client-common ................................. [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-spark-client .................................. [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-sync-common ................................... [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-hive-sync ..................................... [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-spark-datasource .............................. [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-spark-common_2.12 ............................. [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-spark3-common ................................. [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-spark3.5.x_2.12 ............................... [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-java-client ................................... [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-spark_2.12 .................................... [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-aws ........................................... [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-gcp ........................................... [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-utilities_2.12 ................................ [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-utilities-bundle_2.12 ......................... [1;33mSKIPPED[m
+[[1;34mINFO[m] hudi-cli ........................................... [1;33mSKIPPED[m
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] [1;31mBUILD FAILURE[m
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] Total time:  6.904 s
+[[1;34mINFO[m] Finished at: 2026-05-20T12:12:07Z
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;31mERROR[m] Failed to execute goal [32morg.apache.maven.plugins:maven-surefire-plugin:3.5.4:test[m [1m(default-test)[m on project [36mhudi-tests-common[m: [1;31mNo tests matching pattern "skip" were executed! (Set -Dsurefire.failIfNoSpecifiedTests=false to ignore this error.)[m -> [1m[Help 1][m
+[[1;31mERROR[m] 
+[[1;31mERROR[m] To see the full stack trace of the errors, re-run Maven with the [1m-e[m switch.
+[[1;31mERROR[m] Re-run Maven using the [1m-X[m switch to enable full debug logging.
+[[1;31mERROR[m] 
+[[1;31mERROR[m] For more information about the errors and possible solutions, please read the following articles:
+[[1;31mERROR[m] [1m[Help 1][m http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+[[1;31mERROR[m] 
+[[1;31mERROR[m] After correcting the problems, you can resume the build with the command
+[[1;31mERROR[m]   [1mmvn <args> -rf :hudi-tests-common[m

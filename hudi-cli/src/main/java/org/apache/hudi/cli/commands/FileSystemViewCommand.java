@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.NumericUtils;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -151,10 +152,16 @@ public class FileSystemViewCommand {
       fileSliceStream = fsView.getLatestFileSlices(partition);
     } else {
       if (maxInstant.isEmpty()) {
-        maxInstant = HoodieCLI.getTableMetaClient().getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
-            .get().requestedTime();
+        Option<HoodieInstant> lastInstant = HoodieCLI.getTableMetaClient().getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant();
+        if (lastInstant.isPresent()) {
+          maxInstant = lastInstant.get().requestedTime();
+        }
       }
-      fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(partition, maxInstant);
+      if (maxInstant.isEmpty()) {
+        fileSliceStream = fsView.getLatestFileSlices(partition);
+      } else {
+        fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(partition, maxInstant);
+      }
     }
 
     fileSliceStream.forEach(fs -> {

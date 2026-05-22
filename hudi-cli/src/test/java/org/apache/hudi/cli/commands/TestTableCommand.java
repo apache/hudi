@@ -86,7 +86,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     tableName = tableName();
     tablePath = tablePath(tableName);
     metaPath = Paths.get(tablePath, METAFOLDER_NAME).toString();
-    archivePath = Paths.get(metaPath, HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue()).toString();
+    archivePath = Paths.get(metaPath, HoodieTableConfig.TIMELINE_PATH.defaultValue(), HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue()).toString();
   }
 
   /**
@@ -136,11 +136,11 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
 
     // Test meta
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    assertEquals(archivePath, client.getArchivePath());
+    assertEquals(archivePath, client.getArchivePath().toString());
     assertEquals(tablePath, client.getBasePath().toString());
     assertEquals(metaPath, client.getMetaPath().toString());
     assertEquals(HoodieTableType.COPY_ON_WRITE, client.getTableType());
-    assertEquals(new Integer(1), client.getTimelineLayoutVersion().getVersion());
+    assertEquals(org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.CURR_VERSION, client.getTimelineLayoutVersion().getVersion());
 
     HoodieTimeGeneratorConfig timeGeneratorConfig = HoodieCLI.timeGeneratorConfig;
     assertEquals(tablePath, timeGeneratorConfig.getBasePath());
@@ -251,7 +251,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
         + "           \"name\" : \"val\",\n"
         + "           \"type\" : [ \"null\", \"string\" ],\n"
         + "           \"default\" : null\n"
-        + "         }]};";
+        + "         }]}";
 
     generateData(schemaStr);
 
