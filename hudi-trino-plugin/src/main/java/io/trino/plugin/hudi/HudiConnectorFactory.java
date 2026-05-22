@@ -30,9 +30,9 @@ import io.trino.plugin.base.classloader.ClassLoaderSafeConnectorSplitManager;
 import io.trino.plugin.base.classloader.ClassLoaderSafeNodePartitioningProvider;
 import io.trino.plugin.base.jmx.MBeanServerModule;
 import io.trino.plugin.base.session.SessionPropertiesProvider;
-import io.trino.plugin.hive.NodeVersion;
 import io.trino.plugin.hive.metastore.HiveMetastoreModule;
 import io.trino.spi.NodeManager;
+import io.trino.spi.NodeVersion;
 import io.trino.spi.catalog.CatalogName;
 import io.trino.spi.classloader.ThreadContextClassLoader;
 import io.trino.spi.connector.Connector;
@@ -80,7 +80,7 @@ public class HudiConnectorFactory
                     new MBeanModule(),
                     new JsonModule(),
                     new HudiModule(),
-                    new HiveMetastoreModule(Optional.empty()),
+                    new HiveMetastoreModule(Optional.empty(), false),
                     new HudiFileSystemModule(catalogName, context),
                     new MBeanServerModule(),
                     module.orElse(EMPTY_MODULE),
@@ -123,21 +123,19 @@ public class HudiConnectorFactory
             extends AbstractConfigurationAwareModule
     {
         private final String catalogName;
-        private final NodeManager nodeManager;
-        private final OpenTelemetry openTelemetry;
+        private final ConnectorContext context;
 
         public HudiFileSystemModule(String catalogName, ConnectorContext context)
         {
             this.catalogName = requireNonNull(catalogName, "catalogName is null");
-            this.nodeManager = context.getNodeManager();
-            this.openTelemetry = context.getOpenTelemetry();
+            this.context = requireNonNull(context, "context is null");
         }
 
         @Override
         protected void setup(Binder binder)
         {
             boolean metadataCacheEnabled = buildConfigObject(HudiConfig.class).isMetadataCacheEnabled();
-            install(new FileSystemModule(catalogName, nodeManager, openTelemetry, metadataCacheEnabled));
+            install(new FileSystemModule(catalogName, context, metadataCacheEnabled));
         }
     }
 }

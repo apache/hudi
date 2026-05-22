@@ -31,7 +31,22 @@
     <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
     <skipTests>true</skipTests>
+    <dep.trino.version>${trino.connector.version}</dep.trino.version>
   </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- Import Trino's parent POM as a BOM so the SPI artifacts declared as
+           provided below resolve to versions matching the connector code. -->
+      <dependency>
+        <groupId>io.trino</groupId>
+        <artifactId>trino-root</artifactId>
+        <version>${dep.trino.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <build>
     <plugins>
@@ -170,14 +185,95 @@
   <dependencies>
     <!-- Hoodie -->
     <dependency>
+      <!-- Plugin classes are shaded into this bundle. Its compile-scope deps on Trino,
+           Airlift, Jackson, Guice, OpenTelemetry are SPI-provided at Trino runtime and
+           must NOT leak into the bundle's transitive closure (trino-maven-plugin's
+           check-spi-dependencies enforces this on the consumer side). -->
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-trino-plugin</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.module</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.datatype</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.airlift</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.trino</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.google.inject</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.opentelemetry</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.openjdk.jol</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <!-- The connector does not use rocksdb (Hudi's local state stores), arrow, or lance.
+             These leak via hudi-common's compile deps and bloat the Trino server tar. -->
+        <exclusion>
+          <groupId>org.rocksdb</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.arrow</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.lance</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
+      <!-- Use the plain hudi-hadoop-mr artifact (already listed in the shade artifactSet).
+           hudi-hadoop-mr-bundle pulled lance-core, arrow-dataset, and rocksdbjni transitively
+           (~280MB), which the connector does not use and which blew the trino-server tar size cap. -->
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hadoop-mr-bundle</artifactId>
+      <artifactId>hudi-hadoop-mr</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.module</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.datatype</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.rocksdb</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.arrow</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.lance</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
@@ -188,12 +284,56 @@
           <artifactId>guava</artifactId>
           <groupId>com.google.guava</groupId>
         </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.module</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.datatype</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <!-- hudi-timeline-service pulls Jetty + javax.servlet-api, banned by Trino's enforcer.
+             The Trino connector does not use the timeline service. -->
+        <exclusion>
+          <groupId>org.apache.hudi</groupId>
+          <artifactId>hudi-timeline-service</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-java-client</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.module</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.datatype</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.rocksdb</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.arrow</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.lance</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- Kryo -->
@@ -218,6 +358,16 @@
       <artifactId>avro</artifactId>
       <version>${avro.version}</version>
       <scope>compile</scope>
+      <exclusions>
+        <!-- Jackson is SPI-provided by Trino at runtime. Avro's transitive jackson-core/databind
+             must not leak into consumers (check-spi-dependencies). The shaded avro classes within
+             this bundle reference unrelocated com.fasterxml.jackson.* which the Trino runtime
+             supplies. -->
+        <exclusion>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!--protobuf needs to be shaded because HBase 1.2.3 + native HFile reader needs it at runtime,
@@ -227,6 +377,46 @@
       <artifactId>protobuf-java</artifactId>
       <version>${proto.version}</version>
       <scope>${trino.bundle.bootstrap.scope}</scope>
+    </dependency>
+
+    <!-- Trino SPI artifacts. Declared here as provided to override the compile-scope
+         transitives pulled in via hudi-trino-plugin -> trino-hive/etc. Trino's server
+         supplies these at runtime; bundling them would cause split-classloader bugs
+         and breaks the trino-maven-plugin:check-spi-dependencies enforcer. -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-annotations</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.airlift</groupId>
+      <artifactId>slice</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.opentelemetry</groupId>
+      <artifactId>opentelemetry-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.opentelemetry</groupId>
+      <artifactId>opentelemetry-api-incubator</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.opentelemetry</groupId>
+      <artifactId>opentelemetry-context</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.trino</groupId>
+      <artifactId>trino-spi</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.openjdk.jol</groupId>
+      <artifactId>jol-core</artifactId>
+      <scope>provided</scope>
     </dependency>
 
   </dependencies>

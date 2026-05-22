@@ -18,6 +18,7 @@ import io.trino.plugin.hudi.util.HudiAvroSerializer;
 import io.trino.plugin.hudi.util.SynthesizedColumnHandler;
 import io.trino.spi.Page;
 import io.trino.spi.connector.ConnectorPageSource;
+import io.trino.spi.connector.SourcePage;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.AvroRecordContext;
 import org.apache.hudi.common.config.RecordMergeMode;
@@ -119,8 +120,10 @@ public class HudiTrinoReaderContext
                         return false;
                     }
 
-                    // Get next page and reset currentPosition
-                    currentPage = pageSource.getNextPage();
+                    // Get next page and reset currentPosition. Unwrap the SourcePage to the
+                    // underlying Page so the serializer's Block accessors keep working.
+                    SourcePage nextSourcePage = pageSource.getNextSourcePage();
+                    currentPage = nextSourcePage == null ? null : nextSourcePage.getPage();
                     currentPosition = 0;
 
                     // If no more pages are available
