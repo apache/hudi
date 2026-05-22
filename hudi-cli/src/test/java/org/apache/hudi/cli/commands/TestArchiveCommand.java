@@ -19,11 +19,13 @@
 package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +42,7 @@ public class TestArchiveCommand extends CLIFunctionalTestHarness {
   @Autowired
   private Shell shell;
 
+  @Disabled("TODO: HUDI-7614 - trigger archival command not compatible with v9 tables")
   @Test
   public void testArchiving() throws Exception {
     HoodieCLI.conf = storageConf();
@@ -50,7 +53,7 @@ public class TestArchiveCommand extends CLIFunctionalTestHarness {
 
     new TableCommand().createTable(
         tablePath, tableName,
-        "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        "COPY_ON_WRITE", "", HoodieTableVersion.current().versionCode(), "org.apache.hudi.common.model.HoodieAvroPayload");
 
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.cli.commands;
 
+import org.apache.hudi.common.table.HoodieTableVersion;
+
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
@@ -32,7 +34,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -80,7 +81,7 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
     String tablePath = tablePath(tableName);
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.MERGE_ON_READ.name(),
-        "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        "", HoodieTableVersion.current().versionCode(), "org.apache.hudi.common.model.HoodieAvroPayload");
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
     //Create some commits files and base files
     Map<String, String> partitionAndFileId = new HashMap<String, String>() {
