@@ -109,6 +109,7 @@ public class DynamicBucketAssignFunction
     this.indexBackend = isInsertOverwrite
         ? new DummyPartitionedIndexBackend()
         : new RecordLevelIndexBackend(conf, (partitionPath, recordKey, fileId) -> isRecordKeyOfThisTask(recordKey));
+    this.indexBackend.registerMetrics(getRuntimeContext().getMetricGroup());
   }
 
   private boolean isRecordKeyOfThisTask(String recordKey) {
