@@ -132,7 +132,7 @@
     <presto.version>0.273</presto.version>
     <trino.version>481</trino.version>
     <!-- Trino SPI version that hudi-trino-plugin (RFC-105) compiles against. -->
-    <trino.connector.version>472</trino.connector.version>
+    <trino.connector.version>480</trino.connector.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
     <orc.spark.version>1.6.0</orc.spark.version>
