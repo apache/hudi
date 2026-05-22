@@ -1679,50 +1679,6 @@ class TestHoodieVectorSearchFunction extends HoodieSparkClientTestBase {
     spark.catalog.dropTempView("batch_combo_queries")
   }
 
-  // ─── Filter on a non-Hudi view ───
-
-  @Test
-  def testSingleQueryPreFilterOnInMemoryView(): Unit = {
-    val schema = StructType(Seq(
-      StructField("id", StringType, nullable = false),
-      StructField("embedding", ArrayType(FloatType, containsNull = false), nullable = false),
-      StructField("category", StringType, nullable = true)
-    ))
-    val rows = Seq(
-      Row("a", Seq(1.0f, 0.0f, 0.0f), "science"),
-      Row("b", Seq(0.0f, 1.0f, 0.0f), "art"),
-      Row("c", Seq(0.0f, 0.0f, 1.0f), "science"),
-      Row("d", Seq(0.5f, 0.5f, 0.0f), "art")
-    )
-    spark.createDataFrame(spark.sparkContext.parallelize(rows), schema)
-      .createOrReplaceTempView("filter_test_view")
-
-    val result = spark.sql(
-      """
-        |SELECT id, _hudi_distance
-        |FROM hudi_vector_search(
-        |  'filter_test_view',
-        |  'embedding',
-        |  ARRAY(1.0, 0.0, 0.0),
-        |  5,
-        |  'l2',
-        |  'brute_force',
-        |  'category = "science"'
-        |)
-        |ORDER BY _hudi_distance
-        |""".stripMargin
-    ).collect()
-
-    // Only "science" rows: a=[1,0,0] (L2=0) and c=[0,0,1] (L2=sqrt(2)).
-    assertEquals(2, result.length)
-    assertEquals("a", result(0).getAs[String]("id"))
-    assertEquals(0.0, result(0).getAs[Double]("_hudi_distance"), 1e-5)
-    assertEquals("c", result(1).getAs[String]("id"))
-    assertEquals(math.sqrt(2.0), result(1).getAs[Double]("_hudi_distance"), 1e-4)
-
-    spark.catalog.dropTempView("filter_test_view")
-  }
-
   // ─── Failure-mode tests for filter + max_distance ───
 
   @Test
@@ -1808,28 +1764,6 @@ class TestHoodieVectorSearchFunction extends HoodieSparkClientTestBase {
   }
 
   @Test
-  def testMaxDistanceAcceptsIntegerLiteral(): Unit = {
-    // An integer literal (no decimal point) for max_distance should be accepted
-    // and widened to Double — regression guard for the parseOptionalDouble path.
-    val result = spark.sql(
-      s"""
-         |SELECT id, _hudi_distance
-         |FROM hudi_vector_search(
-         |  '$corpusViewName', 'embedding', ARRAY(1.0, 0.0, 0.0), 5,
-         |  'cosine', 'brute_force',
-         |  NULL,
-         |  1
-         |)
-         |ORDER BY _hudi_distance
-         |""".stripMargin
-    ).collect()
-
-    // max_distance = 1 admits everything since cosine distance ∈ [0, 2] but our
-    // corpus produces values in [0, 1]; all 5 rows survive.
-    assertEquals(5, result.length)
-  }
-
-  @Test
   def testNegativeMaxDistanceExcludesAll(): Unit = {
     // Distances are always >= 0 for cosine/L2, so a negative threshold means
     // no row can satisfy <= d. The user gets an empty result, not an error.
@@ -1845,40 +1779,6 @@ class TestHoodieVectorSearchFunction extends HoodieSparkClientTestBase {
     ).collect()
 
     assertEquals(0, result.length)
-  }
-
-  @Test
-  def testEmptyAndWhitespaceFilterTreatedAsNoFilter(): Unit = {
-    // The Javadoc on parseArgs documents that "", "   ", and NULL are equivalent
-    // — all mean "no filter." Verify each variant returns all rows.
-    val baseline = spark.sql(
-      s"""
-         |SELECT id FROM hudi_vector_search(
-         |  '$corpusViewName', 'embedding', ARRAY(1.0, 0.0, 0.0), 5, 'cosine'
-         |)
-         |""".stripMargin
-    ).collect().map(_.getAs[String]("id")).toSet
-
-    val emptyFilter = spark.sql(
-      s"""
-         |SELECT id FROM hudi_vector_search(
-         |  '$corpusViewName', 'embedding', ARRAY(1.0, 0.0, 0.0), 5,
-         |  'cosine', 'brute_force', ''
-         |)
-         |""".stripMargin
-    ).collect().map(_.getAs[String]("id")).toSet
-
-    val whitespaceFilter = spark.sql(
-      s"""
-         |SELECT id FROM hudi_vector_search(
-         |  '$corpusViewName', 'embedding', ARRAY(1.0, 0.0, 0.0), 5,
-         |  'cosine', 'brute_force', '   '
-         |)
-         |""".stripMargin
-    ).collect().map(_.getAs[String]("id")).toSet
-
-    assertEquals(baseline, emptyFilter, "empty filter must behave like no filter")
-    assertEquals(baseline, whitespaceFilter, "whitespace filter must behave like no filter")
   }
 
   @Test

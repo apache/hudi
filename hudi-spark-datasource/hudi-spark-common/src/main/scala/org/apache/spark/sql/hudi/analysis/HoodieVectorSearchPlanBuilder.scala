@@ -66,8 +66,7 @@ trait VectorSearchAlgorithm {
    * @param k              number of nearest neighbors to return
    * @param metric         distance metric (COSINE, L2, DOT_PRODUCT)
    * @param filter         optional SQL predicate applied to the corpus before distance computation,
-   *                       enabling Hudi partition pruning and data skipping. String literals inside
-   *                       the predicate must use double quotes (e.g. {@code label = "z-axis"})
+   *                       String literals inside the predicate must use double quotes (e.g. {@code label = "z-axis"})
    *                       because the filter is passed as a single-quoted TVF argument and
    *                       Spark's lexer does not support {@code ''} as an escape sequence
    *                       inside string literals.
@@ -95,8 +94,7 @@ trait VectorSearchAlgorithm {
    * @param k                  number of nearest neighbors per query
    * @param metric             distance metric (COSINE, L2, DOT_PRODUCT)
    * @param filter             optional SQL predicate applied to the corpus before distance
-   *                           computation, enabling Hudi partition pruning and data skipping and
-   *                           shrinking cross-join cardinality. See [[buildSingleQueryPlan]] for
+   *                           computation, and shrinking cross-join cardinality. See [[buildSingleQueryPlan]] for
    *                           quoting requirements.
    * @param maxDistance        optional distance threshold; results exceeding this value are
    *                           excluded before per-query top-K selection, reducing shuffle volume.
@@ -252,8 +250,7 @@ object HoodieVectorSearchPlanBuilder {
  * (tens to low hundreds of queries) against moderate corpora.
  *
  * <p>Both modes support an optional {@code filter} predicate (applied to the corpus before
- * distance computation, enabling Hudi partition pruning and data skipping) and an optional
- * {@code maxDistance} threshold (results beyond this distance are excluded before top-K
+ * distance computation, and an optional * {@code maxDistance} threshold (results beyond this distance are excluded before top-K
  * selection, reducing shuffle and sort volume).
  */
 object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
@@ -292,8 +289,7 @@ object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
     validateQueryVectorDimension(corpusDf, embeddingCol, queryVector.length)
 
     val elemType = getElementType(corpusDf, embeddingCol)
-    // Apply pre-filter before distance computation to enable Hudi partition pruning
-    // and data skipping, reducing the number of rows that need distance computation.
+    // Apply pre-filter before distance computation to enable reducing the number of rows that need distance computation.
     var filteredDf = corpusDf.filter(col(embeddingCol).isNotNull)
     filter.foreach(f => filteredDf = applyFilter(filteredDf, f))
 
