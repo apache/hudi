@@ -2285,12 +2285,12 @@
       </modules>
     </profile>
     <profile>
-      <!-- RFC-105: builds the Trino connector and its publishable shaded bundle.
-           Excluded from default builds because it requires JDK 25 and the Trino SPI. -->
+      <!-- RFC-105: builds the Trino connector (org.apache.hudi:hudi-trino), a regular non-shaded
+           jar relying on Trino's URLClassLoader plugin isolation. Excluded from default builds
+           because it requires JDK 25 and the Trino SPI. -->
       <id>hudi-trino</id>
       <modules>
         <module>hudi-trino-plugin</module>
-        <module>packaging/hudi-trino-bundle</module>
       </modules>
     </profile>
     <profile>
