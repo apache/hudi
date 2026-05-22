@@ -759,6 +759,31 @@ public class FSUtils {
     return s3aUrl.replaceFirst("(?i)^s3a://", "s3://");
   }
 
+  /**
+   * Canonicalize a Hudi table base path for use as the input to implicit lock-key derivation.
+   *
+   * <p>Implicit lock providers (DynamoDB and Zookeeper variants) hash this string to choose the
+   * lock row / znode for a table. Two callers writing to the same table must produce the same
+   * hash, so any benign formatting drift in the basePath has to be eliminated before hashing.
+   * This method trims surrounding whitespace, normalizes s3a:// to s3://, then forces exactly
+   * one trailing slash. Inner double slashes are intentionally preserved.
+   */
+  public static String normalizeBasePathForLocking(String basePath) {
+    if (basePath == null) {
+      throw new IllegalArgumentException("Hudi table base path cannot be null");
+    }
+    String trimmed = basePath.trim();
+    if (trimmed.isEmpty()) {
+      throw new IllegalArgumentException("Hudi table base path cannot be empty");
+    }
+    String schemeNormalized = s3aToS3(trimmed);
+    int end = schemeNormalized.length();
+    while (end > 0 && schemeNormalized.charAt(end - 1) == '/') {
+      end--;
+    }
+    return schemeNormalized.substring(0, end) + "/";
+  }
+
   public static StoragePathInfo toStoragePathInfo(HoodieFileStatus fileStatus) {
     if (null == fileStatus) {
       return null;

@@ -689,9 +689,33 @@ public class TestFSUtils extends HoodieCommonTestHarness {
       "gs://my-bucket/path/to/s3a://object",
       "gs://my-bucket s3a://my-object",
   })
-  
+
   void testUriDoesNotChange(String uri) {
     assertEquals(uri, FSUtils.s3aToS3(uri));
+  }
+
+  @Test
+  void testNormalizeBasePathForLocking() {
+    // Canonical form ends with exactly one trailing slash.
+    assertEquals("s3://my-bucket/path/", FSUtils.normalizeBasePathForLocking("s3://my-bucket/path"));
+    assertEquals("s3://my-bucket/path/", FSUtils.normalizeBasePathForLocking("s3://my-bucket/path/"));
+    // Multiple trailing slashes collapse to one.
+    assertEquals("s3://my-bucket/path/", FSUtils.normalizeBasePathForLocking("s3://my-bucket/path///"));
+    // s3a:// is normalized to s3:// (delegates to s3aToS3).
+    assertEquals("s3://my-bucket/path/", FSUtils.normalizeBasePathForLocking("s3a://my-bucket/path"));
+    assertEquals("s3://my-bucket/path/", FSUtils.normalizeBasePathForLocking("S3A://my-bucket/path/"));
+    // Whitespace surrounding the path is trimmed.
+    assertEquals("s3://my-bucket/path/", FSUtils.normalizeBasePathForLocking("  s3://my-bucket/path  "));
+    assertEquals("s3://my-bucket/path/", FSUtils.normalizeBasePathForLocking("\ts3a://my-bucket/path/\n"));
+    // Non-S3 schemes pass through (still get trailing-slash normalization).
+    assertEquals("gs://my-bucket/path/", FSUtils.normalizeBasePathForLocking("gs://my-bucket/path"));
+    assertEquals("gs://my-bucket/path/", FSUtils.normalizeBasePathForLocking("gs://my-bucket/path//"));
+    // Inner consecutive slashes are intentionally NOT touched (could be a real S3 key).
+    assertEquals("s3://my-bucket//inner/path/", FSUtils.normalizeBasePathForLocking("s3://my-bucket//inner/path"));
+    // Null and empty are rejected.
+    assertThrows(IllegalArgumentException.class, () -> FSUtils.normalizeBasePathForLocking(null));
+    assertThrows(IllegalArgumentException.class, () -> FSUtils.normalizeBasePathForLocking(""));
+    assertThrows(IllegalArgumentException.class, () -> FSUtils.normalizeBasePathForLocking("   "));
   }
 
   private StoragePath getHoodieTempDir() {
