@@ -1,3 +1,20 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
 # hudi-trino-bundle
 
 Shaded jar that ships the Trino-Hudi connector. Published as `org.apache.hudi:hudi-trino-bundle` (RFC-105). The Trino-side `HudiPlugin` shim depends on this artifact and loads `io.trino.plugin.hudi.HudiConnectorFactory` from it.
@@ -68,3 +85,19 @@ JAVA_HOME=$(/usr/libexec/java_home -v 25) \
 ```
 
 For release candidates, include this bundle in the RC validation step alongside the other published Hudi bundles.
+
+### Before publishing: switch Trino version off SNAPSHOT
+
+The root pom currently sets `<trino.connector.version>480-SNAPSHOT</trino.connector.version>` because the connector tests depend on `trino-*-tests.jar` artifacts, and Trino only publishes the test-jar classifier for snapshot builds (not for tagged releases). Shipping a bundle whose installed POM references a Trino SNAPSHOT version is awkward for downstream consumers.
+
+Before cutting a release, split the property so main jars resolve to a Trino release while test-jars stay on snapshot:
+
+1. Add a sibling property to the root pom:
+   ```
+   <trino.connector.version>480</trino.connector.version>
+   <trino.connector.test.version>480-SNAPSHOT</trino.connector.test.version>
+   ```
+2. In `hudi-trino-plugin/pom.xml`, change each `<type>test-jar</type>` dependency to use `${dep.trino.test.version}` instead of inheriting from the main version.
+3. Verify with `mvn dependency:tree -Phudi-trino -pl hudi-trino-plugin` that compile deps resolve at `480` and test deps at `480-SNAPSHOT`.
+
+Alternative if the release pipeline must not touch SNAPSHOT artifacts at all: build with `-Dmaven.test.skip=true` so test-jar deps are never resolved. Trade-off is no unit test run during the release build; CI should still exercise tests separately under the snapshot path.

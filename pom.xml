@@ -86,7 +86,7 @@
     <maven-surefire-plugin.version>3.5.4</maven-surefire-plugin.version>
     <maven-failsafe-plugin.version>3.5.4</maven-failsafe-plugin.version>
     <!-- bump to 3.5.3 to fix MSHADE-461 -->
-    <maven-shade-plugin.version>3.5.3</maven-shade-plugin.version>
+    <maven-shade-plugin.version>3.6.2</maven-shade-plugin.version>
     <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
     <maven-compiler-plugin.version>3.14.1</maven-compiler-plugin.version>
     <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
@@ -129,8 +129,12 @@
     <hive.avro.version>1.11.4</hive.avro.version>
     <presto.version>0.273</presto.version>
     <trino.version>390</trino.version>
-    <!-- Trino SPI version that hudi-trino-plugin (RFC-105) compiles against. -->
+    <!-- Trino SPI version that hudi-trino-plugin main code compiles against. -->
     <trino.connector.version>480</trino.connector.version>
+    <!-- Trino version used only for *-tests.jar classifier deps. Trino does not publish
+         test-jars for tagged releases, so this tracks a snapshot. Built locally via the
+         Trino source tree; consumers running tests need the snapshot in their m2. -->
+    <trino.connector.test.version>480-SNAPSHOT</trino.connector.test.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
     <orc.spark.version>1.6.0</orc.spark.version>

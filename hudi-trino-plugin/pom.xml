@@ -33,6 +33,9 @@
     <properties>
         <!-- Trino SPI / library version this connector compiles against. Bumped via root pom. -->
         <dep.trino.version>${trino.connector.version}</dep.trino.version>
+        <!-- Tests reuse Trino's internal test scaffolding, which only ships under the
+             test-jar classifier in snapshot builds. See root pom for details. -->
+        <dep.trino.test.version>${trino.connector.test.version}</dep.trino.test.version>
         <trino.parquet.version>1.15.2</trino.parquet.version>
         <!-- Connector requires JDK 25 to compile and run (matches Trino runtime requirement). -->
         <hudi.trino.java.version>25</hudi.trino.java.version>
@@ -340,6 +343,7 @@
         <dependency>
             <groupId>io.trino</groupId>
             <artifactId>trino-filesystem</artifactId>
+            <version>${dep.trino.test.version}</version>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
@@ -353,6 +357,7 @@
         <dependency>
             <groupId>io.trino</groupId>
             <artifactId>trino-hive</artifactId>
+            <version>${dep.trino.test.version}</version>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
@@ -366,6 +371,7 @@
         <dependency>
             <groupId>io.trino</groupId>
             <artifactId>trino-main</artifactId>
+            <version>${dep.trino.test.version}</version>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
@@ -380,7 +386,7 @@
             <!-- BOM does not manage test-jar coordinate; declare the version explicitly. -->
             <groupId>io.trino</groupId>
             <artifactId>trino-spi</artifactId>
-            <version>${dep.trino.version}</version>
+            <version>${dep.trino.test.version}</version>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>

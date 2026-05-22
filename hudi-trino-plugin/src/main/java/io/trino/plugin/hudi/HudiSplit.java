@@ -80,7 +80,7 @@ public class HudiSplit
         this.cachingHostAddresses = requireNonNull(cachingHostAddresses, "cachingHostAddresses is null");
     }
 
-    @Override
+    // Trino 480 removed getSplitInfo from ConnectorSplit. Method retained for local diagnostics.
     public Map<String, String> getSplitInfo()
     {
         return ImmutableMap.<String, String>builder()
