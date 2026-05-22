@@ -84,10 +84,8 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
     int javaVersion = 0;
     try {
       String specVersion = System.getProperty("java.specification.version");
-      // Pre-Java 9: "1.X" format; Java 9+: "11", "17", "21", etc.
-      javaVersion = specVersion.startsWith("1.")
-          ? Integer.parseInt(specVersion.split("\\.")[1])
-          : Integer.parseInt(specVersion.split("\\.")[0]);
+      // "1.X" means Java 8 (Hudi's minimum, always < 11); Java 9+ uses plain major version.
+      javaVersion = specVersion.startsWith("1.") ? 8 : Integer.parseInt(specVersion.split("\\.")[0]);
     } catch (NumberFormatException e) {
       // Ignore, treat as pre-11
     }
