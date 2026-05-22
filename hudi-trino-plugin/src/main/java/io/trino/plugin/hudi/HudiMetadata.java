@@ -47,8 +47,8 @@ import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.statistics.Estimate;
 import io.trino.spi.statistics.TableStatistics;
 import io.trino.spi.type.TypeManager;
-import org.apache.avro.Schema;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
@@ -163,7 +163,7 @@ public class HudiMetadata
         String inputFormat = table.getStorage().getStorageFormat().getInputFormat();
         HoodieTableType hoodieTableType = HudiTableTypeUtils.fromInputFormat(inputFormat);
         Lazy<HoodieTableMetaClient> lazyMetaClient = Lazy.lazily(() -> buildTableMetaClient(fileSystem, tableName.toString(), basePath));
-        Optional<Lazy<Schema>> hudiTableSchema = isResolveColumnNameCasingEnabled(session) ?
+        Optional<Lazy<HoodieSchema>> hudiTableSchema = isResolveColumnNameCasingEnabled(session) ?
                 Optional.of(Lazy.lazily(() -> getLatestTableSchema(lazyMetaClient.get(), tableName.getTableName()))) : Optional.empty();
 
         return new HudiTableHandle(

@@ -53,6 +53,7 @@ import io.trino.spi.predicate.TupleDomain;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -223,19 +224,19 @@ public class HudiPageSourceProvider
                 dataColumnHandles,
                 hudiMetaAndDataColumnHandles,
                 synthesizedColumnHandler);
-        Schema dataSchema =
+        HoodieSchema dataSchema =
                 Optional.ofNullable(hudiTableHandle.getTableSchema())
                         .orElseGet(() -> getLatestTableSchema(metaClient, hudiTableHandle.getTableName()));
 
-        // Construct an Avro schema for log file reader
-        Schema requestedSchema = constructSchema(dataSchema, hudiMetaAndDataColumnHandles.stream().map(HiveColumnHandle::getName).toList());
+        // constructSchema operates on Avro schema to assemble the requested schema for the log file reader.
+        Schema requestedSchema = constructSchema(dataSchema.toAvroSchema(), hudiMetaAndDataColumnHandles.stream().map(HiveColumnHandle::getName).toList());
         HoodieFileGroupReader<IndexedRecord> fileGroupReader =
                 HoodieFileGroupReader.<IndexedRecord>newBuilder()
                         .withReaderContext(readerContext)
                         .withHoodieTableMetaClient(metaClient)
                         .withFileSlice(convertToFileSlice(hudiSplit, hudiTableHandle.getBasePath()))
                         .withDataSchema(dataSchema)
-                        .withRequestedSchema(requestedSchema)
+                        .withRequestedSchema(HoodieSchema.fromAvroSchema(requestedSchema))
                         .withLatestCommitTime(hudiTableHandle.getLatestCommitTime())
                         .withProps(metaClient.getTableConfig().getProps())
                         .withShouldUseRecordPosition(false)
