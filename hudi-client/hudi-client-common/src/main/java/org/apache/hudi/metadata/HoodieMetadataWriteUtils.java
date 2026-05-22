@@ -87,7 +87,6 @@ import org.apache.hudi.util.Lazy;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -145,7 +144,7 @@ public class HoodieMetadataWriteUtils {
   // built from scratch and does not otherwise inherit HoodieCommonConfig / HoodieMemoryConfig
   // values, so without explicit propagation user overrides set on the data-table write
   // config are silently ignored by the MDT writer/compactor.
-  private static final List<ConfigProperty<?>> MDT_INHERITED_SPILLABLE_MAP_CONFIGS = Arrays.asList(
+  private static final List<ConfigProperty<?>> MDT_INHERITED_SPILLABLE_MAP_CONFIGS = List.of(
       HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE,
       HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED,
       HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH,
