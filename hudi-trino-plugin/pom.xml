@@ -59,10 +59,12 @@
         <dependency>
             <!-- Required for compilation: HoodieRecord implements KryoSerializable,
                  so the compiler needs Kryo on classpath to verify the class hierarchy
-                 when loading HoodieRecord for static imports -->
+                 when loading HoodieRecord for static imports.
+                 Explicit compile scope overrides the Trino BOM, which manages kryo at test scope. -->
             <groupId>com.esotericsoftware</groupId>
             <artifactId>kryo</artifactId>
             <version>4.0.2</version>
+            <scope>compile</scope>
         </dependency>
 
         <dependency>
