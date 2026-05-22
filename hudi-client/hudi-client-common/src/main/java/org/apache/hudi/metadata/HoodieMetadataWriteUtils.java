@@ -21,6 +21,9 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.FailOnFirstErrorWriteStatus;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTableServiceManagerConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
@@ -84,6 +87,7 @@ import org.apache.hudi.util.Lazy;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -135,6 +139,21 @@ public class HoodieMetadataWriteUtils {
   // ever. Hence, we use a very large basefile size in metadata table. The actual size of the HFiles created will
   // eventually depend on the number of file groups selected for each partition (See estimateFileGroupCount function)
   private static final long MDT_MAX_HFILE_SIZE_BYTES = 10 * 1024 * 1024 * 1024L; // 10GB
+
+  // Configs that control the spillable-map machinery used by the MDT writer and compactor
+  // (ExternalSpillableMap + HoodieMergedLogRecordScanner). The MDT HoodieWriteConfig is
+  // built from scratch and does not otherwise inherit HoodieCommonConfig / HoodieMemoryConfig
+  // values, so without explicit propagation user overrides set on the data-table write
+  // config are silently ignored by the MDT writer/compactor.
+  private static final List<ConfigProperty<?>> MDT_INHERITED_SPILLABLE_MAP_CONFIGS = Arrays.asList(
+      HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE,
+      HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED,
+      HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH,
+      HoodieMemoryConfig.MAX_MEMORY_FOR_COMPACTION,
+      HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION,
+      HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE,
+      HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE,
+      HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE);
 
   /**
    * Create a {@code HoodieWriteConfig} to use for the Metadata Table.
@@ -278,6 +297,21 @@ public class HoodieMetadataWriteUtils {
         .withWriteRecordPositionsEnabled(false)
         .withWriteConcurrencyMode(concurrencyMode)
         .withLockConfig(lockConfig);
+
+    // Inherit spillable-map / memory configs so user overrides (e.g.
+    // hoodie.common.spillable.diskmap.type=ROCKS_DB) actually reach the MDT
+    // writer/compactor. Guarded by containsKey so that configs without defaults
+    // (e.g. SPILLABLE_MAP_BASE_PATH, MAX_MEMORY_FOR_COMPACTION) aren't forged
+    // into "user-set" on the MDT side when the user hasn't set them.
+    Properties spillableMapProperties = new Properties();
+    Properties dataTableProps = writeConfig.getProps();
+    for (ConfigProperty<?> inheritedConfig : MDT_INHERITED_SPILLABLE_MAP_CONFIGS) {
+      if (dataTableProps.containsKey(inheritedConfig.key())) {
+        spillableMapProperties.setProperty(inheritedConfig.key(),
+            dataTableProps.getProperty(inheritedConfig.key()));
+      }
+    }
+    builder.withProperties(spillableMapProperties);
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();

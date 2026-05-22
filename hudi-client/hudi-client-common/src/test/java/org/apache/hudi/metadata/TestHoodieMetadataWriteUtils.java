@@ -23,12 +23,15 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.client.transaction.lock.StorageBasedLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedImplicitBasePathLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -498,6 +501,70 @@ public class TestHoodieMetadataWriteUtils {
         HoodieMetadataWriteUtils.createMetadataWriteConfig(
             writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.EIGHT));
     assertTrue(ex.getMessage().contains("only supported for built-in lock providers"));
+  }
+
+  @Test
+  public void testSpillableMapConfigPropagation() {
+    // Without any user overrides, the MDT write config should fall back to the same
+    // common-config defaults as the user write config (BITCASK + compression enabled).
+    HoodieWriteConfig writeConfigDefault = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .build();
+    HoodieWriteConfig metadataWriteConfigDefault = HoodieMetadataWriteUtils.createMetadataWriteConfig(
+        writeConfigDefault, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.SIX);
+    assertEquals(ExternalSpillableMap.DiskMapType.BITCASK,
+        metadataWriteConfigDefault.getCommonConfig().getSpillableDiskMapType());
+    assertTrue(metadataWriteConfigDefault.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
+
+    // Configs with noDefaultValue() must not be forged onto the MDT write config when the
+    // user didn't set them; otherwise IOUtils.getMaxMemoryPerCompaction would skip its
+    // fraction fallback and code paths reading SPILLABLE_MAP_BASE_PATH would see a
+    // hardcoded value rather than the inferred system default.
+    assertFalse(metadataWriteConfigDefault.getProps().containsKey(HoodieMemoryConfig.MAX_MEMORY_FOR_COMPACTION.key()),
+        "Unset no-default config MAX_MEMORY_FOR_COMPACTION must not be forged on the MDT write config");
+    assertFalse(metadataWriteConfigDefault.getProps().containsKey(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key()),
+        "Unset no-default config SPILLABLE_MAP_BASE_PATH must not be forged on the MDT write config");
+
+    // User overrides on the main write config must propagate to the MDT write config,
+    // otherwise MDT compaction silently uses defaults regardless of the user setting.
+    Properties properties = new Properties();
+    properties.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(),
+        ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
+    properties.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), "false");
+    properties.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), "/tmp/mdt-spill");
+    properties.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_COMPACTION.key(), "12345");
+    properties.setProperty(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION.key(), "0.42");
+    properties.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), "67890");
+    properties.setProperty(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE.key(), "0.37");
+    properties.setProperty(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(), "2097152");
+    HoodieWriteConfig writeConfigOverridden = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(properties)
+        .build();
+
+    HoodieWriteConfig metadataWriteConfigOverridden = HoodieMetadataWriteUtils.createMetadataWriteConfig(
+        writeConfigOverridden, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.SIX);
+
+    assertEquals(ExternalSpillableMap.DiskMapType.ROCKS_DB,
+        metadataWriteConfigOverridden.getCommonConfig().getSpillableDiskMapType(),
+        "User-supplied spillable diskmap type must propagate to the metadata table write config");
+    assertFalse(metadataWriteConfigOverridden.getCommonConfig().isBitCaskDiskMapCompressionEnabled(),
+        "User-supplied bitcask compression flag must propagate to the metadata table write config");
+    assertEquals("/tmp/mdt-spill", metadataWriteConfigOverridden.getSpillableMapBasePath(),
+        "User-supplied spillable map base path must propagate to the metadata table write config");
+    assertEquals("12345",
+        metadataWriteConfigOverridden.getProps().getProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_COMPACTION.key()),
+        "User-supplied max memory for compaction must propagate to the metadata table write config");
+    assertEquals("0.42",
+        metadataWriteConfigOverridden.getProps().getProperty(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION.key()),
+        "User-supplied max memory fraction for compaction must propagate to the metadata table write config");
+    assertEquals(67890L, metadataWriteConfigOverridden.getMaxMemoryPerPartitionMerge(),
+        "User-supplied max memory for merge must propagate to the metadata table write config");
+    assertEquals("0.37",
+        metadataWriteConfigOverridden.getProps().getProperty(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE.key()),
+        "User-supplied max memory fraction for merge must propagate to the metadata table write config");
+    assertEquals(2097152, metadataWriteConfigOverridden.getMaxDFSStreamBufferSize(),
+        "User-supplied DFS stream buffer size must propagate to the metadata table write config");
   }
 
   private void validateMetadataWriteConfig(HoodieWriteConfig metadataWriteConfig, HoodieFailedWritesCleaningPolicy expectedPolicy,
