@@ -1,20 +1,22 @@
 # hudi-trino-plugin
 
-Hudi connector for Trino (RFC-105). Published as part of `org.apache.hudi:hudi-trino-bundle`; the Trino-side `HudiPlugin` shim loads classes from that bundle.
+Hudi connector for Trino (RFC-105). Published as `org.apache.hudi:hudi-trino` -- a regular non-shaded JAR. The Trino-side `trino-hudi` plugin module depends on this artifact and Trino's URLClassLoader isolates the plugin's transitive deps from the rest of the server, so no shading is required.
+
+The source directory is named `hudi-trino-plugin/`; the Maven artifactId is `hudi-trino`.
 
 ## Build
 
 Excluded from default builds. Activate the `hudi-trino` Maven profile:
 
 ```
-mvn -Phudi-trino -pl hudi-trino-plugin,packaging/hudi-trino-bundle -am install
+mvn -Phudi-trino -pl hudi-trino-plugin install
 ```
 
 Requires JDK 25 (enforced via `maven-enforcer-plugin`).
 
 ## IDE setup
 
-Only `hudi-trino-plugin` needs JDK 25. Leave the rest of Hudi on its native JDK (11 or 17) so you are not toggling the project default.
+Only this module needs JDK 25. Leave the rest of Hudi on its native JDK (11 or 17) so you are not toggling the project default.
 
 1. Activate the `hudi-trino` Maven profile so the IDE picks up the module.
    - IntelliJ: Maven tool window, Profiles, tick `hudi-trino`.

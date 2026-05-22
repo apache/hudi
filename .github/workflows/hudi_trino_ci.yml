@@ -7,7 +7,6 @@ on:
       - 'release-*'
     paths:
       - 'hudi-trino-plugin/**'
-      - 'packaging/hudi-trino-bundle/**'
       - '.github/workflows/hudi_trino_ci.yml'
   pull_request:
     branches:
@@ -15,7 +14,6 @@ on:
       - 'release-*'
     paths:
       - 'hudi-trino-plugin/**'
-      - 'packaging/hudi-trino-bundle/**'
       - '.github/workflows/hudi_trino_ci.yml'
   workflow_dispatch:
 
@@ -38,13 +36,7 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
           cache: maven
-      - name: Build connector and bundle
-        run: ./mvnw $MVN_ARGS -Phudi-trino -pl hudi-trino-plugin,packaging/hudi-trino-bundle -am install -DskipTests
-      - name: Verify bundle contains connector classes
-        run: |
-          BUNDLE_JAR=$(ls packaging/hudi-trino-bundle/target/hudi-trino-bundle-*.jar | grep -v sources | head -n 1)
-          echo "Inspecting $BUNDLE_JAR"
-          jar tf "$BUNDLE_JAR" | grep -E 'io/trino/plugin/hudi/HudiConnectorFactory\.class$' \
-            || (echo "ERROR: HudiConnectorFactory not present in bundle"; exit 1)
+      - name: Build connector
+        run: ./mvnw $MVN_ARGS -Phudi-trino -pl hudi-trino-plugin -am install -DskipTests
       - name: Run connector tests
         run: ./mvnw $MVN_ARGS -Phudi-trino -pl hudi-trino-plugin test

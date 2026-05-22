@@ -26,7 +26,8 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>hudi-trino-plugin</artifactId>
+    <!-- Source dir is hudi-trino-plugin/ but artifactId is hudi-trino per RFC-105. -->
+    <artifactId>hudi-trino</artifactId>
     <packaging>jar</packaging>
     <description>Hudi connector for Trino (RFC-105)</description>
 
@@ -80,6 +81,10 @@
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
         </dependency>
+
+        <!-- Trino's plugin classloader bundles non-SPI compile deps with the plugin (one URLClassLoader
+             per plugin). Only the SPI shortlist further down (trino-spi, jackson-annotations, slice,
+             opentelemetry-*, jol-core) is at provided scope. Matches trino-iceberg / trino-delta-lake. -->
 
         <dependency>
             <!-- Trino bundles guice as the classes-only classifier; the BOM does not manage the plain jar. -->
@@ -194,6 +199,22 @@
                     <groupId>org.apache.orc</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
+                <!-- The Trino connector does not exercise Hudi's local state stores, Arrow
+                     materialization, or Lance integration. Excluding them keeps the plugin's
+                     runtime jar set lean (~280MB worth otherwise) and avoids dragging native
+                     libs (rocksdbjni) onto Trino's plugin classpath. -->
+                <exclusion>
+                    <groupId>org.rocksdb</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.arrow</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.lance</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
 
@@ -218,6 +239,19 @@
                 <exclusion>
                     <groupId>com.google.protobuf</groupId>
                     <artifactId>protobuf-java</artifactId>
+                </exclusion>
+                <!-- Same rationale as hudi-common: connector does not use rocksdb / arrow / lance. -->
+                <exclusion>
+                    <groupId>org.rocksdb</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.arrow</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.lance</groupId>
+                    <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -436,6 +470,11 @@
                 <exclusion>
                     <groupId>*</groupId>
                     <artifactId>*</artifactId>
+                </exclusion>
+                <!-- hudi-timeline-service pulls Jetty + javax.servlet-api; Trino's enforcer bans them. -->
+                <exclusion>
+                    <groupId>org.apache.hudi</groupId>
+                    <artifactId>hudi-timeline-service</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
