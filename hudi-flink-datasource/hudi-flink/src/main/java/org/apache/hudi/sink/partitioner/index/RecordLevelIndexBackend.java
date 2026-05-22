@@ -41,6 +41,7 @@ import org.apache.hudi.sink.utils.SamplingActionExecutor;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
@@ -77,7 +78,7 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
   private final long maxCacheSizeInBytes;
   private final BootstrapFilter bootstrapFilter;
   private HoodieTableMetadata metadataTable;
-  @Getter
+  @Getter(AccessLevel.PACKAGE)
   private FlinkIndexBackendMetrics metrics;
 
   @Getter

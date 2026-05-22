@@ -41,6 +41,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
@@ -184,7 +185,7 @@ public class TestRecordLevelIndexBackend {
 
       assertNotNull(backend.getMetrics());
       // The second call must rewire the field so the active metrics publish to the real metric group.
-      assertFalse(preSeeded == backend.getMetrics());
+      assertNotSame(preSeeded, backend.getMetrics());
     }
   }
 
