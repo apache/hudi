@@ -30,37 +30,34 @@ import java.util.function.Supplier
 
 import scala.collection.JavaConverters._
 
-/**
- * Stored procedure that runs timeline archival on demand.
- *
- * Precedence (highest first):
- *   1. Named parameters explicitly supplied by the caller
- *      (min_commits / max_commits / retain_commits / enable_metadata)
- *   2. Entries in the `options` string
- *   3. Built-in defaults of `HoodieWriteConfig` / sub-configs
- *
- * Implementation note:
- *   `ArchiveExecutorUtils.archive` places `withProps(conf)` at the END of the
- *   builder chain so user options can beat sub-config defaults applied by
- *   `withArchivalConfig` / `withCleanConfig` / `withMetadataConfig`. As a side
- *   effect, options would also overwrite the named parameters' values pushed
- *   through the dedicated builders. To keep named-parameter precedence we
- *   strip from `options` any keys that the caller has explicitly overridden
- *   via a named parameter (detected via `isArgDefined`).
- */
 class ArchiveCommitsProcedure extends BaseProcedure
   with ProcedureBuilder
   with SparkAdapterSupport
   with Logging {
+  // NOTE: min_commits / max_commits / retain_commits / enable_metadata are
+  // intentionally declared WITHOUT default values. Whether a caller actually
+  // passed them is determined by `isArgDefined`; their effective values fall
+  // back to the corresponding ConfigProperty defaults (see `call`).
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.optional(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "path", DataTypes.StringType),
-    ProcedureParameter.optional(2, "min_commits", DataTypes.IntegerType, 20),
-    ProcedureParameter.optional(3, "max_commits", DataTypes.IntegerType, 30),
-    ProcedureParameter.optional(4, "retain_commits", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(5, "enable_metadata", DataTypes.BooleanType, true),
+    ProcedureParameter.optional(2, "min_commits", DataTypes.IntegerType),
+    ProcedureParameter.optional(3, "max_commits", DataTypes.IntegerType),
+    ProcedureParameter.optional(4, "retain_commits", DataTypes.IntegerType),
+    ProcedureParameter.optional(5, "enable_metadata", DataTypes.BooleanType),
     // free-form hoodie.* config overrides; format: 'k1=v1,k2=v2'
     ProcedureParameter.optional(6, "options", DataTypes.StringType)
+  )
+
+  // Mapping of (named parameter -> hoodie.* config key) used both to merge
+  // named-parameter overrides on top of `options` and to back-fill scalar
+  // values fed to ArchiveExecutorUtils. Listed once to keep the named-param
+  // <-> ConfigProperty wiring in a single place.
+  private val NAMED_PARAM_TO_CONFIG_KEY: Seq[(ProcedureParameter, String)] = Seq(
+    PARAMETERS(2) -> HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(),
+    PARAMETERS(3) -> HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(),
+    PARAMETERS(4) -> HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(),
+    PARAMETERS(5) -> HoodieMetadataConfig.ENABLE.key()
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -76,36 +73,20 @@ class ArchiveCommitsProcedure extends BaseProcedure
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
     val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
+    val confs = getArchiveConfigs(args)
 
-    val minCommits = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Int]
-    val maxCommits = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[Int]
-    val retainCommits = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[Int]
-    val enableMetadata = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[Boolean]
-
-    val rawOptionConfs: Map[String, String] = getArgValueOrDefault(args, PARAMETERS(6))
-      .map(p => HoodieCLIUtils.extractOptions(p.toString))
-      .getOrElse(Map.empty)
-
-    // Drop options keys that the caller has explicitly overridden via a named
-    // parameter, so the named parameter's value wins. (`withProps(conf)` runs
-    // after `withArchivalConfig`/`withCleanConfig`/`withMetadataConfig` in
-    // ArchiveExecutorUtils, otherwise options would silently overwrite them.)
-    //
-    // NOTE: `isArgDefined` checks `ProcedureArgs.map`, which is populated only
-    // from arguments the caller actually wrote in the CALL statement
-    // (see HoodieAnalysis#buildProcedureArgs). It is *not* affected by the
-    // ProcedureParameter default values. So when the user calls with options
-    // only — e.g. `options => 'hoodie.keep.min.commits=2'` without naming
-    // `min_commits` — `isArgDefined(min_commits)` returns false and the
-    // matching option key is preserved.
-    val keysOverriddenByNamedArgs: Set[String] = Set(
-      PARAMETERS(2) -> HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key,
-      PARAMETERS(3) -> HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key,
-      PARAMETERS(4) -> HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key,
-      PARAMETERS(5) -> HoodieMetadataConfig.ENABLE.key
-    ).collect { case (param, key) if isArgDefined(args, param) => key }.toSet
-
-    val confs = rawOptionConfs -- keysOverriddenByNamedArgs
+    val minCommits = parseInt(confs,
+      HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(),
+      HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.defaultValue())
+    val maxCommits = parseInt(confs,
+      HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(),
+      HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.defaultValue())
+    val retainCommits = parseInt(confs,
+      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(),
+      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.defaultValue())
+    val enableMetadata = parseBoolean(confs,
+      HoodieMetadataConfig.ENABLE.key(),
+      HoodieMetadataConfig.ENABLE.defaultValue().toString)
 
     val basePath = getBasePath(tableName, tablePath)
     Seq(Row(ArchiveExecutorUtils.archive(jsc,
@@ -115,6 +96,51 @@ class ArchiveCommitsProcedure extends BaseProcedure
       enableMetadata,
       basePath,
       confs.asJava)))
+  }
+
+  /**
+   * Build the effective hoodie.* config map by overlaying named parameters
+   * (only those the caller explicitly passed) on top of the user `options`
+   * string. Whether a parameter was explicitly passed is decided by
+   * `isArgDefined` rather than by checking the parameter's default, so the
+   * precedence semantics stay correct even if future maintainers add defaults
+   * back to the named parameters.
+   */
+  private def getArchiveConfigs(args: ProcedureArgs): Map[String, String] = {
+    val optionConfs = getArgValueOrDefault(args, PARAMETERS(6))
+      .map(p => HoodieCLIUtils.extractOptions(p.toString))
+      .getOrElse(Map.empty[String, String])
+
+    NAMED_PARAM_TO_CONFIG_KEY.foldLeft(optionConfs) {
+      case (confs, (parameter, configKey)) =>
+        if (isArgDefined(args, parameter)) {
+          confs + (configKey -> getArgValueOrDefault(args, parameter).get.toString)
+        } else {
+          confs
+        }
+    }
+  }
+
+  private def parseInt(confs: Map[String, String], key: String, default: String): Int = {
+    val raw = confs.getOrElse(key, default)
+    try {
+      raw.toInt
+    } catch {
+      case _: NumberFormatException =>
+        throw new IllegalArgumentException(
+          s"Invalid integer value for '$key': '$raw'. Expected a base-10 integer.")
+    }
+  }
+
+  private def parseBoolean(confs: Map[String, String], key: String, default: String): Boolean = {
+    val raw = confs.getOrElse(key, default).trim.toLowerCase
+    raw match {
+      case "true" => true
+      case "false" => false
+      case _ =>
+        throw new IllegalArgumentException(
+          s"Invalid boolean value for '$key': '$raw'. Expected 'true' or 'false'.")
+    }
   }
 
   override def build = new ArchiveCommitsProcedure()
