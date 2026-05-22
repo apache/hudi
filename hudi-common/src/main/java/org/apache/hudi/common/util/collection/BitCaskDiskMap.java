@@ -409,12 +409,9 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
     private final ByteArrayOutputStream compressBaos;
     private final ByteArrayOutputStream decompressBaos;
     private final byte[] decompressIntermediateBuffer;
-    // Reusable zlib engines. Each CompressionHandler is held in a ThreadLocal,
+    // Each CompressionHandler is held in a ThreadLocal,
     // so a single Deflater/Inflater pair per worker thread is sufficient and
-    // avoids per-call construction. On JDK 8 every new Deflater/Inflater
-    // registers a finalizer; under concurrent disk-map traffic the Finalizer
-    // thread cannot drain the queue, pinning native zlib handles in old gen
-    // and driving the JVM into a GC death spiral.
+    // avoids per-call construction.
     private transient Deflater deflater;
     private transient Inflater inflater;
 
@@ -424,8 +421,6 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
       decompressIntermediateBuffer = new byte[DECOMPRESS_INTERMEDIATE_BUFFER_SIZE];
     }
 
-    // Lazy accessors so the handler stays usable after Java deserialization
-    // (transient fields come back null).
     private Deflater deflater() {
       if (deflater == null) {
         deflater = new Deflater(Deflater.BEST_COMPRESSION);
@@ -444,9 +439,6 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
       compressBaos.reset();
       Deflater def = deflater();
       def.reset();
-      // Passing our own Deflater puts DeflaterOutputStream in usesDefaultDeflater=false
-      // mode, so close() will finish() the stream but will NOT call def.end() —
-      // exactly what we want for reuse.
       try (DeflaterOutputStream dos = new DeflaterOutputStream(compressBaos, def)) {
         dos.write(value);
       }
@@ -457,8 +449,6 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
       decompressBaos.reset();
       Inflater inf = inflater();
       inf.reset();
-      // Passing our own Inflater puts InflaterInputStream in usesDefaultInflater=false
-      // mode, so close() will not call inf.end() — exactly what we want for reuse.
       try (InputStream in = new InflaterInputStream(new ByteArrayInputStream(bytes), inf)) {
         int len;
         while ((len = in.read(decompressIntermediateBuffer)) > 0) {
