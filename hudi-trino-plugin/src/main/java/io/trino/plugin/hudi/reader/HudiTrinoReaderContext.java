@@ -18,11 +18,11 @@ import io.trino.plugin.hudi.util.HudiAvroSerializer;
 import io.trino.plugin.hudi.util.SynthesizedColumnHandler;
 import io.trino.spi.Page;
 import io.trino.spi.connector.ConnectorPageSource;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.AvroRecordContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -73,8 +73,8 @@ public class HudiTrinoReaderContext
             StoragePath storagePath,
             long start,
             long length,
-            Schema dataSchema,
-            Schema requiredSchema,
+            HoodieSchema dataSchema,
+            HoodieSchema requiredSchema,
             HoodieStorage storage)
     {
         return createRecordIterator();
@@ -85,8 +85,8 @@ public class HudiTrinoReaderContext
             StoragePathInfo storagePathInfo,
             long start,
             long length,
-            Schema dataSchema,
-            Schema requiredSchema,
+            HoodieSchema dataSchema,
+            HoodieSchema requiredSchema,
             HoodieStorage storage)
     {
         return createRecordIterator();
@@ -152,8 +152,10 @@ public class HudiTrinoReaderContext
     }
 
     @Override
-    public ClosableIterator<IndexedRecord> mergeBootstrapReaders(ClosableIterator<IndexedRecord> skeletonFileIterator, Schema skeletonRequiredSchema, ClosableIterator<IndexedRecord> dataFileIterator, Schema dataRequiredSchema, List<Pair<String, Object>> requiredPartitionFieldAndValues)
+    public ClosableIterator<IndexedRecord> mergeBootstrapReaders(ClosableIterator<IndexedRecord> skeletonFileIterator, HoodieSchema skeletonRequiredSchema, ClosableIterator<IndexedRecord> dataFileIterator, HoodieSchema dataRequiredSchema, List<Pair<String, Object>> requiredPartitionFieldAndValues)
     {
-        return null;
+        // Bootstrap merge is not exercised by the Trino connector; reads of bootstrap tables go
+        // through the regular page-source path. Throwing surfaces accidental use loudly.
+        throw new UnsupportedOperationException("HudiTrinoReaderContext does not support bootstrap merge");
     }
 }

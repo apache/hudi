@@ -24,8 +24,8 @@ import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.TupleDomain;
-import org.apache.avro.Schema;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.StringUtils;
@@ -54,7 +54,7 @@ public class HudiTableHandle
     private final Set<HiveColumnHandle> constraintColumns;
     private final TupleDomain<HiveColumnHandle> partitionPredicates;
     private final TupleDomain<HiveColumnHandle> regularPredicates;
-    private final Optional<Lazy<Schema>> hudiTableSchema;
+    private final Optional<Lazy<HoodieSchema>> hudiTableSchema;
     // Coordinator-only
     private final transient Optional<Table> table;
     private final transient Optional<Lazy<HoodieTableMetaClient>> lazyMetaClient;
@@ -89,7 +89,7 @@ public class HudiTableHandle
             Set<HiveColumnHandle> constraintColumns,
             TupleDomain<HiveColumnHandle> partitionPredicates,
             TupleDomain<HiveColumnHandle> regularPredicates,
-            Optional<Lazy<Schema>> hudiTableSchema)
+            Optional<Lazy<HoodieSchema>> hudiTableSchema)
     {
         this(
                 Optional.of(table),
@@ -128,7 +128,7 @@ public class HudiTableHandle
             Set<HiveColumnHandle> constraintColumns,
             TupleDomain<HiveColumnHandle> partitionPredicates,
             TupleDomain<HiveColumnHandle> regularPredicates,
-            Optional<Lazy<Schema>> hudiTableSchema,
+            Optional<Lazy<HoodieSchema>> hudiTableSchema,
             Supplier<String> latestCommitTimeSupplier)
     {
         this.table = requireNonNull(table, "table is null");
@@ -147,19 +147,19 @@ public class HudiTableHandle
     }
 
     /**
-     * Builds a lazily-parsed Avro schema from the given schema string.
+     * Builds a lazily-parsed schema from the given Avro schema JSON string.
      * <p>
      * Returns {@code Optional.empty()} if the input string is null/empty
      * or if parsing the schema fails.
      */
-    private static Optional<Lazy<Schema>> buildTableSchema(String tableSchemaStr)
+    private static Optional<Lazy<HoodieSchema>> buildTableSchema(String tableSchemaStr)
     {
         if (StringUtils.isNullOrEmpty(tableSchemaStr)) {
             return Optional.empty();
         }
 
         try {
-            Lazy<Schema> lazySchema = Lazy.lazily(() -> new Schema.Parser().parse(tableSchemaStr));
+            Lazy<HoodieSchema> lazySchema = Lazy.lazily(() -> HoodieSchema.parse(tableSchemaStr));
             return Optional.of(lazySchema);
         }
         catch (Exception e) {
@@ -231,12 +231,12 @@ public class HudiTableHandle
     {
         return hudiTableSchema
                 .map(Lazy::get)
-                .map(Schema::toString)
+                .map(HoodieSchema::toString)
                 .orElse("");
     }
 
     @JsonIgnore
-    public Schema getTableSchema()
+    public HoodieSchema getTableSchema()
     {
         return hudiTableSchema.map(Lazy::get).orElse(null);
     }

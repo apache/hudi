@@ -13,8 +13,8 @@
  */
 package io.trino.plugin.hudi.io;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.storage.HFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieAvroBootstrapFileReader;
@@ -44,7 +44,7 @@ public class HudiTrinoFileReaderFactory
     @Override
     protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
             StoragePath path,
-            Option<Schema> schemaOption)
+            Option<HoodieSchema> schemaOption)
             throws IOException
     {
         HFileReaderFactory readerFactory = HFileReaderFactory.builder()
@@ -59,7 +59,7 @@ public class HudiTrinoFileReaderFactory
             StoragePath path,
             HoodieStorage storage,
             byte[] content,
-            Option<Schema> schemaOption)
+            Option<HoodieSchema> schemaOption)
             throws IOException
     {
         HFileReaderFactory readerFactory = HFileReaderFactory.builder()
@@ -70,7 +70,7 @@ public class HudiTrinoFileReaderFactory
     }
 
     @Override
-    protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig, StoragePathInfo pathInfo, Option<Schema> schemaOption)
+    protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig, StoragePathInfo pathInfo, Option<HoodieSchema> schemaOption)
             throws IOException
     {
         HFileReaderFactory readerFactory = HFileReaderFactory.builder()

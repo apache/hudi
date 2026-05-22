@@ -50,6 +50,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -399,11 +400,11 @@ public final class HudiUtil
                 tableMetadata, metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
     }
 
-    public static Schema getLatestTableSchema(HoodieTableMetaClient metaClient, String tableName)
+    public static HoodieSchema getLatestTableSchema(HoodieTableMetaClient metaClient, String tableName)
     {
         try {
             HoodieTimer timer = HoodieTimer.start();
-            Schema schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+            HoodieSchema schema = new TableSchemaResolver(metaClient).getTableSchema();
             log.info("Fetched table schema for table %s in %s ms", tableName, timer.endTimer());
             return schema;
         }
