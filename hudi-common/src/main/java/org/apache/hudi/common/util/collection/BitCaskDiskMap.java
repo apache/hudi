@@ -409,7 +409,7 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
     private final ByteArrayOutputStream compressBaos;
     private final ByteArrayOutputStream decompressBaos;
     private final byte[] decompressIntermediateBuffer;
-    // Each CompressionHandler is held in a ThreadLocal,
+    // ENG-41975 - Each CompressionHandler is held in a ThreadLocal,
     // so a single Deflater/Inflater pair per worker thread is sufficient and
     // avoids per-call construction.
     private transient Deflater deflater;
@@ -421,14 +421,14 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
       decompressIntermediateBuffer = new byte[DECOMPRESS_INTERMEDIATE_BUFFER_SIZE];
     }
 
-    private Deflater deflater() {
+    private Deflater getDeflater() {
       if (deflater == null) {
         deflater = new Deflater(Deflater.BEST_COMPRESSION);
       }
       return deflater;
     }
 
-    private Inflater inflater() {
+    private Inflater getInflater() {
       if (inflater == null) {
         inflater = new Inflater();
       }
@@ -437,9 +437,9 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
 
     private byte[] compressBytes(final byte[] value) throws IOException {
       compressBaos.reset();
-      Deflater def = deflater();
-      def.reset();
-      try (DeflaterOutputStream dos = new DeflaterOutputStream(compressBaos, def)) {
+      Deflater deflater = getDeflater();
+      deflater.reset();
+      try (DeflaterOutputStream dos = new DeflaterOutputStream(compressBaos, deflater)) {
         dos.write(value);
       }
       return compressBaos.toByteArray();
@@ -447,9 +447,9 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
 
     private byte[] decompressBytes(final byte[] bytes) throws IOException {
       decompressBaos.reset();
-      Inflater inf = inflater();
-      inf.reset();
-      try (InputStream in = new InflaterInputStream(new ByteArrayInputStream(bytes), inf)) {
+      Inflater inflater = getInflater();
+      inflater.reset();
+      try (InputStream in = new InflaterInputStream(new ByteArrayInputStream(bytes), inflater)) {
         int len;
         while ((len = in.read(decompressIntermediateBuffer)) > 0) {
           decompressBaos.write(decompressIntermediateBuffer, 0, len);
