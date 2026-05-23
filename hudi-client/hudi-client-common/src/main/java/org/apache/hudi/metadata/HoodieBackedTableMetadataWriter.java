@@ -826,28 +826,54 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         dataMetaClient,
         dataWriteConfig);
 
-    // Initialize the file groups
-    final int fileGroupCount = estimateFileGroupCount(records);
+    Pair<Integer, Integer> bounds = getRLIFileGroupCountBounds();
+    int minFileGroupCount = bounds.getLeft();
+    int maxFileGroupCount = bounds.getRight();
+
+    int fileGroupCount;
+    if (minFileGroupCount != maxFileGroupCount) {
+      // Estimate file group count based on record count read from base file footer metadata.
+      // Avoids the expensive records.persist() + records.count() pass over materialized records.
+      List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs = latestMergedPartitionFileSliceList.stream()
+          .filter(p -> p.getRight().getBaseFile().isPresent())
+          .map(p -> Pair.of(p.getLeft(), p.getRight().getBaseFile().get()))
+          .collect(Collectors.toList());
+      fileGroupCount = estimateFileGroupCountFromBaseFiles(
+          partitionBaseFilePairs, minFileGroupCount, maxFileGroupCount);
+      LOG.info("Estimated {} file groups from base file footer metadata", fileGroupCount);
+    } else {
+      // min == max: skip estimation, use the fixed value directly.
+      fileGroupCount = minFileGroupCount;
+      LOG.info("Using user-configured file group count: {}", fileGroupCount);
+    }
+
     LOG.info("Initializing record index with {} file groups.", fileGroupCount);
     return Pair.of(fileGroupCount, records);
   }
 
-  private int estimateFileGroupCount(HoodieData<HoodieRecord> records) {
-    int minFileGroupCount;
-    int maxFileGroupCount;
+  /**
+   * Returns the (min, max) file group count bounds for RLI based on which RLI variant is enabled.
+   */
+  private Pair<Integer, Integer> getRLIFileGroupCountBounds() {
     if (dataWriteConfig.isRecordLevelIndexEnabled()) {
-      minFileGroupCount = dataWriteConfig.getRecordLevelIndexMinFileGroupCount();
-      maxFileGroupCount = dataWriteConfig.getRecordLevelIndexMaxFileGroupCount();
-    } else {
-      minFileGroupCount = dataWriteConfig.getGlobalRecordLevelIndexMinFileGroupCount();
-      maxFileGroupCount = dataWriteConfig.getGlobalRecordLevelIndexMaxFileGroupCount();
+      return Pair.of(dataWriteConfig.getRecordLevelIndexMinFileGroupCount(),
+          dataWriteConfig.getRecordLevelIndexMaxFileGroupCount());
     }
-    Supplier<Long> recordCountSupplier = () -> {
-      records.persist("MEMORY_AND_DISK_SER");
-      long count = records.count();
-      LOG.info("Initializing record index with {} mappings", count);
-      return count;
-    };
+    return Pair.of(dataWriteConfig.getGlobalRecordLevelIndexMinFileGroupCount(),
+        dataWriteConfig.getGlobalRecordLevelIndexMaxFileGroupCount());
+  }
+
+  /**
+   * Estimates RLI file group count using a record count derived from base file footer metadata.
+   * Reading row counts from the footer is an O(1)-per-file operation that avoids materializing
+   * records to compute a count.
+   */
+  private int estimateFileGroupCountFromBaseFiles(List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs,
+                                                  int minFileGroupCount,
+                                                  int maxFileGroupCount) {
+    long estimatedRecordCount = estimateRecordCountFromBaseFiles(partitionBaseFilePairs);
+    LOG.info("Estimated total record count from base file footers: {}", estimatedRecordCount);
+    Supplier<Long> recordCountSupplier = () -> estimatedRecordCount;
     return HoodieTableMetadataUtil.estimateFileGroupCount(
         MetadataPartitionType.RECORD_INDEX,
         recordCountSupplier,
@@ -857,6 +883,32 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         dataWriteConfig.getRecordIndexGrowthFactor(),
         dataWriteConfig.getRecordIndexMaxFileGroupSizeBytes()
     );
+  }
+
+  /**
+   * Sums row counts read from each base file's footer metadata, in parallel via the engine context.
+   * Used in place of materializing and counting an RDD of records during RLI bootstrap.
+   */
+  private long estimateRecordCountFromBaseFiles(List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs) {
+    if (partitionBaseFilePairs.isEmpty()) {
+      return 0L;
+    }
+    int parallelism = Math.min(partitionBaseFilePairs.size(),
+        dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
+    StorageConfiguration<?> storageConfBroadcast = storageConf;
+    return engineContext.parallelize(partitionBaseFilePairs, parallelism)
+        .map(partitionAndBaseFile -> {
+          HoodieBaseFile baseFile = partitionAndBaseFile.getValue();
+          StoragePath path = baseFile.getStoragePath();
+          try {
+            HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConfBroadcast);
+            return HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(path).getRowCount(storage, path);
+          } catch (Exception e) {
+            LOG.warn("Failed to read row count from base file footer: {}", path, e);
+            return 0L;
+          }
+        })
+        .collectAsList().stream().mapToLong(Long::longValue).sum();
   }
 
   /**
