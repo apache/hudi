@@ -15,7 +15,6 @@ package io.trino.plugin.hudi.split;
 
 import com.google.common.collect.ImmutableList;
 import io.airlift.units.DataSize;
-import io.trino.filesystem.cache.CachingHostAddressProvider;
 import io.trino.plugin.hive.HivePartitionKey;
 import io.trino.plugin.hudi.HudiSplit;
 import io.trino.plugin.hudi.HudiTableHandle;
@@ -43,23 +42,20 @@ public class HudiSplitFactory
     private final HudiTableHandle hudiTableHandle;
     private final HudiSplitWeightProvider hudiSplitWeightProvider;
     private final DataSize targetSplitSize;
-    private final CachingHostAddressProvider cachingHostAddressProvider;
 
     public HudiSplitFactory(
             HudiTableHandle hudiTableHandle,
             HudiSplitWeightProvider hudiSplitWeightProvider,
-            DataSize targetSplitSize,
-            CachingHostAddressProvider cachingHostAddressProvider)
+            DataSize targetSplitSize)
     {
         this.hudiTableHandle = requireNonNull(hudiTableHandle, "hudiTableHandle is null");
         this.hudiSplitWeightProvider = requireNonNull(hudiSplitWeightProvider, "hudiSplitWeightProvider is null");
         this.targetSplitSize = requireNonNull(targetSplitSize, "targetSplitSize is null");
-        this.cachingHostAddressProvider = requireNonNull(cachingHostAddressProvider, "cachingHostAddressProvider is null");
     }
 
     public List<HudiSplit> createSplits(List<HivePartitionKey> partitionKeys, FileSlice fileSlice, String commitTime)
     {
-        return createHudiSplits(hudiTableHandle, partitionKeys, fileSlice, commitTime, hudiSplitWeightProvider, targetSplitSize, cachingHostAddressProvider);
+        return createHudiSplits(hudiTableHandle, partitionKeys, fileSlice, commitTime, hudiSplitWeightProvider, targetSplitSize);
     }
 
     /**
@@ -75,8 +71,7 @@ public class HudiSplitFactory
             FileSlice fileSlice,
             String commitTime,
             HudiSplitWeightProvider hudiSplitWeightProvider,
-            DataSize targetSplitSize,
-            CachingHostAddressProvider cachingHostAddressProvider)
+            DataSize targetSplitSize)
     {
         if (fileSlice.isEmpty()) {
             throw new TrinoException(HUDI_FILESYSTEM_ERROR, format("Not a valid file slice: %s", fileSlice));
@@ -85,9 +80,9 @@ public class HudiSplitFactory
         if (isCopyOnWriteOrReadOptimized(hudiTableHandle, fileSlice)) {
             // Handle MERGE_ON_READ tables to be read in read_optimized mode
             // IMPORTANT: These tables will have a COPY_ON_WRITE table type due to how `HudiTableTypeUtils#fromInputFormat`
-            return createSplitsForBaseFile(hudiTableHandle, partitionKeys, fileSlice, commitTime, hudiSplitWeightProvider, targetSplitSize, cachingHostAddressProvider);
+            return createSplitsForBaseFile(hudiTableHandle, partitionKeys, fileSlice, commitTime, hudiSplitWeightProvider, targetSplitSize);
         }
-        return createSplitForMergeOnRead(hudiTableHandle, partitionKeys, fileSlice, commitTime, hudiSplitWeightProvider, cachingHostAddressProvider);
+        return createSplitForMergeOnRead(hudiTableHandle, partitionKeys, fileSlice, commitTime, hudiSplitWeightProvider);
     }
 
     /**
@@ -108,15 +103,16 @@ public class HudiSplitFactory
             FileSlice fileSlice,
             String commitTime,
             HudiSplitWeightProvider hudiSplitWeightProvider,
-            DataSize targetSplitSize,
-            CachingHostAddressProvider cachingHostAddressProvider)
+            DataSize targetSplitSize)
     {
         checkArgument(fileSlice.getBaseFile().isPresent(),
                 "Hudi base file must exist if there are no log files in the file slice");
 
         HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
         long fileSize = baseFile.getFileSize();
-        List<HostAddress> addresses = cachingHostAddressProvider.getHosts(baseFile.getPath(), ImmutableList.of());
+        // Trino 482 removed CachingHostAddressProvider; object-storage reads have no host
+        // affinity, so leave the address list empty. Workers are chosen by the scheduler.
+        List<HostAddress> addresses = ImmutableList.of();
 
         // If the file is empty, create a single split to represent it
         if (fileSize == 0) {
@@ -168,14 +164,12 @@ public class HudiSplitFactory
             List<HivePartitionKey> partitionKeys,
             FileSlice fileSlice,
             String commitTime,
-            HudiSplitWeightProvider hudiSplitWeightProvider,
-            CachingHostAddressProvider cachingHostAddressProvider)
+            HudiSplitWeightProvider hudiSplitWeightProvider)
     {
         // NOTE: Some file slices may not have base files
         Option<HoodieBaseFile> baseFileOption = fileSlice.getBaseFile();
-        List<HostAddress> addresses = baseFileOption
-                .map(baseFile -> cachingHostAddressProvider.getHosts(baseFile.getPath(), ImmutableList.of()))
-                .orElse(ImmutableList.of());
+        // Trino 482 removed CachingHostAddressProvider; no host affinity for object-storage reads.
+        List<HostAddress> addresses = ImmutableList.of();
 
         HudiSplit split = new HudiSplit(
                 baseFileOption.map(HudiBaseFile::of).orElse(null),

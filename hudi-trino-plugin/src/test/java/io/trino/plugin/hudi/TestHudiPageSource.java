@@ -16,7 +16,7 @@ package io.trino.plugin.hudi;
 import io.trino.spi.connector.ConnectorPageSource;
 import org.junit.jupiter.api.Test;
 
-import static io.trino.spi.testing.InterfaceTestUtils.assertAllMethodsOverridden;
+import static io.trino.testing.InterfaceTestUtils.assertAllMethodsOverridden;
 
 public class TestHudiPageSource
 {
