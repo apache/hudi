@@ -26,18 +26,29 @@ env:
 
 jobs:
   build-and-test:
-    name: Build and Test (JDK 25)
+    name: Build connector
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # Hudi targets Java 11 and uses Lombok 1.18.36, which does not run on JDK 25.
+      # Build the upstream modules hudi-trino-plugin depends on under JDK 17 first,
+      # install them into the local m2, then build the connector itself under JDK 25.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+      - name: Install upstream Hudi modules (JDK 17)
+        run: mvn $MVN_ARGS install -pl hudi-common,hudi-hive-sync,hudi-io,hudi-sync-common -am -Dmaven.test.skip=true -Drat.skip -Dcheckstyle.skip
       - name: Set up JDK 25
         uses: actions/setup-java@v5
         with:
           java-version: '25'
           distribution: 'temurin'
           cache: maven
-      - name: Build connector
-        # Tests live behind the hudi-trino-tests profile (Trino does not publish the
-        # test-jars we need). -Dmaven.test.skip=true skips test compilation so the build
-        # resolves cleanly against Maven Central.
-        run: mvn $MVN_ARGS -Phudi-trino -pl hudi-trino-plugin -am install -Dmaven.test.skip=true
+      # Tests live behind the hudi-trino-tests profile (Trino does not publish the
+      # test-jars we need). -Dmaven.test.skip=true skips test compilation so the build
+      # resolves cleanly against Maven Central.
+      - name: Build connector (JDK 25)
+        run: mvn $MVN_ARGS -Phudi-trino -pl hudi-trino-plugin install -Dmaven.test.skip=true
