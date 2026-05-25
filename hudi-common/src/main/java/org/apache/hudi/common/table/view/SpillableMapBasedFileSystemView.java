@@ -225,14 +225,18 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   }
 
   @Override
-  public void close() {
+  protected void closeResources() throws Exception {
+    // Close ExternalSpillableMaps (which hold RocksDB handles) while the writeLock is held
+    // by AbstractTableFileSystemView.close(). This prevents a race where a concurrent reader
+    // holding readLock could be mid-call in RocksDBDAO.put() when the handles are cleared,
+    // causing a NullPointerException at RocksDB.put(null_handle, ...).
     closeFileGroupsMapIfPresent();
     closePendingClusteringMapIfPresent();
     closePendingCompactionMapIfPresent();
     closePendingLogCompactionMapIfPresent();
     closeBootstrapFileMapIfPresent();
     closeReplaceInstantsMapIfPresent();
-    super.close();
+    super.closeResources();
   }
 
   private void closeReplaceInstantsMapIfPresent() {
