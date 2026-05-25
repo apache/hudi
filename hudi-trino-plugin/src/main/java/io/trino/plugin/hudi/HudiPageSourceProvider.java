@@ -221,7 +221,6 @@ public class HudiPageSourceProvider
                 Optional.ofNullable(hudiTableHandle.getTableSchema())
                         .orElseGet(() -> getLatestTableSchema(metaClient, hudiTableHandle.getTableName()));
 
-        // constructSchema operates on Avro schema to assemble the requested schema for the log file reader.
         Schema requestedSchema = constructSchema(dataSchema.toAvroSchema(), hudiMetaAndDataColumnHandles.stream().map(HiveColumnHandle::getName).toList());
         HoodieFileGroupReader<IndexedRecord> fileGroupReader =
                 HoodieFileGroupReader.<IndexedRecord>newBuilder()
@@ -300,8 +299,6 @@ public class HudiPageSourceProvider
                     DOMAIN_COMPACTION_THRESHOLD,
                     options);
 
-            // Trino 480 dropped projectBaseColumns/ReaderColumns; createParquetPageSource handles
-            // base-column projection internally via TransformConnectorPageSource.
             ParquetDataSourceId dataSourceId = dataSource.getId();
             ParquetDataSource finalDataSource = dataSource;
             ParquetReaderProvider parquetReaderProvider = (fields, appendRowNumberColumn) -> new ParquetReader(
