@@ -369,52 +369,19 @@
 
         <dependency>
             <groupId>io.trino</groupId>
-            <artifactId>trino-filesystem</artifactId>
-            <version>${dep.trino.test.version}</version>
-            <type>test-jar</type>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>io.trino</groupId>
             <artifactId>trino-hdfs</artifactId>
             <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>io.trino</groupId>
-            <artifactId>trino-hive</artifactId>
-            <version>${dep.trino.test.version}</version>
-            <type>test-jar</type>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>io.trino</groupId>
             <artifactId>trino-main</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>io.trino</groupId>
-            <artifactId>trino-main</artifactId>
-            <version>${dep.trino.test.version}</version>
-            <type>test-jar</type>
             <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>io.trino</groupId>
             <artifactId>trino-parser</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <!-- BOM does not manage test-jar coordinate; declare the version explicitly. -->
-            <groupId>io.trino</groupId>
-            <artifactId>trino-spi</artifactId>
-            <version>${dep.trino.test.version}</version>
-            <type>test-jar</type>
             <scope>test</scope>
         </dependency>
 
@@ -605,4 +572,49 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+            Test-only profile. Trino does not publish trino-spi / trino-filesystem /
+            trino-hive test-jars to Maven Central, and the published trino-main test-jar
+            still requires a matching SPI snapshot for the rest of the test classpath.
+            Activate this profile alongside hudi-trino when you have a locally-built
+            Trino snapshot in ~/.m2 (build via the Trino source tree and `mvn install`).
+            CI builds keep it off so the default reactor stays resolvable against
+            Maven Central.
+        -->
+        <profile>
+            <id>hudi-trino-tests</id>
+            <dependencies>
+                <dependency>
+                    <groupId>io.trino</groupId>
+                    <artifactId>trino-filesystem</artifactId>
+                    <version>${dep.trino.test.version}</version>
+                    <type>test-jar</type>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>io.trino</groupId>
+                    <artifactId>trino-hive</artifactId>
+                    <version>${dep.trino.test.version}</version>
+                    <type>test-jar</type>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>io.trino</groupId>
+                    <artifactId>trino-main</artifactId>
+                    <version>${dep.trino.test.version}</version>
+                    <type>test-jar</type>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>io.trino</groupId>
+                    <artifactId>trino-spi</artifactId>
+                    <version>${dep.trino.test.version}</version>
+                    <type>test-jar</type>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
 </project>
