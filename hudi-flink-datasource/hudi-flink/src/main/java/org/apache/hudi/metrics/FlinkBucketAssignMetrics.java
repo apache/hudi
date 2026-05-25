@@ -59,6 +59,10 @@ public class FlinkBucketAssignMetrics extends HoodieFlinkMetrics {
     metricGroup.gauge("numShardsAssigned", numShardsAssigned::get);
   }
 
+  /**
+   * Sets the number of RLI shards owned by this task. Call once during {@code open()} when global
+   * RLI is active; the gauge value changes from the sentinel -1 to {@code count}.
+   */
   public void setNumShardsAssigned(int count) {
     numShardsAssigned.set(count);
   }

@@ -170,14 +170,14 @@ public class TestGlobalRecordIndexPartitioner {
 
   @Test
   void testFetchNumFileGroupsForRecordIndexPartitionReturnsPositiveValue() {
-    int count = GlobalRecordIndexPartitioner.fetchNumFileGroupsForRecordIndexPartition(conf);
+    int count = GlobalRecordIndexPartitioner.getNumFileGroupsForRecordIndexPartition(conf);
     assertTrue(count > 0, "File group count must be positive for a table with global RLI enabled");
   }
 
   @Test
   void testFetchNumFileGroupsForRecordIndexPartitionIsCached() {
-    int first = GlobalRecordIndexPartitioner.fetchNumFileGroupsForRecordIndexPartition(conf);
-    int second = GlobalRecordIndexPartitioner.fetchNumFileGroupsForRecordIndexPartition(conf);
+    int first = GlobalRecordIndexPartitioner.getNumFileGroupsForRecordIndexPartition(conf);
+    int second = GlobalRecordIndexPartitioner.getNumFileGroupsForRecordIndexPartition(conf);
     assertEquals(first, second, "Repeated calls must return the same cached result");
   }
 }

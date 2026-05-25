@@ -76,7 +76,7 @@ public class GlobalRecordIndexPartitioner implements Partitioner<HoodieKey> {
   public int partition(HoodieKey recordKey, int numPartitions) {
     // initialize numFileGroupsForRecordIndexPartition lazily.
     if (numFileGroupsForRecordIndexPartition < 0) {
-      numFileGroupsForRecordIndexPartition = getNumFileGroupsForRecordIndexPartition();
+      numFileGroupsForRecordIndexPartition = getNumFileGroupsForRecordIndexPartition(conf);
     }
     int fgIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(
         recordKey.getRecordKey(), numFileGroupsForRecordIndexPartition);
@@ -97,18 +97,11 @@ public class GlobalRecordIndexPartitioner implements Partitioner<HoodieKey> {
   }
 
   /**
-   * Get the number of file groups for record index partition in metadata table.
-   */
-  private int getNumFileGroupsForRecordIndexPartition() {
-    return fetchNumFileGroupsForRecordIndexPartition(conf);
-  }
-
-  /**
    * Reads the file group count for the record index partition from the metadata table.
    * Results are cached per table path within the JVM so that multiple callers
    * (e.g. the partitioner and {@link BucketAssignFunction}) share a single lookup.
    */
-  static int fetchNumFileGroupsForRecordIndexPartition(Configuration conf) {
+  static int getNumFileGroupsForRecordIndexPartition(Configuration conf) {
     String tablePath = conf.get(FlinkOptions.PATH);
     return NUM_FILE_GROUPS_CACHE.computeIfAbsent(tablePath, path -> {
       HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
@@ -116,7 +109,7 @@ public class GlobalRecordIndexPartitioner implements Partitioner<HoodieKey> {
           HoodieFlinkEngineContext.DEFAULT,
           metaClient.getStorage(),
           StreamerUtil.metadataConfig(conf),
-          conf.get(FlinkOptions.PATH))) {
+          tablePath)) {
         return metadataTable.getNumFileGroupsForPartition(MetadataPartitionType.RECORD_INDEX);
       } catch (Exception e) {
         throw new HoodieException("Failed to get file group count for global record index partition.", e);
