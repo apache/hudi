@@ -2276,9 +2276,7 @@
       </modules>
     </profile>
     <profile>
-      <!-- RFC-105: builds the Trino connector (org.apache.hudi:hudi-trino), a regular non-shaded
-           jar relying on Trino's URLClassLoader plugin isolation. Excluded from default builds
-           because it requires JDK 25 and the Trino SPI. -->
+      <!-- RFC-105: non-shaded Trino connector. JDK 25 + Trino SPI; off by default. -->
       <id>hudi-trino</id>
       <modules>
         <module>hudi-trino-plugin</module>
