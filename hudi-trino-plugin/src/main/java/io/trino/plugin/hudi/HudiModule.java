@@ -58,8 +58,6 @@ public class HudiModule
 
         configBinder(binder).bindConfig(HudiConfig.class);
 
-        // Trino 480 removed the TranslateHiveViews annotation; thrift metastore now reads
-        // hive.hive-views.enabled config directly. No binding needed.
         binder.bind(boolean.class).annotatedWith(HideDeltaLakeTables.class).toInstance(false);
 
         newSetBinder(binder, SessionPropertiesProvider.class).addBinding().to(HudiSessionProperties.class).in(Scopes.SINGLETON);

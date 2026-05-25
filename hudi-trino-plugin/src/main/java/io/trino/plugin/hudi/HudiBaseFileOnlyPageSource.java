@@ -99,7 +99,7 @@ public class HudiBaseFileOnlyPageSource
         }
 
         if (allOutputColumns.isEmpty()) {
-            // count(*) projects no columns; forward the physical page which already carries the correct positionCount with zero blocks.
+            // Forward the zero-block page so positionCount survives -- new Page(new Block[0]) would infer positionCount=0.
             return physicalSourcePage;
         }
 

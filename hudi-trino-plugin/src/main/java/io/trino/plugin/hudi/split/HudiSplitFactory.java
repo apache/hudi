@@ -110,8 +110,7 @@ public class HudiSplitFactory
 
         HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
         long fileSize = baseFile.getFileSize();
-        // Trino 482 removed CachingHostAddressProvider; object-storage reads have no host
-        // affinity, so leave the address list empty. Workers are chosen by the scheduler.
+        // Object-storage reads have no host affinity.
         List<HostAddress> addresses = ImmutableList.of();
 
         // If the file is empty, create a single split to represent it
@@ -168,7 +167,6 @@ public class HudiSplitFactory
     {
         // NOTE: Some file slices may not have base files
         Option<HoodieBaseFile> baseFileOption = fileSlice.getBaseFile();
-        // Trino 482 removed CachingHostAddressProvider; no host affinity for object-storage reads.
         List<HostAddress> addresses = ImmutableList.of();
 
         HudiSplit split = new HudiSplit(

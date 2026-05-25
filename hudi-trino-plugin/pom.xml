@@ -32,13 +32,12 @@
     <description>Hudi connector for Trino (RFC-105)</description>
 
     <properties>
-        <!-- Trino SPI / library version this connector compiles against. Bumped via root pom. -->
+        <!-- Trino SPI version; managed in root pom. -->
         <dep.trino.version>${trino.connector.version}</dep.trino.version>
-        <!-- Tests reuse Trino's internal test scaffolding, which only ships under the
-             test-jar classifier in snapshot builds. See root pom for details. -->
+        <!-- Trino test-jars only ship in snapshot builds; tracked separately in root pom. -->
         <dep.trino.test.version>${trino.connector.test.version}</dep.trino.test.version>
         <trino.parquet.version>1.15.2</trino.parquet.version>
-        <!-- Connector requires JDK 25 to compile and run (matches Trino runtime requirement). -->
+        <!-- Trino runtime is JDK 25+. -->
         <hudi.trino.java.version>25</hudi.trino.java.version>
         <main.basedir>${project.parent.basedir}</main.basedir>
         <checkstyle.skip>true</checkstyle.skip>
@@ -61,10 +60,6 @@
 
     <dependencies>
         <dependency>
-            <!-- Required for compilation: HoodieRecord implements KryoSerializable,
-                 so the compiler needs Kryo on classpath to verify the class hierarchy
-                 when loading HoodieRecord for static imports.
-                 Explicit compile scope overrides the Trino BOM, which manages kryo at test scope. -->
             <groupId>com.esotericsoftware</groupId>
             <artifactId>kryo</artifactId>
             <version>4.0.2</version>
@@ -81,10 +76,6 @@
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
         </dependency>
-
-        <!-- Trino's plugin classloader bundles non-SPI compile deps with the plugin (one URLClassLoader
-             per plugin). Only the SPI shortlist further down (trino-spi, jackson-annotations, slice,
-             opentelemetry-*, jol-core) is at provided scope. Matches trino-iceberg / trino-delta-lake. -->
 
         <dependency>
             <!-- Trino bundles guice as the classes-only classifier; the BOM does not manage the plain jar. -->
@@ -199,10 +190,7 @@
                     <groupId>org.apache.orc</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
-                <!-- The Trino connector does not exercise Hudi's local state stores, Arrow
-                     materialization, or Lance integration. Excluding them keeps the plugin's
-                     runtime jar set lean (~280MB worth otherwise) and avoids dragging native
-                     libs (rocksdbjni) onto Trino's plugin classpath. -->
+                <!-- Not used by the connector; excluded to keep the plugin jar set lean. -->
                 <exclusion>
                     <groupId>org.rocksdb</groupId>
                     <artifactId>*</artifactId>
@@ -240,7 +228,6 @@
                     <groupId>com.google.protobuf</groupId>
                     <artifactId>protobuf-java</artifactId>
                 </exclusion>
-                <!-- Same rationale as hudi-common: connector does not use rocksdb / arrow / lance. -->
                 <exclusion>
                     <groupId>org.rocksdb</groupId>
                     <artifactId>*</artifactId>
@@ -578,7 +565,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <!-- Override Hudi parent's Java 11 target. Trino SPI requires recent JDK. -->
+                    <!-- Hudi parent targets JDK 11; override for Trino. -->
                     <source>${hudi.trino.java.version}</source>
                     <target>${hudi.trino.java.version}</target>
                     <release>${hudi.trino.java.version}</release>
