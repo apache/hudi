@@ -37,6 +37,6 @@ jobs:
           distribution: 'temurin'
           cache: maven
       - name: Build connector
-        run: ./mvnw $MVN_ARGS -Phudi-trino -pl hudi-trino-plugin -am install -DskipTests
+        run: mvn $MVN_ARGS -Phudi-trino -pl hudi-trino-plugin -am install -DskipTests
       - name: Run connector tests
-        run: ./mvnw $MVN_ARGS -Phudi-trino -pl hudi-trino-plugin test
+        run: mvn $MVN_ARGS -Phudi-trino -pl hudi-trino-plugin test

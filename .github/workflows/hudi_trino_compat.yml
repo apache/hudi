@@ -39,7 +39,7 @@ jobs:
       - name: Compile hudi-trino-plugin against current Trino SPI
         working-directory: hudi
         run: |
-          ./mvnw $MVN_ARGS -Phudi-trino \
+          mvn $MVN_ARGS -Phudi-trino \
             -Dtrino.connector.version=${{ steps.trino-version.outputs.trino_version }} \
             -pl hudi-trino-plugin -am compile
       - name: Open issue on failure
