@@ -409,7 +409,7 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
     private final ByteArrayOutputStream compressBaos;
     private final ByteArrayOutputStream decompressBaos;
     private final byte[] decompressIntermediateBuffer;
-    // ENG-41975 - Each CompressionHandler is held in a ThreadLocal,
+    // Each CompressionHandler is held in a ThreadLocal,
     // so a single Deflater/Inflater pair per worker thread is sufficient and
     // avoids per-call construction.
     private transient Deflater deflater;
