@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -436,8 +437,13 @@ public class ParquetUtils extends FileFormatUtils {
     config.setValue(PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
     config.setValue("hoodie.avro.schema", writerSchema.toString());
     HoodieRecord.HoodieRecordType recordType = records.iterator().next().getRecordType();
+    // Log-block writers serialize records into an in-memory buffer and do not follow the
+    // user table's META_FIELDS_EXCLUDE_LIST - the meta values on each record are preserved
+    // as-is by the writer. Pass a fresh HoodieTableConfig so the factory derives all-populated
+    // flags (the default) for the synthetic in-memory writer.
+    HoodieTableConfig logBlockTableConfig = new HoodieTableConfig();
     try (HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
-        HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType)) {
+        HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType, logBlockTableConfig)) {
       for (HoodieRecord<?> record : records) {
         String recordKey = record.getRecordKey(readerSchema, keyFieldName);
         parquetWriter.write(recordKey, record, writerSchema);
@@ -462,8 +468,11 @@ public class ParquetUtils extends FileFormatUtils {
     config.setValue(PARQUET_PAGE_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_PAGE_SIZE));
     config.setValue(PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
 
+    // Synthetic in-memory writer (see log-block comment above) - pass a fresh HoodieTableConfig
+    // so the factory derives default (all-populated) flags.
+    HoodieTableConfig logBlockTableConfig = new HoodieTableConfig();
     HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
-        HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType);
+        HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType, logBlockTableConfig);
     while (recordItr.hasNext()) {
       HoodieRecord record = recordItr.next();
       String recordKey = record.getRecordKey(readerSchema, keyFieldName);

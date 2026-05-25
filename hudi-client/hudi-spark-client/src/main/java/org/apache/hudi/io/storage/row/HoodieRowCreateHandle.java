@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -67,6 +68,7 @@ public class HoodieRowCreateHandle implements Serializable {
   private final String fileId;
 
   private final boolean populateMetaFields;
+  private final HoodieMetaFieldFlags metaFieldFlags;
 
   private final UTF8String fileName;
   private final UTF8String commitTime;
@@ -119,6 +121,7 @@ public class HoodieRowCreateHandle implements Serializable {
     this.path = makeNewPath(storage, partitionPath, fileName, writeConfig);
 
     this.populateMetaFields = writeConfig.populateMetaFields();
+    this.metaFieldFlags = table.getMetaClient().getTableConfig().getHoodieMetaFieldFlags();
     this.fileName = UTF8String.fromString(path.getName());
     this.commitTime = UTF8String.fromString(instantTime);
     this.seqIdGenerator = (id) -> HoodieRecord.generateSequenceId(instantTime, taskPartitionId, id);
@@ -176,29 +179,40 @@ public class HoodieRowCreateHandle implements Serializable {
       //          over again)
       UTF8String[] metaFields = new UTF8String[5];
       UTF8String recordKey = row.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_ORD);
-      metaFields[3] = row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD);
-      // This is the only meta-field that is generated dynamically, hence conversion b/w
-      // [[String]] and [[UTF8String]] is unavoidable if preserveHoodieMetadata is false
-      metaFields[1] = shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
-          : UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
-      metaFields[0] = shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD)
-          : commitTime;
-      metaFields[2] = recordKey;
-      metaFields[4] = fileName;
+      metaFields[0] = metaFieldFlags.isCommitTimePopulated()
+          ? (shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD) : commitTime)
+          : null;
+      metaFields[1] = metaFieldFlags.isCommitSeqNoPopulated()
+          ? (shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
+              : UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement())))
+          : null;
+      metaFields[2] = metaFieldFlags.isRecordKeyPopulated() ? recordKey : null;
+      metaFields[3] = metaFieldFlags.isPartitionPathPopulated() ? row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD) : null;
+      metaFields[4] = metaFieldFlags.isFileNamePopulated() ? fileName : null;
       InternalRow updatedRow = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(metaFields, row, true);
       try {
         fileWriter.writeRow(recordKey, updatedRow);
         // NOTE: To avoid conversion on the hot-path we only convert [[UTF8String]] into [[String]]
         //       in cases when successful records' writes are being tracked
         HoodieRecordDelegate recordDelegate = writeStatus.isTrackingSuccessfulWrites()
-            ? HoodieRecordDelegate.create(recordKey.toString(), partitionPath.toString(), null, newRecordLocation) : null;
+            ? HoodieRecordDelegate.create(
+                recordKey == null ? null : recordKey.toString(),
+                partitionPath == null ? null : partitionPath.toString(),
+                null,
+                newRecordLocation)
+            : null;
         writeStatus.markSuccess(recordDelegate, Option.empty());
       } catch (Exception t) {
         log.error("Error writing record " + row, t);
         if (!writeConfig.getIgnoreWriteFailed()) {
           throw new HoodieException(t.getMessage(), t);
         }
-        writeStatus.markFailure(recordKey.toString(), partitionPath.toString(), t);
+        // recordKey/partitionPath may be null when _hoodie_record_key or _hoodie_partition_path
+        // are excluded via META_FIELDS_EXCLUDE_LIST; tolerate the null when reporting failure.
+        writeStatus.markFailure(
+            recordKey == null ? null : recordKey.toString(),
+            partitionPath == null ? null : partitionPath.toString(),
+            t);
       }
     } catch (Exception e) {
       writeStatus.setGlobalError(e);

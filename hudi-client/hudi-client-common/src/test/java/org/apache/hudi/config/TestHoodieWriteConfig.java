@@ -29,7 +29,9 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -751,6 +753,139 @@ public class TestHoodieWriteConfig {
         .withEngineType(EngineType.JAVA).build();
     assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.SIX));
     assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.EIGHT));
+  }
+
+  @Test
+  public void testMetaFieldPopulationFlagsDefault() {
+    // Default: populateMetaFields=true (default), no exclusions => all flags true
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    HoodieMetaFieldFlags flags = tableConfig.getHoodieMetaFieldFlags();
+    assertTrue(flags.isCommitTimePopulated(), "commit_time should be populated by default");
+    assertTrue(flags.isCommitSeqNoPopulated(), "commit_seqno should be populated by default");
+    assertTrue(flags.isRecordKeyPopulated(), "record_key should be populated by default");
+    assertTrue(flags.isPartitionPathPopulated(), "partition_path should be populated by default");
+    assertTrue(flags.isFileNamePopulated(), "file_name should be populated by default");
+  }
+
+  @Test
+  public void testMetaFieldPopulationFlagsWhenPopulateMetaFieldsDisabled() {
+    // populateMetaFields=false => all flags false regardless of exclusions
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(false));
+    HoodieMetaFieldFlags flags = tableConfig.getHoodieMetaFieldFlags();
+    assertFalse(flags.isCommitTimePopulated(), "commit_time should be false when populateMetaFields=false");
+    assertFalse(flags.isCommitSeqNoPopulated(), "commit_seqno should be false when populateMetaFields=false");
+    assertFalse(flags.isRecordKeyPopulated(), "record_key should be false when populateMetaFields=false");
+    assertFalse(flags.isPartitionPathPopulated(), "partition_path should be false when populateMetaFields=false");
+    assertFalse(flags.isFileNamePopulated(), "file_name should be false when populateMetaFields=false");
+  }
+
+  @Test
+  public void testMetaFieldPopulationFlagsSelectiveExclusion() {
+    // Exclude record_key and partition_path only
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST, "_hoodie_record_key,_hoodie_partition_path");
+    HoodieMetaFieldFlags flags = tableConfig.getHoodieMetaFieldFlags();
+    assertTrue(flags.isCommitTimePopulated(), "commit_time should be populated");
+    assertTrue(flags.isCommitSeqNoPopulated(), "commit_seqno should be populated");
+    assertFalse(flags.isRecordKeyPopulated(), "record_key should be excluded");
+    assertFalse(flags.isPartitionPathPopulated(), "partition_path should be excluded");
+    assertTrue(flags.isFileNamePopulated(), "file_name should be populated");
+  }
+
+  @Test
+  public void testMetaFieldPopulationFlagsExcludeAll() {
+    // Exclude all 5 meta fields
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST,
+        "_hoodie_commit_time,_hoodie_commit_seqno,_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name");
+    HoodieMetaFieldFlags flags = tableConfig.getHoodieMetaFieldFlags();
+    assertFalse(flags.isCommitTimePopulated(), "commit_time should be excluded");
+    assertFalse(flags.isCommitSeqNoPopulated(), "commit_seqno should be excluded");
+    assertFalse(flags.isRecordKeyPopulated(), "record_key should be excluded");
+    assertFalse(flags.isPartitionPathPopulated(), "partition_path should be excluded");
+    assertFalse(flags.isFileNamePopulated(), "file_name should be excluded");
+  }
+
+  @Test
+  public void testMetaFieldPopulationFlagsExcludeOnlyCommitTime() {
+    // Exclude only commit_time
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST, "_hoodie_commit_time");
+    HoodieMetaFieldFlags flags = tableConfig.getHoodieMetaFieldFlags();
+    assertFalse(flags.isCommitTimePopulated(), "commit_time should be excluded");
+    assertTrue(flags.isCommitSeqNoPopulated(), "commit_seqno should be populated");
+    assertTrue(flags.isRecordKeyPopulated(), "record_key should be populated");
+    assertTrue(flags.isPartitionPathPopulated(), "partition_path should be populated");
+    assertTrue(flags.isFileNamePopulated(), "file_name should be populated");
+  }
+
+  @Test
+  public void testMetaFieldPopulationFlagsWithWhitespace() {
+    // Ensure whitespace in config value is handled
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST, " _hoodie_record_key , _hoodie_file_name ");
+    HoodieMetaFieldFlags flags = tableConfig.getHoodieMetaFieldFlags();
+    assertTrue(flags.isCommitTimePopulated(), "commit_time should be populated");
+    assertTrue(flags.isCommitSeqNoPopulated(), "commit_seqno should be populated");
+    assertFalse(flags.isRecordKeyPopulated(), "record_key should be excluded");
+    assertTrue(flags.isPartitionPathPopulated(), "partition_path should be populated");
+    assertFalse(flags.isFileNamePopulated(), "file_name should be excluded");
+  }
+
+  @Test
+  public void testMetaFieldPopulationFlagsWithInvalidFieldName() {
+    // Unknown field names in the exclusion list are rejected with a clear error,
+    // so a config typo fails fast instead of being silently ignored.
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST, "_hoodie_nonexistent_field");
+    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+        tableConfig::getHoodieMetaFieldFlags);
+    assertTrue(ex.getMessage().contains("_hoodie_nonexistent_field"),
+        "Error message should mention the unknown field, was: " + ex.getMessage());
+  }
+
+  @Test
+  public void testMetaFieldPopulationFlagsEmptyExcludeList() {
+    // Empty exclude list => all flags true
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST, "");
+    HoodieMetaFieldFlags flags = tableConfig.getHoodieMetaFieldFlags();
+    assertTrue(flags.isCommitTimePopulated(), "commit_time should be populated");
+    assertTrue(flags.isCommitSeqNoPopulated(), "commit_seqno should be populated");
+    assertTrue(flags.isRecordKeyPopulated(), "record_key should be populated");
+    assertTrue(flags.isPartitionPathPopulated(), "partition_path should be populated");
+    assertTrue(flags.isFileNamePopulated(), "file_name should be populated");
+  }
+
+  @Test
+  public void testIsMetaFieldExcluded() {
+    // No exclusions - nothing is excluded
+    HoodieTableConfig configNoExclusions = new HoodieTableConfig();
+    assertFalse(configNoExclusions.isMetaFieldExcluded(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+    assertFalse(configNoExclusions.isMetaFieldExcluded(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+
+    // Exclude commit_time only
+    HoodieTableConfig configExcludeCommitTime = new HoodieTableConfig();
+    configExcludeCommitTime.setValue(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST, "_hoodie_commit_time");
+    assertTrue(configExcludeCommitTime.isMetaFieldExcluded(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+    assertFalse(configExcludeCommitTime.isMetaFieldExcluded(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+
+    // Exclude multiple fields
+    HoodieTableConfig configExcludeMultiple = new HoodieTableConfig();
+    configExcludeMultiple.setValue(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST,
+        "_hoodie_record_key,_hoodie_partition_path");
+    assertFalse(configExcludeMultiple.isMetaFieldExcluded(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+    assertTrue(configExcludeMultiple.isMetaFieldExcluded(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+    assertTrue(configExcludeMultiple.isMetaFieldExcluded(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+
+    // Whitespace handling
+    HoodieTableConfig configWhitespace = new HoodieTableConfig();
+    configWhitespace.setValue(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST,
+        " _hoodie_commit_time , _hoodie_file_name ");
+    assertTrue(configWhitespace.isMetaFieldExcluded(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+    assertTrue(configWhitespace.isMetaFieldExcluded(HoodieRecord.FILENAME_METADATA_FIELD));
+    assertFalse(configWhitespace.isMetaFieldExcluded(HoodieRecord.RECORD_KEY_METADATA_FIELD));
   }
 
   private HoodieWriteConfig createWriteConfig(Map<String, String> configs) {

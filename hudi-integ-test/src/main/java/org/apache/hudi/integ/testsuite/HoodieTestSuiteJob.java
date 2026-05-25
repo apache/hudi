@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -124,6 +125,7 @@ public class HoodieTestSuiteJob {
           .setTableName(cfg.targetTableName)
           .setRecordKeyFields(this.props.getString(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
           .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
+          .setMetaFieldsExcludeList(this.props.getString(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST.key(), null))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), cfg.targetBasePath);
     } else {
       metaClient = HoodieTableMetaClient.builder()

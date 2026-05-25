@@ -486,7 +486,12 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       List<HoodieLogBlock> blocks = new ArrayList<>(2);
       HoodieLogBlock dataBlock = null;
       if (!recordList.isEmpty()) {
-        String keyField = config.populateMetaFields()
+        // Log-block key field names the column readers consult for the record key. If
+        // _hoodie_record_key is excluded (or populate.meta.fields=false), the meta column is
+        // null and we must point at the configured source record-key field instead.
+        // Source the flag from the persisted table config (single source of truth) since the
+        // writer config depends on each engine's table-config merge step running correctly.
+        String keyField = hoodieTable.getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isRecordKeyPopulated()
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 

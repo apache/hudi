@@ -68,7 +68,8 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
   protected HoodieFileWriter newParquetFileWriter(
       OutputStream outputStream,
       HoodieConfig config,
-      HoodieSchema schema) throws IOException {
+      HoodieSchema schema,
+      HoodieTableConfig tableConfig) throws IOException {
     //TODO boundary to revisit in follow up to use HoodieSchema directly
     final RowType rowType = (RowType) RowDataQueryContexts.fromSchema(schema).getRowType().getLogicalType();
     HoodieRowDataParquetWriteSupport writeSupport =
@@ -95,10 +96,11 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       StoragePath storagePath,
       HoodieConfig config,
       HoodieSchema schema,
-      TaskContextSupplier taskContextSupplier) throws IOException {
+      TaskContextSupplier taskContextSupplier,
+      HoodieTableConfig tableConfig) throws IOException {
     //TODO boundary to revisit in follow up to use HoodieSchema directly
     final RowType rowType = (RowType) RowDataQueryContexts.fromSchema(schema).getRowType().getLogicalType();
-    return newParquetFileWriter(instantTime, storagePath, config, rowType, taskContextSupplier);
+    return newParquetFileWriter(instantTime, storagePath, config, rowType, taskContextSupplier, tableConfig);
   }
 
   /**
@@ -109,6 +111,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
    * @param config              hoodie configuration
    * @param rowType             rowType of record
    * @param taskContextSupplier task context supplier
+   * @param tableConfig         persisted table config (source of truth for meta-field flags)
    *
    * @return a RowData parquet writer
    */
@@ -117,8 +120,9 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       StoragePath storagePath,
       HoodieConfig config,
       RowType rowType,
-      TaskContextSupplier taskContextSupplier) throws IOException {
-    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+      TaskContextSupplier taskContextSupplier,
+      HoodieTableConfig tableConfig) throws IOException {
+    boolean populateMetaFields = tableConfig.populateMetaFields();
     boolean withOperation = config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
 
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs = HoodieParquetConfigInjector.applyConfigInjector(storagePath, storage.getConf(), config);

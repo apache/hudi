@@ -166,9 +166,11 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     when(mockTaskContextSupplier.getPartitionIdSupplier()).thenReturn(partitionSupplier);
     when(partitionSupplier.get()).thenReturn(10);
 
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
     return (HoodieAvroHFileWriter) HoodieFileWriterFactory.getFileWriter(
         instantTime, getFilePath(), storage, HoodieStorageConfig.newBuilder().fromProperties(props).build(), schema,
-        mockTaskContextSupplier, HoodieRecord.HoodieRecordType.AVRO);
+        mockTaskContextSupplier, HoodieRecord.HoodieRecordType.AVRO, tableConfig);
   }
 
   @Override

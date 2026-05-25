@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
 import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
@@ -31,6 +32,7 @@ import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
 import java.util.function.Function;
+import java.util.Objects;
 
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.COMMIT_TIME_METADATA_FIELD;
@@ -44,6 +46,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
   private final UTF8String instantTime;
 
   private final boolean populateMetaFields;
+  private final HoodieMetaFieldFlags metaFieldFlags;
 
   private final HoodieRowParquetWriteSupport writeSupport;
 
@@ -53,12 +56,14 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                   HoodieRowParquetConfig parquetConfig,
                                   String instantTime,
                                   TaskContextSupplier taskContextSupplier,
-                                  boolean populateMetaFields) throws IOException {
+                                  boolean populateMetaFields,
+                                  HoodieMetaFieldFlags metaFieldFlags) throws IOException {
     super(file, parquetConfig);
     this.writeSupport = parquetConfig.getWriteSupport();
     this.fileName = UTF8String.fromString(file.getName());
     this.instantTime = UTF8String.fromString(instantTime);
     this.populateMetaFields = populateMetaFields;
+    this.metaFieldFlags = Objects.requireNonNull(metaFieldFlags, "metaFieldFlags must not be null");
     this.seqIdGenerator = recordIndex -> {
       Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
       return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
@@ -95,11 +100,14 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                       UTF8String recordKey,
                                       String partitionPath,
                                       long recordCount)  {
-    row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), instantTime);
-    row.update(COMMIT_SEQNO_METADATA_FIELD.ordinal(), UTF8String.fromString(seqIdGenerator.apply(recordCount)));
-    row.update(RECORD_KEY_METADATA_FIELD.ordinal(), recordKey);
-    // TODO set partition path in ctor
-    row.update(PARTITION_PATH_METADATA_FIELD.ordinal(), UTF8String.fromString(partitionPath));
-    row.update(FILENAME_METADATA_FIELD.ordinal(), fileName);
+    UTF8String seqId = metaFieldFlags.isCommitSeqNoPopulated()
+        ? UTF8String.fromString(seqIdGenerator.apply(recordCount)) : null;
+    UTF8String partitionPathUtf8 = metaFieldFlags.isPartitionPathPopulated()
+        ? UTF8String.fromString(partitionPath) : null;
+    row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), metaFieldFlags.isCommitTimePopulated() ? instantTime : null);
+    row.update(COMMIT_SEQNO_METADATA_FIELD.ordinal(), seqId);
+    row.update(RECORD_KEY_METADATA_FIELD.ordinal(), metaFieldFlags.isRecordKeyPopulated() ? recordKey : null);
+    row.update(PARTITION_PATH_METADATA_FIELD.ordinal(), partitionPathUtf8);
+    row.update(FILENAME_METADATA_FIELD.ordinal(), metaFieldFlags.isFileNamePopulated() ? fileName : null);
   }
 }

@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -77,6 +78,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
   private final String fileId;
   private final boolean preserveHoodieMetadata;
   private final boolean skipMetadataWrite;
+  private final HoodieMetaFieldFlags metaFieldFlags;
   private final HoodieStorage storage;
   protected final WriteStatus writeStatus;
   private final HoodieRecordLocation newRecordLocation;
@@ -100,6 +102,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.preserveHoodieMetadata = preserveHoodieMetadata;
     this.skipMetadataWrite = skipMetadataWrite;
+    this.metaFieldFlags = table.getMetaClient().getTableConfig().getHoodieMetaFieldFlags();
     this.currTimer = HoodieTimer.start();
     this.storage = table.getStorage();
     this.path = makeNewPath(partitionPath);
@@ -143,13 +146,32 @@ public class HoodieRowDataCreateHandle implements Serializable {
       String commitInstant;
       RowData rowData;
       if (!skipMetadataWrite) {
-        seqId = preserveHoodieMetadata
-            ? record.getString(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD).toString()
-            : HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement());
-        commitInstant = preserveHoodieMetadata
-            ? record.getString(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD).toString()
-            : instantTime;
-        rowData = HoodieRowDataCreation.create(commitInstant, seqId, recordKey, partitionPath, path.getName(),
+        if (!metaFieldFlags.isCommitTimePopulated()) {
+          commitInstant = null;
+        } else if (preserveHoodieMetadata) {
+          // preserveHoodieMetadata is the read-side contract that the source row already carries
+          // the meta values to retain (e.g. clustering / bootstrap). Always read from the record,
+          // including a null value - regenerating instantTime here would silently overwrite a
+          // deliberately-null meta column from an upstream table where the field was excluded.
+          commitInstant = record.isNullAt(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD)
+              ? null
+              : record.getString(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD).toString();
+        } else {
+          commitInstant = instantTime;
+        }
+        if (!metaFieldFlags.isCommitSeqNoPopulated()) {
+          seqId = null;
+        } else if (preserveHoodieMetadata) {
+          seqId = record.isNullAt(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
+              ? null
+              : record.getString(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD).toString();
+        } else {
+          seqId = HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement());
+        }
+        String effectiveRecordKey = metaFieldFlags.isRecordKeyPopulated() ? recordKey : null;
+        String effectivePartitionPath = metaFieldFlags.isPartitionPathPopulated() ? partitionPath : null;
+        String effectiveFileName = metaFieldFlags.isFileNamePopulated() ? path.getName() : null;
+        rowData = HoodieRowDataCreation.create(commitInstant, seqId, effectiveRecordKey, effectivePartitionPath, effectiveFileName,
             record, writeConfig.allowOperationMetadataField(), preserveHoodieMetadata);
       } else {
         rowData = record;
@@ -294,6 +316,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
       throws IOException {
     StoragePath storagePath = new StoragePath(path.toUri());
     return (HoodieRowDataFileWriter) new HoodieRowDataFileWriterFactory(hoodieTable.getStorage())
-        .newParquetFileWriter(instantTime, storagePath, config, rowType, hoodieTable.getTaskContextSupplier());
+        .newParquetFileWriter(instantTime, storagePath, config, rowType, hoodieTable.getTaskContextSupplier(),
+            hoodieTable.getMetaClient().getTableConfig());
   }
 }

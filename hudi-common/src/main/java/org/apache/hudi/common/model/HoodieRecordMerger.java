@@ -146,7 +146,10 @@ public interface HoodieRecordMerger extends Serializable {
   default String[] getMandatoryFieldsForMerging(HoodieSchema dataSchema, HoodieTableConfig cfg, TypedProperties properties) {
     ArrayList<String> requiredFields = new ArrayList<>();
 
-    if (cfg.populateMetaFields()) {
+    // Read the record key from the meta column only when _hoodie_record_key is populated on
+    // disk; otherwise (populate.meta.fields=false or _hoodie_record_key in
+    // META_FIELDS_EXCLUDE_LIST) require the configured source record-key fields instead.
+    if (cfg.getHoodieMetaFieldFlags().isRecordKeyPopulated()) {
       requiredFields.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);
     } else {
       Option<String[]> fields = cfg.getRecordKeyFields();

@@ -232,7 +232,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
       // Create the writer for writing the new version file
       fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, newFilePath, hoodieTable.getStorage(),
-            config, writeSchemaWithMetaFields, taskContextSupplier, recordType);
+            config, writeSchemaWithMetaFields, taskContextSupplier, recordType,
+            hoodieTable.getMetaClient().getTableConfig());
     } catch (IOException io) {
       writeStatus.setGlobalError(io);
       throw new HoodieUpsertException("Failed to initialize HoodieUpdateHandle for FileId: " + fileId + " on commit "

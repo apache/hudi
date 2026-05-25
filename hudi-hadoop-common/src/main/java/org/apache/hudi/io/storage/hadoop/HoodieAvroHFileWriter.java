@@ -23,6 +23,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.Option;
@@ -50,6 +51,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.Objects;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -74,6 +76,7 @@ public class HoodieAvroHFileWriter
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
+  private final HoodieMetaFieldFlags metaFieldFlags;
   private final Option<HoodieSchemaField> keyFieldSchema;
   private HFileWriter writer;
   private String minRecordKey;
@@ -81,7 +84,8 @@ public class HoodieAvroHFileWriter
   private String prevRecordKey;
 
   public HoodieAvroHFileWriter(String instantTime, StoragePath file, HoodieHFileConfig hfileConfig, HoodieSchema schema,
-                               TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
+                               TaskContextSupplier taskContextSupplier, boolean populateMetaFields,
+                               HoodieMetaFieldFlags metaFieldFlags) throws IOException {
     Configuration conf = HadoopFSUtils.registerFileSystem(file, (Configuration) hfileConfig.getStorageConf().unwrap());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
     FileSystem fs = this.file.getFileSystem(conf);
@@ -98,6 +102,7 @@ public class HoodieAvroHFileWriter
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
     this.populateMetaFields = populateMetaFields;
+    this.metaFieldFlags = Objects.requireNonNull(metaFieldFlags, "metaFieldFlags must not be null");
 
     HFileContext context = new HFileContext.Builder()
         .blockSize(hfileConfig.getBlockSize())
@@ -116,11 +121,9 @@ public class HoodieAvroHFileWriter
   public void writeAvroWithMetadata(HoodieKey key, IndexedRecord avroRecord) throws IOException {
     if (populateMetaFields) {
       prepRecordWithMetadata(key, avroRecord, instantTime,
-          taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX_COUNT.getAndIncrement(), file.getName());
-      writeAvro(key.getRecordKey(), avroRecord);
-    } else {
-      writeAvro(key.getRecordKey(), avroRecord);
+          taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX_COUNT.getAndIncrement(), file.getName(), metaFieldFlags);
     }
+    writeAvro(key.getRecordKey(), avroRecord);
   }
 
   @Override

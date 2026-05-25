@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -55,5 +56,22 @@ public interface HoodieAvroFileWriter extends HoodieFileWriter {
     String seqId = HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
     HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord, key.getRecordKey(), key.getPartitionPath(), fileName);
     HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord, instantTime, seqId);
+  }
+
+  /**
+   * Selectively populates meta fields based on the provided {@link HoodieMetaFieldFlags} flags.
+   * Fields that are not populated are explicitly set to null so that any pre-existing values on
+   * {@code avroRecord} are cleared and the on-disk output is deterministic.
+   */
+  default void prepRecordWithMetadata(HoodieKey key, IndexedRecord avroRecord, String instantTime,
+      Integer partitionId, long recordIndex, String fileName, HoodieMetaFieldFlags populateFlags) {
+    GenericRecord rec = (GenericRecord) avroRecord;
+    String seqId = populateFlags.isCommitSeqNoPopulated()
+        ? HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex) : null;
+    rec.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, populateFlags.getCommitTime(instantTime));
+    rec.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, seqId);
+    rec.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, populateFlags.getRecordKey(key.getRecordKey()));
+    rec.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, populateFlags.getPartitionPath(key.getPartitionPath()));
+    rec.put(HoodieRecord.FILENAME_METADATA_FIELD, populateFlags.getFileName(fileName));
   }
 }

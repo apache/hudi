@@ -122,7 +122,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
           storage.getConf(), Double.parseDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION.defaultValue()), true);
       try (HoodieAvroParquetWriter writer = new HoodieAvroParquetWriter(
           new StoragePath(Paths.get(basePath, partition, fileName).toString()), config, currentInstantTime,
-          contextSupplier, populateMetaFields)) {
+          contextSupplier, populateMetaFields, new HoodieTableConfig().getHoodieMetaFieldFlags())) {
         int seqId = 1;
         for (HoodieRecord record : records) {
           GenericRecord avroRecord = (GenericRecord) record.rewriteRecordWithNewSchema(schema, CollectionUtils.emptyProps(), schema).getData();
@@ -145,7 +145,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
       try (HoodieAvroOrcWriter writer = new HoodieAvroOrcWriter(
           currentInstantTime,
           new StoragePath(Paths.get(basePath, partition, fileName).toString()),
-          config, schema, contextSupplier)) {
+          config, schema, contextSupplier, new HoodieTableConfig().getHoodieMetaFieldFlags())) {
         int seqId = 1;
         for (HoodieRecord record : records) {
           GenericRecord avroRecord = (GenericRecord) record.toIndexedRecord(schema, CollectionUtils.emptyProps()).get().getData();

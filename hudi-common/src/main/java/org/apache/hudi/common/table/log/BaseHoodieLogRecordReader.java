@@ -184,10 +184,13 @@ public abstract class BaseHoodieLogRecordReader<T> {
       checkState(partitionNameOverride.isPresent());
 
       this.recordKeyField = keyFieldOverride.get();
-    } else if (tableConfig.populateMetaFields()) {
-      this.recordKeyField = HoodieRecord.RECORD_KEY_METADATA_FIELD;
     } else {
-      this.recordKeyField = tableConfig.getRecordKeyFieldProp();
+      // Fall back to the configured source record-key field when _hoodie_record_key is null
+      // on disk (either populate.meta.fields=false or _hoodie_record_key in
+      // META_FIELDS_EXCLUDE_LIST).
+      this.recordKeyField = tableConfig.getHoodieMetaFieldFlags().isRecordKeyPopulated()
+          ? HoodieRecord.RECORD_KEY_METADATA_FIELD
+          : tableConfig.getRecordKeyFieldProp();
     }
 
     this.partitionNameOverrideOpt = partitionNameOverride;

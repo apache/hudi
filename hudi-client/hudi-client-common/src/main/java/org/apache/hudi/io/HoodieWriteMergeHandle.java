@@ -180,8 +180,8 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       // Create the writer for writing the new version file
       fileWriter = HoodieFileWriterFactory.getFileWriter(
           instantTime, newFilePath, hoodieTable.getStorage(),
-
-          config, writeSchemaWithMetaFields, taskContextSupplier, getRecordType());
+          config, writeSchemaWithMetaFields, taskContextSupplier, getRecordType(),
+          hoodieTable.getMetaClient().getTableConfig());
     } catch (IOException io) {
       log.error("Error in update task at commit {}", instantTime, io);
       writeStatus.setGlobalError(io);
@@ -412,9 +412,14 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
   protected void writeToFile(HoodieKey key, HoodieRecord<T> record, HoodieSchema schema, Properties props, boolean shouldPreserveRecordMetadata) throws IOException {
     if (shouldPreserveRecordMetadata) {
       // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
-      //       file holding this record even in cases when overall metadata is preserved
-      HoodieRecord populatedRecord = record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName());
-      fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields, props);
+      //       file holding this record even in cases when overall metadata is preserved -
+      //       unless the column is excluded via META_FIELDS_EXCLUDE_LIST, in which case
+      //       it must stay null on disk to honor the persisted exclusion.
+      HoodieRecord toWrite = hoodieTable.getMetaClient().getTableConfig()
+          .getHoodieMetaFieldFlags().isFileNamePopulated()
+          ? record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName())
+          : record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, null);
+      fileWriter.write(key.getRecordKey(), toWrite, writeSchemaWithMetaFields, props);
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.
       record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());

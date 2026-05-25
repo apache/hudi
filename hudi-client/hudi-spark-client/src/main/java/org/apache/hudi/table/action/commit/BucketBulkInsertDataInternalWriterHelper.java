@@ -89,9 +89,11 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
   }
 
   protected UTF8String extractRecordKey(InternalRow row) {
-    if (populateMetaFields) {
+    // Read the record key from the meta column only when it is populated on disk; with
+    // selective exclusion the column may be null even when populateMetaFields==true.
+    if (hoodieTable.getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isRecordKeyPopulated()) {
       // In case meta-fields are materialized w/in the table itself, we can just simply extract
-      // partition path from there
+      // record key from there
       //
       // NOTE: Helper keeps track of [[lastKnownPartitionPath]] as [[UTF8String]] to avoid
       //       conversion from Catalyst internal representation into a [[String]]

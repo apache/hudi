@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -39,14 +40,18 @@ public class ExecutionStrategyUtil {
    *
    * @param indexedRecord indexedRecord.
    * @param writeConfig writeConfig.
+   * @param tableConfig persisted table config; supplies meta-field flags so the key generator
+   *                    is only allocated when {@code _hoodie_record_key} / {@code _hoodie_partition_path}
+   *                    must be reconstructed from source fields.
    * @return hoodieRecord.
    * @param <T>
    */
   public static <T> HoodieRecord<T> transform(IndexedRecord indexedRecord,
-      HoodieWriteConfig writeConfig) {
+      HoodieWriteConfig writeConfig, HoodieTableConfig tableConfig) {
 
     GenericRecord record = (GenericRecord) indexedRecord;
-    Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
+    Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig,
+        tableConfig.getHoodieMetaFieldFlags().isKeyGeneratorRequired());
 
     String key = KeyGenUtils.getRecordKeyFromGenericRecord(record, keyGeneratorOpt);
     String partition = KeyGenUtils.getPartitionPathFromGenericRecord(record, keyGeneratorOpt);

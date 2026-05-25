@@ -265,7 +265,7 @@ public class HoodieFileSliceTestUtils {
 
     try (HoodieAvroFileWriter writer = (HoodieAvroFileWriter) HoodieFileWriterFactory
         .getFileWriter(baseInstantTime, new StoragePath(baseFilePath), storage, cfg,
-                schema, new LocalTaskContextSupplier(), HoodieRecord.HoodieRecordType.AVRO)) {
+                schema, new LocalTaskContextSupplier(), HoodieRecord.HoodieRecordType.AVRO, new HoodieTableConfig())) {
       for (IndexedRecord record : records) {
         writer.writeAvro(
             (String) record.get(schema.getField(ROW_KEY).get().pos()), record);
