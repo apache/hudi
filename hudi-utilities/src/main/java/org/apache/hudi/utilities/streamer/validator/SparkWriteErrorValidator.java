@@ -122,8 +122,8 @@ public class SparkWriteErrorValidator extends BasePreCommitValidator {
     String errorMsg = String.format(
         "Write-error validation failed for instant %s. "
             + "Errors: %d, Total: %d. "
-            + "To allow the commit to proceed despite write errors, set %s=WARN_LOG, "
-            + "or run HoodieStreamer with --commit-on-errors.",
+            + "To allow commits despite write errors, both %s=WARN_LOG (bypasses this validator) "
+            + "and --commit-on-errors (bypasses the StreamSync inline gate) are required.",
         context.getInstantTime(), totalErrors, totalRecords,
         HoodiePreCommitValidatorConfig.VALIDATION_FAILURE_POLICY.key());
 

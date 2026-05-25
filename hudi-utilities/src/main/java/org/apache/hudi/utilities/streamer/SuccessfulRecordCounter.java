@@ -23,7 +23,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.function.Function;
 
 import java.util.List;
 import java.util.Objects;
@@ -66,18 +65,14 @@ public final class SuccessfulRecordCounter {
     }
     if (isErrorTableWriteUnificationEnabled && errorTableWriteStatusRDDOpt.isPresent()) {
       JavaRDD<WriteStatus> errorRdd = errorTableWriteStatusRDDOpt.get();
-      totalRecords += sumLong(errorRdd, WriteStatus::getTotalRecords);
-      totalErrorRecords += sumLong(errorRdd, WriteStatus::getTotalErrorRecords);
+      long[] sums = errorRdd.aggregate(
+          new long[]{0L, 0L},
+          (acc, ws) -> new long[]{acc[0] + ws.getTotalRecords(), acc[1] + ws.getTotalErrorRecords()},
+          (a, b) -> new long[]{a[0] + b[0], a[1] + b[1]});
+      totalRecords += sums[0];
+      totalErrorRecords += sums[1];
     }
     return new Counts(totalRecords, totalErrorRecords);
-  }
-
-  /**
-   * Lossless long sum over an RDD. Avoids the precision loss of {@code mapToDouble().sum()},
-   * which silently rounds counts above 2^53 (about 9 quadrillion).
-   */
-  private static long sumLong(JavaRDD<WriteStatus> rdd, Function<WriteStatus, Long> extractor) {
-    return rdd.map(extractor).fold(0L, Long::sum);
   }
 
   /** Immutable count snapshot. */
