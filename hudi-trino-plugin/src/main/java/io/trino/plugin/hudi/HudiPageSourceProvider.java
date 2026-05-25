@@ -55,7 +55,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.io.MessageColumnIO;
@@ -65,7 +64,6 @@ import org.joda.time.DateTimeZone;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -79,7 +77,6 @@ import static io.trino.parquet.ParquetTypeUtils.getColumnIO;
 import static io.trino.parquet.ParquetTypeUtils.getDescriptors;
 import static io.trino.parquet.predicate.PredicateUtils.buildPredicate;
 import static io.trino.parquet.predicate.PredicateUtils.getFilteredRowGroups;
-import static io.trino.plugin.hive.HiveColumnHandle.partitionColumnHandle;
 import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.ParquetReaderProvider;
 import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.createDataSource;
 import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.createParquetPageSource;
@@ -203,8 +200,6 @@ public class HudiPageSourceProvider
 
         // Avoid avro serialization if split/filegroup only contains base files
         if (isBaseFileOnly) {
-            ValidationUtils.checkArgument(!hiveColumnHandles.isEmpty(),
-                    "Column handles should always be present for providing Hudi data page source on a base file");
             return new HudiBaseFileOnlyPageSource(
                     dataPageSource,
                     hiveColumnHandles,
@@ -422,15 +417,8 @@ public class HudiPageSourceProvider
     private static List<HiveColumnHandle> getHiveColumns(List<ColumnHandle> columns,
                                                          boolean isBaseFileOnly)
     {
-        if (!isBaseFileOnly || !columns.isEmpty()) {
-            return columns.stream()
-                    .map(HiveColumnHandle.class::cast)
-                    .toList();
-        }
-
-        // The `columns` list containing the requested columns to read could be empty
-        // when count(*) is in the statement; to make sure the page source works properly,
-        // the synthesized partition column is added in this case.
-        return Collections.singletonList(partitionColumnHandle());
+        return columns.stream()
+                .map(HiveColumnHandle.class::cast)
+                .toList();
     }
 }
