@@ -98,6 +98,11 @@ public class HudiBaseFileOnlyPageSource
             return physicalSourcePage;
         }
 
+        if (allOutputColumns.isEmpty()) {
+            // count(*) projects no columns; forward the physical page which already carries the correct positionCount with zero blocks.
+            return physicalSourcePage;
+        }
+
         Block[] outputBlocks = new Block[allOutputColumns.size()];
         for (int i = 0; i < allOutputColumns.size(); i++) {
             HiveColumnHandle outputColumn = allOutputColumns.get(i);
