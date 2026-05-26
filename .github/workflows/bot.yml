@@ -1119,7 +1119,8 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
-        if: ${{ env.SPARK_PROFILE >= 'spark3.4' }} # Only support Spark 3.4 for now && needs.changes.outputs.relevant == 'true'
+        # Only support Spark 3.4 for now
+        if: ${{ env.SPARK_PROFILE >= 'spark3.4' && needs.changes.outputs.relevant == 'true' }}
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/run_docker_java17.sh
