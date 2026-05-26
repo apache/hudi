@@ -74,6 +74,14 @@
                 <artifactId>jackson-annotations</artifactId>
                 <version>2.21</version>
             </dependency>
+            <!-- Hudi parent pins jetty-server / jetty-servlet at 9.4.57; Trino runs on Jetty 12
+                 (Request$Handler etc. exist only in 12.x). Pin jetty-server here to keep
+                 trino-testing's classpath consistent. jetty-servlet does not exist in 12.x. -->
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-server</artifactId>
+                <version>12.1.9</version>
+            </dependency>
             <!-- Airbase manages junit-platform at 6.0.3 (paired with jupiter 6.x). Hudi manages
                  jupiter at 5.14.1 (paired with platform 1.14.1). Pin platform here to keep the
                  pair consistent; without this, surefire fails with OutputDirectoryCreator not found. -->
@@ -225,6 +233,13 @@
                 </exclusion>
                 <exclusion>
                     <groupId>org.apache.orc</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <!-- Hudi pulls Jetty 9.x for its embedded HTTP server; Trino runs on Jetty 12.
+                     The connector does not start a Hudi HTTP server, so drop the legacy artifacts
+                     to avoid jar-set conflicts (Request$Handler missing from 9.x). -->
+                <exclusion>
+                    <groupId>org.eclipse.jetty</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
                 <!-- Not used by the connector; excluded to keep the plugin jar set lean. -->
