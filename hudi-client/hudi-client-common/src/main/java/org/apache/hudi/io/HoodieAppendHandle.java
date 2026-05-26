@@ -255,9 +255,10 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     deltaWriteStat.setFileId(fileId);
     Option<FileSlice> fileSliceOpt = populateWriteStatAndFetchFileSlice(record, deltaWriteStat);
     // averageRecordSize is seeded lazily in flushToDiskIfRequired on the first buffered
-    // (post-prepareRecord) record — sizing the incoming record here under-counts heap on
-    // Spark engines, where the incoming record is a compact UnsafeRow but the buffered
-    // record is the larger Avro form actually retained in recordList.
+    // (post-prepareRecord) record. Sizing the incoming record here under-counts heap
+    // because recordList retains the post-prepareRecord clone: a fully-materialized Avro
+    // IndexedRecord with prepended meta-fields, whereas the incoming record's payload
+    // is typically still in its compact/deflated wire form.
     try {
       // Save hoodie partition meta in the partition path
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
@@ -638,12 +639,13 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
   /**
    * Buffers {@code record} for the next log block. Returns the record actually appended to
-   * {@link #recordList} (the post-{@code prepareRecord} object — typically a
-   * {@code HoodieAvroIndexedRecord} carrying a fully-deserialized {@code IndexedRecord}),
+   * {@link #recordList} — the post-{@code prepareRecord} clone of {@code populatedRecord}
+   * carrying a fully-materialized Avro {@code IndexedRecord} with prepended meta-fields —
    * or {@code null} when nothing was appended to {@code recordList} (delete, ignored, or
    * partition-mismatch failure). The returned reference is what {@link #flushToDiskIfRequired}
-   * sizes — sizing the incoming record under-counts heap on Spark engines where the incoming
-   * record is a compact {@code UnsafeRow} but the buffered record is the larger Avro form.
+   * sizes; sizing the incoming record under-counts heap because the incoming payload is
+   * typically still in its compact/deflated wire form, whereas the buffered record holds
+   * the fully-deserialized Avro graph plus meta-fields.
    */
   private HoodieRecord writeToBuffer(HoodieRecord<T> record) {
     if (!partitionPath.equals(record.getPartitionPath())) {
@@ -714,9 +716,10 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
    * <p>{@code bufferedRecord} is the record that was just appended to {@link #recordList} by
    * {@link #writeToBuffer} (or {@code null} for delete/ignored windows where {@code recordList}
    * did not grow). Sizing this object — rather than the incoming pre-{@code prepareRecord}
-   * record — keeps {@link #averageRecordSize} aligned with what is actually retained in heap,
-   * which matters on Spark engines where the incoming {@code HoodieSparkRecord}/{@code UnsafeRow}
-   * is many times smaller than the buffered {@code HoodieAvroIndexedRecord}.
+   * record — keeps {@link #averageRecordSize} aligned with what is actually retained in heap.
+   * The incoming record's payload is typically still compact/deflated; the buffered record
+   * holds the fully-materialized Avro {@code IndexedRecord} with prepended meta-fields, which
+   * is what {@code maxBlockSize} is meant to bound.
    */
   protected void flushToDiskIfRequired(HoodieRecord bufferedRecord, boolean appendDeleteBlocks) {
     if (bufferedRecord != null
