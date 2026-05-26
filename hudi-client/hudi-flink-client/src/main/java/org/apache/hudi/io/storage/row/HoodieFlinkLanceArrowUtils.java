@@ -202,7 +202,7 @@ public final class HoodieFlinkLanceArrowUtils {
       case TIMESTAMP_WITHOUT_TIME_ZONE:
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
         long micros = ((TimeStampMicroVector) vector).get(rowId);
-        return TimestampData.fromEpochMillis(micros / 1000L, (int) (micros % 1000L) * 1000);
+        return TimestampData.fromEpochMillis(Math.floorDiv(micros, 1000L), (int) Math.floorMod(micros, 1000L) * 1000);
       default:
         throw unsupported(type);
     }

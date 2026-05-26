@@ -25,6 +25,7 @@ import org.apache.arrow.vector.types.TimeUnit;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
@@ -32,8 +33,10 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import java.util.Collections;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 /**
  * Tests for {@link HoodieFlinkLanceArrowUtils}.
@@ -68,6 +71,25 @@ public class TestHoodieFlinkLanceArrowUtils {
 
       HoodieFlinkLanceArrowUtils.writeValue(new TimestampType(6), vector, 1, rowData, 0, false);
       assertEquals(timestampData.toTimestamp().getTime() * 1000L, vector.get(1));
+    }
+  }
+
+  @Test
+  public void testTimestampReadNormalizesPreEpochMicros() {
+    try (BufferAllocator allocator = new RootAllocator();
+         TimeStampMicroVector vector = new TimeStampMicroVector(
+             "ts",
+             FieldType.nullable(new ArrowType.Timestamp(TimeUnit.MICROSECOND, null)),
+             allocator)) {
+      vector.setSafe(0, -1_234_567L);
+      vector.setValueCount(1);
+
+      RowData rowData = HoodieFlinkLanceArrowUtils.toRowData(
+          RowType.of(new LogicalType[] {new TimestampType(6)}, new String[] {"ts"}),
+          Collections.singletonList(vector),
+          0);
+
+      assertEquals(TimestampData.fromEpochMillis(-1235L, 433000), rowData.getTimestamp(0, 6));
     }
   }
 }
