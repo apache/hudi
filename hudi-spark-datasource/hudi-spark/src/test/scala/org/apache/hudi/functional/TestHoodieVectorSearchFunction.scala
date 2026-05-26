@@ -1768,8 +1768,10 @@ class TestHoodieVectorSearchFunction extends HoodieSparkClientTestBase {
     // parseOptionalDouble widens any NumericType literal (Int, Long, Short, Byte, Decimal, Float)
     // to Double. Exercise that contract with an Int literal and a Decimal literal.
     //
-    // Int literal: max_distance = 1 keeps doc_1 (0.0), doc_4 (~0.293), doc_5 (~0.423) — excludes
-    // doc_2/doc_3 (distance = 1.0) because the filter is strict (>).
+    // Int literal: max_distance = 1 → widens to 1.0. The threshold is inclusive (<=) so all five
+    // corpus rows are kept: doc_1 (0.0), doc_4 (~0.293), doc_5 (~0.423), doc_2 (1.0), doc_3 (1.0).
+    // The Int-vs-Double distinction is what's under test, not the boundary itself; using a value
+    // exactly at the corpus boundary makes the widening result observable.
     val intResult = spark.sql(
       s"""
          |SELECT id, _hudi_distance
@@ -1787,12 +1789,15 @@ class TestHoodieVectorSearchFunction extends HoodieSparkClientTestBase {
          |""".stripMargin
     ).collect()
 
-    assertEquals(3, intResult.length)
+    assertEquals(5, intResult.length)
     val intIds = intResult.map(_.getAs[String]("id")).toSet
     assertTrue(intIds.contains("doc_1"))
     assertTrue(intIds.contains("doc_4"))
     assertTrue(intIds.contains("doc_5"))
-    assertFalse(intIds.contains("doc_2"))
+    assertTrue(intIds.contains("doc_2"),
+      "doc_2 at distance 1.0 should be included by inclusive (<=) threshold")
+    assertTrue(intIds.contains("doc_3"),
+      "doc_3 at distance 1.0 should be included by inclusive (<=) threshold")
 
     // Decimal literal: CAST(0.3 AS DECIMAL(10,2)) → keeps doc_1 (0.0) and doc_4 (~0.293).
     val decResult = spark.sql(
