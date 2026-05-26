@@ -55,6 +55,24 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <!-- Airbase manages junit-platform at 6.0.3 (paired with jupiter 6.x). Hudi manages
+                 jupiter at 5.14.1 (paired with platform 1.14.1). Pin platform here to keep the
+                 pair consistent; without this, surefire fails with OutputDirectoryCreator not found. -->
+            <dependency>
+                <groupId>org.junit.platform</groupId>
+                <artifactId>junit-platform-commons</artifactId>
+                <version>${junit.platform.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.platform</groupId>
+                <artifactId>junit-platform-engine</artifactId>
+                <version>${junit.platform.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.platform</groupId>
+                <artifactId>junit-platform-launcher</artifactId>
+                <version>${junit.platform.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
