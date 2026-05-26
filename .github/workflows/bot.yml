@@ -32,23 +32,34 @@ jobs:
     outputs:
       relevant: ${{ steps.filter.outputs.relevant }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: dorny/paths-filter@v3
+      - name: Detect relevant changes
         id: filter
-        with:
-          filters: |
-            relevant:
-              - '!**.bmp'
-              - '!**.gif'
-              - '!**.jpg'
-              - '!**.jpeg'
-              - '!**.md'
-              - '!**.pdf'
-              - '!**.png'
-              - '!**.svg'
-              - '!**.yaml'
-              - '!.gitignore'
-              - '**'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "pull_request" ]; then
+            FILES=$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" --jq '.[].filename')
+          else
+            FILES=$(gh api "repos/$REPO/compare/$BEFORE_SHA...$AFTER_SHA" --jq '.files[].filename')
+          fi
+          echo "Changed files:"
+          printf '%s\n' "$FILES"
+          RELEVANT=false
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              *.bmp|*.gif|*.jpg|*.jpeg|*.md|*.pdf|*.png|*.svg|*.yaml|.gitignore) ;;
+              *) RELEVANT=true ;;
+            esac
+          done <<< "$FILES"
+          echo "Relevant: $RELEVANT"
+          echo "relevant=$RELEVANT" >> "$GITHUB_OUTPUT"
 
   validate-source:
     runs-on: ubuntu-latest
