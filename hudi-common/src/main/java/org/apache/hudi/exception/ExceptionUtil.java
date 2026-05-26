@@ -40,7 +40,7 @@ public final class ExceptionUtil {
 
     Throwable cause = t;
     while (cause != null) {
-      if (cause.getMessage().contains(errorMsg)) {
+      if (cause.getMessage() != null && cause.getMessage().contains(errorMsg)) {
         return true;
       }
       cause = cause.getCause();
