@@ -55,6 +55,25 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <!-- Hudi parent pins jackson-* individually at 2.15.2, which predates
+                 StreamReadConstraints.Builder.maxNameLength (added in 2.16). Trino airlift needs it.
+                 Direct entries override parent pins; jackson-bom imports do not (parent direct entries win). -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>2.21.3</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>2.21.3</version>
+            </dependency>
+            <!-- jackson-annotations follows its own cadence; latest in the 2.21 line is 2.21 (no patch). -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-annotations</artifactId>
+                <version>2.21</version>
+            </dependency>
             <!-- Airbase manages junit-platform at 6.0.3 (paired with jupiter 6.x). Hudi manages
                  jupiter at 5.14.1 (paired with platform 1.14.1). Pin platform here to keep the
                  pair consistent; without this, surefire fails with OutputDirectoryCreator not found. -->
