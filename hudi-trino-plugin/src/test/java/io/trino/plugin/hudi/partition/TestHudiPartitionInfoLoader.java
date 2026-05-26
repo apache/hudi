@@ -16,7 +16,6 @@ package io.trino.plugin.hudi.partition;
 import com.google.common.collect.ImmutableList;
 import io.airlift.units.DataSize;
 import io.trino.filesystem.Location;
-import io.trino.filesystem.cache.DefaultCachingHostAddressProvider;
 import io.trino.metastore.Partition;
 import io.trino.metastore.StorageFormat;
 import io.trino.plugin.hive.HiveColumnHandle;
@@ -167,7 +166,7 @@ public class TestHudiPartitionInfoLoader
                 "",
                 "101");
         HudiSplitWeightProvider weightProvider = new SizeBasedSplitWeightProvider(0.05, DataSize.of(128, MEGABYTE));
-        return new HudiSplitFactory(tableHandle, weightProvider, DataSize.of(128, MEGABYTE), new DefaultCachingHostAddressProvider());
+        return new HudiSplitFactory(tableHandle, weightProvider, DataSize.of(128, MEGABYTE));
     }
 
     private static HiveHudiPartitionInfo createTestPartition(String partitionPath)
