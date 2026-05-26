@@ -714,6 +714,161 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
   }
 
+  /**
+   * Regression test for HUDI: data loss in stream read from earliest when
+   * {@code read.streaming.skip_compaction = true} on a MOR table with completed
+   * compaction commits. Covers the streaming earliest full table scan branch in
+   * {@link org.apache.hudi.source.IncrementalInputSplits#inputSplits(HoodieTableMetaClient, String, boolean)}.
+   *
+   * <p>Triggering condition:
+   * <ul>
+   *   <li>{@code read.start-commit = earliest} (no instant range -> full table scan path);</li>
+   *   <li>{@code read.streaming.skip_compaction = true} (active timeline filtered out compaction);</li>
+   *   <li>MOR table with at least one completed compaction commit.</li>
+   * </ul>
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testStreamReadMorTableWithCompactionFromEarliest(boolean useSourceV2) throws Exception {
+    String createSource = TestConfigurations.getFileSourceDDL("source");
+    streamTableEnv.executeSql(createSource);
+
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
+        // use bucket index to confirm update happened in same file group
+        .option(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name())
+        .option(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 2)
+        .option(FlinkOptions.READ_AS_STREAMING, true)
+        .option(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST)
+        .option(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 2)
+        // enable async compaction
+        .option(FlinkOptions.COMPACTION_ASYNC_ENABLED, true)
+        // generate compaction plan for each commit
+        .option(FlinkOptions.COMPACTION_DELTA_COMMITS, 1)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
+        // skip compaction instant -> active timeline drops compaction commit
+        .option(FlinkOptions.READ_STREAMING_SKIP_COMPACT, true)
+        .noPartition()
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+
+    String insertInto = "insert into t1 select * from source";
+    execInsertSql(streamTableEnv, insertInto);
+
+    List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_INSERT.size());
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+  }
+
+  /**
+   * Regression test for HUDI: data loss in batch read from earliest when
+   * {@code read.streaming.skip_compaction = true} on a MOR table with completed
+   * compaction commits. Covers the batch full-table-scan branch in
+   * {@link org.apache.hudi.source.IncrementalInputSplits#inputSplits(HoodieTableMetaClient, boolean)}.
+   *
+   * <p>This complements {@link #testStreamReadMorTableWithCompactionFromEarliest(boolean)}
+   * which only exercises the streaming code path. Without the fix, building the
+   * {@link org.apache.hudi.common.table.view.HoodieTableFileSystemView} with a
+   * compaction-filtered timeline would mis-classify file slice boundaries and
+   * lose log files.
+   */
+  @Test
+  void testBatchReadMorTableWithCompactionFromEarliest() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_NAME, "t1");
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
+    conf.set(FlinkOptions.TABLE_TYPE, MERGE_ON_READ.name());
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 2);
+    // generate one compaction plan per delta commit so that compaction instants are produced
+    conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+
+    // write two batches of data set against the same record keys to trigger compaction
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
+
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, MERGE_ON_READ)
+        .option(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name())
+        .option(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 2)
+        .option(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST)
+        // skip compaction instant -> active timeline drops compaction commit
+        .option(FlinkOptions.READ_STREAMING_SKIP_COMPACT, true)
+        .end();
+    batchTableEnv.executeSql(hoodieTableDDL);
+
+    List<Row> result = CollectionUtil.iteratorToList(
+        batchTableEnv.executeSql("select * from t1").collect());
+    // After update, the merged result must contain all up-to-date records:
+    //   - 5 updated records   (id1..id5 from DATA_SET_UPDATE_INSERT)
+    //   - 3 carried-over records (id6, id7, id8 from DATA_SET_INSERT, not touched by the update batch)
+    //   - 3 newly inserted records (id9, id10, id11 from DATA_SET_UPDATE_INSERT)
+    // i.e. 11 records in total. Without the fix, log files belonging to the file slice prior
+    // to the inline compaction would be silently dropped by the file system view because
+    // the active timeline filtered out the compaction commit, and the result size would be
+    // smaller than 11.
+    assertEquals(11, result.size(),
+        "Expect all up-to-date records to be visible after earliest + skip_compaction read"
+            + ", actual rows: " + result);
+  }
+
+  /**
+   * Regression test for HUDI: data loss when the start commit has been archived
+   * and {@code read.streaming.skip_compaction = true} on a MOR table.
+   * Covers the batch "fallback to full table scan" branch in
+   * {@link org.apache.hudi.source.IncrementalInputSplits#inputSplits(HoodieTableMetaClient, boolean)}
+   * which is reached when {@code hasArchivedInstants == true}.
+   */
+  @Test
+  void testBatchReadMorTableWithCompactionStartCommitArchived() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_NAME, "t1");
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
+    conf.set(FlinkOptions.TABLE_TYPE, MERGE_ON_READ.name());
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 2);
+    conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+    // aggressive archival to force older instants out of active timeline
+    conf.set(FlinkOptions.ARCHIVE_MIN_COMMITS, 4);
+    conf.set(FlinkOptions.ARCHIVE_MAX_COMMITS, 5);
+    conf.set(FlinkOptions.CLEAN_RETAIN_COMMITS, 3);
+    conf.setString("hoodie.commits.archival.batch", "1");
+
+    // write multiple batches to produce + archive enough delta commits / compactions
+    for (int i = 0; i < 20; i += 2) {
+      List<RowData> dataset = TestData.dataSetInsert(i + 1, i + 2);
+      TestData.writeData(dataset, conf);
+    }
+
+    // pick an archived instant as start commit -> reader hits "fallback to full table scan"
+    String archivedStartInstant = TestUtils.getNthArchivedInstant(tempFile.getAbsolutePath(), 1);
+
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, MERGE_ON_READ)
+        .option(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name())
+        .option(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 2)
+        .option(FlinkOptions.READ_START_COMMIT, archivedStartInstant)
+        .option(FlinkOptions.READ_STREAMING_SKIP_COMPACT, true)
+        .end();
+    batchTableEnv.executeSql(hoodieTableDDL);
+
+    List<Row> result = CollectionUtil.iteratorToList(
+        batchTableEnv.executeSql("select * from t1").collect());
+    // All records inserted so far must be visible: when 'skip_compaction = true'
+    // filtered the compaction instant out of the active timeline, the file system
+    // view used to construct file slices must still rely on the full
+    // commits-and-compaction timeline; otherwise log files would be lost.
+    assertEquals(20, result.size(),
+        "Expect all 20 records to be visible after archived-start-commit + skip_compaction read");
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testStreamReadMorTableWithBucketIndex(boolean partitioned) throws Exception {
