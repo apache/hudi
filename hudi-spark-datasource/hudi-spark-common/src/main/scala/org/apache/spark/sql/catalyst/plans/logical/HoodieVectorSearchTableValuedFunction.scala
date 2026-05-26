@@ -19,7 +19,7 @@ package org.apache.spark.sql.catalyst.plans.logical
 
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Literal}
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
-import org.apache.spark.sql.types.{NumericType, StringType}
+import org.apache.spark.sql.types.{NullType, NumericType, StringType}
 
 object HoodieVectorSearchTableValuedFunction {
 
@@ -129,16 +129,22 @@ object HoodieVectorSearchTableValuedFunction {
 
   /**
    * Parses a numeric argument that may be NULL (meaning "not specified"). Accepts
-   * any [[NumericType]] literal (Int/Long/Float/Double/Decimal/Short/Byte) and
-   * widens to Double. String literals — even ones whose contents parse as a
-   * number — are rejected so the type contract surfaces at parse time.
+   * any foldable expression of [[NumericType]] (or [[NullType]] for an untyped
+   * NULL keyword) — including a bare literal or {@code CAST(literal AS numeric)} —
+   * and widens to Double. String literals are rejected even when their contents
+   * happen to parse as a number, so the type contract surfaces at parse time.
    */
   private[logical] def parseOptionalDouble(
-      funcName: String, expr: Expression, argName: String): Option[Double] = expr match {
-    case Literal(null, _) => None
-    case Literal(v, _: NumericType) if v != null => Some(v.toString.toDouble)
-    case _ => throw new HoodieAnalysisException(
-      s"Function '$funcName': argument '$argName' must be a numeric literal or NULL, got: ${expr.sql}")
+      funcName: String, expr: Expression, argName: String): Option[Double] = {
+    val numericOrNull = expr.dataType match {
+      case _: NumericType | NullType => true
+      case _ => false
+    }
+    if (!expr.foldable || !numericOrNull) {
+      throw new HoodieAnalysisException(
+        s"Function '$funcName': argument '$argName' must be a numeric literal or NULL, got: ${expr.sql}")
+    }
+    Option(expr.eval()).map(_.toString.toDouble)
   }
 }
 
