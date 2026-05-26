@@ -34,7 +34,7 @@ jobs:
           cache: maven
       - name: Install upstream Hudi modules (JDK 17)
         working-directory: hudi
-        run: mvn $MVN_ARGS install -pl hudi-common,hudi-hive-sync,hudi-io,hudi-sync-common -am -Dmaven.test.skip=true -Drat.skip -Dcheckstyle.skip
+        run: mvn $MVN_ARGS install -pl :hudi-common,:hudi-hive-sync,:hudi-io,:hudi-sync-common -am -Dmaven.test.skip=true -Drat.skip -Dcheckstyle.skip
       - name: Set up JDK 25
         uses: actions/setup-java@v5
         with:
