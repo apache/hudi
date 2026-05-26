@@ -118,6 +118,11 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
   }
 
   @Override
+  protected HoodieData<HoodieRecord> getVectorIndexRecords(HoodieIndexDefinition indexDefinition) {
+    throw new HoodieNotSupportedException("Vector index not supported for metadata table version 6.");
+  }
+
+  @Override
   protected JavaRDD<HoodieRecord> convertHoodieDataToEngineSpecificData(HoodieData<HoodieRecord> records) {
     return HoodieJavaRDD.getJavaRDD(records);
   }

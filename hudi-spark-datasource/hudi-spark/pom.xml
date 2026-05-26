@@ -497,5 +497,13 @@
       <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
+
+    <!-- For ITVectorIndexGcs (opt-in via HOODIE_GCS_VECTOR_IT_BASE) -->
+    <dependency>
+      <groupId>com.google.cloud.bigdataoss</groupId>
+      <artifactId>gcs-connector</artifactId>
+      <version>${gcs.connector.version}</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 </project>

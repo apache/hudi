@@ -183,6 +183,11 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     return getWriteClient().upsertPreppedRecords(preppedRecords, instantTime);
   }
 
+  @Override
+  protected HoodieData<HoodieRecord> getVectorIndexRecords(HoodieIndexDefinition indexDefinition) {
+    throw new HoodieNotSupportedException("Flink metadata table does not support vector index yet.");
+  }
+
   protected void bulkInsertAndCommit(BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> writeClient, String instantTime, List<HoodieRecord> preppedRecordInputs,
                                      Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     List<WriteStatus> writeStatusJavaRDD = writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);

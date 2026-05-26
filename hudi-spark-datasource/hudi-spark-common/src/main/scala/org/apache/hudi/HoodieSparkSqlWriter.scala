@@ -356,7 +356,7 @@ class HoodieSparkSqlWriterInternal {
 
       val shouldReconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
       val latestTableSchemaOpt = getLatestTableSchema(tableMetaClient, schemaFromCatalog)
-      val df = if (preppedWriteOperation || preppedSparkSqlWrites || preppedSparkSqlMergeInto || sourceDf.isStreaming) {
+      val baseDf = if (preppedWriteOperation || preppedSparkSqlWrites || preppedSparkSqlMergeInto || sourceDf.isStreaming) {
         sourceDf
       } else {
         sourceDf.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq: _*)
@@ -368,8 +368,11 @@ class HoodieSparkSqlWriterInternal {
         (s.getName, toScalaOption(s.getNamespace).orNull))
         .getOrElse(getRecordNameAndNamespace(tblName))
 
-      val sourceSchema = HoodieSchemaConversionUtils.convertUserStructTypeToHoodieSchema(
-        df.schema, avroRecordName, avroRecordNamespace)
+      val rawSourceSchema = convertStructTypeToHoodieSchema(baseDf.schema, avroRecordName, avroRecordNamespace)
+      val df = VectorIndexHiddenColumnUtils.augmentDataFrameWithHiddenColumns(
+        baseDf, rawSourceSchema, latestTableSchemaOpt, tableMetaClient)
+      val sourceSchema = convertStructTypeToHoodieSchema(df.schema, avroRecordName, avroRecordNamespace)
+      parameters = maybeAugmentWriteSchemaOverrideWithVectorHiddenColumns(parameters, hoodieConfig, sourceSchema)
       val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient).orElse {
         // In case we need to reconcile the schema and schema evolution is enabled,
         // we will force-apply schema evolution to the writer's schema
@@ -810,6 +813,30 @@ class HoodieSparkSqlWriterInternal {
       fieldOpt.get().schema().getNonNullType.getType != HoodieSchemaType.BOOLEAN) {
       throw new HoodieException(HoodieRecord.HOODIE_IS_DELETED_FIELD + " has to be BOOLEAN type. Passed in dataframe's schema has type "
         + fieldOpt.get().schema().getType)
+    }
+  }
+
+  private def maybeAugmentWriteSchemaOverrideWithVectorHiddenColumns(parameters: Map[String, String],
+                                                                     hoodieConfig: HoodieConfig,
+                                                                     sourceSchema: HoodieSchema): Map[String, String] = {
+    parameters.get(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key) match {
+      case None => parameters
+      case Some(schemaOverride) =>
+        val overrideSchema = HoodieSchema.parse(schemaOverride)
+        val vectorHiddenFields = HoodieCommonSchemaUtils.findMissingFields(sourceSchema, overrideSchema).asScala
+          .filter(field => field.name().startsWith("_hudi_vec_"))
+          .map(HoodieCommonSchemaUtils.createNewSchemaField)
+
+        if (vectorHiddenFields.isEmpty) {
+          parameters
+        } else {
+          val mergedOverrideSchema = HoodieCommonSchemaUtils.createNewSchemaFromFieldsWithReference(
+            overrideSchema,
+            (overrideSchema.getFields.asScala.map(HoodieCommonSchemaUtils.createNewSchemaField) ++ vectorHiddenFields).asJava)
+          val mergedOverrideSchemaStr = mergedOverrideSchema.toString
+          hoodieConfig.setValue(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key, mergedOverrideSchemaStr)
+          parameters.updated(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key, mergedOverrideSchemaStr)
+        }
     }
   }
 

@@ -26,10 +26,14 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.index.vector.VectorIndexOptions;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
@@ -40,12 +44,16 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
 import org.apache.hudi.index.record.HoodieRecordIndex;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.index.BaseHoodieIndexClient;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
 
 import java.util.Arrays;
@@ -65,6 +73,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BL
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 
 @Slf4j
@@ -95,6 +104,8 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     if (indexType.equals(PARTITION_NAME_SECONDARY_INDEX) || indexType.equals(PARTITION_NAME_BLOOM_FILTERS)
         || indexType.equals(PARTITION_NAME_COLUMN_STATS)) {
       createExpressionOrSecondaryIndex(metaClient, userIndexName, indexType, columns, options, tableProperties);
+    } else if (indexType.equals(PARTITION_NAME_VECTOR_INDEX)) {
+      createVectorIndex(metaClient, userIndexName, columns, options);
     } else {
       createRecordIndex(metaClient, userIndexName, indexType, options);
     }
@@ -182,11 +193,97 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     }
   }
 
+  private void createVectorIndex(HoodieTableMetaClient metaClient,
+                                 String userIndexName,
+                                 Map<String, Map<String, String>> columns,
+                                 Map<String, String> options) throws Exception {
+    HoodieIndexDefinition indexDefinition = HoodieIndexUtils.getVectorIndexDefinition(metaClient, userIndexName, columns, options);
+    if (!metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()
+        || !metaClient.getIndexForMetadataPartition(indexDefinition.getIndexName()).isPresent()) {
+      log.info("Index definition is not present. Registering index: {} of type: {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
+      register(metaClient, indexDefinition);
+    }
+
+    ValidationUtils.checkState(metaClient.getIndexMetadata().isPresent(), "Index definition is not present");
+
+    log.info("Creating vector index {}", indexDefinition);
+    Option<HoodieIndexDefinition> indexDefinitionOpt = Option.of(indexDefinition);
+    try (SparkRDDWriteClient writeClient = getWriteClient(metaClient, indexDefinitionOpt, Option.of(PARTITION_NAME_VECTOR_INDEX), Collections.emptyMap())) {
+      HoodieIndexVersion currentVersion = HoodieIndexVersion.getCurrentVersion(
+          metaClient.getTableConfig().getTableVersion(), MetadataPartitionType.VECTOR_INDEX);
+      Option<String> indexInstantTime = doSchedule(
+          writeClient, metaClient, indexDefinition.getIndexName(), MetadataPartitionType.VECTOR_INDEX, currentVersion);
+      if (indexInstantTime.isPresent()) {
+        writeClient.index(indexInstantTime.get());
+        if (shouldMaterializeRaBitQColumnsOnCreate(indexDefinition)) {
+          materializeRaBitQColumns(metaClient, indexDefinition);
+        }
+      } else {
+        throw new HoodieMetadataIndexException("Scheduling of index action did not return any instant.");
+      }
+    } catch (Throwable t) {
+      log.error("Error while creating vector index: {}. Index will be dropped.", indexDefinition.getIndexName(), t);
+      drop(metaClient, indexDefinition.getIndexName(), Option.of(indexDefinition));
+      throw t;
+    }
+  }
+
   private void drop(HoodieTableMetaClient metaClient, String indexName, Option<HoodieIndexDefinition> indexDefinitionOpt) {
     log.info("Dropping index {}", indexName);
     try (SparkRDDWriteClient writeClient = getWriteClient(metaClient, indexDefinitionOpt, Option.empty(), Collections.emptyMap())) {
       writeClient.dropIndex(Collections.singletonList(indexName));
     }
+  }
+
+  private boolean shouldMaterializeRaBitQColumnsOnCreate(HoodieIndexDefinition indexDefinition) {
+    return VectorIndexOptions.DEFAULT_QUANTIZER.equals(VectorIndexOptions.getQuantizer(indexDefinition.getIndexOptions()))
+        && VectorIndexOptions.shouldMaterializeRaBitQColumnsOnCreate(indexDefinition.getIndexOptions());
+  }
+
+  private void materializeRaBitQColumns(HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
+    ValidationUtils.checkState(sparkSessionOpt.isPresent(),
+        "SparkSession is required to materialize RaBitQ hidden columns during index creation");
+
+    log.info("Materializing RaBitQ hidden columns for vector index {} via insert_overwrite_table rewrite",
+        indexDefinition.getIndexName());
+
+    String basePath = metaClient.getBasePath().toString();
+    Dataset<Row> rowsToRewrite = dropMetadataColumns(
+        sparkSessionOpt.get().read().format("hudi").load(basePath));
+
+    rowsToRewrite.write()
+        .format("hudi")
+        .options(getPropsForRewrite(metaClient))
+        .option("hoodie.datasource.write.operation", WriteOperationType.INSERT_OVERWRITE_TABLE.value())
+        .mode(SaveMode.Overwrite)
+        .save(basePath);
+  }
+
+  private Dataset<Row> dropMetadataColumns(Dataset<Row> dataset) {
+    return dataset
+        .drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+        .drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
+        .drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)
+        .drop(HoodieRecord.FILENAME_METADATA_FIELD)
+        .drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+        .drop(HoodieRecord.OPERATION_METADATA_FIELD);
+  }
+
+  private Map<String, String> getPropsForRewrite(HoodieTableMetaClient metaClient) {
+    Map<String, String> propsMap = new HashMap<>();
+    metaClient.getTableConfig().getProps().forEach((k, v) -> propsMap.put(k.toString(), v.toString()));
+    propsMap.put(HoodieWriteConfig.SKIP_DEFAULT_PARTITION_VALIDATION.key(), "true");
+    propsMap.put(HoodieWriteConfig.TBL_NAME.key(), metaClient.getTableConfig().getTableName());
+    propsMap.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), metaClient.getTableConfig().getRecordKeyFieldProp());
+    propsMap.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(),
+        HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig()).orElse(""));
+    propsMap.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), metaClient.getTableConfig().getKeyGeneratorClassName());
+    metaClient.getTableConfig().getOrderingFieldsStr()
+        .ifPresent(orderingFields -> {
+          propsMap.put(HoodieTableConfig.ORDERING_FIELDS.key(), orderingFields);
+          propsMap.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), orderingFields);
+        });
+    return propsMap;
   }
 
   @Override
@@ -284,8 +381,12 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
       }
     }
 
-    indexDefinitionOpt.ifPresent(indexDefinition ->
-        HoodieIndexingConfig.fromIndexDefinition(indexDefinition).getProps().forEach((key, value) -> writeConfig.put(key.toString(), value.toString())));
+    indexDefinitionOpt.ifPresent(indexDefinition -> {
+      if (!PARTITION_NAME_VECTOR_INDEX.equals(indexDefinition.getIndexType())) {
+        HoodieIndexingConfig.fromIndexDefinition(indexDefinition).getProps()
+            .forEach((key, value) -> writeConfig.put(key.toString(), value.toString()));
+      }
+    });
     return writeConfig;
   }
 }

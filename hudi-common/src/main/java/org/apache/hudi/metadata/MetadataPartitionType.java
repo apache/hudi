@@ -34,7 +34,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
 import org.apache.hudi.stats.ValueMetadata;
 
-import lombok.Getter;
 import org.apache.avro.generic.GenericRecord;
 
 import java.nio.ByteBuffer;
@@ -77,18 +76,19 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_BLO
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_RECORD_INDEX;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_SECONDARY_INDEX;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_VECTOR_INDEX;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_NAME_METADATA;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_FIELD_IS_DELETED;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.combineFileSystemMetadata;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.mergeColumnStatsRecords;
 
 /**
  * Partition types for metadata table.
  */
-@Getter
 public enum MetadataPartitionType {
   FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-", 2) {
     @Override
@@ -242,6 +242,56 @@ public enum MetadataPartitionType {
       return HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(indexVersion.greaterThanOrEquals(HoodieIndexVersion.V2));
     }
   },
+  VECTOR_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX_PREFIX, "vector-index-", 8) {
+    @Override
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
+      // Vector index is enabled explicitly via CREATE INDEX, not via metadata config flags.
+      return false;
+    }
+
+    @Override
+    public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
+      if (metaClient.getIndexMetadata().isPresent()) {
+        return metaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+            .anyMatch(indexDef -> indexDef.getIndexName().startsWith(PARTITION_NAME_VECTOR_INDEX_PREFIX));
+      }
+      return false;
+    }
+
+    @Override
+    public void constructMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {
+      GenericRecord vectorIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_VECTOR_INDEX);
+      checkState(vectorIndexRecord != null,
+          "Valid VectorIndexMetadata record expected for type: " + MetadataPartitionType.VECTOR_INDEX.getRecordType());
+      payload.vectorIndexMetadata = new org.apache.hudi.avro.model.HoodieVectorIndexInfo(
+          (String) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_ENTRY_TYPE),
+          (String) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_GENERATION_ID),
+          (Integer) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_SHARD_ID),
+          (Integer) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_SHARD_COUNT),
+          (Integer) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_CLUSTER_ID),
+          (java.nio.ByteBuffer) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_CENTROID_BYTES),
+          (String) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_FILE_GROUP_ID),
+          (String) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_PARTITION_PATH),
+          (java.util.List<String>) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_FILE_GROUP_IDS),
+          (Long) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_VECTOR_COUNT),
+          (Long) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_LAST_UPDATED_TS),
+          (String) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_QUANTIZER_TYPE),
+          (Integer) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_QUANTIZED_CODE_BYTES),
+          (Long) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_RANDOM_SEED),
+          (Boolean) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_ASSUME_NORMALIZED),
+          (java.nio.ByteBuffer) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_BINARY_CODE),
+          (Float) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_SCALAR),
+          (Boolean) vectorIndexRecord.get(HoodieMetadataPayload.VECTOR_INDEX_FIELD_IS_DELETED)
+      );
+    }
+
+    @Override
+    public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
+      return metaClient.getIndexForMetadataPartition(indexName)
+          .map(HoodieIndexDefinition::getIndexName)
+          .orElseThrow(() -> new IllegalArgumentException("Index definition is not present for index: " + indexName));
+    }
+  },
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-", 6) {
     @Override
     public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
@@ -381,6 +431,24 @@ public enum MetadataPartitionType {
     this.partitionPath = partitionPath;
     this.fileIdPrefix = fileIdPrefix;
     this.recordType = recordType;
+  }
+
+  /**
+   * Base partition path (or prefix) for this metadata partition type.
+   * <p>
+   * Explicit accessors are required because Lombok does not emit a no-arg {@code getPartitionPath()}
+   * when a {@link #getPartitionPath(HoodieTableMetaClient, String)} overload exists.
+   */
+  public String getPartitionPath() {
+    return partitionPath;
+  }
+
+  public String getFileIdPrefix() {
+    return fileIdPrefix;
+  }
+
+  public int getRecordType() {
+    return recordType;
   }
 
   /**

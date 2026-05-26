@@ -62,7 +62,8 @@ public class HoodieInstantTimeGenerator {
   // when performing comparisons such as LESS_THAN_OR_EQUAL_TO
   public static final String DEFAULT_MILLIS_EXT = "999";
 
-  private static HoodieTimelineTimeZone commitTimeZone = HoodieTimelineTimeZone.LOCAL;
+  // Timeline instants should be timezone-stable across environments; default to UTC.
+  private static HoodieTimelineTimeZone commitTimeZone = HoodieTimelineTimeZone.UTC;
 
   /**
    * Returns next instant time in the correct format.
@@ -87,7 +88,7 @@ public class HoodieInstantTimeGenerator {
     try {
       String timestampInMillis = fixInstantTimeCompatibility(timestamp);
       LocalDateTime dt = LocalDateTime.parse(timestampInMillis, MILLIS_INSTANT_TIME_FORMATTER);
-      return Date.from(dt.atZone(ZoneId.systemDefault()).toInstant());
+      return Date.from(dt.atZone(commitTimeZone.getZoneId()).toInstant());
     } catch (DateTimeParseException e) {
       throw new ParseException(e.getMessage(), e.getErrorIndex());
     }
@@ -185,7 +186,7 @@ public class HoodieInstantTimeGenerator {
   }
 
   private static TemporalAccessor convertDateToTemporalAccessor(Date d) {
-    return d.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+    return d.toInstant().atZone(commitTimeZone.getZoneId()).toLocalDateTime();
   }
 
   public static void setCommitTimeZone(HoodieTimelineTimeZone commitTimeZone) {

@@ -145,6 +145,35 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
     assert(convertedStruct.fields(3).dataType == DecimalType(20, 5))
   }
 
+  test("test StructType to HoodieSchema conversion preserves vector metadata") {
+    val struct = new StructType()
+      .add("id", StringType, false)
+      .add("embedding", ArrayType(FloatType, containsNull = false), false,
+        new MetadataBuilder().putString(HoodieSchema.TYPE_METADATA_FIELD, "VECTOR(16)").build())
+
+    val hoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+      struct, "VectorTypes", "test")
+
+    val embeddingField = hoodieSchema.getField("embedding").get()
+    assertEquals(HoodieSchemaType.VECTOR, embeddingField.schema().getNonNullType().getType)
+    val vectorSchema = embeddingField.schema().getNonNullType().asInstanceOf[HoodieSchema.Vector]
+    assertEquals(16, vectorSchema.getDimension)
+    assertEquals(HoodieSchema.Vector.VectorElementType.FLOAT, vectorSchema.getVectorElementType)
+  }
+
+  test("test HoodieSchema to StructType conversion restores vector metadata") {
+    val hoodieSchema = HoodieSchema.createRecord("VectorTypes", "test", null, java.util.Arrays.asList(
+      HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+      HoodieSchemaField.of("embedding", HoodieSchema.createVector(8, HoodieSchema.Vector.VectorElementType.DOUBLE))
+    ))
+
+    val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(hoodieSchema)
+    val embeddingField = structType("embedding")
+    assertEquals(ArrayType(DoubleType, containsNull = false), embeddingField.dataType)
+    assert(embeddingField.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD))
+    assertEquals("VECTOR(8, DOUBLE)", embeddingField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+  }
+
   test("test HoodieSchema to Spark conversion for logical types") {
     val fields = java.util.Arrays.asList(
       HoodieSchemaField.of("date", HoodieSchema.createDate()),

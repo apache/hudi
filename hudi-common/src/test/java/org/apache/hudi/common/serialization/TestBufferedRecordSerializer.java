@@ -54,7 +54,7 @@ public class TestBufferedRecordSerializer {
     Assertions.assertEquals(record, result);
 
     avroRecordSerializer = new AvroRecordSerializer(integer -> HoodieMetadataRecord.SCHEMA$);
-    HoodieMetadataRecord metadataRecord = new HoodieMetadataRecord("__all_partitions__", 1, new HashMap<>(), null, null, null, null);
+    HoodieMetadataRecord metadataRecord = new HoodieMetadataRecord("__all_partitions__", 1, new HashMap<>(), null, null, null, null, null);
     avroBytes = avroRecordSerializer.serialize(metadataRecord);
     result = avroRecordSerializer.deserialize(avroBytes, 1);
     for (int i = 0; i < metadataRecord.getSchema().getFields().size(); i++) {
@@ -80,7 +80,7 @@ public class TestBufferedRecordSerializer {
 
     avroRecordSerializer = new AvroRecordSerializer(integer -> HoodieMetadataRecord.SCHEMA$);
     bufferedRecordSerializer = new BufferedRecordSerializer<>(avroRecordSerializer);
-    HoodieMetadataRecord metadataRecord = new HoodieMetadataRecord("__all_partitions__", 1, new HashMap<>(), null, null, null, null);
+    HoodieMetadataRecord metadataRecord = new HoodieMetadataRecord("__all_partitions__", 1, new HashMap<>(), null, null, null, null, null);
     bufferedRecord = new BufferedRecord<>("__all_partitions__", 0, metadataRecord, 1, null);
     bytes = bufferedRecordSerializer.serialize(bufferedRecord);
     result = bufferedRecordSerializer.deserialize(bytes);

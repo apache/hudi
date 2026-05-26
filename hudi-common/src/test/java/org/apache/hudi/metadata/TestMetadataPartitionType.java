@@ -56,6 +56,7 @@ public class TestMetadataPartitionType {
 
   private static Stream<Arguments> partitionTypeAndPartitionPairs() {
     return Arrays.stream(MetadataPartitionType.values())
+        .filter(type -> type != MetadataPartitionType.VECTOR_INDEX)
         .flatMap(type -> {
           if (type == MetadataPartitionType.PARTITION_STATS) {
             // PARTITION_STATS can only be enabled if the table is partitioned
@@ -188,6 +189,7 @@ public class TestMetadataPartitionType {
     assertEquals(MetadataPartitionType.FILES, MetadataPartitionType.fromPartitionPath("files"));
     assertEquals(MetadataPartitionType.EXPRESSION_INDEX, MetadataPartitionType.fromPartitionPath("expr_index_dummy"));
     assertEquals(MetadataPartitionType.SECONDARY_INDEX, MetadataPartitionType.fromPartitionPath("secondary_index_dummy"));
+    assertEquals(MetadataPartitionType.VECTOR_INDEX, MetadataPartitionType.fromPartitionPath("vector_index_emb"));
     assertEquals(MetadataPartitionType.COLUMN_STATS, MetadataPartitionType.fromPartitionPath("column_stats"));
     assertEquals(MetadataPartitionType.BLOOM_FILTERS, MetadataPartitionType.fromPartitionPath("bloom_filters"));
     assertEquals(MetadataPartitionType.RECORD_INDEX, MetadataPartitionType.fromPartitionPath("record_index"));
@@ -204,6 +206,7 @@ public class TestMetadataPartitionType {
     assertEquals(5, MetadataPartitionType.RECORD_INDEX.getRecordType());
     assertEquals(6, MetadataPartitionType.PARTITION_STATS.getRecordType());
     assertEquals(7, MetadataPartitionType.SECONDARY_INDEX.getRecordType());
+    assertEquals(8, MetadataPartitionType.VECTOR_INDEX.getRecordType());
   }
 
   @ParameterizedTest
@@ -212,7 +215,8 @@ public class TestMetadataPartitionType {
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     String expressionIndexName = "expr_index_dummyExpressionIndex";
     String secondaryIndexName = "secondary_index_dummySecondaryIndex";
-    HoodieIndexMetadata indexMetadata = getIndexMetadata(expressionIndexName, secondaryIndexName);
+    String vectorIndexName = "vector_index_testIdx";
+    HoodieIndexMetadata indexMetadata = getIndexMetadata(expressionIndexName, secondaryIndexName, vectorIndexName);
     when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
     
     // Mock getIndexForMetadataPartition for both index names
@@ -220,17 +224,21 @@ public class TestMetadataPartitionType {
         .thenReturn(Option.of(indexMetadata.getIndexDefinitions().get(expressionIndexName)));
     when(metaClient.getIndexForMetadataPartition(secondaryIndexName))
         .thenReturn(Option.of(indexMetadata.getIndexDefinitions().get(secondaryIndexName)));
+    when(metaClient.getIndexForMetadataPartition(vectorIndexName))
+        .thenReturn(Option.of(indexMetadata.getIndexDefinitions().get(vectorIndexName)));
     
     if (partitionType == MetadataPartitionType.EXPRESSION_INDEX) {
       assertEquals(expressionIndexName, partitionType.getPartitionPath(metaClient, expressionIndexName));
     } else if (partitionType == MetadataPartitionType.SECONDARY_INDEX) {
       assertEquals(secondaryIndexName, partitionType.getPartitionPath(metaClient, secondaryIndexName));
+    } else if (partitionType == MetadataPartitionType.VECTOR_INDEX) {
+      assertEquals(vectorIndexName, partitionType.getPartitionPath(metaClient, vectorIndexName));
     } else {
       assertEquals(partitionType.getPartitionPath(), partitionType.getPartitionPath(metaClient, null));
     }
   }
 
-  private static HoodieIndexMetadata getIndexMetadata(String expressionIndexName, String secondaryIndexName) {
+  private static HoodieIndexMetadata getIndexMetadata(String expressionIndexName, String secondaryIndexName, String vectorIndexName) {
     Map<String, HoodieIndexDefinition> indexDefinitions = new HashMap<>();
     HoodieIndexDefinition expressionIndexDefinition = HoodieIndexDefinition.newBuilder()
         .withIndexName(expressionIndexName)
@@ -248,6 +256,14 @@ public class TestMetadataPartitionType {
         .withSourceFields(Collections.singletonList("name"))
         .build();
     indexDefinitions.put(secondaryIndexName, secondaryIndexDefinition);
+    HoodieIndexDefinition vectorIndexDefinition = HoodieIndexDefinition.newBuilder()
+        .withIndexName(vectorIndexName)
+        .withIndexType(MetadataPartitionType.COLUMN_STATS.name())
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), vectorIndexName))
+        .withIndexFunction(null)
+        .withSourceFields(Collections.singletonList("embedding"))
+        .build();
+    indexDefinitions.put(vectorIndexName, vectorIndexDefinition);
     return new HoodieIndexMetadata(indexDefinitions);
   }
 

@@ -29,6 +29,7 @@ import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieDataUtils;
@@ -442,6 +443,43 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @return Option containing the record if found, empty Option if not found
    */
   protected abstract Option<HoodieMetadataPayload> readFilesIndexRecords(String key, String partitionName);
+
+  /**
+   * Retrieves vector assignment records keyed by data-table record key (`A|record`).
+   */
+  public HoodiePairData<String, HoodieMetadataPayload> readVectorAssignmentIndexRecordsWithKeys(
+      HoodieData<String> recordKeys,
+      String partitionName) {
+    return readIndexRecordsWithKeys(recordKeys.map(VectorAssignmentRawKey::new), partitionName);
+  }
+
+  /**
+   * Retrieves vector cluster records keyed by generation and cluster (`C|gen|cluster`).
+   */
+  public HoodiePairData<String, HoodieMetadataPayload> readVectorClusterIndexRecordsWithKeys(
+      HoodieData<VectorClusterRawKey> clusterKeys,
+      String partitionName) {
+    return readIndexRecordsWithKeys(clusterKeys, partitionName);
+  }
+
+  /**
+   * Retrieves vector generation manifest records keyed by generation (`M|gen`).
+   */
+  public HoodiePairData<String, HoodieMetadataPayload> readVectorGenerationManifestRecordsWithKeys(
+      HoodieData<VectorGenerationManifestRawKey> manifestKeys,
+      String partitionName) {
+    return readIndexRecordsWithKeys(manifestKeys, partitionName);
+  }
+
+  /**
+   * Retrieves vector posting records using HFile-friendly prefix scans (`P|gen|cluster|[shard]|`).
+   */
+  public HoodieData<HoodieRecord<HoodieMetadataPayload>> readVectorPostingIndexRecordsByPrefixes(
+      HoodieData<VectorPostingPrefixRawKey> postingPrefixes,
+      String partitionName,
+      boolean shouldLoadInMemory) {
+    return getRecordsByKeyPrefixes(postingPrefixes, partitionName, shouldLoadInMemory);
+  }
 
   /**
    * Retrieves a collection of pairs (key -> payload) from the metadata table by its keys.

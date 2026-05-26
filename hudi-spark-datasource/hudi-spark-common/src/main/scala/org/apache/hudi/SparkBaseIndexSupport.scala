@@ -56,6 +56,13 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
    */
   def supportsQueryType(options: Map[String, String]): Boolean = true
 
+  /**
+   * Whether this index can prune files even when Spark has not produced any data filters.
+   * Vector coarse pruning is driven by explicit reader options rather than Catalyst filters,
+   * while traditional skipping indexes rely on translated predicate expressions.
+   */
+  def canPruneWithEmptyDataFilters(options: Map[String, String]): Boolean = false
+
   def computeCandidateIsStrict(spark: SparkSession,
                                fileIndex: HoodieFileIndex,
                                queryFilters: Seq[Expression],

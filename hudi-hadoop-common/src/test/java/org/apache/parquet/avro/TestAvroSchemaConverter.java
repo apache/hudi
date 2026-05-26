@@ -502,6 +502,16 @@ public class TestAvroSchemaConverter {
   }
 
   @Test
+  public void testVectorTypeAvroToParquetConversion() throws Exception {
+    HoodieSchema.Vector vector = HoodieSchema.createVector("vector_float_4", 4, HoodieSchema.Vector.VectorElementType.FLOAT);
+    HoodieSchema schema = HoodieSchema.createRecord("myrecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("embedding", vector, null, null)));
+
+    testAvroToParquetConversion(
+        schema, "message myrecord {\n" + "  required fixed_len_byte_array(16) embedding;\n" + "}\n");
+  }
+
+  @Test
   public void testDecimalIntegerType() throws Exception {
     HoodieSchema expected = HoodieSchema.createRecord("myrecord", null, null, false,
         Collections.singletonList(HoodieSchemaField.of("dec", HoodieSchema.create(HoodieSchemaType.INT), null, null)));

@@ -88,14 +88,9 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
 
     HoodieMetadataConfig metadataConfig = config.getMetadataConfig();
-    Set<String> requestedPartitions = partitionIndexTypes.stream().map(p -> {
-      if (MetadataPartitionType.EXPRESSION_INDEX.equals(p)) {
-        return getSecondaryOrExpressionIndexName(metadataConfig::getExpressionIndexName, PARTITION_NAME_EXPRESSION_INDEX_PREFIX, metadataConfig.getExpressionIndexColumn());
-      } else if (MetadataPartitionType.SECONDARY_INDEX.equals(p)) {
-        return getSecondaryOrExpressionIndexName(metadataConfig::getSecondaryIndexName, PARTITION_NAME_SECONDARY_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
-      }
-      return p.getPartitionPath();
-    }).collect(Collectors.toSet());
+    Set<String> requestedPartitions = partitionIndexTypes.stream()
+        .map(p -> resolvePartitionName(p, metadataConfig))
+        .collect(Collectors.toSet());
     requestedPartitions.addAll(partitionPaths);
     requestedPartitions.removeAll(indexesInflightOrCompleted);
 
@@ -107,17 +102,8 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
       return Option.empty();
     }
     List<MetadataPartitionType> finalPartitionsToIndex = partitionIndexTypes.stream()
-        .filter(p -> {
-          String partitionName;
-          if (MetadataPartitionType.EXPRESSION_INDEX.equals(p)) {
-            partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getExpressionIndexName, PARTITION_NAME_EXPRESSION_INDEX_PREFIX, metadataConfig.getExpressionIndexColumn());
-          } else if (MetadataPartitionType.SECONDARY_INDEX.equals(p)) {
-            partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getSecondaryIndexName, PARTITION_NAME_SECONDARY_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
-          } else {
-            partitionName = p.getPartitionPath();
-          }
-          return requestedPartitions.contains(partitionName);
-        }).collect(Collectors.toList());
+        .filter(p -> requestedPartitions.contains(resolvePartitionName(p, metadataConfig)))
+        .collect(Collectors.toList());
     final HoodieInstant indexInstant = instantGenerator.getIndexRequestedInstant(instantTime);
     try {
       // get last completed instant
@@ -125,7 +111,7 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
       if (indexUptoInstant.isPresent()) {
         // for each partitionToIndex add that time to the plan
         List<HoodieIndexPartitionInfo> indexPartitionInfos = finalPartitionsToIndex.stream()
-            .map(p -> buildIndexPartitionInfo(p, indexUptoInstant.get()))
+            .map(p -> buildIndexPartitionInfo(p, indexUptoInstant.get(), metadataConfig))
             .collect(Collectors.toList());
         HoodieIndexPlan indexPlan = new HoodieIndexPlan(LATEST_INDEX_PLAN_VERSION, indexPartitionInfos);
         // update data timeline with requested instant
@@ -141,17 +127,25 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     return Option.empty();
   }
 
-  private HoodieIndexPartitionInfo buildIndexPartitionInfo(MetadataPartitionType partitionType, HoodieInstant indexUptoInstant) {
-    String partitionName = partitionType.getPartitionPath();
-    HoodieMetadataConfig metadataConfig = config.getMetadataConfig();
-    // for expression or secondary index, we need to pass the metadata config to derive the partition name
-    if (MetadataPartitionType.EXPRESSION_INDEX.equals(partitionType)) {
-      partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getExpressionIndexName, PARTITION_NAME_EXPRESSION_INDEX_PREFIX, metadataConfig.getExpressionIndexColumn());
-    }
-    if (MetadataPartitionType.SECONDARY_INDEX.equals(partitionType)) {
-      partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getSecondaryIndexName, PARTITION_NAME_SECONDARY_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
-    }
+  private HoodieIndexPartitionInfo buildIndexPartitionInfo(MetadataPartitionType partitionType,
+                                                           HoodieInstant indexUptoInstant,
+                                                           HoodieMetadataConfig metadataConfig) {
+    String partitionName = resolvePartitionName(partitionType, metadataConfig);
     return new HoodieIndexPartitionInfo(LATEST_INDEX_PLAN_VERSION, partitionName, indexUptoInstant.requestedTime(), Collections.emptyMap());
+  }
+
+  private String resolvePartitionName(MetadataPartitionType partitionType, HoodieMetadataConfig metadataConfig) {
+    if (MetadataPartitionType.EXPRESSION_INDEX.equals(partitionType)) {
+      return getSecondaryOrExpressionIndexName(metadataConfig::getExpressionIndexName, PARTITION_NAME_EXPRESSION_INDEX_PREFIX, metadataConfig.getExpressionIndexColumn());
+    } else if (MetadataPartitionType.SECONDARY_INDEX.equals(partitionType)) {
+      return getSecondaryOrExpressionIndexName(metadataConfig::getSecondaryIndexName, PARTITION_NAME_SECONDARY_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
+    } else if (MetadataPartitionType.VECTOR_INDEX.equals(partitionType)) {
+      return partitionPaths.stream()
+          .filter(partitionPath -> partitionPath.startsWith(partitionType.getPartitionPath()))
+          .findFirst()
+          .orElse(partitionType.getPartitionPath());
+    }
+    return partitionType.getPartitionPath();
   }
 
   private void validateBeforeScheduling() {

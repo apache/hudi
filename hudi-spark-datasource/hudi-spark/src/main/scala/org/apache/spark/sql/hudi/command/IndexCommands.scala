@@ -63,6 +63,14 @@ case class CreateIndexCommand(table: CatalogTable,
           "Please refer https://hudi.apache.org/docs/metadata for more info")
       }
       new HoodieSparkIndexClient(sparkSession).create(metaClient, indexName, indexType, columnsMap, options.asJava, table.properties.asJava)
+    } else if (indexType.equalsIgnoreCase("vector") || indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX)) {
+      new HoodieSparkIndexClient(sparkSession).create(
+        metaClient,
+        indexName,
+        HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX,
+        columnsMap,
+        options.asJava,
+        table.properties.asJava)
     } else if (indexName.equals(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)) {
       ValidationUtils.checkArgument(CreateIndexCommand.matchesRecordKeys(columnsMap.keySet().asScala.toSet, metaClient.getTableConfig),
         "Input columns should match configured record key columns: " + metaClient.getTableConfig.getRecordKeyFieldProp)
@@ -162,7 +170,7 @@ case class ShowIndexesCommand(table: CatalogTable,
     // need to ensure that the index name is for a valid partition type
     metaClient.getTableConfig.getMetadataPartitions.asScala.map(
       partition => {
-        if (MetadataPartitionType.isExpressionOrSecondaryIndex(partition)) {
+        if (MetadataPartitionType.isExpressionOrSecondaryIndex(partition) || partition.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX_PREFIX)) {
           val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.get(partition)
           Row(partition, indexDefinition.getIndexType.toLowerCase, indexDefinition.getSourceFields.asScala.mkString(","))
         } else if (!partition.equals(MetadataPartitionType.FILES.getPartitionPath)) {

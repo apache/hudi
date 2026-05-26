@@ -155,6 +155,11 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
+  protected HoodieData<HoodieRecord> getVectorIndexRecords(HoodieIndexDefinition indexDefinition) {
+    throw new HoodieNotSupportedException("Vector index not supported for Java metadata table writer yet.");
+  }
+
+  @Override
   protected EngineType getEngineType() {
     return EngineType.JAVA;
   }

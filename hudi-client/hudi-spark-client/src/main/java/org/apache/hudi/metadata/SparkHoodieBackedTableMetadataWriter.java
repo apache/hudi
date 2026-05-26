@@ -26,10 +26,15 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.SparkMetadataWriterUtils;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.index.vector.VectorIndexBootstrapUtils;
+import org.apache.hudi.common.index.vector.VectorIndexOptions;
+import org.apache.hudi.common.index.vector.RaBitQEncoder;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -38,13 +43,19 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata;
@@ -57,8 +68,25 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.ml.clustering.KMeans;
+import org.apache.spark.ml.clustering.KMeansModel;
+import org.apache.spark.ml.linalg.VectorUDT;
+import org.apache.spark.ml.linalg.Vectors;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
+import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.api.java.UDF1;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
+import org.apache.spark.storage.StorageLevel;
 
+import java.lang.reflect.Method;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -66,10 +94,18 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
+import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
+import static org.apache.hudi.common.model.HoodieRecord.PARTITION_PATH_METADATA_FIELD;
+import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex;
+import static org.apache.spark.sql.functions.col;
+import static org.apache.spark.sql.functions.callUDF;
+import static org.apache.spark.sql.functions.collect_set;
+import static org.apache.spark.sql.functions.count;
+import static org.apache.spark.sql.functions.lit;
 
 @Slf4j
 public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>> {
@@ -284,6 +320,502 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       exprIndexRecords = exprIndexRecords.union(expressionIndexComputationMetadata.getPartitionStatRecordsOpt().get());
     }
     return exprIndexRecords;
+  }
+
+  @Override
+  protected HoodieData<HoodieRecord> getVectorIndexRecords(HoodieIndexDefinition indexDefinition) {
+    try {
+      String vectorColumn = indexDefinition.getSourceFields().get(0);
+      HoodieSchema tableSchema = new TableSchemaResolver(dataMetaClient).getTableSchema();
+      Pair<String, HoodieSchemaField> fieldSchema = HoodieSchemaUtils.getNestedField(tableSchema, vectorColumn)
+          .orElseThrow(() -> new HoodieMetadataException("Vector column not found in table schema: " + vectorColumn));
+      HoodieSchema vectorSchema = fieldSchema.getRight().schema().getNonNullType();
+      ValidationUtils.checkState(vectorSchema.getType() == HoodieSchemaType.VECTOR,
+          "Vector index can only be bootstrapped from VECTOR columns: " + vectorColumn);
+
+      HoodieSchema.Vector resolvedVectorType = (HoodieSchema.Vector) vectorSchema;
+      int configuredDimension = VectorIndexOptions.getDimension(indexDefinition.getIndexOptions());
+      ValidationUtils.checkState(resolvedVectorType.getDimension() == configuredDimension,
+          String.format("Vector dimension mismatch for %s: schema=%s, configured=%s",
+              vectorColumn, resolvedVectorType.getDimension(), configuredDimension));
+
+      SparkSession sparkSession = ((HoodieSparkEngineContext) engineContext).getSqlContext().sparkSession();
+      List<String> latestBaseFilePaths;
+      try (HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(
+          engineContext, dataMetaClient, dataMetaClient.getCommitsTimeline().filterCompletedInstants())) {
+        List<String> partitionPaths = FSUtils.getAllPartitionPaths(engineContext, dataMetaClient, false);
+        fsView.loadAllPartitions();
+        latestBaseFilePaths = partitionPaths.stream()
+            .flatMap(partition -> fsView.getLatestBaseFiles(partition))
+            .map(HoodieBaseFile::getPath)
+            .collect(Collectors.toList());
+      }
+
+      if (latestBaseFilePaths.isEmpty()) {
+        log.warn("Vector index bootstrap found no latest base files for {}", dataMetaClient.getBasePath());
+        return engineContext.emptyHoodieData();
+      }
+
+      log.info("Vector index bootstrap discovered {} latest base files for {}", latestBaseFilePaths.size(), indexDefinition.getIndexName());
+
+      Dataset<Row> tableRows = sparkSession.read()
+          .parquet(latestBaseFilePaths.toArray(new String[0]))
+          .select(
+              col(RECORD_KEY_METADATA_FIELD),
+              col(PARTITION_PATH_METADATA_FIELD).alias("__partition_path"),
+              col(FILENAME_METADATA_FIELD).alias("__file_name"),
+              col(vectorColumn).alias("__vector_value"));
+
+      String vectorToFeaturesUdf = "__hudi_vector_index_to_features";
+      UDF1<Object, org.apache.spark.ml.linalg.Vector> vectorFeatureUdf =
+          rawValue -> rawValue == null
+              ? null
+              : Vectors.dense(toNumericArray(rawValue, configuredDimension, resolvedVectorType.getVectorElementType()));
+      sparkSession.udf().register(vectorToFeaturesUdf, vectorFeatureUdf, new VectorUDT());
+
+      Dataset<Row> featureDataset = tableRows
+          .withColumn("features", callUDF(vectorToFeaturesUdf, col("__vector_value")))
+          .filter(col("features").isNotNull())
+          .drop("__vector_value")
+          .persist(StorageLevel.MEMORY_AND_DISK());
+
+      long documentCount = featureDataset.count();
+      if (documentCount == 0) {
+        long tableRowCount = tableRows.count();
+        log.warn("Vector index bootstrap produced zero feature rows for {} despite reading {} table rows",
+            indexDefinition.getIndexName(), tableRowCount);
+        return engineContext.emptyHoodieData();
+      }
+
+      log.info("Vector index bootstrap produced {} feature rows for {}", documentCount, indexDefinition.getIndexName());
+
+      int requestedClusters = Math.max(1, VectorIndexOptions.getNumClusters(indexDefinition.getIndexOptions()));
+      int numClusters = (int) Math.min(documentCount, requestedClusters);
+      int maxIterations = Math.max(1, VectorIndexOptions.getMaxIter(indexDefinition.getIndexOptions()));
+      String quantizerType = getQuantizerType(indexDefinition.getIndexOptions());
+      long quantizerSeed = getRaBitQSeed(indexDefinition.getIndexOptions());
+      boolean assumeNormalized = isRaBitQAssumeNormalized(indexDefinition.getIndexOptions());
+      boolean storeRaBitQCodesInMdt = "IVF_RABITQ".equals(quantizerType)
+          && VectorIndexOptions.shouldStoreRaBitQCodesInMdt(indexDefinition.getIndexOptions());
+      int targetRowsPerShard = Math.max(1, VectorIndexOptions.getRaBitQPostingTargetRowsPerShard(indexDefinition.getIndexOptions()));
+      int maxShardsPerCluster = Math.max(1, VectorIndexOptions.getRaBitQPostingMaxShardsPerCluster(indexDefinition.getIndexOptions()));
+      int quantizedCodeBytes = "IVF_RABITQ".equals(quantizerType)
+          ? new RaBitQEncoder(configuredDimension, quantizerSeed, assumeNormalized).codeBytes()
+          : 0;
+
+      KMeans kMeans = new KMeans()
+          .setK(numClusters)
+          .setSeed(VectorIndexOptions.getRaBitQSeed(indexDefinition.getIndexOptions()))
+          .setMaxIter(maxIterations)
+          .setFeaturesCol("features")
+          .setPredictionCol("__cluster_id");
+      KMeansModel model = kMeans.fit(featureDataset);
+
+      Dataset<Row> predictions = model.transform(featureDataset)
+          .select(
+              col(RECORD_KEY_METADATA_FIELD),
+              col("__cluster_id"),
+              col("__file_name"),
+              col("__partition_path"),
+              col("features"))
+          .persist(StorageLevel.MEMORY_AND_DISK());
+      long predictionCount = predictions.count();
+      log.info("Vector index bootstrap materialized {} prediction rows for {}", predictionCount, indexDefinition.getIndexName());
+      long lastUpdatedTs = System.currentTimeMillis();
+      String generationId = Integer.toUnsignedString((int) (lastUpdatedTs / 1000L));
+      Map<Integer, Long> clusterVectorCounts = predictions.groupBy(col("__cluster_id"))
+          .count()
+          .collectAsList()
+          .stream()
+          .collect(Collectors.toMap(
+              row -> ((Number) row.get(0)).intValue(),
+              row -> ((Number) row.get(1)).longValue()));
+      Map<Integer, Integer> clusterShardCounts = clusterVectorCounts.entrySet().stream()
+          .collect(Collectors.toMap(
+              Map.Entry::getKey,
+              entry -> computeShardCount(entry.getValue(), targetRowsPerShard, maxShardsPerCluster)));
+      JavaRDD<HoodieRecord> assignmentRecords = predictions.javaRDD().map(row -> {
+        int clusterId = ((Number) row.get(1)).intValue();
+        int shardId = computeShardId(row.getString(0), clusterShardCounts.getOrDefault(clusterId, 1));
+        return HoodieMetadataPayload.createVectorIndexAssignmentRecord(
+            row.getString(0),
+            generationId,
+            clusterId,
+            shardId,
+            row.isNullAt(2) ? null : FSUtils.getFileIdFromFileName(row.getString(2)),
+            row.isNullAt(3) ? null : row.getString(3),
+            indexDefinition.getIndexName());
+      });
+      StructType fgMappingSchema = new StructType(new StructField[] {
+          new StructField("__cluster_id", DataTypes.IntegerType, false, Metadata.empty()),
+          new StructField("__partition_path", DataTypes.StringType, true, Metadata.empty()),
+          new StructField("__file_group_id", DataTypes.StringType, true, Metadata.empty())
+      });
+      Dataset<Row> fgMappingDataset = sparkSession.createDataFrame(
+              predictions.javaRDD()
+          .map(row -> RowFactory.create(
+              ((Number) row.get(1)).intValue(),
+              row.isNullAt(3) ? null : row.getString(3),
+              row.isNullAt(2) ? null : FSUtils.getFileIdFromFileName(row.getString(2)))),
+          fgMappingSchema);
+      JavaRDD<HoodieRecord> fgMappingRecords = buildFgMappingRecords(fgMappingDataset, lastUpdatedTs, indexDefinition.getIndexName());
+      double[][] centroids = Arrays.stream(model.clusterCenters())
+          .map(center -> center.toArray())
+          .toArray(double[][]::new);
+      JavaRDD<HoodieRecord> centroidRecord = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext()
+          .parallelize(Collections.singletonList(
+              HoodieMetadataPayload.createVectorIndexCentroidsRecord(
+                  VectorIndexBootstrapUtils.serializeCentroids(centroids, resolvedVectorType.getVectorElementType()),
+                  indexDefinition.getIndexName())), 1);
+      JavaRDD<HoodieRecord> quantizerRecord = buildQuantizerRecord(
+          quantizerType, quantizedCodeBytes, quantizerSeed, assumeNormalized, indexDefinition.getIndexName());
+      JavaRDD<HoodieRecord> manifestRecord = storeRaBitQCodesInMdt
+          ? buildManifestRecord(generationId, quantizerType, quantizedCodeBytes, quantizerSeed, assumeNormalized, lastUpdatedTs, indexDefinition.getIndexName())
+          : ((HoodieSparkEngineContext) engineContext).getJavaSparkContext().parallelize(Collections.emptyList(), 1);
+      JavaRDD<HoodieRecord> generationManifestRecord = storeRaBitQCodesInMdt
+          ? buildGenerationManifestRecord(generationId, quantizerType, quantizedCodeBytes, quantizerSeed, assumeNormalized, lastUpdatedTs, indexDefinition.getIndexName())
+          : ((HoodieSparkEngineContext) engineContext).getJavaSparkContext().parallelize(Collections.emptyList(), 1);
+      JavaRDD<HoodieRecord> clusterManifestRecords = storeRaBitQCodesInMdt
+          ? buildClusterManifestRecords(predictions, generationId, clusterVectorCounts, clusterShardCounts, lastUpdatedTs, indexDefinition.getIndexName())
+          : ((HoodieSparkEngineContext) engineContext).getJavaSparkContext().parallelize(Collections.emptyList(), 1);
+      JavaRDD<HoodieRecord> postingRecords = storeRaBitQCodesInMdt
+          ? buildPostingRecords(predictions, configuredDimension, quantizerSeed, assumeNormalized, generationId,
+              clusterShardCounts, lastUpdatedTs, indexDefinition.getIndexName())
+          : ((HoodieSparkEngineContext) engineContext).getJavaSparkContext().parallelize(Collections.emptyList(), 1);
+      HoodieData<HoodieRecord> metadataRecords = HoodieJavaRDD.of(
+          centroidRecord
+              .union(quantizerRecord)
+              .union(manifestRecord)
+              .union(generationManifestRecord)
+              .union(clusterManifestRecords)
+              .union(assignmentRecords)
+              .union(fgMappingRecords)
+              .union(postingRecords));
+      predictions.unpersist(false);
+      featureDataset.unpersist(false);
+      return metadataRecords;
+    } catch (Exception e) {
+      throw new HoodieMetadataException("Failed to bootstrap vector index records", e);
+    }
+  }
+
+  private static String getQuantizerType(Map<String, String> options) {
+    return options.getOrDefault(VectorIndexOptions.QUANTIZER, "IVF_RABITQ").toUpperCase();
+  }
+
+  private static long getRaBitQSeed(Map<String, String> options) {
+    return Long.parseLong(options.getOrDefault(VectorIndexOptions.RABITQ_RANDOM_SEED, "42"));
+  }
+
+  private static boolean isRaBitQAssumeNormalized(Map<String, String> options) {
+    return Boolean.parseBoolean(options.getOrDefault(VectorIndexOptions.RABITQ_ASSUME_NORMALIZED, "false"));
+  }
+
+  @SuppressWarnings("unchecked")
+  private JavaRDD<HoodieRecord> buildQuantizerRecord(String quantizerType,
+                                                     int quantizedCodeBytes,
+                                                     long quantizerSeed,
+                                                     boolean assumeNormalized,
+                                                     String indexName) {
+    try {
+      Method method = HoodieMetadataPayload.class.getMethod(
+          "createVectorIndexQuantizerMetadataRecord",
+          String.class, int.class, long.class, boolean.class, String.class);
+      HoodieRecord record = (HoodieRecord) method.invoke(null,
+          quantizerType, quantizedCodeBytes, quantizerSeed, assumeNormalized, indexName);
+      return ((HoodieSparkEngineContext) engineContext).getJavaSparkContext()
+          .parallelize(Collections.singletonList(record), 1);
+    } catch (ReflectiveOperationException | LinkageError e) {
+      log.warn("Skipping vector quantizer metadata record because runtime hudi-common does not provide the required API");
+      return ((HoodieSparkEngineContext) engineContext).getJavaSparkContext()
+          .parallelize(Collections.emptyList(), 1);
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private JavaRDD<HoodieRecord> buildManifestRecord(String generationId,
+                                                    String quantizerType,
+                                                    int quantizedCodeBytes,
+                                                    long quantizerSeed,
+                                                    boolean assumeNormalized,
+                                                    long lastUpdatedTs,
+                                                    String indexName) {
+    try {
+      Method method = HoodieMetadataPayload.class.getMethod(
+          "createVectorIndexManifestRecord",
+          String.class, String.class, int.class, long.class, boolean.class, long.class, String.class);
+      HoodieRecord record = (HoodieRecord) method.invoke(null,
+          generationId, quantizerType, quantizedCodeBytes, quantizerSeed, assumeNormalized, lastUpdatedTs, indexName);
+      return ((HoodieSparkEngineContext) engineContext).getJavaSparkContext()
+          .parallelize(Collections.singletonList(record), 1);
+    } catch (ReflectiveOperationException | LinkageError e) {
+      log.warn("Skipping vector manifest record because runtime hudi-common does not provide the required API");
+      return ((HoodieSparkEngineContext) engineContext).getJavaSparkContext()
+          .parallelize(Collections.emptyList(), 1);
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private JavaRDD<HoodieRecord> buildGenerationManifestRecord(String generationId,
+                                                              String quantizerType,
+                                                              int quantizedCodeBytes,
+                                                              long quantizerSeed,
+                                                              boolean assumeNormalized,
+                                                              long lastUpdatedTs,
+                                                              String indexName) {
+    try {
+      Method method = HoodieMetadataPayload.class.getMethod(
+          "createVectorIndexGenerationManifestRecord",
+          String.class, String.class, int.class, long.class, boolean.class, long.class, String.class);
+      HoodieRecord record = (HoodieRecord) method.invoke(null,
+          generationId, quantizerType, quantizedCodeBytes, quantizerSeed, assumeNormalized, lastUpdatedTs, indexName);
+      return ((HoodieSparkEngineContext) engineContext).getJavaSparkContext()
+          .parallelize(Collections.singletonList(record), 1);
+    } catch (ReflectiveOperationException | LinkageError e) {
+      log.warn("Skipping vector generation manifest record because runtime hudi-common does not provide the required API");
+      return ((HoodieSparkEngineContext) engineContext).getJavaSparkContext()
+          .parallelize(Collections.emptyList(), 1);
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private JavaRDD<HoodieRecord> buildClusterManifestRecords(Dataset<Row> predictions,
+                                                            String generationId,
+                                                            Map<Integer, Long> clusterVectorCounts,
+                                                            Map<Integer, Integer> clusterShardCounts,
+                                                            long lastUpdatedTs,
+                                                            String indexName) {
+    try {
+      Map<Integer, List<String>> clusterFileGroups = predictions
+          .where(col("__file_name").isNotNull())
+          .groupBy(col("__cluster_id"))
+          .agg(collect_set(col("__file_name")).alias("__file_names"))
+          .collectAsList()
+          .stream()
+          .collect(Collectors.toMap(
+              row -> ((Number) row.get(0)).intValue(),
+              row -> row.<String>getList(1).stream()
+                  .map(FSUtils::getFileIdFromFileName)
+                  .distinct()
+                  .collect(Collectors.toCollection(ArrayList::new))));
+      Method method = HoodieMetadataPayload.class.getMethod(
+          "createVectorIndexClusterManifestRecord",
+          String.class, int.class, int.class, java.util.Collection.class, long.class, long.class, String.class);
+      List<HoodieRecord> records = clusterVectorCounts.entrySet().stream()
+          .map(entry -> {
+            try {
+              return (HoodieRecord) method.invoke(
+                  null,
+                  generationId,
+                  entry.getKey(),
+                  clusterShardCounts.getOrDefault(entry.getKey(), 1),
+                  clusterFileGroups.getOrDefault(entry.getKey(), Collections.emptyList()),
+                  entry.getValue(),
+                  lastUpdatedTs,
+                  indexName);
+            } catch (ReflectiveOperationException ex) {
+              throw new HoodieMetadataException("Failed to create vector cluster manifest record reflectively", ex);
+            }
+          })
+          .collect(Collectors.toList());
+      return ((HoodieSparkEngineContext) engineContext).getJavaSparkContext()
+          .parallelize(records, Math.max(1, Math.min(records.size(), 64)));
+    } catch (ReflectiveOperationException | LinkageError e) {
+      log.warn("Skipping vector cluster manifest records because runtime hudi-common does not provide the required API");
+      return ((HoodieSparkEngineContext) engineContext).getJavaSparkContext()
+          .parallelize(Collections.emptyList(), 1);
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private JavaRDD<HoodieRecord> buildPostingRecords(Dataset<Row> predictions,
+                                                    int dimension,
+                                                    long quantizerSeed,
+                                                    boolean assumeNormalized,
+                                                    String generationId,
+                                                    Map<Integer, Integer> clusterShardCounts,
+                                                    long lastUpdatedTs,
+                                                    String indexName) {
+    try {
+      HoodieMetadataPayload.class.getMethod(
+          "createVectorIndexPostingRecord",
+          String.class, String.class, int.class, int.class, String.class, String.class, byte[].class, Float.class, long.class, String.class);
+      final RaBitQEncoder encoder = new RaBitQEncoder(dimension, quantizerSeed, assumeNormalized);
+      return predictions.javaRDD().map(row -> createPostingRecordCompat(
+          row, encoder, assumeNormalized, generationId, clusterShardCounts, lastUpdatedTs, indexName));
+    } catch (ReflectiveOperationException | LinkageError e) {
+      log.warn("Skipping vector posting records because runtime hudi-common does not provide the required API");
+      return ((HoodieSparkEngineContext) engineContext).getJavaSparkContext()
+          .parallelize(Collections.emptyList(), 1);
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private JavaRDD<HoodieRecord> buildFgMappingRecords(Dataset<Row> fgMappingDataset,
+                                                      long lastUpdatedTs,
+                                                      String indexName) {
+    try {
+      HoodieMetadataPayload.class.getMethod(
+          "createVectorIndexFgMappingRecord",
+          int.class, String.class, java.util.Collection.class, long.class, long.class, String.class);
+      return fgMappingDataset
+          .groupBy(col("__cluster_id"), col("__partition_path"))
+          .agg(
+              collect_set(col("__file_group_id")).alias("__file_group_ids"),
+              count(lit(1)).alias("__vector_count"))
+          .javaRDD()
+          .map(row -> createFgMappingRecordCompat(row, lastUpdatedTs, indexName));
+    } catch (ReflectiveOperationException | LinkageError e) {
+      log.warn("Skipping vector fg_mapping records because runtime hudi-common does not provide the required API");
+      return ((HoodieSparkEngineContext) engineContext).getJavaSparkContext()
+          .parallelize(Collections.emptyList(), 1);
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static HoodieRecord createPostingRecordCompat(Row row,
+                                                        RaBitQEncoder encoder,
+                                                        boolean assumeNormalized,
+                                                        String generationId,
+                                                        Map<Integer, Integer> clusterShardCounts,
+                                                        long lastUpdatedTs,
+                                                        String indexName) {
+    try {
+      Method method = HoodieMetadataPayload.class.getMethod(
+          "createVectorIndexPostingRecord",
+          String.class, String.class, int.class, int.class, String.class, String.class, byte[].class, Float.class, long.class, String.class);
+      org.apache.spark.ml.linalg.Vector features = row.getAs(4);
+      org.apache.hudi.common.index.vector.VectorQuantizer.QuantizedVector quantizedVector =
+          encoder.encode(toFloatArray(features));
+      Float scalar = assumeNormalized ? null : quantizedVector.scalar;
+      int clusterId = ((Number) row.get(1)).intValue();
+      int shardCount = clusterShardCounts.getOrDefault(clusterId, 1);
+      int shardId = computeShardId(row.getString(0), shardCount);
+      return (HoodieRecord) method.invoke(null,
+          generationId,
+          row.getString(0),
+          clusterId,
+          shardId,
+          row.isNullAt(2) ? null : FSUtils.getFileIdFromFileName(row.getString(2)),
+          row.isNullAt(3) ? null : row.getString(3),
+          quantizedVector.code,
+          scalar,
+          lastUpdatedTs,
+          indexName);
+    } catch (ReflectiveOperationException ex) {
+      throw new HoodieMetadataException("Failed to create vector posting record reflectively", ex);
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static HoodieRecord createFgMappingRecordCompat(Row row, long lastUpdatedTs, String indexName) {
+    try {
+      Method method = HoodieMetadataPayload.class.getMethod(
+          "createVectorIndexFgMappingRecord",
+          int.class, String.class, java.util.Collection.class, long.class, long.class, String.class);
+      return (HoodieRecord) method.invoke(null,
+          ((Number) row.get(0)).intValue(),
+          row.isNullAt(1) ? "" : row.getString(1),
+          row.getList(2),
+          ((Number) row.get(3)).longValue(),
+          lastUpdatedTs,
+          indexName);
+    } catch (ReflectiveOperationException ex) {
+      throw new HoodieMetadataException("Failed to create vector fg_mapping record reflectively", ex);
+    }
+  }
+
+  private static float[] toFloatArray(org.apache.spark.ml.linalg.Vector vector) {
+    double[] source = vector.toArray();
+    float[] converted = new float[source.length];
+    for (int i = 0; i < source.length; i++) {
+      converted[i] = (float) source[i];
+    }
+    return converted;
+  }
+
+  private static int computeShardCount(long clusterPopulation, int targetRowsPerShard, int maxShardsPerCluster) {
+    if (clusterPopulation <= 0) {
+      return 1;
+    }
+    long computed = (clusterPopulation + targetRowsPerShard - 1L) / targetRowsPerShard;
+    computed = Math.max(1L, computed);
+    computed = Math.min(computed, (long) maxShardsPerCluster);
+    return (int) computed;
+  }
+
+  private static int computeShardId(String recordKey, int shardCount) {
+    return Math.floorMod(recordKey.hashCode(), Math.max(1, shardCount));
+  }
+
+  @SuppressWarnings("unchecked")
+  private static double[] toNumericArray(Object rawValue,
+                                         int expectedDimension,
+                                         HoodieSchema.Vector.VectorElementType elementType) {
+    List<?> values;
+    if (rawValue instanceof List) {
+      values = (List<?>) rawValue;
+    } else if (rawValue instanceof scala.collection.Seq) {
+      values = scala.collection.JavaConverters.seqAsJavaList((scala.collection.Seq<Object>) rawValue);
+    } else if (rawValue instanceof float[] && elementType == HoodieSchema.Vector.VectorElementType.FLOAT) {
+      float[] source = (float[]) rawValue;
+      ValidationUtils.checkState(source.length == expectedDimension,
+          String.format("Expected VECTOR(%s) but found %s elements", expectedDimension, source.length));
+      double[] converted = new double[source.length];
+      for (int i = 0; i < source.length; i++) {
+        converted[i] = source[i];
+      }
+      return converted;
+    } else if (rawValue instanceof double[]) {
+      double[] source = (double[]) rawValue;
+      ValidationUtils.checkState(source.length == expectedDimension,
+          String.format("Expected VECTOR(%s) but found %s elements", expectedDimension, source.length));
+      if (elementType == HoodieSchema.Vector.VectorElementType.DOUBLE || elementType == HoodieSchema.Vector.VectorElementType.FLOAT) {
+        return source;
+      }
+      throw new HoodieMetadataException("Expected INT8 vector values but received double[]");
+    } else if (rawValue instanceof byte[]) {
+      byte[] source = (byte[]) rawValue;
+      int expectedSize = expectedDimension * elementType.getElementSize();
+      ValidationUtils.checkState(source.length == expectedSize,
+          String.format("Expected VECTOR(%s) backing size %s but found %s bytes",
+              expectedDimension, expectedSize, source.length));
+      ByteBuffer buffer = ByteBuffer.wrap(source).order(HoodieSchema.VectorLogicalType.VECTOR_BYTE_ORDER);
+      double[] converted = new double[expectedDimension];
+      switch (elementType) {
+        case FLOAT:
+          for (int i = 0; i < expectedDimension; i++) {
+            converted[i] = buffer.getFloat();
+          }
+          return converted;
+        case DOUBLE:
+          for (int i = 0; i < expectedDimension; i++) {
+            converted[i] = buffer.getDouble();
+          }
+          return converted;
+        case INT8:
+          for (int i = 0; i < expectedDimension; i++) {
+            converted[i] = buffer.get();
+          }
+          return converted;
+        default:
+          throw new HoodieMetadataException("Unsupported vector element type: " + elementType);
+      }
+    } else if (rawValue instanceof Object[]) {
+      values = Arrays.asList((Object[]) rawValue);
+    } else {
+      throw new HoodieMetadataException("Unsupported Spark vector value type: " + rawValue.getClass().getName());
+    }
+
+    ValidationUtils.checkState(values.size() == expectedDimension,
+        String.format("Expected VECTOR(%s) but found %s elements", expectedDimension, values.size()));
+    double[] converted = new double[values.size()];
+    for (int i = 0; i < values.size(); i++) {
+      Object value = values.get(i);
+      ValidationUtils.checkState(value instanceof Number, "Vector element must be numeric: " + value);
+      converted[i] = ((Number) value).doubleValue();
+    }
+    return converted;
   }
 
   protected SparkRDDMetadataWriteClient getSparkWriteClient(Option<BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>>> writeClientOpt) {

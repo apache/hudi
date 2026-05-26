@@ -61,7 +61,8 @@ public class TestHoodieIndexVersion {
         Arguments.of("EXPRESSION INDEX", HoodieTableVersion.EIGHT, "files", HoodieIndexVersion.V1),
         Arguments.of("EXPRESSION INDEX", HoodieTableVersion.NINE, "files", HoodieIndexVersion.V1),
         Arguments.of("PARTITION_STATS", HoodieTableVersion.EIGHT, "partition_stats", HoodieIndexVersion.V1),
-        Arguments.of("PARTITION_STATS", HoodieTableVersion.NINE, "partition_stats", HoodieIndexVersion.V2)
+        Arguments.of("PARTITION_STATS", HoodieTableVersion.NINE, "partition_stats", HoodieIndexVersion.V2),
+        Arguments.of("VECTOR_INDEX", HoodieTableVersion.NINE, "vector_index_idx1", HoodieIndexVersion.V1)
     );
   }
 
@@ -81,7 +82,8 @@ public class TestHoodieIndexVersion {
         Arguments.of("EXPRESSION_INDEX", HoodieTableVersion.EIGHT, MetadataPartitionType.EXPRESSION_INDEX, HoodieIndexVersion.V1),
         Arguments.of("FILES", HoodieTableVersion.EIGHT, MetadataPartitionType.FILES, HoodieIndexVersion.V1),
         Arguments.of("PARTITION_STATS", HoodieTableVersion.EIGHT, MetadataPartitionType.PARTITION_STATS, HoodieIndexVersion.V1),
-        Arguments.of("ALL_PARTITIONS", HoodieTableVersion.EIGHT, MetadataPartitionType.ALL_PARTITIONS, HoodieIndexVersion.V1)
+        Arguments.of("ALL_PARTITIONS", HoodieTableVersion.EIGHT, MetadataPartitionType.ALL_PARTITIONS, HoodieIndexVersion.V1),
+        Arguments.of("VECTOR_INDEX", HoodieTableVersion.NINE, MetadataPartitionType.VECTOR_INDEX, HoodieIndexVersion.V1)
     );
   }
 

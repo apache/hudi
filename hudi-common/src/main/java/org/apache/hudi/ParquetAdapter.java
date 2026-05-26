@@ -33,9 +33,12 @@ import org.apache.parquet.schema.PrimitiveType;
 public interface ParquetAdapter {
 
   static ParquetAdapter getAdapter() {
+    // LogicalTypeAnnotations are added in parquet 1.11.0. Feature-detect the API at runtime so we can
+    // compile against older Parquet versions as well.
     try {
+      PrimitiveType.class.getMethod("getLogicalTypeAnnotation");
       return ReflectionUtils.loadClass(LogicalTypeParquetAdapter.class.getName());
-    } catch (Throwable t) {
+    } catch (NoSuchMethodException e) {
       return ReflectionUtils.loadClass(OriginalTypeParquetAdapter.class.getName());
     }
   }

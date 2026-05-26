@@ -22,46 +22,103 @@ package org.apache.parquet.schema;
 import org.apache.hudi.ParquetAdapter;
 import org.apache.hudi.stats.ValueType;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
 /**
  * Uses LogicalTypeAnnotation to extract value type, precision, and scale
  */
 public class LogicalTypeParquetAdapter implements ParquetAdapter {
+
+  private static Object getLogicalTypeAnnotation(PrimitiveType primitiveType) {
+    try {
+      Method m = primitiveType.getClass().getMethod("getLogicalTypeAnnotation");
+      return m.invoke(primitiveType);
+    } catch (NoSuchMethodException e) {
+      // Parquet < 1.11 does not have this API (we should not be instantiated in that case)
+      return null;
+    } catch (IllegalAccessException | InvocationTargetException e) {
+      throw new IllegalStateException("Unable to access Parquet logical type annotation", e);
+    }
+  }
+
+  private static int getIntProperty(Object obj, String methodName) {
+    try {
+      Method m = obj.getClass().getMethod(methodName);
+      Object v = m.invoke(obj);
+      if (!(v instanceof Number)) {
+        throw new IllegalStateException("Expected numeric return from " + methodName + " but got " + v);
+      }
+      return ((Number) v).intValue();
+    } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+      throw new IllegalStateException("Unable to invoke " + methodName + " on " + obj.getClass().getName(), e);
+    }
+  }
+
+  private static boolean getBooleanProperty(Object obj, String methodName) {
+    try {
+      Method m = obj.getClass().getMethod(methodName);
+      Object v = m.invoke(obj);
+      if (!(v instanceof Boolean)) {
+        throw new IllegalStateException("Expected boolean return from " + methodName + " but got " + v);
+      }
+      return (Boolean) v;
+    } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+      throw new IllegalStateException("Unable to invoke " + methodName + " on " + obj.getClass().getName(), e);
+    }
+  }
+
+  private static String getEnumName(Object obj, String methodName) {
+    try {
+      Method m = obj.getClass().getMethod(methodName);
+      Object v = m.invoke(obj);
+      return v == null ? null : v.toString();
+    } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+      throw new IllegalStateException("Unable to invoke " + methodName + " on " + obj.getClass().getName(), e);
+    }
+  }
+
+  private static boolean isAnnotationType(Object annotation, String simpleName) {
+    return annotation != null && annotation.getClass().getName().endsWith("$" + simpleName);
+  }
+
   @Override
   public boolean hasAnnotation(PrimitiveType primitiveType) {
-    return primitiveType.getLogicalTypeAnnotation() != null;
+    return getLogicalTypeAnnotation(primitiveType) != null;
   }
 
   @Override
   public ValueType getValueTypeFromAnnotation(PrimitiveType primitiveType) {
-    LogicalTypeAnnotation annotation = primitiveType.getLogicalTypeAnnotation();
-    if (annotation instanceof LogicalTypeAnnotation.StringLogicalTypeAnnotation) {
+    Object annotation = getLogicalTypeAnnotation(primitiveType);
+    if (isAnnotationType(annotation, "StringLogicalTypeAnnotation")) {
       return ValueType.STRING;
-    } else if (annotation instanceof LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) {
+    } else if (isAnnotationType(annotation, "DecimalLogicalTypeAnnotation")) {
       return ValueType.DECIMAL;
-    } else if (annotation instanceof LogicalTypeAnnotation.DateLogicalTypeAnnotation) {
+    } else if (isAnnotationType(annotation, "DateLogicalTypeAnnotation")) {
       return ValueType.DATE;
-    } else if (annotation instanceof LogicalTypeAnnotation.TimeLogicalTypeAnnotation) {
+    } else if (isAnnotationType(annotation, "TimeLogicalTypeAnnotation")) {
       // TODO: decide if we need to support adjusted to UTC
-      LogicalTypeAnnotation.TimeLogicalTypeAnnotation timeAnnotation = (LogicalTypeAnnotation.TimeLogicalTypeAnnotation) annotation;
-      if (timeAnnotation.getUnit() == LogicalTypeAnnotation.TimeUnit.MILLIS) {
+      String unit = getEnumName(annotation, "getUnit");
+      if ("MILLIS".equals(unit)) {
         return ValueType.TIME_MILLIS;
-      } else if (timeAnnotation.getUnit() == LogicalTypeAnnotation.TimeUnit.MICROS) {
+      } else if ("MICROS".equals(unit)) {
         return ValueType.TIME_MICROS;
       } else {
-        throw new IllegalArgumentException("Unsupported time unit: " + timeAnnotation.getUnit());
+        throw new IllegalArgumentException("Unsupported time unit: " + unit);
       }
-    } else if (annotation instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) {
-      LogicalTypeAnnotation.TimestampLogicalTypeAnnotation timestampAnnotation = (LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) annotation;
-      if (timestampAnnotation.getUnit() == LogicalTypeAnnotation.TimeUnit.MILLIS) {
-        return timestampAnnotation.isAdjustedToUTC() ? ValueType.TIMESTAMP_MILLIS : ValueType.LOCAL_TIMESTAMP_MILLIS;
-      } else if (timestampAnnotation.getUnit() == LogicalTypeAnnotation.TimeUnit.MICROS) {
-        return timestampAnnotation.isAdjustedToUTC() ? ValueType.TIMESTAMP_MICROS : ValueType.LOCAL_TIMESTAMP_MICROS;
-      } else if (timestampAnnotation.getUnit() == LogicalTypeAnnotation.TimeUnit.NANOS) {
-        return timestampAnnotation.isAdjustedToUTC() ? ValueType.TIMESTAMP_NANOS : ValueType.LOCAL_TIMESTAMP_NANOS;
+    } else if (isAnnotationType(annotation, "TimestampLogicalTypeAnnotation")) {
+      String unit = getEnumName(annotation, "getUnit");
+      boolean adjustedToUtc = getBooleanProperty(annotation, "isAdjustedToUTC");
+      if ("MILLIS".equals(unit)) {
+        return adjustedToUtc ? ValueType.TIMESTAMP_MILLIS : ValueType.LOCAL_TIMESTAMP_MILLIS;
+      } else if ("MICROS".equals(unit)) {
+        return adjustedToUtc ? ValueType.TIMESTAMP_MICROS : ValueType.LOCAL_TIMESTAMP_MICROS;
+      } else if ("NANOS".equals(unit)) {
+        return adjustedToUtc ? ValueType.TIMESTAMP_NANOS : ValueType.LOCAL_TIMESTAMP_NANOS;
       } else {
-        throw new IllegalArgumentException("Unsupported timestamp unit: " + timestampAnnotation.getUnit());
+        throw new IllegalArgumentException("Unsupported timestamp unit: " + unit);
       }
-    } else if (annotation instanceof LogicalTypeAnnotation.UUIDLogicalTypeAnnotation) {
+    } else if (isAnnotationType(annotation, "UUIDLogicalTypeAnnotation")) {
       return ValueType.UUID;
     }
 
@@ -69,24 +126,25 @@ public class LogicalTypeParquetAdapter implements ParquetAdapter {
   }
 
   private static void validatePrimitiveType(PrimitiveType primitiveType) {
-    if (primitiveType.getLogicalTypeAnnotation() == null) {
+    Object annotation = getLogicalTypeAnnotation(primitiveType);
+    if (annotation == null) {
       throw new IllegalArgumentException("Unsupported primitive type: " + primitiveType.getPrimitiveTypeName());
     }
 
-    if (!(primitiveType.getLogicalTypeAnnotation() instanceof LogicalTypeAnnotation.DecimalLogicalTypeAnnotation)) {
-      throw new IllegalArgumentException("Unsupported logical type annotation: " + primitiveType.getLogicalTypeAnnotation());
+    if (!isAnnotationType(annotation, "DecimalLogicalTypeAnnotation")) {
+      throw new IllegalArgumentException("Unsupported logical type annotation: " + annotation);
     }
   }
 
   @Override
   public int getPrecision(PrimitiveType primitiveType) {
     validatePrimitiveType(primitiveType);
-    return ((LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) primitiveType.getLogicalTypeAnnotation()).getPrecision();
+    return getIntProperty(getLogicalTypeAnnotation(primitiveType), "getPrecision");
   }
 
   @Override
   public int getScale(PrimitiveType primitiveType) {
     validatePrimitiveType(primitiveType);
-    return ((LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) primitiveType.getLogicalTypeAnnotation()).getScale();
+    return getIntProperty(getLogicalTypeAnnotation(primitiveType), "getScale");
   }
 }

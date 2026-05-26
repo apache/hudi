@@ -1,0 +1,358 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#e8f4fd"/>
+      <stop offset="100%" style="stop-color:#d0e8f9"/>
+    </linearGradient>
+    <linearGradient id="headerGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0053e2"/>
+      <stop offset="100%" style="stop-color:#003da8"/>
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#e8f5e3"/>
+      <stop offset="100%" style="stop-color:#d4edc9"/>
+    </linearGradient>
+    <linearGradient id="sparkGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#fff8e6"/>
+      <stop offset="100%" style="stop-color:#ffefcc"/>
+    </linearGradient>
+    <!-- Drop Shadow -->
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="2" dy="3" stdDeviation="4" flood-opacity="0.15"/>
+    </filter>
+    <!-- Arrow markers -->
+    <marker id="arrowBlue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#0053e2"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2a8703"/>
+    </marker>
+    <marker id="arrowGray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="900" fill="#f8fafc"/>
+
+  <!-- Title -->
+  <text x="600" y="40" text-anchor="middle" font-size="24" font-weight="700" fill="#0053e2">
+    RFC-104: Vector Index Architecture (MDT-Native Design)
+  </text>
+  <text x="600" y="62" text-anchor="middle" font-size="13" fill="#64748b">
+    Separation of Data (Base Table) and Routing (Metadata Table) — No Hidden Columns
+  </text>
+
+  <!-- ========== MAIN TABLE SECTION ========== -->
+  <g transform="translate(40, 90)">
+    <!-- Main Table Container -->
+    <rect width="520" height="380" rx="12" fill="url(#blueGrad)" stroke="#0053e2" stroke-width="2" filter="url(#shadow)"/>
+
+    <!-- Header -->
+    <rect width="520" height="44" rx="12" fill="url(#headerGrad)"/>
+    <rect y="32" width="520" height="12" fill="url(#headerGrad)"/>
+    <text x="260" y="28" text-anchor="middle" font-size="16" font-weight="600" fill="white">
+      MAIN TABLE (Parquet)
+    </text>
+
+    <!-- File Groups -->
+    <g transform="translate(20, 60)">
+      <!-- FileGrp 1 -->
+      <rect width="150" height="300" rx="8" fill="white" stroke="#93c5fd" stroke-width="1.5"/>
+      <rect width="150" height="32" rx="8" fill="#3b82f6"/>
+      <rect y="24" width="150" height="8" fill="#3b82f6"/>
+      <text x="75" y="22" text-anchor="middle" font-size="12" font-weight="600" fill="white">FileGrp 1</text>
+
+      <!-- Schema fields -->
+      <g transform="translate(12, 45)" font-size="11">
+        <text fill="#1e40af" font-weight="600">_hoodie_*</text>
+        <text y="14" fill="#64748b" font-size="10">metadata fields</text>
+
+        <line x1="0" y1="26" x2="126" y2="26" stroke="#e2e8f0" stroke-width="1"/>
+
+        <text y="42" fill="#1e40af" font-weight="600">record_key</text>
+        <text y="56" fill="#64748b" font-size="10">STRING</text>
+
+        <line x1="0" y1="68" x2="126" y2="68" stroke="#e2e8f0" stroke-width="1"/>
+
+        <text y="84" fill="#1e40af" font-weight="600">partition_path</text>
+        <text y="98" fill="#64748b" font-size="10">STRING</text>
+
+        <line x1="0" y1="110" x2="126" y2="110" stroke="#e2e8f0" stroke-width="1"/>
+
+        <text y="126" fill="#1e40af" font-weight="600">user_columns</text>
+        <text y="140" fill="#64748b" font-size="10">id, name, category...</text>
+
+        <line x1="0" y1="152" x2="126" y2="152" stroke="#e2e8f0" stroke-width="1"/>
+
+        <!-- Vector Column - highlighted -->
+        <rect x="-8" y="164" width="142" height="70" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="63" y="186" text-anchor="middle" fill="#1e40af" font-weight="700">embedding</text>
+        <text x="63" y="204" text-anchor="middle" fill="#0053e2" font-weight="600" font-size="12">VECTOR(D)</text>
+        <text x="63" y="222" text-anchor="middle" fill="#64748b" font-size="9">FIXED_LEN_BYTE_ARRAY</text>
+      </g>
+
+      <!-- FileGrp 2 -->
+      <g transform="translate(160, 0)">
+        <rect width="150" height="300" rx="8" fill="white" stroke="#93c5fd" stroke-width="1.5"/>
+        <rect width="150" height="32" rx="8" fill="#3b82f6"/>
+        <rect y="24" width="150" height="8" fill="#3b82f6"/>
+        <text x="75" y="22" text-anchor="middle" font-size="12" font-weight="600" fill="white">FileGrp 2</text>
+        <text x="75" y="160" text-anchor="middle" fill="#94a3b8" font-size="11">...</text>
+      </g>
+
+      <!-- FileGrp N -->
+      <g transform="translate(320, 0)">
+        <rect width="150" height="300" rx="8" fill="white" stroke="#93c5fd" stroke-width="1.5"/>
+        <rect width="150" height="32" rx="8" fill="#3b82f6"/>
+        <rect y="24" width="150" height="8" fill="#3b82f6"/>
+        <text x="75" y="22" text-anchor="middle" font-size="12" font-weight="600" fill="white">FileGrp N</text>
+        <text x="75" y="160" text-anchor="middle" fill="#94a3b8" font-size="11">...</text>
+      </g>
+    </g>
+
+    <!-- No hidden columns badge -->
+    <g transform="translate(160, 365)">
+      <rect x="0" y="0" width="200" height="24" rx="12" fill="#2a8703"/>
+      <text x="100" y="16" text-anchor="middle" font-size="11" font-weight="600" fill="white">
+        ✓ No _hudi_vec_* columns
+      </text>
+    </g>
+  </g>
+
+  <!-- ========== METADATA TABLE SECTION ========== -->
+  <g transform="translate(640, 90)">
+    <!-- MDT Container -->
+    <rect width="520" height="380" rx="12" fill="url(#greenGrad)" stroke="#2a8703" stroke-width="2" filter="url(#shadow)"/>
+
+    <!-- Header -->
+    <rect width="520" height="44" rx="12" fill="#2a8703"/>
+    <rect y="32" width="520" height="12" fill="#2a8703"/>
+    <text x="260" y="28" text-anchor="middle" font-size="16" font-weight="600" fill="white">
+      METADATA TABLE (vector_index_name)
+    </text>
+
+    <!-- Row Families Grid -->
+    <g transform="translate(15, 55)" font-size="10">
+      <!-- Index-Level Records -->
+      <rect width="240" height="100" rx="6" fill="white" stroke="#86efac" stroke-width="1.5"/>
+      <rect width="240" height="22" rx="6" fill="#22c55e"/>
+      <rect y="16" width="240" height="6" fill="#22c55e"/>
+      <text x="120" y="15" text-anchor="middle" font-size="11" font-weight="600" fill="white">Index-Level Records</text>
+
+      <g transform="translate(10, 32)" font-size="10">
+        <text fill="#166534" font-weight="600">__centroids__</text>
+        <text x="95" fill="#64748b">K×D matrix</text>
+        <text y="16" fill="#166534" font-weight="600">__quantizer__</text>
+        <text x="95" y="16" fill="#64748b">seed, type, width</text>
+        <text y="32" fill="#166534" font-weight="600">__manifest__</text>
+        <text x="95" y="32" fill="#64748b">active generation</text>
+      </g>
+
+      <!-- Generation Records -->
+      <g transform="translate(250, 0)">
+        <rect width="240" height="100" rx="6" fill="white" stroke="#86efac" stroke-width="1.5"/>
+        <rect width="240" height="22" rx="6" fill="#22c55e"/>
+        <rect y="16" width="240" height="6" fill="#22c55e"/>
+        <text x="120" y="15" text-anchor="middle" font-size="11" font-weight="600" fill="white">Generation-Scoped Records</text>
+
+        <g transform="translate(10, 32)" font-size="10">
+          <text fill="#166534" font-weight="600">M|gen</text>
+          <text x="55" fill="#64748b">generation manifest</text>
+          <text y="16" fill="#166534" font-weight="600">C|gen|cluster</text>
+          <text x="85" y="16" fill="#64748b">cluster info</text>
+          <text y="32" fill="#64748b" font-size="9">shard count, file groups, vector count</text>
+        </g>
+      </g>
+
+      <!-- Assignment Records -->
+      <g transform="translate(0, 110)">
+        <rect width="240" height="85" rx="6" fill="white" stroke="#86efac" stroke-width="1.5"/>
+        <rect width="240" height="22" rx="6" fill="#22c55e"/>
+        <rect y="16" width="240" height="6" fill="#22c55e"/>
+        <text x="120" y="15" text-anchor="middle" font-size="11" font-weight="600" fill="white">Assignment Rows (Maintenance)</text>
+
+        <g transform="translate(10, 32)" font-size="10">
+          <text fill="#166534" font-weight="600">A|record_key</text>
+          <text y="16" fill="#64748b">→ generation, cluster, shard</text>
+          <text y="32" fill="#64748b">→ file_group, partition_path</text>
+        </g>
+      </g>
+
+      <!-- Posting Records - Main highlight -->
+      <g transform="translate(250, 110)">
+        <rect width="240" height="85" rx="6" fill="#fef3c7" stroke="#fbbf24" stroke-width="2"/>
+        <rect width="240" height="22" rx="6" fill="#f59e0b"/>
+        <rect y="16" width="240" height="6" fill="#f59e0b"/>
+        <text x="120" y="15" text-anchor="middle" font-size="11" font-weight="600" fill="white">Posting Rows (Query Hot Path)</text>
+
+        <g transform="translate(10, 32)" font-size="10">
+          <text fill="#92400e" font-weight="600">P|gen|cluster|shard|key</text>
+          <text y="16" fill="#78350f">→ binaryCode (RaBitQ bits)</text>
+          <text y="32" fill="#78350f">→ scalar, fileGroupId, partition</text>
+        </g>
+      </g>
+
+      <!-- File-Group Mapping -->
+      <g transform="translate(0, 205)">
+        <rect width="490" height="70" rx="6" fill="white" stroke="#86efac" stroke-width="1.5"/>
+        <rect width="490" height="22" rx="6" fill="#22c55e"/>
+        <rect y="16" width="490" height="6" fill="#22c55e"/>
+        <text x="245" y="15" text-anchor="middle" font-size="11" font-weight="600" fill="white">File-Group Mapping (Spark Pruning)</text>
+
+        <g transform="translate(10, 32)" font-size="10">
+          <text fill="#166534" font-weight="600">__fg__/cluster/partition_path</text>
+          <text x="175" fill="#64748b">→ [file_group_ids] for pruning base table reads</text>
+        </g>
+      </g>
+    </g>
+
+    <!-- Storage note -->
+    <g transform="translate(15, 345)">
+      <text font-size="10" fill="#166534" font-weight="600">Storage: O(K×D + N) — centroids + assignments + postings</text>
+      <text y="14" font-size="10" fill="#64748b">RaBitQ codes: ceil(D/8) bytes per vector (96 bytes for D=768)</text>
+    </g>
+  </g>
+
+  <!-- ========== QUERY EXECUTION FLOW ========== -->
+  <g transform="translate(40, 500)">
+    <rect width="1120" height="380" rx="12" fill="url(#sparkGrad)" stroke="#fbbf24" stroke-width="2" filter="url(#shadow)"/>
+
+    <!-- Header -->
+    <rect width="1120" height="44" rx="12" fill="#f59e0b"/>
+    <rect y="32" width="1120" height="12" fill="#f59e0b"/>
+    <text x="560" y="28" text-anchor="middle" font-size="16" font-weight="600" fill="white">
+      Vector Query Execution Flow
+    </text>
+
+    <!-- Steps Row 1 -->
+    <g transform="translate(30, 65)">
+      <!-- Step 1 -->
+      <g transform="translate(0, 0)">
+        <circle cx="20" cy="20" r="20" fill="#0053e2"/>
+        <text x="20" y="26" text-anchor="middle" font-size="14" font-weight="700" fill="white">1</text>
+        <text x="50" y="16" font-size="12" font-weight="600" fill="#1e3a5f">Read Manifest, Centroids</text>
+        <text x="50" y="32" font-size="10" fill="#64748b">Load __manifest__, __centroids__ from MDT</text>
+      </g>
+
+      <!-- Arrow -->
+      <path d="M 260 20 L 290 20" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrowGray)"/>
+
+      <!-- Step 2 -->
+      <g transform="translate(300, 0)">
+        <circle cx="20" cy="20" r="20" fill="#0053e2"/>
+        <text x="20" y="26" text-anchor="middle" font-size="14" font-weight="700" fill="white">2</text>
+        <text x="50" y="16" font-size="12" font-weight="600" fill="#1e3a5f">Probe Top-P Clusters</text>
+        <text x="50" y="32" font-size="10" fill="#64748b">Compare query to K centroids</text>
+      </g>
+
+      <!-- Arrow -->
+      <path d="M 520 20 L 550 20" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrowGray)"/>
+
+      <!-- Step 3 -->
+      <g transform="translate(560, 0)">
+        <circle cx="20" cy="20" r="20" fill="#0053e2"/>
+        <text x="20" y="26" text-anchor="middle" font-size="14" font-weight="700" fill="white">3</text>
+        <text x="50" y="16" font-size="12" font-weight="600" fill="#1e3a5f">Scan MDT Postings</text>
+        <text x="50" y="32" font-size="10" fill="#64748b">Prefix scan P|gen|cluster|shard|*</text>
+      </g>
+
+      <!-- Arrow -->
+      <path d="M 780 20 L 810 20" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrowGray)"/>
+
+      <!-- Step 4 -->
+      <g transform="translate(820, 0)">
+        <circle cx="20" cy="20" r="20" fill="#0053e2"/>
+        <text x="20" y="26" text-anchor="middle" font-size="14" font-weight="700" fill="white">4</text>
+        <text x="50" y="16" font-size="12" font-weight="600" fill="#1e3a5f">RaBitQ Scoring</text>
+        <text x="50" y="32" font-size="10" fill="#64748b">Hamming distance via popcount</text>
+      </g>
+    </g>
+
+    <!-- Second row of steps -->
+    <g transform="translate(30, 130)">
+      <!-- Step 5 -->
+      <g transform="translate(0, 0)">
+        <circle cx="20" cy="20" r="20" fill="#2a8703"/>
+        <text x="20" y="26" text-anchor="middle" font-size="14" font-weight="700" fill="white">5</text>
+        <text x="50" y="16" font-size="12" font-weight="600" fill="#1e3a5f">Read Base Vectors</text>
+        <text x="50" y="32" font-size="10" fill="#64748b">Only top-R candidates from main table</text>
+      </g>
+
+      <!-- Arrow -->
+      <path d="M 270 20 L 300 20" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrowGray)"/>
+
+      <!-- Step 6 -->
+      <g transform="translate(310, 0)">
+        <circle cx="20" cy="20" r="20" fill="#2a8703"/>
+        <text x="20" y="26" text-anchor="middle" font-size="14" font-weight="700" fill="white">6</text>
+        <text x="50" y="16" font-size="12" font-weight="600" fill="#1e3a5f">Exact Re-rank</text>
+        <text x="50" y="32" font-size="10" fill="#64748b">Full vector distance, return top-K</text>
+      </g>
+    </g>
+
+    <!-- Visual flow diagram -->
+    <g transform="translate(30, 200)">
+      <!-- Query Vector -->
+      <rect width="120" height="50" rx="6" fill="#0053e2"/>
+      <text x="60" y="22" text-anchor="middle" font-size="11" font-weight="600" fill="white">Query Vector</text>
+      <text x="60" y="38" text-anchor="middle" font-size="10" fill="#93c5fd">[0.1, 0.2, ...]</text>
+
+      <!-- Arrow to MDT -->
+      <path d="M 130 25 L 180 25" stroke="#0053e2" stroke-width="2" fill="none" marker-end="url(#arrowBlue)"/>
+
+      <!-- MDT Box -->
+      <g transform="translate(190, -30)">
+        <rect width="280" height="130" rx="8" fill="white" stroke="#2a8703" stroke-width="2"/>
+        <rect width="280" height="28" rx="8" fill="#2a8703"/>
+        <rect y="20" width="280" height="8" fill="#2a8703"/>
+        <text x="140" y="19" text-anchor="middle" font-size="11" font-weight="600" fill="white">MDT vector_index_name</text>
+
+        <g transform="translate(15, 38)" font-size="10">
+          <text fill="#166534" font-weight="600">1. __manifest__ → gen 123</text>
+          <text y="16" fill="#166534" font-weight="600">2. __centroids__ → top-P clusters</text>
+          <text y="32" fill="#166534" font-weight="600">3. C|123|cluster → shard info</text>
+          <text y="48" fill="#92400e" font-weight="600">4. P|123|cluster|shard|* → codes</text>
+          <text y="64" fill="#64748b">   → Hamming scoring → top-R</text>
+        </g>
+      </g>
+
+      <!-- Arrow to Base Table -->
+      <path d="M 480 35 L 530 35" stroke="#2a8703" stroke-width="2" fill="none" marker-end="url(#arrowGreen)"/>
+      <text x="505" y="25" text-anchor="middle" font-size="9" fill="#2a8703">top-R</text>
+      <text x="505" y="50" text-anchor="middle" font-size="9" fill="#2a8703">candidates</text>
+
+      <!-- Base Table Box -->
+      <g transform="translate(540, -15)">
+        <rect width="200" height="100" rx="8" fill="white" stroke="#0053e2" stroke-width="2"/>
+        <rect width="200" height="28" rx="8" fill="#0053e2"/>
+        <rect y="20" width="200" height="8" fill="#0053e2"/>
+        <text x="100" y="19" text-anchor="middle" font-size="11" font-weight="600" fill="white">Main Table</text>
+
+        <g transform="translate(15, 38)" font-size="10">
+          <text fill="#1e40af" font-weight="600">5. Read VECTOR(D) values</text>
+          <text y="16" fill="#64748b">   for top-R record keys</text>
+          <text y="36" fill="#1e40af" font-weight="600">6. Exact re-rank</text>
+          <text y="52" fill="#64748b">   → final top-K results</text>
+        </g>
+      </g>
+
+      <!-- Final Arrow -->
+      <path d="M 750 35 L 800 35" stroke="#0053e2" stroke-width="2" fill="none" marker-end="url(#arrowBlue)"/>
+
+      <!-- Results -->
+      <g transform="translate(810, -5)">
+        <rect width="100" height="80" rx="6" fill="#ffc220"/>
+        <text x="50" y="30" text-anchor="middle" font-size="12" font-weight="700" fill="#78350f">Top-K</text>
+        <text x="50" y="48" text-anchor="middle" font-size="10" fill="#92400e">Results</text>
+        <text x="50" y="66" text-anchor="middle" font-size="9" fill="#92400e">exact distances</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Footer note -->
+  <text x="600" y="890" text-anchor="middle" font-size="11" fill="#64748b">
+    RFC-104: Native Vector Search Support in Apache Hudi — MDT-Native Design (No Base Table Hidden Columns)
+  </text>
+</svg>

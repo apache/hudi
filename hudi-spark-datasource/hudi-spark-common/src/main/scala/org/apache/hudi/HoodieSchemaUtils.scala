@@ -117,34 +117,39 @@ object HoodieSchemaUtils {
                          latestTableSchemaOpt: Option[HoodieSchema],
                          internalSchemaOpt: Option[InternalSchema],
                          opts: Map[String, String]): HoodieSchema = {
-    latestTableSchemaOpt match {
-      // If table schema is empty, then we use the source schema as a writer's schema.
-      case None => InternalSchemaConverter.fixNullOrdering(sourceSchema)
-      // Otherwise, we need to make sure we reconcile incoming and latest table schemas
-      case Some(latestTableSchemaWithMetaFields) =>
-        // NOTE: Meta-fields will be unconditionally injected by Hudi writing handles, for the sake of deducing proper writer schema
-        //       we're stripping them to make sure we can perform proper analysis
-        // add call to fix null ordering to ensure backwards compatibility
-        val latestTableSchema = InternalSchemaConverter.fixNullOrdering(
-          HoodieCommonSchemaUtils.removeMetadataFields(latestTableSchemaWithMetaFields))
-        // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
-        // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
-        // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
-        // in the table's one we want to proceed aligning nullability constraints w/ the table's schema
-        // Also, we promote types to the latest table schema if possible.
-        val shouldCanonicalizeSchema = opts.getOrElse(CANONICALIZE_SCHEMA.key, CANONICALIZE_SCHEMA.defaultValue.toString).toBoolean
-        val shouldReconcileSchema = opts.getOrElse(DataSourceWriteOptions.RECONCILE_SCHEMA.key(),
-          DataSourceWriteOptions.RECONCILE_SCHEMA.defaultValue().toString).toBoolean
-        val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
-          canonicalizeSchema(sourceSchema, latestTableSchema, opts, !shouldReconcileSchema)
-        } else {
-          InternalSchemaConverter.fixNullOrdering(sourceSchema)
-        }
+    opts.get(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key) match {
+      case Some(schemaOverride) =>
+        InternalSchemaConverter.fixNullOrdering(HoodieSchema.parse(schemaOverride))
+      case None =>
+        latestTableSchemaOpt match {
+          // If table schema is empty, then we use the source schema as a writer's schema.
+          case None => InternalSchemaConverter.fixNullOrdering(sourceSchema)
+          // Otherwise, we need to make sure we reconcile incoming and latest table schemas
+          case Some(latestTableSchemaWithMetaFields) =>
+            // NOTE: Meta-fields will be unconditionally injected by Hudi writing handles, for the sake of deducing proper writer schema
+            //       we're stripping them to make sure we can perform proper analysis
+            // add call to fix null ordering to ensure backwards compatibility
+            val latestTableSchema = InternalSchemaConverter.fixNullOrdering(
+              HoodieCommonSchemaUtils.removeMetadataFields(latestTableSchemaWithMetaFields))
+            // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
+            // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
+            // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
+            // in the table's one we want to proceed aligning nullability constraints w/ the table's schema
+            // Also, we promote types to the latest table schema if possible.
+            val shouldCanonicalizeSchema = opts.getOrElse(CANONICALIZE_SCHEMA.key, CANONICALIZE_SCHEMA.defaultValue.toString).toBoolean
+            val shouldReconcileSchema = opts.getOrElse(DataSourceWriteOptions.RECONCILE_SCHEMA.key(),
+              DataSourceWriteOptions.RECONCILE_SCHEMA.defaultValue().toString).toBoolean
+            val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
+              canonicalizeSchema(sourceSchema, latestTableSchema, opts, !shouldReconcileSchema)
+            } else {
+              InternalSchemaConverter.fixNullOrdering(sourceSchema)
+            }
 
-        if (shouldReconcileSchema) {
-          deduceWriterSchemaWithReconcile(sourceSchema, canonicalizedSourceSchema, latestTableSchema, internalSchemaOpt, opts)
-        } else {
-          deduceWriterSchemaWithoutReconcile(sourceSchema, canonicalizedSourceSchema, latestTableSchema, opts)
+            if (shouldReconcileSchema) {
+              deduceWriterSchemaWithReconcile(sourceSchema, canonicalizedSourceSchema, latestTableSchema, internalSchemaOpt, opts)
+            } else {
+              deduceWriterSchemaWithoutReconcile(sourceSchema, canonicalizedSourceSchema, latestTableSchema, opts)
+            }
         }
     }
   }

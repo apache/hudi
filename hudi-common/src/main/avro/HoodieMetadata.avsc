@@ -554,6 +554,128 @@
                 }
             ],
             "default" : null
+        },
+        {
+            "name": "VectorIndexMetadata",
+            "doc": "Metadata for an IVF-style vector index. Records can represent a record-key assignment, a centroid dump, or an fg_mapping row storing the forward map cluster_id -> file_group_ids.",
+            "type": [
+                "null",
+                {
+                    "type": "record",
+                    "name": "HoodieVectorIndexInfo",
+                    "fields": [
+                        {
+                            "name": "entryType",
+                            "type": ["null", "string"],
+                            "doc": "Logical subtype inside the vector-index metadata family, for example ASSIGNMENT, FG_MAPPING, CENTROIDS, QUANTIZER, MANIFEST, or POSTING.",
+                            "default": null
+                        },
+                        {
+                            "name": "generationId",
+                            "type": ["null", "string"],
+                            "doc": "Active vector-index generation identifier used to version MDT-native vector postings.",
+                            "default": null
+                        },
+                        {
+                            "name": "shardId",
+                            "type": "int",
+                            "doc": "Shard identifier for MDT-native vector posting rows. Zero for non-sharded or non-posting rows.",
+                            "default": 0
+                        },
+                        {
+                            "name": "shardCount",
+                            "type": "int",
+                            "doc": "Number of shards in the logical cluster posting set for the active generation. Zero when not applicable.",
+                            "default": 0
+                        },
+                        {
+                            "name": "clusterId",
+                            "type": "int",
+                            "doc": "IVF cluster assigned to this record key. -1 for centroid dump records.",
+                            "default": -1
+                        },
+                        {
+                            "name": "centroidBytes",
+                            "type": ["null", "bytes"],
+                            "doc": "Serialised centroid blob for the __centroids__ special record. Encoding is determined by the VECTOR element type and uses little-endian byte order.",
+                            "default": null
+                        },
+                        {
+                            "name": "fileGroupId",
+                            "type": ["null", "string"],
+                            "doc": "File group id for assignment records. Null for centroid and fg_mapping records.",
+                            "default": null
+                        },
+                        {
+                            "name": "partitionPath",
+                            "type": ["null", "string"],
+                            "doc": "Data-table partition path for assignment and fg_mapping records.",
+                            "default": null
+                        },
+                        {
+                            "name": "fileGroupIds",
+                            "type": ["null", {"type": "array", "items": "string"}],
+                            "doc": "Forward map payload for fg_mapping rows: file group ids belonging to the cluster/partition pair.",
+                            "default": null
+                        },
+                        {
+                            "name": "vectorCount",
+                            "type": "long",
+                            "doc": "Number of vectors contributing to this fg_mapping row.",
+                            "default": 0
+                        },
+                        {
+                            "name": "lastUpdatedTs",
+                            "type": "long",
+                            "doc": "Best-effort wall-clock timestamp for when this metadata row was generated.",
+                            "default": 0
+                        },
+                        {
+                            "name": "quantizerType",
+                            "type": ["null", "string"],
+                            "doc": "Quantizer family for special vector-index metadata rows, for example IVF_RABITQ.",
+                            "default": null
+                        },
+                        {
+                            "name": "quantizedCodeBytes",
+                            "type": "int",
+                            "doc": "Encoded code width in bytes for quantized vector payloads. Zero for non-quantizer rows.",
+                            "default": 0
+                        },
+                        {
+                            "name": "randomSeed",
+                            "type": "long",
+                            "doc": "Deterministic seed used by training-free quantizers such as RaBitQ. Zero when not applicable.",
+                            "default": 0
+                        },
+                        {
+                            "name": "assumeNormalized",
+                            "type": "boolean",
+                            "doc": "Whether the quantizer assumes input vectors are pre-normalized and can skip storing the scalar factor.",
+                            "default": false
+                        },
+                        {
+                            "name": "binaryCode",
+                            "type": ["null", "bytes"],
+                            "doc": "MDT-native RaBitQ posting payload storing the packed binary code for a vector candidate.",
+                            "default": null
+                        },
+                        {
+                            "name": "scalar",
+                            "type": ["null", "float"],
+                            "doc": "Optional MDT-native RaBitQ scalar factor for non-normalized vectors.",
+                            "default": null
+                        },
+                        {
+                            "name": "isDeleted",
+                            "type": "boolean",
+                            "doc": "True if this vector-index metadata row has been tombstoned.",
+                            "default": false
+                        }
+                    ]
+                }
+            ],
+            "default" : null
         }
     ]
 }

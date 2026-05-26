@@ -106,6 +106,13 @@
           <!-- Required to support older Hive versions that still use Java 8 -->
           <target>8</target>
           <release>8</release>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+              <version>${lombok.version}</version>
+            </path>
+          </annotationProcessorPaths>
         </configuration>
       </plugin>
     </plugins>

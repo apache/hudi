@@ -190,6 +190,26 @@ object DataSourceReadOptions {
     .withDocumentation("Enables data-skipping allowing queries to leverage indexes to reduce the search space by " +
       "skipping over files")
 
+  val VECTOR_INDEX_NAME: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.vector.index.name")
+    .noDefaultValue()
+    .markAdvanced()
+    .withDocumentation("Vector index name used for MDT-backed coarse pruning during reads. "
+      + "Accepts either the user-visible index name or the fully qualified metadata partition name.")
+
+  val VECTOR_QUERY_VECTOR: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.vector.query.vector")
+    .noDefaultValue()
+    .markAdvanced()
+    .withDocumentation("Query vector used for MDT-backed vector coarse pruning. "
+      + "Provide a comma-separated list or bracketed array, for example '[0.1, 0.2, 0.3]'.")
+
+  val VECTOR_QUERY_NPROBES: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.vector.query.nprobes")
+    .noDefaultValue()
+    .markAdvanced()
+    .withDocumentation("Override for the number of IVF clusters to probe during MDT-backed vector coarse pruning.")
+
   val EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH: ConfigProperty[Boolean] =
     ConfigProperty.key("hoodie.datasource.read.extract.partition.values.from.path")
       .defaultValue(false)

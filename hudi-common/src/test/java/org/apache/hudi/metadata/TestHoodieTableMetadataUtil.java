@@ -352,4 +352,21 @@ class TestHoodieTableMetadataUtil {
           "STRING should remain supported for record type " + recordType);
     }
   }
+
+  @Test
+  void testVectorIndexRawKeysAndPostingPrefixes() {
+    assertEquals("A|doc_987654", new VectorAssignmentRawKey("doc_987654").encode());
+    assertEquals("C|00000007|00001842", new VectorClusterRawKey(7, 0x1842).encode());
+    assertEquals("M|00000007", new VectorGenerationManifestRawKey(7).encode());
+
+    assertEquals("P|00000007|00001842|", HoodieTableMetadataUtil.getVectorIndexPostingPrefix(7, 0x1842));
+    assertEquals("P|00000007|00001842|0000|", HoodieTableMetadataUtil.getVectorIndexPostingPrefix(7, 0x1842, 0));
+    assertEquals("P|00000007|00001842|0000|doc_987654",
+        HoodieTableMetadataUtil.getVectorIndexPostingKey(7, 0x1842, 0, "doc_987654"));
+
+    assertEquals("P|00000007|00001842|0003|",
+        new VectorPostingPrefixRawKey(7, 0x1842, 3).encode());
+    assertEquals("P|00000007|00001842|",
+        new VectorPostingPrefixRawKey(7, 0x1842, null).encode());
+  }
 }
