@@ -40,6 +40,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
+import java.util.Map;
 
 /**
  * Archive Utils.
@@ -53,12 +54,26 @@ public final class ArchiveExecutorUtils {
                             int maxCommits,
                             int commitsRetained,
                             boolean enableMetadata,
-                            String basePath) throws IOException {
+                            String basePath,
+                            Map<String, String> options) throws IOException {
+    // NOTE on builder ordering:
+    //   `withArchivalConfig`/`withCleanConfig`/`withMetadataConfig` each call
+    //   `putAll(subConfig.getProps())` onto `writeConfig.getProps()`, which
+    //   includes every key filled in by `setDefaults` during the sub-config's
+    //   `build()`. If `withProps(conf)` ran BEFORE them, those defaults would
+    //   overwrite the user's options (e.g. `hoodie.keep.min.commits`).
+    //
+    //   Therefore `withProps(conf)` is intentionally placed LAST so user-supplied
+    //   options reliably win over sub-config defaults. Named procedure params
+    //   (min/max/retain/enableMetadata) are forwarded via the dedicated builders
+    //   below; if the caller wants those to win over a same-name key in `conf`,
+    //   the procedure layer is responsible for not putting that key into `conf`.
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(minCommits, maxCommits).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(commitsRetained).build())
         .withEmbeddedTimelineServerEnabled(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build())
+        .withProps(options)
         .build();
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     HoodieSparkTable<HoodieAvroPayload> table = HoodieSparkTable.create(config, context);
