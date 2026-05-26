@@ -41,6 +41,9 @@
         <hudi.trino.java.version>25</hudi.trino.java.version>
         <main.basedir>${project.parent.basedir}</main.basedir>
         <checkstyle.skip>true</checkstyle.skip>
+        <!-- Trino's BlockEncodingSimdSupport uses jdk.incubator.vector for SIMD; the
+             incubator module must be added explicitly on the test JVM command line. -->
+        <argLine>-Xmx4g -Xms128m -XX:-OmitStackTraceInFastThrow --add-modules jdk.incubator.vector</argLine>
     </properties>
 
     <dependencyManagement>
@@ -54,6 +57,76 @@
                 <version>${dep.trino.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <!-- Hudi parent pins jackson-* individually at 2.15.2, which predates
+                 StreamReadConstraints.Builder.maxNameLength (added in 2.16). Trino airlift needs it.
+                 Direct entries override parent pins; jackson-bom imports do not (parent direct entries win). -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>2.21.3</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>2.21.3</version>
+            </dependency>
+            <!-- jackson-annotations follows its own cadence; latest in the 2.21 line is 2.21 (no patch). -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-annotations</artifactId>
+                <version>2.21</version>
+            </dependency>
+            <!-- Hudi parent pins jetty-server / jetty-servlet at 9.4.57; Trino runs on Jetty 12
+                 (Request$Handler etc. exist only in 12.x). Pin jetty-server here to keep
+                 trino-testing's classpath consistent. jetty-servlet does not exist in 12.x. -->
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-server</artifactId>
+                <version>12.1.9</version>
+            </dependency>
+            <!-- Hudi parent pins joda-time at 2.9.9 (from 2016). Trino's DateTimeZoneIndex
+                 clinit needs the newer time-zone names in 2.14.2 (matches airbase). -->
+            <dependency>
+                <groupId>joda-time</groupId>
+                <artifactId>joda-time</artifactId>
+                <version>2.14.2</version>
+            </dependency>
+            <!-- Hudi parent pins jersey-server at 2.17 (legacy javax). Trino runs on Jersey 4.x
+                 (jakarta). The mixed-version classpath crashes with NoSuchFieldError on
+                 ComponentBag.INCLUDE_ALL during ResourceConfig init. -->
+            <dependency>
+                <groupId>org.glassfish.jersey.core</groupId>
+                <artifactId>jersey-server</artifactId>
+                <version>4.0.2</version>
+            </dependency>
+            <dependency>
+                <groupId>org.glassfish.jersey.core</groupId>
+                <artifactId>jersey-client</artifactId>
+                <version>4.0.2</version>
+            </dependency>
+            <dependency>
+                <groupId>org.glassfish.jersey.media</groupId>
+                <artifactId>jersey-media-jaxb</artifactId>
+                <version>4.0.2</version>
+            </dependency>
+            <!-- Airbase manages junit-platform at 6.0.3 (paired with jupiter 6.x). Hudi manages
+                 jupiter at 5.14.1 (paired with platform 1.14.1). Pin platform here to keep the
+                 pair consistent; without this, surefire fails with OutputDirectoryCreator not found. -->
+            <dependency>
+                <groupId>org.junit.platform</groupId>
+                <artifactId>junit-platform-commons</artifactId>
+                <version>${junit.platform.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.platform</groupId>
+                <artifactId>junit-platform-engine</artifactId>
+                <version>${junit.platform.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.platform</groupId>
+                <artifactId>junit-platform-launcher</artifactId>
+                <version>${junit.platform.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -127,6 +200,15 @@
         <dependency>
             <groupId>io.trino</groupId>
             <artifactId>trino-filesystem-manager</artifactId>
+            <exclusions>
+                <!-- alluxio-core-common pulls log4j-slf4j-impl; airlift log-manager pulls
+                     log4j-to-slf4j. Log4j refuses to start with both bridges present and the
+                     resulting clinit failure cascades through every class with a logger. -->
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-slf4j-impl</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>
@@ -188,6 +270,13 @@
                 </exclusion>
                 <exclusion>
                     <groupId>org.apache.orc</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <!-- Hudi pulls Jetty 9.x for its embedded HTTP server; Trino runs on Jetty 12.
+                     The connector does not start a Hudi HTTP server, so drop the legacy artifacts
+                     to avoid jar-set conflicts (Request$Handler missing from 9.x). -->
+                <exclusion>
+                    <groupId>org.eclipse.jetty</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
                 <!-- Not used by the connector; excluded to keep the plugin jar set lean. -->
@@ -456,6 +545,16 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- Surefire bundles its own junit-platform-launcher; if it predates platform 1.11
+                 the bundled DefaultDiscoveryRequest does not override getOutputDirectoryCreator
+                 and the jupiter-engine 5.14 / platform-engine 1.14 pair throws on discovery.
+                 Declaring the launcher explicitly puts 1.14.1 on the project classpath, which
+                 surefire prefers over its bundled copy. -->
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
