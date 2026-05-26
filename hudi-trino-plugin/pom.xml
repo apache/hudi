@@ -422,50 +422,6 @@
         </dependency>
 
         <dependency>
-            <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-client-common</artifactId>
-            <version>${project.version}</version>
-            <scope>test</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>*</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-                <!-- hudi-timeline-service pulls Jetty + javax.servlet-api; Trino's enforcer bans them. -->
-                <exclusion>
-                    <groupId>org.apache.hudi</groupId>
-                    <artifactId>hudi-timeline-service</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-hadoop-common</artifactId>
-            <version>${project.version}</version>
-            <scope>test</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>*</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-java-client</artifactId>
-            <version>${project.version}</version>
-            <scope>test</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.apache.hudi</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-avro</artifactId>
             <version>${trino.parquet.version}</version>
@@ -576,12 +532,11 @@
     <profiles>
         <!--
             Test-only profile. Trino does not publish trino-spi / trino-filesystem /
-            trino-hive test-jars to Maven Central, and the published trino-main test-jar
-            still requires a matching SPI snapshot for the rest of the test classpath.
-            Activate this profile alongside hudi-trino when you have a locally-built
-            Trino snapshot in ~/.m2 (build via the Trino source tree and `mvn install`).
-            CI builds keep it off so the default reactor stays resolvable against
-            Maven Central.
+            trino-hive test-jars to Maven Central, and the Hudi client modules
+            (hudi-client-common, hudi-hadoop-common, hudi-java-client) only resolve
+            from a snapshot reactor build. Activate alongside hudi-trino once those
+            artifacts are in your local m2. CI keeps the profile off so the default
+            build resolves cleanly against Maven Central.
         -->
         <profile>
             <id>hudi-trino-tests</id>
@@ -613,6 +568,47 @@
                     <version>${dep.trino.test.version}</version>
                     <type>test-jar</type>
                     <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.hudi</groupId>
+                    <artifactId>hudi-client-common</artifactId>
+                    <version>${project.version}</version>
+                    <scope>test</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                        <!-- hudi-timeline-service pulls Jetty + javax.servlet-api; Trino's enforcer bans them. -->
+                        <exclusion>
+                            <groupId>org.apache.hudi</groupId>
+                            <artifactId>hudi-timeline-service</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.hudi</groupId>
+                    <artifactId>hudi-hadoop-common</artifactId>
+                    <version>${project.version}</version>
+                    <scope>test</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.hudi</groupId>
+                    <artifactId>hudi-java-client</artifactId>
+                    <version>${project.version}</version>
+                    <scope>test</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>org.apache.hudi</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
                 </dependency>
             </dependencies>
         </profile>
