@@ -54,7 +54,7 @@ jobs:
           while IFS= read -r f; do
             [ -z "$f" ] && continue
             case "$f" in
-              *.bmp|*.gif|*.jpg|*.jpeg|*.md|*.pdf|*.png|*.svg|*.yaml|.gitignore) ;;
+              *.bmp|*.gif|*.jpg|*.jpeg|*.md|*.pdf|*.png|*.svg|*.yaml|*.yml|.gitignore) ;;
               *) RELEVANT=true ;;
             esac
           done <<< "$FILES"
