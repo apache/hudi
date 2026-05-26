@@ -359,9 +359,9 @@ public final class ParquetDataColumnReaderFactory {
   }
 
   private static TimestampData int64ToTimestamp(
-      boolean utcTimestamp, long value, ChronoUnit unit) {
+      boolean isUtcTimestamp, long value, ChronoUnit unit) {
     Instant instant = Instant.EPOCH.plus(value, unit);
-    if (utcTimestamp) {
+    if (isUtcTimestamp) {
       return TimestampData.fromInstant(instant);
     }
     return TimestampData.fromTimestamp(Timestamp.from(instant));
@@ -379,10 +379,10 @@ public final class ParquetDataColumnReaderFactory {
   }
 
   private static TimestampData int96ToTimestamp(
-      boolean utcTimestamp, long nanosOfDay, int julianDay) {
+      boolean isUtcTimestamp, long nanosOfDay, int julianDay) {
     long millisecond = julianDayToMillis(julianDay) + (nanosOfDay / NANOS_PER_MILLISECOND);
 
-    if (utcTimestamp) {
+    if (isUtcTimestamp) {
       int nanoOfMillisecond = (int) (nanosOfDay % NANOS_PER_MILLISECOND);
       return TimestampData.fromEpochMillis(millisecond, nanoOfMillisecond);
     } else {
