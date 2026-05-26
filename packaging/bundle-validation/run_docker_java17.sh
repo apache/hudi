@@ -82,7 +82,7 @@ elif [[ ${SPARK_RUNTIME} == 'spark4.2.0-preview4' && ${SCALA_PROFILE} == 'scala-
   SPARK_HADOOP_VERSION=3
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1200hive313spark420scala213
+  IMAGE_TAG=flink1200hive313spark420previewscala213
 fi
 
 # build docker image
