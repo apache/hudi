@@ -477,6 +477,16 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <!-- Surefire bundles its own junit-platform-launcher; if it predates platform 1.11
+                 the bundled DefaultDiscoveryRequest does not override getOutputDirectoryCreator
+                 and the jupiter-engine 5.14 / platform-engine 1.14 pair throws on discovery.
+                 Declaring the launcher explicitly puts 1.14.1 on the project classpath, which
+                 surefire prefers over its bundled copy. -->
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-params</artifactId>
             <scope>test</scope>
