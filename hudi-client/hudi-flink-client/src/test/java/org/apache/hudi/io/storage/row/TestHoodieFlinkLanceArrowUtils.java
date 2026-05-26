@@ -18,6 +18,14 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.memory.RootAllocator;
+import org.apache.arrow.vector.TimeStampMicroVector;
+import org.apache.arrow.vector.types.TimeUnit;
+import org.apache.arrow.vector.types.pojo.ArrowType;
+import org.apache.arrow.vector.types.pojo.FieldType;
+import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
@@ -25,6 +33,7 @@ import org.apache.flink.table.types.logical.TimestampType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Tests for {@link HoodieFlinkLanceArrowUtils}.
@@ -42,5 +51,23 @@ public class TestHoodieFlinkLanceArrowUtils {
 
     assertInstanceOf(TimestampType.class, roundTripped.getTypeAt(0));
     assertInstanceOf(LocalZonedTimestampType.class, roundTripped.getTypeAt(1));
+  }
+
+  @Test
+  public void testTimestampWriteHonorsUtcTimestampFlag() {
+    TimestampData timestampData = TimestampData.fromEpochMillis(1234L, 567000);
+    GenericRowData rowData = GenericRowData.of(timestampData);
+
+    try (BufferAllocator allocator = new RootAllocator();
+         TimeStampMicroVector vector = new TimeStampMicroVector(
+             "ts",
+             FieldType.nullable(new ArrowType.Timestamp(TimeUnit.MICROSECOND, null)),
+             allocator)) {
+      HoodieFlinkLanceArrowUtils.writeValue(new TimestampType(6), vector, 0, rowData, 0, true);
+      assertEquals(1234567L, vector.get(0));
+
+      HoodieFlinkLanceArrowUtils.writeValue(new TimestampType(6), vector, 1, rowData, 0, false);
+      assertEquals(timestampData.toTimestamp().getTime() * 1000L, vector.get(1));
+    }
   }
 }

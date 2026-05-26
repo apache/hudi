@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -88,7 +89,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     setupTableOptions(conf.get(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
-    checkBaseFileFormatForRead(conf);
+    checkBaseFileFormatForRead(conf, schema);
     return new HoodieTableSource(
         SerializableSchema.create(schema),
         path,
@@ -173,7 +174,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    */
   private void sanityCheck(Configuration conf, ResolvedSchema schema) {
     checkTableType(conf);
-    checkBaseFileFormatForWrite(conf);
+    checkBaseFileFormatForWrite(conf, schema);
     checkIndexType(conf);
 
     if (!OptionsResolver.isAppendMode(conf)) {
@@ -217,28 +218,37 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   /**
    * Validate the base file format. Flink Lance support is scoped to append-only COW tables.
    */
-  private void checkBaseFileFormatForRead(Configuration conf) {
-    checkBaseFileFormat(conf, false);
+  private void checkBaseFileFormatForRead(Configuration conf, ResolvedSchema schema) {
+    checkLanceBaseFileFormat(conf, schema);
   }
 
-  private void checkBaseFileFormatForWrite(Configuration conf) {
-    checkBaseFileFormat(conf, true);
-  }
-
-  private void checkBaseFileFormat(Configuration conf, boolean isWritePath) {
-    String baseFileFormat = conf.getString(HoodieTableConfig.BASE_FILE_FORMAT.key(), null);
-    if (baseFileFormat != null && HoodieFileFormat.LANCE.name().equalsIgnoreCase(baseFileFormat)) {
-      if (conf.containsKey(FlinkOptions.RECORD_KEY_FIELD.key())) {
-        throw new HoodieValidationException("Flink Lance base-file support is only available for append-only tables without primary keys.");
-      }
-      if (OptionsResolver.isMorTable(conf)) {
-        throw new HoodieValidationException("Flink Lance base-file support is only available for COPY_ON_WRITE append-only tables.");
-      }
-      if (isWritePath && !OptionsResolver.isAppendMode(conf)) {
-        throw new HoodieValidationException("Flink Lance base-file writes require append-only INSERT mode. Set '"
-            + FlinkOptions.OPERATION.key() + "' = 'insert'.");
-      }
+  private void checkBaseFileFormatForWrite(Configuration conf, ResolvedSchema schema) {
+    checkLanceBaseFileFormat(conf, schema);
+    if (isLanceBaseFileFormat(conf) && !OptionsResolver.isAppendMode(conf)) {
+      throw new HoodieValidationException("Flink Lance base-file writes require append-only INSERT mode. Set '"
+          + FlinkOptions.OPERATION.key() + "' = 'insert'.");
     }
+  }
+
+  private void checkLanceBaseFileFormat(Configuration conf, ResolvedSchema schema) {
+    if (!isLanceBaseFileFormat(conf)) {
+      return;
+    }
+    if (conf.containsKey(FlinkOptions.RECORD_KEY_FIELD.key()) || schema.getPrimaryKey().isPresent()) {
+      throw new HoodieValidationException("Flink Lance base-file support is only available for append-only tables without primary keys.");
+    }
+    if (OptionsResolver.isMorTable(conf)) {
+      throw new HoodieValidationException("Flink Lance base-file support is only available for COPY_ON_WRITE append-only tables.");
+    }
+    if (OptionsResolver.isSchemaEvolutionEnabled(conf)) {
+      throw new HoodieValidationException("Flink Lance base-file support does not support schema evolution. Set '"
+          + HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key() + "' = 'false'.");
+    }
+  }
+
+  private boolean isLanceBaseFileFormat(Configuration conf) {
+    String baseFileFormat = conf.getString(HoodieTableConfig.BASE_FILE_FORMAT.key(), null);
+    return baseFileFormat != null && HoodieFileFormat.LANCE.name().equalsIgnoreCase(baseFileFormat);
   }
 
   /**

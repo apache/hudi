@@ -174,16 +174,21 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       RowType rowType,
       TaskContextSupplier taskContextSupplier) {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    boolean withOperation = config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
     Option<org.apache.hudi.common.bloom.BloomFilter> bloomFilter = enableBloomFilter(populateMetaFields, config)
         ? Option.of(createBloomFilter(config)) : Option.empty();
     return new HoodieRowDataLanceWriter(
         path,
         rowType,
+        instantTime,
         taskContextSupplier,
         bloomFilter,
         config.getLongOrDefault(HoodieStorageConfig.LANCE_MAX_FILE_SIZE),
         config.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_ALLOCATOR_SIZE_BYTES),
-        config.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_FLUSH_BYTE_WATERMARK));
+        config.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_FLUSH_BYTE_WATERMARK),
+        config.getBooleanOrDefault(HoodieStorageConfig.WRITE_UTC_TIMEZONE),
+        populateMetaFields,
+        withOperation);
   }
 
   private static HoodieParquetConfig<HoodieRowDataParquetWriteSupport> getParquetConfig(

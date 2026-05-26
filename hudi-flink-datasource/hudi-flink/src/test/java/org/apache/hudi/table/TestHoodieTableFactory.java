@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
@@ -817,6 +818,24 @@ public class TestHoodieTableFactory {
         () -> new HoodieTableFactory().createDynamicTableSink(upsertContext));
     assertThat(operationEx.getMessage(), is("Flink Lance base-file writes require append-only INSERT mode. Set '"
         + FlinkOptions.OPERATION.key() + "' = 'insert'."));
+
+    Configuration schemaEvolutionConf = new Configuration(lanceConf);
+    schemaEvolutionConf.setString(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), "true");
+    final MockContext schemaEvolutionContext = MockContext.getInstance(schemaEvolutionConf, appendOnlySchema, "f2");
+    HoodieValidationException schemaEvolutionEx = assertThrows(HoodieValidationException.class,
+        () -> new HoodieTableFactory().createDynamicTableSink(schemaEvolutionContext));
+    assertThat(schemaEvolutionEx.getMessage(), is("Flink Lance base-file support does not support schema evolution. Set '"
+        + HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key() + "' = 'false'."));
+
+    ResolvedSchema primaryKeySchema = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .primaryKey("f0")
+        .build();
+    final MockContext primaryKeyContext = MockContext.getInstance(lanceConf, primaryKeySchema, "f1");
+    HoodieValidationException primaryKeyEx = assertThrows(HoodieValidationException.class,
+        () -> new HoodieTableFactory().createDynamicTableSink(primaryKeyContext));
+    assertThat(primaryKeyEx.getMessage(), is("Flink Lance base-file support is only available for append-only tables without primary keys."));
 
     lanceConf.set(FlinkOptions.RECORD_KEY_FIELD, "f0");
     final MockContext keyedContext = MockContext.getInstance(lanceConf, appendOnlySchema, "f2");

@@ -20,30 +20,19 @@ package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
-
-import java.nio.charset.StandardCharsets;
+import org.apache.hudi.common.util.StringUtils;
 
 /**
- * Bloom-filter footer support for Flink RowData Lance writers.
+ * Bloom-filter footer support for Flink RowData base-file writers.
  */
-class HoodieBloomFilterStringWriteSupport extends HoodieBloomFilterWriteSupport<String> {
+class HoodieBloomFilterRowDataWriteSupport extends HoodieBloomFilterWriteSupport<String> {
 
-  HoodieBloomFilterStringWriteSupport(BloomFilter bloomFilter) {
+  HoodieBloomFilterRowDataWriteSupport(BloomFilter bloomFilter) {
     super(bloomFilter);
   }
 
   @Override
-  protected int compareRecordKey(String a, String b) {
-    return a.compareTo(b);
-  }
-
-  @Override
   protected byte[] getUTF8Bytes(String key) {
-    return key.getBytes(StandardCharsets.UTF_8);
-  }
-
-  @Override
-  protected String dereference(String key) {
-    return key;
+    return StringUtils.getUTF8Bytes(key);
   }
 }

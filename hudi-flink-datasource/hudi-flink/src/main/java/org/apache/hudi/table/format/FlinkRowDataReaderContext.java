@@ -104,6 +104,9 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     InternalSchemaManager schemaManager = isLogFile ? InternalSchemaManager.DISABLED : internalSchemaManager.get();
 
     if (filePath.getName().endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
+      if (schemaManager != InternalSchemaManager.DISABLED) {
+        throw new HoodieValidationException("Flink Lance base-file support does not support schema evolution.");
+      }
       HoodieRowDataLanceReader rowDataLanceReader =
           (HoodieRowDataLanceReader) HoodieIOFactory.getIOFactory(storage)
               .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)

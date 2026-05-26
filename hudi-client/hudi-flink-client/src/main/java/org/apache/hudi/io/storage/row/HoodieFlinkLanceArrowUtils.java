@@ -47,11 +47,22 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
+import org.apache.flink.table.types.logical.BigIntType;
+import org.apache.flink.table.types.logical.BooleanType;
+import org.apache.flink.table.types.logical.DateType;
 import org.apache.flink.table.types.logical.DecimalType;
+import org.apache.flink.table.types.logical.DoubleType;
+import org.apache.flink.table.types.logical.FloatType;
+import org.apache.flink.table.types.logical.IntType;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.table.types.logical.SmallIntType;
+import org.apache.flink.table.types.logical.TimeType;
 import org.apache.flink.table.types.logical.TimestampType;
+import org.apache.flink.table.types.logical.TinyIntType;
+import org.apache.flink.table.types.logical.VarBinaryType;
+import org.apache.flink.table.types.logical.VarCharType;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -98,6 +109,10 @@ public final class HoodieFlinkLanceArrowUtils {
   }
 
   public static void writeValue(LogicalType type, FieldVector vector, int rowId, RowData rowData, int ordinal) {
+    writeValue(type, vector, rowId, rowData, ordinal, true);
+  }
+
+  public static void writeValue(LogicalType type, FieldVector vector, int rowId, RowData rowData, int ordinal, boolean utcTimestamp) {
     if (rowData.isNullAt(ordinal)) {
       vector.setNull(rowId);
       return;
@@ -146,7 +161,7 @@ public final class HoodieFlinkLanceArrowUtils {
       case TIMESTAMP_WITHOUT_TIME_ZONE:
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
         TimestampData timestamp = rowData.getTimestamp(ordinal, getPrecision(type));
-        long micros = timestamp.getMillisecond() * 1000L + timestamp.getNanoOfMillisecond() / 1000L;
+        long micros = timestampToMicros(timestamp, getPrecision(type), utcTimestamp);
         ((TimeStampMicroVector) vector).setSafe(rowId, micros);
         return;
       default:
@@ -237,34 +252,34 @@ public final class HoodieFlinkLanceArrowUtils {
 
   private static LogicalType toLogicalType(ArrowType arrowType) {
     if (arrowType instanceof ArrowType.Bool) {
-      return new org.apache.flink.table.types.logical.BooleanType();
+      return new BooleanType();
     } else if (arrowType instanceof ArrowType.Int) {
       ArrowType.Int intType = (ArrowType.Int) arrowType;
       switch (intType.getBitWidth()) {
         case 8:
-          return new org.apache.flink.table.types.logical.TinyIntType();
+          return new TinyIntType();
         case 16:
-          return new org.apache.flink.table.types.logical.SmallIntType();
+          return new SmallIntType();
         case 32:
-          return new org.apache.flink.table.types.logical.IntType();
+          return new IntType();
         case 64:
-          return new org.apache.flink.table.types.logical.BigIntType();
+          return new BigIntType();
         default:
           throw new HoodieNotSupportedException("Unsupported Arrow int width for Lance Flink reader: " + intType.getBitWidth());
       }
     } else if (arrowType instanceof ArrowType.FloatingPoint) {
       ArrowType.FloatingPoint fp = (ArrowType.FloatingPoint) arrowType;
       return fp.getPrecision() == FloatingPointPrecision.SINGLE
-          ? new org.apache.flink.table.types.logical.FloatType()
-          : new org.apache.flink.table.types.logical.DoubleType();
+          ? new FloatType()
+          : new DoubleType();
     } else if (arrowType instanceof ArrowType.Utf8) {
-      return new org.apache.flink.table.types.logical.VarCharType();
+      return new VarCharType();
     } else if (arrowType instanceof ArrowType.Binary) {
-      return new org.apache.flink.table.types.logical.VarBinaryType();
+      return new VarBinaryType();
     } else if (arrowType instanceof ArrowType.Date) {
-      return new org.apache.flink.table.types.logical.DateType();
+      return new DateType();
     } else if (arrowType instanceof ArrowType.Time) {
-      return new org.apache.flink.table.types.logical.TimeType();
+      return new TimeType();
     } else if (arrowType instanceof ArrowType.Decimal) {
       ArrowType.Decimal decimal = (ArrowType.Decimal) arrowType;
       return new DecimalType(decimal.getPrecision(), decimal.getScale());
@@ -275,6 +290,13 @@ public final class HoodieFlinkLanceArrowUtils {
           : new LocalZonedTimestampType(6);
     }
     throw new HoodieNotSupportedException("Unsupported Arrow type for Lance Flink reader: " + arrowType);
+  }
+
+  private static long timestampToMicros(TimestampData timestampData, int precision, boolean utcTimestamp) {
+    long millis = utcTimestamp ? timestampData.getMillisecond() : timestampData.toTimestamp().getTime();
+    return precision > 3 && utcTimestamp
+        ? millis * 1000L + timestampData.getNanoOfMillisecond() / 1000L
+        : millis * 1000L;
   }
 
   private static HoodieNotSupportedException unsupported(LogicalType type) {

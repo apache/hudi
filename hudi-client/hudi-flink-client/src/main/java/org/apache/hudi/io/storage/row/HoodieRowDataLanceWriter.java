@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.client.model.HoodieRowDataCreation;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
@@ -33,6 +34,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.IOException;
+import java.util.function.Function;
 
 /**
  * Lance writer for Flink {@link RowData} append-only base files.
@@ -45,19 +47,29 @@ public class HoodieRowDataLanceWriter extends HoodieBaseLanceWriter<RowData, Str
 
   private final RowType rowType;
   private final Schema arrowSchema;
+  private final String fileName;
+  private final String instantTime;
   private final long maxFileSize;
+  private final boolean utcTimestamp;
+  private final boolean populateMetaFields;
+  private final boolean withOperation;
+  private final Function<Long, String> seqIdGenerator;
   private long recordCountForNextSizeCheck = MIN_RECORDS_FOR_SIZE_CHECK;
 
   public HoodieRowDataLanceWriter(
       StoragePath file,
       RowType rowType,
+      String instantTime,
       TaskContextSupplier taskContextSupplier,
       Option<BloomFilter> bloomFilterOpt,
       long maxFileSize,
       long allocatorSize,
-      long flushByteWatermark) {
+      long flushByteWatermark,
+      boolean utcTimestamp,
+      boolean populateMetaFields,
+      boolean withOperation) {
     super(file, DEFAULT_BATCH_SIZE, allocatorSize, flushByteWatermark,
-        bloomFilterOpt.map(HoodieBloomFilterStringWriteSupport::new));
+        bloomFilterOpt.map(HoodieBloomFilterRowDataWriteSupport::new));
     ValidationUtils.checkArgument(maxFileSize > 0, "maxFileSize must be a positive number");
     ValidationUtils.checkArgument(allocatorSize > 0, "allocatorSize must be a positive number");
     ValidationUtils.checkArgument(flushByteWatermark > 0, "flushByteWatermark must be a positive number");
@@ -66,7 +78,16 @@ public class HoodieRowDataLanceWriter extends HoodieBaseLanceWriter<RowData, Str
             + allocatorSize + ")");
     this.rowType = rowType;
     this.arrowSchema = HoodieFlinkLanceArrowUtils.toArrowSchema(rowType);
+    this.fileName = file.getName();
+    this.instantTime = instantTime;
     this.maxFileSize = maxFileSize;
+    this.utcTimestamp = utcTimestamp;
+    this.populateMetaFields = populateMetaFields;
+    this.withOperation = withOperation;
+    this.seqIdGenerator = recordIndex -> {
+      Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
+      return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
+    };
   }
 
   @Override
@@ -93,7 +114,12 @@ public class HoodieRowDataLanceWriter extends HoodieBaseLanceWriter<RowData, Str
 
   @Override
   public void writeRowWithMetaData(HoodieKey key, RowData row) throws IOException {
-    writeRow(key.getRecordKey(), row);
+    if (populateMetaFields) {
+      RowData rowWithMeta = updateRecordMetadata(row, key, getWrittenRecordCount());
+      writeRow(key.getRecordKey(), rowWithMeta);
+    } else {
+      writeRow(key.getRecordKey(), row);
+    }
   }
 
   @Override
@@ -117,7 +143,7 @@ public class HoodieRowDataLanceWriter extends HoodieBaseLanceWriter<RowData, Str
     @Override
     public void write(RowData row) {
       for (int i = 0; i < rowType.getFieldCount(); i++) {
-        HoodieFlinkLanceArrowUtils.writeValue(rowType.getTypeAt(i), root.getVector(i), rowId, row, i);
+        HoodieFlinkLanceArrowUtils.writeValue(rowType.getTypeAt(i), root.getVector(i), rowId, row, i, utcTimestamp);
       }
       rowId++;
     }
@@ -134,9 +160,8 @@ public class HoodieRowDataLanceWriter extends HoodieBaseLanceWriter<RowData, Str
     }
   }
 
-  @Override
-  public void writeWithMetadata(HoodieKey key, HoodieRecord record, org.apache.hudi.common.schema.HoodieSchema schema,
-                                java.util.Properties props) throws IOException {
-    writeRowWithMetaData(key, (RowData) record.getData());
+  private RowData updateRecordMetadata(RowData row, HoodieKey key, long recordCount) {
+    return HoodieRowDataCreation.create(instantTime, seqIdGenerator.apply(recordCount),
+        key.getRecordKey(), key.getPartitionPath(), fileName, row, withOperation, true);
   }
 }
