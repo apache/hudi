@@ -175,6 +175,15 @@
         <dependency>
             <groupId>io.trino</groupId>
             <artifactId>trino-filesystem-manager</artifactId>
+            <exclusions>
+                <!-- alluxio-core-common pulls log4j-slf4j-impl; airlift log-manager pulls
+                     log4j-to-slf4j. Log4j refuses to start with both bridges present and the
+                     resulting clinit failure cascades through every class with a logger. -->
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-slf4j-impl</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>
