@@ -94,8 +94,10 @@ trait VectorSearchAlgorithm {
    * @param k                  number of nearest neighbors per query
    * @param metric             distance metric (COSINE, L2, DOT_PRODUCT)
    * @param filter             optional SQL predicate applied to the corpus before distance
-   *                           computation, and shrinking cross-join cardinality. See [[buildSingleQueryPlan]] for
-   *                           quoting requirements.
+   *                           computation, and shrinking cross-join cardinality. Applied to the
+   *                           corpus only — to restrict the query side, apply a projection or
+   *                           filter on the query table before invoking the TVF. See
+   *                           [[buildSingleQueryPlan]] for quoting requirements.
    * @param maxDistance        optional distance threshold; results exceeding this value are
    *                           excluded before per-query top-K selection, reducing shuffle volume.
    * @return an analyzed LogicalPlan whose output matches the batch-query schema contract
@@ -250,8 +252,8 @@ object HoodieVectorSearchPlanBuilder {
  * (tens to low hundreds of queries) against moderate corpora.
  *
  * <p>Both modes support an optional {@code filter} predicate (applied to the corpus before
- * distance computation, and an optional * {@code maxDistance} threshold (results beyond this distance are excluded before top-K
- * selection, reducing shuffle and sort volume).
+ * distance computation), and an optional {@code maxDistance} threshold (results beyond this
+ * distance are excluded before top-K selection, reducing shuffle and sort volume).
  */
 object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
 
@@ -283,8 +285,8 @@ object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
       queryVector: Array[Double],
       k: Int,
       metric: DistanceMetric.Value,
-      filter: Option[String] = None,
-      maxDistance: Option[Double] = None): LogicalPlan = {
+      filter: Option[String],
+      maxDistance: Option[Double]): LogicalPlan = {
     validateEmbeddingColumn(corpusDf, embeddingCol)
     validateQueryVectorDimension(corpusDf, embeddingCol, queryVector.length)
 
@@ -328,8 +330,8 @@ object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
       queryEmbeddingCol: String,
       k: Int,
       metric: DistanceMetric.Value,
-      filter: Option[String] = None,
-      maxDistance: Option[Double] = None): LogicalPlan = {
+      filter: Option[String],
+      maxDistance: Option[Double]): LogicalPlan = {
     validateEmbeddingColumn(corpusDf, corpusEmbeddingCol)
     validateEmbeddingColumn(queryDf, queryEmbeddingCol)
     validateElementTypeCompatibility(corpusDf, corpusEmbeddingCol, queryDf, queryEmbeddingCol)

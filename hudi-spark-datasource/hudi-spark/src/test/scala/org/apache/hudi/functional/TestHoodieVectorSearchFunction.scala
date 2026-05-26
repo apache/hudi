@@ -1764,6 +1764,60 @@ class TestHoodieVectorSearchFunction extends HoodieSparkClientTestBase {
   }
 
   @Test
+  def testMaxDistanceAcceptsNonDoubleNumericLiterals(): Unit = {
+    // parseOptionalDouble widens any NumericType literal (Int, Long, Short, Byte, Decimal, Float)
+    // to Double. Exercise that contract with an Int literal and a Decimal literal.
+    //
+    // Int literal: max_distance = 1 keeps doc_1 (0.0), doc_4 (~0.293), doc_5 (~0.423) — excludes
+    // doc_2/doc_3 (distance = 1.0) because the filter is strict (>).
+    val intResult = spark.sql(
+      s"""
+         |SELECT id, _hudi_distance
+         |FROM hudi_vector_search(
+         |  '$corpusViewName',
+         |  'embedding',
+         |  ARRAY(1.0, 0.0, 0.0),
+         |  5,
+         |  'cosine',
+         |  'brute_force',
+         |  NULL,
+         |  1
+         |)
+         |ORDER BY _hudi_distance
+         |""".stripMargin
+    ).collect()
+
+    assertEquals(3, intResult.length)
+    val intIds = intResult.map(_.getAs[String]("id")).toSet
+    assertTrue(intIds.contains("doc_1"))
+    assertTrue(intIds.contains("doc_4"))
+    assertTrue(intIds.contains("doc_5"))
+    assertFalse(intIds.contains("doc_2"))
+
+    // Decimal literal: CAST(0.3 AS DECIMAL(10,2)) → keeps doc_1 (0.0) and doc_4 (~0.293).
+    val decResult = spark.sql(
+      s"""
+         |SELECT id, _hudi_distance
+         |FROM hudi_vector_search(
+         |  '$corpusViewName',
+         |  'embedding',
+         |  ARRAY(1.0, 0.0, 0.0),
+         |  5,
+         |  'cosine',
+         |  'brute_force',
+         |  NULL,
+         |  CAST(0.3 AS DECIMAL(10,2))
+         |)
+         |ORDER BY _hudi_distance
+         |""".stripMargin
+    ).collect()
+
+    assertEquals(2, decResult.length)
+    assertEquals("doc_1", decResult(0).getAs[String]("id"))
+    assertEquals("doc_4", decResult(1).getAs[String]("id"))
+  }
+
+  @Test
   def testNegativeMaxDistanceExcludesAll(): Unit = {
     // Distances are always >= 0 for cosine/L2, so a negative threshold means
     // no row can satisfy <= d. The user gets an empty result, not an error.
