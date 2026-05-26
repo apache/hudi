@@ -18,12 +18,15 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -40,6 +43,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
@@ -258,6 +262,153 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
     @Override
     protected void appendDataAndDeleteBlocks(Map<HeaderMetadataType, String> header, boolean appendDeleteBlocks) {
       appendInvocations.incrementAndGet();
+    }
+  }
+
+  /**
+   * When the engine does not expose memory/cores (e.g., Flink, or Spark without {@code SparkEnv}),
+   * the dynamic ceiling is absent and the flush gate continues to use the configured
+   * {@code maxBlockSize}. {@link LocalTaskContextSupplier} returns {@code Option.empty()} for all
+   * engine properties, so this is the fallback path.
+   */
+  @Test
+  void testEffectiveBlockSizeFallsBackToMaxBlockSizeWhenNoEngineProps() {
+    TestableAppendHandle handle = newTestableHandle(new RecordingSizeEstimator(1000L));
+    assertEquals(handle.getMaxBlockSizeForTest(), handle.getEffectiveBlockSizeForTest(),
+        "no engine properties — effective cap collapses to maxBlockSize");
+  }
+
+  /**
+   * On a small executor, the dynamic per-task ceiling is smaller than the configured
+   * {@code maxBlockSize} and must win. With 200MB executor / 0.6 memory.fraction / 1 core / 0.6
+   * append-fraction the ceiling is 48MB, well below the default 256MB block size.
+   */
+  @Test
+  void testEffectiveBlockSizeIsDynamicCeilingWhenSmallerThanMaxBlockSize() {
+    long executorBytes = 200L * 1024 * 1024;
+    TaskContextSupplier supplier = new StubTaskContextSupplier(executorBytes, 0.6, 1);
+    TestableAppendHandle handle = new TestableAppendHandle(writeConfig, hoodieTable, supplier);
+
+    long expectedDynamic = (long) Math.floor(executorBytes * (1 - 0.6) / 1 * 0.6); // 48MB
+    assertEquals(expectedDynamic, handle.getEffectiveBlockSizeForTest(),
+        "small executor — dynamic ceiling wins over configured maxBlockSize");
+    assertTrue(handle.getEffectiveBlockSizeForTest() < handle.getMaxBlockSizeForTest(),
+        "effective cap is below maxBlockSize on a tight executor");
+  }
+
+  /**
+   * The dynamic ceiling is floored at
+   * {@link HoodieMemoryConfig#MIN_MEMORY_FOR_LOG_APPEND_BUFFER_IN_BYTES} (16MB). With a tiny 50MB
+   * executor the raw computation yields ~12MB, but the floor pulls it back to 16MB.
+   */
+  @Test
+  void testEffectiveBlockSizeRespects16MBFloor() {
+    long executorBytes = 50L * 1024 * 1024;
+    TaskContextSupplier supplier = new StubTaskContextSupplier(executorBytes, 0.6, 1);
+    TestableAppendHandle handle = new TestableAppendHandle(writeConfig, hoodieTable, supplier);
+
+    assertEquals(HoodieMemoryConfig.MIN_MEMORY_FOR_LOG_APPEND_BUFFER_IN_BYTES,
+        handle.getEffectiveBlockSizeForTest(),
+        "raw computation falls below 16MB floor — floor wins");
+  }
+
+  /**
+   * When the dynamic ceiling is larger than the configured {@code maxBlockSize}, the latter wins.
+   * 16GB executor / 0.6 / 4 cores / 0.6 append-fraction → 960MB ceiling, much larger than the
+   * default 256MB block size.
+   */
+  @Test
+  void testEffectiveBlockSizeKeepsMaxBlockSizeWhenDynamicIsLarger() {
+    long executorBytes = 16L * 1024 * 1024 * 1024;
+    TaskContextSupplier supplier = new StubTaskContextSupplier(executorBytes, 0.6, 4);
+    TestableAppendHandle handle = new TestableAppendHandle(writeConfig, hoodieTable, supplier);
+
+    assertEquals(handle.getMaxBlockSizeForTest(), handle.getEffectiveBlockSizeForTest(),
+        "large executor — configured maxBlockSize is the binding ceiling");
+  }
+
+  /**
+   * The flush gate must use {@code effectiveBlockSize}, not {@code maxBlockSize}. With a 48MB
+   * dynamic ceiling (200MB executor / 0.6 / 1 core / 0.6 append-fraction) and 4MB per-record,
+   * the gate fires after 12 records (48MB / 4MB), well before the 256MB / 4MB = 64 records the
+   * old code would have allowed.
+   */
+  @Test
+  void testFlushGateFiresAtDynamicCeilingNotMaxBlockSize() {
+    long executorBytes = 200L * 1024 * 1024;
+    TaskContextSupplier supplier = new StubTaskContextSupplier(executorBytes, 0.6, 1);
+    TestableAppendHandle handle = new TestableAppendHandle(writeConfig, hoodieTable, supplier);
+    long perRecord = 4L * 1024 * 1024;
+    handle.setSizeEstimator(new RecordingSizeEstimator(perRecord));
+
+    long expectedRecordsAtFlush = handle.getEffectiveBlockSizeForTest() / perRecord;
+    long recordsAtFlushWithMaxBlockSize = handle.getMaxBlockSizeForTest() / perRecord;
+    assertTrue(expectedRecordsAtFlush < recordsAtFlushWithMaxBlockSize,
+        "test setup: dynamic ceiling must trip the gate earlier than maxBlockSize would");
+
+    for (int i = 0; i < expectedRecordsAtFlush - 1; i++) {
+      handle.simulateBufferedRecordForTest(mock(HoodieRecord.class));
+    }
+    assertEquals(0, handle.appendInvocations.get(),
+        "below the dynamic ceiling: gate has not fired yet");
+
+    handle.simulateBufferedRecordForTest(mock(HoodieRecord.class));
+    assertEquals(1, handle.appendInvocations.get(),
+        "buffered records hit the dynamic ceiling — flush fires earlier than maxBlockSize would have allowed");
+  }
+
+  /**
+   * {@link TaskContextSupplier} stub returning the three engine properties the dynamic-ceiling
+   * formula consumes — mirrors what {@code SparkTaskContextSupplier} exposes.
+   */
+  private static final class StubTaskContextSupplier extends TaskContextSupplier {
+    private final long executorMemoryBytes;
+    private final double memoryFraction;
+    private final int executorCores;
+
+    StubTaskContextSupplier(long executorMemoryBytes, double memoryFraction, int executorCores) {
+      this.executorMemoryBytes = executorMemoryBytes;
+      this.memoryFraction = memoryFraction;
+      this.executorCores = executorCores;
+    }
+
+    @Override
+    public Option<String> getProperty(EngineProperty prop) {
+      switch (prop) {
+        case TOTAL_MEMORY_AVAILABLE:
+          return Option.of(String.valueOf(executorMemoryBytes));
+        case MEMORY_FRACTION_IN_USE:
+          return Option.of(String.valueOf(memoryFraction));
+        case TOTAL_CORES_PER_EXECUTOR:
+          return Option.of(String.valueOf(executorCores));
+        default:
+          return Option.empty();
+      }
+    }
+
+    @Override
+    public Supplier<Integer> getPartitionIdSupplier() {
+      return () -> 0;
+    }
+
+    @Override
+    public Supplier<Integer> getStageIdSupplier() {
+      return () -> 0;
+    }
+
+    @Override
+    public Supplier<Long> getAttemptIdSupplier() {
+      return () -> 0L;
+    }
+
+    @Override
+    public Supplier<Integer> getTaskAttemptNumberSupplier() {
+      return () -> -1;
+    }
+
+    @Override
+    public Supplier<Integer> getStageAttemptNumberSupplier() {
+      return () -> -1;
     }
   }
 }
