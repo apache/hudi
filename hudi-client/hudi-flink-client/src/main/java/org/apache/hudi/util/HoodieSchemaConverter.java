@@ -24,6 +24,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
@@ -44,13 +45,18 @@ import org.apache.flink.table.types.logical.TimestampType;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
  * Converts Flink's LogicalType into HoodieSchema.
  */
 public class HoodieSchemaConverter {
+  private static final int DEFAULT_VECTOR_DIMENSION = 128;
 
   /**
    * Converts a Flink LogicalType into a HoodieSchema.
@@ -79,6 +85,37 @@ public class HoodieSchemaConverter {
    * @return HoodieSchema matching this logical type
    */
   public static HoodieSchema convertToSchema(LogicalType logicalType, String rowName) {
+    return convertToSchema(logicalType, rowName, Collections.emptyMap());
+  }
+
+  /**
+   * Converts a Flink LogicalType into a HoodieSchema with top-level VECTOR columns.
+   *
+   * <p>The vector column option uses {@code colName[:dimension]} entries separated by commas.
+   * The dimension defaults to 128. The vector element type is inferred from the Flink array
+   * element type: FLOAT, DOUBLE, or TINYINT.
+   *
+   * @param logicalType    Flink logical type
+   * @param rowName        the record name
+   * @param vectorColumns  comma-separated vector column descriptors, or null/empty
+   * @return HoodieSchema matching this logical type
+   */
+  public static HoodieSchema convertToSchema(
+      LogicalType logicalType,
+      String rowName,
+      String vectorColumns) {
+    Map<String, Integer> vectorColumnMap = vectorColumns == null || vectorColumns.trim().isEmpty()
+        ? Collections.emptyMap() : parseVectorColumns(vectorColumns);
+    return convertToSchema(logicalType, rowName, vectorColumnMap);
+  }
+
+  private static HoodieSchema convertToSchema(
+      LogicalType logicalType,
+      String rowName,
+      Map<String, Integer> vectorColumns) {
+    ValidationUtils.checkArgument(vectorColumns.isEmpty() || logicalType instanceof RowType,
+        "VECTOR columns can only be configured for top-level ROW schemas.");
+
     int precision;
     boolean nullable = logicalType.isNullable();
     HoodieSchema schema;
@@ -196,8 +233,13 @@ public class HoodieSchemaConverter {
           String fieldName = fieldNames.get(i);
           LogicalType fieldType = rowType.getTypeAt(i);
 
-          // Recursive call for field schema
-          HoodieSchema fieldSchema = convertToSchema(fieldType, rowName + "." + fieldName);
+          HoodieSchema fieldSchema;
+          if (vectorColumns.containsKey(fieldName.toLowerCase(Locale.ROOT))) {
+            fieldSchema = convertVectorField(fieldName, fieldType, vectorColumns.get(fieldName.toLowerCase(Locale.ROOT)));
+          } else {
+            // Recursive call for field schema
+            fieldSchema = convertToSchema(fieldType, rowName + "." + fieldName, Collections.emptyMap());
+          }
 
           // Create field with or without default value
           HoodieSchemaField field;
@@ -215,13 +257,13 @@ public class HoodieSchemaConverter {
       case MULTISET:
       case MAP:
         LogicalType valueType = extractValueTypeForMap(logicalType);
-        HoodieSchema valueSchema = convertToSchema(valueType, rowName);
+        HoodieSchema valueSchema = convertToSchema(valueType, rowName, Collections.emptyMap());
         schema = HoodieSchema.createMap(valueSchema);
         break;
 
       case ARRAY:
         ArrayType arrayType = (ArrayType) logicalType;
-        HoodieSchema elementSchema = convertToSchema(arrayType.getElementType(), rowName);
+        HoodieSchema elementSchema = convertToSchema(arrayType.getElementType(), rowName, Collections.emptyMap());
         schema = HoodieSchema.createArray(elementSchema);
         break;
 
@@ -236,6 +278,97 @@ public class HoodieSchemaConverter {
     }
 
     return nullable ? HoodieSchema.createNullable(schema) : schema;
+  }
+
+  private static Map<String, Integer> parseVectorColumns(String vectorColumns) {
+    Map<String, Integer> parsed = new LinkedHashMap<>();
+    for (String rawEntry : vectorColumns.split(",")) {
+      String entry = rawEntry.trim();
+      if (entry.isEmpty()) {
+        continue;
+      }
+      String[] parts = entry.split(":", -1);
+      if (parts.length > 2 || parts[0].trim().isEmpty()) {
+        throw new IllegalArgumentException(
+            "Invalid VECTOR column descriptor '" + entry + "'. Expected format: columnName[:dimension].");
+      }
+      String columnName = parts[0].trim();
+      String normalizedColumnName = columnName.toLowerCase(Locale.ROOT);
+      if (parsed.containsKey(normalizedColumnName)) {
+        throw new IllegalArgumentException("Duplicate VECTOR column descriptor for column: " + columnName);
+      }
+      int dimension = DEFAULT_VECTOR_DIMENSION;
+      if (parts.length == 2) {
+        String dimensionText = parts[1].trim();
+        if (dimensionText.isEmpty()) {
+          throw new IllegalArgumentException(
+              "Invalid VECTOR column descriptor '" + entry + "'. Dimension must not be empty.");
+        }
+        try {
+          dimension = Integer.parseInt(dimensionText);
+        } catch (NumberFormatException e) {
+          throw new IllegalArgumentException("Invalid VECTOR dimension for column '" + columnName + "': " + dimensionText, e);
+        }
+      }
+      if (dimension <= 0) {
+        throw new IllegalArgumentException("VECTOR dimension must be positive for column '" + columnName + "': " + dimension);
+      }
+      parsed.put(normalizedColumnName, dimension);
+    }
+    return parsed;
+  }
+
+  private static HoodieSchema convertVectorField(String fieldName, LogicalType fieldType, int dimension) {
+    if (!(fieldType instanceof ArrayType)) {
+      throw new IllegalArgumentException(
+          "VECTOR column '" + fieldName + "' must be declared as ARRAY<FLOAT>, ARRAY<DOUBLE>, or ARRAY<TINYINT>, but got: "
+              + fieldType.asSummaryString());
+    }
+    HoodieSchema.Vector.VectorElementType elementType = inferVectorElementType(fieldName, ((ArrayType) fieldType).getElementType());
+    HoodieSchema vectorSchema = HoodieSchema.createVector(dimension, elementType);
+    return fieldType.isNullable() ? HoodieSchema.createNullable(vectorSchema) : vectorSchema;
+  }
+
+  private static HoodieSchema.Vector.VectorElementType inferVectorElementType(String fieldName, LogicalType elementType) {
+    switch (elementType.getTypeRoot()) {
+      case FLOAT:
+        return HoodieSchema.Vector.VectorElementType.FLOAT;
+      case DOUBLE:
+        return HoodieSchema.Vector.VectorElementType.DOUBLE;
+      case TINYINT:
+        return HoodieSchema.Vector.VectorElementType.INT8;
+      default:
+        throw new IllegalArgumentException(
+            "VECTOR column '" + fieldName + "' must use ARRAY<FLOAT>, ARRAY<DOUBLE>, or ARRAY<TINYINT>, but got ARRAY<"
+                + elementType.asSummaryString() + ">.");
+    }
+  }
+
+  /**
+   * Validates that all configured VECTOR column descriptors resolve to top-level fields.
+   *
+   * <p>Callers that accept {@code hoodie.vector.columns} as a table option should run this
+   * validation before schema inference so an unknown column is rejected instead of being
+   * silently ignored by schema conversion.
+   *
+   * @param logicalType      Flink logical type
+   * @param vectorColumnsStr comma-separated vector column descriptors, or null/empty
+   */
+  public static void validateVectorColumns(LogicalType logicalType, String vectorColumnsStr) {
+    if (vectorColumnsStr == null || vectorColumnsStr.trim().isEmpty()) {
+      return;
+    }
+    Map<String, Integer> vectorColumns = parseVectorColumns(vectorColumnsStr);
+    List<String> fieldNames = ((RowType) logicalType).getFieldNames();
+    List<String> normalizedFieldNames = fieldNames.stream()
+        .map(fieldName -> fieldName.toLowerCase(Locale.ROOT))
+        .collect(Collectors.toList());
+    vectorColumns.keySet().stream()
+        .filter(vectorColumn -> !normalizedFieldNames.contains(vectorColumn))
+        .findFirst()
+        .ifPresent(vectorColumn -> {
+          throw new IllegalArgumentException("VECTOR column '" + vectorColumn + "' does not exist in the table schema.");
+        });
   }
 
   /**

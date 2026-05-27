@@ -80,6 +80,7 @@ import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
@@ -494,9 +495,12 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
   private HoodieTableMetaClient initTableIfNotExists(ObjectPath tablePath, CatalogTable catalogTable) {
     Configuration flinkConf = Configuration.fromMap(catalogTable.getOptions());
+    RowType rowType = DataTypeUtils.toRowType(catalogTable.getUnresolvedSchema());
+    HoodieSchemaConverter.validateVectorColumns(rowType, flinkConf.get(FlinkOptions.VECTOR_COLUMNS));
     final String avroSchema = HoodieSchemaConverter.convertToSchema(
-        DataTypeUtils.toRowType(catalogTable.getUnresolvedSchema()),
-        HoodieSchemaUtils.getRecordQualifiedName(tablePath.getObjectName())).toString();
+        rowType,
+        HoodieSchemaUtils.getRecordQualifiedName(tablePath.getObjectName()),
+        flinkConf.get(FlinkOptions.VECTOR_COLUMNS)).toString();
     flinkConf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, avroSchema);
 
     // stores two copies of options:

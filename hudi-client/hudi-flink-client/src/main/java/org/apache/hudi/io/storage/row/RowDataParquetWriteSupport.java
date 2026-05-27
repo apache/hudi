@@ -39,15 +39,17 @@ import java.util.HashMap;
 public class RowDataParquetWriteSupport extends WriteSupport<RowData> {
 
   private final RowType rowType;
+  protected final HoodieSchema hoodieSchema;
   private final MessageType schema;
   private ParquetRowDataWriter writer;
   protected final Configuration hadoopConf;
 
   public RowDataParquetWriteSupport(HoodieSchema hoodieSchema, Configuration config) {
     super();
-    this.rowType = HoodieSchemaConverter.convertToRowType(hoodieSchema);
+    this.hoodieSchema = hoodieSchema;
+    this.rowType = (RowType) HoodieSchemaConverter.convertToDataType(hoodieSchema).getLogicalType();
     this.hadoopConf = new Configuration(config);
-    this.schema = ParquetSchemaConverter.convertToParquetMessageType("flink_schema", rowType);
+    this.schema = ParquetSchemaConverter.convertToParquetMessageType("flink_schema", rowType, hoodieSchema);
   }
 
   @Override
@@ -62,7 +64,7 @@ public class RowDataParquetWriteSupport extends WriteSupport<RowData> {
         hadoopConf.getBoolean(
             HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(),
             HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue());
-    this.writer = new ParquetRowDataWriter(recordConsumer, rowType, schema, utcTimestamp);
+    this.writer = new ParquetRowDataWriter(recordConsumer, rowType, schema, utcTimestamp, hoodieSchema);
   }
 
   @Override

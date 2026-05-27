@@ -29,6 +29,8 @@ import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -41,7 +43,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
-import org.apache.hudi.util.HoodieSchemaConverter;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.table.data.RowData;
@@ -122,7 +123,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
               table.getPartitionMetafileFormat());
       partitionMetadata.trySave();
       createMarkerFile(partitionPath, FSUtils.makeBaseFileName(this.instantTime, getWriteToken(), this.fileId, table.getBaseFileExtension()));
-      this.fileWriter = createNewFileWriter(path, table, writeConfig, rowType, this.instantTime);
+      this.fileWriter = createNewFileWriter(path, table, writeConfig, this.instantTime);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize file writer for path " + path, e);
     }
@@ -292,15 +293,19 @@ public class HoodieRowDataCreateHandle implements Serializable {
   }
 
   protected HoodieRowDataFileWriter createNewFileWriter(
-      Path path, HoodieTable hoodieTable, HoodieWriteConfig config, RowType rowType, String instantTime)
+      Path path, HoodieTable hoodieTable, HoodieWriteConfig config, String instantTime)
       throws IOException {
     StoragePath storagePath = new StoragePath(path.toUri());
+    HoodieSchema hoodieSchema = HoodieSchema.parse(config.getSchema());
+    HoodieSchema writerSchema = preserveHoodieMetadata || skipMetadataWrite
+        ? hoodieSchema
+        : HoodieSchemaUtils.addMetadataFields(hoodieSchema, config.allowOperationMetadataField());
     return (HoodieRowDataFileWriter) HoodieFileWriterFactory.getFileWriter(
         instantTime,
         storagePath,
         hoodieTable.getStorage(),
         config,
-        HoodieSchemaConverter.convertToSchema(rowType).getNonNullType(),
+        writerSchema,
         hoodieTable.getTaskContextSupplier(),
         HoodieRecord.HoodieRecordType.FLINK);
   }

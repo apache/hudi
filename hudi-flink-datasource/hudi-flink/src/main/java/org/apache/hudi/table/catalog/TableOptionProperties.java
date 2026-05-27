@@ -203,7 +203,11 @@ public class TableOptionProperties {
       List<String> partitionKeys,
       boolean withOperationField) {
     RowType rowType = supplementMetaFields(DataTypeUtils.toRowType(catalogTable.getUnresolvedSchema()), withOperationField);
-    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
+    HoodieSchemaConverter.validateVectorColumns(rowType, catalogTable.getOptions().get(FlinkOptions.VECTOR_COLUMNS.key()));
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(
+        rowType,
+        "record",
+        catalogTable.getOptions().get(FlinkOptions.VECTOR_COLUMNS.key()));
     String sparkVersion = catalogTable.getOptions().getOrDefault(SPARK_VERSION, DEFAULT_SPARK_VERSION);
     Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(
         partitionKeys,

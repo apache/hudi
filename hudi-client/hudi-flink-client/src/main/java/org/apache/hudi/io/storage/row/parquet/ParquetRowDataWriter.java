@@ -18,7 +18,12 @@
 
 package org.apache.hudi.io.storage.row.parquet;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.util.VectorConversionUtils;
 
 import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.DecimalDataUtils;
@@ -66,14 +71,18 @@ public class ParquetRowDataWriter {
       RecordConsumer recordConsumer,
       RowType rowType,
       GroupType schema,
-      boolean utcTimestamp) {
+      boolean utcTimestamp,
+      HoodieSchema hoodieSchema) {
     this.recordConsumer = recordConsumer;
     this.utcTimestamp = utcTimestamp;
 
     this.filedWriters = new FieldWriter[rowType.getFieldCount()];
     this.fieldNames = rowType.getFieldNames().toArray(new String[0]);
     for (int i = 0; i < rowType.getFieldCount(); i++) {
-      this.filedWriters[i] = createWriter(rowType.getTypeAt(i));
+      String fieldName = fieldNames[i];
+      HoodieSchema fieldSchema = hoodieSchema.getField(fieldName).map(HoodieSchemaField::schema)
+          .orElseThrow(() -> new HoodieSchemaException("Field " + fieldName + " doesn't exist in schema: " + hoodieSchema));
+      this.filedWriters[i] = createWriter(rowType.getTypeAt(i), fieldSchema);
     }
   }
 
@@ -97,7 +106,8 @@ public class ParquetRowDataWriter {
     recordConsumer.endMessage();
   }
 
-  private FieldWriter createWriter(LogicalType t) {
+  private FieldWriter createWriter(LogicalType t, HoodieSchema hoodieSchema) {
+    HoodieSchema resolvedSchema = hoodieSchema.getNonNullType();
     switch (t.getTypeRoot()) {
       case CHAR:
       case VARCHAR:
@@ -141,21 +151,29 @@ public class ParquetRowDataWriter {
           return new Timestamp96Writer(tsLtzPrecision);
         }
       case ARRAY:
+        if (resolvedSchema != null && resolvedSchema.getType() == HoodieSchemaType.VECTOR) {
+          return new VectorWriter((HoodieSchema.Vector) resolvedSchema);
+        }
         ArrayType arrayType = (ArrayType) t;
         LogicalType elementType = arrayType.getElementType();
-        FieldWriter elementWriter = createWriter(elementType);
+        FieldWriter elementWriter = createWriter(elementType, resolvedSchema == null ? null : resolvedSchema.getElementType());
         return new ArrayWriter(elementWriter);
       case MAP:
         MapType mapType = (MapType) t;
         LogicalType keyType = mapType.getKeyType();
         LogicalType valueType = mapType.getValueType();
-        FieldWriter keyWriter = createWriter(keyType);
-        FieldWriter valueWriter = createWriter(valueType);
+        FieldWriter keyWriter = createWriter(keyType, resolvedSchema.getKeyType());
+        FieldWriter valueWriter = createWriter(valueType, resolvedSchema.getValueType());
         return new MapWriter(keyWriter, valueWriter);
       case ROW:
         RowType rowType = (RowType) t;
+        ValidationUtils.checkArgument(resolvedSchema.getType() == HoodieSchemaType.RECORD, "Hoodie schema should be RECORD type.");
         FieldWriter[] fieldWriters = rowType.getFields().stream()
-            .map(RowType.RowField::getType).map(this::createWriter).toArray(FieldWriter[]::new);
+            .map(field -> createWriter(
+                field.getType(),
+                resolvedSchema.getField(field.getName()).map(HoodieSchemaField::schema)
+                    .orElseThrow(() -> new HoodieSchemaException("Field " + field.getName() + " doesn't exist in schema: " + resolvedSchema))))
+            .toArray(FieldWriter[]::new);
         String[] fieldNames = rowType.getFields().stream()
             .map(RowType.RowField::getName).toArray(String[]::new);
         return new RowWriter(fieldNames, fieldWriters);
@@ -271,6 +289,29 @@ public class ParquetRowDataWriter {
     @Override
     public void write(ArrayData array, int ordinal) {
       recordConsumer.addBinary(Binary.fromReusedByteArray(array.getBinary(ordinal)));
+    }
+  }
+
+  private class VectorWriter implements FieldWriter {
+    private final HoodieSchema.Vector vectorSchema;
+
+    private VectorWriter(HoodieSchema.Vector vectorSchema) {
+      this.vectorSchema = vectorSchema;
+    }
+
+    @Override
+    public void write(RowData row, int ordinal) {
+      writeVector(row.getArray(ordinal));
+    }
+
+    @Override
+    public void write(ArrayData array, int ordinal) {
+      writeVector(array.getArray(ordinal));
+    }
+
+    private void writeVector(ArrayData vectorArray) {
+      recordConsumer.addBinary(
+          Binary.fromReusedByteArray(VectorConversionUtils.encodeVectorArrayData(vectorArray, vectorSchema)));
     }
   }
 
@@ -619,4 +660,3 @@ public class ParquetRowDataWriter {
     }
   }
 }
-

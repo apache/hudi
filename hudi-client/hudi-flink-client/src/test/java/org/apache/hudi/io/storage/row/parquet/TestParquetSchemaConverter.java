@@ -20,7 +20,11 @@ package org.apache.hudi.io.storage.row.parquet;
 
 import org.apache.hudi.adapter.DataTypeAdapter;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.storage.row.HoodieRowDataParquetWriteSupport;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
@@ -38,6 +42,7 @@ import org.apache.flink.table.types.logical.SmallIntType;
 import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.table.types.logical.TinyIntType;
 import org.apache.flink.table.types.logical.VarCharType;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
@@ -48,6 +53,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -211,6 +217,45 @@ public class TestParquetSchemaConverter {
         + "  }\n"
         + "}\n";
     assertThat(messageType.toString(), is(expected));
+  }
+
+  @Test
+  void testConvertVectorColumnsWithHoodieSchema() {
+    HoodieSchema hoodieSchema = HoodieSchema.createRecord(
+        "vector_record",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("embedding", HoodieSchema.createVector(2)),
+            HoodieSchemaField.of("features", HoodieSchema.createVector(2, HoodieSchema.Vector.VectorElementType.DOUBLE))));
+    RowType rowType = (RowType) HoodieSchemaConverter.convertToDataType(hoodieSchema).getLogicalType();
+
+    MessageType messageType = ParquetSchemaConverter.convertToParquetMessageType("converted", rowType, hoodieSchema);
+
+    PrimitiveType embeddingType = messageType.getType("embedding").asPrimitiveType();
+    assertEquals(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, embeddingType.getPrimitiveTypeName());
+    assertEquals(8, embeddingType.getTypeLength());
+    PrimitiveType featuresType = messageType.getType("features").asPrimitiveType();
+    assertEquals(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, featuresType.getPrimitiveTypeName());
+    assertEquals(16, featuresType.getTypeLength());
+  }
+
+  @Test
+  void testVectorFooterMetadataComesFromHoodieSchema() {
+    HoodieSchema hoodieSchema = HoodieSchema.createRecord(
+        "vector_record",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("embedding", HoodieSchema.createVector(2))));
+
+    HoodieRowDataParquetWriteSupport writeSupport =
+        new HoodieRowDataParquetWriteSupport(new Configuration(), hoodieSchema, null);
+    Map<String, String> metadata = writeSupport.finalizeWrite().getExtraMetaData();
+
+    assertEquals("embedding:VECTOR(2)", metadata.get(HoodieSchema.VECTOR_COLUMNS_METADATA_KEY));
   }
 
   @Test

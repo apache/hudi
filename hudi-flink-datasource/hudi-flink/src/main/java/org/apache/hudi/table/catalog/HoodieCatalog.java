@@ -70,6 +70,7 @@ import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.util.CollectionUtil;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -319,9 +320,12 @@ public class HoodieCatalog extends AbstractCatalog {
         && !OptionsResolver.isAppendMode(conf)) {
       throw new CatalogException("Primary key definition is missing");
     }
+    LogicalType rowType = resolvedSchema.toPhysicalRowDataType().getLogicalType();
+    HoodieSchemaConverter.validateVectorColumns(rowType, conf.get(FlinkOptions.VECTOR_COLUMNS));
     final String avroSchema = HoodieSchemaConverter.convertToSchema(
-        resolvedSchema.toPhysicalRowDataType().getLogicalType(),
-        HoodieSchemaUtils.getRecordQualifiedName(tablePath.getObjectName())).toString();
+        rowType,
+        HoodieSchemaUtils.getRecordQualifiedName(tablePath.getObjectName()),
+        conf.get(FlinkOptions.VECTOR_COLUMNS)).toString();
     conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, avroSchema);
 
     // stores two copies of options:
@@ -619,9 +623,12 @@ public class HoodieCatalog extends AbstractCatalog {
   private void refreshTableProperties(ObjectPath tablePath, CatalogBaseTable newCatalogTable) {
     Map<String, String> options = newCatalogTable.getOptions();
     ResolvedCatalogTable resolvedTable =  (ResolvedCatalogTable) newCatalogTable;
+    LogicalType rowType = resolvedTable.getResolvedSchema().toPhysicalRowDataType().getLogicalType();
+    HoodieSchemaConverter.validateVectorColumns(rowType, options.get(FlinkOptions.VECTOR_COLUMNS.key()));
     final String avroSchema = HoodieSchemaConverter.convertToSchema(
-        resolvedTable.getResolvedSchema().toPhysicalRowDataType().getLogicalType(),
-        HoodieSchemaUtils.getRecordQualifiedName(tablePath.getObjectName())).toString();
+        rowType,
+        HoodieSchemaUtils.getRecordQualifiedName(tablePath.getObjectName()),
+        options.get(FlinkOptions.VECTOR_COLUMNS.key())).toString();
     options.put(FlinkOptions.SOURCE_AVRO_SCHEMA.key(), avroSchema);
     java.util.Optional<UniqueConstraint> pkConstraintOpt = resolvedTable.getResolvedSchema().getPrimaryKey();
     if (pkConstraintOpt.isPresent()) {

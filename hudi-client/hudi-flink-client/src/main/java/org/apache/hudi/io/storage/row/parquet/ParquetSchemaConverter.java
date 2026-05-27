@@ -20,7 +20,11 @@ package org.apache.hudi.io.storage.row.parquet;
 
 import org.apache.hudi.adapter.DataTypeAdapter;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.table.api.DataTypes;
@@ -206,11 +210,21 @@ public class ParquetSchemaConverter {
   }
 
   public static MessageType convertToParquetMessageType(String name, RowType rowType) {
+    return convertToParquetMessageType(name, rowType, null);
+  }
+
+  public static MessageType convertToParquetMessageType(String name, RowType rowType, HoodieSchema hoodieSchema) {
     Type[] types = new Type[rowType.getFieldCount()];
     for (int i = 0; i < rowType.getFieldCount(); i++) {
       String fieldName = rowType.getFieldNames().get(i);
       LogicalType fieldType = rowType.getTypeAt(i);
-      types[i] = convertToParquetType(fieldName, fieldType, fieldType.isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED);
+      HoodieSchema fieldSchema = hoodieSchema == null ? null
+          : hoodieSchema.getField(fieldName).map(HoodieSchemaField::schema).orElse(null);
+      types[i] = convertToParquetType(
+          fieldName,
+          fieldType,
+          fieldType.isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED,
+          fieldSchema);
     }
     return new MessageType(name, types);
   }
@@ -265,6 +279,12 @@ public class ParquetSchemaConverter {
 
   private static Type convertToParquetType(
       String name, LogicalType type, Type.Repetition repetition) {
+    return convertToParquetType(name, type, repetition, null);
+  }
+
+  private static Type convertToParquetType(
+      String name, LogicalType type, Type.Repetition repetition, HoodieSchema hoodieSchema) {
+    HoodieSchema resolvedSchema = hoodieSchema == null ? null : hoodieSchema.getNonNullType();
     switch (type.getTypeRoot()) {
       case CHAR:
       case VARCHAR:
@@ -338,6 +358,15 @@ public class ParquetSchemaConverter {
               .named(name);
         }
       case ARRAY:
+        if (resolvedSchema != null && resolvedSchema.getType() == HoodieSchemaType.VECTOR) {
+          HoodieSchema.Vector vectorSchema = (HoodieSchema.Vector) resolvedSchema;
+          int fixedSize = Math.multiplyExact(
+              vectorSchema.getDimension(),
+              vectorSchema.getVectorElementType().getElementSize());
+          return Types.primitive(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, repetition)
+              .length(fixedSize)
+              .named(name);
+        }
         // align with Spark And Avro regarding the standard mode array type, see:
         // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#lists
         //
@@ -350,7 +379,13 @@ public class ParquetSchemaConverter {
         Type.Repetition eleRepetition =
             arrayType.getElementType().isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED;
         return ConversionPatterns.listOfElements(
-            repetition, name, convertToParquetType("element", arrayType.getElementType(), eleRepetition));
+            repetition,
+            name,
+            convertToParquetType(
+                "element",
+                arrayType.getElementType(),
+                eleRepetition,
+                resolvedSchema == null ? null : resolvedSchema.getElementType()));
       case MAP:
         // <map-repetition> group <name> (MAP) {
         //   repeated group key_value {
@@ -367,14 +402,24 @@ public class ParquetSchemaConverter {
                 Types
                     .repeatedGroup()
                     .addField(convertToParquetType("key", keyType, Type.Repetition.REQUIRED))
-                    .addField(convertToParquetType("value", valueType, valueType.isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED))
+                    .addField(convertToParquetType(
+                        "value",
+                        valueType,
+                        valueType.isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED,
+                        resolvedSchema == null ? null : resolvedSchema.getValueType()))
                     .named("key_value"))
             .named(name);
       case ROW:
         RowType rowType = (RowType) type;
         Types.GroupBuilder<GroupType> builder = Types.buildGroup(repetition);
+        ValidationUtils.checkArgument(resolvedSchema == null || resolvedSchema.getType() == HoodieSchemaType.RECORD);
         rowType.getFields().forEach(field -> builder
-            .addField(convertToParquetType(field.getName(), field.getType(), field.getType().isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED)));
+            .addField(convertToParquetType(
+                field.getName(),
+                field.getType(),
+                field.getType().isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED,
+                resolvedSchema == null ? null : resolvedSchema.getField(field.getName()).map(HoodieSchemaField::schema)
+                    .orElseThrow(() -> new HoodieSchemaException("Field " + field.getName() + " doesn't exist in schema: " + resolvedSchema)))));
         return builder.named(name);
       default:
         if (DataTypeAdapter.isVariantType(type)) {

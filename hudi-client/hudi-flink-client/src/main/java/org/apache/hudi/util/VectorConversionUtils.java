@@ -21,11 +21,13 @@ package org.apache.hudi.util;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.HoodieVectorUtils;
-import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.GenericArrayData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
@@ -35,6 +37,7 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.table.types.logical.RowType;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -271,6 +274,38 @@ public final class VectorConversionUtils {
       return new GenericArrayData((byte[]) vectorArray);
     }
     throw new UnsupportedOperationException("Unsupported decoded vector array type: " + vectorArray.getClass());
+  }
+
+  /**
+   * Encodes Flink array data into the canonical Hudi VECTOR fixed-bytes representation.
+   */
+  public static byte[] encodeVectorArrayData(ArrayData arrayData, HoodieSchema.Vector vectorSchema) {
+    int dimension = vectorSchema.getDimension();
+    HoodieSchema.Vector.VectorElementType elementType = vectorSchema.getVectorElementType();
+    ValidationUtils.checkArgument(arrayData.size() == dimension,
+        () -> "Vector dimension mismatch: schema expects " + dimension + " elements but got " + arrayData.size());
+    int bufferSize = Math.multiplyExact(dimension, elementType.getElementSize());
+    ByteBuffer buffer = ByteBuffer.allocate(bufferSize).order(HoodieSchema.VectorLogicalType.VECTOR_BYTE_ORDER);
+    switch (elementType) {
+      case FLOAT:
+        for (int i = 0; i < dimension; i++) {
+          buffer.putFloat(arrayData.getFloat(i));
+        }
+        break;
+      case DOUBLE:
+        for (int i = 0; i < dimension; i++) {
+          buffer.putDouble(arrayData.getDouble(i));
+        }
+        break;
+      case INT8:
+        for (int i = 0; i < dimension; i++) {
+          buffer.put(arrayData.getByte(i));
+        }
+        break;
+      default:
+        throw new UnsupportedOperationException("Unsupported VECTOR element type: " + elementType);
+    }
+    return buffer.array();
   }
 
   public static void validateVectorLogicalType(HoodieSchema.Vector vectorSchema, LogicalType type) {

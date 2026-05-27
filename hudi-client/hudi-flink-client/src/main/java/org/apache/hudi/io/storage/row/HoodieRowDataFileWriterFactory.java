@@ -124,7 +124,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
     boolean withOperation = config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
     Option<org.apache.hudi.common.bloom.BloomFilter> bloomFilter = enableBloomFilter(populateMetaFields, config)
         ? Option.of(createBloomFilter(config)) : Option.empty();
-    RowType rowType = HoodieSchemaConverter.convertToRowType(schema);
+    RowType rowType = (RowType) HoodieSchemaConverter.convertToDataType(schema).getLogicalType();
     return new HoodieRowDataLanceWriter(
         path,
         rowType,
