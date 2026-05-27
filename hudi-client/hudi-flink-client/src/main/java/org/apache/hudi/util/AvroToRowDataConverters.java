@@ -60,6 +60,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
 
 /**
  * Tool class used to convert from Avro {@link GenericRecord} to {@link RowData}.
@@ -81,6 +82,27 @@ public class AvroToRowDataConverters {
   // -------------------------------------------------------------------------------------
   // Runtime Converters
   // -------------------------------------------------------------------------------------
+
+  /**
+   * Creates a row converter from the Flink row type using UTC timezone conversion.
+   *
+   * <p>Note that this RowType-only path cannot recover Hoodie-specific logical type metadata
+   * that is not represented in Flink's {@link RowType}.
+   */
+  public static AvroToRowDataConverter createRowConverter(RowType rowType) {
+    return createRowConverter(rowType, true);
+  }
+
+  /**
+   * Creates a row converter from the Flink row type.
+   *
+   * <p>Note that this RowType-only path cannot recover Hoodie-specific logical type metadata
+   * that is not represented in Flink's {@link RowType}.
+   */
+  public static AvroToRowDataConverter createRowConverter(RowType rowType, boolean utcTimezone) {
+    return createRowConverter(HoodieSchemaConverter.convertToSchema(rowType), rowType, utcTimezone);
+  }
+
   /**
    * Creates a row converter using only the Flink row type.
    *
@@ -97,11 +119,18 @@ public class AvroToRowDataConverters {
    */
   public static AvroToRowDataConverter createRowConverter(HoodieSchema schema, RowType rowType, boolean utcTimezone) {
     HoodieSchema recordSchema = schema.getNonNullType();
-    final List<HoodieSchemaField> fields = recordSchema.getFields();
-    final AvroToRowDataConverter[] fieldConverters = new AvroToRowDataConverter[rowType.getFieldCount()];
-    for (int i = 0; i < fieldConverters.length; i++) {
-      fieldConverters[i] = createNullableConverter(fields.get(i).schema(), rowType.getTypeAt(i), utcTimezone);
+    if (recordSchema.getType() == HoodieSchemaType.UNION) {
+      // getNonNullType() unwraps simple nullable unions only. Complex unions can still reach
+      // here when their Flink representation is a ROW, for example fields inside
+      // ColumnStatsSchemas.METADATA_SCHEMA. In that case the RowType already captures the
+      // target Flink shape, so use the first union branch only as the positional Hoodie schema
+      // template for building nested field converters.
+      recordSchema = recordSchema.getTypes().get(0);
     }
+    final List<HoodieSchemaField> fields = recordSchema.getFields();
+    final AvroToRowDataConverter[] fieldConverters = IntStream.range(0, rowType.getFieldCount())
+        .mapToObj(i -> createNullableConverter(fields.get(i).schema(), rowType.getTypeAt(i), utcTimezone))
+        .toArray(AvroToRowDataConverter[]::new);
     final int arity = rowType.getFieldCount();
 
     return avroObject -> {
@@ -189,14 +218,6 @@ public class AvroToRowDataConverters {
         }
         return createArrayConverter(nonNullSchema.getElementType(), (ArrayType) type, utcTimezone);
       case ROW:
-        if (nonNullSchema.getType() == HoodieSchemaType.UNION) {
-          // getNonNullType() unwraps simple nullable unions only. Complex unions can still reach
-          // here when their Flink representation is a ROW, for example fields inside
-          // ColumnStatsSchemas.METADATA_SCHEMA. In that case the RowType already captures the
-          // target Flink shape, so use the first union branch only as the positional Hoodie schema
-          // template for building nested field converters.
-          nonNullSchema = nonNullSchema.getTypes().get(0);
-        }
         return createRowConverter(nonNullSchema, (RowType) type, utcTimezone);
       case MAP:
       case MULTISET:

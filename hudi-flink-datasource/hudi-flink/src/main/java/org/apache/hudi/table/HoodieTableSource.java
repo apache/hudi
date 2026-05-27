@@ -308,7 +308,7 @@ public class HoodieTableSource extends FileIndexReader implements
             rowType,
             requiredRowType,
             tableSchema.toString(),
-            DataTypeUtils.createRequiredSchema(tableSchema, requiredRowType).toString(),
+            DataTypeUtils.toHoodieSchemaWithLogicalMetadata(requiredRowType, tableSchema).toString(),
             new ArrayList<>());
     boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ && context.isStreaming();
     if (conf.get(FlinkOptions.CDC_ENABLED)) {
@@ -324,7 +324,7 @@ public class HoodieTableSource extends FileIndexReader implements
       splitReaderFunction = new HoodieSplitReaderFunction(
           conf,
           tableSchema,
-          DataTypeUtils.createRequiredSchema(tableSchema, requiredRowType),
+          DataTypeUtils.toHoodieSchemaWithLogicalMetadata(requiredRowType, tableSchema),
           internalSchemaManager,
           conf.get(FlinkOptions.MERGE_TYPE),
           predicates,
@@ -613,7 +613,7 @@ public class HoodieTableSource extends FileIndexReader implements
         rowType,
         requiredRowType,
         tableSchema.toString(),
-        DataTypeUtils.createRequiredSchema(tableSchema, requiredRowType).toString(),
+        DataTypeUtils.toHoodieSchemaWithLogicalMetadata(requiredRowType, tableSchema).toString(),
         inputSplits);
     return CdcInputFormat.builder()
         .config(this.conf)
@@ -638,7 +638,7 @@ public class HoodieTableSource extends FileIndexReader implements
         rowType,
         requiredRowType,
         tableAvroSchema.toString(),
-        DataTypeUtils.createRequiredSchema(tableAvroSchema, requiredRowType).toString(),
+        DataTypeUtils.toHoodieSchemaWithLogicalMetadata(requiredRowType, tableAvroSchema).toString(),
         inputSplits);
     return MergeOnReadInputFormat.builder()
         .config(this.conf)

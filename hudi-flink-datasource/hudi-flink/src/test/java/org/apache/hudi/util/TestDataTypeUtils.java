@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 public class TestDataTypeUtils {
 
   @Test
-  public void testCreateRequiredSchemaUsesTableSchemaOnlyForHudiLogicalTypes() {
+  public void testToHoodieSchemaWithLogicalMetadata() {
     HoodieSchema tableSchema = HoodieSchema.createRecord(
         "test_record",
         null,
@@ -58,7 +58,7 @@ public class TestDataTypeUtils {
         .notNull()
         .getLogicalType();
 
-    HoodieSchema requiredSchema = DataTypeUtils.createRequiredSchema(tableSchema, requiredRowType);
+    HoodieSchema requiredSchema = DataTypeUtils.toHoodieSchemaWithLogicalMetadata(requiredRowType, tableSchema);
 
     assertEquals(Arrays.asList("amount", "embedding", "payload", "missing"),
         Arrays.asList(
@@ -76,7 +76,7 @@ public class TestDataTypeUtils {
     assertEquals(HoodieSchema.Vector.VectorElementType.DOUBLE,
         ((HoodieSchema.Vector) embeddingSchema).getVectorElementType());
 
-    assertEquals(HoodieSchemaType.VARIANT,
+    assertEquals(HoodieSchemaType.RECORD,
         requiredSchema.getField("payload").get().schema().getNonNullType().getType());
     assertEquals(HoodieSchemaType.STRING,
         requiredSchema.getField("missing").get().schema().getNonNullType().getType());

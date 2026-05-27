@@ -18,20 +18,20 @@
 
 package org.apache.hudi.table.format.cow;
 
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.format.FilePathUtils;
-import org.apache.hudi.util.VectorConversionUtils;
 import org.apache.hudi.table.format.HoodieRowDataLanceReader;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.VectorConversionUtils;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.io.FileInputFormat;
