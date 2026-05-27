@@ -763,28 +763,28 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   @VisibleForTesting
-  long getNumberOfRecordsForTest() {
+  long getNumberOfRecords() {
     return numberOfRecords;
   }
 
   @VisibleForTesting
-  long getEstimatedBytesWrittenForTest() {
+  long getEstimatedNumberOfBytesWritten() {
     return estimatedNumberOfBytesWritten;
   }
 
   @VisibleForTesting
-  void simulateBufferedRecordForTest(HoodieRecord bufferedRecord) {
+  void simulateBufferedRecord(HoodieRecord bufferedRecord) {
     numberOfRecords++;
     flushToDiskIfRequired(bufferedRecord, false);
   }
 
   @VisibleForTesting
-  long getEffectiveBlockSizeForTest() {
+  long getEffectiveBlockSize() {
     return effectiveBlockSize;
   }
 
   @VisibleForTesting
-  long getMaxBlockSizeForTest() {
+  long getMaxBlockSize() {
     return maxBlockSize;
   }
 
