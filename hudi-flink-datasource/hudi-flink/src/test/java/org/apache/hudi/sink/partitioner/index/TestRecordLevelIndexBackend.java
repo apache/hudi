@@ -20,7 +20,7 @@ package org.apache.hudi.sink.partitioner.index;
 
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.metrics.FlinkIndexBackendMetrics;
+import org.apache.hudi.metrics.FlinkPartitionedIndexBackendMetrics;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -167,20 +167,20 @@ public class TestRecordLevelIndexBackend {
   }
 
   @Test
-  public void testRegisterMetricsRegistersRemoteRliHistograms() throws Exception {
+  public void testRegisterMetricsRegistersPartitionBootstrapHistograms() throws Exception {
     CapturingMetricGroup metricGroup = new CapturingMetricGroup();
     try (RecordLevelIndexBackend backend = createBackend()) {
       backend.registerMetrics(metricGroup);
 
-      assertNotNull(metricGroup.getHistogram("remoteIndexLookupLatency"));
-      assertNotNull(metricGroup.getHistogram("remoteLookupKeysNum"));
+      assertNotNull(metricGroup.getHistogram("partition_bootstrap_latency_millis"));
+      assertNotNull(metricGroup.getHistogram("partition_bootstrap_keys_loaded"));
     }
   }
 
   @Test
   public void testRegisterMetricsReplacesPreSeededMetrics() throws Exception {
     try (RecordLevelIndexBackend backend = createBackend()) {
-      FlinkIndexBackendMetrics preSeeded = backend.getMetrics();
+      FlinkPartitionedIndexBackendMetrics preSeeded = backend.getMetrics();
       backend.registerMetrics(new CapturingMetricGroup());
 
       assertNotNull(backend.getMetrics());
