@@ -1798,21 +1798,29 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | WHEN NOT MATCHED THEN INSERT *
          """.stripMargin)
       }
-      // Spark 4.2 wraps the AnalysisException in a SparkException whose outer
-      // message contains only the unexpanded error-class template; the rendered
-      // text is on the cause. Earlier versions throw AnalysisException directly.
-      val msgToCheck = if (HoodieSparkUtils.gteqSpark4_2) {
+      // Spark 4.2 wraps the AnalysisException in a SparkException. The cause's
+      // rendered message is not reliable on preview4 (the error template can
+      // fail to render with "Undefined variable: searchPath"), so check the
+      // error condition on the SparkThrowable interface instead. Earlier
+      // versions throw AnalysisException directly and expose the rendered
+      // message.
+      if (HoodieSparkUtils.gteqSpark4_2) {
         assert(exception.getCause != null,
           s"Expected wrapped exception with cause on Spark 4.2+, but cause was null: ${exception.getMessage}")
-        exception.getCause.getMessage
+        val cause = exception.getCause
+        val condition = cause match {
+          case t: org.apache.spark.SparkThrowable => t.getCondition
+          case _ => null
+        }
+        assert(condition == "TABLE_OR_VIEW_NOT_FOUND",
+          s"Expected TABLE_OR_VIEW_NOT_FOUND error condition but got: $condition; message: ${cause.getMessage}")
       } else {
         assert(exception.isInstanceOf[org.apache.spark.sql.AnalysisException],
           s"Expected AnalysisException on Spark < 4.2, but got: ${exception.getClass.getName}")
-        exception.getMessage
+        assert(exception.getMessage.contains("TABLE_OR_VIEW_NOT_FOUND") ||
+          exception.getMessage.contains("Table or view not found"),
+          s"Expected TABLE_OR_VIEW_NOT_FOUND error but got: ${exception.getMessage}")
       }
-      assert(msgToCheck.contains("TABLE_OR_VIEW_NOT_FOUND") ||
-        msgToCheck.contains("Table or view not found"),
-        s"Expected TABLE_OR_VIEW_NOT_FOUND error but got: $msgToCheck")
     }
   }
 
