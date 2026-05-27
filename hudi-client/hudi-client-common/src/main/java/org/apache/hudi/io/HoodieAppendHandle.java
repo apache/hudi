@@ -276,11 +276,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     deltaWriteStat.setPartitionPath(partitionPath);
     deltaWriteStat.setFileId(fileId);
     Option<FileSlice> fileSliceOpt = populateWriteStatAndFetchFileSlice(record, deltaWriteStat);
-    // averageRecordSize is seeded lazily in flushToDiskIfRequired on the first buffered
-    // (post-prepareRecord) record. Sizing the incoming record here under-counts heap
-    // because recordList retains the post-prepareRecord clone: a fully-materialized Avro
-    // IndexedRecord with prepended meta-fields, whereas the incoming record's payload
-    // is typically still in its compact/deflated wire form.
     try {
       // Save hoodie partition meta in the partition path
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
