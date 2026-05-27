@@ -69,8 +69,8 @@ public class FlinkPartitionedIndexBackendMetrics extends HoodieFlinkMetrics {
     partitionBootstrapLatencyMillis.update(stopTimer(PARTITION_BOOTSTRAP_KEY));
   }
 
-  public void updatePartitionBootstrapKeysLoaded(long n) {
-    partitionBootstrapKeysLoaded.update(n);
+  public void updatePartitionBootstrapKeysLoaded(long keysLoaded) {
+    partitionBootstrapKeysLoaded.update(keysLoaded);
   }
 
   @VisibleForTesting
