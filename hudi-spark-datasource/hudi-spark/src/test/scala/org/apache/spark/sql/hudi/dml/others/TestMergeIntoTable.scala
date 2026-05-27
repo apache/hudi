@@ -1798,33 +1798,16 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | WHEN NOT MATCHED THEN INSERT *
          """.stripMargin)
       }
-      // Spark 4.2 wraps the AnalysisException in a SparkException. The cause's
-      // rendered message is not reliable on preview4 (the error template can
-      // fail to render with "Undefined variable: searchPath"), so check the
-      // error condition on the SparkThrowable interface instead. Earlier
-      // versions throw AnalysisException directly and expose the rendered
-      // message.
       if (HoodieSparkUtils.gteqSpark4_2) {
-        assert(exception.getCause != null,
-          s"Expected wrapped exception with cause on Spark 4.2+, but cause was null: ${exception.getMessage}")
-        val cause = exception.getCause
-        // SparkThrowable.getErrorClass() exists on all supported Spark versions
-        // (renamed to getCondition() in 4.x but kept as alias). Returns the same
-        // value (e.g. "TABLE_OR_VIEW_NOT_FOUND"). Using getErrorClass keeps this
-        // shared test file compilable against Spark 3.4 / 3.5.
-        val errorClass = cause match {
-          case t: org.apache.spark.SparkThrowable => t.getErrorClass
-          case _ => null
-        }
-        assert(errorClass == "TABLE_OR_VIEW_NOT_FOUND",
-          s"Expected TABLE_OR_VIEW_NOT_FOUND error class but got: $errorClass; message: ${cause.getMessage}")
+        assert(exception.isInstanceOf[org.apache.spark.SparkException],
+          s"Expected SparkException on Spark 4.2+, but got: ${exception.getClass.getName}")
       } else {
         assert(exception.isInstanceOf[org.apache.spark.sql.AnalysisException],
           s"Expected AnalysisException on Spark < 4.2, but got: ${exception.getClass.getName}")
-        assert(exception.getMessage.contains("TABLE_OR_VIEW_NOT_FOUND") ||
-          exception.getMessage.contains("Table or view not found"),
-          s"Expected TABLE_OR_VIEW_NOT_FOUND error but got: ${exception.getMessage}")
       }
+      assert(exception.getMessage.contains("TABLE_OR_VIEW_NOT_FOUND") ||
+        exception.getMessage.contains("Table or view not found"),
+        s"Expected TABLE_OR_VIEW_NOT_FOUND error but got: ${exception.getMessage}")
     }
   }
 
