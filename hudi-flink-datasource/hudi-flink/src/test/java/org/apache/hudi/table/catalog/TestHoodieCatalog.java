@@ -20,6 +20,7 @@ package org.apache.hudi.table.catalog;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -378,6 +379,35 @@ public class TestHoodieCatalog extends BaseTestHoodieCatalog {
 
     CatalogException exception = assertThrows(CatalogException.class, () -> catalog.createTable(tablePath, catalogTable, false));
     assertEquals("Primary key definition is missing", exception.getMessage());
+  }
+
+  @Test
+  public void testCreateAppendOnlyLanceTableWithoutPrimaryKey() throws Exception {
+    ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb_lance_append_only");
+    Map<String, String> lanceOptions = new HashMap<>(EXPECTED_OPTIONS);
+    lanceOptions.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+    lanceOptions.put(FlinkOptions.OPERATION.key(), "insert");
+    lanceOptions.put(FlinkOptions.PRE_COMBINE.key(), "false");
+    lanceOptions.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.LANCE.name());
+    ResolvedSchema appendOnlySchema = new ResolvedSchema(CREATE_COLUMNS, Collections.emptyList(), null);
+    ResolvedCatalogTable lanceTable = new ResolvedCatalogTable(
+        CatalogUtils.createCatalogTable(
+            Schema.newBuilder().fromResolvedSchema(appendOnlySchema).build(),
+            Arrays.asList("partition"),
+            lanceOptions,
+            "test_lance_append_only"),
+        appendOnlySchema
+    );
+
+    catalog.createTable(tablePath, lanceTable, false);
+
+    assertTrue(catalog.tableExists(tablePath));
+    CatalogBaseTable actualTable = catalog.getTable(tablePath);
+    assertFalse(actualTable.getOptions().containsKey(TableOptionProperties.PK_COLUMNS));
+    HoodieTableMetaClient metaClient = createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())),
+        catalog.inferTablePath(catalogPathStr, tablePath));
+    assertThat(metaClient.getTableConfig().getBaseFileFormat(), is(HoodieFileFormat.LANCE));
   }
 
   @Test

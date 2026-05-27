@@ -16,29 +16,23 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.format;
+package org.apache.hudi.io.storage.row;
 
-import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.util.StringUtils;
 
 /**
- * Factory methods to create RowData file reader.
+ * Bloom-filter footer support for Flink RowData base-file writers.
  */
-public class HoodieRowDataFileReaderFactory extends HoodieFileReaderFactory {
-  public HoodieRowDataFileReaderFactory(HoodieStorage storage) {
-    super(storage);
+class HoodieBloomFilterRowDataWriteSupport extends HoodieBloomFilterWriteSupport<String> {
+
+  HoodieBloomFilterRowDataWriteSupport(BloomFilter bloomFilter) {
+    super(bloomFilter);
   }
 
   @Override
-  protected HoodieFileReader newParquetFileReader(StoragePath path) {
-    return new HoodieRowDataParquetReader(storage, path);
-  }
-
-  @Override
-  protected HoodieFileReader newLanceFileReader(HoodieConfig hoodieConfig, StoragePath path) {
-    return new HoodieRowDataLanceReader(path, hoodieConfig);
+  protected byte[] getUTF8Bytes(String key) {
+    return StringUtils.getUTF8Bytes(key);
   }
 }
