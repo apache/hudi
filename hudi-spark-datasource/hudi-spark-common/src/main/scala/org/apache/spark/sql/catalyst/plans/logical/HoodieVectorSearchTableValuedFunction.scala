@@ -19,7 +19,7 @@ package org.apache.spark.sql.catalyst.plans.logical
 
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Literal}
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
-import org.apache.spark.sql.types.{NullType, NumericType, StringType}
+import org.apache.spark.sql.types.{Decimal, NullType, NumericType, StringType}
 
 object HoodieVectorSearchTableValuedFunction {
 
@@ -144,7 +144,13 @@ object HoodieVectorSearchTableValuedFunction {
       throw new HoodieAnalysisException(
         s"Function '$funcName': argument '$argName' must be a numeric literal or NULL, got: ${expr.sql}")
     }
-    Option(expr.eval()).map(_.toString.toDouble)
+    Option(expr.eval()).map {
+      case d: Decimal => d.toDouble
+      case n: Number => n.doubleValue()
+      case other => throw new HoodieAnalysisException(
+        s"Function '$funcName': argument '$argName' has unexpected runtime type: " +
+          s"${other.getClass.getName}")
+    }
   }
 }
 
