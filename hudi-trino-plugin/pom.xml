@@ -85,6 +85,13 @@
                 <artifactId>jetty-server</artifactId>
                 <version>12.1.9</version>
             </dependency>
+            <!-- Hudi parent pins joda-time at 2.9.9 (from 2016). Trino's DateTimeZoneIndex
+                 clinit needs the newer time-zone names in 2.14.2 (matches airbase). -->
+            <dependency>
+                <groupId>joda-time</groupId>
+                <artifactId>joda-time</artifactId>
+                <version>2.14.2</version>
+            </dependency>
             <!-- Hudi parent pins jersey-server at 2.17 (legacy javax). Trino runs on Jersey 4.x
                  (jakarta). The mixed-version classpath crashes with NoSuchFieldError on
                  ComponentBag.INCLUDE_ALL during ResourceConfig init. -->
