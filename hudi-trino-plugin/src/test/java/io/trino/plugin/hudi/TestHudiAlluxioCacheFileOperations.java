@@ -21,7 +21,6 @@ import io.trino.plugin.hudi.util.FileOperationUtils.FileOperation;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.DistributedQueryRunner;
 import org.intellij.lang.annotations.Language;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
@@ -71,7 +70,6 @@ public class TestHudiAlluxioCacheFileOperations
     }
 
     @Test
-    @Disabled("TODO: recalibrate metadata-table file-op counts after Hudi 1.0.2 -> 1.3 port; new code reads fewer pages, hard-coded counts are stale")
     public void testSelectWithFilter()
             throws InterruptedException
     {
@@ -79,8 +77,8 @@ public class TestHudiAlluxioCacheFileOperations
         Multiset<FileOperation> expectedFileOperations = ImmutableMultiset.<FileOperation>builder()
                 .addCopies(new FileOperation("Alluxio.readCached", DATA), 2)
                 .addCopies(new FileOperation("Alluxio.readCached", METADATA_TABLE), 20)
-                .addCopies(new FileOperation("InputFile.lastModified", METADATA_TABLE), 5)
-                .addCopies(new FileOperation("InputFile.length", METADATA_TABLE), 11)
+                .addCopies(new FileOperation("InputFile.lastModified", METADATA_TABLE), 1)
+                .addCopies(new FileOperation("InputFile.length", METADATA_TABLE), 7)
                 .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 2)
                 .add(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES))
                 .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 2)
@@ -91,7 +89,6 @@ public class TestHudiAlluxioCacheFileOperations
     }
 
     @Test
-    @Disabled("TODO: recalibrate metadata-table file-op counts after Hudi 1.0.2 -> 1.3 port; new code reads fewer pages, hard-coded counts are stale")
     public void testJoin()
             throws InterruptedException
     {
@@ -106,8 +103,8 @@ public class TestHudiAlluxioCacheFileOperations
                 ImmutableMultiset.<FileOperation>builder()
                         .addCopies(new FileOperation("Alluxio.readCached", DATA), 6)
                         .addCopies(new FileOperation("Alluxio.readCached", METADATA_TABLE), 222)
-                        .addCopies(new FileOperation("InputFile.lastModified", METADATA_TABLE), 60)
-                        .addCopies(new FileOperation("InputFile.length", METADATA_TABLE), 114)
+                        .addCopies(new FileOperation("InputFile.lastModified", METADATA_TABLE), 21)
+                        .addCopies(new FileOperation("InputFile.length", METADATA_TABLE), 75)
                         .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 5)
                         .addCopies(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES), 3)
                         .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 5)
@@ -119,8 +116,8 @@ public class TestHudiAlluxioCacheFileOperations
                 ImmutableMultiset.<FileOperation>builder()
                         .addCopies(new FileOperation("Alluxio.readCached", DATA), 6)
                         .addCopies(new FileOperation("Alluxio.readCached", METADATA_TABLE), 166)
-                        .addCopies(new FileOperation("InputFile.lastModified", METADATA_TABLE), 45)
-                        .addCopies(new FileOperation("InputFile.length", METADATA_TABLE), 85)
+                        .addCopies(new FileOperation("InputFile.lastModified", METADATA_TABLE), 16)
+                        .addCopies(new FileOperation("InputFile.length", METADATA_TABLE), 56)
                         .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 4)
                         .addCopies(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES), 2)
                         .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 4)
