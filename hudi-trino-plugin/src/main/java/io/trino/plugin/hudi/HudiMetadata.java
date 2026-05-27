@@ -107,6 +107,9 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.INDEXING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
+// TODO: implement applyLimit(...) to push LIMIT into HudiTableHandle so the split loader can
+//       short-circuit partition/file-slice listing once a row-count estimate covers the limit.
+//       Also flip SUPPORTS_LIMIT_PUSHDOWN to true in TestHudiConnectorTest once implemented.
 public class HudiMetadata
         implements ConnectorMetadata
 {

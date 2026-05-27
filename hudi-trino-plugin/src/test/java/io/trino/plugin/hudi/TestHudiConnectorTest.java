@@ -49,6 +49,7 @@ public class TestHudiConnectorTest
                  SUPPORTS_DELETE,
                  SUPPORTS_DEREFERENCE_PUSHDOWN,
                  SUPPORTS_INSERT,
+                 // TODO: implement LIMIT pushdown in HudiMetadata.applyLimit and flip this on.
                  SUPPORTS_LIMIT_PUSHDOWN,
                  SUPPORTS_MERGE,
                  SUPPORTS_RENAME_COLUMN,
