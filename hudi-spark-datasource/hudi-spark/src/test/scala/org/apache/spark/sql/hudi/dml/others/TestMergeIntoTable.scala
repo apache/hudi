@@ -1808,12 +1808,16 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         assert(exception.getCause != null,
           s"Expected wrapped exception with cause on Spark 4.2+, but cause was null: ${exception.getMessage}")
         val cause = exception.getCause
-        val condition = cause match {
-          case t: org.apache.spark.SparkThrowable => t.getCondition
+        // SparkThrowable.getErrorClass() exists on all supported Spark versions
+        // (renamed to getCondition() in 4.x but kept as alias). Returns the same
+        // value (e.g. "TABLE_OR_VIEW_NOT_FOUND"). Using getErrorClass keeps this
+        // shared test file compilable against Spark 3.4 / 3.5.
+        val errorClass = cause match {
+          case t: org.apache.spark.SparkThrowable => t.getErrorClass
           case _ => null
         }
-        assert(condition == "TABLE_OR_VIEW_NOT_FOUND",
-          s"Expected TABLE_OR_VIEW_NOT_FOUND error condition but got: $condition; message: ${cause.getMessage}")
+        assert(errorClass == "TABLE_OR_VIEW_NOT_FOUND",
+          s"Expected TABLE_OR_VIEW_NOT_FOUND error class but got: $errorClass; message: ${cause.getMessage}")
       } else {
         assert(exception.isInstanceOf[org.apache.spark.sql.AnalysisException],
           s"Expected AnalysisException on Spark < 4.2, but got: ${exception.getClass.getName}")
