@@ -304,10 +304,8 @@ public class IncrementalInputSplits implements Serializable {
         log.warn("No files found for reading under path: {}", path);
         return Result.EMPTY;
       }
-      // Use the full commits-and-compaction timeline rather than the (possibly compaction-filtered)
-      // activeTimeline carried by the QueryContext. Otherwise, on a MOR table with
-      // 'read.streaming.skip_compaction = true', file slice boundaries would be wrongly
-      // computed and log files could be missed, causing data loss.
+      // Same reason as the batch full-table-scan branch:
+      // see getFullCommitsTimeline() for why a compaction-filtered timeline must not be used here.
       List<FileSlice> allFileSlices = getFileSlices(metaClient, getFullCommitsTimeline(metaClient),
           readPartitions, pathInfoList, offsetToIssue, false);
       List<FileSlice> fileSlices = fileIndex.filterFileSlices(allFileSlices);
