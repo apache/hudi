@@ -49,7 +49,10 @@ public class TestHudiConnectorTest
                  SUPPORTS_DELETE,
                  SUPPORTS_DEREFERENCE_PUSHDOWN,
                  SUPPORTS_INSERT,
-                 // TODO: implement LIMIT pushdown in HudiMetadata.applyLimit and flip this on.
+                 // HudiMetadata.applyLimit returns limitGuaranteed=false (multi-split connector
+                 // cannot bound total rows across workers). BaseConnectorTest.testLimitPushdown
+                 // requires Output->TableScan with no Limit node, which needs guaranteed=true.
+                 // Stays off, matching Iceberg / Delta Lake / Hive.
                  SUPPORTS_LIMIT_PUSHDOWN,
                  SUPPORTS_MERGE,
                  SUPPORTS_RENAME_COLUMN,
