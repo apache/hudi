@@ -85,6 +85,24 @@
                 <artifactId>jetty-server</artifactId>
                 <version>12.1.9</version>
             </dependency>
+            <!-- Hudi parent pins jersey-server at 2.17 (legacy javax). Trino runs on Jersey 4.x
+                 (jakarta). The mixed-version classpath crashes with NoSuchFieldError on
+                 ComponentBag.INCLUDE_ALL during ResourceConfig init. -->
+            <dependency>
+                <groupId>org.glassfish.jersey.core</groupId>
+                <artifactId>jersey-server</artifactId>
+                <version>4.0.2</version>
+            </dependency>
+            <dependency>
+                <groupId>org.glassfish.jersey.core</groupId>
+                <artifactId>jersey-client</artifactId>
+                <version>4.0.2</version>
+            </dependency>
+            <dependency>
+                <groupId>org.glassfish.jersey.media</groupId>
+                <artifactId>jersey-media-jaxb</artifactId>
+                <version>4.0.2</version>
+            </dependency>
             <!-- Airbase manages junit-platform at 6.0.3 (paired with jupiter 6.x). Hudi manages
                  jupiter at 5.14.1 (paired with platform 1.14.1). Pin platform here to keep the
                  pair consistent; without this, surefire fails with OutputDirectoryCreator not found. -->
