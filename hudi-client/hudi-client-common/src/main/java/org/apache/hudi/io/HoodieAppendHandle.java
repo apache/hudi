@@ -248,11 +248,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     deltaWriteStat.setPartitionPath(partitionPath);
     deltaWriteStat.setFileId(fileId);
     Option<FileSlice> fileSliceOpt = populateWriteStatAndFetchFileSlice(record, deltaWriteStat);
-    // averageRecordSize is seeded lazily in flushToDiskIfRequired on the first buffered
-    // (post-prepareRecord) record. Sizing the incoming record here under-counts heap
-    // because recordList retains the post-prepareRecord clone: a fully-materialized Avro
-    // IndexedRecord with prepended meta-fields, whereas the incoming record's payload
-    // is typically still in its compact/deflated wire form.
     try {
       // Save hoodie partition meta in the partition path
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
@@ -746,17 +741,22 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   @VisibleForTesting
-  long getNumberOfRecordsForTest() {
+  long getNumberOfRecords() {
     return numberOfRecords;
   }
 
   @VisibleForTesting
-  long getEstimatedBytesWrittenForTest() {
+  long getEstimatedNumberOfBytesWritten() {
     return estimatedNumberOfBytesWritten;
   }
 
+  /**
+   * Drives a single iteration of {@link #flushToDiskIfRequired} as if a buffered record had just
+   * been appended to {@code recordList}. {@code null} signals a delete/ignored window (the same
+   * path the production call sites take when buffering returns null).
+   */
   @VisibleForTesting
-  void simulateBufferedRecordForTest(HoodieRecord bufferedRecord) {
+  void simulateBufferedRecord(HoodieRecord bufferedRecord) {
     numberOfRecords++;
     flushToDiskIfRequired(bufferedRecord, false);
   }

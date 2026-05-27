@@ -105,7 +105,7 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
     TestableAppendHandle handle = newTestableHandle(spy);
 
     HoodieRecord buffered = mock(HoodieRecord.class);
-    handle.simulateBufferedRecordForTest(buffered);
+    handle.simulateBufferedRecord(buffered);
 
     assertEquals(1, spy.sizedObjects.size(), "estimator should be invoked once on the first buffered record");
     assertSame(buffered, spy.sizedObjects.get(0),
@@ -123,7 +123,7 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
 
     assertEquals(0L, handle.getAverageRecordSize(), "no records yet — estimate is unseeded");
 
-    handle.simulateBufferedRecordForTest(mock(HoodieRecord.class));
+    handle.simulateBufferedRecord(mock(HoodieRecord.class));
 
     assertEquals(2048L, handle.getAverageRecordSize(),
         "first buffered record seeds averageRecordSize directly (no EWMA on first sample)");
@@ -139,7 +139,7 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
     TestableAppendHandle handle = newTestableHandle(spy);
 
     for (int i = 0; i < 250; i++) {
-      handle.simulateBufferedRecordForTest(null);
+      handle.simulateBufferedRecord(null);
     }
 
     assertEquals(0, spy.sizedObjects.size(), "estimator never invoked on delete-only windows");
@@ -155,13 +155,13 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
   void testEwmaBlendsSamplesAfterFirstSeed() {
     TestableAppendHandle handle = newTestableHandle(new SteppedSizeEstimator(1000L, 5000L));
 
-    handle.simulateBufferedRecordForTest(mock(HoodieRecord.class));
+    handle.simulateBufferedRecord(mock(HoodieRecord.class));
     assertEquals(1000L, handle.getAverageRecordSize(), "first record seeds the estimate at 1000");
 
     // 99 more records — the sampler will not fire again until numberOfRecords % 100 == 0.
     // Record #100 returns the second sample (5000); EWMA blends to 0.8*1000 + 0.2*5000 = 1800.
     for (int i = 0; i < 99; i++) {
-      handle.simulateBufferedRecordForTest(mock(HoodieRecord.class));
+      handle.simulateBufferedRecord(mock(HoodieRecord.class));
     }
     assertEquals(1800L, handle.getAverageRecordSize(), "EWMA after the second sample: 0.8*1000 + 0.2*5000");
   }
@@ -176,14 +176,14 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
     TestableAppendHandle handle = newTestableHandle(new RecordingSizeEstimator(perRecord));
 
     for (int i = 0; i < 9; i++) {
-      handle.simulateBufferedRecordForTest(mock(HoodieRecord.class));
+      handle.simulateBufferedRecord(mock(HoodieRecord.class));
     }
     assertEquals(0, handle.appendInvocations.get(), "9 records of perRecord-sized buffer: gate has not fired yet");
 
-    handle.simulateBufferedRecordForTest(mock(HoodieRecord.class));
+    handle.simulateBufferedRecord(mock(HoodieRecord.class));
     assertEquals(1, handle.appendInvocations.get(), "10th record fills the block — flush fires");
-    assertEquals(0L, handle.getNumberOfRecordsForTest(), "numberOfRecords resets after flush");
-    assertTrue(handle.getEstimatedBytesWrittenForTest() > 0, "estimatedNumberOfBytesWritten advances after flush");
+    assertEquals(0L, handle.getNumberOfRecords(), "numberOfRecords resets after flush");
+    assertTrue(handle.getEstimatedNumberOfBytesWritten() > 0, "estimatedNumberOfBytesWritten advances after flush");
   }
 
   /** Guards against the test harness silently no-op'ing the flush hook. */
@@ -193,10 +193,10 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
         newTestableHandle(new RecordingSizeEstimator(writeConfig.getLogFileDataBlockMaxSize()));
     // Single record whose size == maxBlockSize: gate fires immediately on record #1
     // (numberOfRecords == 1 >= maxBlockSize / maxBlockSize == 1).
-    handle.simulateBufferedRecordForTest(mock(HoodieRecord.class));
+    handle.simulateBufferedRecord(mock(HoodieRecord.class));
     assertEquals(1, handle.appendInvocations.get(),
         "harness must route flushes through the override, not the real writer");
-    assertNotEquals(0L, handle.getEstimatedBytesWrittenForTest());
+    assertNotEquals(0L, handle.getEstimatedNumberOfBytesWritten());
     assertFalse(handle.getAverageRecordSize() == 0L);
   }
 
