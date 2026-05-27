@@ -33,6 +33,7 @@ import org.apache.hudi.util.Lazy;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -54,6 +55,7 @@ public class HudiTableHandle
     private final Set<HiveColumnHandle> constraintColumns;
     private final TupleDomain<HiveColumnHandle> partitionPredicates;
     private final TupleDomain<HiveColumnHandle> regularPredicates;
+    private final OptionalLong limit;
     private final Optional<Lazy<HoodieSchema>> hudiTableSchema;
     // Coordinator-only
     private final transient Optional<Table> table;
@@ -70,11 +72,12 @@ public class HudiTableHandle
             @JsonProperty("orderingColumns") List<HiveColumnHandle> orderingColumns,
             @JsonProperty("partitionPredicates") TupleDomain<HiveColumnHandle> partitionPredicates,
             @JsonProperty("regularPredicates") TupleDomain<HiveColumnHandle> regularPredicates,
+            @JsonProperty("limit") OptionalLong limit,
             @JsonProperty("tableSchemaStr") String tableSchemaStr,
             @JsonProperty("latestCommitTime") String latestCommitTime)
     {
         this(Optional.empty(), Optional.empty(), schemaName, tableName, basePath, tableType, partitionColumns, Lazy.lazily(() -> orderingColumns), ImmutableSet.of(),
-                partitionPredicates, regularPredicates, buildTableSchema(tableSchemaStr), () -> latestCommitTime);
+                partitionPredicates, regularPredicates, limit, buildTableSchema(tableSchemaStr), () -> latestCommitTime);
     }
 
     public HudiTableHandle(
@@ -89,6 +92,7 @@ public class HudiTableHandle
             Set<HiveColumnHandle> constraintColumns,
             TupleDomain<HiveColumnHandle> partitionPredicates,
             TupleDomain<HiveColumnHandle> regularPredicates,
+            OptionalLong limit,
             Optional<Lazy<HoodieSchema>> hudiTableSchema)
     {
         this(
@@ -103,6 +107,7 @@ public class HudiTableHandle
                 constraintColumns,
                 partitionPredicates,
                 regularPredicates,
+                limit,
                 hudiTableSchema,
                 () -> lazyMetaClient
                         .get()
@@ -128,6 +133,7 @@ public class HudiTableHandle
             Set<HiveColumnHandle> constraintColumns,
             TupleDomain<HiveColumnHandle> partitionPredicates,
             TupleDomain<HiveColumnHandle> regularPredicates,
+            OptionalLong limit,
             Optional<Lazy<HoodieSchema>> hudiTableSchema,
             Supplier<String> latestCommitTimeSupplier)
     {
@@ -142,6 +148,7 @@ public class HudiTableHandle
         this.constraintColumns = requireNonNull(constraintColumns, "constraintColumns is null");
         this.partitionPredicates = requireNonNull(partitionPredicates, "partitionPredicates is null");
         this.regularPredicates = requireNonNull(regularPredicates, "regularPredicates is null");
+        this.limit = requireNonNull(limit, "limit is null");
         this.hudiTableSchema = requireNonNull(hudiTableSchema, "hudiTableSchema is null");
         this.lazyLatestCommitTime = Lazy.lazily(latestCommitTimeSupplier);
     }
@@ -255,6 +262,12 @@ public class HudiTableHandle
     }
 
     @JsonProperty
+    public OptionalLong getLimit()
+    {
+        return limit;
+    }
+
+    @JsonProperty
     public List<HiveColumnHandle> getOrderingColumns()
     {
         return lazyOrderingColumns.get();
@@ -282,6 +295,26 @@ public class HudiTableHandle
                 constraintColumns,
                 partitionPredicates.intersect(partitionTupleDomain),
                 regularPredicates.intersect(regularTupleDomain),
+                limit,
+                hudiTableSchema,
+                this::getLatestCommitTime);
+    }
+
+    HudiTableHandle withLimit(long newLimit)
+    {
+        return new HudiTableHandle(
+                table,
+                lazyMetaClient,
+                schemaName,
+                tableName,
+                basePath,
+                tableType,
+                partitionColumns,
+                lazyOrderingColumns,
+                constraintColumns,
+                partitionPredicates,
+                regularPredicates,
+                OptionalLong.of(newLimit),
                 hudiTableSchema,
                 this::getLatestCommitTime);
     }

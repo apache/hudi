@@ -38,6 +38,7 @@ import io.trino.spi.connector.ConnectorTableMetadata;
 import io.trino.spi.connector.ConnectorTableVersion;
 import io.trino.spi.connector.Constraint;
 import io.trino.spi.connector.ConstraintApplicationResult;
+import io.trino.spi.connector.LimitApplicationResult;
 import io.trino.spi.connector.RelationColumnsMetadata;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.SchemaTablePrefix;
@@ -64,6 +65,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -107,9 +109,6 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.INDEXING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
-// TODO: implement applyLimit(...) to push LIMIT into HudiTableHandle so the split loader can
-//       short-circuit partition/file-slice listing once a row-count estimate covers the limit.
-//       Also flip SUPPORTS_LIMIT_PUSHDOWN to true in TestHudiConnectorTest once implemented.
 public class HudiMetadata
         implements ConnectorMetadata
 {
@@ -181,6 +180,7 @@ public class HudiMetadata
                 ImmutableSet.of(),
                 TupleDomain.all(),
                 TupleDomain.all(),
+                OptionalLong.empty(),
                 hudiTableSchema);
     }
 
@@ -262,6 +262,22 @@ public class HudiMetadata
                 newHudiTableHandle.getRegularPredicates().transformKeys(ColumnHandle.class::cast),
                 constraint.getExpression(),
                 false));
+    }
+
+    @Override
+    public Optional<LimitApplicationResult<ConnectorTableHandle>> applyLimit(ConnectorSession session, ConnectorTableHandle handle, long limit)
+    {
+        HudiTableHandle table = (HudiTableHandle) handle;
+
+        if (table.getLimit().isPresent() && table.getLimit().getAsLong() <= limit) {
+            return Optional.empty();
+        }
+
+        // limitGuaranteed=false: the connector can't bound row count across splits without
+        // coordinator-side coordination. Trino keeps the Limit operator above the TableScan.
+        // The stored limit is consumed by HudiSplitSource for split-listing short-circuit when
+        // row-count estimates from the Hudi metadata table become available (TODO).
+        return Optional.of(new LimitApplicationResult<>(table.withLimit(limit), false, false));
     }
 
     @Override
