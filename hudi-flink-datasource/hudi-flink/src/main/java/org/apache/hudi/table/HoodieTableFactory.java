@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -86,9 +87,9 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     StoragePath path = new StoragePath(conf.getOptional(FlinkOptions.PATH).orElseThrow(() ->
         new ValidationException("Option [path] should not be empty.")));
     setupTableOptions(conf.get(FlinkOptions.PATH), conf);
-    checkBaseFileFormat(conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
+    checkBaseFileFormatForRead(conf, schema);
     return new HoodieTableSource(
         SerializableSchema.create(schema),
         path,
@@ -116,11 +117,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   private void setupTableOptions(String basePath, Configuration conf) {
     StreamerUtil.getTableConfig(basePath, HadoopConfigurations.getHadoopConf(conf))
         .ifPresent(tableConfig -> {
-          // Guard: reject Lance from existing table config (hoodie.properties); checkBaseFileFormat() handles user-supplied config separately
-          if (tableConfig.contains(HoodieTableConfig.BASE_FILE_FORMAT)
-              && HoodieFileFormat.LANCE.name().equalsIgnoreCase(tableConfig.getString(HoodieTableConfig.BASE_FILE_FORMAT))) {
-            throw new HoodieValidationException(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG);
-          }
           if (tableConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)
               && !conf.contains(FlinkOptions.RECORD_KEY_FIELD)) {
             conf.set(FlinkOptions.RECORD_KEY_FIELD, tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
@@ -177,8 +173,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    * @param schema The table schema
    */
   private void sanityCheck(Configuration conf, ResolvedSchema schema) {
-    checkBaseFileFormat(conf);
     checkTableType(conf);
+    checkBaseFileFormatForWrite(conf, schema);
     checkIndexType(conf);
 
     if (!OptionsResolver.isAppendMode(conf)) {
@@ -220,13 +216,39 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   }
 
   /**
-   * Validate the base file format. Lance is only supported with the Spark engine.
+   * Validate the base file format. Flink Lance support is scoped to append-only COW tables.
    */
-  private void checkBaseFileFormat(Configuration conf) {
-    String baseFileFormat = conf.getString(HoodieTableConfig.BASE_FILE_FORMAT.key(), null);
-    if (baseFileFormat != null && HoodieFileFormat.LANCE.name().equalsIgnoreCase(baseFileFormat)) {
-      throw new HoodieValidationException(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG);
+  private void checkBaseFileFormatForRead(Configuration conf, ResolvedSchema schema) {
+    checkLanceBaseFileFormat(conf, schema);
+  }
+
+  private void checkBaseFileFormatForWrite(Configuration conf, ResolvedSchema schema) {
+    checkLanceBaseFileFormat(conf, schema);
+    if (isLanceBaseFileFormat(conf) && !OptionsResolver.isAppendMode(conf)) {
+      throw new HoodieValidationException("Flink Lance base-file writes require append-only INSERT mode. Set '"
+          + FlinkOptions.OPERATION.key() + "' = 'insert'.");
     }
+  }
+
+  private void checkLanceBaseFileFormat(Configuration conf, ResolvedSchema schema) {
+    if (!isLanceBaseFileFormat(conf)) {
+      return;
+    }
+    if (conf.containsKey(FlinkOptions.RECORD_KEY_FIELD.key()) || schema.getPrimaryKey().isPresent()) {
+      throw new HoodieValidationException("Flink Lance base-file support is only available for append-only tables without primary keys.");
+    }
+    if (OptionsResolver.isMorTable(conf)) {
+      throw new HoodieValidationException("Flink Lance base-file support is only available for COPY_ON_WRITE append-only tables.");
+    }
+    if (OptionsResolver.isSchemaEvolutionEnabled(conf)) {
+      throw new HoodieValidationException("Flink Lance base-file support does not support schema evolution. Set '"
+          + HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key() + "' = 'false'.");
+    }
+  }
+
+  private boolean isLanceBaseFileFormat(Configuration conf) {
+    String baseFileFormat = conf.getString(HoodieTableConfig.BASE_FILE_FORMAT.key(), null);
+    return baseFileFormat != null && HoodieFileFormat.LANCE.name().equalsIgnoreCase(baseFileFormat);
   }
 
   /**

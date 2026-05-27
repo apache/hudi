@@ -21,7 +21,6 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
@@ -60,16 +59,5 @@ public class HoodieRowDataParquetWriteSupport extends RowDataParquetWriteSupport
   public void add(String recordKey) {
     this.bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport ->
         bloomFilterWriteSupport.addKey(recordKey));
-  }
-
-  private static class HoodieBloomFilterRowDataWriteSupport extends HoodieBloomFilterWriteSupport<String> {
-    public HoodieBloomFilterRowDataWriteSupport(BloomFilter bloomFilter) {
-      super(bloomFilter);
-    }
-
-    @Override
-    protected byte[] getUTF8Bytes(String key) {
-      return StringUtils.getUTF8Bytes(key);
-    }
   }
 }
