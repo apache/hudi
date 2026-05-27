@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.hudi.dml.others
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, ScalaAssertionSupport}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
@@ -1798,10 +1798,21 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | WHEN NOT MATCHED THEN INSERT *
          """.stripMargin)
       }
-      val fullMsg = exception.getMessage + Option(exception.getCause).map(_.getMessage).getOrElse("")
-      assert(fullMsg.contains("TABLE_OR_VIEW_NOT_FOUND") ||
-        fullMsg.contains("Table or view not found"),
-        s"Expected TABLE_OR_VIEW_NOT_FOUND error but got: ${exception.getMessage}")
+      // Spark 4.2 wraps the AnalysisException in a SparkException whose outer
+      // message contains only the unexpanded error-class template; the rendered
+      // text is on the cause. Earlier versions throw AnalysisException directly.
+      val msgToCheck = if (HoodieSparkUtils.gteqSpark4_2) {
+        assert(exception.getCause != null,
+          s"Expected wrapped exception with cause on Spark 4.2+, but cause was null: ${exception.getMessage}")
+        exception.getCause.getMessage
+      } else {
+        assert(exception.isInstanceOf[org.apache.spark.sql.AnalysisException],
+          s"Expected AnalysisException on Spark < 4.2, but got: ${exception.getClass.getName}")
+        exception.getMessage
+      }
+      assert(msgToCheck.contains("TABLE_OR_VIEW_NOT_FOUND") ||
+        msgToCheck.contains("Table or view not found"),
+        s"Expected TABLE_OR_VIEW_NOT_FOUND error but got: $msgToCheck")
     }
   }
 
