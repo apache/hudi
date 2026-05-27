@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -52,7 +53,6 @@ import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
@@ -299,7 +299,7 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
    * When the write config does not carry a schema (e.g. table-service operations such as clean),
    * falls back to resolving the schema from the table's commit history / data files.
    */
-  private static HoodieSchema resolveDataSchemaForRLIBootstrap(HoodieTableMetaClient metaClient, HoodieWriteConfig dataWriteConfig) {
+  static HoodieSchema resolveDataSchemaForRLIBootstrap(HoodieTableMetaClient metaClient, HoodieWriteConfig dataWriteConfig) {
     String writeSchemaStr = dataWriteConfig.getWriteSchema();
     HoodieSchema rawSchema;
     if (writeSchemaStr != null) {
