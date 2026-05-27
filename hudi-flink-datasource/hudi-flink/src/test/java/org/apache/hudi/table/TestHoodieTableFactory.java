@@ -788,7 +788,7 @@ public class TestHoodieTableFactory {
   }
 
   @Test
-  void testLanceFormatSupportedForAppendOnlyTables() {
+  void testLanceFormatSupportedForCopyOnWriteTables() {
     Configuration lanceConf = new Configuration();
     lanceConf.set(FlinkOptions.PATH, new File(tempFile, "lance").getAbsolutePath());
     lanceConf.set(FlinkOptions.TABLE_NAME, "lance_t1");
@@ -809,15 +809,7 @@ public class TestHoodieTableFactory {
     final MockContext morContext = MockContext.getInstance(morConf, appendOnlySchema, "f2");
     HoodieValidationException morEx = assertThrows(HoodieValidationException.class,
         () -> new HoodieTableFactory().createDynamicTableSink(morContext));
-    assertThat(morEx.getMessage(), is("Flink Lance base-file support is only available for COPY_ON_WRITE append-only tables."));
-
-    Configuration upsertConf = new Configuration(lanceConf);
-    upsertConf.set(FlinkOptions.OPERATION, "upsert");
-    final MockContext upsertContext = MockContext.getInstance(upsertConf, appendOnlySchema, "f2");
-    HoodieValidationException operationEx = assertThrows(HoodieValidationException.class,
-        () -> new HoodieTableFactory().createDynamicTableSink(upsertContext));
-    assertThat(operationEx.getMessage(), is("Flink Lance base-file writes require append-only INSERT mode. Set '"
-        + FlinkOptions.OPERATION.key() + "' = 'insert'."));
+    assertThat(morEx.getMessage(), is("Flink Lance base-file support is only available for COPY_ON_WRITE tables."));
 
     Configuration schemaEvolutionConf = new Configuration(lanceConf);
     schemaEvolutionConf.setString(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), "true");
@@ -833,15 +825,16 @@ public class TestHoodieTableFactory {
         .primaryKey("f0")
         .build();
     final MockContext primaryKeyContext = MockContext.getInstance(lanceConf, primaryKeySchema, "f1");
-    HoodieValidationException primaryKeyEx = assertThrows(HoodieValidationException.class,
-        () -> new HoodieTableFactory().createDynamicTableSink(primaryKeyContext));
-    assertThat(primaryKeyEx.getMessage(), is("Flink Lance base-file support is only available for append-only tables without primary keys."));
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(primaryKeyContext));
+
+    Configuration upsertConf = new Configuration(lanceConf);
+    upsertConf.set(FlinkOptions.OPERATION, "upsert");
+    final MockContext upsertContext = MockContext.getInstance(upsertConf, primaryKeySchema, "f1");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(upsertContext));
 
     lanceConf.set(FlinkOptions.RECORD_KEY_FIELD, "f0");
     final MockContext keyedContext = MockContext.getInstance(lanceConf, appendOnlySchema, "f2");
-    HoodieValidationException sinkEx = assertThrows(HoodieValidationException.class,
-        () -> new HoodieTableFactory().createDynamicTableSink(keyedContext));
-    assertThat(sinkEx.getMessage(), is("Flink Lance base-file support is only available for append-only tables without primary keys."));
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(keyedContext));
   }
 
   // -------------------------------------------------------------------------

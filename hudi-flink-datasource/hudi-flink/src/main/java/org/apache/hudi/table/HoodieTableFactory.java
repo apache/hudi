@@ -89,7 +89,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     setupTableOptions(conf.get(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
-    checkBaseFileFormatForRead(conf, schema);
+    checkBaseFileFormatForRead(conf);
     return new HoodieTableSource(
         SerializableSchema.create(schema),
         path,
@@ -174,7 +174,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    */
   private void sanityCheck(Configuration conf, ResolvedSchema schema) {
     checkTableType(conf);
-    checkBaseFileFormatForWrite(conf, schema);
+    checkBaseFileFormatForWrite(conf);
     checkIndexType(conf);
 
     if (!OptionsResolver.isAppendMode(conf)) {
@@ -216,29 +216,22 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   }
 
   /**
-   * Validate the base file format. Flink Lance support is scoped to append-only COW tables.
+   * Validate the base file format. Flink Lance support is scoped to COW tables.
    */
-  private void checkBaseFileFormatForRead(Configuration conf, ResolvedSchema schema) {
-    checkLanceBaseFileFormat(conf, schema);
+  private void checkBaseFileFormatForRead(Configuration conf) {
+    checkLanceBaseFileFormat(conf);
   }
 
-  private void checkBaseFileFormatForWrite(Configuration conf, ResolvedSchema schema) {
-    checkLanceBaseFileFormat(conf, schema);
-    if (isLanceBaseFileFormat(conf) && !OptionsResolver.isAppendMode(conf)) {
-      throw new HoodieValidationException("Flink Lance base-file writes require append-only INSERT mode. Set '"
-          + FlinkOptions.OPERATION.key() + "' = 'insert'.");
-    }
+  private void checkBaseFileFormatForWrite(Configuration conf) {
+    checkLanceBaseFileFormat(conf);
   }
 
-  private void checkLanceBaseFileFormat(Configuration conf, ResolvedSchema schema) {
+  private void checkLanceBaseFileFormat(Configuration conf) {
     if (!isLanceBaseFileFormat(conf)) {
       return;
     }
-    if (conf.containsKey(FlinkOptions.RECORD_KEY_FIELD.key()) || schema.getPrimaryKey().isPresent()) {
-      throw new HoodieValidationException("Flink Lance base-file support is only available for append-only tables without primary keys.");
-    }
     if (OptionsResolver.isMorTable(conf)) {
-      throw new HoodieValidationException("Flink Lance base-file support is only available for COPY_ON_WRITE append-only tables.");
+      throw new HoodieValidationException("Flink Lance base-file support is only available for COPY_ON_WRITE tables.");
     }
     if (OptionsResolver.isSchemaEvolutionEnabled(conf)) {
       throw new HoodieValidationException("Flink Lance base-file support does not support schema evolution. Set '"

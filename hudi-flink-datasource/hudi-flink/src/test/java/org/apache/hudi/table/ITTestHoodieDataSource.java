@@ -1381,6 +1381,27 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(projectedRows, "[+I[Alice, id1], +I[Bob, id2]]");
   }
 
+  @Test
+  void testLanceFormatCopyOnWriteUpsertWriteAndRead() {
+    String createHoodieTable = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE)
+        .option("hoodie.table.base.file.format", "LANCE")
+        .end();
+    batchTableEnv.executeSql(createHoodieTable);
+
+    execInsertSql(batchTableEnv, TestSQL.INSERT_T1);
+    List<Row> rows = CollectionUtil.iteratorToList(
+        batchTableEnv.executeSql("select * from t1").collect());
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+
+    execInsertSql(batchTableEnv, TestSQL.UPDATE_INSERT_T1);
+    List<Row> updatedRows = CollectionUtil.iteratorToList(
+        batchTableEnv.executeSql("select * from t1").collect());
+    assertRowsEquals(updatedRows, TestData.DATA_SET_SOURCE_MERGED);
+  }
+
   @ParameterizedTest
   @EnumSource(value = ExecMode.class)
   void testWriteAndReadDebeziumJson(ExecMode execMode) throws Exception {

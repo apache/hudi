@@ -37,7 +37,7 @@ import java.io.IOException;
 import java.util.function.Function;
 
 /**
- * Lance writer for Flink {@link RowData} append-only base files.
+ * Lance writer for Flink {@link RowData} base files.
  */
 public class HoodieRowDataLanceWriter extends HoodieBaseLanceWriter<RowData, String>
     implements HoodieRowDataFileWriter {
