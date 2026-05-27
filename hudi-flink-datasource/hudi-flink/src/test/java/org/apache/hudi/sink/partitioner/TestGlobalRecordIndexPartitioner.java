@@ -175,9 +175,9 @@ public class TestGlobalRecordIndexPartitioner {
   }
 
   @Test
-  void testFetchNumFileGroupsForRecordIndexPartitionIsCached() {
+  void testFetchNumFileGroupsForRecordIndexPartitionIsConsistent() {
     int first = GlobalRecordIndexPartitioner.getNumFileGroupsForRecordIndexPartition(conf);
     int second = GlobalRecordIndexPartitioner.getNumFileGroupsForRecordIndexPartition(conf);
-    assertEquals(first, second, "Repeated calls must return the same cached result");
+    assertEquals(first, second, "Repeated calls must return the same result");
   }
 }

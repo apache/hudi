@@ -31,8 +31,6 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.configuration.Configuration;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 /**
  * Global record index input partitioner.
  *
@@ -41,13 +39,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * group and reduces small files in the metadata table.
  */
 public class GlobalRecordIndexPartitioner implements Partitioner<HoodieKey> {
-  /**
-   * JVM-level cache to avoid repeatedly fetching the file group count from the metadata table.
-   * Keyed by table path; shared across all instances (partitioner + BucketAssignFunction) in the
-   * same task manager JVM so the expensive metadata lookup only happens once per JVM.
-   */
-  private static final ConcurrentHashMap<String, Integer> NUM_FILE_GROUPS_CACHE = new ConcurrentHashMap<>();
-
   private final Configuration conf;
   /**
    * The number of file groups for record index partition in metadata data table. The number
@@ -98,22 +89,18 @@ public class GlobalRecordIndexPartitioner implements Partitioner<HoodieKey> {
 
   /**
    * Reads the file group count for the record index partition from the metadata table.
-   * Results are cached per table path within the JVM so that multiple callers
-   * (e.g. the partitioner and {@link BucketAssignFunction}) share a single lookup.
    */
   static int getNumFileGroupsForRecordIndexPartition(Configuration conf) {
     String tablePath = conf.get(FlinkOptions.PATH);
-    return NUM_FILE_GROUPS_CACHE.computeIfAbsent(tablePath, path -> {
-      HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
-      try (HoodieTableMetadata metadataTable = metaClient.getTableFormat().getMetadataFactory().create(
-          HoodieFlinkEngineContext.DEFAULT,
-          metaClient.getStorage(),
-          StreamerUtil.metadataConfig(conf),
-          tablePath)) {
-        return metadataTable.getNumFileGroupsForPartition(MetadataPartitionType.RECORD_INDEX);
-      } catch (Exception e) {
-        throw new HoodieException("Failed to get file group count for global record index partition.", e);
-      }
-    });
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    try (HoodieTableMetadata metadataTable = metaClient.getTableFormat().getMetadataFactory().create(
+        HoodieFlinkEngineContext.DEFAULT,
+        metaClient.getStorage(),
+        StreamerUtil.metadataConfig(conf),
+        tablePath)) {
+      return metadataTable.getNumFileGroupsForPartition(MetadataPartitionType.RECORD_INDEX);
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get file group count for global record index partition.", e);
+    }
   }
 }
