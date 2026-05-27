@@ -24,6 +24,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
@@ -44,7 +45,9 @@ import org.apache.flink.table.types.logical.TimestampType;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -79,6 +82,38 @@ public class HoodieSchemaConverter {
    * @return HoodieSchema matching this logical type
    */
   public static HoodieSchema convertToSchema(LogicalType logicalType, String rowName) {
+    return convertToSchema(logicalType, rowName, Collections.emptyMap());
+  }
+
+  /**
+   * Converts a Flink LogicalType into a HoodieSchema with top-level VECTOR columns.
+   *
+   * <p>The vector column option uses {@code colName[:dimension]} entries separated by commas.
+   * The dimension defaults to 128. The vector element type is inferred from the Flink array
+   * element type: FLOAT, DOUBLE, or TINYINT.
+   *
+   * @param logicalType    Flink logical type
+   * @param rowName        the record name
+   * @param vectorColumns  comma-separated vector column descriptors, or null/empty
+   * @return HoodieSchema matching this logical type
+   */
+  public static HoodieSchema convertToSchema(
+      LogicalType logicalType,
+      String rowName,
+      String vectorColumns) {
+    Map<String, Integer> vectorColumnMap = vectorColumns == null || vectorColumns.trim().isEmpty()
+        ? Collections.emptyMap() : VectorColumnParser.parse(vectorColumns);
+    validateVectorColumns(logicalType, vectorColumnMap);
+    return convertToSchema(logicalType, rowName, vectorColumnMap);
+  }
+
+  private static HoodieSchema convertToSchema(
+      LogicalType logicalType,
+      String rowName,
+      Map<String, Integer> vectorColumns) {
+    ValidationUtils.checkArgument(vectorColumns.isEmpty() || logicalType instanceof RowType,
+        "VECTOR columns can only be configured for top-level ROW schemas.");
+
     int precision;
     boolean nullable = logicalType.isNullable();
     HoodieSchema schema;
@@ -196,8 +231,13 @@ public class HoodieSchemaConverter {
           String fieldName = fieldNames.get(i);
           LogicalType fieldType = rowType.getTypeAt(i);
 
-          // Recursive call for field schema
-          HoodieSchema fieldSchema = convertToSchema(fieldType, rowName + "." + fieldName);
+          HoodieSchema fieldSchema;
+          if (vectorColumns.containsKey(fieldName)) {
+            fieldSchema = VectorColumnParser.convertVectorField(fieldName, fieldType, vectorColumns.get(fieldName));
+          } else {
+            // Recursive call for field schema
+            fieldSchema = convertToSchema(fieldType, rowName + "." + fieldName, Collections.emptyMap());
+          }
 
           // Create field with or without default value
           HoodieSchemaField field;
@@ -215,13 +255,13 @@ public class HoodieSchemaConverter {
       case MULTISET:
       case MAP:
         LogicalType valueType = extractValueTypeForMap(logicalType);
-        HoodieSchema valueSchema = convertToSchema(valueType, rowName);
+        HoodieSchema valueSchema = convertToSchema(valueType, rowName, Collections.emptyMap());
         schema = HoodieSchema.createMap(valueSchema);
         break;
 
       case ARRAY:
         ArrayType arrayType = (ArrayType) logicalType;
-        HoodieSchema elementSchema = convertToSchema(arrayType.getElementType(), rowName);
+        HoodieSchema elementSchema = convertToSchema(arrayType.getElementType(), rowName, Collections.emptyMap());
         schema = HoodieSchema.createArray(elementSchema);
         break;
 
@@ -236,6 +276,28 @@ public class HoodieSchemaConverter {
     }
 
     return nullable ? HoodieSchema.createNullable(schema) : schema;
+  }
+
+  /**
+   * Validates that all configured VECTOR columns resolve to top-level fields of the row schema.
+   *
+   * <p>Invoked by {@link #convertToSchema(LogicalType, String, String)} before schema inference so
+   * an unknown column is rejected instead of being silently ignored during conversion.
+   *
+   * @param logicalType   Flink logical type
+   * @param vectorColumns parsed vector columns (normalized column name to dimension), may be empty
+   */
+  private static void validateVectorColumns(LogicalType logicalType, Map<String, Integer> vectorColumns) {
+    if (vectorColumns.isEmpty()) {
+      return;
+    }
+    List<String> normalizedFieldNames = ((RowType) logicalType).getFieldNames();
+    vectorColumns.keySet().stream()
+        .filter(vectorColumn -> !normalizedFieldNames.contains(vectorColumn))
+        .findFirst()
+        .ifPresent(vectorColumn -> {
+          throw new IllegalArgumentException("VECTOR column '" + vectorColumn + "' does not exist in the table schema.");
+        });
   }
 
   /**

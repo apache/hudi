@@ -685,7 +685,10 @@ public class HoodieTableSource extends FileIndexReader implements
   }
 
   private HoodieSchema inferSchemaFromDdl() {
-    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(this.tableRowType);
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(
+        this.tableRowType,
+        HoodieSchemaUtils.getRecordQualifiedName(conf.get(FlinkOptions.TABLE_NAME)),
+        conf.get(FlinkOptions.VECTOR_COLUMNS));
     return HoodieSchemaUtils.addMetadataFields(schema, conf.get(FlinkOptions.CHANGELOG_ENABLED));
   }
 

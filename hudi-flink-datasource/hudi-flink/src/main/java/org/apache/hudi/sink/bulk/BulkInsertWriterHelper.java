@@ -20,6 +20,8 @@ package org.apache.hudi.sink.bulk;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -29,7 +31,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.row.HoodieRowDataCreateHandle;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.DataTypeUtils;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -66,7 +68,8 @@ public class BulkInsertWriterHelper {
   protected final long taskEpochId;
   protected final HoodieTable hoodieTable;
   protected final HoodieWriteConfig writeConfig;
-  protected final RowType rowType;
+  // table schema handed to the write handles.
+  protected final HoodieSchema writerSchema;
   protected final boolean preserveHoodieMetadata;
   protected final boolean isAppendMode;
   // used for Append mode only, if true then only initial row data without metacolumns is written
@@ -104,9 +107,13 @@ public class BulkInsertWriterHelper {
     this.taskEpochId = taskEpochId;
     this.isAppendMode = OptionsResolver.isAppendMode(conf);
     this.populateMetaFields = writeConfig.populateMetaFields();
-    this.rowType = preserveHoodieMetadata || (isAppendMode && !populateMetaFields)
-        ? rowType
-        : DataTypeUtils.addMetadataFields(rowType, writeConfig.allowOperationMetadataField());
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(
+        rowType,
+        HoodieSchemaUtils.getRecordQualifiedName(conf.get(FlinkOptions.TABLE_NAME)),
+        conf.get(FlinkOptions.VECTOR_COLUMNS));
+    this.writerSchema = preserveHoodieMetadata || (isAppendMode && !populateMetaFields)
+        ? schema
+        : HoodieSchemaUtils.addMetadataFields(schema, writeConfig.allowOperationMetadataField());
     this.preserveHoodieMetadata = preserveHoodieMetadata;
     this.isInputSorted = OptionsResolver.isBulkInsertOperation(conf) && conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT);
     this.fileIdPrefix = UUID.randomUUID().toString();
@@ -147,7 +154,7 @@ public class BulkInsertWriterHelper {
       log.info("Creating new file for partition path " + partitionPath);
       writeMetrics.ifPresent(FlinkStreamWriteMetrics::startHandleCreation);
       HoodieRowDataCreateHandle rowCreateHandle = new HoodieRowDataCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
-          instantTime, taskPartitionId, totalSubtaskNum, taskEpochId, rowType, preserveHoodieMetadata, isAppendMode && !populateMetaFields);
+          instantTime, taskPartitionId, totalSubtaskNum, taskEpochId, writerSchema, preserveHoodieMetadata, isAppendMode && !populateMetaFields);
       handles.put(partitionPath, rowCreateHandle);
 
       writeMetrics.ifPresent(FlinkStreamWriteMetrics::increaseNumOfOpenHandle);
@@ -208,7 +215,7 @@ public class BulkInsertWriterHelper {
   private HoodieRowDataCreateHandle createWriteHandle(String  partitionPath) {
     writeMetrics.ifPresent(FlinkStreamWriteMetrics::startHandleCreation);
     HoodieRowDataCreateHandle rowCreateHandle = new HoodieRowDataCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
-        instantTime, taskPartitionId, totalSubtaskNum, taskEpochId, rowType, preserveHoodieMetadata, isAppendMode && !populateMetaFields);
+        instantTime, taskPartitionId, totalSubtaskNum, taskEpochId, writerSchema, preserveHoodieMetadata, isAppendMode && !populateMetaFields);
     writeMetrics.ifPresent(FlinkStreamWriteMetrics::endHandleCreation);
     return rowCreateHandle;
   }

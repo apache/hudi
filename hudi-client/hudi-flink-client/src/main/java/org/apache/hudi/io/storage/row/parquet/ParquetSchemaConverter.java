@@ -20,7 +20,11 @@ package org.apache.hudi.io.storage.row.parquet;
 
 import org.apache.hudi.adapter.DataTypeAdapter;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.table.api.DataTypes;
@@ -205,12 +209,35 @@ public class ParquetSchemaConverter {
     return Pair.of(keyValue.getType(MAP_KEY_NAME), keyValue.getType(MAP_VALUE_NAME));
   }
 
+  /**
+   * Converts a Flink row type to a Parquet message type.
+   *
+   * <p>This overload preserves the pre-VECTOR public API, but converting from
+   * {@link RowType} to {@link HoodieSchema} loses VECTOR logical metadata such as dimension and
+   * element type. Prefer {@link #convertToParquetMessageType(String, HoodieSchema)} whenever the
+   * caller already has a metadata-aware {@link HoodieSchema}.
+   */
   public static MessageType convertToParquetMessageType(String name, RowType rowType) {
+    HoodieSchema hoodieSchema = HoodieSchemaConverter.convertToSchema(rowType);
+    return convertToParquetMessageType(name, hoodieSchema);
+  }
+
+  public static MessageType convertToParquetMessageType(String name, HoodieSchema schema) {
+    HoodieSchema nonNullSchema = schema.getNonNullType();
+    RowType rowType = HoodieSchemaConverter.convertToRowType(nonNullSchema);
     Type[] types = new Type[rowType.getFieldCount()];
     for (int i = 0; i < rowType.getFieldCount(); i++) {
       String fieldName = rowType.getFieldNames().get(i);
       LogicalType fieldType = rowType.getTypeAt(i);
-      types[i] = convertToParquetType(fieldName, fieldType, fieldType.isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED);
+      HoodieSchema fieldSchema = nonNullSchema.getField(fieldName)
+          .map(HoodieSchemaField::schema)
+          .orElseThrow(() -> new HoodieSchemaException(
+              "Field " + fieldName + " doesn't exist in schema: " + nonNullSchema));
+      types[i] = convertToParquetType(
+          fieldName,
+          fieldType,
+          fieldType.isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED,
+          fieldSchema);
     }
     return new MessageType(name, types);
   }
@@ -264,7 +291,8 @@ public class ParquetSchemaConverter {
   }
 
   private static Type convertToParquetType(
-      String name, LogicalType type, Type.Repetition repetition) {
+      String name, LogicalType type, Type.Repetition repetition, HoodieSchema hoodieSchema) {
+    HoodieSchema resolvedSchema = hoodieSchema.getNonNullType();
     switch (type.getTypeRoot()) {
       case CHAR:
       case VARCHAR:
@@ -338,6 +366,15 @@ public class ParquetSchemaConverter {
               .named(name);
         }
       case ARRAY:
+        if (resolvedSchema.getType() == HoodieSchemaType.VECTOR) {
+          HoodieSchema.Vector vectorSchema = (HoodieSchema.Vector) resolvedSchema;
+          int fixedSize = Math.multiplyExact(
+              vectorSchema.getDimension(),
+              vectorSchema.getVectorElementType().getElementSize());
+          return Types.primitive(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, repetition)
+              .length(fixedSize)
+              .named(name);
+        }
         // align with Spark And Avro regarding the standard mode array type, see:
         // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#lists
         //
@@ -350,7 +387,13 @@ public class ParquetSchemaConverter {
         Type.Repetition eleRepetition =
             arrayType.getElementType().isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED;
         return ConversionPatterns.listOfElements(
-            repetition, name, convertToParquetType("element", arrayType.getElementType(), eleRepetition));
+            repetition,
+            name,
+            convertToParquetType(
+                "element",
+                arrayType.getElementType(),
+                eleRepetition,
+                resolvedSchema.getElementType()));
       case MAP:
         // <map-repetition> group <name> (MAP) {
         //   repeated group key_value {
@@ -366,15 +409,25 @@ public class ParquetSchemaConverter {
             .addField(
                 Types
                     .repeatedGroup()
-                    .addField(convertToParquetType("key", keyType, Type.Repetition.REQUIRED))
-                    .addField(convertToParquetType("value", valueType, valueType.isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED))
+                    .addField(convertToParquetType(
+                        "key", keyType, Type.Repetition.REQUIRED, resolvedSchema.getKeyType()))
+                    .addField(convertToParquetType(
+                        "value",
+                        valueType,
+                        valueType.isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED,
+                        resolvedSchema.getValueType()))
                     .named("key_value"))
             .named(name);
       case ROW:
         RowType rowType = (RowType) type;
         Types.GroupBuilder<GroupType> builder = Types.buildGroup(repetition);
         rowType.getFields().forEach(field -> builder
-            .addField(convertToParquetType(field.getName(), field.getType(), field.getType().isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED)));
+            .addField(convertToParquetType(
+                field.getName(),
+                field.getType(),
+                field.getType().isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED,
+                resolvedSchema.getField(field.getName()).map(HoodieSchemaField::schema)
+                    .orElseThrow(() -> new HoodieSchemaException("Field " + field.getName() + " doesn't exist in schema: " + resolvedSchema)))));
         return builder.named(name);
       default:
         if (DataTypeAdapter.isVariantType(type)) {
