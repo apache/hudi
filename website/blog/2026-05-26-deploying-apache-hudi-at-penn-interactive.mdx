@@ -103,7 +103,7 @@ To ingest data from thousands of tables without manual shell scripts, the team b
 The Argo workflow includes a crucial pulse check and resubmission mechanism. It constantly monitors continuous mode jobs and quickly resubmits any that fail due to network timeouts or platform glitches, ensuring high reliability for 24/7 ingestion.
 The team established a workflow for Disaster Recovery for scenarios where Kafka logs have expired. They developed a process to temporarily pause the streaming job and kick off a dedicated DeltaStreamer job with a JDBC source. This job directly upserts missing data from the source, quickly patching the data gap before the streaming job is resumed.
 
-<img src="/assets/images/blog/2026-05-26-penn-interactive/img5.png" alt="Clustering optimization" width="800"/>
+<img src="/assets/images/blog/2026-05-26-penn-interactive/img5.png" alt="DeltaStreamer Job" width="800"/>
 
 ### 6. Monitoring Data Freshness
 
