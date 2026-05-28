@@ -28,6 +28,7 @@ base file formats.
 * columnar formats for vectorized reads, columnar compression and efficient column based access for analytics/data science.
 * row-oriented avro files for fast scans for reading whole records.
 * random access optimized HFiles for efficient searching for indexed records (based on [SSTable](https://github.com/facebook/rocksdb/wiki/A-Tutorial-of-RocksDB-SST-formats) format)
+* [Lance](#lance-base-file-format) files for native `VECTOR` storage and AI/ML workloads (Spark-only).
 
 ![Row vs Columnar File Format](/assets/images/row-col-based-base-file-formats.png)
 
