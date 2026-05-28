@@ -190,7 +190,7 @@ public class ITTestVariantCrossEngineCompatibility {
     tEnv.executeSql(
             "INSERT INTO variant_table VALUES ("
                 + "99, CAST('from_flink' AS STRING), "
-                + "CAST(PARSE_JSON('{\"engine\":\"flink\",\"n\":42}') AS VARIANT NOT NULL), "
+                + "PARSE_JSON('{\"engine\":\"flink\",\"n\":42}'), "
                 + "CAST(9900 AS BIGINT))")
         .await();
 
@@ -257,7 +257,7 @@ public class ITTestVariantCrossEngineCompatibility {
     tEnv.executeSql(
             "INSERT INTO variant_table VALUES ("
                 + "1, CAST('row1' AS STRING), "
-                + "CAST(PARSE_JSON('{\"flink_rewrite\":true}') AS VARIANT NOT NULL), "
+                + "PARSE_JSON('{\"flink_rewrite\":true}'), "
                 + "CAST(5000 AS BIGINT))")
         .await();
 
