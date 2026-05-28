@@ -3,7 +3,7 @@ title: "Unstructured Data"
 keywords: [ hudi, blob, unstructured data, images, binary, pdf, audio, video, inline, out-of-line, read_blob]
 summary: "Store and query unstructured data (images, PDFs, audio, video) in Hudi tables using the BLOB type with inline or out-of-line storage"
 toc: true
-last_modified_at: 2026-04-25T00:00:00-00:00
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 
 import Tabs from '@theme/Tabs';
@@ -72,6 +72,7 @@ schema = pa.schema([
             pa.field("external_path", pa.string()),
             pa.field("offset",        pa.int64()),
             pa.field("length",        pa.int64()),
+            pa.field("managed",       pa.bool_()),
         ])),
     ]), metadata={b"hudi_type": b"BLOB"}),
 ])
@@ -84,7 +85,7 @@ The BLOB internal structure is a struct with three fields:
   - `external_path` — file path for out-of-line data
   - `offset` — byte offset in the file (null means read from start)
   - `length` — byte length to read (null means read to end of file)
-  - `managed` — boolean indicating whether Hudi manages the external file
+  - `managed` — boolean. Only meaningful for `OUT_OF_LINE` blobs. Marks whether Hudi owns the lifecycle of the referenced external file. **Not consumed by the cleaner yet** — set the value to record intent, and a future cleaner implementation will use it: `true` → cleaner may delete the external file when the blob row is no longer referenced; `false` → cleaner will leave the external file in place.
 
 </TabItem>
 </Tabs>
@@ -112,7 +113,7 @@ INSERT INTO media_assets VALUES (
     named_struct(
         'type',      'INLINE',
         'data',      /* binary literal or column reference */,
-        'reference', CAST(NULL AS STRUCT<external_path: STRING, offset: BIGINT, length: BIGINT>)
+        'reference', CAST(NULL AS STRUCT<external_path: STRING, offset: BIGINT, length: BIGINT, managed: BOOLEAN>)
     )
 );
 ```
@@ -158,7 +159,8 @@ INSERT INTO media_assets VALUES (
         'reference', named_struct(
             'external_path', 's3://my-bucket/media/container_001.bin',
             'offset',        8388608,       -- byte offset in the container
-            'length',        1073741824     -- number of bytes
+            'length',        1073741824,    -- number of bytes
+            'managed',       false          -- intent flag; not consumed by the cleaner yet
         )
     )
 );
@@ -290,14 +292,43 @@ Out-of-line BLOBs keep the Hudi table footprint extremely small:
 
 | Property | Default | Description |
 |:---------|:--------|:------------|
-| `hoodie.read.blob.inline.mode` | `CONTENT` | Controls how INLINE BLOBs are read. `CONTENT` materializes raw bytes in the `data` column. `DESCRIPTOR` surfaces `(position, size)` coordinates rewritten as OUT_OF_LINE references. |
+| `hoodie.read.blob.inline.mode` | `DESCRIPTOR` | Controls how INLINE BLOBs are read. `DESCRIPTOR` (default) returns an out-of-line-shaped reference pointing at the in-file coordinates of the bytes — no bytes are materialized. `CONTENT` materializes the raw inline bytes directly in the `data` field on every read. |
 | `hoodie.blob.batching.max.gap.bytes` | `4096` | Maximum gap (in bytes) between consecutive byte ranges before they are merged into a single read. Larger values reduce I/O calls at the cost of reading some unused bytes. |
 | `hoodie.blob.batching.lookahead.size` | `50` | Number of rows to buffer for batch read detection. Larger values improve batching for sorted data but increase memory usage. |
 
 :::note
-DESCRIPTOR mode is only supported on Lance-backed tables. CONTENT mode is always used for internal
-operations (compaction, merge, log replay) regardless of this setting.
+`DESCRIPTOR` mode is the default for all storage formats including Lance. `CONTENT` mode is always
+used for internal operations (compaction, merge, log replay) regardless of this setting.
 :::
+
+:::caution Calling read_blob() on INLINE columns under DESCRIPTOR mode
+Under the default `DESCRIPTOR` mode, calling `read_blob()` on an INLINE BLOB column **throws** —
+the raw bytes are not materialized in the scan, so there is nothing for `read_blob()` to return.
+To read inline bytes with `read_blob()`, switch to `CONTENT` mode first:
+
+```sql
+SET hoodie.read.blob.inline.mode=CONTENT;
+SELECT asset_id, read_blob(content) AS raw_bytes
+FROM media_assets
+WHERE asset_id = 'asset_001';
+```
+
+This setting affects only INLINE columns — OUT_OF_LINE columns always fetch from the external path
+regardless of mode.
+:::
+
+## Metastore Sync
+
+When syncing BLOB column schemas to Hive or BigQuery, Hudi maps the BLOB struct to the target
+catalog's native struct type:
+
+| Catalog | BLOB representation |
+|:--------|:-------------------|
+| Hive | `STRUCT<type:STRING, data:BINARY, reference:STRUCT<external_path:STRING, offset:BIGINT, length:BIGINT, managed:BOOLEAN>>` |
+| BigQuery | Equivalent `STRUCT` fields |
+
+The raw binary payload is preserved in the struct representation, but `read_blob()` is a Spark SQL
+function and is not available in Hive or BigQuery directly.
 
 ## Best Practices
 

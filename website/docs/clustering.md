@@ -2,7 +2,7 @@
 title: Clustering
 summary: "In this page, we describe async compaction in Hudi."
 toc: true
-last_modified_at: 2025-11-24T02:44:48
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 
 ## Background
@@ -134,6 +134,47 @@ dynamically expanding the buckets for bucket index datasets.
 :::note The latter two strategies are applicable only for the Spark engine.
 :::
 
+#### CommitBasedClusteringPlanStrategy
+
+Hudi 1.2.0 introduced `org.apache.hudi.table.action.cluster.strategy.CommitBasedClusteringPlanStrategy`, a plan
+strategy that schedules clustering based on commit patterns rather than just file size. It groups file slices by the
+commits that produced them, making it easier to cluster data written in specific time windows or under specific commit
+criteria.
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.clustering.plan.strategy.class` | `SparkSizeBasedClusteringPlanStrategy` | Set to `org.apache.hudi.table.action.cluster.strategy.CommitBasedClusteringPlanStrategy` to use commit-based planning. |
+| `hoodie.clustering.plan.strategy.earliest.commit.to.cluster` | (none) | Earliest commit time (exclusive) to start clustering from. Only commits after this instant are considered. Useful for incrementally clustering new data while skipping already-clustered history. |
+
+#### SparkStreamCopyClusteringPlanStrategy
+
+Available since Hudi 1.2.0, `org.apache.hudi.client.clustering.plan.strategy.SparkStreamCopyClusteringPlanStrategy`
+is a Spark-only plan strategy that performs binary file stitching (byte-level copy) rather than re-reading and
+re-writing records. This can be significantly faster when the goal is simply to coalesce small files and sort order is
+not required. It is paired with
+`org.apache.hudi.client.clustering.run.strategy.SparkStreamCopyClusteringExecutionStrategy`.
+
+#### Single-Group Clustering Control
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.clustering.plan.strategy.single.group.clustering.enabled` | `true` | Whether to generate a clustering plan when only one file group is eligible. Set to `false` to skip clustering when there is nothing meaningful to consolidate (i.e., the partition already has a single file group). |
+
+#### File-Slice Sort Order in Clustering Plan Generation
+
+Since 1.2.0, the order in which file slices are packed into clustering groups is configurable, giving more control over
+which files are colocated and how groups are filled.
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.clustering.plan.strategy.file.slices.sort.by` | `SIZE` | Comma-separated list of fields used to sort file slices when packing them into clustering groups within a partition. `SIZE`: sort by file size descending (largest first). `INSTANT_TIME`: sort by commit time ascending (oldest files first). Example: `INSTANT_TIME,SIZE` sorts by commit time then by size. |
+
+#### Driver-Side Plan Generation
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.clustering.plan.generation.use.local.engine.context` | `false` | When enabled, clustering group computation runs on the driver (local engine context) instead of being distributed across executors. Enable when there are only a few partitions with many files, where driver-local computation is more resource-efficient than allocating executor slots. |
+
 ### Execution Strategy
 
 After building the clustering groups in the planning phase, Hudi applies execution strategy, for each group, primarily
@@ -250,6 +291,22 @@ In addition to the basic mode options, HoodieClusteringJob supports the followin
 :::note
 These retry options are only effective when using `--mode scheduleAndExecute`. The `--retry-last-failed-job` option requires `--job-max-processing-time-ms` to be set to a positive value to detect stale inflight instants.
 :::
+
+#### Automatic Expiration of Stale Clustering Instants
+
+When a clustering job is scheduled but never successfully executed (e.g., due to a driver failure), the inflight
+`replacecommit` instant blocks future clustering runs. Hudi 1.2.0 adds automatic expiration of such stale clustering
+instants, complementing the manual retry options above.
+
+:::note
+Expired clustering plan cleanup requires `hoodie.clean.failed.writes.policy=LAZY`. With LAZY cleaning, the rollback of
+failed writes (triggered on the next write) also rolls back expired clustering instants.
+:::
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.clustering.enable.expirations` | `false` | When enabled, rollback of failed writes (under LAZY cleaning) also rolls back clustering `replacecommit` instants whose heartbeat has expired. Clustering jobs record a heartbeat before scheduling so other writers can detect stale attempts. |
+| `hoodie.clustering.expiration.threshold.mins` | `60` | A clustering instant is not considered expired unless its creation time is at least this many minutes old. Acts as a guardrail to avoid rolling back clustering attempts that are still in progress. |
 
 Note that to run this job while the original writer is still running, please enable multi-writing:
 

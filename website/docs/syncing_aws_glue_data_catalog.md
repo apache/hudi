@@ -54,6 +54,10 @@ hoodie.datasource.meta.sync.glue.partition_index_fields.enable
 hoodie.datasource.meta.sync.glue.partition_index_fields
 ```
 
+## Writer Version Table Property
+
+Hudi 1.2.0 Glue sync writes the table property `hudi_writer_version` (set to the Hudi version that last synced the table) to the Glue Data Catalog entry on every sync, consistent with HMS sync behavior.
+
 ## Other references
 
 ### Running AWS Glue Catalog Sync for Spark DataSource

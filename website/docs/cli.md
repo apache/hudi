@@ -1,7 +1,7 @@
 ---
 title: CLI
 keywords: [hudi, cli]
-last_modified_at: 2021-08-18T15:59:57-04:00
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 
 ### Local set up
@@ -340,6 +340,13 @@ $ hdfs dfs -ls /app/uber/trips/.hoodie/*.inflight
 -rw-r--r--   3 vinoth supergroup     321984 2016-10-05 23:18 /app/uber/trips/.hoodie/20161005225920.inflight
 ```
 
+To list all inflight and requested instants that have been running longer than a specified number of minutes, use `commits show_inflights`:
+
+```shell
+hudi:trips->commits show_inflights --lookbackInMins 30
+```
+
+This lists every inflight or requested instant whose requested timestamp is older than 30 minutes, showing the commit time, action type, and current state. This is useful for detecting hung or stuck writes. The `--lookbackInMins` option defaults to `0` (returns all inflight/requested instants).
 
 ### Drilling Down to a specific Commit
 
@@ -674,6 +681,22 @@ corresponding to the library release version is used:
 ```shell
 upgrade table
 ```
+
+### Record Index Lookup
+
+To look up a record's file location via the Record Level Index (RLI) stored in the Metadata Table:
+
+```shell
+hudi:trips->metadata lookup-record-index --record_key <key>
+```
+
+For a partitioned (non-global) RLI, the partition path is required:
+
+```shell
+hudi:trips->metadata lookup-record-index --record_key <key> --partition_path <partition>
+```
+
+The `--partition_path` argument is optional for a global RLI (where record keys are unique across all partitions) and required for a partitioned RLI. If `--partition_path` is omitted for a partitioned RLI, the command will return an error. The output columns are `Record key`, `Partition path`, `File Id`, and `Instant time`.
 
 ### Change Hudi Table Type
 There are cases we want to change the hudi table type. For example, change COW table to MOR for more efficient and 

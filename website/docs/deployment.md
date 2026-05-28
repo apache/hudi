@@ -3,7 +3,7 @@ title: Deployment
 keywords: [ hudi, administration, operation, devops, deployment]
 summary: This section offers an overview of tools available to operate an ecosystem of Hudi
 toc: true
-last_modified_at: 2019-12-30T15:59:57-04:00
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 
 This section provides all the help you need to deploy and operate Hudi tables at scale.
@@ -31,6 +31,8 @@ from varied sources such as DFS, Kafka and DB Changelogs and ingest them to hudi
 
 To use Hudi Streamer in Spark, the `hudi-utilities-slim-bundle` and Hudi Spark bundle are required, by adding
 `--packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.1` to the `spark-submit` command.
+
+Pick the Spark bundle that matches your Spark runtime — for example, `hudi-spark3.3-bundle_2.12`, `hudi-spark3.4-bundle_2.12`, `hudi-spark3.5-bundle_2.12` (Scala 2.12 or 2.13), `hudi-spark3.5-bundle_2.13`, `hudi-spark4.0-bundle_2.13`, or `hudi-spark4.1-bundle_2.13`. Spark 4.0 and 4.1 require Java 17 or later at runtime; Spark 3.x runs on Java 8 or later.
 
 - **Run Once Mode** : In this mode, Hudi Streamer performs one ingestion round which includes incrementally pulling events from upstream sources and ingesting them to hudi table. Background operations like cleaning old file versions and archiving hoodie timeline are automatically executed as part of the run. For Merge-On-Read tables, Compaction is also run inline as part of ingestion unless disabled by passing the flag "--disable-compaction". By default, Compaction is run inline for every ingestion run and this can be changed by setting the property "hoodie.compact.inline.max.delta.commits". You can either manually run this spark application or use any cron trigger or workflow orchestrator (most common deployment strategy) such as Apache Airflow to spawn this application. See command line options in [this section](hoodie_streaming_ingestion.md#hudi-streamer) for running the spark application.
 

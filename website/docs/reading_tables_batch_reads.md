@@ -19,6 +19,32 @@ val tripsDF = spark.read.
 tripsDF.where(tripsDF.fare > 20.0).show()
 ```
 
+## Flink Batch (Snapshot) Read
+
+Flink can read a Hudi table as a snapshot (batch) query by leaving `read.streaming.enabled` at its default value of `false`.
+
+```sql
+CREATE TABLE hudi_table (
+  uuid VARCHAR(20) PRIMARY KEY NOT ENFORCED,
+  name VARCHAR(10),
+  age INT,
+  ts TIMESTAMP(3),
+  `partition` VARCHAR(20)
+)
+PARTITIONED BY (`partition`)
+WITH (
+  'connector' = 'hudi',
+  'path' = '${path}',
+  'table.type' = 'MERGE_ON_READ'
+  -- read.streaming.enabled defaults to false → batch/snapshot read
+);
+
+-- Snapshot query
+SELECT * FROM hudi_table WHERE age > 25;
+```
+
+For more Flink read options, see [Using Flink](ingestion_flink.md).
+
 ## Daft
 
 [Daft](https://www.daft.ai/) supports reading Hudi tables using `daft.read_hudi()` function.

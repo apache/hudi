@@ -89,6 +89,15 @@ If you turn off the metadata table after enabling, be sure to wait for a few com
 cleaned up, before re-enabling the metadata table again.
 :::
 
+### Auto-Delete of Disabled MDT Partitions
+
+When an index is disabled in the write config, Hudi automatically deletes the corresponding metadata table partition.
+Available since Hudi 1.2.0, this behavior is configurable.
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.metadata.auto.delete.partitions` | `true` | When enabled (default), metadata table partitions (indexes) that are disabled in the write config are automatically deleted. Set to `false` to prevent accidental deletion in multi-writer environments where not all writers may have the same config — users must then drop indexes explicitly via Hudi CLI or `DROP INDEX`. |
+
 ## Leveraging metadata during queries
 
 ### files index
@@ -128,6 +137,28 @@ provider and other required configs set for every writer as follows, there is no
 can bring up the writers sequentially after stopping the writers for enabling metadata table. Applying the proper 
 configurations to only a subset of writers or table services is unsafe and can lead to loss of data. So, please ensure you enable 
 metadata table across all writers.
+
+## MDT Cleaner and Compaction
+
+Hudi 1.2.0 introduced a config that lets the metadata table's cleaner derive its retention policy directly from the
+data table, rather than requiring a separate configuration.
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.metadata.derive.from.datatable.clean.policy` | `true` | When enabled, the metadata table's cleaner uses the same cleaning policy (retention count, hours, etc.) as the data table. See also [cleaning](cleaning.md#mdt-cleaner-inherits-data-table-policy). |
+
+The metadata table's compaction and log compaction can also be delegated to an external table service platform. See
+[compaction](compaction.md#delegating-mdt-compaction-to-an-external-platform) for the full config reference.
+
+## Timeline Archival Controls
+
+Hudi 1.2.0 added two configs in `HoodieArchivalConfig` to fine-tune how the timeline manifest and archival interact
+with the most recent clean.
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.timeline.manifest.retained.versions` | `3` | Number of timeline manifest file versions to retain. Older manifest versions are pruned during archival. |
+| `hoodie.archive.block.on.latest.clean.ectr` | `false` | When enabled, archival stops at the Earliest Commit To Retain (ECTR) from the last completed clean. This prevents archiving commits whose data files still exist on storage, avoiding inconsistencies between the timeline and actual data. |
 
 ## Related Resources
 <h3>Blogs</h3>

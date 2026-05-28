@@ -2,7 +2,7 @@
 title: Indexing
 summary: "In this page, we describe how to run metadata indexing asynchronously."
 toc: true
-last_modified_at:
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 
 Hudi maintains a scalable [metadata](metadata.md) that has some auxiliary data about the table.
@@ -36,7 +36,7 @@ For more information on these indexes please refer [metadata section](metadata/#
 :::note
 Please note in order to create secondary index:
 1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](record_merger.md#commit_time_ordering).
-2. Record index must be enabled. This can be done by setting `hoodie.metadata.record.index.enable=true` and then creating `record_index`. Please note the example below.
+2. Record index must be enabled. This can be done by setting `hoodie.metadata.global.record.level.index.enable=true` and then creating `record_index`. Please note the example below.
 :::
 
 **Examples**
@@ -73,8 +73,8 @@ hoodie.metadata.index.column.stats.enable=true
 -- [Optional Configs] - list of columns to index on. By default all columns are indexed
 hoodie.metadata.index.column.stats.column.list=col1,col2,...
 
--- [Required Configs] Record Level Index
-hoodie.metadata.record.index.enable=true
+-- [Required Configs] Record Level Index (Global RLI — single record key unique across all partitions)
+hoodie.metadata.global.record.level.index.enable=true
 
 -- [Required Configs] Bloom filter Index
 hoodie.metadata.index.bloom.filter.enable=true
@@ -116,7 +116,7 @@ inserts.write.format("hudi").
   
 // Create record index and secondary index for the table
 spark.sql(s"CREATE TABLE test_table_external USING hudi LOCATION '$basePath'")
-spark.sql(s"SET hoodie.metadata.record.index.enable=true")
+spark.sql(s"SET hoodie.metadata.global.record.level.index.enable=true")
 spark.sql(s"CREATE INDEX record_index ON test_table_external (uuid)")
 spark.sql(s"CREATE INDEX idx_rider ON test_table_external (rider)")
 spark.sql(s"SHOW INDEXES FROM hudi_indexed_table").show(false)
@@ -190,6 +190,24 @@ to enable them. The full set of metadata configurations can be explored [here](c
 Enabling the metadata table and configuring a lock provider are the prerequisites for using async indexer. Checkout a sample
 configuration below.
 :::
+
+#### Record-Level Index Configuration Keys
+
+Hudi supports two flavors of the Record Level Index, each with its own enable flag and sizing configs:
+
+- **Global RLI** — record key is unique across the entire table (across partitions).
+- **Partitioned RLI** — `partition_path + record_key` is unique within each partition.
+
+| Config Name | Default | Notes |
+|---|---|---|
+| `hoodie.metadata.global.record.level.index.enable` | `false` | Enables the global RLI. |
+| `hoodie.metadata.global.record.level.index.min.filegroup.count` | `10` | Min file groups for the global RLI. |
+| `hoodie.metadata.global.record.level.index.max.filegroup.count` | `10000` | Max file groups for the global RLI. |
+| `hoodie.metadata.record.level.index.enable` | `false` | Enables the partitioned RLI. Independent toggle from the global RLI above. |
+| `hoodie.metadata.record.level.index.min.filegroup.count` | `1` | Min file groups for the partitioned RLI. |
+| `hoodie.metadata.record.level.index.max.filegroup.count` | `10` | Max file groups for the partitioned RLI. |
+| `hoodie.metadata.record.level.index.defer.init` | `false` | When enabled, defers RLI initialization to the second commit on a fresh table so Hudi can size file groups based on actual record volume. Applies to both global and partitioned RLI. |
+| `hoodie.metadata.record.index.max.filegroup.size` | `1073741824` (1 GB) | Maximum size in bytes of a single RLI file group. Larger file groups take longer to compact. |
 
 ```
 # ensure that async indexing is enabled
@@ -284,7 +302,10 @@ indexer logs, we would find that it indeed caught up with instant `2022041419542
 
 ### Drop Index
 
-To drop an index, just run the index in `dropindex` mode.
+To drop an index, just run the index in `dropindex` mode. Note that as of Hudi 1.2.0, when an index is disabled in
+the write config, Hudi automatically drops its metadata table partition by default; see
+[`hoodie.metadata.auto.delete.partitions`](metadata.md#auto-delete-of-disabled-mdt-partitions) to control this
+behavior.
 
 ```
 spark-submit \

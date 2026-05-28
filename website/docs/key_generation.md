@@ -2,7 +2,7 @@
 title: Key Generation
 summary: "In this page, we describe key generation in Hudi."
 toc: true
-last_modified_at:
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 
 Hudi needs some way to point to records in the table, so that base/log files can be merged efficiently for updates/deletes, 
@@ -209,6 +209,35 @@ Partition path generated from key generator: "2020040118"
 
 Input field value: "20200401" <br/>
 Partition path generated from key generator: "04/01/2020"
+
+## Slash-Separated Date Partitioning
+
+By default, Hudi writes date-valued partition paths as a flat string (e.g. `2024-03-15`).
+When `hoodie.datasource.write.slash.separated.date.partitioning` is set to `true`, partition field
+values in `yyyy-MM-dd` format are stored as `yyyy/MM/dd` directory hierarchies (e.g. `2024/03/15`).
+
+| Config Name                                                          | Default   | Description                                                                                                                              |
+|----------------------------------------------------------------------|-----------|------------------------------------------------------------------------------------------------------------------------------------------|
+| `hoodie.datasource.write.slash.separated.date.partitioning`          | `false`   | When `true`, transforms date partition values from `yyyy-MM-dd` into `yyyy/MM/dd` directory paths. Cannot be used together with hive-style partitioning (`hoodie.datasource.write.hive_style_partitioning=true`). |
+
+Example:
+
+```java
+df.write.format("hudi")
+  .option("hoodie.datasource.write.partitionpath.field", "event_date")
+  .option("hoodie.datasource.write.slash.separated.date.partitioning", "true")
+  .option("hoodie.table.name", tableName)
+  .mode("append")
+  .save(basePath)
+```
+
+A record with `event_date = "2024-03-15"` will be stored under `basePath/2024/03/15/` instead of
+`basePath/2024-03-15/`.
+
+:::note
+`SHOW PARTITIONS` in Spark SQL correctly handles slash-separated date partition paths: it displays
+the value in `yyyy-MM-dd` form (normalizing the `/` separators back to `-`) for readability.
+:::
 
 ## Related Resources
 

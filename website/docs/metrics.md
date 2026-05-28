@@ -3,7 +3,7 @@ title: Metrics
 keywords: [ hudi, administration, operation, devops, metrics]
 summary: This section offers an overview of metrics in Hudi
 toc: true
-last_modified_at: 2020-06-20T15:59:57-04:00
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 
 In this section, we will introduce the `MetricsReporter` and `HoodieMetrics` in Hudi. You can view the metrics-related configurations [here](configurations.md#METRICS).
@@ -204,29 +204,46 @@ These `HoodieMetrics` can then be plotted on a standard tool like grafana. Below
 
 ## List of metrics:
 
-The below metrics are available in all timeline operations that involves a commit such as deltacommit, compaction, clustering and rollback.
+The metrics below are emitted across timeline operations (deltacommit, compaction, clustering, rollback, clean, archival) and post-commit callbacks. When `hoodie.metrics.reporter.metricsname.prefix` is set, every name is prefixed with `<prefix>.<name>`.
 
-Name  |  Description
+Name | Description
 --- | ---
-commitFreshnessInMs | Milliseconds from the commit end time and the maximum event time of the incoming records
-commitLatencyInMs | Milliseconds from the commit end time and the minimum event time of incoming records
-commitTime  | Time of commit in epoch milliseconds
-duration  | Total time taken for the commit/rollback in milliseconds
-numFilesDeleted | Number of files deleted during a clean/rollback
-numFilesFinalized | Number of files finalized in a write
-totalBytesWritten | Bytes written in a HoodieCommit
-totalCompactedRecordsUpdated  | Number of records updated in a compaction operation
-totalCreateTime | Time taken for file creation during a Hoodie Insert operation
-totalFilesInsert  | Number of newly written files in a HoodieCommit
-totalFilesUpdate  | Number of files updated in a HoodieCommit
-totalInsertRecordsWritten | Number of records inserted or converted to updates(for small file handling) in a HoodieCommit
-totalLogFilesCompacted  | Number of log files under a base file in a file group compacted
-totalLogFilesSize | Total size in bytes of all log files under a base file in a file group
-totalPartitionsWritten  | Number of partitions that took writes in a HoodieCommit
-totalRecordsWritten | Number of records written in a HoodieCommit. For inserts, it is the total numbers of records inserted. And for updates, it the total number of records in the file.
-totalScanTime | Time taken for reading and merging logblocks in a log file
-totalUpdateRecordsWritten | Number of records that got changed in a HoodieCommit
-totalUpsertTime | Time taken for Hoodie Merge
+commitFreshnessInMs | Milliseconds from the commit end time and the maximum event time of the incoming records.
+commitLatencyInMs | Milliseconds from the commit end time and the minimum event time of incoming records.
+commitTime | Time of commit in epoch milliseconds.
+duration | Total time taken for the commit/rollback in milliseconds.
+numFilesDeleted | Number of files deleted during a clean/rollback.
+numFilesFinalized | Number of files finalized in a write.
+totalBytesWritten | Bytes written in a HoodieCommit.
+totalCompactedRecordsUpdated | Number of records updated in a compaction operation.
+totalCreateTime | Time taken for file creation during a Hoodie Insert operation.
+totalFilesInsert | Number of newly written files in a HoodieCommit.
+totalFilesUpdate | Number of files updated in a HoodieCommit.
+totalInsertRecordsWritten | Number of records inserted or converted to updates (for small file handling) in a HoodieCommit.
+totalLogFilesCompacted | Number of log files under a base file in a file group compacted.
+totalLogFilesSize | Total size in bytes of all log files under a base file in a file group.
+totalPartitionsWritten | Number of partitions that took writes in a HoodieCommit.
+totalRecordsWritten | Number of records written in a HoodieCommit. For inserts, the total records inserted; for updates, the total records in the file.
+totalScanTime | Time taken for reading and merging log blocks in a log file.
+totalUpdateRecordsWritten | Number of records that got changed in a HoodieCommit.
+totalUpsertTime | Time taken for Hoodie Merge.
+clean.duration | Wall-clock time in milliseconds for a clean operation.
+archive.duration | Wall-clock time in milliseconds for an archive operation.
+rollback.failure.counter | Incremented each time a rollback operation fails.
+postCommit.success.counter | Incremented each time all post-commit callbacks succeed.
+postCommit.failure.counter | Incremented each time a post-commit callback fails (post-commit failures are non-fatal).
+postCommit.duration | Wall-clock time in milliseconds for post-commit callback execution.
+archival.archivalNumAllCommits | Total number of instants archived in this archival run.
+archival.archivalNumWriteCommits | Number of write instants (commit, deltacommit, replacecommit) archived.
+archival.archivalNumCleanCommits | Number of clean instants archived.
+archival.archivalNumRollbackCommits | Number of rollback instants archived.
+archival.archivalStatus | `1` if archival succeeded, `-1` if it failed.
+archival.archivalFailure.\<ExceptionClassName\> | Incremented on archival failure; the suffix is the simple class name of the exception thrown.
+archival.archivalOutOfMemory | Incremented when archival fails due to an `OutOfMemoryError`.
+\<action\>.totalCorruptedLogBlocks | Number of corrupted log blocks encountered during compaction. Reported only when `hoodie.metricscompaction.log.blocks.on=true`. `<action>` is the commit action type (e.g., `commit`).
+\<action\>.totalRollbackLogBlocks | Number of rollback log blocks encountered during compaction. Reported only when `hoodie.metricscompaction.log.blocks.on=true`.
+\<action\>.totalLogBlocksCompacted | Total number of log blocks compacted. Reported only when `hoodie.metricscompaction.log.blocks.on=true`.
 
-These metrics can be found at org.apache.hudi.metrics.HoodieMetrics and referenced from 
-org.apache.hudi.common.model.HoodieCommitMetadata and org.apache.hudi.common.model.HoodieWriteStat
+These metrics live in `org.apache.hudi.metrics.HoodieMetrics` (with archival-specific names sourced from `org.apache.hudi.client.utils.ArchivalMetrics`) and are referenced from `org.apache.hudi.common.model.HoodieCommitMetadata` and `org.apache.hudi.common.model.HoodieWriteStat`.
+
+In multi-tenant deployments where a single Spark job writes to multiple Hudi tables, each table gets its own isolated `MetricRegistry`, scoped as `<tableName>.<registryName>` so metrics from different tables do not collide. No configuration is required.

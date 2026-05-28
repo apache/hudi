@@ -2,7 +2,7 @@
 title: Microsoft Azure
 keywords: [ hudi, hive, azure, spark, presto]
 summary: In this page, we go over how to configure Hudi with Azure filesystem.
-last_modified_at: 2020-05-25T19:00:57-04:00
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 In this page, we explain how to use Hudi on Microsoft Azure.
 
@@ -48,6 +48,18 @@ This combination works out of the box. No extra config needed.
     .format("org.apache.hudi")
     .load("/mountpoint/hudi-tables/customer")
   ```
+
+## Concurrency Control
+
+As of Hudi 1.2.0, the storage-based lock provider supports Azure ADLS Gen2 (`abfs://`, `abfss://`) and Azure Blob Storage (`wasb://`, `wasbs://`) base paths for concurrency control. This allows multi-writer pipelines on Azure to use storage-native conditional writes for locking — without requiring external systems like ZooKeeper, or Hive Metastore.
+
+Add `hudi-azure-bundle` to your classpath and set:
+
+```properties
+hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.StorageBasedLockProvider
+```
+
+The lock client supports multiple Azure authentication methods (connection string, SAS token, managed identity, service principal, and `DefaultAzureCredential`). See [Concurrency Control — Azure Storage-Based Lock](concurrency_control.md#azure-storage-based-lock) for the full configuration reference and authentication precedence.
 
 ## Related Resources
 

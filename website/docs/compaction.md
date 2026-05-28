@@ -4,7 +4,7 @@ summary: "In this page, we describe async compaction in Hudi."
 toc: true
 toc_min_heading_level: 2
 toc_max_heading_level: 4
-last_modified_at: 2025-11-24T02:44:48
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 ## Background
 
@@ -103,6 +103,17 @@ BoundedPartitionAwareCompactionStrategy</li></ul>
 :::note
 Please refer to [advanced configs](https://hudi.apache.org/docs/next/configurations#Compaction-Configs) for more details.
 :::
+
+#### Metadata Table Compaction Trigger Strategy
+
+Available since Hudi 1.2.0, the metadata table (MDT) supports the same set of compaction trigger strategies as the
+data table, plus a time-based option.
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.metadata.compact.trigger.strategy` | `NUM_COMMITS` | Trigger strategy for MDT compaction. Accepts the same values as `hoodie.compact.inline.trigger.strategy`: `NUM_COMMITS`, `NUM_COMMITS_AFTER_LAST_REQUEST`, `TIME_ELAPSED`, `NUM_AND_TIME`, `NUM_OR_TIME`. |
+| `hoodie.metadata.compact.max.delta.commits` | `10` | Number of delta commits after the last MDT compaction before a new one is scheduled (for `NUM_COMMITS`-based strategies). |
+| `hoodie.metadata.compact.max.delta.seconds` | `7200` | Elapsed seconds after the last MDT compaction before scheduling a new one. Takes effect only for `TIME_ELAPSED`, `NUM_AND_TIME`, and `NUM_OR_TIME` strategies. |
 
 ## Ways to trigger Compaction
 

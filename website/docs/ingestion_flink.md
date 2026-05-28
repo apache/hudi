@@ -1,7 +1,7 @@
 ---
 title: Using Flink
 keywords: [hudi, flink, streamer, ingestion]
-last_modified_at: 2025-11-22T12:53:57+08:00
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 
 ## CDC Ingestion
@@ -112,15 +112,24 @@ the compaction options `compaction.delta_commits` and `compaction.delta_seconds`
 
 For `INSERT` mode write operations, new Parquet files are written directly, and the [auto‑file sizing](file_sizing.md) is not enabled.
 
-### In-Memory Buffer Sort
+### Append Write Buffer
 
-For append-only workloads, Hudi supports in-memory buffer sorting to improve Parquet compression ratio. When enabled, data is sorted within the write buffer before being flushed to disk. This improves columnar file compression efficiency by grouping similar values together.
+For append-only workloads, Hudi supports several write-buffer strategies that improve Parquet compression ratio and write throughput. Data is sorted or batched within the write buffer before being flushed to disk, grouping similar values together for better columnar compression.
 
-| Option Name                 | Required | Default | Remarks                                                                                                                       |
-|-----------------------------|----------|---------|-------------------------------------------------------------------------------------------------------------------------------|
-| `write.buffer.sort.enabled` | `false`  | `false` | Whether to enable buffer sort within append write function. Improves Parquet compression ratio by sorting data before writing |
-| `write.buffer.sort.keys`    | `false`  | `N/A`   | Sort keys concatenated by comma (e.g., `col1,col2`). Required when `write.buffer.sort.enabled` is `true`                      |
-| `write.buffer.size`         | `false`  | `1000`  | Buffer size in number of records. When buffer reaches this size, data is sorted and flushed to disk                           |
+The buffer strategy is selected with `write.buffer.type`. In Hudi 1.2.0 this replaces the deprecated `write.buffer.sort.enabled` flag.
+
+| Option Name                              | Required | Default    | Remarks                                                                                                                                                                                                                          |
+|------------------------------------------|----------|------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `write.buffer.type`                      | `false`  | `NONE`     | Buffer type for append write. Values: `NONE` (no buffering), `BOUNDED_IN_MEMORY` (double buffer with async write), `DISRUPTOR` (ring-buffer with async write, recommended for higher throughput), `CONTINUOUS_SORT` (TreeMap-based continuous sort with incremental draining) |
+| `write.buffer.size`                      | `false`  | `1000`     | Record count threshold at which the buffer is flushed. Applies to all non-`NONE` buffer types                                                                                                                                    |
+| `write.buffer.sort.keys`                 | `false`  | `N/A`      | Comma-separated sort key columns (e.g., `col1,col2`). Required for `DISRUPTOR` and `CONTINUOUS_SORT` modes                                                                                                                       |
+| `write.buffer.sort.continuous.drain.size`| `false`  | `1`        | Number of records drained per flush cycle in `CONTINUOUS_SORT` mode. Default 1 provides smooth incremental draining; increase for batching (e.g., 10–100)                                                                       |
+
+:::note
+`write.buffer.sort.enabled` is deprecated as of 1.2.0. Use `write.buffer.type=DISRUPTOR` instead for equivalent behavior. The `DISRUPTOR` and `CONTINUOUS_SORT` modes require `write.buffer.sort.keys` to be set.
+:::
+
+For Disruptor-specific tuning options, see [flink_tuning.md](flink_tuning.md#disruptor-buffer-tuning).
 
 ### Disable Meta Fields
 
@@ -156,7 +165,7 @@ Only Copy‑on‑Write tables are supported.
 
 ### Clustering Plan Strategy
 
-Custom clustering strategy is supported.
+Custom clustering strategy is supported. Hudi 1.2.0 adds `FlinkSkipSingleFileClusteringPlanStrategy` (`org.apache.hudi.client.clustering.plan.strategy.FlinkSkipSingleFileClusteringPlanStrategy`), which skips file groups that already consist of a single file, reducing unnecessary rewrites.
 
 | Option Name                                             | Required | Default | Remarks                                                                                                                                          |
 |---------------------------------------------------------|----------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -185,7 +194,7 @@ Hudi Flink writer supports two types of writer indexes:
 | Cross‑Partition Changes | Cannot handle changes among partitions (unless input is a CDC stream)                                                                                                                                                                                                       | No limit on handling cross‑partition changes                                                                           |
 
 :::note
-Bucket index supports only the `UPSERT` write operation and cannot be used with the [append mode](#append-mode) in Flink.
+Bucket index supports `UPSERT` write operations on both COW and MOR tables. As of Hudi 1.2.0, MOR + bucket index + upsert is fully supported. Bucket index cannot be used with the [append mode](#append-mode) in Flink.
 :::
 
 ### Bucket Index Examples
@@ -349,10 +358,215 @@ For Flink streaming reads, rate limiting helps avoid backpressure when processin
 
 The average read rate can be calculated as: **`read.splits.limit` / `read.streaming.check-interval`** splits per second.
 
+Hudi 1.2.0 adds `read.commits.limit`, which complements `read.splits.limit` by capping the number of commits (instants) consumed per check interval. This is useful when tables have many small commits — limiting commits bounds the number of splits regardless of their individual size.
+
 ### Options
 
-| Option Name                     | Required | Default             | Remarks                                                                                                                                                                          |
-|---------------------------------|----------|---------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `write.rate.limit`              | `false`  | `0`                 | Write record rate limit per second to prevent traffic jitter and improve stability. Default is 0 (no limit)                                                                      |
-| `read.splits.limit`             | `false`  | `Integer.MAX_VALUE` | Maximum number of splits allowed to read in each instant check for streaming reads. Average read rate = `read.splits.limit`/`read.streaming.check-interval`. Default is no limit |
-| `read.streaming.check-interval` | `false`  | `60`                | Check interval in seconds for streaming reads. Default is 60 seconds (1 minute)                                                                                                  |
+| Option Name                     | Required | Default             | Remarks                                                                                                                                                                                    |
+|---------------------------------|----------|---------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `write.rate.limit`              | `false`  | `0`                 | Write record rate limit per second to prevent traffic jitter and improve stability. Default is 0 (no limit)                                                                                |
+| `read.splits.limit`             | `false`  | `Integer.MAX_VALUE` | Maximum number of splits allowed to read in each instant check for streaming reads. Average read rate = `read.splits.limit`/`read.streaming.check-interval`. Default is no limit           |
+| `read.commits.limit`            | `false`  | `(none)`            | Maximum number of commits (instants) allowed to read in each check interval. Complements `read.splits.limit`. Average rate = `read.commits.limit`/`read.streaming.check-interval`. Default is no limit |
+| `read.streaming.check-interval` | `false`  | `60`                | Check interval in seconds for streaming reads. Default is 60 seconds (1 minute)                                                                                                            |
+
+## Flink Source V2
+
+Hudi 1.2.0 introduces a new Flink source implementation ([RFC-95](https://github.com/apache/hudi/blob/master/rfc/rfc-95/rfc-95.md)) based on [FLIP-27](https://cwiki.apache.org/confluence/display/FLINK/FLIP-27%3A+Refactor+Source+Interface), available as an opt-in feature via the `read.source-v2.enabled` flag.
+
+### Why Source V2?
+
+The legacy Hudi Flink source was built on Flink's `SourceFunction` API. The FLIP-27 rewrite brings:
+
+- **Resumable split assignment** — splits can be checkpointed independently, enabling finer-grained recovery
+- **Checkpoint alignment** — the new API participates in Flink's coordinated checkpoint protocol, improving end-to-end consistency
+- **Push-down support** — predicate push-down, partition pruning, and `LIMIT` push-down are supported through the new source interface, reducing data scanned at the source level
+
+### Enabling Source V2
+
+```sql
+CREATE TABLE t1 (
+  uuid VARCHAR(20) PRIMARY KEY NOT ENFORCED,
+  name VARCHAR(10),
+  age INT,
+  ts TIMESTAMP(3),
+  `partition` VARCHAR(20)
+)
+PARTITIONED BY (`partition`)
+WITH (
+  'connector' = 'hudi',
+  'path' = '${path}',
+  'table.type' = 'MERGE_ON_READ',
+  'read.source-v2.enabled' = 'true'  -- enable the FLIP-27 source
+);
+```
+
+### Options
+
+| Option Name               | Required | Default | Remarks                                                                                                 |
+|---------------------------|----------|---------|---------------------------------------------------------------------------------------------------------|
+| `read.source-v2.enabled`  | `false`  | `false` | Whether to use the FLIP-27 new source (Source V2) to consume data files. Default is the legacy source  |
+
+### Savepoint Incompatibility
+
+:::warning
+Savepoints taken with the **legacy source** (`read.source-v2.enabled=false`) are **not compatible** with the Source V2 source, and vice versa. When switching from the legacy source to Source V2, start a fresh job without restoring from a legacy savepoint. If you need to preserve read progress, record the last committed instant time and use `read.start-commit` to resume from that point.
+:::
+
+## Record-Level Index (RLI) Bucket Indexing for Flink
+
+As of Hudi 1.2.0, the Flink writer supports the Record-Level Index (RLI) backed by the metadata table, in addition to the existing `FLINK_STATE` and `BUCKET` index types. RLI is stored in the metadata table and avoids the state-backend overhead of `FLINK_STATE`, while supporting full global or partition-scoped uniqueness guarantees.
+
+Two RLI variants are available via `index.type`:
+
+- `RECORD_LEVEL_INDEX` — partitioned RLI; enforces uniqueness per (partition path, record key) pair
+- `GLOBAL_RECORD_LEVEL_INDEX` — global RLI; enforces uniqueness across all partitions
+
+### Bootstrap
+
+When enabling RLI on an existing table, the bootstrap process loads existing record locations into RocksDB before the first write. Bootstrap is triggered by setting `index.bootstrap.enabled=true`.
+
+```sql
+CREATE TABLE my_hudi_table (
+  id BIGINT,
+  name STRING,
+  ts BIGINT,
+  dt STRING,
+  PRIMARY KEY (id) NOT ENFORCED
+)
+PARTITIONED BY (dt)
+WITH (
+  'connector' = 'hudi',
+  'path' = 'hdfs:///warehouse/my_hudi_table',
+  'table.type' = 'MERGE_ON_READ',
+  'index.type' = 'RECORD_LEVEL_INDEX',
+  'metadata.enabled' = 'true',
+  'index.bootstrap.enabled' = 'true',  -- enable bootstrap on first run
+  'index.bootstrap.rocksdb.path' = '/tmp/hudi-rli-rocksdb'
+);
+```
+
+Once bootstrap completes (after the first successful checkpoint), you can optionally restart the job with `index.bootstrap.enabled=false` to skip the bootstrap operators. Leaving them enabled is harmless — they become no-ops on subsequent runs and do not affect write performance.
+
+### In-Pipeline MDT Compaction
+
+For RLI workloads, the metadata table (MDT) accumulates log files that need periodic compaction. The option `metadata.compaction.async.enabled` (default `true`) runs MDT compaction inside the Flink pipeline after every `metadata.compaction.delta_commits` (default `10`) delta commits.
+
+### Options
+
+| Option Name                         | Required | Default  | Remarks                                                                                                                                                 |
+|-------------------------------------|----------|----------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `index.type`                        | `false`  | `FLINK_STATE` | Set to `RECORD_LEVEL_INDEX` or `GLOBAL_RECORD_LEVEL_INDEX` to use the metadata-table-backed RLI                                                    |
+| `index.bootstrap.enabled`           | `false`  | `false`  | Bootstrap the index from the existing table on first run. Blocks checkpoints during bootstrap                                                           |
+| `index.bootstrap.rocksdb.path`      | `false`  | system temp dir | Local path for RocksDB storage during RLI bootstrap. Each task manager creates a unique subdirectory under this path                             |
+| `index.rli.cache.size`              | `false`  | `256`    | Maximum memory in MB for the RLI cache per bucket-assign task. Dynamically adjusted based on historical usage                                           |
+| `index.rli.lookup.minibatch.size`   | `false`  | `1000`   | Maximum records buffered per mini-batch during RLI lookup. Mini-batching reduces individual index lookups. Minimum effective value is 1000              |
+| `metadata.compaction.async.enabled` | `false`  | `true`   | Whether to run MDT compaction asynchronously within the Flink pipeline. Recommended to keep enabled for RLI workloads                                  |
+| `metadata.compaction.delta_commits` | `false`  | `10`     | Number of MDT delta commits that trigger in-pipeline compaction                                                                                         |
+
+:::note
+`GLOBAL_RECORD_LEVEL_INDEX` requires `metadata.enabled=true` and `index.global.enabled=true`. The Flink table factory validates these constraints automatically.
+:::
+
+## Lookup Join
+
+Hudi 1.2.0 adds a RocksDB-backed cache option for Flink lookup joins against Hudi dimension tables. This avoids JVM heap pressure when the dimension table is large.
+
+### Options
+
+| Option Name                    | Required | Default                         | Remarks                                                                                                                                         |
+|--------------------------------|----------|---------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
+| `lookup.join.cache.type`       | `false`  | `heap`                          | Storage backend for the lookup join cache. `heap` (default) stores rows in JVM heap; `rocksdb` stores rows off-heap in an embedded RocksDB instance |
+| `lookup.join.rocksdb.path`     | `false`  | `${java.io.tmpdir}/hudi-lookup-rocksdb` | Local directory for RocksDB data when `lookup.join.cache.type=rocksdb`. Cleaned up when the lookup function closes                    |
+| `lookup.async`                 | `false`  | `false`                         | Whether to enable async lookup join. Async join can improve throughput when the lookup function has high latency                                  |
+| `lookup.async-thread-number`   | `false`  | `16`                            | Number of threads for async lookup join                                                                                                         |
+
+### Example
+
+```sql
+-- Streaming fact table with a processing-time attribute
+CREATE TABLE orders (
+  order_id BIGINT,
+  customer_id BIGINT,
+  amount DOUBLE,
+  proc_time AS PROCTIME(),
+  PRIMARY KEY (order_id) NOT ENFORCED
+) WITH (
+  'connector' = 'hudi',
+  'path' = 'hdfs:///warehouse/orders',
+  'table.type' = 'MERGE_ON_READ',
+  'read.streaming.enabled' = 'true'
+);
+
+-- Hudi dimension table with RocksDB-backed lookup cache
+CREATE TABLE customers (
+  customer_id BIGINT,
+  name STRING,
+  city STRING,
+  PRIMARY KEY (customer_id) NOT ENFORCED
+) WITH (
+  'connector' = 'hudi',
+  'path' = 'hdfs:///warehouse/customers',
+  'lookup.join.cache.type' = 'rocksdb',
+  'lookup.join.rocksdb.path' = '/tmp/hudi-lookup-rocksdb'
+);
+
+-- Lookup join keyed by the fact table's processing-time attribute
+SELECT o.order_id, c.name, o.amount
+FROM orders AS o
+JOIN customers FOR SYSTEM_TIME AS OF o.proc_time AS c
+  ON o.customer_id = c.customer_id;
+```
+
+## Virtual Metadata Columns
+
+Hudi metadata fields can be declared as `METADATA VIRTUAL` columns in the Flink DDL. This allows accessing system metadata (e.g., commit time, record key) without storing them as regular data columns.
+
+```sql
+CREATE TABLE events (
+  event_id BIGINT,
+  payload STRING,
+  -- virtual metadata columns (read-only, not persisted as data)
+  _hoodie_commit_time     STRING METADATA VIRTUAL,
+  _hoodie_record_key      STRING METADATA VIRTUAL,
+  _hoodie_partition_path  STRING METADATA VIRTUAL,
+  PRIMARY KEY (event_id) NOT ENFORCED
+)
+WITH (
+  'connector' = 'hudi',
+  'path' = 'hdfs:///warehouse/events'
+);
+
+-- Query metadata alongside data
+SELECT event_id, _hoodie_commit_time, payload FROM events;
+```
+
+:::note
+Only `VIRTUAL` metadata columns are supported. All valid virtual columns correspond to Hudi's built-in meta fields (`_hoodie_commit_time`, `_hoodie_commit_seqno`, `_hoodie_record_key`, `_hoodie_partition_path`, `_hoodie_file_name`, `_hoodie_operation`).
+:::
+
+## Advanced Options
+
+### Hadoop Configuration Pass-through
+
+Hadoop filesystem configuration properties can be passed to the Flink writer using the `properties.hadoop.*` prefix (or directly as `hadoop.*`):
+
+```sql
+WITH (
+  'connector' = 'hudi',
+  'path' = 's3a://my-bucket/my-table',
+  'properties.hadoop.fs.s3a.access.key' = 'AKID...',
+  'properties.hadoop.fs.s3a.secret.key' = '...'
+)
+```
+
+### Kafka Offset Tracing
+
+For advanced Kafka offset tracing (internal/optional), the following `kafka.offset.trace.*` options configure the checkpoint-service-based offset lookup used in some deployment environments. These are advanced options with no functional impact on standard Hudi writes:
+
+| Option Name                              | Default           | Remarks                                                    |
+|------------------------------------------|-------------------|------------------------------------------------------------|
+| `kafka.offset.trace.caller.service.name` | `ingestion-rt`    | Caller service name for checkpoint-service RPC headers     |
+| `kafka.offset.trace.checkpoint.service`  | `athena-job-manager` | Checkpoint service name                                 |
+| `kafka.offset.trace.dc`                  | `(none)`          | Data center for checkpoint offset lookup                   |
+| `kafka.offset.trace.env`                 | `(none)`          | Environment for checkpoint offset lookup                   |
+| `kafka.offset.trace.job.name`            | `(none)`          | Flink job name for checkpoint offset lookup                |
