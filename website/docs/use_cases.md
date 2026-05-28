@@ -114,7 +114,7 @@ the new types and to Lance-backed tables.
 
 Hudi tables are readable by Spark, with hudi-rs (Python/Rust) and other engines reading the
 underlying Parquet representation directly. For engine-specific constraints, see
-[Using Flink](ingestion_flink.md#engine-constraints-for-the-120-types) and the
+[Using Flink](ingestion_flink.md#engine-constraints-for-types) and the
 [BigQuery / Hive metastore mappings](syncing_metastore.md#metastore-mapping-for-vector-blob-and-variant).
 
 ## Efficient Data lakes with Incremental Processing

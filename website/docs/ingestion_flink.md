@@ -4,26 +4,6 @@ keywords: [hudi, flink, streamer, ingestion]
 last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 
-## Engine constraints for the 1.2.0 types
-
-Flink behavior of the 1.2.0 column types ([`VECTOR`](sql_ddl.md#vector),
-[`BLOB`](sql_ddl.md#blob), [`VARIANT`](sql_ddl.md#variant)) differs from Spark in a few places:
-
-`VECTOR` columns are stored as Parquet `FIXED_LEN_BYTE_ARRAY`, which Flink's Parquet reader does
-not convert back into a typed array. The other columns of the same table read fine; only the
-`VECTOR` column itself is inaccessible from Flink. Use Spark to query `VECTOR` columns.
-
-Native `VARIANT` operations require Flink 2.1+. Flink &lt; 2.1 throws
-`UnsupportedOperationException` on VARIANT columns. On Flink 2.1+, VARIANT columns surface as
-`ROW<metadata BYTES, value BYTES>`. Flink can read the underlying struct but cannot decode it as a
-variant value.
-
-`read_blob()` is a Spark SQL function. From Flink, queries on a `BLOB` column return the underlying
-struct directly.
-
-The Lance base file format is Spark-only. Reading a Lance-backed table from Flink throws
-`HoodieValidationException`; see [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format).
-
 ## CDC Ingestion
 
 CDC (change data capture) keeps track of data changes evolving in a source system so a downstream process or system can act on those changes.
@@ -563,6 +543,26 @@ SELECT event_id, _hoodie_commit_time, payload FROM events;
 :::note
 Only `VIRTUAL` metadata columns are supported. All valid virtual columns correspond to Hudi's built-in meta fields (`_hoodie_commit_time`, `_hoodie_commit_seqno`, `_hoodie_record_key`, `_hoodie_partition_path`, `_hoodie_file_name`, `_hoodie_operation`).
 :::
+
+## Engine constraints for types
+
+Flink behavior of the new column types ([`VECTOR`](sql_ddl.md#vector),
+[`BLOB`](sql_ddl.md#blob), [`VARIANT`](sql_ddl.md#variant)) differs from Spark in a few places:
+
+`VECTOR` columns are stored as Parquet `FIXED_LEN_BYTE_ARRAY`, which Flink's Parquet reader does
+not convert back into a typed array. The other columns of the same table read fine; only the
+`VECTOR` column itself is inaccessible from Flink. Use Spark to query `VECTOR` columns.
+
+Native `VARIANT` operations require Flink 2.1+. Flink &lt; 2.1 throws
+`UnsupportedOperationException` on VARIANT columns. On Flink 2.1+, VARIANT columns surface as
+`ROW<metadata BYTES, value BYTES>`. Flink can read the underlying struct but cannot decode it as a
+variant value.
+
+`read_blob()` is a Spark SQL function. From Flink, queries on a `BLOB` column return the underlying
+struct directly.
+
+The Lance base file format is Spark-only. Reading a Lance-backed table from Flink throws
+`HoodieValidationException`; see [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format).
 
 ## Advanced Options
 
