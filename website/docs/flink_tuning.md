@@ -154,7 +154,7 @@ WITH (
 
 ## Source V2 Read-Lag Metrics
 
-When [Source V2](ingestion_flink.md#flink-source-v2-rfc-95) is enabled (`read.source-v2.enabled=true`), the following read-lag metrics are emitted to help monitor streaming pipeline health:
+When [Source V2](ingestion_flink.md#flink-source-v2) is enabled (`read.source-v2.enabled=true`), the following read-lag metrics are emitted to help monitor streaming pipeline health:
 
 | Metric | Description |
 |--------|-------------|

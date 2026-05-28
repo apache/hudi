@@ -45,7 +45,7 @@ SELECT * FROM hudi_table WHERE age > 25;
 
 ### LIMIT Push-Down with Source V2
 
-When [Source V2](ingestion_flink.md#flink-source-v2-rfc-95) is enabled (`read.source-v2.enabled=true`), `LIMIT` clauses are pushed down to the source, reducing the number of files scanned:
+When [Source V2](ingestion_flink.md#flink-source-v2) is enabled (`read.source-v2.enabled=true`), `LIMIT` clauses are pushed down to the source, reducing the number of files scanned:
 
 ```sql
 SELECT * FROM hudi_table LIMIT 100;

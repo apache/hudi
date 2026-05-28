@@ -369,9 +369,9 @@ Hudi 1.2.0 adds `read.commits.limit`, which complements `read.splits.limit` by c
 | `read.commits.limit`            | `false`  | `(none)`            | Maximum number of commits (instants) allowed to read in each check interval. Complements `read.splits.limit`. Average rate = `read.commits.limit`/`read.streaming.check-interval`. Default is no limit |
 | `read.streaming.check-interval` | `false`  | `60`                | Check interval in seconds for streaming reads. Default is 60 seconds (1 minute)                                                                                                            |
 
-## Flink Source V2 (RFC-95)
+## Flink Source V2
 
-Hudi 1.2.0 introduces a new Flink source implementation based on [FLIP-27](https://cwiki.apache.org/confluence/display/FLINK/FLIP-27%3A+Refactor+Source+Interface), available as an opt-in feature via the `read.source-v2.enabled` flag.
+Hudi 1.2.0 introduces a new Flink source implementation ([RFC-95](https://github.com/apache/hudi/blob/master/rfc/rfc-95/rfc-95.md)) based on [FLIP-27](https://cwiki.apache.org/confluence/display/FLINK/FLIP-27%3A+Refactor+Source+Interface), available as an opt-in feature via the `read.source-v2.enabled` flag.
 
 ### Why Source V2?
 

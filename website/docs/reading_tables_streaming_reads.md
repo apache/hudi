@@ -125,7 +125,7 @@ SELECT * FROM hudi_table;
 
 ### Source V2 for Streaming
 
-As of Hudi 1.2.0, the [FLIP-27-based Source V2](ingestion_flink.md#flink-source-v2-rfc-95) is available as an opt-in for streaming reads. Source V2 participates in Flink's checkpoint protocol for finer-grained recovery and supports partition pruning:
+As of Hudi 1.2.0, the [FLIP-27-based Source V2](ingestion_flink.md#flink-source-v2) is available as an opt-in for streaming reads. Source V2 participates in Flink's checkpoint protocol for finer-grained recovery and supports partition pruning:
 
 ```sql
 WITH (
@@ -137,7 +137,7 @@ WITH (
 ```
 
 :::warning
-Savepoints taken with the legacy source are not compatible with Source V2. Start a fresh job when switching. See [Flink Source V2](ingestion_flink.md#flink-source-v2-rfc-95) for migration details.
+Savepoints taken with the legacy source are not compatible with Source V2. Start a fresh job when switching. See [Flink Source V2](ingestion_flink.md#flink-source-v2) for migration details.
 :::
 
 For a full list of Flink streaming read options (rate limiting, commits limit, CDC mode, etc.), see [Using Flink](ingestion_flink.md).
