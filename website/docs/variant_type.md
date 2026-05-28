@@ -3,7 +3,7 @@ title: "Semi-Structured Data (VARIANT)"
 keywords: [ hudi, variant, semi-structured, json, schemaless, shredding, parse_json, flexible schema]
 summary: "Store and query semi-structured JSON-like data in Hudi tables using the VARIANT type, with optional shredding for query performance"
 toc: true
-last_modified_at: 2026-04-25T00:00:00-00:00
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 
 import Tabs from '@theme/Tabs';
@@ -253,12 +253,34 @@ binary `value` field.
 
 | Engine | VARIANT Support |
 |:-------|:---------------|
-| **Spark 4.0+** | Native `VariantType` — full read/write/query |
+| **Spark 4.0** | Native `VariantType` — full read/write/query; MOR + VARIANT fully supported; native `df.write` with `VariantType` on V1 datasource |
+| **Spark 4.1** | Native `VariantType` — full read/write/query; MOR + VARIANT fixed in 1.2.0 |
 | **Spark 3.x** | Reads as `STRUCT<value: BINARY, metadata: BINARY>` — backward compatible |
-| **Flink** | Reads as `ROW<metadata BYTES, value BYTES>` — cross-engine compatible |
+| **Flink 2.1+** | Reads and writes as `VARIANT` (Flink's native `LogicalTypeRoot.VARIANT`) — cross-engine compatible |
+| **Flink < 2.1** | **Not supported** — throws `UnsupportedOperationException`. Upgrade to Flink 2.1 to use VARIANT columns. |
 
-A VARIANT table written by Spark 4.0 can be read by Spark 3.x or Flink, and vice versa. The
-binary encoding is engine-independent.
+A VARIANT table written by Spark 4.0/4.1 can be read by Spark 3.x or Flink 2.1+, and vice versa.
+The binary encoding is engine-independent.
+
+:::caution Flink version requirement
+VARIANT columns require **Flink 2.1 or later**. On Flink 2.0 and earlier, any operation involving
+a VARIANT column throws:
+> `UnsupportedOperationException: VARIANT type is only supported in Flink 2.1+. Please upgrade your
+> Flink version to use Variant columns.`
+:::
+
+## Metastore Sync
+
+When syncing VARIANT column schemas to external catalogs, Hudi maps the binary encoding to the
+target catalog's native struct type:
+
+| Catalog | VARIANT representation |
+|:--------|:----------------------|
+| Hive | `STRUCT<metadata:BINARY, value:BINARY>` |
+| BigQuery | `STRUCT` with `metadata` and `value` fields (`BYTES` type) |
+
+Query engines that support VARIANT (Spark 4.0+, Flink 2.1+) read the table directly using the
+Parquet VARIANT annotation and do not go through the Hive/BigQuery metastore representation.
 
 ## Use Cases for AI Workloads
 
@@ -344,3 +366,6 @@ CREATE TABLE api_responses (
 - Native `VARIANT` keyword in DDL requires Spark 4.0+. On Spark 3.x, use the struct representation.
 - VARIANT shredding configuration is determined at write time based on the schema definition.
 - Complex path expressions within VARIANT may require casting to STRING and then using JSON functions.
+- VARIANT columns on Flink require **Flink 2.1+** — earlier Flink versions throw `UnsupportedOperationException`.
+- VARIANT columns are **not supported** on Lance-backed tables. Use Parquet as the base file format
+  for tables containing VARIANT columns.
