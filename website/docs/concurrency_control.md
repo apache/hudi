@@ -4,7 +4,7 @@ summary: On this page, we discuss how to perform concurrent writes to Hudi table
 toc: true
 toc_min_heading_level: 2
 toc_max_heading_level: 4
-last_modified_at: 2025-11-23T14:20:00
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 
 Concurrency control defines how different writers, readers, and table services coordinate access to a Hudi table. Hudi ensures atomic writes by publishing commits atomically to the timeline, stamped with an instant time that denotes when the action is deemed to have occurred. Unlike general-purpose file version control, Hudi draws a clear distinction between writer processes that issue [write operations](write_operations.md), table services that (re)write data/metadata to optimize or perform bookkeeping, and readers (that execute queries and read data).
@@ -47,6 +47,7 @@ Add the corresponding cloud bundle to your classpath:
 
 * For S3: `hudi-aws-bundle`
 * For GCS: `hudi-gcp-bundle`
+* For Azure (`abfs://`, `abfss://`, `wasb://`, `wasbs://`): `hudi-azure-bundle`
 
 Set this configuration:
 
@@ -54,7 +55,7 @@ Set this configuration:
 hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.StorageBasedLockProvider
 ```
 
-Supported for S3 and GCS (additional systems planned). This cloud-native design works directly with storage features, simplifying large-scale cloud operations.
+Supported for S3, GCS, and Azure ADLS Gen2 / Azure Blob Storage. This cloud-native design works directly with storage features, simplifying large-scale cloud operations.
 
 Optional tuning configurations:
 
@@ -62,6 +63,37 @@ Optional tuning configurations:
 |-------------------------------------------------|----------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | hoodie.write.lock.storage.validity.timeout.secs | 300 (Optional) | Validity period (seconds) for each new lock. The provider renews its lock until the lease extends or timeout occurs.<br /><br />`Config Param: STORAGE_BASED_LOCK_VALIDITY_TIMEOUT_SECS`<br />`Since Version: 1.0.2` |
 | hoodie.write.lock.storage.renew.interval.secs   | 30 (Optional)  | Interval (seconds) between renewal attempts.<br /><br />`Config Param: STORAGE_BASED_LOCK_RENEW_INTERVAL_SECS`<br />`Since Version: 1.0.2`                                                                           |
+
+#### Azure Storage-Based Lock
+
+When your Hudi table's base path uses an `abfs://`, `abfss://`, `wasb://`, or `wasbs://` scheme, the `StorageBasedLockProvider` automatically uses the `AzureStorageLockClient` backed by Azure Blob Storage conditional writes. No separate lock-provider class is needed — the same `StorageBasedLockProvider` class is used for all supported storage systems.
+
+Add `hudi-azure-bundle` to your classpath, then set:
+
+```properties
+hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.StorageBasedLockProvider
+```
+
+The provider selects the Azure lock client automatically based on the base path scheme. Authentication is resolved in the following precedence order:
+
+| Priority | Config Key | Description |
+|----------|------------|-------------|
+| 1 (highest) | `hoodie.write.lock.azure.connection.string` | Azure Storage connection string |
+| 2 | `hoodie.write.lock.azure.sas.token` | SAS token (not recommended for production by Azure) |
+| 3 | `hoodie.write.lock.azure.managed.identity.client.id` | Client ID of a user-assigned managed identity (`ManagedIdentityCredential`) |
+| 4 | `hoodie.write.lock.azure.client.tenant.id` + `.client.id` + `.client.secret` | Service principal via `ClientSecretCredential` — all three must be set |
+| 5 (lowest) | _(none)_ | `DefaultAzureCredential` chain (system-assigned managed identity, environment variables, etc.) |
+
+Example configuration for service-principal authentication:
+
+```properties
+hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.StorageBasedLockProvider
+hoodie.write.lock.azure.client.tenant.id=<your-tenant-id>
+hoodie.write.lock.azure.client.id=<your-app-client-id>
+hoodie.write.lock.azure.client.secret=<your-client-secret>
+```
+
+The optional `hoodie.write.lock.storage.validity.timeout.secs` and `hoodie.write.lock.storage.renew.interval.secs` tuning parameters documented above apply equally to the Azure lock client.
 
 ### Zookeeper-Based Lock Provider
 
@@ -358,6 +390,32 @@ hoodie.write.lock.client.num_retries
 ```
 
 *Setting the right values for these depends on a case by case basis; some defaults have been provided for general cases.*
+
+## Pre-Write Cleaner Policy
+
+When running multi-writer pipelines, failed writes can accumulate on storage if a writer crashes before a clean cycle runs. Hudi 1.2.0 introduces `hoodie.prewrite.cleaner.policy` to proactively handle this at write startup:
+
+| Config Key | Default | Description |
+|---|---|---|
+| `hoodie.prewrite.cleaner.policy` | `NONE` | Policy applied before starting a new ingestion write commit. `NONE`: no pre-write action (default). `CLEAN`: force a clean table service call (also rolls back failed writes). `ROLLBACK_FAILED_WRITES`: only roll back failed writes without running a full clean. |
+
+This is useful when a writer is perpetually crashing before completing a `CLEAN`. See [Cleaning](cleaning.md) for the full list of cleaning configurations.
+
+## Exclusive Rollbacks and Conflict Resolution (1.2.0)
+
+In Hudi 1.2.0, exclusive rollback operations in multi-writer scenarios are now serialized to prevent races where multiple writers simultaneously attempt to roll back the same inflight commit.
+
+For the `PreferWriterConflictResolutionStrategy`, a new configuration controls clustering behavior during conflict resolution:
+
+| Config Key | Default | Description |
+|---|---|---|
+| `hoodie.clustering.fail.on.pending.ingestion.during.conflict.resolution` | `false` | Only applicable when `hoodie.write.concurrency.mode` is OCC or NBCC and the conflict resolution strategy is `PreferWriterConflictResolutionStrategy`. When `true`, clustering proactively fails if there are pending ingestion commits that would conflict. |
+
+## Advanced: Lock Audit Logging and Diagnostics
+
+The storage-based lock provider supports optional audit logging of lock operations. When enabled, a `.hoodie/lock/audit_enabled.json` marker is written to the table base path and lock acquisition/release events are recorded for post-hoc debugging.
+
+For ZooKeeper-based locking, the ZK lock node now stores the Spark application ID of the writer holding the lock, making it easier to correlate lock holders with running Spark jobs in cluster UIs.
 
 ## Caveats
 
