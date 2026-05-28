@@ -2,7 +2,7 @@
 title: Indexing
 summary: "In this page, we describe how to run metadata indexing asynchronously."
 toc: true
-last_modified_at:
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 
 Hudi maintains a scalable [metadata](metadata.md) that has some auxiliary data about the table.
@@ -36,7 +36,7 @@ For more information on these indexes please refer [metadata section](metadata/#
 :::note
 Please note in order to create secondary index:
 1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](record_merger.md#commit_time_ordering).
-2. Record index must be enabled. This can be done by setting `hoodie.metadata.record.index.enable=true` and then creating `record_index`. Please note the example below.
+2. Record index must be enabled. This can be done by setting `hoodie.metadata.global.record.level.index.enable=true` and then creating `record_index`. Please note the example below.
 :::
 
 **Examples**
@@ -73,8 +73,8 @@ hoodie.metadata.index.column.stats.enable=true
 -- [Optional Configs] - list of columns to index on. By default all columns are indexed
 hoodie.metadata.index.column.stats.column.list=col1,col2,...
 
--- [Required Configs] Record Level Index
-hoodie.metadata.record.index.enable=true
+-- [Required Configs] Record Level Index (Global RLI — single record key unique across all partitions)
+hoodie.metadata.global.record.level.index.enable=true
 
 -- [Required Configs] Bloom filter Index
 hoodie.metadata.index.bloom.filter.enable=true
@@ -116,7 +116,7 @@ inserts.write.format("hudi").
   
 // Create record index and secondary index for the table
 spark.sql(s"CREATE TABLE test_table_external USING hudi LOCATION '$basePath'")
-spark.sql(s"SET hoodie.metadata.record.index.enable=true")
+spark.sql(s"SET hoodie.metadata.global.record.level.index.enable=true")
 spark.sql(s"CREATE INDEX record_index ON test_table_external (uuid)")
 spark.sql(s"CREATE INDEX idx_rider ON test_table_external (rider)")
 spark.sql(s"SHOW INDEXES FROM hudi_indexed_table").show(false)
@@ -299,6 +299,40 @@ spark-submit \
 --parallelism 1 \
 --spark-memory 2g
 ```
+
+## New in 1.2.0
+
+### Record-Level Index Config Key Renames
+
+Hudi 1.2.0 renamed several RLI configuration keys to better distinguish between the _global_ RLI (unique record key
+across the entire table) and the _partitioned_ RLI (unique record key within each partition). The old keys remain
+functional as aliases but are deprecated — update your configs to the new canonical names.
+
+| Old key (alias, still works) | New canonical key | Default | Notes |
+|---|---|---|---|
+| `hoodie.metadata.record.index.enable` | `hoodie.metadata.global.record.level.index.enable` | `false` | Enables the global Record Level Index (unique key across all partitions). |
+| `hoodie.metadata.record.index.min.filegroup.count` | `hoodie.metadata.global.record.level.index.min.filegroup.count` | `10` | Min file groups for the global RLI. |
+| `hoodie.metadata.record.index.max.filegroup.count` | `hoodie.metadata.global.record.level.index.max.filegroup.count` | `10000` | Max file groups for the global RLI. |
+| `hoodie.metadata.partitioned.record.index.min.filegroup.count` | `hoodie.metadata.record.level.index.min.filegroup.count` | `1` | Min file groups for the partitioned RLI. |
+| `hoodie.metadata.partitioned.record.index.max.filegroup.count` | `hoodie.metadata.record.level.index.max.filegroup.count` | `10` | Max file groups for the partitioned RLI. |
+
+In addition, the following existing key is unchanged but was not previously documented:
+
+| Key | Default | Notes |
+|---|---|---|
+| `hoodie.metadata.record.level.index.enable` | `false` | Enables the partitioned Record Level Index (unique `partition_path + record_key` pair). This is a separate toggle from the global RLI above. |
+
+### Additional New RLI Configs
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.metadata.record.level.index.defer.init` | `false` | When enabled, defers RLI initialization to the second commit on a fresh table. This allows Hudi to determine an accurate file group count based on actual record volume before allocating RLI file groups. Applies to both global and partitioned RLI. |
+| `hoodie.metadata.record.index.max.filegroup.size` | `1073741824` (1 GB) | Maximum size in bytes of a single RLI file group. Larger file groups take longer to compact. |
+
+### Auto-Delete of Disabled Partitions
+
+See [metadata](metadata.md#auto-delete-of-disabled-mdt-partitions) for `hoodie.metadata.auto.delete.partitions`
+(default `true`). Set to `false` to prevent a disabled index from dropping its MDT partition automatically.
 
 ## Caveats
 

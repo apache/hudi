@@ -129,6 +129,38 @@ can bring up the writers sequentially after stopping the writers for enabling me
 configurations to only a subset of writers or table services is unsafe and can lead to loss of data. So, please ensure you enable 
 metadata table across all writers.
 
+## New in 1.2.0
+
+### Auto-Delete of Disabled MDT Partitions
+
+When an index is disabled in the write config, Hudi previously deleted the corresponding metadata table partition
+automatically. Hudi 1.2.0 makes this behavior configurable.
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.metadata.auto.delete.partitions` | `true` | When enabled (default), metadata table partitions (indexes) that are disabled in the write config are automatically deleted. Set to `false` to prevent accidental deletion in multi-writer environments where not all writers may have the same config — users must then drop indexes explicitly via Hudi CLI or `DROP INDEX`. |
+
+### MDT Cleaner Policy Derivation
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.metadata.derive.from.datatable.clean.policy` | `true` | When enabled, the metadata table's cleaner uses the same cleaning policy (retention count, hours, etc.) as the data table. See also [cleaning](cleaning.md#mdt-cleaner-inherits-data-table-policy). |
+
+### MDT Compaction Delegation
+
+The metadata table's compaction and log compaction can be delegated to an external table service platform. See
+[compaction](compaction.md#delegating-mdt-compaction-to-an-external-platform) for the full config reference.
+
+### Timeline Archival Controls
+
+Two new configs in `HoodieArchivalConfig` let you fine-tune how the timeline manifest and archival interact with the
+most recent clean.
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.timeline.manifest.retained.versions` | `3` | Number of timeline manifest file versions to retain. Older manifest versions are pruned during archival. |
+| `hoodie.archive.block.on.latest.clean.ectr` | `false` | When enabled, archival stops at the Earliest Commit To Retain (ECTR) from the last completed clean. This prevents archiving commits whose data files still exist on storage, avoiding inconsistencies between the timeline and actual data. |
+
 ## Related Resources
 <h3>Blogs</h3>
 * [Table service deployment models in Apache Hudi](https://medium.com/@simpsons/table-service-deployment-models-in-apache-hudi-9cfa5a44addf)
