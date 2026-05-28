@@ -3,7 +3,7 @@ title: "Vector Search"
 keywords: [ hudi, vector, search, embeddings, similarity, cosine, ANN, nearest neighbor, VECTOR type]
 summary: "Store embedding vectors in Hudi tables and run approximate nearest neighbor search using the VECTOR type and hudi_vector_search TVF"
 toc: true
-last_modified_at: 2026-04-25T00:00:00-00:00
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 
 import Tabs from '@theme/Tabs';
@@ -12,6 +12,19 @@ import TabItem from '@theme/TabItem';
 Hudi's `VECTOR` type and `hudi_vector_search` table-valued function (TVF) bring native similarity search
 to the data lakehouse. Store embeddings alongside your structured data and query them with familiar Spark SQL —
 no external vector database required.
+
+## Storage Format
+
+VECTOR columns are stored in Parquet as `FIXED_LEN_BYTE_ARRAY` — a fixed-length binary encoding of the
+float array. Hudi stamps `hudi_type` metadata on the column so the Spark reader knows to decode the
+bytes back into a typed array.
+
+On **Lance** tables, VECTOR columns are stored natively as Lance `FixedSizeList<Float32/Float64, dim>`,
+which enables Lance's built-in IVF-PQ ANN index. See [Lance File Format](lance_file_format.md) for details.
+
+The `VECTOR(dim[, elementType])` DDL syntax works across Spark 3.4, 3.5, 4.0, and 4.1. Hudi's SQL
+parser normalizes `VECTOR(128, FLOAT)` to `VECTOR(128)` (FLOAT is the default element type).
+Nesting VECTOR inside STRUCT, ARRAY, or MAP is not supported.
 
 ## VECTOR Type
 
@@ -240,3 +253,21 @@ FROM hudi_vector_search(
 - VECTOR columns must be **top-level fields** — nesting inside STRUCT, ARRAY, or MAP is not supported.
 - The query vector's element type must **exactly match** the corpus embedding's element type (no implicit casting).
 - VECTOR dimension and element type **cannot be changed** after table creation via schema evolution.
+- **Flink cannot read VECTOR columns.** VECTOR data is stored as Parquet `FIXED_LEN_BYTE_ARRAY`, which
+  Flink's Parquet reader does not decode back into a typed array. Flink can still read all **other**
+  columns in a table that contains a VECTOR column — only the VECTOR column itself is inaccessible.
+  Use Spark to query VECTOR columns.
+
+## Metastore Sync
+
+When syncing VECTOR column schemas to external catalogs, Hudi maps the binary encoding to the
+target catalog's native binary type, preserving the original VECTOR metadata in table properties:
+
+| Catalog | VECTOR representation |
+|:--------|:---------------------|
+| Hive | `BINARY` |
+| BigQuery | `BYTES` |
+
+The `VECTOR(dim, elementType)` dimension and element-type metadata is preserved in
+`TBLPROPERTIES`/table descriptions so the table can be correctly reconstructed by Spark even after
+a metastore round-trip.
