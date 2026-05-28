@@ -11,7 +11,7 @@ workloads. Hudi's pluggable storage architecture lets you use Lance as the base 
 and ORC, unlocking vector indexing, fast random access, and optimized high-dimensional array storage.
 
 :::caution Engine Support
-Lance is **Spark-only**. Attempting to open a Lance-backed table from Flink or Hive throws a
+Lance file format support is **Spark-only**. Attempting to read a Lance-backed table from Flink or Hive throws a
 `HoodieValidationException`:
 > Lance base file format is currently only supported with the Spark engine. Please use Parquet, ORC, or HFile
 > for non-Spark engines (Flink, Hive, Presto, Trino).
@@ -75,14 +75,14 @@ TBLPROPERTIES (
 
 ### Required Dependencies
 
-The Lance JAR is not bundled in Hudi. Add the appropriate Lance Spark bundle to your Spark classpath:
+The Lance JAR is not bundled in Hudi. Add the appropriate Lance Spark bundle JAR to your Spark classpath:
 
-| Spark Version | Maven Coordinates |
-|:--------------|:-----------------|
-| Spark 3.4 | `org.lance:lance-spark-3.4_2.12:0.4.0` |
-| Spark 3.5 | `org.lance:lance-spark-3.5_2.12:0.4.0` |
-| Spark 4.0 | `org.lance:lance-spark-4.0_2.13:0.4.0` |
-| Spark 4.1 | `org.lance:lance-spark-4.1_2.13:0.4.0` |
+| Spark Version | Bundle JAR (Maven Central) |
+|:--------------|:---------------------------|
+| Spark 3.4 | `org.lance:lance-spark-bundle-3.4_2.12:0.4.0` |
+| Spark 3.5 | `org.lance:lance-spark-bundle-3.5_2.12:0.4.0` |
+| Spark 4.0 | `org.lance:lance-spark-bundle-4.0_2.13:0.4.0` |
+| Spark 4.1 | `org.lance:lance-spark-bundle-4.1_2.13:0.4.0` |
 
 ```bash
 export LANCE_BUNDLE_JAR=/path/to/lance-spark-bundle-3.5_2.12-0.4.0.jar
@@ -90,6 +90,8 @@ export LANCE_BUNDLE_JAR=/path/to/lance-spark-bundle-3.5_2.12-0.4.0.jar
 # Include both Hudi and Lance JARs
 spark-shell --jars $HUDI_BUNDLE_JAR,$LANCE_BUNDLE_JAR
 ```
+
+Lance publishes two artifact families under the same version: the bare connector (`org.lance:lance-spark-<spark>_<scala>`) is what Hudi declares as a Maven dependency internally, while the `-bundle-` variant above is the shaded uber-JAR with transitive dependencies — use the bundle when adding the JAR to a Spark cluster classpath via `--jars`.
 
 ## How Hudi + Lance Work Together
 
@@ -120,14 +122,7 @@ All Hudi table services work with Lance-backed tables:
 - **Clustering** — reorganizes Lance files for better data locality
 - **Cleaning** — removes old Lance file versions
 - **Metadata indexing** — bloom filters work across Lance files; column stats and partition stats are
-  **automatically disabled** for Lance tables (they would produce empty ranges and silently prune all
-  data on read — a known limitation to be addressed in a future release)
-
-:::note
-Each Lance file is **non-splittable**: one Spark task processes one Lance file. For best parallelism,
-configure file sizing so you get roughly one Lance file per executor core (see
-[File Sizing and Memory](#file-sizing-and-memory)).
-:::
+  **automatically disabled** for Lance tables
 
 ## VECTOR Storage on Lance
 
