@@ -66,15 +66,7 @@ Optional tuning configurations:
 
 #### Azure Storage-Based Lock
 
-When your Hudi table's base path uses an `abfs://`, `abfss://`, `wasb://`, or `wasbs://` scheme, the `StorageBasedLockProvider` automatically uses the `AzureStorageLockClient` backed by Azure Blob Storage conditional writes. No separate lock-provider class is needed — the same `StorageBasedLockProvider` class is used for all supported storage systems.
-
-Add `hudi-azure-bundle` to your classpath, then set:
-
-```properties
-hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.StorageBasedLockProvider
-```
-
-The provider selects the Azure lock client automatically based on the base path scheme. Authentication is resolved in the following precedence order:
+Authentication is resolved in the following precedence order:
 
 | Priority | Config Key | Description |
 |----------|------------|-------------|
@@ -92,8 +84,6 @@ hoodie.write.lock.azure.client.tenant.id=<your-tenant-id>
 hoodie.write.lock.azure.client.id=<your-app-client-id>
 hoodie.write.lock.azure.client.secret=<your-client-secret>
 ```
-
-The optional `hoodie.write.lock.storage.validity.timeout.secs` and `hoodie.write.lock.storage.renew.interval.secs` tuning parameters documented above apply equally to the Azure lock client.
 
 ### Zookeeper-Based Lock Provider
 
