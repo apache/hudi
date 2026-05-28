@@ -297,3 +297,40 @@ While using hive beeline query, you need to enter settings:
 ```bash
 set hive.input.format = org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
 ```
+
+## Spark Catalog Metastore Client
+
+When running Hudi inside a Spark environment that already has Hive support enabled (e.g., SparkSQL with `spark.sql.catalogImplementation=hive`), the standard `IMetaStoreClient` initialization can conflict with Spark's own Hive classloader. Setting
+
+```properties
+hoodie.datasource.hive_sync.use_spark_catalog=true
+```
+
+(default: `false`) makes Hudi use `SparkCatalogMetaStoreClient` — a Spark-native `IMetaStoreClient` implementation — instead of creating its own. This avoids classloader conflicts in Hive-on-Spark setups. Requires a `SparkSession` with Hive support active.
+
+## HMS 4.x Support via JDBC Fallback
+
+HMS 4.x changed several Thrift API method signatures (e.g., `get_table` → `get_table_req`), which makes the standard Thrift-based HMS client incompatible. Hudi 1.2.0 adds automatic fallback: when the first Thrift call fails with a `TApplicationException` indicating an API mismatch, all subsequent metadata operations are transparently rerouted through the JDBC path.
+
+**Requirement:** sync mode must be `jdbc` with a valid JDBC URL so that the fallback client is available:
+
+```properties
+hoodie.datasource.hive_sync.mode=jdbc
+hoodie.datasource.hive_sync.jdbcurl=jdbc:hive2://hiveserver:10000
+hoodie.datasource.hive_sync.username=<username>
+hoodie.datasource.hive_sync.password=<password>
+```
+
+With these settings, syncing against HMS 4.x works transparently — no code changes or separate build profile needed.
+
+## Writer Version Table Property
+
+Hudi 1.2.0 sync writes the table property `hudi_writer_version` (set to the Hudi version that last synced the table) to the Hive metastore entry on every sync. This allows tooling and metastore administrators to identify which Hudi version wrote a given table.
+
+To emit `TOUCH` events to the metastore for partition-level change tracking (e.g., for downstream catalog notifications), set:
+
+```properties
+hoodie.meta.sync.touch.partitions.enabled=true
+```
+
+Default is `false`. When enabled, a TOUCH event is issued for each partition that was modified in the sync operation.

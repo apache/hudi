@@ -146,7 +146,9 @@ Usage: <main class> [options]
       Default: 0
     --op
       Takes one of these values : UPSERT (default), INSERT, BULK_INSERT,
-      INSERT_OVERWRITE, INSERT_OVERWRITE_TABLE, DELETE_PARTITION
+      INSERT_OVERWRITE, INSERT_OVERWRITE_TABLE, DELETE_PARTITION, DELETE
+      (DELETE extracts HoodieKeys from source records and deletes the
+      corresponding records from the table.)
       Default: UPSERT
       Possible Values: [INSERT, INSERT_PREPPED, UPSERT, UPSERT_PREPPED, BULK_INSERT, BULK_INSERT_PREPPED, DELETE, DELETE_PREPPED, BOOTSTRAP, INSERT_OVERWRITE, CLUSTER, DELETE_PARTITION, INSERT_OVERWRITE_TABLE, COMPACT, INDEX, ALTER_SCHEMA, LOG_COMPACT, UNKNOWN]
     --payload-class
@@ -636,3 +638,118 @@ to how you run Hudi Streamer.
 ```
 
 For detailed information on how to configure and use `HoodieMultiTableStreamer`, please refer [blog section](/blog/2020/08/22/ingest-multiple-tables-using-hudi).
+
+## Amazon Kinesis Source (JsonKinesisSource)
+
+`org.apache.hudi.utilities.sources.JsonKinesisSource` reads JSON records directly from an AWS Kinesis Data Stream using the AWS SDK v2. It is the JSON counterpart to the Avro-based `KinesisSource` and shares the same checkpoint and shard-iteration logic via the abstract `KinesisSource<T>` base class.
+
+### Key configuration
+
+All keys use the prefix `hoodie.streamer.source.kinesis.`.
+
+| Config key | Default | Description |
+|---|---|---|
+| `hoodie.streamer.source.kinesis.stream.name` | (required) | Kinesis Data Streams stream name. |
+| `hoodie.streamer.source.kinesis.region` | (required) | AWS region for the stream (e.g., `us-east-1`). |
+| `hoodie.streamer.source.kinesis.endpoint.url` | (none) | Custom endpoint URL, e.g., for LocalStack. Uses the default AWS endpoint when unset. |
+| `hoodie.streamer.source.kinesis.access.key` | (none) | AWS access key. Used with custom endpoints; otherwise uses the default AWS credential chain. |
+| `hoodie.streamer.source.kinesis.secret.key` | (none) | AWS secret key. Used with custom endpoints; otherwise uses the default AWS credential chain. |
+| `hoodie.streamer.source.kinesis.max.events` | `5000000` | Maximum number of records read per batch across all shards. |
+| `hoodie.streamer.source.kinesis.starting.position` | `LATEST` | Starting position when no checkpoint exists. `LATEST` or `EARLIEST` (maps to `TRIM_HORIZON`). |
+| `hoodie.streamer.source.kinesis.enable.deaggregation` | `true` | De-aggregates records produced by the Kinesis Producer Library (KPL). Pass-through for non-KPL producers. |
+| `hoodie.streamer.source.kinesis.append.offsets` | `false` | When enabled, appends Kinesis metadata fields to each record: `_hoodie_kinesis_source_sequence_number`, `_hoodie_kinesis_source_shard_id`, `_hoodie_kinesis_source_partition_key`, `_hoodie_kinesis_source_timestamp`. |
+| `hoodie.streamer.source.kinesis.persist.fetch.rdd` | `true` | **Required for correct, duplicate-free ingestion.** Persists the fetch RDD to `MEMORY_AND_DISK` so both checkpoint collection and record writing reuse the same Spark job. When `false`, Kinesis is queried twice per batch, which can result in duplicate records being written. |
+| `hoodie.streamer.source.kinesis.partitions` | `0` | Target Spark partitions. `0` means one partition per shard. Set a positive value to repartition for downstream parallelism. |
+| `hoodie.streamer.source.kinesis.max.records.per.request` | `10000` | Maximum records per `GetRecords` API call (Kinesis hard limit: 10,000). |
+| `hoodie.streamer.source.kinesis.get.records.interval.ms` | `200` | Minimum interval in ms between successive `GetRecords` calls per shard. |
+| `hoodie.streamer.source.kinesis.retry.initial.interval.ms` | `1000` | Initial backoff in ms for `ProvisionedThroughputExceededException`. Doubles each retry up to `retry.max.interval.ms`. |
+| `hoodie.streamer.source.kinesis.retry.max.interval.ms` | `10000` | Maximum backoff in ms between retries for throughput exceeded. |
+| `hoodie.streamer.source.kinesis.retry.throttle.timeout.ms` | `600000` | Maximum time in ms to keep retrying after throttling before the batch fails (default: 10 minutes). |
+| `hoodie.streamer.source.kinesis.fail.on.data.loss.enable` | `false` | Fail if a checkpoint references an expired shard that has not been fully consumed. |
+
+:::caution
+
+Keep `hoodie.streamer.source.kinesis.persist.fetch.rdd=true` (the default). Setting it to `false` causes the Kinesis fetch to run twice per Streamer cycle — once to collect checkpoint metadata and once when the record RDD is consumed — which can produce duplicate records in the Hudi table.
+
+:::
+
+### Minimal spark-submit example
+
+```properties
+# kinesis-source.properties
+hoodie.streamer.source.kinesis.stream.name=my-stream
+hoodie.streamer.source.kinesis.region=us-east-1
+hoodie.streamer.source.kinesis.starting.position=LATEST
+hoodie.streamer.source.kinesis.persist.fetch.rdd=true
+
+# Standard Hudi write / key-gen configs
+hoodie.datasource.write.recordkey.field=id
+hoodie.datasource.write.partitionpath.field=event_date
+hoodie.table.ordering.fields=ts
+```
+
+```bash
+spark-submit \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.2.0,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.2.0 \
+  --class org.apache.hudi.utilities.streamer.HoodieStreamer \
+  hudi-utilities-slim-bundle-*.jar \
+  --props kinesis-source.properties \
+  --source-class org.apache.hudi.utilities.sources.JsonKinesisSource \
+  --table-type COPY_ON_WRITE \
+  --target-base-path s3://my-bucket/hudi/my-table \
+  --target-table my_db.my_table \
+  --op UPSERT \
+  --continuous
+```
+
+## Schema Widening (make.columns.nullable)
+
+`hoodie.streamer.schema.make.columns.nullable` (default: `false`) — when set to `true`, all columns in the incoming dataset schema are widened to nullable before the write. This is useful for maintaining backward compatibility when new nullable columns are introduced via SQL transformations: existing non-nullable columns in the Hudi table schema are safely evolved to nullable, while existing data retains its values.
+
+The legacy alias `hoodie.deltastreamer.schema.make.columns.nullable` is also accepted.
+
+```properties
+hoodie.streamer.schema.make.columns.nullable=true
+```
+
+## Cloud and Parquet DFS Schema Merging
+
+When reading batches from cloud storage (S3/GCS) or Parquet DFS sources that may have heterogeneous schemas across files (e.g., during bootstrap or schema evolution), Hudi merges schemas across all files in the batch by default.
+
+| Config key | Default | Applies to |
+|---|---|---|
+| `hoodie.streamer.source.cloud.data.merge.schema.enable` | `true` | S3/GCS incremental sources (Parquet and ORC files) |
+| `hoodie.streamer.source.parquet.dfs.merge.schema.enable` | `true` | Parquet DFS source |
+
+Set either to `false` to restore the prior behavior where the schema from the first file in the batch is used.
+
+## On-Demand Hive Sync (HudiHiveSyncJob)
+
+`org.apache.hudi.utilities.HudiHiveSyncJob` is a standalone Spark job that syncs a Hudi table's metadata to Hive metastore independently of any ingestion workflow. It is useful for backfills, manual data corrections, or reconciling metastore metadata after direct writes.
+
+### Arguments
+
+| Argument | Required | Description |
+|---|---|---|
+| `--base-path` / `-sp` | Yes | Base path of the Hudi table. |
+| `--base-file-format` / `-bff` | No | Base file format. Default: `PARQUET`. |
+| `--props-file-path` | No | Path to a properties file with Hudi / Hive sync configs. |
+| `--hoodie-conf` | No | Inline config override (repeatable). |
+| `--spark-master` | No | Spark master URL. Inherits from environment if unset. |
+
+### Example
+
+```bash
+spark-submit \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.2.0,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.2.0 \
+  --class org.apache.hudi.utilities.HudiHiveSyncJob \
+  hudi-utilities-slim-bundle-*.jar \
+  --base-path s3://my-bucket/hudi/my-table \
+  --base-file-format PARQUET \
+  --hoodie-conf hoodie.datasource.hive_sync.mode=hms \
+  --hoodie-conf hoodie.datasource.hive_sync.metastore.uris=thrift://hive-metastore:9083 \
+  --hoodie-conf hoodie.datasource.hive_sync.database=my_db \
+  --hoodie-conf hoodie.datasource.hive_sync.table=my_table
+```
+
+All `hoodie.datasource.hive_sync.*` options accepted by the DataSource writer are also accepted here. See [Syncing to Hive Metastore](syncing_metastore.md) for the full list.
