@@ -340,10 +340,10 @@ $ hdfs dfs -ls /app/uber/trips/.hoodie/*.inflight
 -rw-r--r--   3 vinoth supergroup     321984 2016-10-05 23:18 /app/uber/trips/.hoodie/20161005225920.inflight
 ```
 
-To list all inflight and requested instants that have been running longer than a specified number of minutes, use `commits show_infights` (note the literal spelling of the command key):
+To list all inflight and requested instants that have been running longer than a specified number of minutes, use `commits show_inflights`:
 
 ```shell
-hudi:trips->commits show_infights --lookbackInMins 30
+hudi:trips->commits show_inflights --lookbackInMins 30
 ```
 
 This lists every inflight or requested instant whose requested timestamp is older than 30 minutes, showing the commit time, action type, and current state. This is useful for detecting hung or stuck writes. The `--lookbackInMins` option defaults to `0` (returns all inflight/requested instants).
