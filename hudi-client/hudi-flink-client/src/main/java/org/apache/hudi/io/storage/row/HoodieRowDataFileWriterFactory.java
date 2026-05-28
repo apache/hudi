@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
@@ -38,7 +37,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.util.HoodieSchemaConverter;
-import org.apache.hudi.util.RowDataQueryContexts;
 
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.conf.Configuration;
@@ -47,10 +45,6 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
-import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
-import static org.apache.hudi.common.model.HoodieFileFormat.LANCE;
-import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
-import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.util.ParquetUtils.getCompressionCodecName;
 
 /**
@@ -60,30 +54,6 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
 
   public HoodieRowDataFileWriterFactory(HoodieStorage storage) {
     super(storage);
-  }
-
-  public HoodieFileWriter getFileWriter(String instantTime, StoragePath storagePath, HoodieWriteConfig config, RowType rowType,
-                                     TaskContextSupplier taskContextSupplier) throws IOException {
-    final String extension = FSUtils.getFileExtension(storagePath.getName());
-    return getFileWriterByFormat(extension, instantTime, storagePath, config, rowType, taskContextSupplier);
-  }
-
-  private  <T, I, K, O> HoodieFileWriter getFileWriterByFormat(
-      String extension, String instantTime, StoragePath path, HoodieConfig config, RowType rowType,
-      TaskContextSupplier taskContextSupplier) throws IOException {
-    if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetFileWriter(instantTime, path, config, rowType, taskContextSupplier);
-    }
-    if (HFILE.getFileExtension().equals(extension)) {
-      return newHFileFileWriter(instantTime, path, config, HoodieSchemaConverter.convertToSchema(rowType), taskContextSupplier);
-    }
-    if (ORC.getFileExtension().equals(extension)) {
-      return newOrcFileWriter(instantTime, path, config, HoodieSchemaConverter.convertToSchema(rowType), taskContextSupplier);
-    }
-    if (LANCE.getFileExtension().equals(extension)) {
-      return newLanceFileWriter(instantTime, path, config, rowType, taskContextSupplier);
-    }
-    throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
   /**
@@ -100,11 +70,9 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       OutputStream outputStream,
       HoodieConfig config,
       HoodieSchema schema) throws IOException {
-    //TODO boundary to revisit in follow up to use HoodieSchema directly
-    final RowType rowType = (RowType) RowDataQueryContexts.fromSchema(schema).getRowType().getLogicalType();
     HoodieRowDataParquetWriteSupport writeSupport =
         new HoodieRowDataParquetWriteSupport(
-            storage.getConf().unwrapAs(Configuration.class), rowType, null);
+            storage.getConf().unwrapAs(Configuration.class), schema, null);
     return new HoodieRowDataParquetOutputStreamWriter(
         new FSDataOutputStream(outputStream, null), writeSupport, getParquetConfig(config, writeSupport));
   }
@@ -127,28 +95,6 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       HoodieConfig config,
       HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
-    //TODO boundary to revisit in follow up to use HoodieSchema directly
-    final RowType rowType = (RowType) RowDataQueryContexts.fromSchema(schema).getRowType().getLogicalType();
-    return newParquetFileWriter(instantTime, storagePath, config, rowType, taskContextSupplier);
-  }
-
-  /**
-   * Create a parquet RowData writer on a given storage path.
-   *
-   * @param instantTime         instant time to write
-   * @param storagePath         file storage path
-   * @param config              hoodie configuration
-   * @param rowType             rowType of record
-   * @param taskContextSupplier task context supplier
-   *
-   * @return a RowData parquet writer
-   */
-  public HoodieFileWriter newParquetFileWriter(
-      String instantTime,
-      StoragePath storagePath,
-      HoodieConfig config,
-      RowType rowType,
-      TaskContextSupplier taskContextSupplier) throws IOException {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
     boolean withOperation = config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
 
@@ -160,23 +106,25 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
     BloomFilter filter = createBloomFilter(hoodieConfig);
     HoodieRowDataParquetWriteSupport writeSupport = (HoodieRowDataParquetWriteSupport) ReflectionUtils.loadClass(
         hoodieConfig.getStringOrDefault(HoodieStorageConfig.HOODIE_PARQUET_FLINK_ROW_DATA_WRITE_SUPPORT_CLASS),
-        new Class<?>[] {Configuration.class, RowType.class, BloomFilter.class},
-        conf, rowType, filter);
+        new Class<?>[] {Configuration.class, HoodieSchema.class, BloomFilter.class},
+        conf, schema, filter);
 
     return new HoodieRowDataParquetWriter(storagePath, getParquetConfig(hoodieConfig, writeSupport),
         instantTime, taskContextSupplier, populateMetaFields, withOperation);
   }
 
+  @Override
   public HoodieFileWriter newLanceFileWriter(
       String instantTime,
       StoragePath path,
       HoodieConfig config,
-      RowType rowType,
+      HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
     boolean withOperation = config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
     Option<org.apache.hudi.common.bloom.BloomFilter> bloomFilter = enableBloomFilter(populateMetaFields, config)
         ? Option.of(createBloomFilter(config)) : Option.empty();
+    RowType rowType = HoodieSchemaConverter.convertToRowType(schema);
     return new HoodieRowDataLanceWriter(
         path,
         rowType,
