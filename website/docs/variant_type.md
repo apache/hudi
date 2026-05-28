@@ -9,12 +9,9 @@ last_modified_at: 2026-05-27T00:00:00-00:00
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-The `VARIANT` type stores semi-structured, JSON-like data directly in Hudi tables. Unlike rigid schemas
-where every column and type must be declared upfront, VARIANT columns accept arbitrary nested structures —
-objects, arrays, scalars — and store them efficiently in a self-describing binary format.
-
-This is particularly useful for AI and data engineering workloads where data shapes evolve rapidly:
-model metadata, LLM outputs, feature dictionaries, API responses, and event payloads.
+The `VARIANT` type stores semi-structured, JSON-like data as a column. VARIANT columns accept
+arbitrary nested structures — objects, arrays, scalars — and store them in a self-describing binary
+format.
 
 ## Overview
 
@@ -26,8 +23,7 @@ VARIANT represents semi-structured data as two binary fields:
 | `value` | The actual data payload |
 
 This encoding supports any JSON-compatible value: objects, arrays, strings, numbers, booleans, and null.
-Unlike storing raw JSON strings, VARIANT provides type-aware binary storage with optional **shredding**
-for columnar query performance.
+Optional **shredding** extracts known fields into typed columnar storage (see below).
 
 ## Creating Tables with VARIANT Columns
 
@@ -273,84 +269,12 @@ target catalog's native struct type:
 Query engines that support VARIANT (Spark 4.0+, Flink 2.1+) read the table directly using the
 Parquet VARIANT annotation and do not go through the Hive/BigQuery metastore representation.
 
-## Use Cases for AI Workloads
+## Notes
 
-### LLM Output Storage
-
-Store raw LLM responses with varying structures:
-
-```sql
-CREATE TABLE llm_outputs (
-    request_id  STRING,
-    model       STRING,
-    response    VARIANT,
-    tokens_used INT,
-    ts          BIGINT
-) USING hudi TBLPROPERTIES (primaryKey = 'request_id', preCombineField = 'ts');
-
-INSERT INTO llm_outputs VALUES (
-    'req_001', 'claude-sonnet',
-    parse_json('{"text": "...", "stop_reason": "end_turn", "usage": {"input": 500, "output": 200}}'),
-    700, 1000
-);
-```
-
-### Model Metadata & Experiment Tracking
-
-Store heterogeneous model configurations and metrics:
-
-```sql
-CREATE TABLE experiments (
-    run_id        STRING,
-    model_config  VARIANT,    -- hyperparameters, architecture, etc.
-    metrics       VARIANT,    -- loss, accuracy, custom metrics
-    ts            BIGINT
-) USING hudi TBLPROPERTIES (primaryKey = 'run_id', preCombineField = 'ts');
-```
-
-### Feature Dictionaries
-
-Store sparse or variable-length feature maps for ML:
-
-```sql
-CREATE TABLE user_features (
-    user_id    STRING,
-    features   VARIANT,       -- {"age": 25, "interests": [...], "embedding": [...]}
-    updated_at BIGINT
-) USING hudi TBLPROPERTIES (primaryKey = 'user_id', preCombineField = 'updated_at');
-```
-
-### API Response Archival
-
-Ingest and store API responses with evolving schemas:
-
-```sql
-CREATE TABLE api_responses (
-    request_id  STRING,
-    endpoint    STRING,
-    status_code INT,
-    body        VARIANT,
-    ts          BIGINT
-) USING hudi TBLPROPERTIES (primaryKey = 'request_id', preCombineField = 'ts');
-```
-
-## Best Practices
-
-1. **Use VARIANT for evolving schemas** — When the data shape changes frequently or varies across
-   records, VARIANT avoids constant schema migrations.
-
-2. **Prefer typed columns for frequently-queried fields** — If you always filter on a specific field,
-   make it a top-level typed column rather than burying it in VARIANT. Combine: use typed columns for
-   stable fields and VARIANT for the rest.
-
-3. **Consider shredding for hot fields** — If certain VARIANT fields are queried heavily, shredding
-   extracts them into columnar storage for better performance.
-
-4. **Use `parse_json()` for ingestion** — On Spark 4.0+, `parse_json()` is the standard way to create
-   VARIANT values from JSON strings.
-
-5. **Use `cast(v as STRING)` for export** — Convert VARIANT back to JSON for downstream consumers
-   that expect text.
+- On Spark 4.0+, `parse_json()` converts a JSON string into a VARIANT value.
+- `cast(v as STRING)` returns the JSON serialization of a VARIANT value.
+- Shredded fields (see [VARIANT Shredding](#variant-shredding)) are read as typed columns; unshredded
+  fields fall back to the binary `value` field.
 
 ## Limitations
 

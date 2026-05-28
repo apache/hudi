@@ -1,14 +1,14 @@
 ---
-title: "AI Quick Start"
-keywords: [ hudi, ai, vector search, embeddings, unstructured data, blob, machine learning, image search, similarity]
-summary: "Store embeddings and images in a Hudi table, then find similar images with one SQL query using hudi_vector_search and read_blob"
+title: "Unstructured Data Quick Start"
+keywords: [ hudi, vector search, embeddings, unstructured data, blob, image search, similarity]
+summary: "Store embeddings and images in a Hudi table, then find similar images with hudi_vector_search and read_blob"
 toc: true
 last_modified_at: 2026-04-29T00:00:00-00:00
 ---
 
-This guide shows how Hudi 1.2.0 brings AI-native data types to the lakehouse. You will store image
-embeddings (`VECTOR`) and raw image bytes (`BLOB`) in a single Hudi table, then run a similarity
-search that finds the top-K nearest neighbors **and** materializes their images — in one SQL query.
+This guide walks through the 1.2.0 `VECTOR` and `BLOB` types end to end. You will store image
+embeddings (`VECTOR`) and raw image bytes (`BLOB`) in a single Hudi table, then run a top-K
+similarity search and materialize the matching images in one SQL query.
 
 :::tip
 Want to try this locally? This guide is also available as an interactive Jupyter notebook.
@@ -45,7 +45,7 @@ HUDI_JAR = os.getenv("HUDI_BUNDLE_JAR", "hudi-spark3.5-bundle_2.12-1.2.0.jar")
 
 spark = (
     SparkSession.builder
-    .appName("Hudi-AI-QuickStart")
+    .appName("Hudi-Unstructured-QuickStart")
     .config("spark.jars", HUDI_JAR)
     .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
     .config("spark.sql.extensions",
@@ -105,7 +105,7 @@ DIM = feats.shape[1]  # 1024
 
 ## 3. Create table and insert data
 
-Declare `VECTOR(1024)` for embeddings and `BLOB` for raw image bytes — first-class Hudi column types.
+Declare `VECTOR(1024)` for embeddings and `BLOB` for raw image bytes.
 
 ```python
 from pyspark.sql import Row
@@ -189,7 +189,8 @@ LIMIT 5;
 
 ## 5. Vector search + BLOB retrieval in one query
 
-The headline: `hudi_vector_search` finds the top-K nearest neighbors by cosine similarity, and `read_blob()` materializes image bytes **only for the matching rows**.
+`hudi_vector_search` returns the top-K nearest neighbors by cosine similarity; `read_blob()`
+materializes image bytes only for the matching rows.
 
 ```sql
 SELECT image_id,
@@ -220,9 +221,7 @@ ORDER BY _hudi_distance;
 
 ![Vector search results panel](/assets/images/hudi_vector_search_results.jpg)
 
-*Query: German Shorthaired pointer (left). Top-5 results ranked by cosine similarity — the search correctly identifies same-breed images as the closest matches.*
-
-One SQL query. No external vector database. Embeddings, raw images, and metadata all live in one transactional Hudi table.
+*Query: German Shorthaired pointer (left). Top-5 results ranked by cosine similarity.*
 
 ## 6. Visualize results
 
@@ -255,6 +254,5 @@ plt.savefig("hudi_vector_search_results.png", dpi=150)
 | Full interactive notebook | [00_main_demo.ipynb](https://github.com/apache/hudi/blob/master/hudi-examples/hudi-examples-spark/src/test/python/vector_blob_demo/notebooks/00_main_demo.ipynb) |
 | VECTOR type reference | [Vector Search](vector_search.md) — element types, batch TVF, distance metrics |
 | BLOB type reference | [Unstructured Data](blob_unstructured_data.md) — inline vs. out-of-line, `read_blob()`, configs |
-| VARIANT type | [Semi-Structured Data](variant_type.md) — flexible JSON-like storage for LLM outputs, model metadata |
-| Lance file format | [Lance File Format](lance_file_format.md) — vector-optimized storage |
-| AI overview | [AI-Native Lakehouse](ai_overview.md) — architecture and use cases |
+| VARIANT type | [Semi-Structured Data](variant_type.md) — JSON-like storage, shredding, cross-engine notes |
+| Lance file format | [Lance File Format](lance_file_format.md) — pluggable base file format (Spark-only) |

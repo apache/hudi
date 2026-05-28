@@ -9,9 +9,9 @@ last_modified_at: 2026-05-27T00:00:00-00:00
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Hudi's `VECTOR` type and `hudi_vector_search` table-valued function (TVF) bring native similarity search
-to the data lakehouse. Store embeddings alongside your structured data and query them with familiar Spark SQL —
-no external vector database required.
+The `VECTOR` type stores fixed-dimension embedding vectors as a column. The `hudi_vector_search`
+table-valued function (TVF) returns the top-K rows from a Hudi table whose VECTOR column is closest
+to a given query vector.
 
 ## Storage Format
 
@@ -34,11 +34,11 @@ Dimension metadata enables the query engine to validate inputs and optimize sear
 
 ### Element Types
 
-| Element Type | Description | Storage | Use Case |
-|:-------------|:------------|:--------|:---------|
-| **FLOAT** (default) | 32-bit float | `ArrayType(FloatType)` | Standard embeddings (OpenAI, Cohere, etc.) |
-| **DOUBLE** | 64-bit double | `ArrayType(DoubleType)` | High-precision scientific embeddings |
-| **INT8** / **BYTE** | 8-bit signed integer | `ArrayType(ByteType)` | Quantized embeddings for storage efficiency |
+| Element Type | Description | Storage |
+|:-------------|:------------|:--------|
+| **FLOAT** (default) | 32-bit float | `ArrayType(FloatType)` |
+| **DOUBLE** | 64-bit double | `ArrayType(DoubleType)` |
+| **INT8** / **BYTE** | 8-bit signed integer | `ArrayType(ByteType)` |
 
 ```sql
 -- Default (FLOAT)
@@ -182,20 +182,15 @@ If corpus and query tables share column names, query columns are prefixed with `
 
 ### Distance Metrics
 
-| Metric | Formula | Range | Best for |
-|:-------|:--------|:------|:---------|
-| **cosine** | 1 - cos(a, b), clamped to [0, 2] | [0, 2] | Normalized embeddings (most common). Returns 1.0 for zero vectors. |
-| **l2** | sqrt(sum((a[i] - b[i])^2)) | [0, +inf) | Raw (unnormalized) embeddings |
-| **dot_product** | -(a &middot; b) | (-inf, +inf) | Maximum inner product search. Negated so ascending sort = most similar. |
+| Metric | Formula | Range | Notes |
+|:-------|:--------|:------|:------|
+| **cosine** | 1 - cos(a, b), clamped to [0, 2] | [0, 2] | Returns 1.0 for zero vectors. |
+| **l2** | sqrt(sum((a[i] - b[i])^2)) | [0, +inf) | — |
+| **dot_product** | -(a &middot; b) | (-inf, +inf) | Negated so ascending sort surfaces the most similar rows first. |
 
-:::tip
-For best results with cosine distance, **L2-normalize your embeddings** before writing them to the table.
-Most embedding models (OpenAI, Cohere, sentence-transformers) output normalized vectors by default.
-If yours does not, normalize during ingestion:
-
-```python
-embedding = embedding / np.linalg.norm(embedding)
-```
+:::note
+`cosine` distance computes `1 - cos(a, b)`. If embeddings are not L2-normalized before write,
+results reflect both vector direction and magnitude.
 :::
 
 ### Examples
@@ -237,17 +232,6 @@ FROM hudi_vector_search(
     20, 'cosine'
 );
 ```
-
-## Best Practices
-
-1. **Normalize embeddings** — Pre-normalize embeddings (L2 norm = 1) for cosine distance. This yields
-   more consistent results and slightly faster search.
-
-2. **Right-size your dimensions** — Higher dimensions capture more information but increase storage and
-   search cost. Many use cases work well with 384–1024 dimensions.
-
-3. **Use incremental processing** — When new data arrives, only embed and write the new records.
-   Hudi's incremental query capabilities make this straightforward.
 
 ## Constraints
 

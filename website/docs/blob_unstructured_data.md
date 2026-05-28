@@ -9,22 +9,17 @@ last_modified_at: 2026-05-27T00:00:00-00:00
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-The `BLOB` type lets you store raw binary data — images, PDFs, audio clips, video files, model weights —
-directly in Hudi tables. Combined with Hudi's transactional guarantees and table services, BLOB makes
-the data lakehouse a single source of truth for both structured and unstructured data.
+The `BLOB` type stores raw binary data — images, PDFs, audio clips, video files, model weights —
+as a column in a Hudi table.
 
 ## BLOB Type Overview
 
 A BLOB column stores binary data in one of two modes:
 
-| Mode | Storage | Table Footprint | Read Pattern |
-|:-----|:--------|:----------------|:-------------|
-| **Inline** | Raw bytes embedded in the table row | Larger (bytes stored in data files) | Direct read — no external fetch |
-| **Out-of-line** | Pointer to external storage location | Very small (< 1% of data size) | On-demand via `read_blob()` |
-
-Choose **inline** for small objects that are frequently read together (thumbnails, short audio clips,
-small documents). Choose **out-of-line** for large objects where you typically query metadata first and
-fetch raw data selectively (high-res images, video, model checkpoints).
+| Mode | Storage | Read Pattern |
+|:-----|:--------|:-------------|
+| **Inline** | Raw bytes embedded in the table row | Direct read; no external fetch |
+| **Out-of-line** | Pointer to external storage location | On-demand via `read_blob()` |
 
 ## Creating Tables with BLOB Columns
 
@@ -219,74 +214,18 @@ For **inline** BLOBs, `read_blob()` simply extracts the embedded bytes.
 For **out-of-line** BLOBs, `read_blob()` reads from the external path at the specified offset and length,
 transparently fetching the data on demand.
 
-:::tip
-Use `read_blob()` selectively — filter first, then resolve. Avoid `SELECT read_blob(content) FROM large_table`
-without a WHERE clause, as this will fetch all raw data.
+:::note
+`read_blob()` materializes raw bytes per row, including external fetches for `OUT_OF_LINE` blobs.
+Apply predicates before calling `read_blob()` to bound the bytes resolved.
 :::
 
-## Use Cases
+## Storage Characteristics
 
-### Image Datasets for Computer Vision
-
-Store training images alongside metadata and embeddings:
-
-```sql
-CREATE TABLE training_images (
-    image_id   STRING,
-    label      STRING,
-    split      STRING,           -- 'train', 'val', 'test'
-    embedding  VECTOR(1024),
-    raw_image  BLOB
-) USING hudi TBLPROPERTIES (...);
-
--- Get raw images for a specific label
-SELECT image_id, read_blob(raw_image) AS pixels
-FROM training_images
-WHERE label = 'cat' AND split = 'train';
-```
-
-### Document Store for RAG Pipelines
-
-Store PDF documents alongside their chunk embeddings:
-
-```sql
-CREATE TABLE knowledge_base (
-    doc_id     STRING,
-    chunk_id   STRING,
-    source_url STRING,
-    text       STRING,
-    embedding  VECTOR(1536),
-    original   BLOB              -- original PDF bytes
-) USING hudi TBLPROPERTIES (...);
-
--- Retrieve full document after vector search
-SELECT doc_id, source_url, read_blob(original) AS pdf_bytes
-FROM knowledge_base
-WHERE doc_id IN (SELECT doc_id FROM top_matches);
-```
-
-### Audio/Video Processing Pipelines
-
-```sql
-CREATE TABLE audio_clips (
-    clip_id    STRING,
-    transcript STRING,
-    duration   DOUBLE,
-    embedding  VECTOR(512),
-    audio      BLOB
-) USING hudi TBLPROPERTIES (...);
-```
-
-## Storage Efficiency
-
-Out-of-line BLOBs keep the Hudi table footprint extremely small:
-
-| Metric | Inline | Out-of-Line |
+| Aspect | Inline | Out-of-Line |
 |:-------|:-------|:------------|
-| Table size vs. raw data | ~100% | < 1% |
-| Query metadata without fetch | Requires reading data files | Only reads pointer columns |
-| Random access to raw data | Read full row | Seek to (offset, length) |
-| Best for object size | < 1 MB | > 1 MB |
+| Where bytes live | In the table row | At `reference.external_path[offset, length]` |
+| Pointer-only query (no `read_blob()`) | Reads data files | Reads pointer columns only |
+| Random access pattern | Full row read | Seek to `(offset, length)` |
 
 ## Configuration Reference
 
@@ -330,21 +269,12 @@ catalog's native struct type:
 The raw binary payload is preserved in the struct representation, but `read_blob()` is a Spark SQL
 function and is not available in Hive or BigQuery directly.
 
-## Best Practices
+## Notes
 
-1. **Choose the right mode** — Use inline for small, frequently-accessed objects. Use out-of-line for
-   anything over 1 MB.
-
-2. **Filter before resolving** — Always apply WHERE predicates before calling `read_blob()` to avoid
-   unnecessary data transfer.
-
-3. **Batch container files** — When using out-of-line mode, pack multiple objects into container files
-   rather than storing one file per object.
-
-4. **Combine with VECTOR** — Pair BLOB columns with VECTOR columns for powerful "search then retrieve"
-   workflows: vector search narrows candidates, then `read_blob()` fetches just the winners.
-
-5. **Use incremental queries** — Process only new BLOBs by leveraging Hudi's incremental query support:
-   ```sql
-   SELECT * FROM hudi_table_changes('media_assets', 'latest_state', '20260401000000');
-   ```
+- `read_blob()` is a Spark SQL function. It is not available from Hive, BigQuery, or other engines
+  reading the underlying struct directly.
+- For OUT_OF_LINE blobs, multiple rows can reference different `(offset, length)` ranges within the
+  same `external_path`. Hudi reads the configured byte ranges; it does not own the lifecycle of the
+  external file unless `reference.managed=true` is set (currently advisory; see the struct definition
+  above).
+- BLOB columns are excluded from column-stats indexing.

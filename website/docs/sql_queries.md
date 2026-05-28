@@ -363,6 +363,32 @@ SELECT * FROM hudi_vector_search('db.embeddings_table', 'embedding', ARRAY(0.1, 
 
 See [Vector Search](vector_search.md) for the full API, supported metrics, and setup instructions.
 
+### Reading BLOB Columns
+
+The `read_blob()` SQL function returns the raw bytes of a `BLOB` column. It transparently handles
+both `INLINE` (under `hoodie.read.blob.inline.mode=CONTENT`) and `OUT_OF_LINE` storage modes.
+
+```sql
+SELECT asset_id, read_blob(content) AS raw_bytes
+FROM media_assets
+WHERE asset_id = 'asset_001';
+```
+
+`read_blob()` can be combined with `hudi_vector_search` in a single query — see
+[Unstructured Data](blob_unstructured_data.md) and the
+[Unstructured Data Quick Start](unstructured-data-quick-start.md).
+
+### Querying VARIANT Columns
+
+VARIANT columns hold semi-structured (JSON-like) data. Cast to `STRING` for JSON output, or use
+Spark's path/field access functions on a typed VARIANT value.
+
+```sql
+SELECT event_id, cast(payload as STRING) AS payload_json FROM events;
+```
+
+See [Semi-Structured Data (VARIANT)](variant_type.md) for shredding and cross-engine notes.
+
 ### Query Indexes and Timeline
 
 Hudi also allows users to directly query the metadata partitions and check the metadata corresponding to the table

@@ -48,6 +48,29 @@ INSERT INTO hudi_cow_pt_tbl PARTITION(dt = '2021-12-09', hh='11') SELECT 2, 'a2'
 INSERT INTO hudi_cow_pt_tbl PARTITION(dt, hh) SELECT 1 AS id, 'a1' AS name, 1000 AS ts, '2021-12-09' AS dt, '10' AS hh;
 ```
 
+#### Inserting VECTOR, BLOB, and VARIANT columns
+
+```sql
+-- VECTOR: pass an ARRAY of floats with the declared dimension
+INSERT INTO products SELECT 'prod_001', 'Shoes', ARRAY(0.12, -0.03, /* ... 768 floats ... */);
+
+-- BLOB (INLINE): construct the internal struct with named_struct
+INSERT INTO media_assets VALUES (
+  'asset_001', 'logo.png', 'image/png', 45230,
+  named_struct(
+    'type',      'INLINE',
+    'data',      <binary>,
+    'reference', CAST(NULL AS STRUCT<external_path: STRING, offset: BIGINT, length: BIGINT, managed: BOOLEAN>)
+  )
+);
+
+-- VARIANT (Spark 4.0+): build VARIANT values with parse_json
+INSERT INTO events VALUES ('evt_001', parse_json('{"action":"click","x":120}'), 1000);
+```
+
+See [Vector Search](vector_search.md), [Unstructured Data](blob_unstructured_data.md), and
+[Semi-Structured Data (VARIANT)](variant_type.md) for the full write semantics of each type.
+
 :::note Mapping to write operations
 Hudi offers flexibility in choosing the underlying [write operation](write_operations.md) of a `INSERT INTO` statement using 
 the `hoodie.spark.sql.insert.into.operation` configuration. Possible options include *"bulk_insert"* (large inserts), *"insert"* (with small file management), 

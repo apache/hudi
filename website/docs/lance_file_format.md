@@ -1,14 +1,13 @@
 ---
 title: "Lance File Format"
-keywords: [ hudi, lance, file format, vector, AI, ML, columnar, ANN, indexing]
+keywords: [ hudi, lance, file format, vector, columnar, ANN, indexing]
 summary: "Use the Lance columnar file format with Hudi for vector-friendly storage and efficient ML workloads"
 toc: true
 last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 
-[Lance](https://lancedb.github.io/lance/) is a modern columnar data format designed for AI and machine learning
-workloads. Hudi's pluggable storage architecture lets you use Lance as the base file format alongside Parquet
-and ORC, unlocking vector indexing, fast random access, and optimized high-dimensional array storage.
+[Lance](https://lancedb.github.io/lance/) is a columnar file format. Hudi 1.2.0 supports Lance as a
+pluggable base file format alongside Parquet, ORC, and HFile.
 
 :::caution Engine Support
 Lance file format support is **Spark-only**. Attempting to read a Lance-backed table from Flink or Hive throws a
@@ -91,35 +90,18 @@ export LANCE_BUNDLE_JAR=/path/to/lance-spark-bundle-3.5_2.12-0.4.0.jar
 spark-shell --jars $HUDI_BUNDLE_JAR,$LANCE_BUNDLE_JAR
 ```
 
-## How Hudi + Lance Work Together
+## Layering
 
-Hudi manages the table layer — transactions, schema, timeline, table services — while Lance handles the
-file-level storage:
+Hudi manages the table layer (timeline, metadata, schema, file groups, table services). Lance is the
+on-disk file format for base files. Log files for MOR tables remain Avro.
 
-```
-┌───────────────────────────────────┐
-│         Hudi Table Layer          │
-│  Timeline, Metadata, Indexing     │
-│  Transactions, Schema Evolution   │
-├───────────────────────────────────┤
-│     File Group / File Slice       │
-│  (same Hudi concepts as Parquet)  │
-├───────────────────────────────────┤
-│     Lance Data Files (.lance)     │
-│  Columnar storage                 │
-│  Fragment-based layout            │
-├───────────────────────────────────┤
-│   Storage (S3, GCS, HDFS, FS)    │
-└───────────────────────────────────┘
-```
+Table-service behavior on Lance-backed tables:
 
-All Hudi table services work with Lance-backed tables:
-
-- **Compaction** — merges log files into Lance base files
-- **Clustering** — reorganizes Lance files for better data locality
-- **Cleaning** — removes old Lance file versions
-- **Metadata indexing** — bloom filters work across Lance files; column stats and partition stats are
-  **automatically disabled** for Lance tables
+- **Compaction** — merges Avro log files into Lance base files.
+- **Clustering** — reorganizes records into new Lance files.
+- **Cleaning** — removes obsolete Lance file slices.
+- **Metadata indexing** — bloom filter indexing is supported. Column-stats and partition-stats
+  indices are automatically disabled for Lance base files.
 
 ## VECTOR Storage on Lance
 
@@ -152,9 +134,8 @@ Lance supports the following schema changes at the Hudi layer:
 | Drop column | Yes |
 
 :::caution
-`FLOAT → DOUBLE` and `FLOAT → STRING` type promotions are supported for Parquet tables but **not**
-for Lance. Attempting these on a Lance table will fail. Use `DOUBLE` from the start if you anticipate
-needing higher precision.
+`FLOAT → DOUBLE` and `FLOAT → STRING` type promotions are supported for Parquet tables but not
+for Lance. Attempting these on a Lance table fails at write time.
 :::
 
 ## Vector Search with Lance
@@ -197,9 +178,9 @@ The three sizing configs work together:
   approach the cap. The default 96 MiB (≈ 3/8 of the allocator cap) leaves room for offset and
   validity buffers to double without exceeding the allocator limit.
 
-For tables with large BLOB columns, increase both `hoodie.lance.write.allocator.size.bytes` and
-`hoodie.lance.write.flush.byte.watermark` proportionally (keep watermark at roughly 3/8 of allocator
-size).
+For tables with large BLOB columns, increase `hoodie.lance.write.allocator.size.bytes` and
+`hoodie.lance.write.flush.byte.watermark` together (keep watermark at roughly 3/8 of allocator size
+so Arrow's power-of-2 doubling stays within the allocator cap).
 
 ## Additional Notes
 
@@ -211,10 +192,6 @@ size).
 
 ## Mixed-Format Tables
 
-Hudi does not require all tables in a lakehouse to use the same file format. You can have:
-
-- **Analytical tables** on Parquet — for traditional BI/SQL workloads
-- **AI tables** on Lance — for embeddings, vector search, and ML feature storage
-- **Archival tables** on ORC — for compressed long-term storage
-
-All share the same Hudi catalog, metadata, and tooling.
+`hoodie.table.base.file.format` is set per table, so different tables in the same lakehouse can use
+different base file formats (Parquet, ORC, HFile, Lance) under a shared Hudi catalog and metadata
+table.

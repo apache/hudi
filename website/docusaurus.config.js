@@ -145,6 +145,10 @@ module.exports = {
             to: "/docs/next/indexes",
           },
           {
+            from: ["/docs/next/ai-quick-start-guide"],
+            to: "/docs/next/unstructured-data-quick-start",
+          },
+          {
             from: ["/docs/releases", "/docs/next/releases"],
             to: "/releases/release-1.1",
           },

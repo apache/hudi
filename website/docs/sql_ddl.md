@@ -49,6 +49,16 @@ CREATE TABLE IF NOT EXISTS hudi_table (
 ) USING hudi;
 ```
 
+#### Column types
+
+In addition to standard SQL types, Hudi supports the following column types:
+
+| Type | Description | Reference |
+|:-----|:------------|:----------|
+| `VECTOR(dim[, FLOAT \| DOUBLE \| INT8])` | Fixed-dimension embedding vector. Searchable via the `hudi_vector_search` TVF. | [Vector Search](vector_search.md) |
+| `BLOB` | Binary column with `INLINE` or `OUT_OF_LINE` storage. Read with `read_blob()`. | [Unstructured Data](blob_unstructured_data.md) |
+| `VARIANT` | Semi-structured (JSON-like) column. Spark 4.0+ supports the native `VARIANT` keyword; on Spark 3.x use `STRUCT<metadata: BINARY, value: BINARY>`. | [Semi-Structured Data (VARIANT)](variant_type.md) |
+
 ### Create partitioned table
 A partitioned table can be created by adding a `partitioned by` clause. Partitioning helps to organize the data into multiple folders 
 based on the partition columns. It can also help speed up queries and index lookups by limiting the amount of metadata, index and data scanned.

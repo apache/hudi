@@ -467,6 +467,22 @@ The following advanced storage configuration options were added in Hudi 1.2.0:
 | Config | Default | Description |
 |---|---|---|
 | `hoodie.parquet.write.config.injector.class` | (none) | Fully-qualified class name of a custom `HoodieParquetConfigInjector` implementation. Use this to inject custom Parquet writer properties (e.g., disable dictionary encoding, set bloom filter sizes) without modifying the Hudi source. The implementing class must implement `org.apache.hudi.io.HoodieParquetConfigInjector`. |
+| `hoodie.table.base.file.format` | `parquet` | Base file format for the table. Accepts `parquet`, `orc`, `hfile`, or `lance`. See [Lance File Format](lance_file_format.md) for the Lance-specific options. |
+
+### Writing VECTOR, BLOB, and VARIANT Columns
+
+Hudi 1.2.0 introduces three new column types that participate in writes the same way as standard
+SQL types:
+
+- **`VECTOR(dim[, FLOAT|DOUBLE|INT8])`** — written as an array of floats matching the declared
+  dimension. With the DataFrame API, stamp `hudi_type=VECTOR(dim)` metadata on the column.
+  See [Vector Search](vector_search.md).
+- **`BLOB`** — internally a struct with `type` (`INLINE`/`OUT_OF_LINE`), `data`, and a `reference`
+  pointer struct. Construct it via `named_struct(...)` in SQL or the equivalent struct in the
+  DataFrame API. See [Unstructured Data](blob_unstructured_data.md).
+- **`VARIANT`** — on Spark 4.0+, construct values with `parse_json()`. On Spark 3.x, write the
+  underlying `STRUCT<metadata: BINARY, value: BINARY>` directly. See
+  [Semi-Structured Data (VARIANT)](variant_type.md).
 
 ## Java Client
 We can use plain java to write to hudi tables. To use Java client we can refere [here](https://github.com/apache/hudi/blob/master/hudi-examples/hudi-examples-java/src/main/java/org/apache/hudi/examples/java/HoodieJavaWriteClientExample.java)
