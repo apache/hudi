@@ -245,10 +245,7 @@ public class ITTestVariantCrossEngineCompatibility {
     Row appended = rows.get(1);
     assertEquals(99, appended.getField(0));
     DataTypeAdapterTestUtils.assertAsBinaryVariant(appended.getField(2));
-    String appendedJson = selectVariantJson(tEnv, 99);
-    assertTrue(
-        appendedJson.contains("flink") && appendedJson.contains("42"),
-        "Inserted VARIANT stringify should expose engine+n; got: " + appendedJson);
+    assertVariantMatchesParseJson(tEnv, appended.getField(2), "{\"engine\":\"flink\",\"n\":42}");
 
     StreamTableEnvironment sEnv = asStreamTableEnv(tEnv);
     Row streamRow =
@@ -306,8 +303,7 @@ public class ITTestVariantCrossEngineCompatibility {
     DataTypeAdapterTestUtils.assertAsBinaryVariant(sqlRow.getField(2));
 
     Object v = sqlRow.getField(2);
-    String json = selectVariantJson(tEnv, 1);
-    assertTrue(json.contains("flink_rewrite"), "Upsert VARIANT should stringify rewrite JSON; got: " + json);
+    assertVariantMatchesParseJson(tEnv, v, "{\"flink_rewrite\":true}");
 
     StreamTableEnvironment sEnv = asStreamTableEnv(tEnv);
     Row dsRow =
@@ -365,20 +361,14 @@ public class ITTestVariantCrossEngineCompatibility {
     assertEquals(6000L, row.getField(3));
     DataTypeAdapterTestUtils.assertAsBinaryVariant(row.getField(2));
 
-    String json = selectVariantJson(tEnv, 1);
-    assertTrue(
-        json.contains("flink_sql_select") && json.contains("7"),
-        "INSERT SELECT upsert VARIANT should stringify rewrite JSON; got: " + json);
+    assertVariantMatchesParseJson(tEnv, row.getField(2), "{\"flink_sql_select\":true,\"n\":7}");
 
     tEnv.executeSql("DROP TABLE variant_table");
   }
 
-  private static String selectVariantJson(TableEnvironment tEnv, int id) throws Exception {
-    return CollectionUtil.iteratorToList(
-            tEnv.executeSql("SELECT JSON_STRING(v) FROM variant_table WHERE id = " + id).collect())
-        .get(0)
-        .getField(0)
-        .toString();
+  private static void assertVariantMatchesParseJson(
+      TableEnvironment tEnv, Object actual, String jsonLiteral) throws Exception {
+    DataTypeAdapterTestUtils.assertVariantMatchesParseJson(tEnv, actual, jsonLiteral);
   }
 
   private static void assertExpectedSpark40VariantBytes(Object variantObject, String testDescription) {

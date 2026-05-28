@@ -22,12 +22,17 @@ import org.apache.hudi.adapter.DataTypeAdapter;
 import org.apache.hudi.adapter.DataTypeAdapterTestUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.clustering.FlinkClusteringConfig;
 import org.apache.hudi.sink.clustering.HoodieFlinkClusteringJob;
+import org.apache.hudi.util.CompactionUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestTableEnvs;
@@ -135,9 +140,9 @@ public class ITTestVariantFlinkTableServices {
             tEnv.executeSql("SELECT id, name, v, ts FROM variant_table ORDER BY id").collect());
     assertEquals(3, rows.size(), "Compaction should preserve row count");
 
-    assertRowVariantJson(tEnv, rows.get(0), 1, "r1", 2000L, "merged");
-    assertRowVariantJson(tEnv, rows.get(1), 2, "r2", 1000L, "\"k\":2");
-    assertRowVariantJson(tEnv, rows.get(2), 3, "r3", 1000L, "\"k\":3");
+    assertRowVariantJson(tEnv, rows.get(0), 1, "r1", 2000L, "{\"k\":1,\"merged\":true}");
+    assertRowVariantJson(tEnv, rows.get(1), 2, "r2", 1000L, "{\"k\":2}");
+    assertRowVariantJson(tEnv, rows.get(2), 3, "r3", 1000L, "{\"k\":3}");
 
     tEnv.executeSql("DROP TABLE variant_table");
   }
@@ -278,45 +283,48 @@ public class ITTestVariantFlinkTableServices {
       int expectedId,
       String expectedName,
       long expectedTs,
-      String jsonFragment)
+      String jsonLiteral)
       throws Exception {
     assertEquals(expectedId, row.getField(0));
     assertEquals(expectedName, row.getField(1));
     assertEquals(expectedTs, row.getField(3));
-    DataTypeAdapterTestUtils.assertAsBinaryVariant(row.getField(2));
-
-    String json =
-        CollectionUtil.iteratorToList(
-                tEnv.executeSql(
-                        "SELECT JSON_STRING(v) FROM variant_table WHERE id = " + expectedId)
-                    .collect())
-            .get(0)
-            .getField(0)
-            .toString();
-    assertTrue(
-        json.contains(jsonFragment),
-        "Expected VARIANT json to contain " + jsonFragment + "; got: " + json);
+    DataTypeAdapterTestUtils.assertVariantMatchesParseJson(tEnv, row.getField(2), jsonLiteral);
   }
 
   /**
    * Batch SQL INSERT jobs do not drive the append-mode clustering operator through checkpoints;
-   * run the standalone clustering service after commits (same pattern as {@code ITTestHoodieFlinkClustering}).
+   * schedule and execute clustering via {@link HoodieFlinkClusteringJob} (same pattern as
+   * {@code ITTestHoodieFlinkClustering}).
    */
   private static void runClusteringService(String tablePath) throws Exception {
     FlinkClusteringConfig cfg = new FlinkClusteringConfig();
     cfg.path = tablePath;
     cfg.schedule = true;
-    cfg.minClusteringIntervalSeconds = 1;
     Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    conf.set(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, metaClient.getTableConfig().getRecordKeyFieldProp());
+    conf.set(
+        FlinkOptions.PARTITION_PATH_FIELD,
+        HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig()).orElse(""));
+    CompactionUtil.setAvroSchema(conf, metaClient);
+
+    try (HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(conf)) {
+      assertTrue(
+          writeClient.scheduleClustering(Option.empty()).isPresent(),
+          "Clustering plan should be schedulable after inserts");
+    }
+
     HoodieFlinkClusteringJob.AsyncClusteringService service =
         new HoodieFlinkClusteringJob.AsyncClusteringService(cfg, conf);
-    service.start(null);
+    try {
+      new HoodieFlinkClusteringJob(service).start(false);
+    } finally {
+      service.shutDown();
+    }
     assertTrue(
-        TestUtils.waitUntil(
-            () -> hasCompletedClustering(tablePath) && !hasPendingClustering(tablePath),
-            ASYNC_SERVICE_TIMEOUT_SECONDS),
+        hasCompletedClustering(tablePath) && !hasPendingClustering(tablePath),
         "Clustering should complete after inserts");
-    service.shutDown();
   }
 
   private static HoodieTableMetaClient metaClient(String tablePath) {
