@@ -356,9 +356,7 @@ available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectI
   ([HUDI-9666](https://issues.apache.org/jira/browse/HUDI-9666)).
 * Databricks Spark runtime compatibility for reading Hudi tables, including partition predicate handling and incremental
   query with full scan mode on MOR tables.
-* Storage-based lock provider implementations for [S3](https://issues.apache.org/jira/browse/HUDI-9159),
-  [GCS](https://issues.apache.org/jira/browse/HUDI-9160), and
-  [DynamoDB](https://issues.apache.org/jira/browse/HUDI-8490).
+* Storage-based lock provider improvements.
 * Column stats index correctness with metadata table
   ([HUDI-8371](https://issues.apache.org/jira/browse/HUDI-8371)) and timestamp column logical type fixes.
 * Schema evolution improvements for nested data types, MOR tables with timestamp columns
