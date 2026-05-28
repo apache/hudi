@@ -1,7 +1,7 @@
 ---
 title: Batch Writes
 keywords: [hudi, incremental, batch, processing]
-last_modified_at: 2024-03-13T15:59:57-04:00
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -440,6 +440,34 @@ inputDF.write.format("hudi")
        .mode(Overwrite)
        .save(basePath)
 ```
+
+### Rolling Extra Metadata
+
+Rolling extra metadata allows you to automatically carry forward selected commit metadata keys to every subsequent commit and clean instant without having to walk the full timeline. This is particularly useful for persisting checkpoint information such as Kafka offsets or Flink checkpoints across commits.
+
+| Config | Default | Description |
+|---|---|---|
+| `hoodie.write.rolling.metadata.keys` | `""` (disabled) | Comma-separated list of extra metadata keys to carry forward to each new commit and clean instant. Values are read from recent completed instants and written into the new commit metadata, so they remain accessible without walking the timeline. New values override old ones. Only applies to data table commits and clean instants. |
+| `hoodie.write.rolling.metadata.timeline.lookback.commits` | `10` | Maximum number of completed instants to walk back when searching for the configured rolling metadata keys. Higher values improve resilience at a small performance cost. |
+
+**Example:**
+
+```java
+inputDF.write.format("hudi")
+       .option("hoodie.write.rolling.metadata.keys", "kafka.offset.partition.0,kafka.offset.partition.1")
+       .option("hoodie.write.rolling.metadata.timeline.lookback.commits", "10")
+       // ... other options
+       .save(basePath)
+```
+
+### Advanced Storage Options
+
+The following advanced storage configuration options are available in 1.2.0:
+
+| Config | Default | Description |
+|---|---|---|
+| `hoodie.parquet.write.config.injector.class` | (none) | Fully-qualified class name of a custom `HoodieParquetConfigInjector` implementation. Use this to inject custom Parquet writer properties (e.g., disable dictionary encoding, set bloom filter sizes) without modifying the Hudi source. The implementing class must implement `org.apache.hudi.io.HoodieParquetConfigInjector`. |
+| `hoodie.hfile.writes.allow.duplicates` | `false` | Allow duplicate keys to be written into HFile-format log blocks. This is an escape hatch for bootstrapping a Record Level Index (RLI) when the source data table contains pre-existing duplicates; enabling it avoids bootstrap job failures. Note that with duplicates present, there is no deterministic guarantee of which record will be retained in the index. Do not enable for normal write workloads. |
 
 ## Java Client
 We can use plain java to write to hudi tables. To use Java client we can refere [here](https://github.com/apache/hudi/blob/master/hudi-examples/hudi-examples-java/src/main/java/org/apache/hudi/examples/java/HoodieJavaWriteClientExample.java)
