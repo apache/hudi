@@ -115,25 +115,6 @@ data table, plus a time-based option.
 | `hoodie.metadata.compact.max.delta.commits` | `10` | Number of delta commits after the last MDT compaction before a new one is scheduled (for `NUM_COMMITS`-based strategies). |
 | `hoodie.metadata.compact.max.delta.seconds` | `7200` | Elapsed seconds after the last MDT compaction before scheduling a new one. Takes effect only for `TIME_ELAPSED`, `NUM_AND_TIME`, and `NUM_OR_TIME` strategies. |
 
-#### Delegating MDT Compaction to an External Platform
-
-In large deployments it may be desirable to delegate metadata table compaction and log compaction to a dedicated
-platform (e.g., a separate async table service runner) rather than running them inline with each writer.
-Hudi 1.2.0 introduced the following configs to support this pattern.
-
-| Config Name | Default | Description |
-|---|---|---|
-| `hoodie.metadata.table.service.manager.enabled` | `false` | When `true`, delegate the table service actions listed in `hoodie.metadata.table.service.manager.actions` to an external table service manager instead of running them inline. |
-| `hoodie.metadata.table.service.manager.actions` | (empty) | Comma-separated list of MDT table service actions to delegate. Supported values: `compaction`, `logcompaction`. |
-| `hoodie.metadata.write.concurrency.mode` | `SINGLE_WRITER` | Set to `OPTIMISTIC_CONCURRENCY_CONTROL` (OCC) when an external concurrent writer (such as a table service platform) performs MDT operations, so that the appropriate locks are acquired. |
-
-**Example — delegate MDT compaction to an external service:**
-```properties
-hoodie.metadata.table.service.manager.enabled=true
-hoodie.metadata.table.service.manager.actions=compaction,logcompaction
-hoodie.metadata.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL
-```
-
 ## Ways to trigger Compaction
 
 ### Inline
@@ -300,18 +281,6 @@ Offline compaction needs to submit the Flink task on the command line. The progr
 
 :::note
 The retry options (`--retry`, `--retry-last-failed-job`, `--job-max-processing-time-ms`) are only effective in single-run mode, not in service mode. Service mode has implicit retry semantics via its continuous monitoring loop. A warning will be logged if `--retry-last-failed-job` is enabled but `--job-max-processing-time-ms` is not set to a positive value.
-:::
-
-### Log Compaction Blocks Threshold
-
-As of Hudi 1.2.0, a minimum-block threshold gates log compaction scheduling per file group.
-
-| Config Name | Default | Description |
-|---|---|---|
-| `hoodie.log.compaction.blocks.threshold` | `5` | Minimum number of log blocks in a file slice before log compaction is scheduled for that file group. Applies when `hoodie.log.compaction.enable=true`. |
-
-:::note
-This threshold also gates scheduling: log compaction is not scheduled for a file group unless the delta-commit count exceeds this value. Duplicate plan execution now fails fast rather than silently succeeding.
 :::
 
 ## Related Resources
