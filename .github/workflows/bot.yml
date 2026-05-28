@@ -1078,6 +1078,7 @@ jobs:
           mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
           mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" $FLINK_IT_FILTER2 -pl hudi-flink-datasource/hudi-flink $MVN_ARGS
 
+  # Parquet 1.16 + Hadoop 3.3+ required for VARIANT Parquet write/read (see flink2.1 VARIANT ITs).
   test-flink-variant:
     runs-on: ubuntu-latest
     needs: changes
