@@ -2,7 +2,7 @@
 title: "Spark Quick Start"
 sidebar_position: 2
 toc: true
-last_modified_at: 2026-05-27T00:00:00-00:00
+last_modified_at: 2025-02-21T03:17:02+09:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -16,9 +16,9 @@ Hudi works with Spark 3.3 and above versions. You can follow instructions [here]
 
 ### Spark Support Matrix
 
-| Hudi   | Supported Spark versions                                                   | Scala versions                                                        | Java versions                        |
-|:-------|:---------------------------------------------------------------------------|:----------------------------------------------------------------------|:-------------------------------------|
-| 1.2.x  | 4.1.1 (new), 4.0.2, 3.5.5 (default build), 3.4.3, 3.3.x                   | 2.13 (Spark 4.0/4.1), 2.12/2.13 (Spark 3.5), 2.12 (Spark 3.3–3.4)   | 17+ (Spark 4.0/4.1), 8+ (Spark 3.x) |
+| Hudi   | Supported Spark versions                                 | Scala versions                                                        | Java versions                       |
+|:-------|:---------------------------------------------------------|:----------------------------------------------------------------------|:------------------------------------|
+| 1.2.x  | 4.1.x, 4.0.x, 3.5.x (default build), 3.4.x, 3.3.x        | 2.13 (Spark 4.0/4.1), 2.12/2.13 (Spark 3.5), 2.12 (Spark 3.3-3.4)     | 17+ (Spark 4.0/4.1), 8+ (Spark 3.x) |
 | 1.1.x  | 4.0.x, 3.5.x (default build), 3.4.x, 3.3.x               | 2.13 (Spark 4.0), 2.12/2.13 (Spark 3.5), 2.12 (Spark 3.3-3.4)         | 17+ (Spark 4.0), 8+ (Spark 3.x)     |
 | 1.0.x  | 3.5.x (default build), 3.4.x, 3.3.x                      | 2.12/2.13 (Spark 3.5), 2.12 (Spark 3.3-3.4)                           | 8+                                  |
 | 0.15.x | 3.5.x (default build), 3.4.x, 3.3.x, 3.2.x, 3.1.x, 3.0.x | 2.12/2.13 (Spark 3.5), 2.12                                           | 8+                                  |
@@ -26,12 +26,6 @@ Hudi works with Spark 3.3 and above versions. You can follow instructions [here]
 
 :::note
 The *default build* Spark version indicates how we build `hudi-spark3-bundle`.
-:::
-
-:::note Java requirements
-Hudi 1.2.0 requires **Java 11 as the minimum version to build** from source. The runtime Java requirement
-depends on the Spark version in use: Java 17 or later is required for Spark 4.0/4.1, while Spark 3.x
-continues to support Java 8 and above at runtime.
 :::
 
 ### Spark Shell/SQL
