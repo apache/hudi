@@ -310,9 +310,9 @@ hoodie.datasource.hive_sync.use_spark_catalog=true
 
 ## HMS 4.x Support via JDBC Fallback
 
-HMS 4.x changed several Thrift API method signatures (e.g., `get_table` → `get_table_req`), which makes the standard Thrift-based HMS client incompatible. Hudi 1.2.0 adds automatic fallback: when the first Thrift call fails with a `TApplicationException` indicating an API mismatch, all subsequent metadata operations are transparently rerouted through the JDBC path.
+HMS 4.x changed several Thrift API method signatures (e.g., `get_table` → `get_table_req`), which makes the standard Thrift-based HMS client incompatible. Hudi 1.2.0 adds automatic fallback: when a Thrift metadata call surfaces a `TApplicationException` anywhere in its cause chain, Hudi flips an internal `thriftIncompatible` flag and reroutes the rest of that sync run through the JDBC path.
 
-**Requirement:** sync mode must be `jdbc` with a valid JDBC URL so that the fallback client is available:
+**Requirement:** sync mode must be `jdbc` with a valid JDBC URL so the fallback client is available:
 
 ```properties
 hoodie.datasource.hive_sync.mode=jdbc
@@ -321,7 +321,11 @@ hoodie.datasource.hive_sync.username=<username>
 hoodie.datasource.hive_sync.password=<password>
 ```
 
-With these settings, syncing against HMS 4.x works transparently — no code changes or separate build profile needed.
+If the table is synced with `mode=hms` or `mode=hiveql` against HMS 4.x, Hudi logs `"Thrift API incompatible with HMS but no JDBC fallback available. Consider using mode=jdbc with a valid jdbcUrl."` and surfaces the original exception — no automatic recovery happens.
+
+**Detection scope.** The flag is per `HoodieHiveSyncClient` instance, not global, and only transitions from `false` to `true` (it never resets). In practice this means the first Thrift call of each sync run probes once, and the rest of that run uses the JDBC fallback. The next sync run starts with a fresh probe.
+
+**JDBC connection failures surface separately.** With `mode=jdbc`, Hudi opens the JDBC connection eagerly when the sync client is constructed — before any Thrift call is attempted. A bad JDBC URL, missing driver, or wrong credentials therefore fails at startup with `HoodieHiveSyncException: Failed to create HiveMetaStoreClient` and the underlying JDBC exception as the cause in the stack trace. This is a configuration-error path, not an HMS API mismatch, and is the same behavior as `mode=jdbc` against any HMS version.
 
 ## Writer Version Table Property
 

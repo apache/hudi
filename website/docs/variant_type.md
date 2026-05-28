@@ -253,8 +253,8 @@ binary `value` field.
 
 | Engine | VARIANT Support |
 |:-------|:---------------|
-| **Spark 4.0** | Native `VariantType` — full read/write/query; MOR + VARIANT fully supported; native `df.write` with `VariantType` on V1 datasource |
-| **Spark 4.1** | Native `VariantType` — full read/write/query; MOR + VARIANT fixed in 1.2.0 |
+| **Spark 4.0** | Native `VariantType` — full read/write/query for COW and MOR; native `df.write` with `VariantType` on the V1 datasource |
+| **Spark 4.1** | Native `VariantType` — full read/write/query for COW and MOR |
 | **Spark 3.x** | Reads as `STRUCT<value: BINARY, metadata: BINARY>` — backward compatible |
 | **Flink 2.1+** | Reads and writes as `VARIANT` (Flink's native `LogicalTypeRoot.VARIANT`) — cross-engine compatible |
 | **Flink < 2.1** | **Not supported** — throws `UnsupportedOperationException`. Upgrade to Flink 2.1 to use VARIANT columns. |
