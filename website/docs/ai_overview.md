@@ -18,7 +18,7 @@ Apache Hudi's AI-native capabilities bring this vision to life with four foundat
 
 ### VECTOR Type and Similarity Search
 
-Store high-dimensional embedding vectors as first-class column types and run approximate nearest neighbor (ANN)
+Store high-dimensional embedding vectors as first-class column types and run vector similarity
 search directly in Spark SQL.
 
 ```sql
@@ -99,7 +99,7 @@ query performance, while keeping the flexibility for everything else.
 Hudi's pluggable file format architecture supports **Lance**, a modern columnar format purpose-built for
 AI/ML workloads. Lance provides:
 
-- Efficient vector indexing and ANN search
+- Native vector column encoding (`FixedSizeList`) — no conversion overhead at the file-format layer
 - Fast random access for training data sampling
 - Optimized storage for high-dimensional arrays and nested structures
 

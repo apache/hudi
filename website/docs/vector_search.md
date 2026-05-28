@@ -1,7 +1,7 @@
 ---
 title: "Vector Search"
-keywords: [ hudi, vector, search, embeddings, similarity, cosine, ANN, nearest neighbor, VECTOR type]
-summary: "Store embedding vectors in Hudi tables and run approximate nearest neighbor search using the VECTOR type and hudi_vector_search TVF"
+keywords: [ hudi, vector, search, embeddings, similarity, cosine, nearest neighbor, VECTOR type]
+summary: "Store embedding vectors in Hudi tables and run vector similarity search using the VECTOR type and hudi_vector_search TVF"
 toc: true
 last_modified_at: 2026-05-27T00:00:00-00:00
 ---
@@ -20,7 +20,8 @@ float array. Hudi stamps `hudi_type` metadata on the column so the Spark reader 
 bytes back into a typed array.
 
 On **Lance** tables, VECTOR columns are stored natively as Lance `FixedSizeList<Float32/Float64, dim>`,
-which enables Lance's built-in IVF-PQ ANN index. See [Lance File Format](lance_file_format.md) for details.
+so embeddings are written without conversion overhead at the file-format layer. See
+[Lance File Format](lance_file_format.md) for details.
 
 The `VECTOR(dim[, elementType])` DDL syntax works across Spark 3.4, 3.5, 4.0, and 4.1. Hudi's SQL
 parser normalizes `VECTOR(128, FLOAT)` to `VECTOR(128)` (FLOAT is the default element type).
@@ -111,8 +112,8 @@ INSERT INTO products VALUES (
 
 ## hudi_vector_search TVF
 
-The `hudi_vector_search` table-valued function performs approximate nearest neighbor (ANN) search
-over a VECTOR column.
+The `hudi_vector_search` table-valued function returns the `top_k` rows from a Hudi table whose
+VECTOR column is closest to a given query vector under a chosen distance metric.
 
 ### Syntax
 

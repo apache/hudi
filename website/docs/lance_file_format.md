@@ -1,7 +1,7 @@
 ---
 title: "Lance File Format"
 keywords: [ hudi, lance, file format, vector, AI, ML, columnar, ANN, indexing]
-summary: "Use the Lance columnar file format with Hudi for vector-optimized storage, ANN indexing, and efficient ML workloads"
+summary: "Use the Lance columnar file format with Hudi for vector-friendly storage and efficient ML workloads"
 toc: true
 last_modified_at: 2026-05-27T00:00:00-00:00
 ---
@@ -106,7 +106,6 @@ file-level storage:
 │  (same Hudi concepts as Parquet)  │
 ├───────────────────────────────────┤
 │     Lance Data Files (.lance)     │
-│  IVF-PQ vector index              │
 │  Columnar storage                 │
 │  Fragment-based layout            │
 ├───────────────────────────────────┤
@@ -125,14 +124,13 @@ All Hudi table services work with Lance-backed tables:
 ## VECTOR Storage on Lance
 
 VECTOR columns are stored natively in Lance as `FixedSizeList<Float32/Float64, dim>` — Lance's own
-vector column encoding. This unlocks Lance's built-in IVF-PQ approximate nearest neighbor (ANN) index
-for high-throughput vector search without any data conversion overhead.
+vector column encoding, so embeddings are written without conversion overhead at the file-format
+layer.
 
 Only **FLOAT** and **DOUBLE** element types are supported as VECTOR columns on Lance. INT8 vectors
 are not yet supported and will fail fast at write time.
 
-The `hudi_vector_search` TVF automatically uses the Lance IVF-PQ index when the table uses Lance as
-its base file format. See [Vector Search](vector_search.md) for TVF documentation.
+See [Vector Search](vector_search.md) for the `hudi_vector_search` TVF that queries VECTOR columns.
 
 ## BLOB Columns on Lance
 
@@ -161,7 +159,8 @@ needing higher precision.
 
 ## Vector Search with Lance
 
-The `hudi_vector_search` TVF leverages Lance's built-in IVF-PQ index for approximate nearest neighbor search:
+Use the `hudi_vector_search` TVF to run vector similarity queries against VECTOR columns on a
+Lance-backed table:
 
 ```sql
 SELECT id, metadata, _hudi_distance
