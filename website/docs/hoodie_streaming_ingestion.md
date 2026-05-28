@@ -519,7 +519,6 @@ All keys use the prefix `hoodie.streamer.source.kinesis.`. The settings most use
 | `hoodie.streamer.source.kinesis.region` | (required) | AWS region for the stream (e.g., `us-east-1`). |
 | `hoodie.streamer.source.kinesis.starting.position` | `LATEST` | Where to start when no checkpoint exists yet. `LATEST` starts at the tip of each shard; `EARLIEST` replays from `TRIM_HORIZON`. |
 | `hoodie.streamer.source.kinesis.max.events` | `5000000` | Maximum number of records read per batch across all shards. Tune to control batch size. |
-| `hoodie.streamer.source.kinesis.append.offsets` | `false` | When enabled, appends Kinesis metadata fields to each record: `_hoodie_kinesis_source_sequence_number`, `_hoodie_kinesis_source_shard_id`, `_hoodie_kinesis_source_partition_key`, `_hoodie_kinesis_source_timestamp`. |
 | `hoodie.streamer.source.kinesis.partitions` | `0` | Spark partitions to use when reading. `0` means one Spark partition per Kinesis shard. Set a positive value to repartition for downstream parallelism. |
 
 For credentials, the source uses the default AWS credential chain (instance profile, environment variables, etc.). Authentication for custom endpoints (e.g., LocalStack), API-level rate limiting, and retry tuning are also available — see the [configurations reference](configurations.md) for the full list of `hoodie.streamer.source.kinesis.*` keys.

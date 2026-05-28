@@ -160,7 +160,7 @@ not required. It is paired with
 |---|---|---|
 | `hoodie.clustering.plan.strategy.single.group.clustering.enabled` | `true` | Whether to generate a clustering plan when only one file group is eligible. Set to `false` to skip clustering when there is nothing meaningful to consolidate (i.e., the partition already has a single file group). |
 
-#### File-Slice Sort Order in Plan Generation
+#### File-Slice Sort Order in Clustering Plan Generation
 
 Since 1.2.0, the order in which file slices are packed into clustering groups is configurable, giving more control over
 which files are colocated and how groups are filled.
