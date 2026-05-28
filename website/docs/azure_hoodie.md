@@ -49,9 +49,9 @@ This combination works out of the box. No extra config needed.
     .load("/mountpoint/hudi-tables/customer")
   ```
 
-## Concurrency Control / Locking
+## Concurrency Control
 
-As of Hudi 1.2.0, the `StorageBasedLockProvider` supports Azure ADLS Gen2 (`abfs://`, `abfss://`) and Azure Blob Storage (`wasb://`, `wasbs://`) base paths for distributed lock management. This allows multi-writer pipelines on Azure to use storage-native conditional writes for locking — without requiring ZooKeeper, DynamoDB, or Hive Metastore.
+As of Hudi 1.2.0, the storage-based lock provider supports Azure ADLS Gen2 (`abfs://`, `abfss://`) and Azure Blob Storage (`wasb://`, `wasbs://`) base paths for concurrency control. This allows multi-writer pipelines on Azure to use storage-native conditional writes for locking — without requiring external systems like ZooKeeper, or Hive Metastore.
 
 Add `hudi-azure-bundle` to your classpath and set:
 
