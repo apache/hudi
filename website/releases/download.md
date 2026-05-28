@@ -205,6 +205,11 @@ toc: true
 * Source Release : [Apache Hudi 1.0.0 Source Release](https://downloads.apache.org/hudi/1.0.0/hudi-1.0.0.src.tgz) ([asc](https://downloads.apache.org/hudi/1.0.0/hudi-1.0.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.0.0/hudi-1.0.0.src.tgz.sha512))
 * Release Note : ([Release Note for Apache Hudi 1.0.0](/releases/release-1.0#release-100))
 
+## Release 0.15.1
+
+* Source Release : [Apache Hudi 0.15.1 Source Release](https://downloads.apache.org/hudi/0.15.1/hudi-0.15.1.src.tgz) ([asc](https://downloads.apache.org/hudi/0.15.1/hudi-0.15.1.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.15.1/hudi-0.15.1.src.tgz.sha512))
+* Release Note : ([Release Note for Apache Hudi 0.15.1](/releases/release-0.15#release-0151))
+
 ## Release 0.15.0
 
 * Source Release : [Apache Hudi 0.15.0 Source Release](https://downloads.apache.org/hudi/0.15.0/hudi-0.15.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.15.0/hudi-0.15.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.15.0/hudi-0.15.0.src.tgz.sha512))

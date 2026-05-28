@@ -9,6 +9,7 @@ import TabItem from '@theme/TabItem';
 This page contains release notes for all Apache Hudi 0.15.x releases, including:
 
 - [Release 0.15.0](#release-0150)
+- [Release 0.15.1](#release-0151)
 
 ---
 
@@ -335,3 +336,30 @@ Avoid upgrading any existing table to 0.14.1 and 0.15.0 from any prior version i
 
 The raw release notes are
 available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12353381).
+
+## [Release 0.15.1](https://github.com/apache/hudi/releases/tag/release-0.15.1)
+
+## Migration Guide
+* This release (0.15.1) does not introduce any new table version, thus no migration is needed if you are on 0.15.0.
+* If migrating from an older release, please check the migration guide from the previous release notes, specifically
+  the upgrade instructions in [0.6.0](/releases/release-0.6.0),
+  [0.9.0](/releases/release-0.9.0), [0.10.0](/releases/release-0.10.0),
+  [0.11.0](/releases/release-0.11.0), [0.12.0](/releases/release-0.12.0), [0.13.0](/releases/release-0.13.0), [0.14.0](/releases/release-0.14#release-0140), and
+  [0.15.0](/releases/release-0.15#release-0150)
+
+### Bug fixes
+
+0.15.1 release is primarily intended for bug fixes and stability, including these areas:
+
+* Fix for the Complex Key Generator regression flagged in 0.15.0.
+* Databricks Spark runtime compatibility for reading Hudi tables.
+* Column stats index correctness with metadata table and timestamp column logical type fixes.
+* Hive/Glue and DataHub meta sync improvements.
+* Flink bug fixes.
+* Security fixes.
+
+## Known Regressions
+
+No known regressions at the time of release. The Complex Key Generator regression reported in 0.15.0 is fixed in 0.15.1
+via [HUDI-9666](https://issues.apache.org/jira/browse/HUDI-9666); users on 0.14.1 / 0.15.0 with `ComplexKeyGenerator`
+and a single record key field are encouraged to upgrade.
