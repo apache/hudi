@@ -85,7 +85,7 @@ The BLOB internal structure is a struct with three fields:
   - `external_path` — file path for out-of-line data
   - `offset` — byte offset in the file (null means read from start)
   - `length` — byte length to read (null means read to end of file)
-  - `managed` — boolean: whether Hudi manages the lifecycle of the external file
+  - `managed` — boolean. Only meaningful for `OUT_OF_LINE` blobs. Marks whether Hudi owns the lifecycle of the referenced external file. **Not consumed by the cleaner yet** — set the value to record intent, and a future cleaner implementation will use it: `true` → cleaner may delete the external file when the blob row is no longer referenced; `false` → cleaner will leave the external file in place.
 
 </TabItem>
 </Tabs>
@@ -160,7 +160,7 @@ INSERT INTO media_assets VALUES (
             'external_path', 's3://my-bucket/media/container_001.bin',
             'offset',        8388608,       -- byte offset in the container
             'length',        1073741824,    -- number of bytes
-            'managed',       false          -- Hudi does not manage this external file
+            'managed',       false          -- intent flag; not consumed by the cleaner yet
         )
     )
 );
@@ -302,9 +302,9 @@ used for internal operations (compaction, merge, log replay) regardless of this 
 :::
 
 :::caution Calling read_blob() on INLINE columns under DESCRIPTOR mode
-Under the default `DESCRIPTOR` mode, calling `read_blob()` on an INLINE BLOB column returns a
-descriptor reference rather than the raw bytes — it does **not** materialize the content. To read
-inline bytes with `read_blob()`, set `hoodie.read.blob.inline.mode=CONTENT`:
+Under the default `DESCRIPTOR` mode, calling `read_blob()` on an INLINE BLOB column **throws** —
+the raw bytes are not materialized in the scan, so there is nothing for `read_blob()` to return.
+To read inline bytes with `read_blob()`, switch to `CONTENT` mode first:
 
 ```sql
 SET hoodie.read.blob.inline.mode=CONTENT;
