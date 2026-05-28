@@ -48,28 +48,92 @@ INSERT INTO hudi_cow_pt_tbl PARTITION(dt = '2021-12-09', hh='11') SELECT 2, 'a2'
 INSERT INTO hudi_cow_pt_tbl PARTITION(dt, hh) SELECT 1 AS id, 'a1' AS name, 1000 AS ts, '2021-12-09' AS dt, '10' AS hh;
 ```
 
-#### Inserting VECTOR, BLOB, and VARIANT columns
+#### Inserting VECTOR columns
+
+A [`VECTOR(dim[, elementType])`](sql_ddl.md#vector) column accepts an `ARRAY` whose length and
+element type match the declared dimension and element type:
 
 ```sql
--- VECTOR: pass an ARRAY of floats with the declared dimension
-INSERT INTO products SELECT 'prod_001', 'Shoes', ARRAY(0.12, -0.03, /* ... 768 floats ... */);
-
--- BLOB (INLINE): construct the internal struct with named_struct
-INSERT INTO media_assets VALUES (
-  'asset_001', 'logo.png', 'image/png', 45230,
-  named_struct(
-    'type',      'INLINE',
-    'data',      <binary>,
-    'reference', CAST(NULL AS STRUCT<external_path: STRING, offset: BIGINT, length: BIGINT, managed: BOOLEAN>)
-  )
+INSERT INTO products VALUES (
+    'prod_001', 'Running Shoes', 'Lightweight trail runner',
+    ARRAY(0.123, -0.456, 0.789, /* ... 768 floats ... */)
 );
-
--- VARIANT (Spark 4.0+): build VARIANT values with parse_json
-INSERT INTO events VALUES ('evt_001', parse_json('{"action":"click","x":120}'), 1000);
 ```
 
-See [Vector Search](vector_search.md), [Unstructured Data](blob_unstructured_data.md), and
-[Semi-Structured Data (VARIANT)](variant_type.md) for the full write semantics of each type.
+The query vector's element type must exactly match the corpus embedding's element type (no implicit
+casting).
+
+#### Inserting BLOB columns
+
+A [`BLOB`](sql_ddl.md#blob) column is internally a struct with `type` (`INLINE`/`OUT_OF_LINE`),
+`data`, and a `reference` pointer struct. Construct it via `named_struct`.
+
+**Inline** — bytes embedded directly in the row:
+
+```sql
+INSERT INTO media_assets VALUES (
+    'asset_001', 'logo.png', 'image/png', 45230,
+    named_struct(
+        'type',      'INLINE',
+        'data',      /* binary literal or column reference */,
+        'reference', CAST(NULL AS STRUCT<external_path: STRING, offset: BIGINT, length: BIGINT, managed: BOOLEAN>)
+    )
+);
+```
+
+**Out-of-line** — pointer to a byte range in an external file:
+
+```sql
+INSERT INTO media_assets VALUES (
+    'asset_002', 'video.mp4', 'video/mp4', 1073741824,
+    named_struct(
+        'type',      'OUT_OF_LINE',
+        'data',      CAST(NULL AS BINARY),
+        'reference', named_struct(
+            'external_path', 's3://my-bucket/media/container_001.bin',
+            'offset',        8388608,
+            'length',        1073741824,
+            'managed',       false
+        )
+    )
+);
+```
+
+A common pattern for `OUT_OF_LINE` storage is to pack multiple objects into a single binary
+container file and have each BLOB row store the `(external_path, offset, length)` triple into that
+container:
+
+```
+container_001.bin
+├── [offset=0,       len=45230]      → logo.png
+├── [offset=45230,   len=89012]      → photo.jpg
+├── [offset=134242,  len=1073741824] → video.mp4
+└── ...
+```
+
+#### Inserting VARIANT columns
+
+A [`VARIANT`](sql_ddl.md#variant) column accepts any JSON-compatible value. On Spark 4.0+, build
+VARIANT values with `parse_json`:
+
+```sql
+INSERT INTO events VALUES
+    ('evt_001', parse_json('{"action": "click", "x": 120, "y": 450}'), 1000),
+    ('evt_002', parse_json('{"action": "purchase", "items": ["sku_a", "sku_b"], "total": 59.99}'), 1001),
+    ('evt_003', parse_json('"simple string value"'), 1002);
+```
+
+VARIANT columns support `UPDATE`, `DELETE`, and `MERGE` on both COW and MOR tables.
+
+```sql
+UPDATE events SET payload = parse_json('{"action": "click", "x": 200}')
+WHERE event_id = 'evt_001';
+
+MERGE INTO events target
+USING new_events source ON target.event_id = source.event_id
+WHEN MATCHED THEN UPDATE SET payload = source.payload, ts = source.ts
+WHEN NOT MATCHED THEN INSERT *;
+```
 
 :::note Mapping to write operations
 Hudi offers flexibility in choosing the underlying [write operation](write_operations.md) of a `INSERT INTO` statement using 

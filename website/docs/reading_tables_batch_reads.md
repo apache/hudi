@@ -45,18 +45,19 @@ SELECT * FROM hudi_table WHERE age > 25;
 
 For more Flink read options, see [Using Flink](ingestion_flink.md).
 
-## VECTOR and BLOB Columns
+## VECTOR, BLOB, and VARIANT Columns
 
-Hudi exposes two Spark SQL extensions for reading the 1.2.0 types:
+Hudi exposes two Spark SQL extensions for reading the 1.2.0 column types:
 
-- `hudi_vector_search(table, vector_col, query_vector, top_k[, metric])` — top-K similarity search
-  over a `VECTOR` column. See [Vector Search](vector_search.md).
-- `read_blob(blob_col)` — materializes raw bytes from a `BLOB` column. Under the default
-  `hoodie.read.blob.inline.mode=DESCRIPTOR`, calling `read_blob()` on an `INLINE` column throws —
-  set the mode to `CONTENT` to read inline bytes. See [Unstructured Data](blob_unstructured_data.md).
+- [`hudi_vector_search`](sql_queries.md#vector-similarity-search) — top-K similarity search over a
+  [`VECTOR`](sql_ddl.md#vector) column.
+- [`read_blob()`](sql_queries.md#reading-blob-columns) — materializes raw bytes from a
+  [`BLOB`](sql_ddl.md#blob) column. Under the default `hoodie.read.blob.inline.mode=DESCRIPTOR`,
+  calling `read_blob()` on an `INLINE` column throws — set the mode to `CONTENT` to read inline
+  bytes.
 
-`VARIANT` columns are read like ordinary columns; cast to `STRING` for JSON output. See
-[Semi-Structured Data (VARIANT)](variant_type.md).
+[`VARIANT`](sql_ddl.md#variant) columns are read like ordinary columns; cast to `STRING` for JSON
+output.
 
 ## Daft
 

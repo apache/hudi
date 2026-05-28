@@ -1,5 +1,5 @@
 ---
-title: "Unstructured Data Quick Start"
+title: "Unstructured Data Quick Start Guide"
 keywords: [ hudi, vector search, embeddings, unstructured data, blob, image search, similarity]
 summary: "Store embeddings and images in a Hudi table, then find similar images with hudi_vector_search and read_blob"
 toc: true
@@ -252,7 +252,8 @@ plt.savefig("hudi_vector_search_results.png", dpi=150)
 | Topic | Link |
 |:------|:-----|
 | Full interactive notebook | [00_main_demo.ipynb](https://github.com/apache/hudi/blob/master/hudi-examples/hudi-examples-spark/src/test/python/vector_blob_demo/notebooks/00_main_demo.ipynb) |
-| VECTOR type reference | [Vector Search](vector_search.md) — element types, batch TVF, distance metrics |
-| BLOB type reference | [Unstructured Data](blob_unstructured_data.md) — inline vs. out-of-line, `read_blob()`, configs |
-| VARIANT type | [Semi-Structured Data](variant_type.md) — JSON-like storage, shredding, cross-engine notes |
-| Lance file format | [Lance File Format](lance_file_format.md) — pluggable base file format (Spark-only) |
+| VECTOR type reference | [VECTOR in SQL DDL](sql_ddl.md#vector) + [`hudi_vector_search` in SQL Queries](sql_queries.md#vector-similarity-search) |
+| BLOB type reference | [BLOB in SQL DDL](sql_ddl.md#blob) + [`read_blob()` in SQL Queries](sql_queries.md#reading-blob-columns) |
+| VARIANT type | [VARIANT in SQL DDL](sql_ddl.md#variant) + [VARIANT shredding in Schema Evolution](schema_evolution.md#variant-shredding) |
+| Lance file format | [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format) + [Deployment → Lance dependency](deployment.md#lance-dependency) |
+| AI lakehouse use cases | [Use Cases → AI Lakehouse](use_cases.md#ai-lakehouse) |

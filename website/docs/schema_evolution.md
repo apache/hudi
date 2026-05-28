@@ -312,6 +312,68 @@ scala> spark.sql("select rowId, partitionId, orderingField, name, versionId, int
 ```
 
 
+## VARIANT shredding {#variant-shredding}
+
+[`VARIANT`](sql_ddl.md#variant) columns are stored as two binary fields (`metadata`, `value`).
+Shredding extracts frequently-accessed fields from the binary `value` into typed columnar storage
+at write time; queries on shredded fields read the typed column directly.
+
+**Unshredded** (default):
+
+```
+group variant {
+  required binary metadata;
+  required binary value;
+}
+```
+
+**Shredded (scalar)** — a known field extracted into a typed sub-column:
+
+```
+group variant {
+  required binary metadata;
+  optional binary value;
+  optional int64  typed_value;   -- extracted scalar field
+}
+```
+
+**Shredded (object)** — multiple known fields, each as a typed sub-column:
+
+```
+group variant {
+  required binary metadata;
+  optional binary value;
+  optional group typed_value {
+    optional group action {
+      optional binary value;
+      optional string typed_value;   -- "click", "purchase", ...
+    }
+    optional group total {
+      optional binary value;
+      optional double typed_value;   -- 59.99
+    }
+  }
+}
+```
+
+Each known field gets its own sub-column. Fields not present in a given row fall back to the binary
+`value` field. Shredding is determined at write time from the schema definition.
+
+## Schema evolution on Lance-backed tables {#lance-schema-evolution}
+
+[Lance](storage_layouts.md#lance-base-file-format) supports the following schema changes at the Hudi
+layer:
+
+| Operation | Lance |
+|:----------|:------|
+| Add column | Supported |
+| Rename column | Supported |
+| Drop column | Supported |
+| Promote `FLOAT` → `DOUBLE` | **Not supported** (works on Parquet) |
+| Promote `FLOAT` → `STRING` | **Not supported** (works on Parquet) |
+
+Attempting an unsupported promotion on a Lance table fails at write time.
+
 ## Related Resources
 <h3>Videos</h3>
 

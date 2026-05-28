@@ -151,6 +151,27 @@ inputDF.write()
        .save(basePath);
 ```
 
+### Lance dependency {#lance-dependency}
+
+When using the [Lance base file format](storage_layouts.md#lance-base-file-format), the Lance Spark
+bundle JAR is not included in the Hudi distribution and must be added to the Spark classpath. Pick
+the bundle that matches your Spark version:
+
+| Spark version | Bundle (Maven Central) |
+|:--------------|:-----------------------|
+| Spark 3.4 | `org.lance:lance-spark-bundle-3.4_2.12:0.4.0` |
+| Spark 3.5 | `org.lance:lance-spark-bundle-3.5_2.12:0.4.0` |
+| Spark 4.0 | `org.lance:lance-spark-bundle-4.0_2.13:0.4.0` |
+| Spark 4.1 | `org.lance:lance-spark-bundle-4.1_2.13:0.4.0` |
+
+```bash
+export LANCE_BUNDLE_JAR=/path/to/lance-spark-bundle-3.5_2.12-0.4.0.jar
+spark-shell --jars $HUDI_BUNDLE_JAR,$LANCE_BUNDLE_JAR
+```
+
+Lance base files are only readable by the Spark engine. Reading a Lance-backed table from Flink,
+Hive, Presto, or Trino throws `HoodieValidationException`.
+
 ## Upgrading
 
 New Hudi releases are listed on the [releases page](/releases/download), with detailed notes which list all the changes, with highlights in each release.
