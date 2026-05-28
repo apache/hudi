@@ -245,12 +245,7 @@ public class ITTestVariantCrossEngineCompatibility {
     Row appended = rows.get(1);
     assertEquals(99, appended.getField(0));
     DataTypeAdapterTestUtils.assertAsBinaryVariant(appended.getField(2));
-    String appendedJson =
-        CollectionUtil.iteratorToList(
-                tEnv.executeSql("SELECT CAST(v AS STRING) FROM variant_table WHERE id = 99").collect())
-            .get(0)
-            .getField(0)
-            .toString();
+    String appendedJson = selectVariantJson(tEnv, 99);
     assertTrue(
         appendedJson.contains("flink") && appendedJson.contains("42"),
         "Inserted VARIANT stringify should expose engine+n; got: " + appendedJson);
@@ -311,12 +306,7 @@ public class ITTestVariantCrossEngineCompatibility {
     DataTypeAdapterTestUtils.assertAsBinaryVariant(sqlRow.getField(2));
 
     Object v = sqlRow.getField(2);
-    String json =
-        CollectionUtil.iteratorToList(
-                tEnv.executeSql("SELECT CAST(v AS STRING) FROM variant_table WHERE id = 1").collect())
-            .get(0)
-            .getField(0)
-            .toString();
+    String json = selectVariantJson(tEnv, 1);
     assertTrue(json.contains("flink_rewrite"), "Upsert VARIANT should stringify rewrite JSON; got: " + json);
 
     StreamTableEnvironment sEnv = asStreamTableEnv(tEnv);
@@ -375,17 +365,20 @@ public class ITTestVariantCrossEngineCompatibility {
     assertEquals(6000L, row.getField(3));
     DataTypeAdapterTestUtils.assertAsBinaryVariant(row.getField(2));
 
-    String json =
-        CollectionUtil.iteratorToList(
-                tEnv.executeSql("SELECT CAST(v AS STRING) FROM variant_table WHERE id = 1").collect())
-            .get(0)
-            .getField(0)
-            .toString();
+    String json = selectVariantJson(tEnv, 1);
     assertTrue(
         json.contains("flink_sql_select") && json.contains("7"),
         "INSERT SELECT upsert VARIANT should stringify rewrite JSON; got: " + json);
 
     tEnv.executeSql("DROP TABLE variant_table");
+  }
+
+  private static String selectVariantJson(TableEnvironment tEnv, int id) throws Exception {
+    return CollectionUtil.iteratorToList(
+            tEnv.executeSql("SELECT JSON_STRING(v) FROM variant_table WHERE id = " + id).collect())
+        .get(0)
+        .getField(0)
+        .toString();
   }
 
   private static void assertExpectedSpark40VariantBytes(Object variantObject, String testDescription) {

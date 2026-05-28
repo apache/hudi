@@ -26,6 +26,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.clustering.FlinkClusteringConfig;
+import org.apache.hudi.sink.clustering.HoodieFlinkClusteringJob;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestTableEnvs;
@@ -50,10 +52,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Flink-only integration tests for VARIANT columns through commit-triggered MOR compaction and
- * COW clustering. Writes block on {@code TableResult#await()}; table services are triggered by
- * {@code compaction.delta_commits} / {@code clustering.delta_commits} and tests poll the timeline
- * via {@link TestUtils#waitUntil} instead of sleeping.
+ * Flink-only integration tests for VARIANT columns through MOR compaction and COW clustering.
+ * Compaction is commit-triggered via {@code compaction.delta_commits}; clustering is executed by
+ * {@link HoodieFlinkClusteringJob.AsyncClusteringService} after batch SQL inserts (batch jobs do not
+ * checkpoint through the embedded clustering operator).
  */
 @ExtendWith(FlinkMiniCluster.class)
 public class ITTestVariantFlinkTableServices {
@@ -188,11 +190,7 @@ public class ITTestVariantFlinkTableServices {
       valueBefore[i + 2] = DataTypeAdapter.getVariantValue(afterSecondCommit.get(i).getField(1));
     }
 
-    assertTrue(
-        TestUtils.waitUntil(
-            () -> hasCompletedClustering(tablePath) && !hasPendingClustering(tablePath),
-            ASYNC_SERVICE_TIMEOUT_SECONDS),
-        "Commit-triggered clustering should complete after 2 insert commits");
+    runClusteringService(tablePath);
 
     List<Row> afterCluster =
         CollectionUtil.iteratorToList(
@@ -290,7 +288,7 @@ public class ITTestVariantFlinkTableServices {
     String json =
         CollectionUtil.iteratorToList(
                 tEnv.executeSql(
-                        "SELECT CAST(v AS STRING) FROM variant_table WHERE id = " + expectedId)
+                        "SELECT JSON_STRING(v) FROM variant_table WHERE id = " + expectedId)
                     .collect())
             .get(0)
             .getField(0)
@@ -298,6 +296,27 @@ public class ITTestVariantFlinkTableServices {
     assertTrue(
         json.contains(jsonFragment),
         "Expected VARIANT json to contain " + jsonFragment + "; got: " + json);
+  }
+
+  /**
+   * Batch SQL INSERT jobs do not drive the append-mode clustering operator through checkpoints;
+   * run the standalone clustering service after commits (same pattern as {@code ITTestHoodieFlinkClustering}).
+   */
+  private static void runClusteringService(String tablePath) throws Exception {
+    FlinkClusteringConfig cfg = new FlinkClusteringConfig();
+    cfg.path = tablePath;
+    cfg.schedule = true;
+    cfg.minClusteringIntervalSeconds = 1;
+    Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
+    HoodieFlinkClusteringJob.AsyncClusteringService service =
+        new HoodieFlinkClusteringJob.AsyncClusteringService(cfg, conf);
+    service.start(null);
+    assertTrue(
+        TestUtils.waitUntil(
+            () -> hasCompletedClustering(tablePath) && !hasPendingClustering(tablePath),
+            ASYNC_SERVICE_TIMEOUT_SECONDS),
+        "Clustering should complete after inserts");
+    service.shutDown();
   }
 
   private static HoodieTableMetaClient metaClient(String tablePath) {
