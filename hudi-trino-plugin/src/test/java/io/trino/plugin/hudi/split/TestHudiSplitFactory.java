@@ -182,6 +182,7 @@ public class TestHudiSplitFactory
                 ImmutableList.of(),
                 TupleDomain.all(),
                 TupleDomain.all(),
+                java.util.OptionalLong.empty(),
                 "",
                 "101");
     }
