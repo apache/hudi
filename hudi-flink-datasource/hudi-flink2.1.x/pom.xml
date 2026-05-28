@@ -30,6 +30,7 @@
 
     <properties>
         <main.basedir>${project.parent.parent.basedir}</main.basedir>
+        <parquet.version>${flink.format.parquet.version}</parquet.version>
     </properties>
 
     <dependencies>
@@ -140,6 +141,37 @@
                     <artifactId>parquet-format-structures</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+        <!-- flink-parquet parquet artifacts are excluded above; pin ${flink.format.parquet.version} for compile. -->
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-column</artifactId>
+            <version>${parquet.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-common</artifactId>
+            <version>${parquet.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-encoding</artifactId>
+            <version>${parquet.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-hadoop</artifactId>
+            <version>${parquet.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-format-structures</artifactId>
+            <version>${parquet.version}</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
