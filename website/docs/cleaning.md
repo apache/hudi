@@ -121,7 +121,7 @@ for related multi-writer configuration.
 
 | Config Name | Default | Description |
 |---|---|---|
-| `hoodie.prewrite.cleaner.policy` | `NONE` | Pre-write cleaning action. `NONE`: no pre-write action (default). `CLEAN`: run a clean pass before each write. `ROLLBACK_FAILED_WRITES`: roll back any failed writes before each write. |
+| `hoodie.prewrite.cleaner.policy` | `NONE` | Pre-write cleaning action. `NONE`: no pre-write action (default). `CLEAN`: run a clean pass before each write — this also rolls back failed writes as part of the clean. `ROLLBACK_FAILED_WRITES`: only roll back any failed writes before each write, without running a full clean. |
 
 #### Run independently
 Hoodie Cleaner can also be run as a separate process. Following is the command for running the cleaner independently:
