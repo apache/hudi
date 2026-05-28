@@ -53,7 +53,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Integration test for cross-engine compatibility - verifying that Flink can read Variant tables
  * written by Spark 4.0, including via Table/SQL and {@code toDataStream}, and can upsert rows on
- * a writable copy of the Spark-produced COW fixture under {@code variant_backward_compat/}.
+ * a writable copy of the Spark-produced COW fixture under {@code variant_backward_compat/} using
+ * Flink SQL ({@code INSERT ... VALUES} and {@code INSERT ... SELECT}).
  */
 @ExtendWith(FlinkMiniCluster.class)
 public class ITTestVariantCrossEngineCompatibility {
@@ -305,6 +306,62 @@ public class ITTestVariantCrossEngineCompatibility {
             .get(0);
     assertArrayEquals(DataTypeAdapter.getVariantMetadata(v), DataTypeAdapter.getVariantMetadata(dsRow.getField(1)));
     assertArrayEquals(DataTypeAdapter.getVariantValue(v), DataTypeAdapter.getVariantValue(dsRow.getField(1)));
+
+    tEnv.executeSql("DROP TABLE variant_table");
+  }
+
+  @Test
+  public void testFlinkPrimaryKeyUpsertOverwriteViaInsertSelectSql() throws Exception {
+    Assumptions.assumeTrue(nativeVariantAvailable, "VARIANT requires Flink 2.1+");
+
+    Path out = tempDir.resolve("cow_pkey_overwrite_insert_select");
+    HoodieTestUtils.extractZipToDirectory("variant_backward_compat/variant_cow.zip", out, getClass());
+    String cowPath = out.resolve("variant_cow").toString();
+
+    TableEnvironment tEnv = TestTableEnvs.getBatchTableEnv();
+    tEnv.executeSql(
+        String.format(
+            "CREATE TABLE variant_table ("
+                + "  id INT,"
+                + "  name STRING,"
+                + "  v VARIANT,"
+                + "  ts BIGINT,"
+                + "  PRIMARY KEY (id) NOT ENFORCED"
+                + ") WITH ("
+                + "  'connector' = 'hudi',"
+                + "  'path' = '%s',"
+                + "  'table.type' = 'COPY_ON_WRITE'"
+                + ")",
+            cowPath.replace("'", "''")));
+
+    tEnv.executeSql(
+            "INSERT INTO variant_table "
+                + "SELECT "
+                + "1, "
+                + "CAST('row1_flink_sql' AS STRING), "
+                + "PARSE_JSON('{\"flink_sql_select\":true,\"n\":7}'), "
+                + "CAST(6000 AS BIGINT)")
+        .await();
+
+    List<Row> rows =
+        CollectionUtil.iteratorToList(
+            tEnv.executeSql("SELECT id, name, v, ts FROM variant_table ORDER BY id").collect());
+    assertEquals(1, rows.size(), "PK upsert via INSERT SELECT should still leave one row");
+    Row row = rows.get(0);
+    assertEquals(1, row.getField(0));
+    assertEquals("row1_flink_sql", row.getField(1));
+    assertEquals(6000L, row.getField(3));
+    DataTypeAdapterTestUtils.assertAsBinaryVariant(row.getField(2));
+
+    String json =
+        CollectionUtil.iteratorToList(
+                tEnv.executeSql("SELECT CAST(v AS STRING) FROM variant_table WHERE id = 1").collect())
+            .get(0)
+            .getField(0)
+            .toString();
+    assertTrue(
+        json.contains("flink_sql_select") && json.contains("7"),
+        "INSERT SELECT upsert VARIANT should stringify rewrite JSON; got: " + json);
 
     tEnv.executeSql("DROP TABLE variant_table");
   }
