@@ -163,6 +163,7 @@ public class TestHudiPartitionInfoLoader
                 ImmutableList.of(),
                 TupleDomain.all(),
                 TupleDomain.all(),
+                java.util.OptionalLong.empty(),
                 "",
                 "101");
         HudiSplitWeightProvider weightProvider = new SizeBasedSplitWeightProvider(0.05, DataSize.of(128, MEGABYTE));
