@@ -115,3 +115,50 @@ the `write.rate.limit` option can be turned on to ensure smooth writing.
 |  Option Name  | Required | Default | Remarks |
 |  -----------  | -------  | ------- | ------- |
 | `write.rate.limit` | `false` | `0` | Turn off by default |
+
+## Managed-Memory Write Buffer
+
+By default, the Flink write buffer uses JVM heap memory (`ON_HEAP`). In containerized environments where heap memory is tightly budgeted, you can switch to Flink's managed (off-heap) memory pool to reduce GC pressure and avoid OOM errors.
+
+:::note
+When using `MANAGED` memory type, ensure `taskmanager.memory.managed.size` is configured sufficiently in `flink-conf.yaml`.
+:::
+
+|  Option Name  | Description | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `write.buffer.memory.type` | Memory type for the write buffer: `ON_HEAP` (default, uses JVM heap) or `MANAGED` (uses Flink managed off-heap memory) | `ON_HEAP` | Switch to `MANAGED` to avoid OOM in memory-constrained deployments |
+| `write.memory.segment.page.size` | Page size in bytes for memory segments used in the write buffer | `32768` (32 KB) | Tune for workload characteristics; larger pages reduce overhead for large records |
+
+## Disruptor Buffer Tuning
+
+When `write.buffer.type=DISRUPTOR` is set in the table options (see [Append Write Buffer](ingestion_flink.md#append-write-buffer)), the following tuning options control the Disruptor ring buffer:
+
+|  Option Name  | Description | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `write.buffer.disruptor.ring.size` | Size of the Disruptor ring buffer (must be a power of 2) | `16384` | Larger values absorb write bursts but consume more heap memory |
+| `write.buffer.disruptor.wait.strategy` | Wait strategy for the Disruptor consumer: `BLOCKING_WAIT` (default), `SLEEPING_WAIT`, `YIELDING_WAIT`, `BUSY_SPIN_WAIT` | `BLOCKING_WAIT` | `BLOCKING_WAIT` is safest for containerized environments; `BUSY_SPIN_WAIT` offers lowest latency at the cost of a dedicated CPU core |
+
+## Timeline-Server-Based Markers
+
+As of Hudi 1.2.0, Flink writers support `TIMELINE_SERVER_BASED` marker type (`hoodie.write.markers.type=TIMELINE_SERVER_BASED`). This is recommended over `DIRECT` markers on object stores (S3, GCS, ADLS) where the high cost of directory listings makes `DIRECT` markers slow.
+
+```sql
+CREATE TABLE my_table (...)
+WITH (
+  'connector' = 'hudi',
+  'path' = 's3a://my-bucket/my-table',
+  'hoodie.write.markers.type' = 'TIMELINE_SERVER_BASED'
+  -- other options
+);
+```
+
+## Source V2 Read-Lag Metrics
+
+When [Source V2](ingestion_flink.md#flink-source-v2-rfc-95) is enabled (`read.source-v2.enabled=true`), the following read-lag metrics are emitted to help monitor streaming pipeline health:
+
+| Metric | Description |
+|--------|-------------|
+| `issuedInstantDelay` | Time elapsed (ms) between when a new instant was written and when the source issued it for reading |
+| `sourceReaderIdleTime` | Time (ms) the source reader has been idle (no new splits assigned) |
+
+These metrics are exposed through Flink's standard metrics system and can be forwarded to Prometheus, JMX, or other reporters.
