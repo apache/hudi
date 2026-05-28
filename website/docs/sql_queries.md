@@ -352,9 +352,9 @@ time to completion time depending on the source table version.
 
 ### Vector Similarity Search
 
-Hudi 1.2.0 introduces a `hudi_vector_search` table-valued function (TVF) for top-K similarity search
-over [`VECTOR`](sql_ddl.md#vector) columns. It returns the `top_k` rows from a Hudi table whose
-VECTOR column is closest to a given query vector under a chosen distance metric.
+The `hudi_vector_search` table-valued function (TVF) runs top-K similarity search over a
+[`VECTOR`](sql_ddl.md#vector) column. It returns the `top_k` rows whose VECTOR column is closest to
+a query vector under the chosen distance metric.
 
 ```sql
 SELECT *
@@ -380,14 +380,15 @@ Parameters:
 | `algorithm` | STRING | `'brute_force'` | Only `'brute_force'` is currently supported. |
 
 Return schema: all columns from the source table (excluding the embedding column) plus
-`_hudi_distance DOUBLE`. Results are ordered by `_hudi_distance` ascending — closest matches first.
+`_hudi_distance DOUBLE`. Results are ordered by `_hudi_distance` ascending, so the closest matches
+come first.
 
 Distance metrics:
 
 | Metric | Formula | Range | Notes |
 |:-------|:--------|:------|:------|
 | `cosine` | 1 − cos(a, b), clamped to [0, 2] | [0, 2] | Returns 1.0 for zero vectors. |
-| `l2` | sqrt(sum((a[i] − b[i])²)) | [0, +∞) | — |
+| `l2` | sqrt(sum((a[i] − b[i])²)) | [0, +∞) | |
 | `dot_product` | −(a · b) | (−∞, +∞) | Negated so ascending sort surfaces the most similar rows first. |
 
 ```sql
@@ -449,7 +450,7 @@ FROM media_assets;
 
 | Property | Default | Description |
 |:---------|:--------|:------------|
-| `hoodie.read.blob.inline.mode` | `DESCRIPTOR` | Controls how `INLINE` BLOBs surface on read. `DESCRIPTOR` (default) returns an out-of-line-shaped reference pointing at in-file coordinates of the bytes — no bytes are materialized. `CONTENT` materializes the raw inline bytes in the `data` field on every read. |
+| `hoodie.read.blob.inline.mode` | `DESCRIPTOR` | Controls how `INLINE` BLOBs surface on read. `DESCRIPTOR` (default) returns an out-of-line-shaped reference pointing at the in-file coordinates of the bytes. No bytes are materialized. `CONTENT` materializes the raw inline bytes in the `data` field on every read. |
 | `hoodie.blob.batching.max.gap.bytes` | `4096` | Maximum gap between consecutive byte ranges before they are merged into a single read. Larger values reduce I/O calls at the cost of reading some unused bytes. |
 | `hoodie.blob.batching.lookahead.size` | `50` | Number of rows to buffer for batch-read detection. Larger values improve batching for sorted data but increase memory usage. |
 
@@ -457,9 +458,9 @@ FROM media_assets;
 this setting.
 
 :::caution Calling `read_blob()` on INLINE columns under DESCRIPTOR mode
-Under the default `DESCRIPTOR` mode, calling `read_blob()` on an `INLINE` BLOB column **throws** —
-the raw bytes are not materialized in the scan. To read inline bytes with `read_blob()`, switch to
-`CONTENT` mode first:
+Under the default `DESCRIPTOR` mode, calling `read_blob()` on an `INLINE` BLOB column throws.
+The raw bytes are not materialized in the scan, so there is nothing for `read_blob()` to return.
+To read inline bytes with `read_blob()`, switch to `CONTENT` mode first:
 
 ```sql
 SET hoodie.read.blob.inline.mode=CONTENT;
@@ -467,7 +468,7 @@ SELECT asset_id, read_blob(content) AS raw_bytes
 FROM media_assets WHERE asset_id = 'asset_001';
 ```
 
-This setting only affects `INLINE` columns — `OUT_OF_LINE` always fetches from the external path.
+This setting affects only `INLINE` columns. `OUT_OF_LINE` always fetches from the external path.
 :::
 
 `read_blob()` is a Spark SQL function; Hive, BigQuery, and other engines reading the underlying
@@ -483,12 +484,12 @@ JSON output:
 SELECT event_id, cast(payload as STRING) AS payload_json FROM events;
 ```
 
-VARIANT supports all standard DML — `UPDATE`, `DELETE`, `MERGE` — on both COW and MOR tables.
+VARIANT columns support `UPDATE`, `DELETE`, and `MERGE` on both COW and MOR tables.
 
 #### End-to-end example
 
-`hudi_vector_search` and `read_blob()` compose in a single query — return the matching rows and the
-materialized bytes for each:
+`hudi_vector_search` and `read_blob()` compose in a single query that returns both the matching
+rows and the materialized bytes for each:
 
 ```sql
 SELECT image_id, category,

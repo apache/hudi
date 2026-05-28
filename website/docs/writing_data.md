@@ -473,15 +473,14 @@ The following advanced storage configuration options were added in Hudi 1.2.0:
 
 The 1.2.0 column types participate in writes the same way as standard SQL types:
 
-- **[`VECTOR(dim[, FLOAT|DOUBLE|INT8])`](sql_ddl.md#vector)** — written as an array of values
-  matching the declared dimension and element type. With the DataFrame API, stamp
-  `hudi_type=VECTOR(dim)` metadata on the column.
-- **[`BLOB`](sql_ddl.md#blob)** — internally a struct with `type` (`INLINE`/`OUT_OF_LINE`), `data`,
-  and a `reference` pointer struct. Construct it via `named_struct(...)` in SQL or the equivalent
-  struct in the DataFrame API. SQL INSERT examples live in
-  [SQL DML](sql_dml.md#inserting-blob-columns).
-- **[`VARIANT`](sql_ddl.md#variant)** — on Spark 4.0+, construct values with `parse_json()`. On
-  Spark 3.x, write the underlying `STRUCT<metadata: BINARY, value: BINARY>` directly.
+- [`VECTOR(dim[, FLOAT|DOUBLE|INT8])`](sql_ddl.md#vector): written as an array of values matching
+  the declared dimension and element type. With the DataFrame API, stamp `hudi_type=VECTOR(dim)`
+  metadata on the column.
+- [`BLOB`](sql_ddl.md#blob): internally a struct with `type` (`INLINE`/`OUT_OF_LINE`), `data`, and a
+  `reference` pointer struct. Construct it via `named_struct(...)` in SQL or the equivalent struct
+  in the DataFrame API. SQL INSERT examples are in [SQL DML](sql_dml.md#inserting-blob-columns).
+- [`VARIANT`](sql_ddl.md#variant): on Spark 4.0+, construct values with `parse_json()`. On Spark
+  3.x, write the underlying `STRUCT<metadata: BINARY, value: BINARY>` directly.
 
 ## Java Client
 We can use plain java to write to hudi tables. To use Java client we can refere [here](https://github.com/apache/hudi/blob/master/hudi-examples/hudi-examples-java/src/main/java/org/apache/hudi/examples/java/HoodieJavaWriteClientExample.java)

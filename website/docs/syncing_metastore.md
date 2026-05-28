@@ -345,7 +345,7 @@ Spark after a metastore round-trip.
 
 Engines that support `VARIANT` natively (Spark 4.0+, Flink 2.1+) read the table directly using the
 Parquet VARIANT annotation and do not go through the Hive/BigQuery metastore representation. The
-`read_blob()` SQL function is Spark-only — Hive and BigQuery queries on a BLOB column read the
+`read_blob()` SQL function is Spark-only. Hive and BigQuery queries on a BLOB column read the
 underlying struct directly.
 
 ## Writer Version Table Property

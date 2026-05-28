@@ -49,14 +49,14 @@ For more Flink read options, see [Using Flink](ingestion_flink.md).
 
 Hudi exposes two Spark SQL extensions for reading the 1.2.0 column types:
 
-- [`hudi_vector_search`](sql_queries.md#vector-similarity-search) — top-K similarity search over a
-  [`VECTOR`](sql_ddl.md#vector) column.
-- [`read_blob()`](sql_queries.md#reading-blob-columns) — materializes raw bytes from a
+- [`hudi_vector_search`](sql_queries.md#vector-similarity-search) runs top-K similarity search over
+  a [`VECTOR`](sql_ddl.md#vector) column.
+- [`read_blob()`](sql_queries.md#reading-blob-columns) materializes raw bytes from a
   [`BLOB`](sql_ddl.md#blob) column. Under the default `hoodie.read.blob.inline.mode=DESCRIPTOR`,
-  calling `read_blob()` on an `INLINE` column throws — set the mode to `CONTENT` to read inline
+  calling `read_blob()` on an `INLINE` column throws; set the mode to `CONTENT` to read inline
   bytes.
 
-[`VARIANT`](sql_ddl.md#variant) columns are read like ordinary columns; cast to `STRING` for JSON
+[`VARIANT`](sql_ddl.md#variant) columns are read like ordinary columns. Cast to `STRING` for JSON
 output.
 
 ## Daft

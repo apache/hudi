@@ -67,29 +67,26 @@ TBLPROPERTIES (
 );
 ```
 
-Behavior of Hudi table services on Lance-backed tables:
-
-- **Compaction** — merges Avro log files into Lance base files.
-- **Clustering** — reorganizes records into new Lance files.
-- **Cleaning** — removes obsolete Lance file slices.
-- **Indexing** — bloom filter indexing is supported. Column-stats and partition-stats indices are
-  automatically disabled for Lance base files. See [Indexes](indexes.md) for the supported set.
+Hudi table services on Lance-backed tables behave as follows. Compaction merges Avro log files
+into Lance base files. Clustering reorganizes records into new Lance files. Cleaning removes
+obsolete Lance file slices. Bloom filter indexing is supported; column-stats and partition-stats
+indices are automatically disabled for Lance base files. See [Indexes](indexes.md) for the
+supported set.
 
 Type-specific behavior on Lance:
 
-- `VECTOR` columns are stored natively as Lance `FixedSizeList<Float32/Float64, dim>` (FLOAT/DOUBLE
-  only; `INT8` is not supported on Lance and fails fast at write).
-- `BLOB` columns default to `DESCRIPTOR` read mode (same as Parquet).
-- `VARIANT` columns are not supported on Lance — attempting to write a table with a VARIANT column
-  to Lance throws `HoodieNotSupportedException`. Use Parquet for VARIANT tables.
+- `VECTOR` columns are stored natively as Lance `FixedSizeList<Float32/Float64, dim>` (FLOAT or
+  DOUBLE only; `INT8` is not supported on Lance and fails fast at write).
+- `BLOB` columns default to `DESCRIPTOR` read mode, same as Parquet.
+- `VARIANT` columns are not supported on Lance. Writing a table with a VARIANT column to Lance
+  throws `HoodieNotSupportedException`. Use Parquet for VARIANT tables.
 
-Engine support: Lance is **Spark-only**. Reading a Lance-backed table from Flink, Hive, Presto, or
-Trino throws `HoodieValidationException`.
+Lance is Spark-only. Reading a Lance-backed table from Flink, Hive, Presto, or Trino throws
+`HoodieValidationException`. Lance files are also non-splittable: a single Spark task reads one
+Lance base file.
 
-Lance files are non-splittable: a single Spark task reads one Lance base file.
-
-The Lance JAR is **not bundled** in the Hudi distribution — add the matching Lance Spark bundle to
-your classpath. See [Deployment → Lance dependency](deployment.md#lance-dependency) for the version
+The Lance JAR is not bundled in the Hudi distribution. Add the matching Lance Spark bundle to your
+classpath; see [Deployment → Lance dependency](deployment.md#lance-dependency) for the version
 matrix.
 
 ##### File sizing and memory

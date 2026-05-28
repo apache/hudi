@@ -15,7 +15,7 @@ Want to try this locally? This guide is also available as an interactive Jupyter
 [Download the notebook](https://github.com/apache/hudi/blob/master/hudi-examples/hudi-examples-spark/src/test/python/vector_blob_demo/notebooks/00_main_demo.ipynb) and run it end-to-end on your machine.
 :::
 
-![Vector search results — query image on the left, top-5 nearest neighbors on the right](/assets/images/hudi_vector_search_results.jpg)
+![Vector search results: query image on the left, top-5 nearest neighbors on the right](/assets/images/hudi_vector_search_results.jpg)
 
 *Example output: a query image of a German Shorthaired pointer (left) and the five most similar images found by `hudi_vector_search`, with cosine similarity scores. Raw image bytes are materialized by `read_blob()` directly in the same query.*
 
@@ -155,9 +155,9 @@ SELECT image_id, category, label,
 FROM staging;
 ```
 
-Key points:
-- **`VECTOR(1024)`** stores fixed-dimension embeddings for similarity search.
-- **`BLOB`** stores raw image bytes inline. For large objects, use `OUT_OF_LINE` to store a pointer instead — `read_blob()` resolves both modes transparently.
+Notes:
+- `VECTOR(1024)` stores fixed-dimension embeddings for similarity search.
+- `BLOB` stores raw image bytes inline. For large objects, use `OUT_OF_LINE` to store a pointer instead. `read_blob()` resolves both modes transparently.
 
 ## 4. Materialize a BLOB with `read_blob()`
 
@@ -183,9 +183,9 @@ LIMIT 5;
 +-----------+--------------------+----------+
 ```
 
-![A sample image retrieved via read_blob — a sleeping Beagle](/assets/images/hudi_read_blob_sample.jpg)
+![A sample image retrieved via read_blob, a sleeping Beagle](/assets/images/hudi_read_blob_sample.jpg)
 
-*Image bytes retrieved by `read_blob()`, decoded back to a PNG — confirming lossless round-trip through the Hudi BLOB column.*
+*Image bytes retrieved by `read_blob()`, decoded back to a PNG. The round-trip through the Hudi BLOB column is lossless.*
 
 ## 5. Vector search + BLOB retrieval in one query
 

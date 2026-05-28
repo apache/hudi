@@ -6,21 +6,23 @@ last_modified_at: 2026-05-27T00:00:00-00:00
 
 ## Engine constraints for the 1.2.0 types
 
-The 1.2.0 column types ([`VECTOR`](sql_ddl.md#vector), [`BLOB`](sql_ddl.md#blob),
-[`VARIANT`](sql_ddl.md#variant)) have the following Flink behavior:
+Flink behavior of the 1.2.0 column types ([`VECTOR`](sql_ddl.md#vector),
+[`BLOB`](sql_ddl.md#blob), [`VARIANT`](sql_ddl.md#variant)) differs from Spark in a few places:
 
-- **`VECTOR`** — Flink cannot decode `VECTOR` columns. They are stored as Parquet
-  `FIXED_LEN_BYTE_ARRAY`, which Flink's Parquet reader does not convert back into a typed array.
-  Flink can still read all **other** columns in a table containing a `VECTOR` column — only the
-  `VECTOR` column itself is inaccessible. Use Spark to query `VECTOR` columns.
-- **`VARIANT`** — Native `VARIANT` operations require Flink 2.1+. Flink &lt; 2.1 throws
-  `UnsupportedOperationException` on VARIANT columns. On Flink 2.1+, VARIANT columns surface as
-  `ROW<metadata BYTES, value BYTES>` and can be read but not natively decoded as a variant value.
-- **`BLOB`** — `read_blob()` is a Spark SQL function and is not available in Flink. Flink reads the
-  underlying struct directly.
+`VECTOR` columns are stored as Parquet `FIXED_LEN_BYTE_ARRAY`, which Flink's Parquet reader does
+not convert back into a typed array. The other columns of the same table read fine; only the
+`VECTOR` column itself is inaccessible from Flink. Use Spark to query `VECTOR` columns.
 
-For the Lance base file format, Flink is not supported — reading a Lance-backed table from Flink
-throws `HoodieValidationException`. See [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format).
+Native `VARIANT` operations require Flink 2.1+. Flink &lt; 2.1 throws
+`UnsupportedOperationException` on VARIANT columns. On Flink 2.1+, VARIANT columns surface as
+`ROW<metadata BYTES, value BYTES>`. Flink can read the underlying struct but cannot decode it as a
+variant value.
+
+`read_blob()` is a Spark SQL function. From Flink, queries on a `BLOB` column return the underlying
+struct directly.
+
+The Lance base file format is Spark-only. Reading a Lance-backed table from Flink throws
+`HoodieValidationException`; see [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format).
 
 ## CDC Ingestion
 

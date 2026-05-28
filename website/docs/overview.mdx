@@ -59,10 +59,10 @@ If you want to experience Apache Hudi integrated into an end to end demo with Ka
 
 Hudi supports the following types and file formats for unstructured and semi-structured data, in addition to standard SQL types and Parquet/ORC:
 
-- **[`VECTOR(dim[, elementType])`](sql_ddl.md#vector)** — fixed-dimension embedding column with the [`hudi_vector_search`](sql_queries.md#vector-similarity-search) TVF.
-- **[`BLOB`](sql_ddl.md#blob)** — binary column with `INLINE` or `OUT_OF_LINE` storage and the [`read_blob()`](sql_queries.md#reading-blob-columns) function.
-- **[`VARIANT`](sql_ddl.md#variant)** — semi-structured (JSON-like) column with optional [shredding](schema_evolution.md#variant-shredding).
-- **[Lance file format](storage_layouts.md#lance-base-file-format)** — pluggable base file format (Spark-only).
+- [`VECTOR(dim[, elementType])`](sql_ddl.md#vector): fixed-dimension embedding column with the [`hudi_vector_search`](sql_queries.md#vector-similarity-search) TVF.
+- [`BLOB`](sql_ddl.md#blob): binary column with `INLINE` or `OUT_OF_LINE` storage and the [`read_blob()`](sql_queries.md#reading-blob-columns) function.
+- [`VARIANT`](sql_ddl.md#variant): semi-structured (JSON-like) column with optional [shredding](schema_evolution.md#variant-shredding).
+- [Lance file format](storage_layouts.md#lance-base-file-format): pluggable base file format (Spark-only).
 
 ## Connect With The Community
 Apache Hudi is community-focused and community-led and welcomes new-comers with open arms. Leverage the following

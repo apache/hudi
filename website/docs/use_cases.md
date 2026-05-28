@@ -75,49 +75,47 @@ together to build out the platform. Such an open platform is also essential for 
 
 ## AI Lakehouse
 
-AI and ML workloads need to store and query embeddings, raw binary objects (images, PDFs, audio,
-video), and semi-structured payloads (LLM outputs, model configs, API responses) alongside
-structured data. Hudi 1.2.0 adds three column types and a pluggable file format that let a single
-Hudi table hold these payloads with the same transactions, schema, and table services as the rest of
-the lakehouse:
+AI and ML workloads often need to store and query embeddings, raw binary objects (images, PDFs,
+audio, video), and semi-structured payloads (LLM outputs, model configs, API responses) alongside
+structured data. Hudi 1.2.0 adds three column types and a pluggable file format for these payloads:
 
-- [`VECTOR`](sql_ddl.md#vector) — fixed-dimension embedding column queried with the
+- [`VECTOR`](sql_ddl.md#vector): fixed-dimension embedding column. Query with the
   [`hudi_vector_search`](sql_queries.md#vector-similarity-search) TVF.
-- [`BLOB`](sql_ddl.md#blob) — binary column with `INLINE` and `OUT_OF_LINE` storage; raw bytes are
-  materialized via [`read_blob()`](sql_queries.md#reading-blob-columns).
-- [`VARIANT`](sql_ddl.md#variant) — semi-structured (JSON-like) column with optional
+- [`BLOB`](sql_ddl.md#blob): binary column with `INLINE` and `OUT_OF_LINE` storage. Raw bytes are
+  materialized by [`read_blob()`](sql_queries.md#reading-blob-columns).
+- [`VARIANT`](sql_ddl.md#variant): semi-structured (JSON-like) column with optional
   [shredding](schema_evolution.md#variant-shredding) for typed columnar access.
-- [Lance base file format](storage_layouts.md#lance-base-file-format) — Spark-only base file format
+- [Lance base file format](storage_layouts.md#lance-base-file-format): Spark-only base file format
   that stores `VECTOR` natively as `FixedSizeList`.
 
-A worked end-to-end walk-through (image embeddings + raw bytes + similarity search) lives in
+For a worked example covering image embeddings, raw bytes, and similarity search, see the
 [Unstructured Data Quick Start Guide](unstructured-data-quick-start-guide.md).
 
 | Use case | Types and features |
 |:---------|:-------------------|
-| **Image / video search** | `VECTOR` embeddings + `BLOB` raw frames + `hudi_vector_search` |
-| **Retrieval-augmented generation (RAG)** | `VECTOR` chunk embeddings retrieved to assemble LLM context |
-| **LLM output management** | `VARIANT` for response payloads + `VECTOR` for semantic indexing |
-| **Recommendation systems** | `VECTOR` similarity for collaborative filtering; incremental re-embedding via incremental queries |
-| **Content moderation** | `BLOB` raw content + `VECTOR` content embeddings + incremental processing |
-| **Multimodal analytics** | Structured metadata + `VECTOR` embeddings + `BLOB` raw data in one table |
-| **ML feature store** | `VECTOR` for feature embeddings, `VARIANT` for sparse feature maps; time-travel for point-in-time retrieval |
-| **Experiment tracking** | `VARIANT` for heterogeneous model configs and metrics; incremental queries for latest runs |
-| **Data labeling pipelines** | `BLOB` for raw data, incremental queries for unlabeled data, transactional label updates |
+| Image / video search | `VECTOR` embeddings + `BLOB` raw frames + `hudi_vector_search` |
+| Retrieval-augmented generation (RAG) | `VECTOR` chunk embeddings retrieved to assemble LLM context |
+| LLM output management | `VARIANT` for response payloads + `VECTOR` for semantic indexing |
+| Recommendation systems | `VECTOR` similarity for collaborative filtering; incremental re-embedding via incremental queries |
+| Content moderation | `BLOB` raw content + `VECTOR` content embeddings + incremental processing |
+| Multimodal analytics | Structured metadata + `VECTOR` embeddings + `BLOB` raw data in one table |
+| ML feature store | `VECTOR` for feature embeddings, `VARIANT` for sparse feature maps; time-travel for point-in-time retrieval |
+| Experiment tracking | `VARIANT` for heterogeneous model configs and metrics; incremental queries for latest runs |
+| Data labeling pipelines | `BLOB` for raw data, incremental queries for unlabeled data, transactional label updates |
 
 ### Why Hudi?
 
-- Embeddings, raw bytes, semi-structured payloads and structured metadata live in a single Hudi
-  table — managed by the same transactions, schema, and access controls as any other Hudi table.
-- Incremental queries let pipelines re-embed only new or changed rows
-  (`hudi_table_changes(table, 'latest_state', commit_time)`), instead of reprocessing the full
-  corpus.
-- All standard table services (clustering, compaction, cleaning, indexing) apply to tables with the
-  new types and to Lance-backed tables.
-- Tables are readable by Spark, with hudi-rs (Python/Rust) and other engines reading the underlying
-  Parquet representation directly (subject to the engine constraints noted on
-  [Using Flink](ingestion_flink.md#engine-constraints-for-the-120-types) and the
-  [BigQuery / Hive metastore mappings](syncing_metastore.md#metastore-mapping-for-vector-blob-and-variant)).
+Embeddings, raw bytes, semi-structured payloads, and structured metadata live in a single Hudi
+table under the same transactions, schema, and access controls as any other Hudi table. Incremental
+queries let pipelines re-embed only new or changed rows
+(`hudi_table_changes(table, 'latest_state', commit_time)`), instead of reprocessing the full
+corpus. Standard table services (clustering, compaction, cleaning, indexing) apply to tables with
+the new types and to Lance-backed tables.
+
+Hudi tables are readable by Spark, with hudi-rs (Python/Rust) and other engines reading the
+underlying Parquet representation directly. For engine-specific constraints, see
+[Using Flink](ingestion_flink.md#engine-constraints-for-the-120-types) and the
+[BigQuery / Hive metastore mappings](syncing_metastore.md#metastore-mapping-for-vector-blob-and-variant).
 
 ## Efficient Data lakes with Incremental Processing
 

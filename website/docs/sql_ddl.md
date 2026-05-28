@@ -1179,6 +1179,6 @@ WITH (
 In addition to the standard SQL types above, Hudi 1.2.0 supports three column types covered in
 detail in the [Column types](#column-types) section earlier on this page:
 
-- [`VECTOR(dim[, elementType])`](#vector) — fixed-dimension embedding vector.
-- [`BLOB`](#blob) — binary column with `INLINE` and `OUT_OF_LINE` storage.
-- [`VARIANT`](#variant) — semi-structured (JSON-like) column.
+- [`VECTOR(dim[, elementType])`](#vector): fixed-dimension embedding vector.
+- [`BLOB`](#blob): binary column with `INLINE` and `OUT_OF_LINE` storage.
+- [`VARIANT`](#variant): semi-structured (JSON-like) column.
