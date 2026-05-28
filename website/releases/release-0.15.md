@@ -349,21 +349,14 @@ available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectI
 
 ### Bug fixes
 
-0.15.1 release is primarily intended for bug fixes and stability. Notable fixes include:
+0.15.1 release is primarily intended for bug fixes and stability, including these areas:
 
-* Fix for the Complex Key Generator regression flagged in 0.15.0, which could silently ingest
-  duplicates when the record key consists of a single field
-  ([HUDI-9666](https://issues.apache.org/jira/browse/HUDI-9666)).
-* Databricks Spark runtime compatibility for reading Hudi tables, including partition predicate handling and incremental
-  query with full scan mode on MOR tables.
-* Column stats index correctness with metadata table
-  ([HUDI-8371](https://issues.apache.org/jira/browse/HUDI-8371)) and timestamp column logical type fixes.
-* Hive/Glue sync emits drop partition events when partitions are removed
-  ([HUDI-9770](https://issues.apache.org/jira/browse/HUDI-9770)); meta sync recreates tables on certain exceptions.
-* DataHub meta sync improvements ([HUDI-8616](https://issues.apache.org/jira/browse/HUDI-8616),
-  [HUDI-9377](https://issues.apache.org/jira/browse/HUDI-9377)).
-* Flink bug fix cherry-picks from 0.14.2.
-* Security fixes for [CVE-2023-39410 and CVE-2020-13956](https://issues.apache.org/jira/browse/HUDI-8402).
+* Fix for the Complex Key Generator regression flagged in 0.15.0.
+* Databricks Spark runtime compatibility for reading Hudi tables.
+* Column stats index correctness with metadata table and timestamp column logical type fixes.
+* Hive/Glue and DataHub meta sync improvements.
+* Flink bug fixes.
+* Security fixes.
 
 ## Known Regressions
 
