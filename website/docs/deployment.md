@@ -154,8 +154,7 @@ inputDF.write()
 ### Lance dependency {#lance-dependency}
 
 When using the [Lance base file format](storage_layouts.md#lance-base-file-format), the Lance Spark
-bundle JAR is not included in the Hudi distribution and must be added to the Spark classpath. Pick
-the bundle that matches your Spark version:
+bundle JAR must be added to the Spark classpath. Pick the bundle that matches your Spark version:
 
 | Spark version | Bundle (Maven Central) |
 |:--------------|:-----------------------|

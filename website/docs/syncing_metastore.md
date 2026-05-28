@@ -329,7 +329,7 @@ If the table is synced with `mode=hms` or `mode=hiveql` against HMS 4.x, Hudi lo
 
 ## Metastore mapping for VECTOR, BLOB, and VARIANT
 
-When the 1.2.0 column types ([`VECTOR`](sql_ddl.md#vector), [`BLOB`](sql_ddl.md#blob),
+When the column types ([`VECTOR`](sql_ddl.md#vector), [`BLOB`](sql_ddl.md#blob),
 [`VARIANT`](sql_ddl.md#variant)) are synced to an external catalog, Hudi maps them to the catalog's
 native binary/struct types:
 
