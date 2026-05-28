@@ -541,7 +541,11 @@ Each `value` is one of:
 - `lastSeq|endSeq` — closed shard. `endSeq` is the shard's final sequence number, used to detect data loss if the shard expires before being fully consumed.
 - `lastSeq@arrivalTime|endSeq` — closed shard with arrival time.
 
-Example: `my-stream,shardId-000000000000:49590338271490256608559692538361571095921575989136588898,shardId-000000000001:49590338271512557353758223166512876988234521851574796306`
+Example (sequence numbers abbreviated; Kinesis assigns each shard a 56-digit decimal sequence number):
+
+```
+my-stream,shardId-000000000000:49590…88898,shardId-000000000001:49590…96306
+```
 
 You don't need to construct or parse this string yourself — it is read and updated automatically by the source — but it's useful for debugging, manual checkpoint resets, or comparing progress across shards.
 
