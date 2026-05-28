@@ -996,7 +996,7 @@ jobs:
             flinkParquetVersion: '1.14.4'
           - flinkProfile: "flink2.1"
             flinkAvroVersion: "1.11.4"
-            flinkParquetVersion: '1.15.2'
+            flinkParquetVersion: '1.16.0'
     steps:
       - if: needs.changes.outputs.relevant == 'true'
         uses: actions/checkout@v5
@@ -1045,7 +1045,7 @@ jobs:
         include:
           - flinkProfile: "flink2.1"
             flinkAvroVersion: "1.11.4"
-            flinkParquetVersion: '1.15.2'
+            flinkParquetVersion: '1.16.0'
     steps:
       - if: needs.changes.outputs.relevant == 'true'
         uses: actions/checkout@v5
@@ -1268,7 +1268,7 @@ jobs:
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink2.1'
             flinkAvroVersion: '1.11.4'
-            flinkParquetVersion: '1.15.2'
+            flinkParquetVersion: '1.16.0'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.1'
 
@@ -1429,7 +1429,7 @@ jobs:
           - scalaProfile: "scala-2.12"
             flinkProfile: "flink2.1"
             flinkAvroVersion: '1.11.4'
-            flinkParquetVersion: '1.15.2'
+            flinkParquetVersion: '1.16.0'
     steps:
       - if: needs.changes.outputs.relevant == 'true'
         uses: actions/checkout@v5
@@ -1455,8 +1455,10 @@ jobs:
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         run:
-          mvn test -Punit-tests -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
+          mvn test -Punit-tests -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
 
   test-hudi-trino-plugin:
     runs-on: ubuntu-latest
