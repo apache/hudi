@@ -239,24 +239,6 @@ A record with `event_date = "2024-03-15"` will be stored under `basePath/2024/03
 the value in `yyyy-MM-dd` form (normalizing the `/` separators back to `-`) for readability.
 :::
 
-## Nested Partition Column Pruning
-
-Hudi 1.2.0 extends partition pruning to support **nested (dot-path) partition columns** in Spark.
-For example, a table partitioned by a nested field `metadata.region` can be pruned with:
-
-```sql
-SELECT * FROM hudi_table WHERE metadata.region = 'us-east-1';
-```
-
-Hudi resolves the dot-path (`a.b.c`) notation and pushes the predicate down to the partition
-pruning layer, avoiding full partition scans.
-
-:::caution Known limitation
-Queries that combine a flat (top-level) partition filter **and** a nested partition filter in the
-same `WHERE` clause may not prune both correctly in all cases. Use separate partition fields or
-rewrite such queries until this is resolved.
-:::
-
 ## Related Resources
 
 <h3>Blogs</h3>

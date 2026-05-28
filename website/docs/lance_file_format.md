@@ -91,8 +91,6 @@ export LANCE_BUNDLE_JAR=/path/to/lance-spark-bundle-3.5_2.12-0.4.0.jar
 spark-shell --jars $HUDI_BUNDLE_JAR,$LANCE_BUNDLE_JAR
 ```
 
-Lance publishes two artifact families under the same version: the bare connector (`org.lance:lance-spark-<spark>_<scala>`) is what Hudi declares as a Maven dependency internally, while the `-bundle-` variant above is the shaded uber-JAR with transitive dependencies — use the bundle when adding the JAR to a Spark cluster classpath via `--jars`.
-
 ## How Hudi + Lance Work Together
 
 Hudi manages the table layer — transactions, schema, timeline, table services — while Lance handles the
@@ -211,8 +209,6 @@ size).
 - **Complex types** (struct, array, map) are supported as Lance columns.
 - **VARIANT columns** are **not supported** on Lance. Attempting to write a table with VARIANT columns
   to Lance throws a `HoodieNotSupportedException`. Use Parquet for tables with VARIANT columns.
-- The `hoodie.datasource.write.base.file.format` key referenced in older documentation does **not
-  exist**; the correct key is `hoodie.table.base.file.format`.
 
 ## Mixed-Format Tables
 
