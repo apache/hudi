@@ -33,8 +33,8 @@ CI keeps `hudi-trino-tests` off so the build resolves cleanly against Maven Cent
 
 Only this module needs JDK 25. Leave the rest of Hudi on its native JDK (11 or 17) so you are not toggling the project default.
 
-1. Activate the `hudi-trino` Maven profile so the IDE picks up the module.
-   - IntelliJ: Maven tool window, Profiles, tick `hudi-trino`.
+1. Activate the `hudi-trino` Maven profile so the IDE picks up the module. Tick `hudi-trino-tests` too if you want the test classpath to resolve.
+   - IntelliJ: Maven tool window, Profiles, tick both `hudi-trino` and `hudi-trino-tests`.
 2. Override the SDK for the `hudi-trino-plugin` module only, to Temurin 25 with Language level 25.
    - IntelliJ: `File > Project Structure > Modules > hudi-trino-plugin > Dependencies > Module SDK`.
 
