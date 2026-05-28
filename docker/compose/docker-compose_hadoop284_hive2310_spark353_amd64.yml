@@ -258,7 +258,6 @@ services:
       - "hive-metastore-postgresql"
       - "namenode"
       - "presto-coordinator-1"
-      - "trino-coordinator-1"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
 
@@ -282,7 +281,6 @@ services:
       - "hive-metastore-postgresql"
       - "namenode"
       - "presto-coordinator-1"
-      - "trino-coordinator-1"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
 
