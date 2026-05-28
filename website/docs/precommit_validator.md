@@ -109,6 +109,71 @@ Hudi offers a [commit notification service](platform_services_post_commit_callba
 
 The commit notification service can be combined with pre-commit validators to send a notification when a commit fails a validation. This is possible by passing details about the validation as a custom value to the HTTP endpoint.
 
+## Notes on Validator Behavior (1.2.0)
+
+**Metadata fields in SQL queries**: Validator SQL can now reference Hudi metadata fields (`_hoodie_record_key`, `_hoodie_partition_path`, `_hoodie_file_name`, `_hoodie_commit_time`, `_hoodie_commit_seqno`) directly in query expressions.
+
+**Empty writes**: Empty write commits no longer cause pre-commit validators to error. Validators are skipped gracefully when no records are present in the write.
+
+## Failure Policy
+
+Hudi 1.2.0 introduces a configurable failure policy for pre-commit validators:
+
+| Config Key | Default | Description |
+|---|---|---|
+| `hoodie.precommit.validators.failure.policy` | `FAIL` | How to handle validator failures. `FAIL`: block the commit with an exception. `WARN_LOG`: emit a warning log but allow the commit to proceed (useful for soft monitoring). |
+
+## Flink and Streaming-Offset Validators (1.2.0)
+
+Flink writers now honor `hoodie.precommit.validators` using the same configuration key as Spark. Validators intended for use with Flink must extend the engine-agnostic `org.apache.hudi.client.validator.BasePreCommitValidator` (in `hudi-common`), which provides access to commit metadata and timeline information independently of Spark.
+
+Two built-in streaming-offset validators are now available for Kafka-sourced pipelines:
+
+| Validator Class | Engine | Description |
+|---|---|---|
+| `org.apache.hudi.sink.validator.FlinkKafkaOffsetValidator` | Flink | Validates that the number of records written matches the Kafka offset difference for the batch |
+| `org.apache.hudi.utilities.streamer.validator.SparkKafkaOffsetValidator` | Spark / HoodieStreamer | Same semantics for Spark-based Kafka ingestion pipelines |
+
+Both validators use the following configuration:
+
+| Config Key | Default | Description |
+|---|---|---|
+| `hoodie.precommit.validators.streaming.offset.tolerance.percentage` | `0.0` | Tolerance percentage for offset-based record-count validation. A value of `0.0` requires an exact match between expected records (from Kafka offset delta) and actual records written. For upsert workloads with deduplication, set a higher tolerance (e.g., `10.0` for 10%). |
+| `hoodie.precommit.validators.failure.policy` | `FAIL` | See [Failure Policy](#failure-policy) above. |
+
+Example (Flink):
+```properties
+hoodie.precommit.validators=org.apache.hudi.sink.validator.FlinkKafkaOffsetValidator
+hoodie.precommit.validators.streaming.offset.tolerance.percentage=5.0
+hoodie.precommit.validators.failure.policy=WARN_LOG
+```
+
+## Pre-Write Validators (1.2.0)
+
+Pre-write validators run **before** data is written to storage, in contrast to pre-commit validators which run **after** data is written but before the commit is published to the timeline. This enables earlier rejection of invalid operations, avoiding unnecessary I/O.
+
+Configuration:
+
+| Config Key | Default | Description |
+|---|---|---|
+| `hoodie.prewrite.validators` | `""` | Comma-separated list of fully-qualified class names implementing `org.apache.hudi.client.validator.PreWriteValidator`. |
+
+To implement a custom pre-write validator, implement the `org.apache.hudi.client.validator.PreWriteValidator` interface:
+
+```java
+public interface PreWriteValidator {
+  <T> void validate(
+      String instantTime,
+      WriteOperationType writeOperationType,
+      HoodieTableMetaClient metaClient,
+      HoodieWriteConfig writeConfig,
+      HoodieEngineContext engineContext,
+      Option<HoodieData<HoodieRecord<T>>> recordsOpt) throws HoodieValidationException;
+}
+```
+
+No built-in pre-write validator implementations are provided yet; this framework is designed for custom user extensions. Unlike pre-commit validators, pre-write validators have access to the incoming records before any write I/O occurs.
+
 ## Related Resources
 
 <h3>Blogs</h3>
