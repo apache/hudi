@@ -35,14 +35,18 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metrics.FlinkPartitionedIndexBackendMetrics;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.utils.SamplingActionExecutor;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -74,6 +78,8 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
   private final long maxCacheSizeInBytes;
   private final BootstrapFilter bootstrapFilter;
   private HoodieTableMetadata metadataTable;
+  @Getter(AccessLevel.PACKAGE)
+  private FlinkPartitionedIndexBackendMetrics metrics;
 
   @Getter
   private final Map<String, BucketCache> partitionBucketCaches = new LinkedHashMap<>(16, 0.75f, true);
@@ -96,7 +102,16 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
     this.metaClient = StreamerUtil.createMetaClient(conf);
     this.maxCacheSizeInBytes = conf.get(FlinkOptions.INDEX_RLI_CACHE_SIZE) * 1024 * 1024;
     this.bootstrapFilter = bootstrapFilter;
+    // Pre-seed metrics with an unregistered group so the backend is safe to use before the
+    // bucket assign operator wires the real metric group via registerMetrics(MetricGroup).
+    registerMetrics(new UnregisteredMetricsGroup());
     reloadMetadataTable();
+  }
+
+  @Override
+  public void registerMetrics(MetricGroup metricGroup) {
+    this.metrics = new FlinkPartitionedIndexBackendMetrics(metricGroup);
+    this.metrics.registerMetrics();
   }
 
   @Override
@@ -161,11 +176,16 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
       return cache;
     }
 
+    // Time the partition bootstrap. readRecordIndexLocations returns a lazy HoodieListData whose
+    // underlying file-slice scan only runs during the forEach below, so the timer must span the
+    // iteration to capture the full remote cost.
+    metrics.startPartitionBootstrap();
     try {
       Map<String, List<FileSlice>> partitionedFileGroups =
           metadataTable.getBucketizedFileGroupsForPartitionedRLI(MetadataPartitionType.RECORD_INDEX);
       List<FileSlice> fileSlices = partitionedFileGroups.get(partitionPath);
       if (fileSlices == null || fileSlices.isEmpty()) {
+        metrics.updatePartitionBootstrapKeysLoaded(0L);
         return cache;
       }
       HoodiePairData<String, HoodieRecordGlobalLocation> locations =
@@ -179,12 +199,15 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
         }
         totalCnt.incrementAndGet();
       });
+      metrics.updatePartitionBootstrapKeysLoaded(cache.size());
       log.info("Bootstrapped partitioned RLI cache for partition {} with {} owned records from total {} RLI records.",
           partitionPath, cache.size(), totalCnt.get());
       return cache;
     } catch (Exception e) {
       cache.close();
       throw new HoodieException("Failed to bootstrap partitioned RLI cache for partition " + partitionPath, e);
+    } finally {
+      metrics.endPartitionBootstrap();
     }
   }
 

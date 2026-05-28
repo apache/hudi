@@ -20,11 +20,14 @@ package org.apache.hudi.sink.partitioner.index;
 
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.metrics.FlinkPartitionedIndexBackendMetrics;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.Histogram;
+import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -37,6 +40,8 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
@@ -152,6 +157,38 @@ public class TestRecordLevelIndexBackend {
     }
   }
 
+  @Test
+  public void testConstructorPreSeedsMetricsForNullSafety() throws Exception {
+    // Without pre-seeding, bootstrapPartition would NPE before the bucket assign operator
+    // wires the real MetricGroup via registerMetrics(MetricGroup).
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      assertNotNull(backend.getMetrics());
+    }
+  }
+
+  @Test
+  public void testRegisterMetricsRegistersPartitionBootstrapHistograms() throws Exception {
+    CapturingMetricGroup metricGroup = new CapturingMetricGroup();
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.registerMetrics(metricGroup);
+
+      assertNotNull(metricGroup.getHistogram("partition_bootstrap_latency_millis"));
+      assertNotNull(metricGroup.getHistogram("partition_bootstrap_keys_loaded"));
+    }
+  }
+
+  @Test
+  public void testRegisterMetricsReplacesPreSeededMetrics() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      FlinkPartitionedIndexBackendMetrics preSeeded = backend.getMetrics();
+      backend.registerMetrics(new CapturingMetricGroup());
+
+      assertNotNull(backend.getMetrics());
+      // The second call must rewire the field so the active metrics publish to the real metric group.
+      assertNotSame(preSeeded, backend.getMetrics());
+    }
+  }
+
   private RecordLevelIndexBackend createBackend() {
     return new RecordLevelIndexBackend(conf, (partitionPath, recordKey, fileId) -> true);
   }
@@ -185,6 +222,20 @@ public class TestRecordLevelIndexBackend {
     @Override
     public Map<Long, String> requestInflightInstants() {
       return inflightInstants;
+    }
+  }
+
+  private static class CapturingMetricGroup extends UnregisteredMetricsGroup {
+    private final Map<String, Histogram> histograms = new HashMap<>();
+
+    @Override
+    public <H extends Histogram> H histogram(String name, H histogram) {
+      histograms.put(name, histogram);
+      return histogram;
+    }
+
+    Histogram getHistogram(String name) {
+      return histograms.get(name);
     }
   }
 }
