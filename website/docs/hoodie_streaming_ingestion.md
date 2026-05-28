@@ -711,27 +711,6 @@ to how you run Hudi Streamer.
 
 For detailed information on how to configure and use `HoodieMultiTableStreamer`, please refer [blog section](/blog/2020/08/22/ingest-multiple-tables-using-hudi).
 
-## Schema Widening (make.columns.nullable)
-
-`hoodie.streamer.schema.make.columns.nullable` (default: `false`) — when set to `true`, all columns in the incoming dataset schema are widened to nullable before the write. This is useful for maintaining backward compatibility when new nullable columns are introduced via SQL transformations: existing non-nullable columns in the Hudi table schema are safely evolved to nullable, while existing data retains its values.
-
-The legacy alias `hoodie.deltastreamer.schema.make.columns.nullable` is also accepted.
-
-```properties
-hoodie.streamer.schema.make.columns.nullable=true
-```
-
-## Cloud and Parquet DFS Schema Merging
-
-When reading batches from cloud storage (S3/GCS) or Parquet DFS sources that may have heterogeneous schemas across files (e.g., during bootstrap or schema evolution), Hudi merges schemas across all files in the batch by default.
-
-| Config key | Default | Applies to |
-|---|---|---|
-| `hoodie.streamer.source.cloud.data.merge.schema.enable` | `true` | S3/GCS incremental sources (Parquet and ORC files) |
-| `hoodie.streamer.source.parquet.dfs.merge.schema.enable` | `true` | Parquet DFS source |
-
-Set either to `false` to restore the prior behavior where the schema from the first file in the batch is used.
-
 ## On-Demand Hive Sync (HudiHiveSyncJob)
 
 `org.apache.hudi.utilities.HudiHiveSyncJob` is a standalone Spark job that syncs a Hudi table's metadata to Hive metastore independently of any ingestion workflow. It is useful for backfills, manual data corrections, or reconciling metastore metadata after direct writes.
