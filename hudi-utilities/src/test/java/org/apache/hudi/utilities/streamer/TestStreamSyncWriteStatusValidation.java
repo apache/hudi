@@ -48,8 +48,8 @@ class TestStreamSyncWriteStatusValidation extends SparkClientFunctionalTestHarne
 
     Tuple2<Long, Long> counts = StreamSync.sumRecordAndErrorCounts(writeStatusRDD);
 
-    assertEquals(37L, counts._1().longValue(), "total records summed across all partitions");
-    assertEquals(8L, counts._2().longValue(), "total errored records summed across all partitions");
+    assertEquals(37L, counts._1, "total records summed across all partitions");
+    assertEquals(8L, counts._2, "total errored records summed across all partitions");
   }
 
   @Test
@@ -58,8 +58,8 @@ class TestStreamSyncWriteStatusValidation extends SparkClientFunctionalTestHarne
 
     Tuple2<Long, Long> counts = StreamSync.sumRecordAndErrorCounts(emptyRDD);
 
-    assertEquals(0L, counts._1().longValue());
-    assertEquals(0L, counts._2().longValue());
+    assertEquals(0L, counts._1);
+    assertEquals(0L, counts._2);
   }
 
   @Test
@@ -70,8 +70,8 @@ class TestStreamSyncWriteStatusValidation extends SparkClientFunctionalTestHarne
 
     Tuple2<Long, Long> counts = StreamSync.sumRecordAndErrorCounts(emptyRDD);
 
-    assertEquals(0L, counts._1().longValue());
-    assertEquals(0L, counts._2().longValue());
+    assertEquals(0L, counts._1);
+    assertEquals(0L, counts._2);
   }
 
   private static WriteStatus writeStatus(long totalRecords, long totalErrorRecords) {
