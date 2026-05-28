@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -898,23 +899,9 @@ public class ITTestHoodieDataSource {
     conf.setString("hoodie.commits.archival.batch", "1");
 
     // Step 1: write 10 batches of 2 new records each -> 10 delta_commit instants, 20 distinct keys.
-    // Remember each batch's instant time so we can later map start_commit -> excluded id set.
-    List<String> batchInstantTimes = new ArrayList<>();
-    HoodieTableMetaClient metaClient = null;
     for (int i = 0; i < 20; i += 2) {
       List<RowData> dataset = TestData.dataSetInsert(i + 1, i + 2);
       TestData.writeData(dataset, conf);
-      // Create metaClient lazily after the first write establishes the table on disk.
-      if (metaClient == null) {
-        metaClient = HoodieTestUtils.createMetaClient(
-            new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())),
-            tempFile.getAbsolutePath());
-      } else {
-        metaClient.reloadActiveTimeline();
-      }
-      batchInstantTimes.add(
-          metaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants()
-              .lastInstant().get().requestedTime());
     }
 
     // Step 2: trigger at least one completed compaction commit by issuing one more delta_commit
@@ -927,11 +914,29 @@ public class ITTestHoodieDataSource {
     conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     TestData.writeDataAsBatch(TestData.dataSetInsert(1, 2, 3, 4), conf);
 
-    // Step 3: pick the LAST archived delta_commit that belongs to Step 1's batches as
+    // Step 3: list the full timeline in one shot to map start_commit -> expected id set.
+    // Delta_commit instants are strictly monotonically increasing, so the sorted list of all
+    // delta_commits across active + archived timelines gives a 1:1 mapping to the 10 batches
+    // written in Step 1: the k-th delta_commit wrote id_{2k+1} and id_{2k+2}.
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())),
+        tempFile.getAbsolutePath());
+    // Use the merged (archived + active) timeline to capture all delta_commits,
+    // even those that may have been archived by the aggressive archival settings.
+    List<String> batchInstantTimes = TimelineUtils.getTimeline(metaClient, true)
+        .getCommitsTimeline().filterCompletedInstants()
+        .filter(instant -> HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()))
+        .getInstantsAsStream().map(HoodieInstant::requestedTime).collect(Collectors.toList());
+    // Step 1 produced exactly 10 delta_commits; the 11th (if present) is from Step 2 UPDATE.
+    // Keep only the first 10 to build the batch-index -> id mapping.
+    assertTrue(batchInstantTimes.size() >= 10,
+        "Expected at least 10 delta_commits from Step 1, got " + batchInstantTimes.size());
+    batchInstantTimes = batchInstantTimes.subList(0, 10);
+
+    // Step 4: pick the LAST archived delta_commit that belongs to Step 1's batches as
     // start commit. This avoids any drift caused by archival ordering or by compaction
     // `commit` instants being interleaved with delta_commits in the archived timeline,
     // and also ignores the Step 2 UPDATE batch in case it also got archived.
-    metaClient.reloadActiveTimeline();
     Set<String> step1InstantTimeSet = new TreeSet<>(batchInstantTimes);
     List<HoodieInstant> archivedDeltaCommits = metaClient.getArchivedTimeline().getCommitsTimeline()
         .filterCompletedInstants()
@@ -975,10 +980,9 @@ public class ITTestHoodieDataSource {
     batchTableEnv.executeSql(hoodieTableDDL);
 
     List<Row> result = CollectionUtil.iteratorToList(
-        batchTableEnv.executeSql("select * from t1").collect());
+        batchTableEnv.executeSql("select uuid from t1").collect());
     Set<String> actualIds = new TreeSet<>();
     for (Row r : result) {
-      // schema: uuid, name, age, ts, partition
       actualIds.add(r.getField(0).toString());
     }
     // Without the fix, the FS view used to construct file slices for the fallback full-table-scan
