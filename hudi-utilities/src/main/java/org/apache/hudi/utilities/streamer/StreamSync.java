@@ -1404,6 +1404,39 @@ public class StreamSync implements Serializable, Closeable {
   }
 
   /**
+   * Sums {@link WriteStatus#getTotalRecords()} and {@link WriteStatus#getTotalErrorRecords()} over the
+   * given RDD in a single Spark action, returned as a {@code (totalRecords, totalErroredRecords)} tuple.
+   *
+   * <p>Folding both counters into one {@code aggregate} pass avoids re-deserializing every cached
+   * {@link WriteStatus} block a second time. Issuing two separate {@code mapToDouble(...).sum()}
+   * actions on the persisted error-table {@code WriteStatus} RDD doubles Kryo deserialization of
+   * cached partitions during commit validation and adds gratuitous heap pressure on memory-strained
+   * executors.
+   *
+   * <p>{@code aggregate} is used (instead of {@code mapPartitions(...).reduce(...)}) so that a
+   * 0-partition RDD (e.g. {@code sc.emptyRDD()}, which {@link BaseErrorTableWriter#upsert} can
+   * return for an empty commit) returns {@code (0L, 0L)} rather than raising
+   * {@code UnsupportedOperationException} as {@code reduce} would. The mutable {@code long[2]}
+   * accumulator keeps per-record allocations at zero.
+   */
+  @VisibleForTesting
+  static Tuple2<Long, Long> sumRecordAndErrorCounts(JavaRDD<WriteStatus> writeStatuses) {
+    long[] counts = writeStatuses.aggregate(
+        new long[]{0L, 0L},
+        (acc, status) -> {
+          acc[0] += status.getTotalRecords();
+          acc[1] += status.getTotalErrorRecords();
+          return acc;
+        },
+        (left, right) -> {
+          left[0] += right[0];
+          left[1] += right[1];
+          return left;
+        });
+    return new Tuple2<>(counts[0], counts[1]);
+  }
+
+  /**
    * WriteStatus Validator for commits to hoodie streamer data table.
    * The writes to error table is taken care as well.
    */
@@ -1447,9 +1480,10 @@ public class StreamSync implements Serializable, Closeable {
 
       long totalRecords = tableTotalRecords;
       long totalErroredRecords = tableTotalErroredRecords;
-      if (isErrorTableWriteUnificationEnabled) {
-        totalRecords += errorTableWriteStatusRDDOpt.map(status -> status.mapToDouble(WriteStatus::getTotalRecords).sum().longValue()).orElse(0L);
-        totalErroredRecords += errorTableWriteStatusRDDOpt.map(status -> status.mapToDouble(WriteStatus::getTotalErrorRecords).sum().longValue()).orElse(0L);
+      if (isErrorTableWriteUnificationEnabled && errorTableWriteStatusRDDOpt.isPresent()) {
+        Tuple2<Long, Long> errorTableCounts = sumRecordAndErrorCounts(errorTableWriteStatusRDDOpt.get());
+        totalRecords += errorTableCounts._1;
+        totalErroredRecords += errorTableCounts._2;
       }
       long totalSuccessfulRecords = totalRecords - totalErroredRecords;
       this.totalSuccessfulRecords.set(totalSuccessfulRecords);
