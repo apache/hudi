@@ -445,7 +445,7 @@ WITH (
 );
 ```
 
-After the first successful checkpoint (which completes bootstrap), restart the job with `index.bootstrap.enabled=false`.
+Once bootstrap completes (after the first successful checkpoint), you can optionally restart the job with `index.bootstrap.enabled=false` to skip the bootstrap operators. Leaving them enabled is harmless — they become no-ops on subsequent runs and do not affect write performance.
 
 ### In-Pipeline MDT Compaction
 
@@ -483,13 +483,12 @@ Hudi 1.2.0 adds a RocksDB-backed cache option for Flink lookup joins against Hud
 ### Example
 
 ```sql
--- Streaming fact table
+-- Streaming fact table with a processing-time attribute
 CREATE TABLE orders (
   order_id BIGINT,
   customer_id BIGINT,
   amount DOUBLE,
-  ts TIMESTAMP(3),
-  WATERMARK FOR ts AS ts - INTERVAL '5' SECOND,
+  proc_time AS PROCTIME(),
   PRIMARY KEY (order_id) NOT ENFORCED
 ) WITH (
   'connector' = 'hudi',
@@ -511,10 +510,10 @@ CREATE TABLE customers (
   'lookup.join.rocksdb.path' = '/tmp/hudi-lookup-rocksdb'
 );
 
--- Lookup join
+-- Lookup join keyed by the fact table's processing-time attribute
 SELECT o.order_id, c.name, o.amount
 FROM orders AS o
-JOIN customers FOR SYSTEM_TIME AS OF o.ts AS c
+JOIN customers FOR SYSTEM_TIME AS OF o.proc_time AS c
   ON o.customer_id = c.customer_id;
 ```
 

@@ -256,18 +256,9 @@ binary `value` field.
 | **Spark 4.0** | Native `VariantType` — full read/write/query for COW and MOR; native `df.write` with `VariantType` on the V1 datasource |
 | **Spark 4.1** | Native `VariantType` — full read/write/query for COW and MOR |
 | **Spark 3.x** | Reads as `STRUCT<value: BINARY, metadata: BINARY>` — backward compatible |
-| **Flink 2.1+** | Reads and writes as `VARIANT` (Flink's native `LogicalTypeRoot.VARIANT`) — cross-engine compatible |
-| **Flink < 2.1** | **Not supported** — throws `UnsupportedOperationException`. Upgrade to Flink 2.1 to use VARIANT columns. |
+| **Flink** | Native `VARIANT` operations are not supported. Tables written by Spark with VARIANT columns can be read in Flink only as the underlying `ROW<metadata BYTES, value BYTES>` struct. |
 
-A VARIANT table written by Spark 4.0/4.1 can be read by Spark 3.x or Flink 2.1+, and vice versa.
-The binary encoding is engine-independent.
-
-:::caution Flink version requirement
-VARIANT columns require **Flink 2.1 or later**. On Flink 2.0 and earlier, any operation involving
-a VARIANT column throws:
-> `UnsupportedOperationException: VARIANT type is only supported in Flink 2.1+. Please upgrade your
-> Flink version to use Variant columns.`
-:::
+A VARIANT table written by Spark 4.0/4.1 can be read by Spark 3.x using the underlying binary struct, or by Flink as `ROW<metadata BYTES, value BYTES>`. The binary encoding is engine-independent.
 
 ## Metastore Sync
 
@@ -366,6 +357,6 @@ CREATE TABLE api_responses (
 - Native `VARIANT` keyword in DDL requires Spark 4.0+. On Spark 3.x, use the struct representation.
 - VARIANT shredding configuration is determined at write time based on the schema definition.
 - Complex path expressions within VARIANT may require casting to STRING and then using JSON functions.
-- VARIANT columns on Flink require **Flink 2.1+** — earlier Flink versions throw `UnsupportedOperationException`.
+- Native VARIANT operations are not supported on Flink. VARIANT columns surface as `ROW<metadata BYTES, value BYTES>` and can be read but not natively decoded or queried as a variant.
 - VARIANT columns are **not supported** on Lance-backed tables. Use Parquet as the base file format
   for tables containing VARIANT columns.

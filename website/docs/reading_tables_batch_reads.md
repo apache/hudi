@@ -43,16 +43,6 @@ WITH (
 SELECT * FROM hudi_table WHERE age > 25;
 ```
 
-### LIMIT Push-Down with Source V2
-
-When [Source V2](ingestion_flink.md#flink-source-v2) is enabled (`read.source-v2.enabled=true`), `LIMIT` clauses are pushed down to the source, reducing the number of files scanned:
-
-```sql
-SELECT * FROM hudi_table LIMIT 100;
-```
-
-Without Source V2, the `LIMIT` is applied after all data is read from storage. With Source V2 it is pushed to the split enumeration layer, stopping file scanning early.
-
 For more Flink read options, see [Using Flink](ingestion_flink.md).
 
 ## Daft

@@ -14,7 +14,7 @@ This page introduces Flink–Hudi integration and demonstrates how Flink brings 
 
 | Hudi   | Supported Flink versions                                                      |
 | :----- | :---------------------------------------------------------------------------- |
-| 1.2.x  | 1.17.x, 1.18.x, 1.19.x, 1.20.x, 2.0.x, **2.1.x (default build)**            |
+| 1.2.x  | 1.17.x, 1.18.x, 1.19.x, 1.20.x (default build), 2.0.x, 2.1.x                |
 | 1.1.x  | 1.17.x, 1.18.x, 1.19.x, 1.20.x (default build), 2.0.x                        |
 | 1.0.x  | 1.14.x, 1.15.x, 1.16.x, 1.17.x, 1.18.x, 1.19.x, 1.20.x (default build)      |
 | 0.15.x | 1.14.x, 1.15.x, 1.16.x, 1.17.x, 1.18.x                                       |
@@ -63,8 +63,8 @@ You can build the jar manually under path `hudi-source-dir/packaging/hudi-flink-
 Now start the SQL CLI:
 
 ```bash
-# For Flink versions: 1.17-1.20, 2.0, 2.1 (default build for Hudi 1.2.x)
-export FLINK_VERSION=2.1
+# Supported Flink versions for Hudi 1.2.x: 1.17, 1.18, 1.19, 1.20 (default build), 2.0, 2.1
+export FLINK_VERSION=1.20
 export HUDI_VERSION=1.2.0
 wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-flink${FLINK_VERSION}-bundle/${HUDI_VERSION}/hudi-flink${FLINK_VERSION}-bundle-${HUDI_VERSION}.jar -P /tmp/
 ./bin/sql-client.sh embedded -j /tmp/hudi-flink${FLINK_VERSION}-bundle-${HUDI_VERSION}.jar shell
@@ -78,10 +78,10 @@ The SQL CLI only executes the SQL line by line.
 
 Please add the desired dependency to your project:
 ```xml
-<!-- For Flink versions 1.17-1.20, 2.0, 2.1 (default build for Hudi 1.2.x) -->
+<!-- Supported Flink versions for Hudi 1.2.x: 1.17, 1.18, 1.19, 1.20 (default build), 2.0, 2.1 -->
 <properties>
-    <flink.version>2.1.1</flink.version>
-    <flink.binary.version>2.1</flink.binary.version>
+    <flink.version>1.20.1</flink.version>
+    <flink.binary.version>1.20</flink.binary.version>
     <hudi.version>1.2.0</hudi.version>
 </properties>
 <dependency>
