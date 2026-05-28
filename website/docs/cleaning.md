@@ -147,6 +147,67 @@ cleans run --sparkMaster local --hoodieConfigs hoodie.clean.policy=KEEP_LATEST_C
 
 You can find more details and the relevant code for these commands in [`org.apache.hudi.cli.commands.CleansCommand`](https://github.com/apache/hudi/blob/master/hudi-cli/src/main/java/org/apache/hudi/cli/commands/CleansCommand.java) class. 
 
+## New in 1.2.0
+
+### Empty Clean Commits for Append-Only Tables
+
+Append-only tables never accumulate updates, so the cleaner's `earliest_commit_to_retain` pointer never advances — causing
+the cleaner to scan the full table history on every run. Hudi 1.2.0 introduces periodic _empty clean commits_ to advance
+this pointer even when there is nothing to delete.
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.write.empty.clean.interval.hours` | `-1` (disabled) | Interval in hours at which an empty clean commit is created. `-1` disables the feature. Must be `-1` or `>= 1`. When enabled, the cleaner advances `earliest_commit_to_retain` so that subsequent clean plans only scan partitions modified after the last empty clean's pointer. |
+
+### Full-Clean Partition Filtering
+
+When incremental cleaning is disabled (`hoodie.clean.incremental.enabled=false`), the cleaner scans every partition on
+every run. For very large tables this can cause OOM during planning. Two new configs let you restrict which partitions are
+examined.
+
+:::note
+Both configs require `hoodie.clean.incremental.enabled=false`. If both are set, `hoodie.clean.partition.filter.selected`
+takes precedence over the regex.
+:::
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.clean.partition.filter.regex` | (none) | Java regex pattern; only partitions whose path matches are cleaned. |
+| `hoodie.clean.partition.filter.selected` | (none) | Comma-separated list of partition paths to clean; takes precedence over the regex when both are set. |
+
+### Pre-Write Cleaner Policy
+
+By default the cleaner runs _after_ a write commits. The new `hoodie.prewrite.cleaner.policy` config lets you force a
+clean (or rollback of failed writes) _before_ each write begins, which is useful in scenarios where you want a
+deterministic table state before every write.
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.prewrite.cleaner.policy` | `NONE` | Pre-write cleaning action. `NONE`: no pre-write action (default). `CLEAN`: run a clean pass before each write. `ROLLBACK_FAILED_WRITES`: roll back any failed writes before each write. |
+
+:::note
+`hoodie.prewrite.cleaner.policy` is cross-referenced from [concurrency control](concurrency_control.md) where it is
+relevant to multi-writer deployments. This page is the canonical description.
+:::
+
+### Capping the Number of Commits Cleaned per Run
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.clean.max.commits.to.clean` | `Long.MAX_VALUE` (unbounded) | Maximum number of commits cleaned in a single clean commit. Applicable when the cleaning policy is `KEEP_LATEST_COMMITS` or `KEEP_LATEST_BY_HOURS`. Must be `>= 1`. |
+
+### Driver-Side Planning Optimization
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.clean.optimize.using.local.engine.context` | `true` | When enabled, clean planning for metadata tables and non-partitioned datasets runs on the driver only (local engine context), avoiding OOM on executor memory caused by large `record_index` partitions during file listing. |
+
+### MDT Cleaner Inherits Data-Table Policy
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.metadata.derive.from.datatable.clean.policy` | `true` | When enabled, the metadata table's cleaner uses the same cleaning policy as the data table. Disable only if you need an independent retention policy for the metadata table. Also configurable from [metadata](metadata.md). |
+
 ## Related Resources
 
 <h3>Blogs</h3>
