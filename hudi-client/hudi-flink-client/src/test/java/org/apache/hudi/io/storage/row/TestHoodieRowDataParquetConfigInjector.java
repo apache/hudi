@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.DisableDictionaryInjector;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -31,6 +32,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.GenericRowData;
@@ -111,6 +113,7 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
         basePath + "/partition/path/test_dictionary_" + instantTime + ".parquet");
 
     RowType rowType = getTestRowType();
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
 
     // Create config with the custom injector
     HoodieConfig config = new HoodieConfig();
@@ -120,7 +123,7 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
     // Create writer and write some data
     HoodieRowDataFileWriterFactory factory = new HoodieRowDataFileWriterFactory(storage);
     HoodieFileWriter writer = factory.newParquetFileWriter(
-        instantTime, parquetPath, config, rowType, new LocalTaskContextSupplier());
+        instantTime, parquetPath, config, schema, new LocalTaskContextSupplier());
 
     assertTrue(writer instanceof HoodieRowDataParquetWriter);
 
@@ -169,6 +172,7 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
         basePath + "/partition/path/test_invalid_" + instantTime + ".parquet");
 
     RowType rowType = getTestRowType();
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
 
     // Create config with an invalid/non-existent injector class
     HoodieConfig config = new HoodieConfig();
@@ -177,7 +181,7 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
     // Should throw an exception when trying to create the writer
     HoodieRowDataFileWriterFactory factory = new HoodieRowDataFileWriterFactory(storage);
     assertThrows(Exception.class, () -> {
-      factory.newParquetFileWriter(instantTime, parquetPath, config, rowType, new LocalTaskContextSupplier());
+      factory.newParquetFileWriter(instantTime, parquetPath, config, schema, new LocalTaskContextSupplier());
     });
   }
 
@@ -189,6 +193,7 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
         basePath + "/partition/path/test_no_injector_" + instantTime + ".parquet");
 
     RowType rowType = getTestRowType();
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
 
     // Create config WITHOUT injector - should use default settings
     HoodieConfig config = new HoodieConfig();
@@ -197,7 +202,7 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
     // Create writer and write some data
     HoodieRowDataFileWriterFactory factory = new HoodieRowDataFileWriterFactory(storage);
     HoodieFileWriter writer = factory.newParquetFileWriter(
-        instantTime, parquetPath, config, rowType, new LocalTaskContextSupplier());
+        instantTime, parquetPath, config, schema, new LocalTaskContextSupplier());
 
     assertTrue(writer instanceof HoodieRowDataParquetWriter);
 
