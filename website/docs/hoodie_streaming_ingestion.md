@@ -639,39 +639,45 @@ to how you run Hudi Streamer.
 
 For detailed information on how to configure and use `HoodieMultiTableStreamer`, please refer [blog section](/blog/2020/08/22/ingest-multiple-tables-using-hudi).
 
-## Amazon Kinesis Source (JsonKinesisSource)
+## Amazon Kinesis Source
 
-`org.apache.hudi.utilities.sources.JsonKinesisSource` reads JSON records directly from an AWS Kinesis Data Stream using the AWS SDK v2. It is the JSON counterpart to the Avro-based `KinesisSource` and shares the same checkpoint and shard-iteration logic via the abstract `KinesisSource<T>` base class.
+Use the `JsonKinesisSource` (`org.apache.hudi.utilities.sources.JsonKinesisSource`) to ingest JSON records from an AWS Kinesis Data Stream into a Hudi table. It reads from every shard in parallel, tracks per-shard progress in the Hudi Streamer checkpoint, automatically handles shard splits and merges, and de-aggregates records produced by the Kinesis Producer Library (KPL).
 
-### Key configuration
+### Common configuration
 
-All keys use the prefix `hoodie.streamer.source.kinesis.`.
+All keys use the prefix `hoodie.streamer.source.kinesis.`. The settings most users need:
 
 | Config key | Default | Description |
 |---|---|---|
 | `hoodie.streamer.source.kinesis.stream.name` | (required) | Kinesis Data Streams stream name. |
 | `hoodie.streamer.source.kinesis.region` | (required) | AWS region for the stream (e.g., `us-east-1`). |
-| `hoodie.streamer.source.kinesis.endpoint.url` | (none) | Custom endpoint URL, e.g., for LocalStack. Uses the default AWS endpoint when unset. |
-| `hoodie.streamer.source.kinesis.access.key` | (none) | AWS access key. Used with custom endpoints; otherwise uses the default AWS credential chain. |
-| `hoodie.streamer.source.kinesis.secret.key` | (none) | AWS secret key. Used with custom endpoints; otherwise uses the default AWS credential chain. |
-| `hoodie.streamer.source.kinesis.max.events` | `5000000` | Maximum number of records read per batch across all shards. |
-| `hoodie.streamer.source.kinesis.starting.position` | `LATEST` | Starting position when no checkpoint exists. `LATEST` or `EARLIEST` (maps to `TRIM_HORIZON`). |
-| `hoodie.streamer.source.kinesis.enable.deaggregation` | `true` | De-aggregates records produced by the Kinesis Producer Library (KPL). Pass-through for non-KPL producers. |
+| `hoodie.streamer.source.kinesis.starting.position` | `LATEST` | Where to start when no checkpoint exists yet. `LATEST` starts at the tip of each shard; `EARLIEST` replays from `TRIM_HORIZON`. |
+| `hoodie.streamer.source.kinesis.max.events` | `5000000` | Maximum number of records read per batch across all shards. Tune to control batch size. |
 | `hoodie.streamer.source.kinesis.append.offsets` | `false` | When enabled, appends Kinesis metadata fields to each record: `_hoodie_kinesis_source_sequence_number`, `_hoodie_kinesis_source_shard_id`, `_hoodie_kinesis_source_partition_key`, `_hoodie_kinesis_source_timestamp`. |
-| `hoodie.streamer.source.kinesis.persist.fetch.rdd` | `true` | **Required for correct, duplicate-free ingestion.** Persists the fetch RDD to `MEMORY_AND_DISK` so both checkpoint collection and record writing reuse the same Spark job. When `false`, Kinesis is queried twice per batch, which can result in duplicate records being written. |
-| `hoodie.streamer.source.kinesis.partitions` | `0` | Target Spark partitions. `0` means one partition per shard. Set a positive value to repartition for downstream parallelism. |
-| `hoodie.streamer.source.kinesis.max.records.per.request` | `10000` | Maximum records per `GetRecords` API call (Kinesis hard limit: 10,000). |
-| `hoodie.streamer.source.kinesis.get.records.interval.ms` | `200` | Minimum interval in ms between successive `GetRecords` calls per shard. |
-| `hoodie.streamer.source.kinesis.retry.initial.interval.ms` | `1000` | Initial backoff in ms for `ProvisionedThroughputExceededException`. Doubles each retry up to `retry.max.interval.ms`. |
-| `hoodie.streamer.source.kinesis.retry.max.interval.ms` | `10000` | Maximum backoff in ms between retries for throughput exceeded. |
-| `hoodie.streamer.source.kinesis.retry.throttle.timeout.ms` | `600000` | Maximum time in ms to keep retrying after throttling before the batch fails (default: 10 minutes). |
-| `hoodie.streamer.source.kinesis.fail.on.data.loss.enable` | `false` | Fail if a checkpoint references an expired shard that has not been fully consumed. |
+| `hoodie.streamer.source.kinesis.partitions` | `0` | Spark partitions to use when reading. `0` means one Spark partition per Kinesis shard. Set a positive value to repartition for downstream parallelism. |
 
-:::caution
+For credentials, the source uses the default AWS credential chain (instance profile, environment variables, etc.). Authentication for custom endpoints (e.g., LocalStack), API-level rate limiting, and retry tuning are also available — see the [configurations reference](configurations.md) for the full list of `hoodie.streamer.source.kinesis.*` keys.
 
-Keep `hoodie.streamer.source.kinesis.persist.fetch.rdd=true` (the default). Setting it to `false` causes the Kinesis fetch to run twice per Streamer cycle — once to collect checkpoint metadata and once when the record RDD is consumed — which can produce duplicate records in the Hudi table.
+### Checkpoint format
 
-:::
+Hudi Streamer persists Kinesis progress as a single checkpoint string on the timeline. Each batch advances the checkpoint to the last record successfully read from every shard, so a failed batch can be retried without skipping or duplicating records.
+
+The checkpoint encodes per-shard state in plain text:
+
+```
+streamName,shardId:value,shardId:value,...
+```
+
+Each `value` is one of:
+
+- `lastSeq` — last sequence number consumed from an open shard.
+- `lastSeq@arrivalTime` — same, with the record's approximate arrival time (epoch millis) for lag/observability.
+- `lastSeq|endSeq` — closed shard. `endSeq` is the shard's final sequence number, used to detect data loss if the shard expires before being fully consumed.
+- `lastSeq@arrivalTime|endSeq` — closed shard with arrival time.
+
+Example: `my-stream,shardId-000000000000:49590338271490256608559692538361571095921575989136588898,shardId-000000000001:49590338271512557353758223166512876988234521851574796306`
+
+You don't need to construct or parse this string yourself — it is read and updated automatically by the source — but it's useful for debugging, manual checkpoint resets, or comparing progress across shards.
 
 ### Minimal spark-submit example
 
@@ -680,7 +686,6 @@ Keep `hoodie.streamer.source.kinesis.persist.fetch.rdd=true` (the default). Sett
 hoodie.streamer.source.kinesis.stream.name=my-stream
 hoodie.streamer.source.kinesis.region=us-east-1
 hoodie.streamer.source.kinesis.starting.position=LATEST
-hoodie.streamer.source.kinesis.persist.fetch.rdd=true
 
 # Standard Hudi write / key-gen configs
 hoodie.datasource.write.recordkey.field=id
