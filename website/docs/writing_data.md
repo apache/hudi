@@ -467,7 +467,6 @@ The following advanced storage configuration options were added in Hudi 1.2.0:
 | Config | Default | Description |
 |---|---|---|
 | `hoodie.parquet.write.config.injector.class` | (none) | Fully-qualified class name of a custom `HoodieParquetConfigInjector` implementation. Use this to inject custom Parquet writer properties (e.g., disable dictionary encoding, set bloom filter sizes) without modifying the Hudi source. The implementing class must implement `org.apache.hudi.io.HoodieParquetConfigInjector`. |
-| `hoodie.hfile.writes.allow.duplicates` | `false` | Allow duplicate keys to be written into HFile-format log blocks. This is an escape hatch for bootstrapping a Record Level Index (RLI) when the source data table contains pre-existing duplicates; enabling it avoids bootstrap job failures. Note that with duplicates present, there is no deterministic guarantee of which record will be retained in the index. Do not enable for normal write workloads. |
 
 ## Java Client
 We can use plain java to write to hudi tables. To use Java client we can refere [here](https://github.com/apache/hudi/blob/master/hudi-examples/hudi-examples-java/src/main/java/org/apache/hudi/examples/java/HoodieJavaWriteClientExample.java)
