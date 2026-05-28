@@ -65,8 +65,8 @@ public class TestHudiNoCacheFileOperations
         @Language("SQL") String query = "SELECT * FROM " + HUDI_MULTI_FG_PT_V8_MOR + " WHERE country='SG'";
         Multiset<FileOperationUtils.FileOperation> expectedFileOperations = ImmutableMultiset.<FileOperationUtils.FileOperation>builder()
                 .addCopies(new FileOperationUtils.FileOperation("Input.readTail", DATA), 2)
-                .addCopies(new FileOperationUtils.FileOperation("InputFile.lastModified", METADATA_TABLE), 5)
-                .addCopies(new FileOperationUtils.FileOperation("InputFile.length", METADATA_TABLE), 5)
+                .addCopies(new FileOperationUtils.FileOperation("InputFile.lastModified", METADATA_TABLE), 1)
+                .addCopies(new FileOperationUtils.FileOperation("InputFile.length", METADATA_TABLE), 1)
                 .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", METADATA_TABLE), 6)
                 .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", INDEX_DEFINITION), 2)
                 .add(new FileOperationUtils.FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES))
@@ -91,8 +91,8 @@ public class TestHudiNoCacheFileOperations
                 query,
                 ImmutableMultiset.<FileOperationUtils.FileOperation>builder()
                         .addCopies(new FileOperationUtils.FileOperation("Input.readTail", DATA), 6)
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.lastModified", METADATA_TABLE), 60)
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.length", METADATA_TABLE), 60)
+                        .addCopies(new FileOperationUtils.FileOperation("InputFile.lastModified", METADATA_TABLE), 21)
+                        .addCopies(new FileOperationUtils.FileOperation("InputFile.length", METADATA_TABLE), 21)
                         .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", INDEX_DEFINITION), 5)
                         .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", METADATA_TABLE), 54)
                         .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES), 3)
@@ -104,8 +104,8 @@ public class TestHudiNoCacheFileOperations
                 query,
                 ImmutableMultiset.<FileOperationUtils.FileOperation>builder()
                         .addCopies(new FileOperationUtils.FileOperation("Input.readTail", DATA), 6)
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.lastModified", METADATA_TABLE), 45)
-                        .addCopies(new FileOperationUtils.FileOperation("InputFile.length", METADATA_TABLE), 45)
+                        .addCopies(new FileOperationUtils.FileOperation("InputFile.lastModified", METADATA_TABLE), 16)
+                        .addCopies(new FileOperationUtils.FileOperation("InputFile.length", METADATA_TABLE), 16)
                         .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", INDEX_DEFINITION), 4)
                         .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", METADATA_TABLE), 40)
                         .addCopies(new FileOperationUtils.FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES), 2)
