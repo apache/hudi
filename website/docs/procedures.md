@@ -2,7 +2,7 @@
 title: SQL Procedures
 summary: "In this page, we introduce how to use SQL procedures with Hudi."
 toc: true
-last_modified_at: 2025-11-24T00:00:00
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -297,6 +297,64 @@ call show_archived_commits(table => 'test_hudi_table');
 | 20220216171049652 | 432653              | 0                 | 1                   | 1                        | 0                     | 0                            | 0            |
 | 20220216171027021 | 435346              | 1                 | 0                   | 1                        | 1                     | 0                            | 0            |
 | 20220216171019361 | 435349              | 1                 | 0                   | 1                        | 1                     | 0                            | 0            |
+
+### show_timeline
+
+Show timeline entries for a Hudi table. Returns instant-level information for all timeline operations (commits, compactions, clustering, clean, rollback, etc.) from the active and optionally archived timeline. Results are sorted by timestamp descending.
+
+**Input**
+
+| Parameter Name | Type    | Required | Default Value | Description                                                                      |
+|----------------|---------|----------|---------------|----------------------------------------------------------------------------------|
+| table          | String  | N*       | None          | Hudi table name (mutually exclusive with `path`)                                 |
+| path           | String  | N*       | None          | Base path of the Hudi table (mutually exclusive with `table`)                    |
+| limit          | Int     | N        | 20            | Max number of timeline entries to return (ignored when both `startTime` and `endTime` are set) |
+| showArchived   | Boolean | N        | false         | Whether to include archived timeline entries                                     |
+| filter         | String  | N        | ""            | SQL expression to filter results on any output column                            |
+| startTime      | String  | N        | ""            | Start timestamp for filtering (format: `yyyyMMddHHmmss`, inclusive)              |
+| endTime        | String  | N        | ""            | End timestamp for filtering (format: `yyyyMMddHHmmss`, inclusive)                |
+
+\* Either `table` or `path` must be provided.
+
+**Output**
+
+| Output Name    | Type   | Description                                                                           |
+|----------------|--------|---------------------------------------------------------------------------------------|
+| instant_time   | String | Requested timestamp of the instant                                                    |
+| action         | String | Action type: `commit`, `deltacommit`, `compaction`, `clustering`, `clean`, `rollback`, etc. |
+| state          | String | State of the instant: `REQUESTED`, `INFLIGHT`, or `COMPLETED`                        |
+| requested_time | String | Wall-clock time when the instant was requested (format: `MM-dd HH:mm:ss`)            |
+| inflight_time  | String | Wall-clock time when the instant became inflight (format: `MM-dd HH:mm:ss`)          |
+| completed_time | String | Wall-clock time when the instant completed (format: `MM-dd HH:mm:ss`), or `null`     |
+| timeline_type  | String | `ACTIVE` or `ARCHIVED`                                                                |
+| rollback_info  | String | For rollback instants: what was rolled back; for rolled-back instants: which rollback instant rolled them back; otherwise `null` |
+
+**Example**
+
+```sql
+-- Show the 20 most recent timeline entries
+call show_timeline(table => 'test_hudi_table');
+
+-- Show up to 50 entries including archived timeline
+call show_timeline(table => 'test_hudi_table', limit => 50, showArchived => true);
+
+-- Filter to completed commits in a time range
+call show_timeline(
+  table => 'test_hudi_table',
+  startTime => '20251201000000',
+  endTime => '20251231235959',
+  filter => "action = 'commit' AND state = 'COMPLETED'"
+);
+
+-- Look up by base path instead of table name
+call show_timeline(path => 'hdfs:///user/hive/warehouse/test_hudi_table');
+```
+
+| instant_time      | action | state     | requested_time      | inflight_time       | completed_time      | timeline_type | rollback_info |
+|-------------------|--------|-----------|---------------------|---------------------|---------------------|---------------|---------------|
+| 20251205143022001 | commit | COMPLETED | 12-05 14:30:20      | 12-05 14:30:21      | 12-05 14:30:22      | ACTIVE        | null          |
+| 20251205141510003 | clean  | COMPLETED | 12-05 14:15:09      | 12-05 14:15:10      | 12-05 14:15:10      | ACTIVE        | null          |
+| 20251205140030002 | commit | COMPLETED | 12-05 14:00:28      | 12-05 14:00:29      | 12-05 14:00:30      | ACTIVE        | null          |
 
 ### show_commit_files
 
