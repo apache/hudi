@@ -3,16 +3,26 @@ title: "Lance File Format"
 keywords: [ hudi, lance, file format, vector, AI, ML, columnar, ANN, indexing]
 summary: "Use the Lance columnar file format with Hudi for vector-optimized storage, ANN indexing, and efficient ML workloads"
 toc: true
-last_modified_at: 2026-04-25T00:00:00-00:00
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 
 [Lance](https://lancedb.github.io/lance/) is a modern columnar data format designed for AI and machine learning
 workloads. Hudi's pluggable storage architecture lets you use Lance as the base file format alongside Parquet
 and ORC, unlocking vector indexing, fast random access, and optimized high-dimensional array storage.
 
+:::caution Engine Support
+Lance is **Spark-only**. Attempting to open a Lance-backed table from Flink or Hive throws a
+`HoodieValidationException`:
+> Lance base file format is currently only supported with the Spark engine. Please use Parquet, ORC, or HFile
+> for non-Spark engines (Flink, Hive, Presto, Trino).
+
+The Lance JAR is **not bundled** in the Hudi distribution — you must add it to your Spark classpath
+(see [Required Dependencies](#required-dependencies)).
+:::
+
 ## Enabling Lance in Hudi
 
-### Table Creation
+### Table Creation (COW)
 
 Set the base file format to `lance` in table properties:
 
@@ -26,7 +36,26 @@ TBLPROPERTIES (
     primaryKey = 'id',
     type = 'cow',
     hoodie.record.merger.impls = 'org.apache.hudi.DefaultSparkRecordMerger',
-    hoodie.datasource.write.base.file.format = 'lance'
+    hoodie.table.base.file.format = 'lance'
+);
+```
+
+### Table Creation (MOR)
+
+Lance base files work with MOR tables — Lance files act as base files while Avro log files capture
+incremental changes. Log compaction merges the delta log back into Lance base files.
+
+```sql
+CREATE TABLE my_ai_table_mor (
+    id        STRING,
+    embedding VECTOR(768),
+    metadata  STRING
+) USING hudi
+TBLPROPERTIES (
+    primaryKey = 'id',
+    type = 'mor',
+    hoodie.record.merger.impls = 'org.apache.hudi.DefaultSparkRecordMerger',
+    hoodie.table.base.file.format = 'lance'
 );
 ```
 
@@ -39,18 +68,21 @@ TBLPROPERTIES (
    .option("hoodie.datasource.write.recordkey.field", "id")
    .option("hoodie.record.merger.impls",
            "org.apache.hudi.DefaultSparkRecordMerger")
-   .option("hoodie.datasource.write.base.file.format", "lance")
+   .option("hoodie.table.base.file.format", "lance")
    .mode("overwrite")
    .save("/path/to/my_ai_table"))
 ```
 
 ### Required Dependencies
 
-Add the Lance Spark bundle to your Spark classpath:
+The Lance JAR is not bundled in Hudi. Add the appropriate Lance Spark bundle to your Spark classpath:
 
-| Component | Maven Coordinates |
-|:----------|:-----------------|
-| Lance Spark Bundle (Spark 3.5) | `org.lance:lance-spark-bundle-3.5_2.12:0.4.0` |
+| Spark Version | Maven Coordinates |
+|:--------------|:-----------------|
+| Spark 3.4 | `org.lance:lance-spark-3.4_2.12:0.4.0` |
+| Spark 3.5 | `org.lance:lance-spark-3.5_2.12:0.4.0` |
+| Spark 4.0 | `org.lance:lance-spark-4.0_2.13:0.4.0` |
+| Spark 4.1 | `org.lance:lance-spark-4.1_2.13:0.4.0` |
 
 ```bash
 export LANCE_BUNDLE_JAR=/path/to/lance-spark-bundle-3.5_2.12-0.4.0.jar
@@ -87,7 +119,52 @@ All Hudi table services work with Lance-backed tables:
 - **Compaction** — merges log files into Lance base files
 - **Clustering** — reorganizes Lance files for better data locality
 - **Cleaning** — removes old Lance file versions
-- **Metadata indexing** — column stats and bloom filters work across Lance files
+- **Metadata indexing** — bloom filters work across Lance files; column stats and partition stats are
+  **automatically disabled** for Lance tables (they would produce empty ranges and silently prune all
+  data on read — a known limitation to be addressed in a future release)
+
+:::note
+Each Lance file is **non-splittable**: one Spark task processes one Lance file. For best parallelism,
+configure file sizing so you get roughly one Lance file per executor core (see
+[File Sizing and Memory](#file-sizing-and-memory)).
+:::
+
+## VECTOR Storage on Lance
+
+VECTOR columns are stored natively in Lance as `FixedSizeList<Float32/Float64, dim>` — Lance's own
+vector column encoding. This unlocks Lance's built-in IVF-PQ approximate nearest neighbor (ANN) index
+for high-throughput vector search without any data conversion overhead.
+
+Only **FLOAT** and **DOUBLE** element types are supported as VECTOR columns on Lance. INT8 vectors
+are not yet supported and will fail fast at write time.
+
+The `hudi_vector_search` TVF automatically uses the Lance IVF-PQ index when the table uses Lance as
+its base file format. See [Vector Search](vector_search.md) for TVF documentation.
+
+## BLOB Columns on Lance
+
+INLINE BLOB columns on Lance default to `DESCRIPTOR` read mode — standard queries return an
+out-of-line-shaped reference descriptor rather than materializing the raw bytes. To read inline
+byte content via `read_blob()`, set `hoodie.read.blob.inline.mode=CONTENT`. See
+[Unstructured Data](blob_unstructured_data.md) for full documentation.
+
+## Schema Evolution
+
+Lance supports the following schema changes at the Hudi layer:
+
+| Operation | Supported? |
+|:----------|:-----------|
+| Add column | Yes |
+| Rename column | Yes (via Hudi schema evolution) |
+| Promote `FLOAT` → `DOUBLE` | **No** — not supported on Lance |
+| Promote `FLOAT` → `STRING` | **No** — not supported on Lance |
+| Drop column | Yes |
+
+:::caution
+`FLOAT → DOUBLE` and `FLOAT → STRING` type promotions are supported for Parquet tables but **not**
+for Lance. Attempting these on a Lance table will fail. Use `DOUBLE` from the start if you anticipate
+needing higher precision.
+:::
 
 ## Vector Search with Lance
 
@@ -107,10 +184,40 @@ See [Vector Search](vector_search.md) for full documentation on the TVF and dist
 
 ## Configuration Reference
 
-| Property | Description | Default |
-|:---------|:------------|:--------|
-| `hoodie.datasource.write.base.file.format` | Set to `lance` to use Lance as the base file format | `parquet` |
-| `hoodie.record.merger.impls` | Must be `org.apache.hudi.DefaultSparkRecordMerger` for Lance | — |
+| Property | Default | Description |
+|:---------|:--------|:------------|
+| `hoodie.table.base.file.format` | `parquet` | Set to `lance` to use Lance as the base file format. |
+| `hoodie.record.merger.impls` | — | Must be `org.apache.hudi.DefaultSparkRecordMerger` for Lance. |
+| `hoodie.lance.max.file.size` | `125829120` (120 MiB) | Target file size in bytes for Lance base files. |
+| `hoodie.lance.write.allocator.size.bytes` | `268435456` (256 MiB) | Maximum size of the Arrow child allocator used for buffering in-flight batch data. Increase for tables with very large BLOB columns. |
+| `hoodie.lance.write.flush.byte.watermark` | `100663296` (96 MiB) | Byte-size threshold at which the current write batch is flushed. Must be less than `hoodie.lance.write.allocator.size.bytes`. |
+
+### File Sizing and Memory
+
+The three sizing configs work together:
+
+- **`hoodie.lance.max.file.size`** controls when Hudi rolls over to a new Lance file, similar to
+  `hoodie.parquet.max.file.size` for Parquet tables.
+- **`hoodie.lance.write.allocator.size.bytes`** caps the Arrow allocator's in-flight memory. Arrow
+  uses power-of-2 buffer doubling; the default 256 MiB accommodates the 128 MiB doubling step with
+  headroom.
+- **`hoodie.lance.write.flush.byte.watermark`** triggers an early batch flush when Arrow buffers
+  approach the cap. The default 96 MiB (≈ 3/8 of the allocator cap) leaves room for offset and
+  validity buffers to double without exceeding the allocator limit.
+
+For tables with large BLOB columns, increase both `hoodie.lance.write.allocator.size.bytes` and
+`hoodie.lance.write.flush.byte.watermark` proportionally (keep watermark at roughly 3/8 of allocator
+size).
+
+## Additional Notes
+
+- **`populateMetaFields=false`** is supported. User-defined key generators work normally with Lance
+  tables.
+- **Complex types** (struct, array, map) are supported as Lance columns.
+- **VARIANT columns** are **not supported** on Lance. Attempting to write a table with VARIANT columns
+  to Lance throws a `HoodieNotSupportedException`. Use Parquet for tables with VARIANT columns.
+- The `hoodie.datasource.write.base.file.format` key referenced in older documentation does **not
+  exist**; the correct key is `hoodie.table.base.file.format`.
 
 ## Mixed-Format Tables
 
