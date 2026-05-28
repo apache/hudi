@@ -351,7 +351,7 @@ available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectI
 
 0.15.1 release is primarily intended for bug fixes and stability. Notable fixes include:
 
-* Fix for the [Complex Key Generator regression](#known-regressions) flagged in 0.15.0, which could silently ingest
+* Fix for the Complex Key Generator regression flagged in 0.15.0, which could silently ingest
   duplicates when the record key consists of a single field
   ([HUDI-9666](https://issues.apache.org/jira/browse/HUDI-9666)).
 * Databricks Spark runtime compatibility for reading Hudi tables, including partition predicate handling and incremental
