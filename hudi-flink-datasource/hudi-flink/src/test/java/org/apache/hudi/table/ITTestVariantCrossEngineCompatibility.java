@@ -26,6 +26,7 @@ import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestTableEnvs;
 
 import org.apache.flink.table.api.TableEnvironment;
+import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
@@ -50,26 +51,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 /**
- * Integration tests for Flink reading (and upserting) Apache Spark 4 VARIANT Hudi tables backed by
- * zipped golden layouts under {@code variant_backward_compat/*.zip} (see that directory's README).
- *
- * <p>Uses only existing Spark-produced fixtures; asserts Table/SQL and {@code toDataStream}
- * paths both surface the same VARIANT physical bytes as the Spark 4 golden row (id=1), and
- * exercises primary-key upserts on a writable copy of the COW fixture.
+ * Integration test for cross-engine compatibility - verifying that Flink can read Variant tables
+ * written by Spark 4.0, including via Table/SQL and {@code toDataStream}, and can upsert rows on
+ * a writable copy of the Spark-produced COW fixture under {@code variant_backward_compat/}.
  */
 @ExtendWith(FlinkMiniCluster.class)
 public class ITTestVariantCrossEngineCompatibility {
-
-  /**
-   * Spark 4.0 golden VARIANT for id=1 after the delete flow in {@code TestVariantDataType} that
-   * produced the zipped tables: {@code parse_json('{"updated": true, "new_field": 123}')}.
-   */
-  static final byte[] GOLDEN_VARIANT_VALUE_BYTES =
-      new byte[]{0x02, 0x02, 0x01, 0x00, 0x01, 0x00, 0x03, 0x04, 0x0C, 0x7B};
-
-  static final byte[] GOLDEN_VARIANT_METADATA_BYTES =
-      new byte[]{0x01, 0x02, 0x00, 0x07, 0x10, 0x75, 0x70, 0x64, 0x61,
-          0x74, 0x65, 0x64, 0x6E, 0x65, 0x77, 0x5F, 0x66, 0x69, 0x65, 0x6C, 0x64};
 
   private static boolean nativeVariantAvailable;
 
@@ -86,8 +73,7 @@ public class ITTestVariantCrossEngineCompatibility {
     }
   }
 
-  /** Parameters: zip classpath resource, root dir inside zip, Hudi {@code table.type}, display name. */
-  static List<Object[]> sparkGoldenFixtures() {
+  static List<Object[]> sparkVariantBackwardCompatFixtures() {
     List<Object[]> list = new ArrayList<>();
     list.add(new Object[] {"variant_backward_compat/variant_cow.zip", "variant_cow", "COPY_ON_WRITE", "COW"});
     list.add(
@@ -107,20 +93,16 @@ public class ITTestVariantCrossEngineCompatibility {
     return (StreamTableEnvironment) env;
   }
 
-  /** SQL + {@code toDataStream} agree with Spark&nbsp;4 golden VARIANT bytes on id=1. */
-  @ParameterizedTest(name = "{3}")
-  @MethodSource("sparkGoldenFixtures")
-  public void testFlinkSqlAndDataStreamReadSparkGoldenVariant(String zipResource, String rootDir,
-      String hoodieTableType, String ignoredDisplayName)
-      throws Exception {
-    Assumptions.assumeTrue(nativeVariantAvailable, "VARIANT requires Flink 2.1+");
+  /**
+   * Helper method to verify that Flink can read Spark 4.0 Variant tables via Table/SQL.
+   *
+   * @return the {@link TableEnvironment} with {@code variant_table} still registered (caller drops)
+   */
+  private TableEnvironment verifyFlinkCanReadSparkVariantTable(
+      String tablePath, String tableType, String testDescription) throws Exception {
+    TableEnvironment tableEnv = TestTableEnvs.getBatchTableEnv();
 
-    Path extractRoot = tempDir.resolve(ignoredDisplayName);
-    HoodieTestUtils.extractZipToDirectory(zipResource, extractRoot, getClass());
-    String tablePath = extractRoot.resolve(rootDir).toString();
-
-    TableEnvironment tEnv = TestTableEnvs.getBatchTableEnv();
-    String ddl =
+    String createTableDdl =
         String.format(
             "CREATE TABLE variant_table ("
                 + "  id INT,"
@@ -134,21 +116,48 @@ public class ITTestVariantCrossEngineCompatibility {
                 + "  'table.type' = '%s'"
                 + ")",
             tablePath.replace("'", "''"),
-            hoodieTableType);
+            tableType);
 
-    tEnv.executeSql(ddl);
+    tableEnv.executeSql(createTableDdl);
 
-    List<Row> sqlRows =
-        CollectionUtil.iteratorToList(
-            tEnv.executeSql("SELECT id, name, v, ts FROM variant_table ORDER BY id").collect());
+    TableResult result = tableEnv.executeSql("SELECT id, name, v, ts FROM variant_table ORDER BY id");
+    List<Row> rows = CollectionUtil.iteratorToList(result.collect());
 
-    assertEquals(1, sqlRows.size(),
-        "Should have one row after Spark 4.0 delete workflow (" + ignoredDisplayName + ")");
-    Row sqlRow = sqlRows.get(0);
-    assertGoldenVariantRow(sqlRow, "SQL COLLECT (" + ignoredDisplayName + ")");
+    // Verify we got the expected row (after Spark 4.0 delete operation, only 1 row remains)
+    assertEquals(
+        1,
+        rows.size(),
+        "Should have 1 row after delete operation in Spark 4.0 (" + testDescription + ")");
+
+    Row row = rows.get(0);
+    assertEquals(1, row.getField(0), "First column should be id=1");
+    assertEquals("row1", row.getField(1), "Second column should be name=row1");
+    assertEquals(1000L, row.getField(3), "Fourth column should be ts=1000");
+
+    assertExpectedSpark40VariantBytes(row.getField(2), testDescription);
+
+    return tableEnv;
+  }
+
+  @ParameterizedTest(name = "{3}")
+  @MethodSource("sparkVariantBackwardCompatFixtures")
+  public void testFlinkSqlAndDataStreamReadSparkVariantTable(
+      String zipResource,
+      String rootDir,
+      String hoodieTableType,
+      String testDescription)
+      throws Exception {
+    Assumptions.assumeTrue(nativeVariantAvailable, "VARIANT requires Flink 2.1+");
+
+    Path extractRoot = tempDir.resolve(testDescription);
+    HoodieTestUtils.extractZipToDirectory(zipResource, extractRoot, getClass());
+    String tablePath = extractRoot.resolve(rootDir).toString();
+
+    TableEnvironment tEnv =
+        verifyFlinkCanReadSparkVariantTable(tablePath, hoodieTableType, testDescription);
 
     StreamTableEnvironment sEnv = asStreamTableEnv(tEnv);
-    List<Row> dsRows =
+    List<Row> streamRows =
         CollectionUtil.iteratorToList(
             sEnv
                 .toDataStream(
@@ -156,14 +165,21 @@ public class ITTestVariantCrossEngineCompatibility {
                     Row.class)
                 .executeAndCollect());
 
-    assertEquals(1, dsRows.size(), "DataStream should see one logical row (" + ignoredDisplayName + ")");
-    assertGoldenVariantRow(dsRows.get(0), "DataStream (" + ignoredDisplayName + ")");
+    assertEquals(
+        1,
+        streamRows.size(),
+        "DataStream should see one row after Spark 4.0 delete (" + testDescription + ")");
+    Row streamRow = streamRows.get(0);
+    assertEquals(1, streamRow.getField(0), "First column should be id=1");
+    assertEquals("row1", streamRow.getField(1), "Second column should be name=row1");
+    assertEquals(1000L, streamRow.getField(3), "Fourth column should be ts=1000");
+    assertExpectedSpark40VariantBytes(streamRow.getField(2), testDescription + " (DataStream)");
 
     tEnv.executeSql("DROP TABLE variant_table");
   }
 
   @Test
-  public void testFlinkPrimaryKeyUpsertAppendsWithoutDisturbingGoldenKey() throws Exception {
+  public void testFlinkPrimaryKeyUpsertAppendsWithoutDisturbingExistingKey() throws Exception {
     Assumptions.assumeTrue(nativeVariantAvailable, "VARIANT requires Flink 2.1+");
 
     Path out = tempDir.resolve("cow_upsert_append");
@@ -171,7 +187,7 @@ public class ITTestVariantCrossEngineCompatibility {
     String cowPath = out.resolve("variant_cow").toString();
 
     TableEnvironment tEnv = TestTableEnvs.getBatchTableEnv();
-    String ddl =
+    tEnv.executeSql(
         String.format(
             "CREATE TABLE variant_table ("
                 + "  id INT,"
@@ -184,8 +200,7 @@ public class ITTestVariantCrossEngineCompatibility {
                 + "  'path' = '%s',"
                 + "  'table.type' = 'COPY_ON_WRITE'"
                 + ")",
-            cowPath.replace("'", "''"));
-    tEnv.executeSql(ddl);
+            cowPath.replace("'", "''")));
 
     tEnv.executeSql(
             "INSERT INTO variant_table VALUES ("
@@ -197,9 +212,12 @@ public class ITTestVariantCrossEngineCompatibility {
     List<Row> rows =
         CollectionUtil.iteratorToList(
             tEnv.executeSql("SELECT id, name, v, ts FROM variant_table ORDER BY id").collect());
-    assertEquals(2, rows.size(), "Should have Spark golden row plus Flink-inserted pk");
+    assertEquals(2, rows.size(), "Should have Spark row plus Flink-inserted pk");
 
-    assertGoldenVariantRow(rows.get(0), "id=1 after Flink append pk=99");
+    assertEquals(1, rows.get(0).getField(0));
+    assertEquals("row1", rows.get(0).getField(1));
+    assertEquals(1000L, rows.get(0).getField(3));
+    assertExpectedSpark40VariantBytes(rows.get(0).getField(2), "id=1 after Flink append pk=99");
 
     Row appended = rows.get(1);
     assertEquals(99, appended.getField(0));
@@ -215,7 +233,7 @@ public class ITTestVariantCrossEngineCompatibility {
         "Inserted VARIANT stringify should expose engine+n; got: " + appendedJson);
 
     StreamTableEnvironment sEnv = asStreamTableEnv(tEnv);
-    Row streamGolden =
+    Row streamRow =
         CollectionUtil.iteratorToList(
                 sEnv
                     .toDataStream(
@@ -223,8 +241,8 @@ public class ITTestVariantCrossEngineCompatibility {
                         Row.class)
                     .executeAndCollect())
             .get(0);
-    assertEquals(1, streamGolden.getField(0));
-    assertGoldenVariantBytes(streamGolden.getField(1), "DataStream pk=1 after append");
+    assertEquals(1, streamRow.getField(0));
+    assertExpectedSpark40VariantBytes(streamRow.getField(1), "DataStream pk=1 after append");
 
     tEnv.executeSql("DROP TABLE variant_table");
   }
@@ -238,7 +256,7 @@ public class ITTestVariantCrossEngineCompatibility {
     String cowPath = out.resolve("variant_cow").toString();
 
     TableEnvironment tEnv = TestTableEnvs.getBatchTableEnv();
-    String ddl =
+    tEnv.executeSql(
         String.format(
             "CREATE TABLE variant_table ("
                 + "  id INT,"
@@ -251,8 +269,7 @@ public class ITTestVariantCrossEngineCompatibility {
                 + "  'path' = '%s',"
                 + "  'table.type' = 'COPY_ON_WRITE'"
                 + ")",
-            cowPath.replace("'", "''"));
-    tEnv.executeSql(ddl);
+            cowPath.replace("'", "''")));
 
     tEnv.executeSql(
             "INSERT INTO variant_table VALUES ("
@@ -292,36 +309,33 @@ public class ITTestVariantCrossEngineCompatibility {
     tEnv.executeSql("DROP TABLE variant_table");
   }
 
-  private static void assertGoldenVariantRow(Row row, String desc) {
-    assertEquals(1, row.getField(0), desc + " — id");
-    assertEquals("row1", row.getField(1), desc + " — name");
-    assertEquals(1000L, row.getField(3), desc + " — ts");
-    assertGoldenVariantBytes(row.getField(2), desc);
-  }
-
-  private static void assertGoldenVariantBytes(Object variantObject, String desc) {
-    assertNotNull(variantObject, desc);
+  private static void assertExpectedSpark40VariantBytes(Object variantObject, String testDescription) {
+    assertNotNull(variantObject, "Variant column should not be null");
     DataTypeAdapterTestUtils.assertAsBinaryVariant(variantObject);
 
-    byte[] actualValue = DataTypeAdapter.getVariantValue(variantObject);
-    byte[] actualMetadata = DataTypeAdapter.getVariantMetadata(variantObject);
+    // Expected byte values from Spark 4.0 Variant representation: {"updated": true, "new_field": 123}
+    byte[] expectedValueBytes =
+        new byte[]{0x02, 0x02, 0x01, 0x00, 0x01, 0x00, 0x03, 0x04, 0x0C, 0x7B};
+    byte[] expectedMetadataBytes =
+        new byte[]{0x01, 0x02, 0x00, 0x07, 0x10, 0x75, 0x70, 0x64, 0x61,
+            0x74, 0x65, 0x64, 0x6E, 0x65, 0x77, 0x5F, 0x66, 0x69, 0x65, 0x6C, 0x64};
 
     assertArrayEquals(
-        GOLDEN_VARIANT_VALUE_BYTES,
-        actualValue,
+        expectedValueBytes,
+        DataTypeAdapter.getVariantValue(variantObject),
         String.format(
-            "%s — value bytes mismatch. Expected hex %s, got %s",
-            desc,
-            Arrays.toString(StringUtils.encodeHex(GOLDEN_VARIANT_VALUE_BYTES)),
-            Arrays.toString(StringUtils.encodeHex(actualValue))));
+            "Variant value bytes mismatch (%s). Expected: %s, Got: %s",
+            testDescription,
+            Arrays.toString(StringUtils.encodeHex(expectedValueBytes)),
+            Arrays.toString(StringUtils.encodeHex(DataTypeAdapter.getVariantValue(variantObject)))));
 
     assertArrayEquals(
-        GOLDEN_VARIANT_METADATA_BYTES,
-        actualMetadata,
+        expectedMetadataBytes,
+        DataTypeAdapter.getVariantMetadata(variantObject),
         String.format(
-            "%s — metadata bytes mismatch. Expected hex %s, got %s",
-            desc,
-            Arrays.toString(StringUtils.encodeHex(GOLDEN_VARIANT_METADATA_BYTES)),
-            Arrays.toString(StringUtils.encodeHex(actualMetadata))));
+            "Variant metadata bytes mismatch (%s). Expected: %s, Got: %s",
+            testDescription,
+            Arrays.toString(StringUtils.encodeHex(expectedMetadataBytes)),
+            Arrays.toString(StringUtils.encodeHex(DataTypeAdapter.getVariantMetadata(variantObject)))));
   }
 }
