@@ -193,29 +193,20 @@ configuration below.
 
 #### Record-Level Index Configuration Keys
 
-Hudi 1.2.0 renamed several RLI configuration keys to better distinguish between the _global_ RLI (unique record key
-across the entire table) and the _partitioned_ RLI (unique record key within each partition). The old keys remain
-functional as aliases but are deprecated — update your configs to the new canonical names.
+Hudi supports two flavors of the Record Level Index, each with its own enable flag and sizing configs:
 
-| Old key (alias, still works) | New canonical key | Default | Notes |
-|---|---|---|---|
-| `hoodie.metadata.record.index.enable` | `hoodie.metadata.global.record.level.index.enable` | `false` | Enables the global Record Level Index (unique key across all partitions). |
-| `hoodie.metadata.record.index.min.filegroup.count` | `hoodie.metadata.global.record.level.index.min.filegroup.count` | `10` | Min file groups for the global RLI. |
-| `hoodie.metadata.record.index.max.filegroup.count` | `hoodie.metadata.global.record.level.index.max.filegroup.count` | `10000` | Max file groups for the global RLI. |
-| `hoodie.metadata.partitioned.record.index.min.filegroup.count` | `hoodie.metadata.record.level.index.min.filegroup.count` | `1` | Min file groups for the partitioned RLI. |
-| `hoodie.metadata.partitioned.record.index.max.filegroup.count` | `hoodie.metadata.record.level.index.max.filegroup.count` | `10` | Max file groups for the partitioned RLI. |
+- **Global RLI** — record key is unique across the entire table (across partitions).
+- **Partitioned RLI** — `partition_path + record_key` is unique within each partition.
 
-In addition, the following existing key is unchanged but was not previously documented:
-
-| Key | Default | Notes |
+| Config Name | Default | Notes |
 |---|---|---|
-| `hoodie.metadata.record.level.index.enable` | `false` | Enables the partitioned Record Level Index (unique `partition_path + record_key` pair). This is a separate toggle from the global RLI above. |
-
-The following additional RLI configs were also introduced in Hudi 1.2.0.
-
-| Config Name | Default | Description |
-|---|---|---|
-| `hoodie.metadata.record.level.index.defer.init` | `false` | When enabled, defers RLI initialization to the second commit on a fresh table. This allows Hudi to determine an accurate file group count based on actual record volume before allocating RLI file groups. Applies to both global and partitioned RLI. |
+| `hoodie.metadata.global.record.level.index.enable` | `false` | Enables the global RLI. |
+| `hoodie.metadata.global.record.level.index.min.filegroup.count` | `10` | Min file groups for the global RLI. |
+| `hoodie.metadata.global.record.level.index.max.filegroup.count` | `10000` | Max file groups for the global RLI. |
+| `hoodie.metadata.record.level.index.enable` | `false` | Enables the partitioned RLI. Independent toggle from the global RLI above. |
+| `hoodie.metadata.record.level.index.min.filegroup.count` | `1` | Min file groups for the partitioned RLI. |
+| `hoodie.metadata.record.level.index.max.filegroup.count` | `10` | Max file groups for the partitioned RLI. |
+| `hoodie.metadata.record.level.index.defer.init` | `false` | When enabled, defers RLI initialization to the second commit on a fresh table so Hudi can size file groups based on actual record volume. Applies to both global and partitioned RLI. |
 | `hoodie.metadata.record.index.max.filegroup.size` | `1073741824` (1 GB) | Maximum size in bytes of a single RLI file group. Larger file groups take longer to compact. |
 
 ```
