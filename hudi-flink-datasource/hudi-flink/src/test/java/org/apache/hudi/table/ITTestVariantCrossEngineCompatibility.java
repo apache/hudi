@@ -74,6 +74,21 @@ public class ITTestVariantCrossEngineCompatibility {
     }
   }
 
+  private static void assumeVariantWriteSupport() {
+    Assumptions.assumeTrue(nativeVariantAvailable, "VARIANT requires Flink 2.1+");
+    Assumptions.assumeTrue(
+        variantParquetAnnotationAvailable(),
+        "VARIANT Parquet write requires parquet-java 1.16.0+ (use -Pflink2.1 profile)");
+  }
+
+  private static boolean variantParquetAnnotationAvailable() {
+    try {
+      return DataTypeAdapter.variantParquetAnnotation().isPresent();
+    } catch (UnsupportedOperationException e) {
+      return false;
+    }
+  }
+
   static List<Object[]> sparkVariantBackwardCompatFixtures() {
     List<Object[]> list = new ArrayList<>();
     list.add(new Object[] {"variant_backward_compat/variant_cow.zip", "variant_cow", "COPY_ON_WRITE", "COW"});
@@ -181,7 +196,7 @@ public class ITTestVariantCrossEngineCompatibility {
 
   @Test
   public void testFlinkPrimaryKeyUpsertAppendsWithoutDisturbingExistingKey() throws Exception {
-    Assumptions.assumeTrue(nativeVariantAvailable, "VARIANT requires Flink 2.1+");
+    assumeVariantWriteSupport();
 
     Path out = tempDir.resolve("cow_upsert_append");
     HoodieTestUtils.extractZipToDirectory("variant_backward_compat/variant_cow.zip", out, getClass());
@@ -250,7 +265,7 @@ public class ITTestVariantCrossEngineCompatibility {
 
   @Test
   public void testFlinkPrimaryKeyUpsertOverwritesVariantsSqlMatchesDataStream() throws Exception {
-    Assumptions.assumeTrue(nativeVariantAvailable, "VARIANT requires Flink 2.1+");
+    assumeVariantWriteSupport();
 
     Path out = tempDir.resolve("cow_pkey_overwrite");
     HoodieTestUtils.extractZipToDirectory("variant_backward_compat/variant_cow.zip", out, getClass());
@@ -312,7 +327,7 @@ public class ITTestVariantCrossEngineCompatibility {
 
   @Test
   public void testFlinkPrimaryKeyUpsertOverwriteViaInsertSelectSql() throws Exception {
-    Assumptions.assumeTrue(nativeVariantAvailable, "VARIANT requires Flink 2.1+");
+    assumeVariantWriteSupport();
 
     Path out = tempDir.resolve("cow_pkey_overwrite_insert_select");
     HoodieTestUtils.extractZipToDirectory("variant_backward_compat/variant_cow.zip", out, getClass());

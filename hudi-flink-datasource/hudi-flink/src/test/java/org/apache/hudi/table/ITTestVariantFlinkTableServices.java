@@ -75,9 +75,24 @@ public class ITTestVariantFlinkTableServices {
     }
   }
 
+  private static void assumeVariantWriteSupport() {
+    Assumptions.assumeTrue(nativeVariantAvailable, "VARIANT requires Flink 2.1+");
+    Assumptions.assumeTrue(
+        variantParquetAnnotationAvailable(),
+        "VARIANT Parquet write requires parquet-java 1.16.0+ (use -Pflink2.1 profile)");
+  }
+
+  private static boolean variantParquetAnnotationAvailable() {
+    try {
+      return DataTypeAdapter.variantParquetAnnotation().isPresent();
+    } catch (UnsupportedOperationException e) {
+      return false;
+    }
+  }
+
   @Test
   public void testFlinkMorCompactionPreservesVariant() throws Exception {
-    Assumptions.assumeTrue(nativeVariantAvailable, "VARIANT requires Flink 2.1+");
+    assumeVariantWriteSupport();
 
     String tablePath = tempDir.resolve("variant_mor_compact").toString();
     TableEnvironment tEnv = TestTableEnvs.getBatchTableEnv();
@@ -125,7 +140,7 @@ public class ITTestVariantFlinkTableServices {
 
   @Test
   public void testFlinkCowClusteringPreservesVariant() throws Exception {
-    Assumptions.assumeTrue(nativeVariantAvailable, "VARIANT requires Flink 2.1+");
+    assumeVariantWriteSupport();
 
     String tablePath = tempDir.resolve("variant_cow_cluster").toString();
     TableEnvironment tEnv = TestTableEnvs.getBatchTableEnv();

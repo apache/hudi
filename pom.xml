@@ -2846,7 +2846,8 @@
         <flink.connector.kafka.version>4.0.1-2.0</flink.connector.kafka.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
-        <flink.format.parquet.version>1.15.2</flink.format.parquet.version>
+        <!-- VARIANT Parquet write requires LogicalTypeAnnotation.variantType() (parquet-java 1.16.0+). -->
+        <flink.format.parquet.version>1.16.0</flink.format.parquet.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility</flink.hadoop.compatibility.artifactId>
       </properties>
       <modules>
