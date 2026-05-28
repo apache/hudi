@@ -164,7 +164,7 @@ hoodie.datasource.write.payload.class=org.apache.hudi.common.model.DefaultHoodie
 ```
 
 While `OverwriteWithLatestAvroPayload` precombines based on an ordering field and picks the latest record while merging,
-`DefaultHoodieRecordPayload` honors the ordering field for both precombining and merging. When the incoming record has a lower ordering value than the record already on storage, `combineAndGetUpdateValue` returns a sentinel no-op value, leaving the persisted record unchanged. Let's understand the difference with an example:
+`DefaultHoodieRecordPayload` honors the ordering field for both precombining and merging. Let's understand the difference with an example:
 
 Let's say the ordering field is `ts` and record key is `id` and schema is:
 
@@ -206,19 +206,6 @@ Result data after merging using `DefaultHoodieRecordPayload` (always honors orde
     id      ts      name    price
     1       2       name_2  price_2
 ```
-
-### ReverseOrderHoodieRecordPayload (deprecated)
-
-```scala
-hoodie.datasource.write.payload.class=org.apache.hudi.common.model.ReverseOrderHoodieRecordPayload
-```
-
-This payload extends `DefaultHoodieRecordPayload` but reverses the ordering comparison so that the record with the **lowest** ordering value wins (oldest-record-wins semantics), in contrast to `DefaultHoodieRecordPayload` which keeps the record with the highest ordering value.
-
-1. **preCombine** — Keeps the record with the lowest ordering value. Delete records bypass this comparison and always use natural order.
-2. **combineAndGetUpdateValue** — Retains the persisted record if its ordering value is lower than (or, when `hoodie.write.update.same.ordering` is `true`, equal to) the incoming record's ordering value.
-
-This is useful when you want to preserve the earliest version of a record, for example when ingesting change events where you want to keep the original insert and discard later updates.
 
 ### EventTimeAvroPayload (deprecated)
 
