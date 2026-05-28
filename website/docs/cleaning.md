@@ -70,27 +70,25 @@ duration on tables that have fallen significantly behind on cleaning.
 |---|---|---|
 | `hoodie.clean.max.commits.to.clean` | `Long.MAX_VALUE` (unbounded) | Maximum number of commits cleaned in a single clean commit. Applicable when the cleaning policy is `KEEP_LATEST_COMMITS` or `KEEP_LATEST_BY_HOURS`. Must be `>= 1`. |
 
+#### Full-Clean Partition Filtering
+
+When incremental cleaning is disabled (`hoodie.clean.incremental.enabled=false`), the cleaner scans every partition on
+every run. For very large tables this can cause OOM during planning. Hudi 1.2.0 added two configs to restrict which
+partitions are examined.
+
+:::note
+Both configs require `hoodie.clean.incremental.enabled=false`. If both are set, `hoodie.clean.partition.filter.selected`
+takes precedence over the regex.
+:::
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.clean.partition.filter.regex` | (none) | Java regex pattern; only partitions whose path matches are cleaned. |
+| `hoodie.clean.partition.filter.selected` | (none) | Comma-separated list of partition paths to clean; takes precedence over the regex when both are set. |
+
 ### Configs
 For details about all possible configurations and their default values see the [configuration docs](https://hudi.apache.org/docs/next/configurations/#Clean-Configs).
 For Flink related configs refer [here](https://hudi.apache.org/docs/next/configurations/#FLINK_SQL).
-
-#### Driver-Side Planning Optimization
-
-Hudi 1.2.0 introduced a driver-local planning mode to prevent OOM during clean planning on large metadata-table
-partitions (such as `record_index`).
-
-| Config Name | Default | Description |
-|---|---|---|
-| `hoodie.clean.optimize.using.local.engine.context` | `true` | When enabled, clean planning for metadata tables and non-partitioned datasets runs on the driver only (local engine context), avoiding OOM on executor memory caused by large `record_index` partitions during file listing. |
-
-#### MDT Cleaner Inherits Data-Table Policy
-
-When the [metadata table](metadata.md) is enabled, Hudi 1.2.0 added an option to keep its cleaner policy
-synchronized with the data table's policy, so you don't have to manage retention separately for both.
-
-| Config Name | Default | Description |
-|---|---|---|
-| `hoodie.metadata.derive.from.datatable.clean.policy` | `true` | When enabled, the metadata table's cleaner uses the same cleaning policy as the data table. Disable only if you need an independent retention policy for the metadata table. |
 
 ### Ways to trigger Cleaning
 
@@ -124,22 +122,6 @@ for related multi-writer configuration.
 | Config Name | Default | Description |
 |---|---|---|
 | `hoodie.prewrite.cleaner.policy` | `NONE` | Pre-write cleaning action. `NONE`: no pre-write action (default). `CLEAN`: run a clean pass before each write. `ROLLBACK_FAILED_WRITES`: roll back any failed writes before each write. |
-
-#### Full-Clean Partition Filtering
-
-When incremental cleaning is disabled (`hoodie.clean.incremental.enabled=false`), the cleaner scans every partition on
-every run. For very large tables this can cause OOM during planning. Hudi 1.2.0 added two configs to restrict which
-partitions are examined.
-
-:::note
-Both configs require `hoodie.clean.incremental.enabled=false`. If both are set, `hoodie.clean.partition.filter.selected`
-takes precedence over the regex.
-:::
-
-| Config Name | Default | Description |
-|---|---|---|
-| `hoodie.clean.partition.filter.regex` | (none) | Java regex pattern; only partitions whose path matches are cleaned. |
-| `hoodie.clean.partition.filter.selected` | (none) | Comma-separated list of partition paths to clean; takes precedence over the regex when both are set. |
 
 #### Run independently
 Hoodie Cleaner can also be run as a separate process. Following is the command for running the cleaner independently:
