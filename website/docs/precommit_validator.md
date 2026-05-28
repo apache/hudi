@@ -109,7 +109,9 @@ Hudi offers a [commit notification service](platform_services_post_commit_callba
 
 The commit notification service can be combined with pre-commit validators to send a notification when a commit fails a validation. This is possible by passing details about the validation as a custom value to the HTTP endpoint.
 
-## Notes on Validator Behavior (1.2.0)
+## Notes on Validator Behavior
+
+Hudi 1.2.0 introduced the following behavioral refinements:
 
 **Metadata fields in SQL queries**: Validator SQL can now reference Hudi metadata fields (`_hoodie_record_key`, `_hoodie_partition_path`, `_hoodie_file_name`, `_hoodie_commit_time`, `_hoodie_commit_seqno`) directly in query expressions.
 
@@ -123,9 +125,9 @@ Hudi 1.2.0 introduces a configurable failure policy for pre-commit validators:
 |---|---|---|
 | `hoodie.precommit.validators.failure.policy` | `FAIL` | How to handle validator failures. `FAIL`: block the commit with an exception. `WARN_LOG`: emit a warning log but allow the commit to proceed (useful for soft monitoring). |
 
-## Flink and Streaming-Offset Validators (1.2.0)
+## Flink and Streaming-Offset Validators
 
-Flink writers now honor `hoodie.precommit.validators` using the same configuration key as Spark. Validators intended for use with Flink must extend the engine-agnostic `org.apache.hudi.client.validator.BasePreCommitValidator` (in `hudi-common`), which provides access to commit metadata and timeline information independently of Spark.
+Available since Hudi 1.2.0. Flink writers now honor `hoodie.precommit.validators` using the same configuration key as Spark. Validators intended for use with Flink must extend the engine-agnostic `org.apache.hudi.client.validator.BasePreCommitValidator` (in `hudi-common`), which provides access to commit metadata and timeline information independently of Spark.
 
 Two built-in streaming-offset validators are now available for Kafka-sourced pipelines:
 
@@ -148,9 +150,9 @@ hoodie.precommit.validators.streaming.offset.tolerance.percentage=5.0
 hoodie.precommit.validators.failure.policy=WARN_LOG
 ```
 
-## Pre-Write Validators (1.2.0)
+## Pre-Write Validators
 
-Pre-write validators run **before** data is written to storage, in contrast to pre-commit validators which run **after** data is written but before the commit is published to the timeline. This enables earlier rejection of invalid operations, avoiding unnecessary I/O.
+Introduced in Hudi 1.2.0, pre-write validators run **before** data is written to storage, in contrast to pre-commit validators which run **after** data is written but before the commit is published to the timeline. This enables earlier rejection of invalid operations, avoiding unnecessary I/O.
 
 Configuration:
 

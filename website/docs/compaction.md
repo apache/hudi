@@ -104,6 +104,36 @@ BoundedPartitionAwareCompactionStrategy</li></ul>
 Please refer to [advanced configs](https://hudi.apache.org/docs/next/configurations#Compaction-Configs) for more details.
 :::
 
+#### Metadata Table Compaction Trigger Strategy
+
+Available since Hudi 1.2.0, the metadata table (MDT) supports the same set of compaction trigger strategies as the
+data table, plus a time-based option.
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.metadata.compact.trigger.strategy` | `NUM_COMMITS` | Trigger strategy for MDT compaction. Accepts the same values as `hoodie.compact.inline.trigger.strategy`: `NUM_COMMITS`, `NUM_COMMITS_AFTER_LAST_REQUEST`, `TIME_ELAPSED`, `NUM_AND_TIME`, `NUM_OR_TIME`. |
+| `hoodie.metadata.compact.max.delta.commits` | `10` | Number of delta commits after the last MDT compaction before a new one is scheduled (for `NUM_COMMITS`-based strategies). |
+| `hoodie.metadata.compact.max.delta.seconds` | `7200` | Elapsed seconds after the last MDT compaction before scheduling a new one. Takes effect only for `TIME_ELAPSED`, `NUM_AND_TIME`, and `NUM_OR_TIME` strategies. |
+
+#### Delegating MDT Compaction to an External Platform
+
+In large deployments it may be desirable to delegate metadata table compaction and log compaction to a dedicated
+platform (e.g., a separate async table service runner) rather than running them inline with each writer.
+Hudi 1.2.0 introduced the following configs to support this pattern.
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.metadata.table.service.manager.enabled` | `false` | When `true`, delegate the table service actions listed in `hoodie.metadata.table.service.manager.actions` to an external table service manager instead of running them inline. |
+| `hoodie.metadata.table.service.manager.actions` | (empty) | Comma-separated list of MDT table service actions to delegate. Supported values: `compaction`, `logcompaction`. |
+| `hoodie.metadata.write.concurrency.mode` | `SINGLE_WRITER` | Set to `OPTIMISTIC_CONCURRENCY_CONTROL` (OCC) when an external concurrent writer (such as a table service platform) performs MDT operations, so that the appropriate locks are acquired. |
+
+**Example — delegate MDT compaction to an external service:**
+```properties
+hoodie.metadata.table.service.manager.enabled=true
+hoodie.metadata.table.service.manager.actions=compaction,logcompaction
+hoodie.metadata.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL
+```
+
 ## Ways to trigger Compaction
 
 ### Inline
@@ -272,46 +302,17 @@ Offline compaction needs to submit the Flink task on the command line. The progr
 The retry options (`--retry`, `--retry-last-failed-job`, `--job-max-processing-time-ms`) are only effective in single-run mode, not in service mode. Service mode has implicit retry semantics via its continuous monitoring loop. A warning will be logged if `--retry-last-failed-job` is enabled but `--job-max-processing-time-ms` is not set to a positive value.
 :::
 
-## New in 1.2.0
-
-### MDT Compaction Trigger Strategy
-
-The metadata table (MDT) now supports the same set of compaction trigger strategies as the data table, plus a
-time-based option.
-
-| Config Name | Default | Description |
-|---|---|---|
-| `hoodie.metadata.compact.trigger.strategy` | `NUM_COMMITS` | Trigger strategy for MDT compaction. Accepts the same values as `hoodie.compact.inline.trigger.strategy`: `NUM_COMMITS`, `NUM_COMMITS_AFTER_LAST_REQUEST`, `TIME_ELAPSED`, `NUM_AND_TIME`, `NUM_OR_TIME`. |
-| `hoodie.metadata.compact.max.delta.commits` | `10` | Number of delta commits after the last MDT compaction before a new one is scheduled (for `NUM_COMMITS`-based strategies). |
-| `hoodie.metadata.compact.max.delta.seconds` | `7200` | Elapsed seconds after the last MDT compaction before scheduling a new one. Takes effect only for `TIME_ELAPSED`, `NUM_AND_TIME`, and `NUM_OR_TIME` strategies. |
-
 ### Log Compaction Blocks Threshold
+
+As of Hudi 1.2.0, a minimum-block threshold gates log compaction scheduling per file group.
 
 | Config Name | Default | Description |
 |---|---|---|
 | `hoodie.log.compaction.blocks.threshold` | `5` | Minimum number of log blocks in a file slice before log compaction is scheduled for that file group. Applies when `hoodie.log.compaction.enable=true`. |
 
 :::note
-In Hudi 1.2.0, this threshold also gates scheduling: log compaction is not scheduled for a file group unless the delta-commit count exceeds this value. Duplicate plan execution now fails fast rather than silently succeeding.
+This threshold also gates scheduling: log compaction is not scheduled for a file group unless the delta-commit count exceeds this value. Duplicate plan execution now fails fast rather than silently succeeding.
 :::
-
-### Delegating MDT Compaction to an External Platform
-
-In large deployments it may be desirable to delegate metadata table compaction and log compaction to a dedicated
-platform (e.g., a separate async table service runner) rather than running them inline with each writer.
-
-| Config Name | Default | Description |
-|---|---|---|
-| `hoodie.metadata.table.service.manager.enabled` | `false` | When `true`, delegate the table service actions listed in `hoodie.metadata.table.service.manager.actions` to an external table service manager instead of running them inline. |
-| `hoodie.metadata.table.service.manager.actions` | (empty) | Comma-separated list of MDT table service actions to delegate. Supported values: `compaction`, `logcompaction`. |
-| `hoodie.metadata.write.concurrency.mode` | `SINGLE_WRITER` | Set to `OPTIMISTIC_CONCURRENCY_CONTROL` (OCC) when an external concurrent writer (such as a table service platform) performs MDT operations, so that the appropriate locks are acquired. |
-
-**Example — delegate MDT compaction to an external service:**
-```properties
-hoodie.metadata.table.service.manager.enabled=true
-hoodie.metadata.table.service.manager.actions=compaction,logcompaction
-hoodie.metadata.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL
-```
 
 ## Related Resources
 

@@ -462,7 +462,7 @@ inputDF.write.format("hudi")
 
 ### Advanced Storage Options
 
-The following advanced storage configuration options are available in 1.2.0:
+The following advanced storage configuration options were added in Hudi 1.2.0:
 
 | Config | Default | Description |
 |---|---|---|

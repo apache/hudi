@@ -401,9 +401,9 @@ When running multi-writer pipelines, failed writes can accumulate on storage if 
 
 This is useful when a writer is perpetually crashing before completing a `CLEAN`. See [Cleaning](cleaning.md) for the full list of cleaning configurations.
 
-## Exclusive Rollbacks and Conflict Resolution (1.2.0)
+## Exclusive Rollbacks and Conflict Resolution
 
-In Hudi 1.2.0, exclusive rollback operations in multi-writer scenarios are now serialized to prevent races where multiple writers simultaneously attempt to roll back the same inflight commit.
+Since Hudi 1.2.0, exclusive rollback operations in multi-writer scenarios are serialized to prevent races where multiple writers simultaneously attempt to roll back the same inflight commit.
 
 For the `PreferWriterConflictResolutionStrategy`, a new configuration controls clustering behavior during conflict resolution:
 

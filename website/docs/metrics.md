@@ -231,11 +231,9 @@ totalUpsertTime | Time taken for Hoodie Merge
 These metrics can be found at org.apache.hudi.metrics.HoodieMetrics and referenced from 
 org.apache.hudi.common.model.HoodieCommitMetadata and org.apache.hudi.common.model.HoodieWriteStat
 
-## New Metrics in 1.2.0
+## Archival Metrics
 
-### Archival Metrics
-
-When archival runs, the following metrics are emitted under the `archival.*` prefix. They track the number and type of instants archived per archival run.
+When archival runs, the following metrics are emitted under the `archival.*` prefix (available since Hudi 1.2.0). They track the number and type of instants archived per archival run.
 
 Name | Description
 --- | ---
@@ -249,24 +247,26 @@ archival.archivalOutOfMemory | Incremented when archival fails due to an `OutOfM
 
 These metrics are reported via `org.apache.hudi.metrics.HoodieMetrics#updateArchivalMetrics` and sourced from `org.apache.hudi.client.utils.ArchivalMetrics`.
 
-### Rollback, Post-commit, and Table Service Duration Metrics
+## Rollback, Post-commit, and Table Service Duration Metrics
+
+The following metrics (available since Hudi 1.2.0) track rollback failures and post-commit callback outcomes and durations.
 
 Name | Type | Description
 --- | --- | ---
 rollback.failure.counter | Counter | Incremented each time a rollback operation fails
 postCommit.success.counter | Counter | Incremented each time all post-commit callbacks succeed
-postCommit.failure.counter | Counter | Incremented each time a post-commit callback fails (post-commit failures are non-fatal as of 1.2.0)
+postCommit.failure.counter | Counter | Incremented each time a post-commit callback fails (post-commit failures are non-fatal)
 postCommit.duration | Gauge | Total wall-clock time in milliseconds for post-commit callback execution
 clean.duration | Gauge | Total wall-clock time in milliseconds for a clean operation
 archive.duration | Gauge | Total wall-clock time in milliseconds for an archive operation
 
 All names above use the default (no prefix) form. When `hoodie.metrics.reporter.metricsname.prefix` is set, names are prefixed as `<prefix>.<name>`.
 
-### Per-Table MetricRegistry Isolation
+## Per-Table MetricRegistry Isolation
 
-In multi-tenant deployments where a single Spark job writes to multiple Hudi tables, each table now gets its own isolated `MetricRegistry`. The distributed registry key is scoped as `<tableName>.<registryName>`, ensuring that metrics from different tables do not collide. No configuration change is required; isolation is automatic when the table name is available in the engine context.
+Since Hudi 1.2.0, in multi-tenant deployments where a single Spark job writes to multiple Hudi tables, each table gets its own isolated `MetricRegistry`. The distributed registry key is scoped as `<tableName>.<registryName>`, ensuring that metrics from different tables do not collide. No configuration change is required; isolation is automatic when the table name is available in the engine context.
 
-### Log-Block Compaction Gauges
+## Log-Block Compaction Gauges
 
 When `hoodie.metricscompaction.log.blocks.on=true`, the following additional gauges are reported as part of a compaction commit:
 
@@ -276,4 +276,4 @@ Name | Description
 \<action\>.totalRollbackLogBlocks | Number of rollback log blocks encountered during compaction
 \<action\>.totalLogBlocksCompacted | Total number of log blocks compacted
 
-where `<action>` is the commit action type (e.g., `commit`). This feature has been available since 0.14.0 and the config key is `hoodie.metricscompaction.log.blocks.on` (off by default).
+where `<action>` is the commit action type (e.g., `commit`). The config key is `hoodie.metricscompaction.log.blocks.on` (off by default).
