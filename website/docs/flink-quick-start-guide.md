@@ -1,7 +1,7 @@
 ---
 title: "Flink Quick Start"
 toc: true
-last_modified_at: 2025-11-22T14:30:00+08:00
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -12,12 +12,13 @@ This page introduces Flink–Hudi integration and demonstrates how Flink brings 
 
 ### Flink Support Matrix
 
-| Hudi   | Supported Flink versions                                               |
-| :----- | :--------------------------------------------------------------------- |
-| 1.1.x  | 1.17.x, 1.18.x, 1.19.x, 1.20.x (default build), 2.0.x                  |
-| 1.0.x  | 1.14.x, 1.15.x, 1.16.x, 1.17.x, 1.18.x, 1.19.x, 1.20.x (default build) |
-| 0.15.x | 1.14.x, 1.15.x, 1.16.x, 1.17.x, 1.18.x                                 |
-| 0.14.x | 1.13.x, 1.14.x, 1.15.x, 1.16.x, 1.17.x                                 |
+| Hudi   | Supported Flink versions                                                      |
+| :----- | :---------------------------------------------------------------------------- |
+| 1.2.x  | 1.17.x, 1.18.x, 1.19.x, 1.20.x, 2.0.x, **2.1.x (default build)**            |
+| 1.1.x  | 1.17.x, 1.18.x, 1.19.x, 1.20.x (default build), 2.0.x                        |
+| 1.0.x  | 1.14.x, 1.15.x, 1.16.x, 1.17.x, 1.18.x, 1.19.x, 1.20.x (default build)      |
+| 0.15.x | 1.14.x, 1.15.x, 1.16.x, 1.17.x, 1.18.x                                       |
+| 0.14.x | 1.13.x, 1.14.x, 1.15.x, 1.16.x, 1.17.x                                       |
 
 ### Download Flink and Start Flink cluster
 
@@ -62,9 +63,9 @@ You can build the jar manually under path `hudi-source-dir/packaging/hudi-flink-
 Now start the SQL CLI:
 
 ```bash
-# For Flink versions: 1.17-1.20, 2.0
-export FLINK_VERSION=1.20 
-export HUDI_VERSION=1.1.1
+# For Flink versions: 1.17-1.20, 2.0, 2.1 (default build for Hudi 1.2.x)
+export FLINK_VERSION=2.1
+export HUDI_VERSION=1.2.0
 wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-flink${FLINK_VERSION}-bundle/${HUDI_VERSION}/hudi-flink${FLINK_VERSION}-bundle-${HUDI_VERSION}.jar -P /tmp/
 ./bin/sql-client.sh embedded -j /tmp/hudi-flink${FLINK_VERSION}-bundle-${HUDI_VERSION}.jar shell
 ```
@@ -77,11 +78,11 @@ The SQL CLI only executes the SQL line by line.
 
 Please add the desired dependency to your project:
 ```xml
-<!-- For Flink versions 1.17-1.20, 2.0-->
+<!-- For Flink versions 1.17-1.20, 2.0, 2.1 (default build for Hudi 1.2.x) -->
 <properties>
-    <flink.version>1.20.0</flink.version>
-    <flink.binary.version>1.20</flink.binary.version>
-    <hudi.version>1.1.1</hudi.version>
+    <flink.version>2.1.1</flink.version>
+    <flink.binary.version>2.1</flink.binary.version>
+    <hudi.version>1.2.0</hudi.version>
 </properties>
 <dependency>
     <groupId>org.apache.hudi</groupId>
@@ -447,11 +448,12 @@ feature is that it lets you author streaming pipelines on streaming or batch dat
 - **Quick Start**: Read the Quick Start section above to get started quickly with the Flink SQL client to write to (and read from) Hudi.
 - **Configuration**: For [Global Configuration](flink_tuning.md#global-configurations), set up through `$FLINK_HOME/conf/flink-conf.yaml`. For per-job configuration, set up through [Table Option](flink_tuning.md#table-options).
 - **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](ingestion_flink.md#cdc-ingestion), [Bulk Insert](ingestion_flink.md#bulk-insert), [Index Bootstrap](ingestion_flink.md#index-bootstrap), [Changelog Mode](ingestion_flink.md#changelog-mode) and [Append Mode](ingestion_flink.md#append-mode). Flink also supports multiple streaming writers with [non-blocking concurrency control](sql_dml.md#non-blocking-concurrency-control-experimental).
-- **Reading Data** : Flink supports different modes for reading, such as [Streaming Query](sql_queries.md#streaming-query) and [Incremental Query](sql_queries.md#incremental-query).
+- **Reading Data** : Flink supports different modes for reading, such as [Streaming Query](sql_queries.md#streaming-query) and [Incremental Query](sql_queries.md#incremental-query). For improved push-down and resumable reads, see [Flink Source V2 (RFC-95)](ingestion_flink.md#flink-source-v2-rfc-95).
 - **Tuning**: For write/read tasks, this guide provides some tuning suggestions, such as [Memory Optimization](flink_tuning.md#memory-optimization) and [Write Rate Limit](flink_tuning.md#write-rate-limit).
 - **Optimization**: Offline compaction is supported: [Offline Compaction](compaction.md#flink-offline-compaction).
 - **Query Engines**: Besides Flink, many other engines are integrated: [Hive Query](syncing_metastore.md#flink-setup), [Presto Query](sql_queries.md#presto).
 - **Catalog**: A Hudi‑specific catalog is supported: [Hudi Catalog](sql_ddl/#create-catalog).
+- **1.2.0 New Features**: [Flink Source V2](ingestion_flink.md#flink-source-v2-rfc-95), [RLI Bucket Indexing](ingestion_flink.md#record-level-index-rli-bucket-indexing-for-flink), [Append Write Buffer Modes](ingestion_flink.md#append-write-buffer), [Lookup Join RocksDB Cache](ingestion_flink.md#lookup-join), [Managed-Memory Write Buffer](flink_tuning.md#managed-memory-write-buffer).
 
 If you are relatively new to Apache Hudi, it is important to be familiar with a few core concepts:
 
