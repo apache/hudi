@@ -356,19 +356,10 @@ available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectI
   ([HUDI-9666](https://issues.apache.org/jira/browse/HUDI-9666)).
 * Databricks Spark runtime compatibility for reading Hudi tables, including partition predicate handling and incremental
   query with full scan mode on MOR tables.
-* Storage-based lock provider improvements.
 * Column stats index correctness with metadata table
   ([HUDI-8371](https://issues.apache.org/jira/browse/HUDI-8371)) and timestamp column logical type fixes.
-* Schema evolution improvements for nested data types, MOR tables with timestamp columns
-  ([HUDI-8175](https://issues.apache.org/jira/browse/HUDI-8175)), and avoiding unnecessary schema evolution when only
-  the version id changes ([HUDI-9597](https://issues.apache.org/jira/browse/HUDI-9597)).
-* Rollback and cleaning now acquire locks as needed
-  ([HUDI-7507](https://issues.apache.org/jira/browse/HUDI-7507)); cleaner NPE on plan deserialization
-  ([HUDI-8772](https://issues.apache.org/jira/browse/HUDI-8772)).
 * Hive/Glue sync emits drop partition events when partitions are removed
   ([HUDI-9770](https://issues.apache.org/jira/browse/HUDI-9770)); meta sync recreates tables on certain exceptions.
-* MERGE INTO on Spark no longer scans the target table unnecessarily
-  ([HUDI-9088](https://issues.apache.org/jira/browse/HUDI-9088)).
 * DataHub meta sync improvements ([HUDI-8616](https://issues.apache.org/jira/browse/HUDI-8616),
   [HUDI-9377](https://issues.apache.org/jira/browse/HUDI-9377)).
 * Flink bug fix cherry-picks from 0.14.2.
