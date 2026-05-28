@@ -520,7 +520,7 @@ JOIN customers FOR SYSTEM_TIME AS OF o.ts AS c
 
 ## Virtual Metadata Columns
 
-Flink 1.2.0 supports declaring Hudi metadata fields as `METADATA VIRTUAL` columns in the DDL. This allows accessing system metadata (e.g., commit time, record key) without storing them as regular data columns.
+Hudi metadata fields can be declared as `METADATA VIRTUAL` columns in the Flink DDL. This allows accessing system metadata (e.g., commit time, record key) without storing them as regular data columns.
 
 ```sql
 CREATE TABLE events (
