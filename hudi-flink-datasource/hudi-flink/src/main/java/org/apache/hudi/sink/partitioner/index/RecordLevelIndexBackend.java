@@ -41,12 +41,10 @@ import org.apache.hudi.sink.utils.SamplingActionExecutor;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
-import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
-import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -78,7 +76,6 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
   private final long maxCacheSizeInBytes;
   private final BootstrapFilter bootstrapFilter;
   private HoodieTableMetadata metadataTable;
-  @Getter(AccessLevel.PACKAGE)
   private FlinkPartitionedIndexBackendMetrics metrics;
 
   @Getter
@@ -102,9 +99,6 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
     this.metaClient = StreamerUtil.createMetaClient(conf);
     this.maxCacheSizeInBytes = conf.get(FlinkOptions.INDEX_RLI_CACHE_SIZE) * 1024 * 1024;
     this.bootstrapFilter = bootstrapFilter;
-    // Pre-seed metrics with an unregistered group so the backend is safe to use before the
-    // bucket assign operator wires the real metric group via registerMetrics(MetricGroup).
-    registerMetrics(new UnregisteredMetricsGroup());
     reloadMetadataTable();
   }
 

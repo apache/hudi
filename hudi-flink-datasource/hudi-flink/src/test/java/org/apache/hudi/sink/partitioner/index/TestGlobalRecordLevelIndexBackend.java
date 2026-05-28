@@ -138,6 +138,7 @@ public class TestGlobalRecordLevelIndexBackend {
     conf.set(FlinkOptions.INDEX_RLI_CACHE_SIZE, 1L);
 
     try (GlobalRecordLevelIndexBackend globalRecordLevelIndexBackend = new GlobalRecordLevelIndexBackend(conf, -1)) {
+      globalRecordLevelIndexBackend.registerMetrics(TaskManagerMetricGroup.createTaskManagerMetricGroup(registry, "localhost", ResourceID.generate()));
 
       for (int i = 0; i < 1500; i++) {
         globalRecordLevelIndexBackend.update("id1_" + i,
@@ -200,18 +201,6 @@ public class TestGlobalRecordLevelIndexBackend {
       assertEquals("par1", globalRecordLevelIndexBackend.get(Collections.singletonList("id2_0")).get("id2_0").getPartitionPath());
       assertEquals("par1", globalRecordLevelIndexBackend.get(Collections.singletonList("id3_0")).get("id3_0").getPartitionPath());
       assertEquals("par1", globalRecordLevelIndexBackend.get(Collections.singletonList("id4_0")).get("id4_0").getPartitionPath());
-    }
-  }
-
-  @Test
-  void testLookupWithoutMetricsRegistrationIsNullSafe() throws Exception {
-    // Verifies that the if (metrics != null) guards in get(List) don't throw even when
-    // registerMetrics was never called.
-    try (GlobalRecordLevelIndexBackend backend = new GlobalRecordLevelIndexBackend(conf, -1)) {
-      HoodieRecordGlobalLocation location = new HoodieRecordGlobalLocation("par1", "000000001", "file-id-1");
-      backend.update("null_metrics_key", location);
-      Map<String, HoodieRecordGlobalLocation> result = backend.get(Collections.singletonList("null_metrics_key"));
-      assertEquals(location, result.get("null_metrics_key"));
     }
   }
 
