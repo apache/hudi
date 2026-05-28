@@ -2,7 +2,7 @@
 title: SQL Queries
 summary: "In this page, we go over querying Hudi tables using SQL"
 toc: true
-last_modified_at: 
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -13,6 +13,24 @@ This page will show how to issue different queries and discuss any specific inst
 
 ## Spark SQL
 The Spark [quickstart](quick-start-guide.md) provides a good overview of how to use Spark SQL to query Hudi tables. This section will go into more advanced configurations and functionalities.
+
+:::tip Setting Hudi read options at the session level
+Hudi 1.2.0 supports setting read options at the **Spark session level** using the `spark.hoodie.*` prefix.
+Any `spark.hoodie.X` config set via `spark.conf.set` or `--conf` is treated equivalently to `hoodie.X`.
+
+Config precedence (low → high):
+1. Global DFS properties
+2. `spark.hoodie.*` session-level configs (normalized to `hoodie.*`)
+3. Explicit `hoodie.*` data source options or per-table `SET` commands
+
+```sql
+-- Apply a Hudi read option for the entire session
+SET spark.hoodie.metadata.column.stats.enable = true;
+SELECT * FROM hudi_table WHERE price BETWEEN 10.0 AND 50.0;
+```
+
+If both `spark.hoodie.X` and `hoodie.X` are set, the explicit `hoodie.X` value takes precedence.
+:::
 
 ### Snapshot Query
 Snapshot queries are the most common query type for Hudi tables. Spark SQL supports snapshot queries on both COPY_ON_WRITE and MERGE_ON_READ tables.
@@ -325,12 +343,31 @@ see all changes in a given time window and not just the latest values.
 
 Please refer to [configurations](basic_configurations.md) section for the important configuration options.
 
+:::note Column pruning for incremental queries
+Starting with Hudi 1.2.0, **column pruning** is applied to incremental queries. Only the columns
+actually referenced in the query are read from the base files, reducing I/O for wide tables. No
+configuration change is required — this optimization is applied automatically.
+:::
+
 :::note Incremental Query Checkpointing between Hudi 0.x and 1.0.
 In Hudi 1.0, we switch the incremental and CDC query to used completion time, instead of instant time, to determine the
 range of commits to incrementally pull from. The checkpoint stored for Hudi incremental source and related sources is
 also changed to use completion time. To support compatiblity, Hudi does a checkpoint translation from requested instant
 time to completion time depending on the source table version.
 :::
+
+### Vector Similarity Search
+
+Hudi 1.2.0 introduces a `hudi_vector_search` table-valued function (TVF) for approximate
+nearest-neighbor (ANN) search over `VECTOR` columns. This is an extension of the
+`hudi_table_changes` TVF pattern.
+
+```sql
+-- Find the 10 nearest neighbors to a query vector in the 'embedding' column
+SELECT * FROM hudi_vector_search('db.embeddings_table', 'embedding', ARRAY(0.1, 0.2, ...), 10);
+```
+
+See [Vector Search](vector_search.md) for the full API, supported metrics, and setup instructions.
 
 ### Query Indexes and Timeline
 

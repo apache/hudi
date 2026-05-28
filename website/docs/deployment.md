@@ -3,11 +3,18 @@ title: Deployment
 keywords: [ hudi, administration, operation, devops, deployment]
 summary: This section offers an overview of tools available to operate an ecosystem of Hudi
 toc: true
-last_modified_at: 2019-12-30T15:59:57-04:00
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 
 This section provides all the help you need to deploy and operate Hudi tables at scale.
 Specifically, we will cover the following aspects.
+
+:::note Prerequisites for Hudi 1.2.0
+- **Java:** Java 11 is the minimum required to **build** Hudi from source. At runtime, the Java requirement
+  follows the Spark version: Java 17 or later for Spark 4.0/4.1; Java 8 or later for Spark 3.x.
+- **Spark:** Hudi 1.2.x supports Spark 3.3.x through 4.1.1 (Spark 3.5.5 is the default bundle build).
+- **Databricks Runtime:** Databricks Runtime 3.4-based clusters can now read Hudi 1.2.x tables.
+:::
 
 - [Deployment Model](#deploying) : How various Hudi components are deployed and managed.
 - [Upgrading Versions](#upgrading) : Picking up new releases of Hudi, guidelines and general best-practices.

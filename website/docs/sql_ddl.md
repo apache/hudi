@@ -2,7 +2,7 @@
 title: SQL DDL
 summary: "In this page, we discuss using SQL DDL commands with Hudi"
 toc: true
-last_modified_at: 
+last_modified_at: 2026-05-27T00:00:00-00:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -696,6 +696,14 @@ SHOW PARTITIONS hudi_table;
 ALTER TABLE hudi_table DROP PARTITION (dt='2021-12-09', hh='10');
 ```
 
+:::note Slash-separated date partitioning and SHOW PARTITIONS
+When a table is written with `hoodie.datasource.write.slash.separated.date.partitioning=true`, the
+physical directory layout uses `yyyy/MM/dd` paths. `SHOW PARTITIONS` correctly handles this: it
+returns partition values in the standard `col=yyyy-MM-dd` display format, normalizing the `/`
+separators back to `-` for readability. See [Key Generation](key_generation.md#slash-separated-date-partitioning)
+for details on configuring slash-separated partitioning.
+:::
+
 ### Show and drop index
 
 **Syntax**
@@ -837,6 +845,39 @@ WITH (
 );
 ```
 
+### Create Append-Only Table Without Primary Key
+
+Hudi 1.2.0 supports creating a Flink table **without a `PRIMARY KEY`** for pure append workloads.
+In this mode, set `write.operation` to `insert`; Hudi will not enforce record-level uniqueness and
+the record-key and ordering fields are optional.
+
+```sql
+-- Append-only table: no PRIMARY KEY required
+CREATE TABLE hudi_append_table (
+  id      BIGINT,
+  name    STRING,
+  ts      BIGINT,
+  city    STRING
+)
+PARTITIONED BY (`city`)
+WITH (
+  'connector'       = 'hudi',
+  'path'            = 'file:///tmp/hudi_append_table',
+  'table.type'      = 'COPY_ON_WRITE',
+  'write.operation' = 'insert'
+);
+
+INSERT INTO hudi_append_table VALUES (1, 'Alice', 1695159649, 'sf'), (2, 'Bob', 1695091554, 'ny');
+```
+
+:::note
+Without a primary key, Hudi uses auto-generated record keys and does **not** perform deduplication
+or upsert merging. This is equivalent to `bulk_insert` semantics and is well suited for log/event
+ingestion pipelines where every incoming row should be appended as-is.
+If `write.operation` is any value other than `insert` and no `PRIMARY KEY` is defined, Hudi will
+throw `"Primary key definition is missing"` at table creation time.
+:::
+
 ### Create Table in Non-Blocking Concurrency Control Mode
 
 The following is an example of creating a Flink table in [Non-Blocking Concurrency Control mode](concurrency_control.md#non-blocking-concurrency-control).
@@ -967,3 +1008,15 @@ WITH (
 | numeric       |              | not supported |
 | null          |              | not supported |
 | object        |              | not supported |
+
+### AI and Unstructured Data Types
+
+Hudi 1.2.0 introduces two additional column types for AI and unstructured data workloads:
+
+- **`VECTOR(dim[, elementType])`** — stores fixed-dimension embedding vectors (e.g. `VECTOR(768)`,
+  `VECTOR(768, FLOAT)`, `VECTOR(768, DOUBLE)`). Enables approximate nearest-neighbor search via
+  the `hudi_vector_search` TVF. See [Vector Search](vector_search.md) for full details.
+
+- **`BLOB`** — stores arbitrary binary objects (images, audio, documents) either inline within the
+  base file or as external references. See [BLOB / Unstructured Data](blob_unstructured_data.md)
+  for the storage modes, DDL syntax, and read APIs.
