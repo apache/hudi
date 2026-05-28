@@ -1093,21 +1093,11 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
-      - name: Build Project
-        if: needs.changes.outputs.relevant == 'true'
-        run: |
-          mvn clean install -T 2 -Pintegration-tests -Dscala-2.12 -Dflink2.1 \
-            -pl hudi-flink-datasource/hudi-flink -am \
-            -Davro.version=1.11.4 \
-            -Dparquet.version=1.16.0 \
-            -Dflink.format.parquet.version=1.16.0 \
-            -Dhadoop.version=3.3.0 \
-            -DskipTests=true $MVN_ARGS
       - name: VARIANT Integration Tests
         if: needs.changes.outputs.relevant == 'true'
         run: |
-          mvn verify -Pintegration-tests -Dscala-2.12 -Dflink2.1 \
-            -pl hudi-flink-datasource/hudi-flink \
+          mvn clean verify -T 2 -Pintegration-tests -Dscala-2.12 -Dflink2.1 \
+            -pl hudi-flink-datasource/hudi-flink -am \
             -Davro.version=1.11.4 \
             -Dparquet.version=1.16.0 \
             -Dflink.format.parquet.version=1.16.0 \

@@ -79,8 +79,9 @@ public class ITTestVariantFlinkTableServices {
     Assumptions.assumeTrue(nativeVariantAvailable, "VARIANT requires Flink 2.1+");
     Assumptions.assumeTrue(
         variantParquetAnnotationAvailable(),
-        "VARIANT Parquet write requires parquet-java 1.16.0+ and Hadoop 3.3+ "
-            + "(CI: test-flink-variant job; local: -Dflink.format.parquet.version=1.16.0 -Dhadoop.version=3.3.0)");
+        "VARIANT Parquet requires parquet-java 1.16.0+ and Hadoop 3.3+ "
+            + "(CI: test-flink-variant job; local: -Dparquet.version=1.16.0 "
+            + "-Dflink.format.parquet.version=1.16.0 -Dhadoop.version=3.3.0)");
   }
 
   private static boolean variantParquetAnnotationAvailable() {
