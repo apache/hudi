@@ -97,7 +97,42 @@ For the more curious, a more detailed explanation of the benefits of _incrementa
 - The idea with MoR is to reduce write costs/latencies, by writing delta logs (Hudi), positional delete files (iceberg). Hudi employs about 4 types of indexing to quickly locate the file that the updates records belong to. Formats relying on a scan of the table can quickly bottleneck on write performance. e.g updating 1GB into a 1TB table every 5-10 mins.
 - Hudi is the only lakehouse storage system that natively supports event time ordering and late data handling for streaming workloads where MoR is employed heavily. 
 
+## AI-Native Data Lakehouse
 
+The rise of large language models (LLMs) and multimodal AI has sparked a fundamental paradigm shift in data processing, moving the data lakehouse's primary workload from traditional ETL/BI analytics toward feature engineering, model training, and Retrieval-Augmented Generation (RAG). Traditional data lakehouses were natively designed around structured, tabular data, leaving modern AI applications awkwardly fragmented. These advanced workloads requires seamlessly combining structured metadata with a massive explosion of high-dimensional vector embeddings, raw unstructured binary objects (such as images, text, audio, and video), and highly dynamic semi-structured payloads (such as model configurations and LLM response outputs).
 
+Oftentimes, managing this multi-modal reality forced engineering teams to maintain separate, siloed infrastructure. Raw binaries were stored in unmanaged object stores, while embeddings were synced out to standalone, external vector databases. This fragmented architecture introduced a severe "sync dilemma": it creates multiple data copies, drives up operational infrastructure costs, suffers from a lack of real-time responsiveness, and entirely breaks transactional consistency across the AI lifecycle. For instance, a model training or RAG workflow requires strict data lineage, point-in-time reproducibility, and version control. If an embedding is updated but its corresponding raw image or metadata isn't atomically committed alongside it, downstream models suffer from stale or mismatched data. An AI-native data lakehouse that unifies structured, semi-structured, and unstructured data into a single transactional storage layer eliminates these write-scale bottlenecks and transactional inconsistencies.
 
+Apache Hudi delivers an AI-native lakehouse architecture by supporting multi-modal data types within the same table schema. Large binary objects ([`BLOB`](sql_ddl.md#blob)), dense semantic embeddings ([`VECTOR`](sql_ddl.md#vector)), and flexible semi-structured payloads ([`VARIANT`](sql_ddl.md#variant)) reside natively within the same Hudi data files. By managing multi-modal data inside the same lakehouse rather than separate infrastructure, unstructured data inherits Hudi's ACID transactions on the [timeline](timeline.md), [schema evolution](schema_evolution.md), and [time-travel queries](sql_queries.md#time-travel-query). Hudi's [table services](hudi_stack.md), [file sizing](file_sizing.md), [cleaning](cleaning.md), [compaction](compaction.md), and [clustering](clustering.md), operate on tables with these data types to optimize data layout for similarity search ([`hudi_vector_search`](sql_queries.md#vector-similarity-search)) and BLOB reading ([`read_blob()`](sql_queries.md#reading-blob-columns)).
 
+The table below serves as the technical entry point for interacting with AI-native data types in Hudi:
+
+| Type | Declare | Write | Read |
+|:-----|:--------|:------|:-----|
+| [`VECTOR`](sql_ddl.md#vector) | [DDL](sql_ddl.md#vector) | [SQL DML](sql_dml.md#inserting-vector-columns) · [DataFrame](writing_data.md#vector-via-dataframe) | [`hudi_vector_search` TVF](sql_queries.md#vector-similarity-search) |
+| [`BLOB`](sql_ddl.md#blob) | [DDL](sql_ddl.md#blob) | [SQL DML](sql_dml.md#inserting-blob-columns) · [DataFrame](writing_data.md#blob-via-dataframe) | [`read_blob()`](sql_queries.md#reading-blob-columns) |
+| [`VARIANT`](sql_ddl.md#variant) | [DDL](sql_ddl.md#variant) | [SQL DML](sql_dml.md#inserting-variant-columns) · [DataFrame](writing_data.md#variant-via-dataframe) | [Querying VARIANT](sql_queries.md#querying-variant-columns) |
+| [Lance file format](storage_layouts.md#lance-base-file-format) | [TBLPROPERTIES](sql_ddl.md#lance-base-file-format) | [DataFrame](writing_data.md#lance-base-file-format-via-dataframe) | (transparent; Spark-only) |
+
+For a worked example covering image embeddings, raw bytes, and similarity search, see the
+[Unstructured Data Quick Start Guide](unstructured-data-quick-start-guide.md).
+
+| Use case | Types and features |
+|:---------|:-------------------|
+| Image / video search | `VECTOR` embeddings + `BLOB` raw frames + `hudi_vector_search` |
+| Retrieval-augmented generation (RAG) | `VECTOR` chunk embeddings retrieved to assemble LLM context |
+| LLM output management | `VARIANT` for response payloads + `VECTOR` for semantic indexing |
+| Recommendation systems | `VECTOR` similarity for collaborative filtering; incremental re-embedding via incremental queries |
+| Content moderation | `BLOB` raw content + `VECTOR` content embeddings + incremental processing |
+| Multimodal analytics | Structured metadata + `VECTOR` embeddings + `BLOB` raw data in one table |
+| ML feature store | `VECTOR` for feature embeddings, `VARIANT` for sparse feature maps; time-travel for point-in-time retrieval |
+| Experiment tracking | `VARIANT` for heterogeneous model configs and metrics; incremental queries for latest runs |
+| Data labeling pipelines | `BLOB` for raw data, incremental queries for unlabeled data, transactional label updates |
+
+### Why Hudi for AI workloads
+
+- Unified storage across modalities: Raw binary objects ([`BLOB`](sql_ddl.md#blob)), semantic vector embeddings ([`VECTOR`](sql_ddl.md#vector)), semi-structured payloads ([`VARIANT`](sql_ddl.md#variant)), and standard analytical columns live together in a single Hudi table, under the same [timeline](timeline.md), [schema evolution](schema_evolution.md), and access controls.
+- Incremental embedding pipelines: Hudi's [incremental query](sql_queries.md#incremental-query) lets feature pipelines re-embed only the rows that changed since a given commit, instead of reprocessing the full batch.
+- Multi-modal transactional guarantees: Vector updates, binary changes, and metadata modifications commit atomically. A similarity query joining the `VECTOR` column with the `BLOB` column never observes a state in which the embedding refers to a deleted or stale binary asset.
+- Automated table services: [File sizing](file_sizing.md), [cleaning](cleaning.md), [compaction](compaction.md), and [clustering](clustering.md) apply to tables that contain `VECTOR`, `BLOB`, and `VARIANT` columns.
+- Open, multi-engine access: Hudi tables are written and read by [Apache Spark](quick-start-guide.md) and [Apache Flink](flink-quick-start-guide.md), and by the upcoming native [Python / Rust client (hudi-rs)](python-rust-quick-start-guide.md) reading the underlying Parquet representation directly.

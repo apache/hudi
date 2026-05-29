@@ -146,6 +146,183 @@ TBLPROPERTIES (
 LOCATION 'file:///tmp/hudi_table_merge_mode_custom/';
 ```
 
+### Create table with unstructured and semi-structured column types {#create-table-with-unstructured-and-semi-structured-column-types}
+
+Hudi supports three column types for unstructured and semi-structured data, plus a Lance base file
+format.
+
+#### `VECTOR(dim[, elementType])` {#vector}
+
+A fixed-dimension embedding column. `elementType` is one of `FLOAT` (default), `DOUBLE`, or `INT8`
+(alias `BYTE`):
+
+| Element type | Storage |
+|:-------------|:--------|
+| `FLOAT` (default) | `ArrayType(FloatType)` |
+| `DOUBLE` | `ArrayType(DoubleType)` |
+| `INT8` / `BYTE` | `ArrayType(ByteType)` |
+
+```sql
+CREATE TABLE products (
+    product_id   STRING,
+    name         STRING,
+    embedding    VECTOR(768)          -- defaults to FLOAT
+) USING hudi
+TBLPROPERTIES (
+    primaryKey = 'product_id',
+    type = 'cow',
+    hoodie.record.merger.impls = 'org.apache.hudi.DefaultSparkRecordMerger'
+);
+
+-- Other element types
+-- embedding VECTOR(768, FLOAT)
+-- embedding VECTOR(768, DOUBLE)
+-- embedding VECTOR(256, INT8)
+```
+
+Hudi's SQL parser normalizes `VECTOR(128, FLOAT)` to `VECTOR(128)`.
+
+VECTOR columns must be **top-level fields**; nesting inside `STRUCT`, `ARRAY`, or `MAP` is not
+supported. Dimension and element type cannot be changed via schema evolution after table creation.
+
+**Internal storage.** In Parquet, a VECTOR column is stored as `FIXED_LEN_BYTE_ARRAY` with
+`hudi_type=VECTOR(dim[,elementType])` field metadata so the Spark reader decodes the bytes back into
+a typed array. On Lance-backed tables, VECTOR is stored natively as
+`FixedSizeList<Float32/Float64, dim>`; only `FLOAT` and `DOUBLE` element types are accepted on Lance.
+
+Query VECTOR columns with the [`hudi_vector_search` TVF](sql_queries.md#vector-similarity-search).
+
+**Engine constraints.** Flink cannot decode VECTOR columns (the underlying Parquet
+`FIXED_LEN_BYTE_ARRAY` is not converted back into a typed array); Flink can still read other columns
+in a table that contains a VECTOR column.
+
+#### `BLOB` {#blob}
+
+A binary column with two storage modes:
+
+| Mode | Storage | Read pattern |
+|:-----|:--------|:-------------|
+| `INLINE` | Raw bytes embedded in the table row | Direct read; no external fetch |
+| `OUT_OF_LINE` | Pointer to a byte range in an external file | On-demand via [`read_blob()`](sql_queries.md#reading-blob-columns) |
+
+```sql
+CREATE TABLE media_assets (
+    asset_id    STRING,
+    file_name   STRING,
+    mime_type   STRING,
+    file_size   BIGINT,
+    content     BLOB
+) USING hudi
+TBLPROPERTIES (
+    primaryKey = 'asset_id',
+    type = 'cow'
+);
+```
+
+**Internal struct.** A BLOB column is represented internally as:
+
+```
+STRUCT<
+  type:      STRING,        -- 'INLINE' or 'OUT_OF_LINE'
+  data:      BINARY,        -- raw bytes for INLINE; null for OUT_OF_LINE
+  reference: STRUCT<
+    external_path: STRING,  -- file path for OUT_OF_LINE
+    offset:        BIGINT,  -- byte offset; null = start of file
+    length:        BIGINT,  -- byte length; null = read to end
+    managed:       BOOLEAN  -- advisory flag for the (future) cleaner
+  >
+>
+```
+
+`managed` is currently advisory: `true` records the intent that Hudi owns the lifecycle of the
+referenced external file (so a future cleaner may delete it when no row references it), `false`
+records that the file is externally managed. The cleaner does not yet consume this field.
+
+BLOB columns are excluded from column-stats indexing.
+
+#### `VARIANT` {#variant}
+
+A semi-structured (JSON-like) column that stores any JSON-compatible value (object, array, string,
+number, boolean, null) as two binary fields:
+
+| Field | Description |
+|:------|:------------|
+| `metadata` | Encodes field names, types, and structure for efficient access |
+| `value` | The data payload |
+
+On Spark 4.0+, declare the native type:
+
+```sql
+CREATE TABLE events (
+    event_id  STRING,
+    payload   VARIANT,
+    ts        BIGINT
+) USING hudi
+TBLPROPERTIES (
+    primaryKey = 'event_id',
+    preCombineField = 'ts'
+);
+```
+
+Spark 3.x has no native `VariantType`. To read a VARIANT-bearing Hudi table written by Spark 4.x,
+declare the column as a binary struct in the `CREATE TABLE` DDL pointing at the table location:
+
+```sql
+CREATE TABLE events (
+    event_id  STRING,
+    payload   STRUCT<value: BINARY, metadata: BINARY>,
+    ts        BIGINT
+) USING hudi
+LOCATION '<existing-table-path>'
+TBLPROPERTIES (
+    primaryKey = 'event_id',
+    preCombineField = 'ts'
+);
+```
+
+Spark 3.x then returns the raw `metadata` and `value` bytes; it does not surface the column as a
+logical VARIANT, and reading a VARIANT table without this explicit DDL (i.e. letting Hudi
+auto-resolve the schema from commit metadata) throws `"VARIANT type is only supported in Spark
+4.0+"`.
+
+Engine support for `VARIANT`:
+
+| Engine | Behavior |
+|:-------|:---------|
+| Spark 4.0+ | Native `VariantType` for read/write/query on COW and MOR (CREATE TABLE with `VARIANT` or DataFrame writes with `VariantType`). |
+| Spark 4.1 | Same as Spark 4.0. Spark 4.1's `PushVariantIntoScan` rewrites VARIANT projections into struct-of-extractions; Hudi recognizes that shape and returns the column as a logical VARIANT. |
+| Spark 3.x | No native VARIANT. Backward-compat read of a Spark 4.x-written table requires the explicit binary-struct DDL above; raw bytes only. |
+| Flink &lt; 2.1 | Throws `UnsupportedOperationException` on VARIANT columns. |
+| Flink ≥ 2.1 | Surfaces VARIANT as `ROW<metadata BYTES, value BYTES>`. Flink can read the underlying struct but cannot decode it as a variant value. |
+
+VARIANT columns are not supported on Lance-backed tables.
+
+Only unshredded VARIANT is exposed at the user-facing level: every Spark/Hudi schema conversion
+produces an unshredded VARIANT (two binary fields, `metadata` and `value`). The shredded variant
+write path exists in the engine but has no DDL, table-property, or session-config to enable it.
+
+#### Lance base file format
+
+Set the base file format per-table:
+
+```sql
+CREATE TABLE my_ai_table (
+    id        STRING,
+    embedding VECTOR(768),
+    metadata  STRING
+) USING hudi
+TBLPROPERTIES (
+    primaryKey = 'id',
+    type = 'cow',
+    hoodie.record.merger.impls = 'org.apache.hudi.DefaultSparkRecordMerger',
+    hoodie.table.base.file.format = 'lance'
+);
+```
+
+Lance also works with MOR tables: Lance files act as base files while Avro log files capture
+incremental changes. See [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format) for
+configuration, dependencies, and behavior.
+
 ### Create table from an external location
 Often, Hudi tables are created from streaming writers like the [streamer tool](hoodie_streaming_ingestion.md#hudi-streamer), which
 may later need some SQL statements to run on them. You can create an External table using the `location` statement.
@@ -1003,20 +1180,11 @@ WITH (
 | array         |  array       |               |
 | map           |  map         |               |
 | struct        |  struct      |               |
+| `ArrayType(<elementType>)` with field metadata `hudi_type=VECTOR(dim[, elementType])` | VECTOR | Fixed-dimension embedding column. Element type is `FloatType`, `DoubleType`, or `ByteType` (INT8). See [Create table with unstructured and semi-structured column types](#create-table-with-unstructured-and-semi-structured-column-types). |
+| `StructType(type STRING, data BINARY, reference STRUCT<…>)` with field metadata `hudi_type=BLOB` | BLOB | Binary column with `INLINE` / `OUT_OF_LINE` storage. See [Create table with unstructured and semi-structured column types](#create-table-with-unstructured-and-semi-structured-column-types). |
+| `VariantType` (Spark 4.0+) or `StructType(metadata BINARY NOT NULL, value BINARY NOT NULL)` with field metadata `hudi_type=VARIANT` (Spark 3.x) | VARIANT | Semi-structured (JSON-like) column (unshredded). See [Create table with unstructured and semi-structured column types](#create-table-with-unstructured-and-semi-structured-column-types). |
 | char          |              | not supported |
 | varchar       |              | not supported |
 | numeric       |              | not supported |
 | null          |              | not supported |
 | object        |              | not supported |
-
-### AI and Unstructured Data Types
-
-Hudi 1.2.0 introduces two additional column types for AI and unstructured data workloads:
-
-- **`VECTOR(dim[, elementType])`** — stores fixed-dimension embedding vectors (e.g. `VECTOR(768)`,
-  `VECTOR(768, FLOAT)`, `VECTOR(768, DOUBLE)`). Enables approximate nearest-neighbor search via
-  the `hudi_vector_search` TVF. See [Vector Search](vector_search.md) for full details.
-
-- **`BLOB`** — stores arbitrary binary objects (images, audio, documents) either inline within the
-  base file or as external references. See [BLOB / Unstructured Data](blob_unstructured_data.md)
-  for the storage modes, DDL syntax, and read APIs.

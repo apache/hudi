@@ -352,16 +352,186 @@ time to completion time depending on the source table version.
 
 ### Vector Similarity Search
 
-Hudi 1.2.0 introduces a `hudi_vector_search` table-valued function (TVF) for approximate
-nearest-neighbor (ANN) search over `VECTOR` columns. This is an extension of the
-`hudi_table_changes` TVF pattern.
+The `hudi_vector_search` table-valued function (TVF) runs top-K similarity search over a
+[`VECTOR`](sql_ddl.md#vector) column. It returns the `top_k` rows whose VECTOR column is closest to
+a query vector under the chosen distance metric.
 
 ```sql
--- Find the 10 nearest neighbors to a query vector in the 'embedding' column
-SELECT * FROM hudi_vector_search('db.embeddings_table', 'embedding', ARRAY(0.1, 0.2, ...), 10);
+SELECT *
+FROM hudi_vector_search(
+    table_name,        -- STRING: registered table name or path
+    vector_column,     -- STRING: VECTOR column name
+    query_vector,      -- ARRAY: query embedding
+    top_k,             -- INT: number of nearest neighbors
+    [distance_metric], -- STRING: 'cosine' (default), 'l2', 'dot_product'
+    [algorithm]        -- STRING: 'brute_force' (default)
+)
 ```
 
-See [Vector Search](vector_search.md) for the full API, supported metrics, and setup instructions.
+Parameters:
+
+| Parameter | Type | Default | Description |
+|:----------|:-----|:--------|:------------|
+| `table_name` | STRING | (required) | Registered table name or table path. |
+| `vector_column` | STRING | (required) | Name of the VECTOR column. |
+| `query_vector` | ARRAY&lt;FLOAT&gt; | (required) | Query embedding; must match the column's dimension and element type. |
+| `top_k` | INT | (required) | Number of nearest neighbors. |
+| `distance_metric` | STRING | `'cosine'` | One of `'cosine'`, `'l2'`, `'dot_product'`. |
+| `algorithm` | STRING | `'brute_force'` | Only `'brute_force'` is currently supported. |
+
+Return schema: all columns from the source table (excluding the embedding column) plus
+`_hudi_distance DOUBLE`. Results are ordered by `_hudi_distance` ascending, so the closest matches
+come first.
+
+Distance metrics:
+
+| Metric | Formula | Range | Notes |
+|:-------|:--------|:------|:------|
+| `cosine` | 1 − cos(a, b), clamped to [0, 2] | [0, 2] | Returns 1.0 for zero vectors. |
+| `l2` | sqrt(sum((a[i] − b[i])²)) | [0, +∞) | |
+| `dot_product` | −(a · b) | (−∞, +∞) | Negated so ascending sort surfaces the most similar rows first. |
+
+```sql
+-- Find the 10 nearest neighbors to a query embedding
+SELECT product_id, name, _hudi_distance
+FROM hudi_vector_search('products', 'embedding',
+                        ARRAY(0.12, -0.03, 0.87, /* ... */),
+                        10, 'cosine')
+ORDER BY _hudi_distance;
+```
+
+RAG context retrieval to apply a distance threshold to drop weak matches:
+
+```sql
+-- Retrieve the 5 most relevant document chunks for an LLM prompt
+SELECT chunk_id, text_content, _hudi_distance
+FROM hudi_vector_search(
+    'document_chunks', 'embedding',
+    ARRAY(/* embedding of the user's question */),
+    5, 'cosine'
+)
+WHERE _hudi_distance < 0.3;
+```
+
+Cross-modal search to query a corpus of image embeddings with a text embedding (e.g., CLIP):
+
+```sql
+SELECT image_id, caption, _hudi_distance
+FROM hudi_vector_search(
+    'image_catalog', 'clip_embedding',
+    ARRAY(/* text embedding from CLIP */),
+    20, 'cosine'
+);
+```
+
+The TVF also works on Lance-backed tables. Set `hoodie.table.base.file.format=lance` at table
+creation (see [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format)); the call site
+is unchanged.
+
+:::note
+`cosine` distance computes `1 − cos(a, b)`. If embeddings are not L2-normalized before write,
+results reflect both vector direction and magnitude.
+:::
+
+#### `hudi_vector_search_batch`
+
+The batch variant runs many query vectors at once:
+
+```sql
+SELECT *
+FROM hudi_vector_search_batch(
+    corpus_table,           -- STRING
+    corpus_embedding_col,   -- STRING
+    query_table,            -- STRING: table holding query vectors
+    query_embedding_col,    -- STRING: VECTOR column in query table
+    top_k,                  -- INT: neighbors per query
+    [distance_metric],
+    [algorithm]
+)
+```
+
+Return schema: corpus columns + query columns + `_hudi_distance DOUBLE` +
+`_hudi_query_index LONG` (identifies the query that produced the row). If corpus and query share
+column names, query columns are prefixed with `_hudi_query_`.
+
+### Reading BLOB Columns
+
+The `read_blob()` SQL function materializes raw bytes from a [`BLOB`](sql_ddl.md#blob) column. It
+handles both storage modes uniformly: for `INLINE`, it extracts the embedded bytes; for
+`OUT_OF_LINE`, it reads `reference.length` bytes starting at `reference.offset` from
+`reference.external_path`.
+
+```sql
+SELECT asset_id, read_blob(content) AS raw_bytes
+FROM media_assets
+WHERE asset_id = 'asset_001';
+```
+
+Standard queries on a BLOB column return the underlying struct (descriptor + bytes), not raw bytes:
+
+```sql
+SELECT asset_id, content.type, content.reference.external_path
+FROM media_assets;
+```
+
+#### Inline read mode
+
+| Property | Default | Description |
+|:---------|:--------|:------------|
+| `hoodie.read.blob.inline.mode` | `DESCRIPTOR` | Controls how `INLINE` BLOBs surface on read. `DESCRIPTOR` (default) returns an out-of-line-shaped reference pointing at the in-file coordinates of the bytes. No bytes are materialized. `CONTENT` materializes the raw inline bytes in the `data` field on every read. |
+| `hoodie.blob.batching.max.gap.bytes` | `4096` | Maximum gap between consecutive byte ranges before they are merged into a single read. Larger values reduce I/O calls at the cost of reading some unused bytes. |
+| `hoodie.blob.batching.lookahead.size` | `50` | Number of rows to buffer for batch-read detection. Larger values improve batching for sorted data but increase memory usage. |
+
+`CONTENT` mode is always used for internal operations (compaction, merge, log replay) regardless of
+this setting.
+
+:::caution Calling `read_blob()` on INLINE columns under DESCRIPTOR mode
+Under the default `DESCRIPTOR` mode, calling `read_blob()` on an `INLINE` BLOB column throws.
+The raw bytes are not materialized in the scan, so there is nothing for `read_blob()` to return.
+To read inline bytes with `read_blob()`, switch to `CONTENT` mode first:
+
+```sql
+SET hoodie.read.blob.inline.mode=CONTENT;
+SELECT asset_id, read_blob(content) AS raw_bytes
+FROM media_assets WHERE asset_id = 'asset_001';
+```
+
+This setting affects only `INLINE` columns. `OUT_OF_LINE` always fetches from the external path.
+:::
+
+`read_blob()` is a Spark SQL function; Hive, BigQuery, and other engines reading the underlying
+struct directly do not have it. Apply predicates before calling `read_blob()` to bound the bytes
+resolved per row.
+
+### Querying VARIANT Columns
+
+[`VARIANT`](sql_ddl.md#variant) columns hold semi-structured (JSON-like) data. Cast to `STRING` for
+JSON output:
+
+```sql
+SELECT event_id, cast(payload as STRING) AS payload_json FROM events;
+```
+
+VARIANT columns support `UPDATE`, `DELETE`, and `MERGE` on both COW and MOR tables.
+
+#### End-to-end example
+
+`hudi_vector_search` and `read_blob()` compose in a single query that returns both the matching
+rows and the materialized bytes for each:
+
+```sql
+SELECT image_id, category,
+       read_blob(image_bytes) AS resolved_bytes,
+       _hudi_distance
+FROM hudi_vector_search(
+    '/tmp/hudi_pets', 'embedding',
+    ARRAY(0.12, -0.03, /* ... */),
+    5, 'cosine'
+)
+ORDER BY _hudi_distance;
+```
+
+See [Unstructured Data Quick Start Guide](unstructured-data-quick-start-guide.md) for a full end-to-end walk-through.
 
 ### Query Indexes and Timeline
 

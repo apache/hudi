@@ -418,6 +418,137 @@ Then any record you want to delete you can mark `_hoodie_is_deleted` as true:
 {"ts": 0.0, "uuid": "19tdb048-c93e-4532-adf9-f61ce6afe10", "rank": 1045, "partitionpath": "americas/brazil/sao_paulo", "_hoodie_is_deleted" : true}
 ```
 
+### Writing VECTOR, BLOB, and VARIANT Columns
+
+`VECTOR`, `BLOB`, and `VARIANT` columns can be written using SQL `INSERT`, see [SQL DML](sql_dml.md#inserting-vector-columns); the
+DataFrame API equivalents are below.
+
+#### VECTOR via DataFrame
+
+Add `hudi_type` metadata on the VECTOR column so the writer recognizes it:
+
+```python
+import pyarrow as pa
+
+schema = pa.schema([
+    pa.field("product_id", pa.string()),
+    pa.field("embedding",  pa.list_(pa.float32()),
+             metadata={b"hudi_type": b"VECTOR(768)"}),
+])
+```
+
+#### BLOB via DataFrame
+
+A BLOB column is internally a struct (see [BLOB](sql_ddl.md#blob)). Build it as a Spark `Row`:
+
+```python
+from pyspark.sql import Row
+
+with open("logo.png", "rb") as f:
+    raw_bytes = f.read()
+
+row = Row(
+    asset_id="asset_001",
+    file_name="logo.png",
+    mime_type="image/png",
+    file_size=len(raw_bytes),
+    content=Row(type="INLINE", data=raw_bytes, reference=None),
+)
+```
+
+For PyArrow schemas, declare the struct explicitly:
+
+```python
+import pyarrow as pa
+
+schema = pa.schema([
+    pa.field("asset_id",  pa.string()),
+    pa.field("file_name", pa.string()),
+    pa.field("mime_type", pa.string()),
+    pa.field("file_size", pa.int64()),
+    pa.field("content",   pa.struct([
+        pa.field("type",      pa.string()),
+        pa.field("data",      pa.binary()),
+        pa.field("reference", pa.struct([
+            pa.field("external_path", pa.string()),
+            pa.field("offset",        pa.int64()),
+            pa.field("length",        pa.int64()),
+            pa.field("managed",       pa.bool_()),
+        ])),
+    ]), metadata={b"hudi_type": b"BLOB"}),
+])
+```
+
+#### VARIANT via DataFrame
+
+VARIANT writes via the DataFrame API require Spark 4.0+. Use native `VariantType`:
+
+```python
+from pyspark.sql.types import StructType, StructField, StringType, LongType, VariantType
+
+schema = StructType([
+    StructField("event_id", StringType()),
+    StructField("payload",  VariantType()),
+    StructField("ts",       LongType()),
+])
+```
+
+Alternatively, declare the underlying struct and tag the outer field with `hudi_type=VARIANT`. The
+struct must contain exactly two **non-nullable** `BinaryType` fields named `metadata` and `value`,
+otherwise the writer throws `IllegalArgumentException: Invalid variant schema structure`. The column
+round-trips as native `VariantType` on read:
+
+```python
+from pyspark.sql.types import StructType, StructField, StringType, LongType, BinaryType, MetadataBuilder
+
+variant_metadata = MetadataBuilder().putString("hudi_type", "VARIANT").build()
+variant_struct = StructType([
+    StructField("metadata", BinaryType(), nullable=False),
+    StructField("value",    BinaryType(), nullable=False),
+])
+schema = StructType([
+    StructField("event_id", StringType()),
+    StructField("payload",  variant_struct, metadata=variant_metadata),
+    StructField("ts",       LongType()),
+])
+```
+
+The simplest path for constructing VARIANT values from JSON strings is to build the DataFrame via
+SQL and then write it:
+
+```python
+df = spark.sql("""
+    SELECT 'evt_001' AS event_id,
+           parse_json('{"action": "click", "x": 120, "y": 450}') AS payload,
+           1000 AS ts
+""")
+df.write.format("hudi") \
+    .option("hoodie.table.name", "events") \
+    .option("hoodie.datasource.write.recordkey.field", "event_id") \
+    .option("hoodie.datasource.write.precombine.field", "ts") \
+    .mode("append") \
+    .save("/path/to/table")
+```
+
+#### Lance base file format via DataFrame
+
+Set `hoodie.table.base.file.format=lance` on the write options:
+
+```python
+(df.write
+   .format("hudi")
+   .option("hoodie.table.name", "my_ai_table")
+   .option("hoodie.datasource.write.recordkey.field", "id")
+   .option("hoodie.record.merger.impls",
+           "org.apache.hudi.DefaultSparkRecordMerger")
+   .option("hoodie.table.base.file.format", "lance")
+   .mode("overwrite")
+   .save("/path/to/my_ai_table"))
+```
+
+See [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format) for full Lance behavior
+and configs.
+
 ### Concurrency Control
 
 Following is an example of how to use `optimistic_concurrency_control` via Spark DataSource API.
@@ -467,6 +598,8 @@ The following advanced storage configuration options were added in Hudi 1.2.0:
 | Config | Default | Description |
 |---|---|---|
 | `hoodie.parquet.write.config.injector.class` | (none) | Fully-qualified class name of a custom `HoodieParquetConfigInjector` implementation. Use this to inject custom Parquet writer properties (e.g., disable dictionary encoding, set bloom filter sizes) without modifying the Hudi source. The implementing class must implement `org.apache.hudi.io.HoodieParquetConfigInjector`. |
+| `hoodie.table.base.file.format` | `parquet` | Base file format for the table. Accepts `parquet`, `orc`, `hfile`, or `lance`. See [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format) for the Lance-specific options. |
+
 
 ## Java Client
 We can use plain java to write to hudi tables. To use Java client we can refere [here](https://github.com/apache/hudi/blob/master/hudi-examples/hudi-examples-java/src/main/java/org/apache/hudi/examples/java/HoodieJavaWriteClientExample.java)

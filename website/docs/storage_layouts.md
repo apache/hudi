@@ -28,8 +28,100 @@ base file formats.
 * columnar formats for vectorized reads, columnar compression and efficient column based access for analytics/data science.
 * row-oriented avro files for fast scans for reading whole records.
 * random access optimized HFiles for efficient searching for indexed records (based on [SSTable](https://github.com/facebook/rocksdb/wiki/A-Tutorial-of-RocksDB-SST-formats) format)
+* [Lance](#lance-base-file-format) files for native `VECTOR` storage and AI/ML workloads (Spark-only).
 
 ![Row vs Columnar File Format](/assets/images/row-col-based-base-file-formats.png)
+
+#### Lance base file format {#lance-base-file-format}
+
+[Lance](https://lancedb.github.io/lance/) is a pluggable base file format selected per table via
+`hoodie.table.base.file.format = 'lance'`. Hudi manages the table layer
+(timeline, metadata, schema, file groups, table services); Lance is the on-disk file format for
+base files. Log files for MOR tables remain Avro; log compaction merges Avro logs into Lance base
+files.
+
+```sql
+-- COW
+CREATE TABLE my_ai_table (
+    id        STRING,
+    embedding VECTOR(768),
+    metadata  STRING
+) USING hudi
+TBLPROPERTIES (
+    primaryKey = 'id',
+    type = 'cow',
+    hoodie.record.merger.impls = 'org.apache.hudi.DefaultSparkRecordMerger',
+    hoodie.table.base.file.format = 'lance'
+);
+
+-- MOR (Lance base + Avro logs)
+CREATE TABLE my_ai_table_mor (
+    id        STRING,
+    embedding VECTOR(768),
+    metadata  STRING
+) USING hudi
+TBLPROPERTIES (
+    primaryKey = 'id',
+    type = 'mor',
+    hoodie.record.merger.impls = 'org.apache.hudi.DefaultSparkRecordMerger',
+    hoodie.table.base.file.format = 'lance'
+);
+```
+
+Hudi table services on Lance-backed tables behave as follows. Compaction merges Avro log files
+into Lance base files. Clustering reorganizes records into new Lance files. Cleaning removes
+obsolete Lance file slices. Bloom filter indexing is supported; column-stats and partition-stats
+indices are automatically disabled for Lance base files. See [Indexes](indexes.md) for the
+supported set.
+
+Type-specific behavior on Lance:
+
+- `VECTOR` columns are stored natively as Lance `FixedSizeList<Float32/Float64, dim>` (FLOAT or
+  DOUBLE only; `INT8` is not supported on Lance and fails fast at write).
+- `BLOB` columns default to `DESCRIPTOR` read mode, same as Parquet.
+- `VARIANT` columns are not supported on Lance. Writing a table with a VARIANT column to Lance
+  throws `HoodieNotSupportedException`. Use Parquet for VARIANT tables.
+- Complex types (`STRUCT`, `ARRAY`, `MAP`) are supported as Lance columns.
+- `populateMetaFields=false` is supported. User-defined key generators work normally with
+  Lance-backed tables.
+
+Lance is Spark-only. Reading a Lance-backed table from Flink, Hive, Presto, or Trino throws
+`HoodieValidationException`. Lance files are also non-splittable: a single Spark task reads one
+Lance base file.
+
+The Lance JAR is not bundled in the Hudi distribution. Add the Lance Spark bundle that matches
+your Spark version to the Spark classpath:
+
+| Spark version | Bundle (Maven Central) |
+|:--------------|:-----------------------|
+| Spark 3.4 | `org.lance:lance-spark-bundle-3.4_2.12:0.4.0` |
+| Spark 3.5 | `org.lance:lance-spark-bundle-3.5_2.12:0.4.0` |
+| Spark 4.0 | `org.lance:lance-spark-bundle-4.0_2.13:0.4.0` |
+| Spark 4.1 | `org.lance:lance-spark-bundle-4.1_2.13:0.4.0` |
+
+```bash
+export LANCE_BUNDLE_JAR=/path/to/lance-spark-bundle-3.5_2.12-0.4.0.jar
+spark-shell --jars $HUDI_BUNDLE_JAR,$LANCE_BUNDLE_JAR
+```
+
+##### File sizing and memory
+
+| Property | Default | Description |
+|:---------|:--------|:------------|
+| `hoodie.lance.max.file.size` | `125829120` (120 MiB) | Target file size in bytes for Lance base files (analogous to `hoodie.parquet.max.file.size`). |
+| `hoodie.lance.write.allocator.size.bytes` | `268435456` (256 MiB) | Maximum size of the Arrow child allocator used for buffering in-flight batch data. Increase for tables with very large `BLOB` columns. |
+| `hoodie.lance.write.flush.byte.watermark` | `100663296` (96 MiB) | Byte-size threshold at which the current write batch is flushed. Must be less than `hoodie.lance.write.allocator.size.bytes`. |
+
+Arrow uses power-of-2 buffer doubling; the default 256 MiB allocator accommodates a 128 MiB doubling
+step with headroom. The default 96 MiB watermark (~3/8 of the allocator cap) leaves room for offset
+and validity buffers to double without exceeding the allocator limit. For tables with large `BLOB`
+columns, increase the allocator and watermark together (keep watermark ≈ 3/8 of allocator).
+
+##### Mixed-format tables
+
+`hoodie.table.base.file.format` is set per table, so different tables in the same lakehouse can use
+different base file formats (Parquet, ORC, HFile, Lance) under a shared Hudi catalog and metadata
+table.
 
 ### Log Files 
 

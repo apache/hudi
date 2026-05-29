@@ -327,6 +327,27 @@ If the table is synced with `mode=hms` or `mode=hiveql` against HMS 4.x, Hudi lo
 
 **JDBC connection failures surface separately.** With `mode=jdbc`, Hudi opens the JDBC connection eagerly when the sync client is constructed — before any Thrift call is attempted. A bad JDBC URL, missing driver, or wrong credentials therefore fails at startup with `HoodieHiveSyncException: Failed to create HiveMetaStoreClient` and the underlying JDBC exception as the cause in the stack trace. This is a configuration-error path, not an HMS API mismatch, and is the same behavior as `mode=jdbc` against any HMS version.
 
+## Metastore mapping for VECTOR, BLOB, and VARIANT
+
+When the column types ([`VECTOR`](sql_ddl.md#vector), [`BLOB`](sql_ddl.md#blob),
+[`VARIANT`](sql_ddl.md#variant)) are synced to an external catalog, Hudi maps them to the catalog's
+native binary/struct types:
+
+| Type | Hive | BigQuery |
+|:-----|:-----|:---------|
+| `VECTOR` | `BINARY` | `BYTES` |
+| `BLOB` | `STRUCT<type:STRING, data:BINARY, reference:STRUCT<external_path:STRING, offset:BIGINT, length:BIGINT, managed:BOOLEAN>>` | Equivalent `STRUCT` fields |
+| `VARIANT` | `STRUCT<metadata:BINARY, value:BINARY>` | `STRUCT` with `metadata` and `value` fields (`BYTES`) |
+
+For `VECTOR`, the original `VECTOR(dim, elementType)` dimension and element-type metadata is
+preserved in `TBLPROPERTIES`/table descriptions so the table can be correctly reconstructed by
+Spark after a metastore round-trip.
+
+Engines that support `VARIANT` natively (Spark 4.0+, Flink 2.1+) read the table directly using the
+Parquet VARIANT annotation and do not go through the Hive/BigQuery metastore representation. The
+`read_blob()` SQL function is Spark-only. Hive and BigQuery queries on a BLOB column read the
+underlying struct directly.
+
 ## Writer Version Table Property
 
 Hudi 1.2.0 sync writes the table property `hudi_writer_version` (set to the Hudi version that last synced the table) to the Hive metastore entry on every sync. This allows tooling and metastore administrators to identify which Hudi version wrote a given table.
