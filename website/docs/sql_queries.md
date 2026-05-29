@@ -2,7 +2,7 @@
 title: SQL Queries
 summary: "In this page, we go over querying Hudi tables using SQL"
 toc: true
-last_modified_at: 2026-05-27T00:00:00-00:00
+last_modified_at: 2026-05-29T00:00:00-00:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -513,6 +513,13 @@ SELECT event_id, cast(payload as STRING) AS payload_json FROM events;
 ```
 
 VARIANT columns support `UPDATE`, `DELETE`, and `MERGE` on both COW and MOR tables.
+
+:::note Spark 3.x (3.4 / 3.5)
+`parse_json()`, `variant_get()`, and `cast(... as STRING)` require Spark 4.0+. On Spark 3.x,
+read raw binary buffers via the
+[backward-compat DDL](sql_ddl.md#reading-variant-from-spark-3x-backward-compatibility);
+predicate pushdown into VARIANT fields is not available.
+:::
 
 #### End-to-end example
 
