@@ -534,8 +534,8 @@ module.exports = {
               path: "next",
               banner: "unreleased",
             },
-            "1.1.1": {
-              label: "1.1.1",
+            "1.2.0": {
+              label: "1.2.0",
               path: "",
             },
           },
