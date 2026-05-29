@@ -288,7 +288,23 @@ public class ITTestVariantFlinkTableServices {
     assertEquals(expectedId, row.getField(0));
     assertEquals(expectedName, row.getField(1));
     assertEquals(expectedTs, row.getField(3));
-    DataTypeAdapterTestUtils.assertVariantMatchesParseJson(tEnv, row.getField(2), jsonLiteral);
+    assertVariantMatchesParseJson(tEnv, row.getField(2), jsonLiteral);
+  }
+
+  private static void assertVariantMatchesParseJson(
+      TableEnvironment tEnv, Object actual, String jsonLiteral) throws Exception {
+    DataTypeAdapterTestUtils.assertAsBinaryVariant(actual);
+    String escaped = jsonLiteral.replace("'", "''");
+    Object expected =
+        CollectionUtil.iteratorToList(
+                tEnv.executeSql("SELECT PARSE_JSON('" + escaped + "')").collect())
+            .get(0)
+            .getField(0);
+    DataTypeAdapterTestUtils.assertAsBinaryVariant(expected);
+    assertArrayEquals(
+        DataTypeAdapter.getVariantMetadata(expected), DataTypeAdapter.getVariantMetadata(actual));
+    assertArrayEquals(
+        DataTypeAdapter.getVariantValue(expected), DataTypeAdapter.getVariantValue(actual));
   }
 
   /**

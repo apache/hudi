@@ -367,7 +367,18 @@ public class ITTestVariantCrossEngineCompatibility {
 
   private static void assertVariantMatchesParseJson(
       TableEnvironment tEnv, Object actual, String jsonLiteral) throws Exception {
-    DataTypeAdapterTestUtils.assertVariantMatchesParseJson(tEnv, actual, jsonLiteral);
+    DataTypeAdapterTestUtils.assertAsBinaryVariant(actual);
+    String escaped = jsonLiteral.replace("'", "''");
+    Object expected =
+        CollectionUtil.iteratorToList(
+                tEnv.executeSql("SELECT PARSE_JSON('" + escaped + "')").collect())
+            .get(0)
+            .getField(0);
+    DataTypeAdapterTestUtils.assertAsBinaryVariant(expected);
+    assertArrayEquals(
+        DataTypeAdapter.getVariantMetadata(expected), DataTypeAdapter.getVariantMetadata(actual));
+    assertArrayEquals(
+        DataTypeAdapter.getVariantValue(expected), DataTypeAdapter.getVariantValue(actual));
   }
 
   private static void assertExpectedSpark40VariantBytes(Object variantObject, String testDescription) {
