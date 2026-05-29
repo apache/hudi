@@ -197,8 +197,10 @@ Engine support for `VARIANT`:
 
 VARIANT columns are not supported on Lance-backed tables.
 
-Optional **shredding** extracts hot fields into typed columnar storage; see
-[Schema Evolution → VARIANT shredding](schema_evolution.md#variant-shredding).
+In 1.2.0, only unshredded VARIANT is exposed at the user-facing level: every Spark/Hudi schema
+conversion produces an unshredded VARIANT (two binary fields, `metadata` and `value`). The shredded
+variant write path exists in the engine but has no DDL, table-property, or session-config to
+enable it.
 
 ##### Lance base file format
 

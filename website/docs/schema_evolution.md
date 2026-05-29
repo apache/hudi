@@ -312,13 +312,9 @@ scala> spark.sql("select rowId, partitionId, orderingField, name, versionId, int
 ```
 
 
-## VARIANT shredding {#variant-shredding}
+## VARIANT storage {#variant-shredding}
 
-[`VARIANT`](sql_ddl.md#variant) columns are stored as two binary fields (`metadata`, `value`).
-Shredding extracts frequently-accessed fields from the binary `value` into typed columnar storage
-at write time; queries on shredded fields read the typed column directly.
-
-**Unshredded** (default):
+[`VARIANT`](sql_ddl.md#variant) columns are stored on Parquet as two binary fields:
 
 ```
 group variant {
@@ -327,37 +323,10 @@ group variant {
 }
 ```
 
-**Shredded (scalar)** — a known field extracted into a typed sub-column:
-
-```
-group variant {
-  required binary metadata;
-  optional binary value;
-  optional int64  typed_value;   -- extracted scalar field
-}
-```
-
-**Shredded (object)** — multiple known fields, each as a typed sub-column:
-
-```
-group variant {
-  required binary metadata;
-  optional binary value;
-  optional group typed_value {
-    optional group action {
-      optional binary value;
-      optional string typed_value;   -- "click", "purchase", ...
-    }
-    optional group total {
-      optional binary value;
-      optional double typed_value;   -- 59.99
-    }
-  }
-}
-```
-
-Each known field gets its own sub-column. Fields not present in a given row fall back to the binary
-`value` field. Shredding is determined at write time from the schema definition.
+In 1.2.0, all user-facing code paths produce this unshredded layout. The shredded layout (where
+known fields are extracted into typed sub-columns via `typed_value` per the Parquet variant
+shredding spec) is present in the writer but not yet enabled from DDL, table properties, or
+session configs.
 
 ## Schema evolution on Lance-backed tables {#lance-schema-evolution}
 

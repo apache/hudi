@@ -107,8 +107,7 @@ structured data. Hudi 1.2.0 adds three column types and a pluggable file format 
   [`hudi_vector_search`](sql_queries.md#vector-similarity-search) TVF.
 - [`BLOB`](sql_ddl.md#blob): binary column with `INLINE` and `OUT_OF_LINE` storage. Raw bytes are
   materialized by [`read_blob()`](sql_queries.md#reading-blob-columns).
-- [`VARIANT`](sql_ddl.md#variant): semi-structured (JSON-like) column with optional
-  [shredding](schema_evolution.md#variant-shredding) for typed columnar access.
+- [`VARIANT`](sql_ddl.md#variant): semi-structured (JSON-like) column (unshredded layout in 1.2.0).
 - [Lance base file format](storage_layouts.md#lance-base-file-format): Spark-only base file format
   that stores `VECTOR` natively as `FixedSizeList`.
 
