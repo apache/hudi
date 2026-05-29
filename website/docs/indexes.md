@@ -52,11 +52,6 @@ the [metadata table](metadata.md#metadata-table), significantly improving the ef
 ![Indexes](/assets/images/hudi-stack-indexes.png)
 <p align = "center">Figure: Indexes in Hudi</p>
 
-:::note
-On tables using the [Lance base file format](storage_layouts.md#lance-base-file-format), bloom
-filter indexing is supported. Column-stats and partition-stats indices are automatically disabled.
-:::
-
 ### Bloom Filters
 
 [Bloom filter](https://github.com/apache/hudi/blob/46f41d186c6c84a6af2c54a907ff2736b6013e15/rfc/rfc-37/rfc-37.md) indexes as *bloom_filter* partition in the metadata table.
