@@ -73,6 +73,30 @@ together to build out the platform. Such an open platform is also essential for 
 - Along with compatibility with other open table formats like [Apache Iceberg](https://iceberg.apache.org/)/[Delta Lake](https://delta.io/), and catalog sync services to various data catalogs, Hudi is one of the most open choices for your data foundation.
 
 
+## Efficient Data lakes with Incremental Processing
+
+Organizations spend close to 50% of their budgets on data pipelines, that transform and prepare data for consumption. As data volumes increase, so does the cost of running these pipelines.
+Hudi has a unique combination of features that make it a very efficient choice for data pipelines, by introducing a new paradigm for incremental processing of data. The current state-of-the-art 
+prescribes two completely different data stacks for data processing. Batch processing stack stores data as files/objects on or cloud storage, processed by engines such as Spark, Hive and so on. On the other hand, the 
+stream processing stack stores data as events in independent storage systems like Kafka, processed by engines such as Flink. Even as processing engines provide unified APIs for these two styles of data processing, 
+the underlying storage differences make it impossible to use one stack for the other. Hudi offers a unified data lakehouse stack that can be used for both batch and streaming processing models. 
+
+Hudi introduces "incremental processing" to bring stream processing model (i.e. processing only newly added or changed data every X seconds/minutes) on top of batch storage (i.e. data lakehouse built on open data formats
+on the cloud), combining the best of both worlds. Incremental processing requires the ability to write changes quickly into tables using indexes, while also making the data available for querying efficiently.
+Another requirement is to be able to efficiently compute the exact set of changes to a table between two points in time for pipelines to efficiently only process new data each run, without having to scan the entire table.
+For the more curious, a more detailed explanation of the benefits of _incremental processing_ can be found [here](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop).
+
+### Why Hudi?
+
+- By bringing streaming primitives to data lake storage, Hudi opens up new possibilities by being able to ingest/process data within few minutes and eliminate need for specialized real-time analytics systems.
+- Hudi groups records into file groups, with updates being tied to the same file group, limiting the amount of data scanned for the query i.e only log files within the same file group need to be scanned for a given base file
+- Hudi adds low-overhead record level metadata and supplemental logging of metadata to compute CDC streams, to track how a given changes/moves within the table, in the face of writes and background table services. For e.g. Hudi is able to preserve change history even if many small files are combined into another file due to clustering 
+  and does not have any dependency on how table snapshots are maintained. In snapshot based approaches to tracking metadata, expiring a single snapshot can lead to loss of change history.
+- Hudi can encode updates natively without being forced to turn them into deletes and inserts, which tends to continuously redistribute records randomly across files, reducing data skipping efficiency. Hudi associates a given delete or update to the original file group that the record was inserted to (or latest clustered to), which preserves the spatial locality of clustered data or temporal order in which record were inserted. As a result, queries that filter on time (e.g querying events/logs by time window), can efficiently only scan few file groups to return results.
+- Building on top of this, Hudi also supports partial update encoding for encoding partial updates efficiently into delta logs. For columnar data, this means write/merge costs are proportional to number of columns in a merge/update statement.
+- The idea with MoR is to reduce write costs/latencies, by writing delta logs (Hudi), positional delete files (iceberg). Hudi employs about 4 types of indexing to quickly locate the file that the updates records belong to. Formats relying on a scan of the table can quickly bottleneck on write performance. e.g updating 1GB into a 1TB table every 5-10 mins.
+- Hudi is the only lakehouse storage system that natively supports event time ordering and late data handling for streaming workloads where MoR is employed heavily. 
+
 ## AI Lakehouse
 
 AI and ML workloads often need to store and query embeddings, raw binary objects (images, PDFs,
@@ -154,30 +178,6 @@ Hudi tables are readable by Spark, with hudi-rs (Python/Rust) and other engines 
 underlying Parquet representation directly. For engine-specific constraints, see
 [Using Flink](ingestion_flink.md#engine-constraints-for-types) and the
 [BigQuery / Hive metastore mappings](syncing_metastore.md#metastore-mapping-for-vector-blob-and-variant).
-
-## Efficient Data lakes with Incremental Processing
-
-Organizations spend close to 50% of their budgets on data pipelines, that transform and prepare data for consumption. As data volumes increase, so does the cost of running these pipelines.
-Hudi has a unique combination of features that make it a very efficient choice for data pipelines, by introducing a new paradigm for incremental processing of data. The current state-of-the-art 
-prescribes two completely different data stacks for data processing. Batch processing stack stores data as files/objects on or cloud storage, processed by engines such as Spark, Hive and so on. On the other hand, the 
-stream processing stack stores data as events in independent storage systems like Kafka, processed by engines such as Flink. Even as processing engines provide unified APIs for these two styles of data processing, 
-the underlying storage differences make it impossible to use one stack for the other. Hudi offers a unified data lakehouse stack that can be used for both batch and streaming processing models. 
-
-Hudi introduces "incremental processing" to bring stream processing model (i.e. processing only newly added or changed data every X seconds/minutes) on top of batch storage (i.e. data lakehouse built on open data formats
-on the cloud), combining the best of both worlds. Incremental processing requires the ability to write changes quickly into tables using indexes, while also making the data available for querying efficiently.
-Another requirement is to be able to efficiently compute the exact set of changes to a table between two points in time for pipelines to efficiently only process new data each run, without having to scan the entire table.
-For the more curious, a more detailed explanation of the benefits of _incremental processing_ can be found [here](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop).
-
-### Why Hudi?
-
-- By bringing streaming primitives to data lake storage, Hudi opens up new possibilities by being able to ingest/process data within few minutes and eliminate need for specialized real-time analytics systems.
-- Hudi groups records into file groups, with updates being tied to the same file group, limiting the amount of data scanned for the query i.e only log files within the same file group need to be scanned for a given base file
-- Hudi adds low-overhead record level metadata and supplemental logging of metadata to compute CDC streams, to track how a given changes/moves within the table, in the face of writes and background table services. For e.g. Hudi is able to preserve change history even if many small files are combined into another file due to clustering 
-  and does not have any dependency on how table snapshots are maintained. In snapshot based approaches to tracking metadata, expiring a single snapshot can lead to loss of change history.
-- Hudi can encode updates natively without being forced to turn them into deletes and inserts, which tends to continuously redistribute records randomly across files, reducing data skipping efficiency. Hudi associates a given delete or update to the original file group that the record was inserted to (or latest clustered to), which preserves the spatial locality of clustered data or temporal order in which record were inserted. As a result, queries that filter on time (e.g querying events/logs by time window), can efficiently only scan few file groups to return results.
-- Building on top of this, Hudi also supports partial update encoding for encoding partial updates efficiently into delta logs. For columnar data, this means write/merge costs are proportional to number of columns in a merge/update statement.
-- The idea with MoR is to reduce write costs/latencies, by writing delta logs (Hudi), positional delete files (iceberg). Hudi employs about 4 types of indexing to quickly locate the file that the updates records belong to. Formats relying on a scan of the table can quickly bottleneck on write performance. e.g updating 1GB into a 1TB table every 5-10 mins.
-- Hudi is the only lakehouse storage system that natively supports event time ordering and late data handling for streaming workloads where MoR is employed heavily. 
 
 
 
