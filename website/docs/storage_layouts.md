@@ -68,24 +68,6 @@ TBLPROPERTIES (
 );
 ```
 
-The layering:
-
-```
-┌───────────────────────────────────┐
-│         Hudi table layer          │
-│  Timeline, metadata, indexing,    │
-│  transactions, schema evolution   │
-├───────────────────────────────────┤
-│       File group / file slice     │
-│  (same Hudi concepts as Parquet)  │
-├───────────────────────────────────┤
-│     Lance data files (.lance)     │
-│  Columnar storage, fragment-based │
-├───────────────────────────────────┤
-│   Storage (S3, GCS, HDFS, FS)     │
-└───────────────────────────────────┘
-```
-
 Hudi table services on Lance-backed tables behave as follows. Compaction merges Avro log files
 into Lance base files. Clustering reorganizes records into new Lance files. Cleaning removes
 obsolete Lance file slices. Bloom filter indexing is supported; column-stats and partition-stats
