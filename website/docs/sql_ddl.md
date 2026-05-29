@@ -190,19 +190,6 @@ supported. Dimension and element type cannot be changed via schema evolution aft
 a typed array. On Lance-backed tables, VECTOR is stored natively as
 `FixedSizeList<Float32/Float64, dim>`; only `FLOAT` and `DOUBLE` element types are accepted on Lance.
 
-**DataFrame API.** When writing via DataFrame, you must stamp the `hudi_type` metadata on the column
-yourself:
-
-```python
-import pyarrow as pa
-
-schema = pa.schema([
-    pa.field("product_id", pa.string()),
-    pa.field("embedding",  pa.list_(pa.float32()),
-             metadata={b"hudi_type": b"VECTOR(768)"}),
-])
-```
-
 Query VECTOR columns with the [`hudi_vector_search` TVF](sql_queries.md#vector-similarity-search).
 
 **Engine constraints.** Flink cannot decode VECTOR columns (the underlying Parquet
