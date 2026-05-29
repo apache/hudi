@@ -9,7 +9,7 @@ The source directory is named `hudi-trino-plugin/`; the Maven artifactId is `hud
 Excluded from default builds. Activate the `hudi-trino` Maven profile:
 
 ```
-mvn -Phudi-trino -pl hudi-trino-plugin install
+mvn -Phudi-trino -pl hudi-trino-plugin install -Dmaven.test.skip=true
 ```
 
 Requires JDK 25 (enforced via `maven-enforcer-plugin`).
