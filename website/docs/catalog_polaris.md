@@ -6,8 +6,8 @@ toc_max_heading_level: 4
 keywords: [hudi, polaris, catalog, integration]
 ---
 
-:::warning Polaris Integration Status
-Hudi 1.1.0 added support for Apache Polaris catalog integration (see [PR #13558](https://github.com/apache/hudi/pull/13558)). However, a Polaris release that includes [this PR](https://github.com/apache/polaris/pull/1862) is pending before this integration to be available.
+:::note Polaris Integration Status
+The Polaris integration is available since Polaris 1.3.0 and Hudi 1.1.1.
 :::
 
 ## Overview

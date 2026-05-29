@@ -42,8 +42,8 @@ becomes _REPLACE_COMMIT_ in completed state. Compactions complete as _COMMIT_ ac
 may map to the same action on the timeline.
 
 ### State Transitions
-Actions go through state transitions on the timeline, with each transition recorded by a file of the pattern `<requsted instant>.<action>.<state>`(for other states) or 
-`<requsted instant>_<completed instant>.<action>` (for COMPLETED state). Hudi guarantees that the state transitions are atomic and timeline consistent based on the instant time.
+Actions go through state transitions on the timeline, with each transition recorded by a file of the pattern `<requested instant>.<action>.<state>`(for other states) or 
+`<requested instant>_<completed instant>.<action>` (for COMPLETED state). Hudi guarantees that the state transitions are atomic and timeline consistent based on the instant time.
 Atomicity is achieved by relying on the atomic operations on the underlying storage (e.g. PUT calls to S3/Cloud Storage).
 
 Valid state transitions are as follows:
