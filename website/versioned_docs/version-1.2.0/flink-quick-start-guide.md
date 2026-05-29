@@ -51,7 +51,7 @@ values={[
 >
 <TabItem value="flinksql">
 
-We use the [Flink SQL Client](https://ci.apache.org/projects/flink/flink-docs-release-1.13/docs/dev/table/sqlclient/) because it's a good
+We use the [Flink SQL Client](https://nightlies.apache.org/flink/flink-docs-release-1.20/docs/dev/table/sqlclient/) because it's a good
 quick-start tool for SQL users.
 
 ### Start Flink SQL Client

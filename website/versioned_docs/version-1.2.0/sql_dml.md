@@ -386,7 +386,7 @@ UPDATE hudi_table SET price = price * 2, ts = 1111 WHERE id = 1;
 ```
 
 :::note Key requirements
-Update query only work with batch excution mode.
+Update query only work with batch execution mode.
 :::
 
 ### Delete From
@@ -400,13 +400,8 @@ DELETE FROM tableIdentifier [ WHERE boolExpression ]
 DELETE FROM hudi_table WHERE price < 100;
 ```
 
-
-```sql
-DELETE FROM hudi_table WHERE price < 100;
-```
-
 :::note Key requirements
-Delete query only work with batch excution mode.
+Delete query only work with batch execution mode.
 :::
 
 ### Lookup Joins
