@@ -312,37 +312,6 @@ scala> spark.sql("select rowId, partitionId, orderingField, name, versionId, int
 ```
 
 
-## VARIANT storage {#variant-shredding}
-
-[`VARIANT`](sql_ddl.md#variant) columns are stored on Parquet as two binary fields:
-
-```
-group variant {
-  required binary metadata;
-  required binary value;
-}
-```
-
-In 1.2.0, all user-facing code paths produce this unshredded layout. The shredded layout (where
-known fields are extracted into typed sub-columns via `typed_value` per the Parquet variant
-shredding spec) is present in the writer but not yet enabled from DDL, table properties, or
-session configs.
-
-## Schema evolution on Lance-backed tables {#lance-schema-evolution}
-
-[Lance](storage_layouts.md#lance-base-file-format) supports the following schema changes at the Hudi
-layer:
-
-| Operation | Lance |
-|:----------|:------|
-| Add column | Supported |
-| Rename column | Supported |
-| Drop column | Supported |
-| Promote `FLOAT` → `DOUBLE` | **Not supported** (works on Parquet) |
-| Promote `FLOAT` → `STRING` | **Not supported** (works on Parquet) |
-
-Attempting an unsupported promotion on a Lance table fails at write time.
-
 ## Related Resources
 <h3>Videos</h3>
 
