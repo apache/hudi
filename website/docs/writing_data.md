@@ -420,9 +420,9 @@ Then any record you want to delete you can mark `_hoodie_is_deleted` as true:
 
 ### Writing VECTOR, BLOB, and VARIANT Columns
 
-The 1.2.0 column types participate in writes the same way as standard SQL types. SQL `INSERT`
-examples for all three live in [SQL DML](sql_dml.md#inserting-vector-columns); the DataFrame API
-equivalents are below.
+`VECTOR`, `BLOB`, and `VARIANT` columns participate in writes the same way as standard SQL types.
+SQL `INSERT` examples for all three live in [SQL DML](sql_dml.md#inserting-vector-columns); the
+DataFrame API equivalents are below.
 
 #### VECTOR via DataFrame
 

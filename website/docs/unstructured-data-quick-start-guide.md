@@ -6,7 +6,7 @@ toc: true
 last_modified_at: 2026-04-29T00:00:00-00:00
 ---
 
-This guide walks through the 1.2.0 `VECTOR` and `BLOB` types end to end. You will store image
+This guide walks through the `VECTOR` and `BLOB` column types end to end. You will store image
 embeddings (`VECTOR`) and raw image bytes (`BLOB`) in a single Hudi table, then run a top-K
 similarity search and materialize the matching images in one SQL query.
 

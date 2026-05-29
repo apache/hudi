@@ -21,7 +21,7 @@ tripsDF.where(tripsDF.fare > 20.0).show()
 
 ### VECTOR, BLOB, and VARIANT Columns
 
-Hudi exposes two Spark SQL extensions for reading the 1.2.0 column types:
+Hudi exposes two Spark SQL extensions for reading the new column types:
 
 - [`hudi_vector_search`](sql_queries.md#vector-similarity-search) runs top-K similarity search over
   a [`VECTOR`](sql_ddl.md#vector) column.

@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS hudi_table (
 
 #### Column types
 
-In addition to standard SQL types, Hudi 1.2.0 supports the following column types:
+In addition to standard SQL types, Hudi supports the following column types:
 
 ##### `VECTOR(dim[, elementType])` {#vector}
 
@@ -212,10 +212,9 @@ Engine support for `VARIANT`:
 
 VARIANT columns are not supported on Lance-backed tables.
 
-In 1.2.0, only unshredded VARIANT is exposed at the user-facing level: every Spark/Hudi schema
-conversion produces an unshredded VARIANT (two binary fields, `metadata` and `value`). The shredded
-variant write path exists in the engine but has no DDL, table-property, or session-config to
-enable it.
+Only unshredded VARIANT is exposed at the user-facing level: every Spark/Hudi schema conversion
+produces an unshredded VARIANT (two binary fields, `metadata` and `value`). The shredded variant
+write path exists in the engine but has no DDL, table-property, or session-config to enable it.
 
 ##### Lance base file format
 
@@ -1199,10 +1198,10 @@ WITH (
 | null          |              | not supported |
 | object        |              | not supported |
 
-### Unstructured and semi-structured types (1.2.0)
+### Unstructured and semi-structured types
 
-In addition to the standard SQL types above, Hudi 1.2.0 supports three column types covered in
-detail in the [Column types](#column-types) section earlier on this page:
+In addition to the standard SQL types above, Hudi supports three column types covered in detail in
+the [Column types](#column-types) section earlier on this page:
 
 - [`VECTOR(dim[, elementType])`](#vector): fixed-dimension embedding vector.
 - [`BLOB`](#blob): binary column with `INLINE` and `OUT_OF_LINE` storage.

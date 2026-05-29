@@ -101,13 +101,13 @@ For the more curious, a more detailed explanation of the benefits of _incrementa
 
 AI and ML workloads often need to store and query embeddings, raw binary objects (images, PDFs,
 audio, video), and semi-structured payloads (LLM outputs, model configs, API responses) alongside
-structured data. Hudi 1.2.0 adds three column types and a pluggable file format for these payloads:
+structured data. Hudi provides three column types and a pluggable file format for these payloads:
 
 - [`VECTOR`](sql_ddl.md#vector): fixed-dimension embedding column. Query with the
   [`hudi_vector_search`](sql_queries.md#vector-similarity-search) TVF.
 - [`BLOB`](sql_ddl.md#blob): binary column with `INLINE` and `OUT_OF_LINE` storage. Raw bytes are
   materialized by [`read_blob()`](sql_queries.md#reading-blob-columns).
-- [`VARIANT`](sql_ddl.md#variant): semi-structured (JSON-like) column (unshredded layout in 1.2.0).
+- [`VARIANT`](sql_ddl.md#variant): semi-structured (JSON-like) column (unshredded layout).
 - [Lance base file format](storage_layouts.md#lance-base-file-format): Spark-only base file format
   that stores `VECTOR` natively as `FixedSizeList`.
 
