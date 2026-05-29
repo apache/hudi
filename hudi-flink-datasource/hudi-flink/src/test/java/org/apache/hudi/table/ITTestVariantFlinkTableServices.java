@@ -260,7 +260,7 @@ public class ITTestVariantFlinkTableServices {
             + "  'table.type' = 'COPY_ON_WRITE',"
             + "  '%s' = '%s',"
             + "  '%s' = 'partition',"
-            + "  '%s' = 'true',"
+            + "  '%s' = 'false',"
             + "  '%s' = 'false',"
             + "  '%s' = '%d',"
             + "  '%s' = '1',"
@@ -317,6 +317,7 @@ public class ITTestVariantFlinkTableServices {
     FlinkClusteringConfig cfg = new FlinkClusteringConfig();
     cfg.path = tablePath;
     cfg.schedule = true;
+    cfg.clusteringDeltaCommits = clusteringDeltaCommits;
     Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
     conf.set(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
@@ -324,9 +325,11 @@ public class ITTestVariantFlinkTableServices {
     conf.set(
         FlinkOptions.PARTITION_PATH_FIELD,
         HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig()).orElse(""));
-    // Match ITTestHoodieFlinkClustering: batch INSERT does not defer async clustering to a separate job;
-    // if the sink runs async clustering, commits since last clustering drop to 0 and scheduleClustering no-ops.
+    // INSERT pipeline must not schedule/execute clustering (OptionsResolver.needsScheduleClustering /
+    // needsAsyncClustering). Otherwise the sink consumes the delta window or leaves clustering on the
+    // timeline and standalone scheduleClustering returns empty.
     conf.set(FlinkOptions.CLUSTERING_ASYNC_ENABLED, false);
+    conf.set(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
     conf.set(FlinkOptions.CLUSTERING_DELTA_COMMITS, clusteringDeltaCommits);
     CompactionUtil.setAvroSchema(conf, metaClient);
 
