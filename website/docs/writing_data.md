@@ -418,57 +418,6 @@ Then any record you want to delete you can mark `_hoodie_is_deleted` as true:
 {"ts": 0.0, "uuid": "19tdb048-c93e-4532-adf9-f61ce6afe10", "rank": 1045, "partitionpath": "americas/brazil/sao_paulo", "_hoodie_is_deleted" : true}
 ```
 
-### Concurrency Control
-
-Following is an example of how to use `optimistic_concurrency_control` via Spark DataSource API.
-
-Read more in-depth details about concurrency control in the [concurrency control concepts](concurrency_control.md) section.
-
-```java
-inputDF.write.format("hudi")
-       .options(getQuickstartWriteConfigs)
-       .option("hoodie.table.ordering.fields", "ts")
-       .option("hoodie.cleaner.policy.failed.writes", "LAZY")
-       .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
-       .option("hoodie.write.lock.zookeeper.url", "zookeeper")
-       .option("hoodie.write.lock.zookeeper.port", "2181")
-       .option("hoodie.write.lock.zookeeper.lock_key", "test_table")
-       .option("hoodie.write.lock.zookeeper.base_path", "/test")
-       .option("hoodie.datasource.write.recordkey.field", "uuid")
-       .option("hoodie.datasource.write.partitionpath.field", "partitionpath")
-       .option("hoodie.table.name", tableName)
-       .mode(Overwrite)
-       .save(basePath)
-```
-
-### Rolling Extra Metadata
-
-Rolling extra metadata allows you to automatically carry forward selected commit metadata keys to every subsequent commit and clean instant without having to walk the full timeline. This is particularly useful for persisting checkpoint information such as Kafka offsets or Flink checkpoints across commits.
-
-| Config | Default | Description |
-|---|---|---|
-| `hoodie.write.rolling.metadata.keys` | `""` (disabled) | Comma-separated list of extra metadata keys to carry forward to each new commit and clean instant. Values are read from recent completed instants and written into the new commit metadata, so they remain accessible without walking the timeline. New values override old ones. Only applies to data table commits and clean instants. |
-| `hoodie.write.rolling.metadata.timeline.lookback.commits` | `10` | Maximum number of completed instants to walk back when searching for the configured rolling metadata keys. Higher values improve resilience at a small performance cost. |
-
-**Example:**
-
-```java
-inputDF.write.format("hudi")
-       .option("hoodie.write.rolling.metadata.keys", "kafka.offset.partition.0,kafka.offset.partition.1")
-       .option("hoodie.write.rolling.metadata.timeline.lookback.commits", "10")
-       // ... other options
-       .save(basePath)
-```
-
-### Advanced Storage Options
-
-The following advanced storage configuration options were added in Hudi 1.2.0:
-
-| Config | Default | Description |
-|---|---|---|
-| `hoodie.parquet.write.config.injector.class` | (none) | Fully-qualified class name of a custom `HoodieParquetConfigInjector` implementation. Use this to inject custom Parquet writer properties (e.g., disable dictionary encoding, set bloom filter sizes) without modifying the Hudi source. The implementing class must implement `org.apache.hudi.io.HoodieParquetConfigInjector`. |
-| `hoodie.table.base.file.format` | `parquet` | Base file format for the table. Accepts `parquet`, `orc`, `hfile`, or `lance`. See [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format) for the Lance-specific options. |
-
 ### Writing VECTOR, BLOB, and VARIANT Columns
 
 The 1.2.0 column types participate in writes the same way as standard SQL types. SQL `INSERT`
@@ -598,6 +547,58 @@ Set `hoodie.table.base.file.format=lance` on the write options:
 
 See [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format) for full Lance behavior
 and configs.
+
+### Concurrency Control
+
+Following is an example of how to use `optimistic_concurrency_control` via Spark DataSource API.
+
+Read more in-depth details about concurrency control in the [concurrency control concepts](concurrency_control.md) section.
+
+```java
+inputDF.write.format("hudi")
+       .options(getQuickstartWriteConfigs)
+       .option("hoodie.table.ordering.fields", "ts")
+       .option("hoodie.cleaner.policy.failed.writes", "LAZY")
+       .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
+       .option("hoodie.write.lock.zookeeper.url", "zookeeper")
+       .option("hoodie.write.lock.zookeeper.port", "2181")
+       .option("hoodie.write.lock.zookeeper.lock_key", "test_table")
+       .option("hoodie.write.lock.zookeeper.base_path", "/test")
+       .option("hoodie.datasource.write.recordkey.field", "uuid")
+       .option("hoodie.datasource.write.partitionpath.field", "partitionpath")
+       .option("hoodie.table.name", tableName)
+       .mode(Overwrite)
+       .save(basePath)
+```
+
+### Rolling Extra Metadata
+
+Rolling extra metadata allows you to automatically carry forward selected commit metadata keys to every subsequent commit and clean instant without having to walk the full timeline. This is particularly useful for persisting checkpoint information such as Kafka offsets or Flink checkpoints across commits.
+
+| Config | Default | Description |
+|---|---|---|
+| `hoodie.write.rolling.metadata.keys` | `""` (disabled) | Comma-separated list of extra metadata keys to carry forward to each new commit and clean instant. Values are read from recent completed instants and written into the new commit metadata, so they remain accessible without walking the timeline. New values override old ones. Only applies to data table commits and clean instants. |
+| `hoodie.write.rolling.metadata.timeline.lookback.commits` | `10` | Maximum number of completed instants to walk back when searching for the configured rolling metadata keys. Higher values improve resilience at a small performance cost. |
+
+**Example:**
+
+```java
+inputDF.write.format("hudi")
+       .option("hoodie.write.rolling.metadata.keys", "kafka.offset.partition.0,kafka.offset.partition.1")
+       .option("hoodie.write.rolling.metadata.timeline.lookback.commits", "10")
+       // ... other options
+       .save(basePath)
+```
+
+### Advanced Storage Options
+
+The following advanced storage configuration options were added in Hudi 1.2.0:
+
+| Config | Default | Description |
+|---|---|---|
+| `hoodie.parquet.write.config.injector.class` | (none) | Fully-qualified class name of a custom `HoodieParquetConfigInjector` implementation. Use this to inject custom Parquet writer properties (e.g., disable dictionary encoding, set bloom filter sizes) without modifying the Hudi source. The implementing class must implement `org.apache.hudi.io.HoodieParquetConfigInjector`. |
+| `hoodie.table.base.file.format` | `parquet` | Base file format for the table. Accepts `parquet`, `orc`, `hfile`, or `lance`. See [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format) for the Lance-specific options. |
+
 
 ## Java Client
 We can use plain java to write to hudi tables. To use Java client we can refere [here](https://github.com/apache/hudi/blob/master/hudi-examples/hudi-examples-java/src/main/java/org/apache/hudi/examples/java/HoodieJavaWriteClientExample.java)
