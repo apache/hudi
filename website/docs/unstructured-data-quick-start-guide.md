@@ -1,5 +1,5 @@
 ---
-title: "Unstructured Data Quick Start Guide"
+title: "Unstructured Data Quick Start"
 keywords: [ hudi, ai, machine learning, vector search, embeddings, unstructured data, blob, image search, similarity]
 summary: "Store embeddings and images in a Hudi table, then find similar images with hudi_vector_search and read_blob"
 toc: true
@@ -254,8 +254,8 @@ plt.savefig("hudi_vector_search_results.png", dpi=150)
 | Topic | Link |
 |:------|:-----|
 | Full interactive notebook | [00_main_demo.ipynb](https://github.com/apache/hudi/blob/master/hudi-examples/hudi-examples-spark/src/test/python/vector_blob_demo/notebooks/00_main_demo.ipynb) |
-| VECTOR type reference | [VECTOR in SQL DDL](sql_ddl.md#vector) + [`hudi_vector_search` in SQL Queries](sql_queries.md#vector-similarity-search) |
-| BLOB type reference | [BLOB in SQL DDL](sql_ddl.md#blob) + [`read_blob()` in SQL Queries](sql_queries.md#reading-blob-columns) |
-| VARIANT type | [VARIANT in SQL DDL](sql_ddl.md#variant) |
-| Lance file format | [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format) |
+| VECTOR type reference | [VECTOR in SQL DDL](sql_ddl.md#vector) · [SQL DML](sql_dml.md#inserting-vector-columns) · [DataFrame writes](writing_data.md#vector-via-dataframe) · [`hudi_vector_search` in SQL Queries](sql_queries.md#vector-similarity-search) |
+| BLOB type reference | [BLOB in SQL DDL](sql_ddl.md#blob) · [SQL DML](sql_dml.md#inserting-blob-columns) · [DataFrame writes](writing_data.md#blob-via-dataframe) · [`read_blob()` in SQL Queries](sql_queries.md#reading-blob-columns) |
+| VARIANT type | [VARIANT in SQL DDL](sql_ddl.md#variant) · [SQL DML](sql_dml.md#inserting-variant-columns) · [DataFrame writes](writing_data.md#variant-via-dataframe) · [Querying VARIANT](sql_queries.md#querying-variant-columns) |
+| Lance file format | [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format) · [DataFrame writes](writing_data.md#lance-base-file-format-via-dataframe) |
 | AI lakehouse use cases | [Use Cases → AI Lakehouse](use_cases.md#ai-lakehouse) |
