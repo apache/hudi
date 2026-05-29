@@ -1180,9 +1180,9 @@ WITH (
 | array         |  array       |               |
 | map           |  map         |               |
 | struct        |  struct      |               |
-| `VECTOR(dim[, elementType])` | vector | Fixed-dimension embedding column. See [Create table with unstructured and semi-structured column types](#create-table-with-unstructured-and-semi-structured-column-types). |
-| `BLOB` | blob | Binary column with `INLINE` / `OUT_OF_LINE` storage. See [Create table with unstructured and semi-structured column types](#create-table-with-unstructured-and-semi-structured-column-types). |
-| `VARIANT` | variant | Semi-structured (JSON-like) column (unshredded). See [Create table with unstructured and semi-structured column types](#create-table-with-unstructured-and-semi-structured-column-types). |
+| `ArrayType(<elementType>)` with field metadata `hudi_type=VECTOR(dim[, elementType])` | VECTOR | Fixed-dimension embedding column. Element type is `FloatType`, `DoubleType`, or `ByteType` (INT8). See [Create table with unstructured and semi-structured column types](#create-table-with-unstructured-and-semi-structured-column-types). |
+| `StructType(type STRING, data BINARY, reference STRUCT<…>)` with field metadata `hudi_type=BLOB` | BLOB | Binary column with `INLINE` / `OUT_OF_LINE` storage. See [Create table with unstructured and semi-structured column types](#create-table-with-unstructured-and-semi-structured-column-types). |
+| `VariantType` (Spark 4.0+) or `StructType(metadata BINARY NOT NULL, value BINARY NOT NULL)` with field metadata `hudi_type=VARIANT` (Spark 3.x) | VARIANT | Semi-structured (JSON-like) column (unshredded). See [Create table with unstructured and semi-structured column types](#create-table-with-unstructured-and-semi-structured-column-types). |
 | char          |              | not supported |
 | varchar       |              | not supported |
 | numeric       |              | not supported |
