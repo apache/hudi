@@ -107,9 +107,20 @@ Lance is Spark-only. Reading a Lance-backed table from Flink, Hive, Presto, or T
 `HoodieValidationException`. Lance files are also non-splittable: a single Spark task reads one
 Lance base file.
 
-The Lance JAR is not bundled in the Hudi distribution. Add the matching Lance Spark bundle to your
-classpath; see [Deployment → Lance dependency](deployment.md#lance-dependency) for the version
-matrix.
+The Lance JAR is not bundled in the Hudi distribution. Add the Lance Spark bundle that matches
+your Spark version to the Spark classpath:
+
+| Spark version | Bundle (Maven Central) |
+|:--------------|:-----------------------|
+| Spark 3.4 | `org.lance:lance-spark-bundle-3.4_2.12:0.4.0` |
+| Spark 3.5 | `org.lance:lance-spark-bundle-3.5_2.12:0.4.0` |
+| Spark 4.0 | `org.lance:lance-spark-bundle-4.0_2.13:0.4.0` |
+| Spark 4.1 | `org.lance:lance-spark-bundle-4.1_2.13:0.4.0` |
+
+```bash
+export LANCE_BUNDLE_JAR=/path/to/lance-spark-bundle-3.5_2.12-0.4.0.jar
+spark-shell --jars $HUDI_BUNDLE_JAR,$LANCE_BUNDLE_JAR
+```
 
 ##### File sizing and memory
 

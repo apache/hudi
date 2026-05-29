@@ -255,5 +255,5 @@ plt.savefig("hudi_vector_search_results.png", dpi=150)
 | VECTOR type reference | [VECTOR in SQL DDL](sql_ddl.md#vector) + [`hudi_vector_search` in SQL Queries](sql_queries.md#vector-similarity-search) |
 | BLOB type reference | [BLOB in SQL DDL](sql_ddl.md#blob) + [`read_blob()` in SQL Queries](sql_queries.md#reading-blob-columns) |
 | VARIANT type | [VARIANT in SQL DDL](sql_ddl.md#variant) |
-| Lance file format | [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format) + [Deployment → Lance dependency](deployment.md#lance-dependency) |
+| Lance file format | [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format) |
 | AI lakehouse use cases | [Use Cases → AI Lakehouse](use_cases.md#ai-lakehouse) |
