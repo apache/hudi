@@ -97,13 +97,17 @@ For the more curious, a more detailed explanation of the benefits of _incrementa
 - The idea with MoR is to reduce write costs/latencies, by writing delta logs (Hudi), positional delete files (iceberg). Hudi employs about 4 types of indexing to quickly locate the file that the updates records belong to. Formats relying on a scan of the table can quickly bottleneck on write performance. e.g updating 1GB into a 1TB table every 5-10 mins.
 - Hudi is the only lakehouse storage system that natively supports event time ordering and late data handling for streaming workloads where MoR is employed heavily. 
 
-## AI Lakehouse
+## AI-Native Data Lakehouse
 
-AI and ML workloads often need to store and query embeddings, raw binary objects (images, PDFs,
-audio, video), and semi-structured payloads (LLM outputs, model configs, API responses) alongside
-structured data. Hudi provides three column types and a pluggable file format for these payloads.
-The table below is the entry point: each row links to the DDL, write, and read surfaces for the
-type.
+The rise of large language models (LLMs) and multimodal AI has sparked a fundamental paradigm shift in data processing, moving the data lakehouse's primary workload from traditional ETL/BI analytics toward feature engineering, model training, and Retrieval-Augmented Generation (RAG). Traditional data lakehouses were natively designed around structured, tabular data, leaving modern AI applications awkwardly fragmented. These advanced workloads must seamlessly combine structured metadata with a massive explosion of high-dimensional vector embeddings, raw unstructured binary objects (such as images, text, audio, and video), and highly dynamic semi-structured payloads (such as model configurations and LLM response outputs).
+
+Historically, managing this multi-modal reality forced engineering teams to maintain separate, siloed infrastructure. Raw binaries were tossed into unmanaged object stores, while embeddings were synced out to standalone, external vector databases. This fragmented architecture introduces a severe "sync dilemma": it creates massive data duplication, drives up operational infrastructure costs, suffers from a lack of real-time responsiveness, and entirely breaks transactional consistency across the AI lifecycle. For instance, a model training or RAG workflow requires strict data lineage, point-in-time reproducibility, and version control. If an embedding is updated but its corresponding raw image or metadata isn't atomically committed alongside it, downstream models suffer from stale or mismatched data. To eliminate these write-scale bottlenecks and synchronization risks, the industry requires an AI-native lakehouse that unifies structured, semi-structured, and unstructured data into a single transactional storage layer. 
+
+Apache Hudi delivers an AI-native lakehouse architecture by treating non-tabular multi-modal assets as first-class citizens within the table schema. Large binary objects ([`BLOB`](sql_ddl.md#blob)), dense semantic embeddings ([`VECTOR`](sql_ddl.md#vector)), and flexible semi-structured payloads ([`VARIANT`](sql_ddl.md#variant)) reside natively within the same Hudi data files. By keeping large binary elements inside the table framework rather than as external pointers, unstructured data inherits Hudi's ACID transactions on the [timeline](timeline.md), [schema evolution](schema_evolution.md), and [time-travel queries](sql_queries.md#time-travel-query).
+
+Hudi's background [table services](hudi_stack.md) — [file sizing](file_sizing.md), [cleaning](cleaning.md), [compaction](compaction.md), and [clustering](clustering.md) — operate on tables with these column types and on [Lance-backed tables](storage_layouts.md#lance-base-file-format), automating the data lifecycle from ingestion through similarity search ([`hudi_vector_search`](sql_queries.md#vector-similarity-search)) and BLOB resolution ([`read_blob()`](sql_queries.md#reading-blob-columns)).
+
+The table below serves as the technical entry point for interacting with AI-native data types in Hudi:
 
 | Type | Declare | Write | Read |
 |:-----|:--------|:------|:-----|
@@ -129,57 +133,8 @@ For a worked example covering image embeddings, raw bytes, and similarity search
 
 ### Why Hudi for AI workloads
 
-#### Unified storage for structured and unstructured data
-
-Embeddings, raw bytes, semi-structured payloads, and structured metadata live in a single Hudi
-table under the same transactions, schema, and access controls as any other Hudi table:
-
-```
-┌─────────────────────────────────────────────────┐
-│                  Hudi Table                     │
-│                                                 │
-│  image_id │ breed │ embedding    │ image_bytes  │
-│  (STRING) │(STRING)│(VECTOR(1024))│   (BLOB)    │
-│───────────┼───────┼──────────────┼──────────────│
-│  pet_001  │ Corgi │ [0.12, ...]  │ <137 KB PNG> │
-│  pet_002  │ Tabby │ [-.03, ...]  │ <89 KB JPEG> │
-└─────────────────────────────────────────────────┘
-```
-
-#### Incremental processing for embedding pipelines
-
-Hudi's incremental query lets pipelines re-embed only new or changed rows instead of reprocessing
-the full corpus:
-
-```sql
--- Get only new images since the last embedding run
-SELECT * FROM hudi_table_changes('product_images', 'latest_state', '20260101000000');
-```
-
-#### Transactional guarantees
-
-Embedding updates, metadata changes, and raw byte writes commit atomically: a query that joins the
-`embedding` and `image_bytes` columns will not observe a state where the vector index refers to a
-deleted or stale row.
-
-#### Table services
-
-Standard table services apply to tables with the new types and to Lance-backed tables:
-
-- Clustering reorganizes rows for better data locality (including vector locality).
-- Compaction merges incremental updates into base files.
-- Cleaning reclaims storage from older file versions.
-- Metadata indexing maintains the multi-modal indexes (subject to the Lance constraints in
-  [Indexes](indexes.md)).
-
-#### Open ecosystem
-
-Hudi tables are readable by Spark, with hudi-rs (Python/Rust) and other engines reading the
-underlying Parquet representation directly. For engine-specific constraints, see
-[Using Flink](ingestion_flink.md#engine-constraints-for-types) and the
-[BigQuery / Hive metastore mappings](syncing_metastore.md#metastore-mapping-for-vector-blob-and-variant).
-
-
-
-
-
+- Unified storage across modalities: Raw binary objects ([`BLOB`](sql_ddl.md#blob)), semantic vector embeddings ([`VECTOR`](sql_ddl.md#vector)), semi-structured payloads ([`VARIANT`](sql_ddl.md#variant)), and standard analytical columns live together in a single Hudi table, under the same [timeline](timeline.md), [schema evolution](schema_evolution.md), and access controls.
+- Incremental embedding pipelines: Hudi's [incremental query](sql_queries.md#incremental-query) lets feature pipelines re-embed only the rows that changed since a given commit, instead of reprocessing the full corpus.
+- Multi-modal transactional guarantees: Vector updates, binary changes, and metadata modifications commit atomically. A similarity query joining the `VECTOR` column with the `BLOB` column never observes a state in which the embedding refers to a deleted or stale binary asset.
+- Automated table services: [File sizing](file_sizing.md), [cleaning](cleaning.md), [compaction](compaction.md), and [clustering](clustering.md) apply to tables that contain `VECTOR`, `BLOB`, and `VARIANT` columns, and to [Lance-backed tables](storage_layouts.md#lance-base-file-format). Lance-specific index behavior (bloom-only; column- and partition-stats indices auto-disabled) is documented in [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format).
+- Open, multi-engine access: Hudi tables are written and read by [Apache Spark](quick-start-guide.md) and [Apache Flink](flink-quick-start-guide.md), and by the native [Python / Rust client (hudi-rs)](python-rust-quick-start-guide.md) reading the underlying Parquet representation directly. Engine-specific constraints for the new types are documented in [Using Flink → Engine constraints for types](ingestion_flink.md#engine-constraints-for-types) and the [Hive / BigQuery metastore mappings](syncing_metastore.md#metastore-mapping-for-vector-blob-and-variant).
