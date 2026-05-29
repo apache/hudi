@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.partitioner.index;
 
-import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
@@ -71,7 +70,6 @@ public class GlobalRecordLevelIndexBackend implements MinibatchIndexBackend {
     this.metaClient = StreamerUtil.createMetaClient(conf);
     this.conf = conf;
     this.recordIndexCache = new RecordIndexCache(conf, initCheckpointId);
-    registerMetrics(new UnregisteredMetricsGroup());
     reloadMetadataTable();
   }
 
