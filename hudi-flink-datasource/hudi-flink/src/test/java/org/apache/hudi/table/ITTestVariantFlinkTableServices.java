@@ -25,7 +25,9 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -382,9 +384,22 @@ public class ITTestVariantFlinkTableServices {
   }
 
   private static boolean hasCompletedClustering(String tablePath) {
-    HoodieTableMetaClient metaClient = metaClient(tablePath);
-    metaClient.reloadActiveTimeline();
-    return metaClient.getActiveTimeline().getCompletedReplaceTimeline().countInstants() > 0;
+    try {
+      HoodieTableMetaClient mc = metaClient(tablePath);
+      mc.reloadActiveTimeline();
+      HoodieTimeline timeline = mc.getActiveTimeline();
+      // Timeline v2 completes clustering as CLUSTERING_ACTION; v1 uses replacecommit with a plan.
+      // getCompletedReplaceTimeline() only sees REPLACE_COMMIT_ACTION, so it misses v2 clustering.
+      for (HoodieInstant instant :
+          timeline.getCommitsTimeline().filterCompletedInstants().getInstants()) {
+        if (ClusteringUtils.isClusteringInstant(timeline, instant, mc.getInstantGenerator())) {
+          return true;
+        }
+      }
+      return false;
+    } catch (Exception e) {
+      return false;
+    }
   }
 
   private static boolean hasPendingClustering(String tablePath) {
