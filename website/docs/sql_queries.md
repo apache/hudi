@@ -400,7 +400,7 @@ FROM hudi_vector_search('products', 'embedding',
 ORDER BY _hudi_distance;
 ```
 
-RAG context retrieval — apply a distance threshold to drop weak matches:
+RAG context retrieval to apply a distance threshold to drop weak matches:
 
 ```sql
 -- Retrieve the 5 most relevant document chunks for an LLM prompt
@@ -413,7 +413,7 @@ FROM hudi_vector_search(
 WHERE _hudi_distance < 0.3;
 ```
 
-Cross-modal search — query a corpus of image embeddings with a text embedding (e.g., CLIP):
+Cross-modal search to query a corpus of image embeddings with a text embedding (e.g., CLIP):
 
 ```sql
 SELECT image_id, caption, _hudi_distance

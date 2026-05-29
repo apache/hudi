@@ -420,13 +420,12 @@ Then any record you want to delete you can mark `_hoodie_is_deleted` as true:
 
 ### Writing VECTOR, BLOB, and VARIANT Columns
 
-`VECTOR`, `BLOB`, and `VARIANT` columns participate in writes the same way as standard SQL types.
-SQL `INSERT` examples for all three live in [SQL DML](sql_dml.md#inserting-vector-columns); the
+`VECTOR`, `BLOB`, and `VARIANT` columns can be written using SQL `INSERT`, see [SQL DML](sql_dml.md#inserting-vector-columns); the
 DataFrame API equivalents are below.
 
 #### VECTOR via DataFrame
 
-Stamp `hudi_type` metadata on the VECTOR column so the writer recognizes it:
+Add `hudi_type` metadata on the VECTOR column so the writer recognizes it:
 
 ```python
 import pyarrow as pa
@@ -528,7 +527,7 @@ df.write.format("hudi") \
     .option("hoodie.datasource.write.recordkey.field", "event_id") \
     .option("hoodie.datasource.write.precombine.field", "ts") \
     .mode("append") \
-    .save("/path/to/events")
+    .save("/path/to/table")
 ```
 
 #### Lance base file format via DataFrame
