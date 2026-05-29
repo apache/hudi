@@ -150,11 +150,11 @@ module.exports = {
           },
           {
             from: ["/docs/releases", "/docs/next/releases"],
-            to: "/releases/release-1.2",
+            to: "/releases/release-1.1",
           },
           {
             from: ["/releases"],
-            to: "/releases/release-1.2",
+            to: "/releases/release-1.1",
           },
           {
             from: [
@@ -349,7 +349,7 @@ module.exports = {
             },
             {
               label: "Releases",
-              to: "/releases/release-1.2",
+              to: "/releases/release-1.1",
             },
             {
               label: "Download",
