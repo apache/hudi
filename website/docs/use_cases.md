@@ -103,14 +103,52 @@ For a worked example covering image embeddings, raw bytes, and similarity search
 | Experiment tracking | `VARIANT` for heterogeneous model configs and metrics; incremental queries for latest runs |
 | Data labeling pipelines | `BLOB` for raw data, incremental queries for unlabeled data, transactional label updates |
 
-### Why Hudi?
+### Why Hudi for AI workloads
+
+#### Unified storage for structured and unstructured data
 
 Embeddings, raw bytes, semi-structured payloads, and structured metadata live in a single Hudi
-table under the same transactions, schema, and access controls as any other Hudi table. Incremental
-queries let pipelines re-embed only new or changed rows
-(`hudi_table_changes(table, 'latest_state', commit_time)`), instead of reprocessing the full
-corpus. Standard table services (clustering, compaction, cleaning, indexing) apply to tables with
-the new types and to Lance-backed tables.
+table under the same transactions, schema, and access controls as any other Hudi table:
+
+```
+┌─────────────────────────────────────────────────┐
+│                  Hudi Table                     │
+│                                                 │
+│  image_id │ breed │ embedding    │ image_bytes  │
+│  (STRING) │(STRING)│(VECTOR(1024))│   (BLOB)    │
+│───────────┼───────┼──────────────┼──────────────│
+│  pet_001  │ Corgi │ [0.12, ...]  │ <137 KB PNG> │
+│  pet_002  │ Tabby │ [-.03, ...]  │ <89 KB JPEG> │
+└─────────────────────────────────────────────────┘
+```
+
+#### Incremental processing for embedding pipelines
+
+Hudi's incremental query lets pipelines re-embed only new or changed rows instead of reprocessing
+the full corpus:
+
+```sql
+-- Get only new images since the last embedding run
+SELECT * FROM hudi_table_changes('product_images', 'latest_state', '20260101000000');
+```
+
+#### Transactional guarantees
+
+Embedding updates, metadata changes, and raw byte writes commit atomically: a query that joins the
+`embedding` and `image_bytes` columns will not observe a state where the vector index refers to a
+deleted or stale row.
+
+#### Table services
+
+Standard table services apply to tables with the new types and to Lance-backed tables:
+
+- Clustering reorganizes rows for better data locality (including vector locality).
+- Compaction merges incremental updates into base files.
+- Cleaning reclaims storage from older file versions.
+- Metadata indexing maintains the multi-modal indexes (subject to the Lance constraints in
+  [Indexes](indexes.md)).
+
+#### Open ecosystem
 
 Hudi tables are readable by Spark, with hudi-rs (Python/Rust) and other engines reading the
 underlying Parquet representation directly. For engine-specific constraints, see

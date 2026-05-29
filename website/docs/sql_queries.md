@@ -400,6 +400,34 @@ FROM hudi_vector_search('products', 'embedding',
 ORDER BY _hudi_distance;
 ```
 
+RAG context retrieval — apply a distance threshold to drop weak matches:
+
+```sql
+-- Retrieve the 5 most relevant document chunks for an LLM prompt
+SELECT chunk_id, text_content, _hudi_distance
+FROM hudi_vector_search(
+    'document_chunks', 'embedding',
+    ARRAY(/* embedding of the user's question */),
+    5, 'cosine'
+)
+WHERE _hudi_distance < 0.3;
+```
+
+Cross-modal search — query a corpus of image embeddings with a text embedding (e.g., CLIP):
+
+```sql
+SELECT image_id, caption, _hudi_distance
+FROM hudi_vector_search(
+    'image_catalog', 'clip_embedding',
+    ARRAY(/* text embedding from CLIP */),
+    20, 'cosine'
+);
+```
+
+The TVF also works on Lance-backed tables. Set `hoodie.table.base.file.format=lance` at table
+creation (see [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format)); the call site
+is unchanged.
+
 :::note
 `cosine` distance computes `1 − cos(a, b)`. If embeddings are not L2-normalized before write,
 results reflect both vector direction and magnitude.

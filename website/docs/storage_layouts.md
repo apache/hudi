@@ -68,6 +68,24 @@ TBLPROPERTIES (
 );
 ```
 
+The layering:
+
+```
+┌───────────────────────────────────┐
+│         Hudi table layer          │
+│  Timeline, metadata, indexing,    │
+│  transactions, schema evolution   │
+├───────────────────────────────────┤
+│       File group / file slice     │
+│  (same Hudi concepts as Parquet)  │
+├───────────────────────────────────┤
+│     Lance data files (.lance)     │
+│  Columnar storage, fragment-based │
+├───────────────────────────────────┤
+│   Storage (S3, GCS, HDFS, FS)     │
+└───────────────────────────────────┘
+```
+
 Hudi table services on Lance-backed tables behave as follows. Compaction merges Avro log files
 into Lance base files. Clustering reorganizes records into new Lance files. Cleaning removes
 obsolete Lance file slices. Bloom filter indexing is supported; column-stats and partition-stats
@@ -81,6 +99,9 @@ Type-specific behavior on Lance:
 - `BLOB` columns default to `DESCRIPTOR` read mode, same as Parquet.
 - `VARIANT` columns are not supported on Lance. Writing a table with a VARIANT column to Lance
   throws `HoodieNotSupportedException`. Use Parquet for VARIANT tables.
+- Complex types (`STRUCT`, `ARRAY`, `MAP`) are supported as Lance columns.
+- `populateMetaFields=false` is supported. User-defined key generators work normally with
+  Lance-backed tables.
 
 Lance is Spark-only. Reading a Lance-backed table from Flink, Hive, Presto, or Trino throws
 `HoodieValidationException`. Lance files are also non-splittable: a single Spark task reads one

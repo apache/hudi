@@ -185,9 +185,17 @@ On Spark 3.x, declare the underlying struct directly (Hudi recognizes the patter
 payload STRUCT<value: BINARY, metadata: BINARY>
 ```
 
-Native `VARIANT` operations require Spark 4.0+ or Flink 2.1+. Flink &lt; 2.1 throws
-`UnsupportedOperationException` on VARIANT columns; Flink ≥ 2.1 surfaces VARIANT as
-`ROW<metadata BYTES, value BYTES>`. VARIANT columns are not supported on Lance-backed tables.
+Engine support for `VARIANT`:
+
+| Engine | Behavior |
+|:-------|:---------|
+| Spark 4.0 | Native `VariantType` for read/write/query on COW and MOR. Native `df.write` with `VariantType` is supported on the V1 datasource. |
+| Spark 4.1 | Native `VariantType` for read/write/query on COW and MOR. |
+| Spark 3.x | Reads as `STRUCT<value: BINARY, metadata: BINARY>`. Backward compatible with tables written by Spark 4.x. |
+| Flink &lt; 2.1 | Throws `UnsupportedOperationException` on VARIANT columns. |
+| Flink ≥ 2.1 | Surfaces VARIANT as `ROW<metadata BYTES, value BYTES>`. Flink can read the underlying struct but cannot decode it as a variant value. |
+
+VARIANT columns are not supported on Lance-backed tables.
 
 Optional **shredding** extracts hot fields into typed columnar storage; see
 [Schema Evolution → VARIANT shredding](schema_evolution.md#variant-shredding).
