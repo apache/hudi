@@ -179,19 +179,34 @@ TBLPROPERTIES (
 );
 ```
 
-On Spark 3.x, declare the underlying struct directly (Hudi recognizes the pattern):
+Spark 3.x has no native `VariantType`. To read a VARIANT-bearing Hudi table written by Spark 4.x,
+declare the column as a binary struct in the `CREATE TABLE` DDL pointing at the table location:
 
 ```sql
-payload STRUCT<value: BINARY, metadata: BINARY>
+CREATE TABLE events (
+    event_id  STRING,
+    payload   STRUCT<value: BINARY, metadata: BINARY>,
+    ts        BIGINT
+) USING hudi
+LOCATION '<existing-table-path>'
+TBLPROPERTIES (
+    primaryKey = 'event_id',
+    preCombineField = 'ts'
+);
 ```
+
+Spark 3.x then returns the raw `metadata` and `value` bytes; it does not surface the column as a
+logical VARIANT, and reading a VARIANT table without this explicit DDL (i.e. letting Hudi
+auto-resolve the schema from commit metadata) throws `"VARIANT type is only supported in Spark
+4.0+"`.
 
 Engine support for `VARIANT`:
 
 | Engine | Behavior |
 |:-------|:---------|
-| Spark 4.0 | Native `VariantType` for read/write/query on COW and MOR. Native `df.write` with `VariantType` is supported on the V1 datasource. |
-| Spark 4.1 | Native `VariantType` for read/write/query on COW and MOR. |
-| Spark 3.x | Reads as `STRUCT<value: BINARY, metadata: BINARY>`. Backward compatible with tables written by Spark 4.x. |
+| Spark 4.0+ | Native `VariantType` for read/write/query on COW and MOR (CREATE TABLE with `VARIANT` or DataFrame writes with `VariantType`). |
+| Spark 4.1 | Same as Spark 4.0. Spark 4.1's `PushVariantIntoScan` rewrites VARIANT projections into struct-of-extractions; Hudi recognizes that shape and returns the column as a logical VARIANT. |
+| Spark 3.x | No native VARIANT. Backward-compat read of a Spark 4.x-written table requires the explicit binary-struct DDL above; raw bytes only. |
 | Flink &lt; 2.1 | Throws `UnsupportedOperationException` on VARIANT columns. |
 | Flink ≥ 2.1 | Surfaces VARIANT as `ROW<metadata BYTES, value BYTES>`. Flink can read the underlying struct but cannot decode it as a variant value. |
 

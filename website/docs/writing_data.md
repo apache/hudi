@@ -482,7 +482,7 @@ schema = pa.schema([
 
 #### VARIANT via DataFrame
 
-On Spark 4.0+, use native `VariantType`:
+VARIANT writes via the DataFrame API require Spark 4.0+. Use native `VariantType`:
 
 ```python
 from pyspark.sql.types import StructType, StructField, StringType, LongType, VariantType
@@ -494,16 +494,18 @@ schema = StructType([
 ])
 ```
 
-On Spark 3.x (or 4.0+ when interoperating with 3.x), declare the underlying struct and tag it with
-`hudi_type=VARIANT` so the writer recognizes it:
+Alternatively, declare the underlying struct and tag the outer field with `hudi_type=VARIANT`. The
+struct must contain exactly two **non-nullable** `BinaryType` fields named `metadata` and `value`,
+otherwise the writer throws `IllegalArgumentException: Invalid variant schema structure`. The column
+round-trips as native `VariantType` on read:
 
 ```python
 from pyspark.sql.types import StructType, StructField, StringType, LongType, BinaryType, MetadataBuilder
 
 variant_metadata = MetadataBuilder().putString("hudi_type", "VARIANT").build()
 variant_struct = StructType([
-    StructField("metadata", BinaryType()),
-    StructField("value",    BinaryType()),
+    StructField("metadata", BinaryType(), nullable=False),
+    StructField("value",    BinaryType(), nullable=False),
 ])
 schema = StructType([
     StructField("event_id", StringType()),
