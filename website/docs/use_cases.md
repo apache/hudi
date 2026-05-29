@@ -107,9 +107,9 @@ type.
 
 | Type | Declare | Write | Read |
 |:-----|:--------|:------|:-----|
-| [`VECTOR`](sql_ddl.md#vector) | [DDL](sql_ddl.md#vector) | [SQL INSERT](sql_dml.md#inserting-vector-columns) · [DataFrame](writing_data.md#vector-via-dataframe) | [`hudi_vector_search` TVF](sql_queries.md#vector-similarity-search) |
-| [`BLOB`](sql_ddl.md#blob) | [DDL](sql_ddl.md#blob) | [SQL INSERT](sql_dml.md#inserting-blob-columns) · [DataFrame](writing_data.md#blob-via-dataframe) | [`read_blob()`](sql_queries.md#reading-blob-columns) |
-| [`VARIANT`](sql_ddl.md#variant) | [DDL](sql_ddl.md#variant) | [SQL INSERT](sql_dml.md#inserting-variant-columns) · [DataFrame](writing_data.md#variant-via-dataframe) | [Querying VARIANT](sql_queries.md#querying-variant-columns) |
+| [`VECTOR`](sql_ddl.md#vector) | [DDL](sql_ddl.md#vector) | [SQL DML](sql_dml.md#inserting-vector-columns) · [DataFrame](writing_data.md#vector-via-dataframe) | [`hudi_vector_search` TVF](sql_queries.md#vector-similarity-search) |
+| [`BLOB`](sql_ddl.md#blob) | [DDL](sql_ddl.md#blob) | [SQL DML](sql_dml.md#inserting-blob-columns) · [DataFrame](writing_data.md#blob-via-dataframe) | [`read_blob()`](sql_queries.md#reading-blob-columns) |
+| [`VARIANT`](sql_ddl.md#variant) | [DDL](sql_ddl.md#variant) | [SQL DML](sql_dml.md#inserting-variant-columns) · [DataFrame](writing_data.md#variant-via-dataframe) | [Querying VARIANT](sql_queries.md#querying-variant-columns) |
 | [Lance file format](storage_layouts.md#lance-base-file-format) | [TBLPROPERTIES](sql_ddl.md#lance-base-file-format) | [DataFrame](writing_data.md#lance-base-file-format-via-dataframe) | (transparent; Spark-only) |
 
 For a worked example covering image embeddings, raw bytes, and similarity search, see the
