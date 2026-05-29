@@ -43,6 +43,7 @@ import software.amazon.awssdk.services.glue.model.CreateDatabaseResponse;
 import software.amazon.awssdk.services.glue.model.CreateTableRequest;
 import software.amazon.awssdk.services.glue.model.CreateTableResponse;
 import software.amazon.awssdk.services.glue.model.DatabaseInput;
+import software.amazon.awssdk.services.glue.model.DeleteTableRequest;
 import software.amazon.awssdk.services.glue.model.EntityNotFoundException;
 import software.amazon.awssdk.services.glue.model.GetDatabaseRequest;
 import software.amazon.awssdk.services.glue.model.GetPartitionsRequest;
@@ -367,6 +368,50 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   }
 
   @Override
+  public void createOrReplaceTable(String tableName,
+                                   MessageType storageSchema,
+                                   String inputFormatClass,
+                                   String outputFormatClass,
+                                   String serdeClass,
+                                   Map<String, String> serdeProperties,
+                                   Map<String, String> tableProperties) {
+
+    if (!tableExists(tableName)) {
+      // if table doesn't exist before, directly create new table.
+      createTable(tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
+      return;
+    }
+
+    try {
+      // Create a temp table will validate the schema before dropping and recreating the table
+      String tempTableName = generateTempTableName(tableName);
+      createTable(tempTableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
+
+      Table tempTable = getTable(awsGlue, databaseName, tempTableName);
+      final Instant now = Instant.now();
+      TableInput updatedTableInput = TableInput.builder()
+          .name(tableName)
+          .tableType(tempTable.tableType())
+          .parameters(tempTable.parameters())
+          .partitionKeys(tempTable.partitionKeys())
+          .storageDescriptor(tempTable.storageDescriptor())
+          .lastAccessTime(now)
+          .lastAnalyzedTime(now)
+          .build();
+
+      UpdateTableRequest request = UpdateTableRequest.builder()
+          .databaseName(databaseName)
+          .skipArchive(skipTableArchive)
+          .tableInput(updatedTableInput)
+          .build();
+      awsGlue.updateTable(request);
+      dropTable(tempTableName);
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Fail to recreate the table" + tableId(databaseName, tableName), e);
+    }
+  }
+
+  @Override
   public void createTable(String tableName,
                           MessageType storageSchema,
                           String inputFormatClass,
@@ -536,6 +581,27 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       updateTableParameters(awsGlue, databaseName, tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitTimestamp), skipTableArchive);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update last sync commit time for " + tableId(databaseName, tableName), e);
+    }
+  }
+
+  @Override
+  public void dropTable(String tableName) {
+    DeleteTableRequest deleteTableRequest = DeleteTableRequest.builder()
+        .databaseName(databaseName)
+        .name(tableName)
+        .build();
+
+    try {
+      awsGlue.deleteTable(deleteTableRequest).get();
+      LOG.info("Successfully deleted table in AWS Glue: {}.{}", databaseName, tableName);
+    } catch (Exception e) {
+      if (e instanceof InterruptedException) {
+        // In case {@code InterruptedException} was thrown, resetting the interrupted flag
+        // of the thread, we reset it (to true) again to permit subsequent handlers
+        // to be interrupted as well
+        Thread.currentThread().interrupt();
+      }
+      throw new HoodieGlueSyncException("Failed to delete table " + tableId(databaseName, tableName), e);
     }
   }
 
