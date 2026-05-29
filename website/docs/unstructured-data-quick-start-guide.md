@@ -1,14 +1,16 @@
 ---
 title: "Unstructured Data Quick Start Guide"
-keywords: [ hudi, vector search, embeddings, unstructured data, blob, image search, similarity]
+keywords: [ hudi, ai, machine learning, vector search, embeddings, unstructured data, blob, image search, similarity]
 summary: "Store embeddings and images in a Hudi table, then find similar images with hudi_vector_search and read_blob"
 toc: true
 last_modified_at: 2026-04-29T00:00:00-00:00
 ---
 
-This guide walks through the `VECTOR` and `BLOB` column types end to end. You will store image
-embeddings (`VECTOR`) and raw image bytes (`BLOB`) in a single Hudi table, then run a top-K
-similarity search and materialize the matching images in one SQL query.
+AI and machine learning pipelines (RAG, recommendation, multimodal search) need to store and query
+embeddings, raw bytes, and structured metadata side by side. Hudi's `VECTOR` and `BLOB` column
+types let you keep all of those in a single transactional table. This guide walks through them end
+to end: you will store image embeddings (`VECTOR`) and raw image bytes (`BLOB`) in a single Hudi
+table, then run a top-K similarity search and materialize the matching images in one SQL query.
 
 :::tip
 Want to try this locally? This guide is also available as an interactive Jupyter notebook.
