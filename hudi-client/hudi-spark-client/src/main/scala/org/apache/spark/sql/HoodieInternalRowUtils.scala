@@ -208,15 +208,15 @@ object HoodieInternalRowUtils {
       case (newStructType: StructType, prevStructType: StructType) =>
         val writer = genUnsafeStructWriter(prevStructType, newStructType, renamedColumnsMap, fieldNameStack)
 
-        val newRow = new SpecificInternalRow(newStructType.fields.map(_.dataType))
-        val rowUpdater = new RowUpdater(newRow)
-
         (fieldUpdater, ordinal, value) => {
           // Here new row is built in 2 stages:
           //    - First, we pass mutable row (used as buffer/scratchpad) created above wrapped into [[RowUpdater]]
           //      into generated row-writer
           //    - Upon returning from row-writer, we call back into parent row's [[fieldUpdater]] to set returned
           //      row as a value in it
+          // NOTE: Create a new row for each element to avoid reusing the same row object across array elements
+          val newRow = new SpecificInternalRow(newStructType.fields.map(_.dataType))
+          val rowUpdater = new RowUpdater(newRow)
           writer(rowUpdater, value)
           fieldUpdater.set(ordinal, newRow)
         }
