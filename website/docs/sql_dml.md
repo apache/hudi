@@ -123,11 +123,18 @@ INSERT INTO events VALUES
     ('evt_003', parse_json('"simple string value"'), 1002);
 ```
 
-VARIANT columns support `UPDATE`, `DELETE`, and `MERGE` on both COW and MOR tables.
+#### UPDATE, DELETE, and MERGE on VECTOR, BLOB, and VARIANT columns
+
+`UPDATE`, `DELETE`, and `MERGE INTO` are supported on tables that contain
+[`VECTOR`](sql_ddl.md#vector), [`BLOB`](sql_ddl.md#blob), or [`VARIANT`](sql_ddl.md#variant)
+columns, on both COW and MOR tables. Examples below use a VARIANT column; the same syntax applies
+to VECTOR and BLOB columns.
 
 ```sql
 UPDATE events SET payload = parse_json('{"action": "click", "x": 200}')
 WHERE event_id = 'evt_001';
+
+DELETE FROM events WHERE event_id = 'evt_003';
 
 MERGE INTO events target
 USING new_events source ON target.event_id = source.event_id
