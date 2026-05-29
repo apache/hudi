@@ -47,7 +47,7 @@ HUDI_JAR = os.getenv("HUDI_BUNDLE_JAR", "hudi-spark3.5-bundle_2.12-1.2.0.jar")
 
 spark = (
     SparkSession.builder
-    .appName("Hudi-Unstructured-QuickStart")
+    .appName("Hudi-Unstructured-Data-QuickStart")
     .config("spark.jars", HUDI_JAR)
     .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
     .config("spark.sql.extensions",
