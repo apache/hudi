@@ -2,7 +2,7 @@
 title: SQL DDL
 summary: "In this page, we discuss using SQL DDL commands with Hudi"
 toc: true
-last_modified_at: 2026-05-27T00:00:00-00:00
+last_modified_at: 2026-05-29T00:00:00-00:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -264,34 +264,62 @@ TBLPROPERTIES (
 );
 ```
 
-Spark 3.x has no native `VariantType`. To read a VARIANT-bearing Hudi table written by Spark 4.x,
-declare the column as a binary struct in the `CREATE TABLE` DDL pointing at the table location:
+:::tip Reading a Spark 4.0+ VARIANT table from Spark 3.x?
+Without the explicit DDL below, the read throws `HoodieSchemaException` (caused by
+`UnsupportedOperationException: VARIANT type is only supported in Spark 4.0+`). See
+[Reading from Spark 3.x](#reading-variant-from-spark-3x-backward-compatibility).
+:::
+
+##### Reading VARIANT from Spark 3.x (backward compatibility) {#reading-variant-from-spark-3x-backward-compatibility}
+
+Hudi 1.2.0 supports Spark 3.4 and 3.5, but neither can construct a native `VariantType`. To
+read a Spark 4.0+ VARIANT table from Spark 3.x, create an external Hudi table at the existing
+location with the VARIANT column declared as a binary struct:
 
 ```sql
-CREATE TABLE events (
+CREATE TABLE IF NOT EXISTS events_3x (
     event_id  STRING,
     payload   STRUCT<value: BINARY, metadata: BINARY>,
     ts        BIGINT
 ) USING hudi
-LOCATION '<existing-table-path>'
+LOCATION '/path/to/events'
 TBLPROPERTIES (
-    primaryKey = 'event_id',
-    preCombineField = 'ts'
+    primaryKey      = 'event_id',
+    preCombineField = 'ts',
+    type            = 'cow'     -- or 'mor'
 );
+
+SELECT event_id, payload.value, payload.metadata FROM events_3x;
 ```
 
-Spark 3.x then returns the raw `metadata` and `value` bytes; it does not surface the column as a
-logical VARIANT, and reading a VARIANT table without this explicit DDL (i.e. letting Hudi
-auto-resolve the schema from commit metadata) throws `"VARIANT type is only supported in Spark
-4.0+"`.
+`LOCATION` makes the table external (catalog-metadata only; `DROP TABLE` does not delete
+data). `primaryKey`, `preCombineField`, and `type` must match the table's
+`.hoodie/hoodie.properties`; a mismatch misleads the catalog but does not corrupt data.
+Works on COW and MOR (both `AVRO` and `SPARK` log-record types).
 
-Engine support for `VARIANT`:
+:::caution Treat the mapping as read-only
+Spark SQL accepts DML against the mapping, but writes fail downstream in Hudi's Spark 3.x
+write path, possibly after partial work (marker files, log blocks). Only run `SELECT`s here;
+if a Spark 4.0+ writer is producing this table, register the mapping in a separate database
+to avoid collisions.
+:::
+
+What you get: raw `payload.metadata` and `payload.value` bytes (open
+[Spark Variant binary spec](https://github.com/apache/spark/blob/master/common/variant/README.md)),
+decodable in application code if needed. What you do **not** get on Spark 3.x:
+
+- `parse_json()`, `variant_get()`, `cast(payload as STRING)`: Spark 4.0+ only.
+- Predicate pushdown into VARIANT fields.
+- Schema auto-resolution: the DDL above is required; `spark.read.format("hudi").load(path)`
+  alone fails.
+
+##### Engine support for `VARIANT`
 
 | Engine | Behavior |
 |:-------|:---------|
 | Spark 4.0+ | Native `VariantType` for read/write/query on COW and MOR (CREATE TABLE with `VARIANT` or DataFrame writes with `VariantType`). |
 | Spark 4.1 | Same as Spark 4.0. Spark 4.1's `PushVariantIntoScan` rewrites VARIANT projections into struct-of-extractions; Hudi recognizes that shape and returns the column as a logical VARIANT. |
-| Spark 3.x | No native VARIANT. Backward-compat read of a Spark 4.x-written table requires the explicit binary-struct DDL above; raw bytes only. |
+| Spark 3.x (3.4 / 3.5) | No native VARIANT. [Backward-compat read](#reading-variant-from-spark-3x-backward-compatibility) of a Spark 4.x-written table requires the explicit binary-struct DDL above; raw bytes only. |
 | Flink &lt; 2.1 | Throws `UnsupportedOperationException` on VARIANT columns. |
 | Flink ≥ 2.1 | Surfaces VARIANT as `ROW<metadata BYTES, value BYTES>`. Flink can read the underlying struct but cannot decode it as a variant value. |
 
