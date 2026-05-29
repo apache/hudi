@@ -17,7 +17,7 @@
 # limitations under the License.
 #
 
-VERSION=1.1.0
+VERSION=1.2.0
 SCALA_VERSION=2.12
 
 JARS=(
@@ -30,6 +30,7 @@ JARS=(
 "$HOME/.m2/repository/org/apache/hudi/hudi-trino-bundle/$VERSION/hudi-trino-bundle-$VERSION.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-hadoop-mr-bundle/$VERSION/hudi-hadoop-mr-bundle-$VERSION.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-hive-sync-bundle/$VERSION/hudi-hive-sync-bundle-$VERSION.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-azure-bundle/$VERSION/hudi-azure-bundle-$VERSION.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-gcp-bundle/$VERSION/hudi-gcp-bundle-$VERSION.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-aws-bundle/$VERSION/hudi-aws-bundle-$VERSION.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-datahub-sync-bundle/$VERSION/hudi-datahub-sync-bundle-$VERSION.jar"
