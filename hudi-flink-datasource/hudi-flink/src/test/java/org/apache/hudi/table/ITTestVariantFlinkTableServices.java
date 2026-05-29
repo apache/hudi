@@ -157,7 +157,8 @@ public class ITTestVariantFlinkTableServices {
         .getConfiguration()
         .set(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
 
-    tEnv.executeSql(createVariantCowPartitionedTableDdl(tablePath, 2));
+    int clusteringDeltaCommits = 2;
+    tEnv.executeSql(createVariantCowPartitionedTableDdl(tablePath, clusteringDeltaCommits));
 
     tEnv.executeSql(
             "INSERT INTO variant_table VALUES "
@@ -195,7 +196,7 @@ public class ITTestVariantFlinkTableServices {
       valueBefore[i + 2] = DataTypeAdapter.getVariantValue(afterSecondCommit.get(i).getField(1));
     }
 
-    runClusteringService(tablePath);
+    runClusteringService(tablePath, clusteringDeltaCommits);
 
     List<Row> afterCluster =
         CollectionUtil.iteratorToList(
@@ -260,7 +261,7 @@ public class ITTestVariantFlinkTableServices {
             + "  '%s' = '%s',"
             + "  '%s' = 'partition',"
             + "  '%s' = 'true',"
-            + "  '%s' = 'true',"
+            + "  '%s' = 'false',"
             + "  '%s' = '%d',"
             + "  '%s' = '1',"
             + "  '%s' = 'false'"
@@ -312,7 +313,7 @@ public class ITTestVariantFlinkTableServices {
    * schedule and execute clustering via {@link HoodieFlinkClusteringJob} (same pattern as
    * {@code ITTestHoodieFlinkClustering}).
    */
-  private static void runClusteringService(String tablePath) throws Exception {
+  private static void runClusteringService(String tablePath, int clusteringDeltaCommits) throws Exception {
     FlinkClusteringConfig cfg = new FlinkClusteringConfig();
     cfg.path = tablePath;
     cfg.schedule = true;
@@ -323,6 +324,10 @@ public class ITTestVariantFlinkTableServices {
     conf.set(
         FlinkOptions.PARTITION_PATH_FIELD,
         HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig()).orElse(""));
+    // Match ITTestHoodieFlinkClustering: batch INSERT does not defer async clustering to a separate job;
+    // if the sink runs async clustering, commits since last clustering drop to 0 and scheduleClustering no-ops.
+    conf.set(FlinkOptions.CLUSTERING_ASYNC_ENABLED, false);
+    conf.set(FlinkOptions.CLUSTERING_DELTA_COMMITS, clusteringDeltaCommits);
     CompactionUtil.setAvroSchema(conf, metaClient);
 
     try (HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(conf)) {
