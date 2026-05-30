@@ -272,6 +272,9 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
 
   /**
    * By default, return the writer schema in Write Config for storing in commit.
+   * The returned schema is sanitized of Hudi meta fields by
+   * {@link CommitUtils#sanitizeSchemaForCommitMetadata(String)} when the commit
+   * metadata is built, so callers do not need to strip meta fields here.
    */
   protected String getSchemaToStoreInCommit() {
     return config.getSchema();

@@ -24,13 +24,16 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -83,6 +86,8 @@ import java.util.stream.IntStream;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.parquet.avro.AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness {
@@ -127,6 +132,99 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
   @Test
   public void testClusteringWithRow() throws IOException {
     writeAndClustering(true);
+  }
+
+  /**
+   * Asserts that the schema persisted under HoodieCommitMetadata.SCHEMA_KEY in a completed
+   * replace (clustering) commit does NOT contain Hudi meta fields like _hoodie_commit_time.
+   * The schema stored in commit metadata is meant to be the user/write schema.
+   */
+  @Test
+  public void testReplaceCommitSchemaHasNoMetaFields() throws Exception {
+    setup(102400);
+    config.setValue("hoodie.datasource.write.row.writer.enable", "false");
+    config.setValue("hoodie.metadata.enable", "false");
+    config.setValue("hoodie.clustering.plan.strategy.daybased.lookback.partitions", "1");
+    config.setValue("hoodie.clustering.plan.strategy.target.file.max.bytes", String.valueOf(1024 * 1024));
+    config.setValue("hoodie.clustering.plan.strategy.max.bytes.per.group", String.valueOf(2 * 1024 * 1024));
+
+    writeData(1000, true, System.currentTimeMillis());
+
+    String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
+    writeClient.cluster(clusteringTime, true);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieInstant replaceInstant = metaClient.getActiveTimeline()
+        .getCompletedReplaceTimeline()
+        .filter(i -> i.requestedTime().equals(clusteringTime))
+        .firstInstant()
+        .orElseThrow(() -> new AssertionError("No completed replace commit found for " + clusteringTime));
+
+    HoodieReplaceCommitMetadata replaceCommitMetadata =
+        metaClient.getActiveTimeline().readReplaceCommitMetadata(replaceInstant);
+    assertSchemaHasNoMetaFields(replaceCommitMetadata, "replace (clustering) commit");
+  }
+
+  /**
+   * Even when {@code config.getSchema()} is pre-polluted with Hudi meta fields
+   * (simulating upstream paths like compaction reader-schema setup that may set
+   * a schema-with-meta-fields back onto the write config), both ingestion and
+   * clustering commits must persist a clean schema (without meta fields) under
+   * {@link HoodieCommitMetadata#SCHEMA_KEY}. This guards the sanitization in
+   * {@code CommitUtils#sanitizeSchemaForCommitMetadata(String)}.
+   */
+  @Test
+  public void testCommitSchemaCleanedEvenWhenConfigSchemaHasMetaFields() throws Exception {
+    setup(102400);
+    config.setValue("hoodie.datasource.write.row.writer.enable", "false");
+    config.setValue("hoodie.metadata.enable", "false");
+    config.setValue("hoodie.clustering.plan.strategy.daybased.lookback.partitions", "1");
+    config.setValue("hoodie.clustering.plan.strategy.target.file.max.bytes", String.valueOf(1024 * 1024));
+    config.setValue("hoodie.clustering.plan.strategy.max.bytes.per.group", String.valueOf(2 * 1024 * 1024));
+
+    // Pre-pollute the write config schema with Hudi meta fields.
+    HoodieSchema pollutedSchema = HoodieSchemaUtils.addMetadataFields(getSchema());
+    assertTrue(pollutedSchema.getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD).isPresent(),
+        "Sanity check: polluted schema must contain meta fields");
+    config.setSchema(pollutedSchema.toString());
+
+    writeData(1000, true, System.currentTimeMillis());
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieInstant ingestionInstant = metaClient.getActiveTimeline()
+        .getCommitsTimeline()
+        .filterCompletedInstants()
+        .lastInstant()
+        .orElseThrow(() -> new AssertionError("No completed ingestion commit found"));
+    HoodieCommitMetadata ingestionMetadata =
+        metaClient.getActiveTimeline().readCommitMetadata(ingestionInstant);
+    assertSchemaHasNoMetaFields(ingestionMetadata, "ingestion commit");
+
+    String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
+    writeClient.cluster(clusteringTime, true);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieInstant replaceInstant = metaClient.getActiveTimeline()
+        .getCompletedReplaceTimeline()
+        .filter(i -> i.requestedTime().equals(clusteringTime))
+        .firstInstant()
+        .orElseThrow(() -> new AssertionError("No completed replace commit found for " + clusteringTime));
+    HoodieReplaceCommitMetadata replaceMetadata =
+        metaClient.getActiveTimeline().readReplaceCommitMetadata(replaceInstant);
+    assertSchemaHasNoMetaFields(replaceMetadata, "replace (clustering) commit");
+  }
+
+  private static void assertSchemaHasNoMetaFields(HoodieCommitMetadata commitMetadata, String label) {
+    String schemaStr = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
+    assertNotNull(schemaStr, label + " must persist a schema under SCHEMA_KEY");
+    assertFalse(schemaStr.isEmpty(), label + " schema must not be empty");
+    HoodieSchema storedSchema = HoodieSchema.parse(schemaStr);
+    List<String> metaFieldsPresent = HoodieRecord.HOODIE_META_COLUMNS.stream()
+        .filter(metaField -> storedSchema.getField(metaField).isPresent())
+        .collect(Collectors.toList());
+    assertTrue(metaFieldsPresent.isEmpty(),
+        label + " schema should not contain Hudi meta fields, but found: " + metaFieldsPresent
+            + ". Stored schema: " + schemaStr);
   }
 
   public void writeAndClustering(boolean isRow) throws IOException {
