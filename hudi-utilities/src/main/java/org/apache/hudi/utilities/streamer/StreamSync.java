@@ -1474,4 +1474,29 @@ public class StreamSync implements Serializable, Closeable {
       return writeStatusRDD;
     }
   }
+
+  /**
+   * Sums {@link WriteStatus#getTotalRecords()} and {@link WriteStatus#getTotalErrorRecords()} over the
+   * given RDD in a single Spark action, returned as a {@code (totalRecords, totalErroredRecords)} tuple.
+   *
+   * <p>{@code aggregate} (not {@code reduce}) is used so a 0-partition RDD returns {@code (0L, 0L)}
+   * instead of raising {@code UnsupportedOperationException}; the mutable {@code long[2]} accumulator
+   * avoids per-record allocations.
+   */
+  @VisibleForTesting
+  static Tuple2<Long, Long> sumRecordAndErrorCounts(JavaRDD<WriteStatus> writeStatuses) {
+    long[] counts = writeStatuses.aggregate(
+        new long[]{0L, 0L},
+        (acc, status) -> {
+          acc[0] += status.getTotalRecords();
+          acc[1] += status.getTotalErrorRecords();
+          return acc;
+        },
+        (left, right) -> {
+          left[0] += right[0];
+          left[1] += right[1];
+          return left;
+        });
+    return new Tuple2<>(counts[0], counts[1]);
+  }
 }
