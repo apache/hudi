@@ -18,6 +18,7 @@
 
 package org.apache.hudi.aws.sync;
 
+import org.apache.hudi.HoodieVersion;
 import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 import org.apache.hudi.aws.sync.util.GluePartitionFilterGenerator;
 import org.apache.hudi.common.fs.FSUtils;
@@ -529,6 +530,21 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         throw new HoodieGlueSyncException("Fail to update table comments " + tableId(databaseName, table.name()), e);
       }
       return true;
+    }
+  }
+
+  @Override
+  public void updateHoodieWriterVersion(String tableName) {
+    try {
+      updateTableParameters(
+          awsGlue,
+          databaseName,
+          tableName,
+          Collections.singletonMap(HoodieVersion.HOODIE_WRITER_VERSION, HoodieVersion.get()),
+          skipTableArchive);
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException(String.format("Failed to update hudi writer version %s for %s",
+          HoodieVersion.get(), tableName), e);
     }
   }
 

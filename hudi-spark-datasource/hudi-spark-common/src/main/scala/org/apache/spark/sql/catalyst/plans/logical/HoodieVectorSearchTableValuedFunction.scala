@@ -19,7 +19,7 @@ package org.apache.spark.sql.catalyst.plans.logical
 
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Literal}
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
-import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.types.{Decimal, NullType, NumericType, StringType}
 
 object HoodieVectorSearchTableValuedFunction {
 
@@ -53,21 +53,28 @@ object HoodieVectorSearchTableValuedFunction {
     queryVectorExpr: Expression,
     k: Int,
     metric: DistanceMetric.Value,
-    algorithm: SearchAlgorithm.Value
+    algorithm: SearchAlgorithm.Value,
+    filter: Option[String],
+    maxDistance: Option[Double]
   )
 
   /**
    * Parse arguments for the hudi_vector_search TVF (single-query mode).
    *
-   * Signature (4–6 args):
-   *   hudi_vector_search('table', 'embedding_col', ARRAY(1.0, 2.0, ...), k [, 'metric'] [, 'algorithm'])
+   * Signature (4–8 args):
+   *   hudi_vector_search('table', 'embedding_col', ARRAY(1.0, 2.0, ...), k
+   *     [, 'metric'] [, 'algorithm'] [, 'filter_predicate' | NULL] [, max_distance | NULL])
    *   metric defaults to 'cosine'; algorithm defaults to 'brute_force'.
+   *   filter is a SQL predicate applied to the corpus before distance computation;
+   *     NULL, the empty string, and whitespace-only strings all mean "no filter."
+   *   max_distance excludes results whose distance exceeds the given threshold;
+   *     NULL means "no threshold." Must be a numeric literal when specified.
    */
   def parseArgs(exprs: Seq[Expression]): ParsedArgs = {
-    if (exprs.size < 4 || exprs.size > 6) {
+    if (exprs.size < 4 || exprs.size > 8) {
       throw new HoodieAnalysisException(
-        s"Function '$FUNC_NAME' expects 4-6 arguments: " +
-          "(table, embedding_col, query_vector, k [, metric] [, algorithm]).")
+        s"Function '$FUNC_NAME' expects 4-8 arguments: " +
+          "(table, embedding_col, query_vector, k [, metric] [, algorithm] [, filter] [, max_distance]).")
     }
 
     def requireStringLiteral(expr: Expression, argName: String): String = expr match {
@@ -84,7 +91,9 @@ object HoodieVectorSearchTableValuedFunction {
     else DistanceMetric.COSINE
     val algorithm = if (exprs.size >= 6) SearchAlgorithm.fromString(requireStringLiteral(exprs(5), "algorithm"))
     else SearchAlgorithm.BRUTE_FORCE
-    ParsedArgs(table, embeddingCol, queryVectorExpr, k, metric, algorithm)
+    val filter = if (exprs.size >= 7) parseOptionalString(FUNC_NAME, exprs(6), "filter") else None
+    val maxDistance = if (exprs.size >= 8) parseOptionalDouble(FUNC_NAME, exprs(7), "max_distance") else None
+    ParsedArgs(table, embeddingCol, queryVectorExpr, k, metric, algorithm, filter, maxDistance)
   }
 
   private[logical] def parseK(funcName: String, expr: Expression): Int = {
@@ -105,6 +114,43 @@ object HoodieVectorSearchTableValuedFunction {
         s"Function '$funcName': k must be a positive integer, got $kValue")
     }
     kValue
+  }
+
+  /** Parses a string argument that may be NULL (meaning "not specified"). */
+  private[logical] def parseOptionalString(
+      funcName: String, expr: Expression, argName: String): Option[String] = expr match {
+    case Literal(null, _) => None
+    case Literal(v, StringType) if v != null =>
+      val s = v.toString.trim
+      if (s.isEmpty) None else Some(s)
+    case _ => throw new HoodieAnalysisException(
+      s"Function '$funcName': argument '$argName' must be a string literal or NULL, got: ${expr.sql}")
+  }
+
+  /**
+   * Parses a numeric argument that may be NULL (meaning "not specified"). Accepts
+   * any foldable expression of [[NumericType]] (or [[NullType]] for an untyped
+   * NULL keyword) — including a bare literal or {@code CAST(literal AS numeric)} —
+   * and widens to Double. String literals are rejected even when their contents
+   * happen to parse as a number, so the type contract surfaces at parse time.
+   */
+  private[logical] def parseOptionalDouble(
+      funcName: String, expr: Expression, argName: String): Option[Double] = {
+    val numericOrNull = expr.dataType match {
+      case _: NumericType | NullType => true
+      case _ => false
+    }
+    if (!expr.foldable || !numericOrNull) {
+      throw new HoodieAnalysisException(
+        s"Function '$funcName': argument '$argName' must be a numeric literal or NULL, got: ${expr.sql}")
+    }
+    Option(expr.eval()).map {
+      case d: Decimal => d.toDouble
+      case n: Number => n.doubleValue()
+      case other => throw new HoodieAnalysisException(
+        s"Function '$funcName': argument '$argName' has unexpected runtime type: " +
+          s"${other.getClass.getName}")
+    }
   }
 }
 
@@ -142,21 +188,28 @@ object HoodieVectorSearchBatchTableValuedFunction {
     queryEmbeddingCol: String,
     k: Int,
     metric: HoodieVectorSearchTableValuedFunction.DistanceMetric.Value,
-    algorithm: HoodieVectorSearchTableValuedFunction.SearchAlgorithm.Value
+    algorithm: HoodieVectorSearchTableValuedFunction.SearchAlgorithm.Value,
+    filter: Option[String],
+    maxDistance: Option[Double]
   )
 
   /**
    * Parse arguments for the hudi_vector_search_batch TVF (batch-query mode).
    *
-   * Signature (5–7 args):
-   *   hudi_vector_search_batch('corpus_table', 'corpus_col', 'query_table', 'query_col', k [, 'metric'] [, 'algorithm'])
+   * Signature (5–9 args):
+   *   hudi_vector_search_batch('corpus_table', 'corpus_col', 'query_table', 'query_col', k
+   *     [, 'metric'] [, 'algorithm'] [, 'filter_predicate' | NULL] [, max_distance | NULL])
    *   metric defaults to 'cosine'; algorithm defaults to 'brute_force'.
+   *   filter is a SQL predicate applied to the corpus before distance computation;
+   *     NULL, the empty string, and whitespace-only strings all mean "no filter."
+   *   max_distance excludes results whose distance exceeds the given threshold;
+   *     NULL means "no threshold." Must be a numeric literal when specified.
    */
   def parseArgs(exprs: Seq[Expression]): ParsedArgs = {
-    if (exprs.size < 5 || exprs.size > 7) {
+    if (exprs.size < 5 || exprs.size > 9) {
       throw new HoodieAnalysisException(
-        s"Function '$FUNC_NAME' expects 5-7 arguments: " +
-          "(corpus_table, corpus_col, query_table, query_col, k [, metric] [, algorithm]).")
+        s"Function '$FUNC_NAME' expects 5-9 arguments: " +
+          "(corpus_table, corpus_col, query_table, query_col, k [, metric] [, algorithm] [, filter] [, max_distance]).")
     }
 
     def requireStringLiteral(expr: Expression, argName: String): String = expr match {
@@ -176,7 +229,14 @@ object HoodieVectorSearchBatchTableValuedFunction {
     val algorithm = if (exprs.size >= 7)
       HoodieVectorSearchTableValuedFunction.SearchAlgorithm.fromString(requireStringLiteral(exprs(6), "algorithm"))
     else HoodieVectorSearchTableValuedFunction.SearchAlgorithm.BRUTE_FORCE
-    ParsedArgs(corpusTable, corpusEmbeddingCol, queryTable, queryEmbeddingCol, k, metric, algorithm)
+    val filter = if (exprs.size >= 8)
+      HoodieVectorSearchTableValuedFunction.parseOptionalString(FUNC_NAME, exprs(7), "filter")
+    else None
+    val maxDistance = if (exprs.size >= 9)
+      HoodieVectorSearchTableValuedFunction.parseOptionalDouble(FUNC_NAME, exprs(8), "max_distance")
+    else None
+    ParsedArgs(corpusTable, corpusEmbeddingCol, queryTable, queryEmbeddingCol,
+      k, metric, algorithm, filter, maxDistance)
   }
 }
 

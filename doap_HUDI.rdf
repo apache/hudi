@@ -223,10 +223,26 @@
         <created>2025-11-17</created>
         <revision>1.1.0</revision>
       </Version>
+    </release>
+    <release>
       <Version>
         <name>Apache Hudi 1.1.1</name>
         <created>2025-12-18</created>
         <revision>1.1.1</revision>
+      </Version>
+    </release>
+    <release>
+      <Version>
+        <name>Apache Hudi 0.15.1</name>
+        <created>2026-05-19</created>
+        <revision>0.15.1</revision>
+      </Version>
+    </release>
+    <release>
+      <Version>
+        <name>Apache Hudi 1.2.0</name>
+        <created>2026-05-23</created>
+        <revision>1.2.0</revision>
       </Version>
     </release>
     <repository>

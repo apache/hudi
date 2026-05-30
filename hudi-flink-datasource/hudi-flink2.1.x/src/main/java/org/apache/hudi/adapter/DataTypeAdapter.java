@@ -25,11 +25,46 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.types.variant.BinaryVariant;
 import org.apache.flink.types.variant.Variant;
+import org.apache.hudi.common.util.Option;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
+
+import java.lang.reflect.Method;
 
 /**
  * Adapter utils to provide {@code DataType} utilities.
  */
 public class DataTypeAdapter {
+
+  /**
+   * The Parquet Variant binary format specification version passed to
+   * {@code LogicalTypeAnnotation.variantType(byte)}. Version 1 is the initial spec
+   * defined by the Parquet Variant proposal (parquet-format 2.11.0 / parquet-java 1.16.0).
+   */
+  private static final byte VARIANT_SPEC_VERSION = 1;
+
+  /**
+   * Cached VARIANT annotation resolved via reflection. Empty if parquet-java
+   * on the classpath predates {@code LogicalTypeAnnotation.variantType()} (< 1.16.0).
+   */
+  private static final Option<LogicalTypeAnnotation> VARIANT_ANNOTATION = resolveVariantAnnotation();
+
+  private static Option<LogicalTypeAnnotation> resolveVariantAnnotation() {
+    try {
+      Method factory = LogicalTypeAnnotation.class.getMethod("variantType", byte.class);
+      return Option.of((LogicalTypeAnnotation) factory.invoke(null, VARIANT_SPEC_VERSION));
+    } catch (Exception e) {
+      return Option.empty();
+    }
+  }
+
+  /**
+   * Returns the Parquet VARIANT {@link LogicalTypeAnnotation} if parquet-java 1.16.0+ is on the
+   * classpath, or empty if the annotation class is unavailable.
+   */
+  public static Option<LogicalTypeAnnotation> variantParquetAnnotation() {
+    return VARIANT_ANNOTATION;
+  }
+
   public static Variant getVariant(RowData rowData, int pos) {
     return rowData.getVariant(pos);
   }

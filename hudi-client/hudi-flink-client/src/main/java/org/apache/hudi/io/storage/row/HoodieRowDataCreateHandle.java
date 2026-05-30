@@ -35,11 +35,13 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.table.data.RowData;
@@ -293,7 +295,13 @@ public class HoodieRowDataCreateHandle implements Serializable {
       Path path, HoodieTable hoodieTable, HoodieWriteConfig config, RowType rowType, String instantTime)
       throws IOException {
     StoragePath storagePath = new StoragePath(path.toUri());
-    return (HoodieRowDataFileWriter) new HoodieRowDataFileWriterFactory(hoodieTable.getStorage())
-        .newParquetFileWriter(instantTime, storagePath, config, rowType, hoodieTable.getTaskContextSupplier());
+    return (HoodieRowDataFileWriter) HoodieFileWriterFactory.getFileWriter(
+        instantTime,
+        storagePath,
+        hoodieTable.getStorage(),
+        config,
+        HoodieSchemaConverter.convertToSchema(rowType).getNonNullType(),
+        hoodieTable.getTaskContextSupplier(),
+        HoodieRecord.HoodieRecordType.FLINK);
   }
 }

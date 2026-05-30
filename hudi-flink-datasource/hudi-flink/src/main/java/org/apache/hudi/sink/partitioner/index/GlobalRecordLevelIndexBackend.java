@@ -23,23 +23,23 @@ import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metrics.FlinkIndexBackendMetrics;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.util.StreamerUtil;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.MetricGroup;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -58,6 +58,7 @@ public class GlobalRecordLevelIndexBackend implements MinibatchIndexBackend {
   private final Configuration conf;
   private final HoodieTableMetaClient metaClient;
   private HoodieTableMetadata metadataTable;
+  private FlinkIndexBackendMetrics metrics;
 
   /**
    * Creates a global RLI backend with a checkpoint-aware cache.
@@ -73,8 +74,14 @@ public class GlobalRecordLevelIndexBackend implements MinibatchIndexBackend {
   }
 
   @Override
+  public void registerMetrics(MetricGroup metricGroup) {
+    this.metrics = new FlinkIndexBackendMetrics(metricGroup);
+    this.metrics.registerMetrics();
+  }
+
+  @Override
   public HoodieRecordGlobalLocation get(String recordKey) throws IOException {
-    return get(Collections.singletonList(recordKey)).get(recordKey);
+    throw new UnsupportedOperationException(this.getClass().getSimpleName() + " doesn't support lookup with a single key.");
   }
 
   @Override
@@ -84,25 +91,35 @@ public class GlobalRecordLevelIndexBackend implements MinibatchIndexBackend {
 
   @Override
   public Map<String, HoodieRecordGlobalLocation> get(List<String> recordKeys) throws IOException {
-    // use a linked hash map to keep the natural order.
-    Map<String, HoodieRecordGlobalLocation> keysAndLocations = new LinkedHashMap<>();
+    Map<String, HoodieRecordGlobalLocation> keysAndLocations = new HashMap<>();
     List<String> missedKeys = new ArrayList<>();
-    for (String key: recordKeys) {
+
+    metrics.startLocalIndexLookup();
+    for (String key : recordKeys) {
       HoodieRecordGlobalLocation location = recordIndexCache.get(key);
       if (location == null) {
         missedKeys.add(key);
+      } else {
+        keysAndLocations.put(key, location);
       }
-      // insert anyway even the location is null to keep the natural order.
-      keysAndLocations.put(key, location);
     }
+
+    int hitCount = recordKeys.size() - missedKeys.size();
+    metrics.endLocalIndexLookup();
+    metrics.updateLocalLookupKeysCount(hitCount);
+    metrics.updateLookupCacheHitRatio(hitCount, missedKeys.size());
+
     if (!missedKeys.isEmpty()) {
+      metrics.startRemoteIndexLookup();
       HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
           metadataTable.readRecordIndexLocationsWithKeys(HoodieListData.eager(missedKeys));
-      List<Pair<String, HoodieRecordGlobalLocation>> recordIndexLocations = HoodieDataUtils.dedupeAndCollectAsList(recordIndexData);
-      recordIndexLocations.forEach(keyAndLocation -> {
+      recordIndexData.forEach(keyAndLocation -> {
         recordIndexCache.update(keyAndLocation.getKey(), keyAndLocation.getValue());
         keysAndLocations.put(keyAndLocation.getKey(), keyAndLocation.getValue());
       });
+
+      metrics.endRemoteIndexLookup();
+      metrics.updateRemoteLookupKeysCount(missedKeys.size());
     }
     return keysAndLocations;
   }

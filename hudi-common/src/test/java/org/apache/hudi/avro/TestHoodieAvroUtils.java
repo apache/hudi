@@ -99,7 +99,10 @@ import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -497,6 +500,147 @@ public class TestHoodieAvroUtils {
     assertTrue(obj instanceof ByteBuffer);
     ByteBuffer buffer = (ByteBuffer) obj;
     assertEquals(0, buffer.position());
+  }
+
+  // Cross-Avro-version test fixtures: the same date / timestamp value expressed in both the Avro
+  // primitive form (Integer / Long) — what GenericDatumReader returns under Avro 1.12.0 / 1.11.x —
+  // and the java.time form (LocalDate / Instant / LocalDateTime) — what it returns under Avro
+  // 1.12.1 with its default fastReaderEnabled=true. The contract under test is that both forms
+  // produce identical downstream behavior in every Hudi read-side path that touches a logical-typed
+  // field. Sharing these fixtures across tests pins the same exact value through every path.
+  private static final long FIXTURE_EPOCH_MICROS = 1716163200_000000L + 123456L; // 2024-05-20T00:00:00.123456Z
+  private static final long FIXTURE_EPOCH_MILLIS = 1716163200_000L + 123L;       // 2024-05-20T00:00:00.123Z
+  private static final int FIXTURE_EPOCH_DAY = (int) LocalDate.of(2024, 5, 20).toEpochDay();
+  private static final Instant FIXTURE_MILLIS_INSTANT = Instant.ofEpochMilli(FIXTURE_EPOCH_MILLIS);
+  private static final Instant FIXTURE_MICROS_INSTANT = Instant.ofEpochSecond(
+      FIXTURE_EPOCH_MICROS / 1_000_000L, (FIXTURE_EPOCH_MICROS % 1_000_000L) * 1000L);
+  private static final LocalDate FIXTURE_LOCAL_DATE = LocalDate.ofEpochDay(FIXTURE_EPOCH_DAY);
+  private static final LocalDateTime FIXTURE_LOCAL_DT_MILLIS =
+      LocalDateTime.ofInstant(FIXTURE_MILLIS_INSTANT, ZoneOffset.UTC);
+  private static final LocalDateTime FIXTURE_LOCAL_DT_MICROS =
+      LocalDateTime.ofInstant(FIXTURE_MICROS_INSTANT, ZoneOffset.UTC);
+
+  private static final Schema DATE_SCHEMA = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
+  private static final Schema TS_MILLIS_SCHEMA = LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
+  private static final Schema TS_MICROS_SCHEMA = LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
+  private static final Schema LOCAL_TS_MILLIS_SCHEMA = LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
+  private static final Schema LOCAL_TS_MICROS_SCHEMA = LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
+
+  /**
+   * Cross-Avro-version invariant: {@link HoodieAvroUtils#convertValueForAvroLogicalTypes} must produce
+   * the same canonical Java value whether the GenericRecord field holds the Avro primitive form
+   * ({@code Long}/{@code Integer}, returned by Avro 1.12.0 and 1.11.x) or the java.time form
+   * ({@code Instant}/{@code LocalDate}/{@code LocalDateTime}, returned by Avro 1.12.1 with its
+   * default {@code fastReaderEnabled=true}). This is the contract that lets a Spark 4.1 reader
+   * compare ordering values against records written by any earlier Spark profile without divergence.
+   */
+  @Test
+  public void testConvertValueForAvroLogicalTypesCrossAvroVersion() {
+    // date
+    assertEquals(HoodieAvroUtils.convertValueForAvroLogicalTypes(DATE_SCHEMA, FIXTURE_EPOCH_DAY, false),
+        HoodieAvroUtils.convertValueForAvroLogicalTypes(DATE_SCHEMA, FIXTURE_LOCAL_DATE, false));
+
+    // timestamp-millis, consistent=false → epoch-millis Long
+    assertEquals(FIXTURE_EPOCH_MILLIS, HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MILLIS_SCHEMA, FIXTURE_EPOCH_MILLIS, false));
+    assertEquals(FIXTURE_EPOCH_MILLIS, HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MILLIS_SCHEMA, FIXTURE_MILLIS_INSTANT, false));
+
+    // timestamp-millis, consistent=true → java.sql.Timestamp
+    assertEquals(HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MILLIS_SCHEMA, FIXTURE_EPOCH_MILLIS, true),
+        HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MILLIS_SCHEMA, FIXTURE_MILLIS_INSTANT, true));
+
+    // timestamp-micros, consistent=false → epoch-micros Long
+    assertEquals(FIXTURE_EPOCH_MICROS, HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MICROS_SCHEMA, FIXTURE_EPOCH_MICROS, false));
+    assertEquals(FIXTURE_EPOCH_MICROS, HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MICROS_SCHEMA, FIXTURE_MICROS_INSTANT, false));
+
+    // timestamp-micros, consistent=true → java.sql.Timestamp (millis precision, matches Avro 1.11 behavior)
+    assertEquals(HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MICROS_SCHEMA, FIXTURE_EPOCH_MICROS, true),
+        HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MICROS_SCHEMA, FIXTURE_MICROS_INSTANT, true));
+
+    // local-timestamp-millis / local-timestamp-micros → Long
+    assertEquals(FIXTURE_EPOCH_MILLIS, HoodieAvroUtils.convertValueForAvroLogicalTypes(LOCAL_TS_MILLIS_SCHEMA, FIXTURE_EPOCH_MILLIS, false));
+    assertEquals(FIXTURE_EPOCH_MILLIS, HoodieAvroUtils.convertValueForAvroLogicalTypes(LOCAL_TS_MILLIS_SCHEMA, FIXTURE_LOCAL_DT_MILLIS, false));
+    assertEquals(FIXTURE_EPOCH_MICROS, HoodieAvroUtils.convertValueForAvroLogicalTypes(LOCAL_TS_MICROS_SCHEMA, FIXTURE_EPOCH_MICROS, false));
+    assertEquals(FIXTURE_EPOCH_MICROS, HoodieAvroUtils.convertValueForAvroLogicalTypes(LOCAL_TS_MICROS_SCHEMA, FIXTURE_LOCAL_DT_MICROS, false));
+  }
+
+  /**
+   * Cross-Avro-version invariant for ordering-value extraction: a record whose timestamp/date field
+   * holds the java.time form (Avro 1.12.1 fast reader) must yield the same comparable ordering value
+   * as one holding the primitive form (Avro 1.12.0 / 1.11.x). Without this property,
+   * {@code DefaultHoodieRecordPayload.compareOrderingVal} throws ClassCastException when one side of
+   * the comparison was read via Avro 1.12.1 and the other built from a Long (which is what Hudi's
+   * Spark→Avro serializer always produces).
+   */
+  @Test
+  public void testGetNestedFieldValOrderingInvariantAcrossAvroVersions() {
+    String schemaStr = "{\"type\":\"record\",\"name\":\"r\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"string\"},"
+        + "{\"name\":\"ts\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},"
+        + "{\"name\":\"d\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}}]}";
+    Schema schema = new Schema.Parser().parse(schemaStr);
+
+    GenericRecord avro111Form = new GenericData.Record(schema);
+    avro111Form.put("id", "k");
+    avro111Form.put("ts", FIXTURE_EPOCH_MICROS);
+    avro111Form.put("d", FIXTURE_EPOCH_DAY);
+
+    GenericRecord avro112Form = new GenericData.Record(schema);
+    avro112Form.put("id", "k");
+    avro112Form.put("ts", FIXTURE_MICROS_INSTANT);
+    avro112Form.put("d", FIXTURE_LOCAL_DATE);
+
+    Object ts111 = HoodieAvroUtils.getNestedFieldVal(avro111Form, "ts", true, false);
+    Object ts112 = HoodieAvroUtils.getNestedFieldVal(avro112Form, "ts", true, false);
+    assertEquals(ts111, ts112);
+    // ordering compareTo must be symmetric and produce 0 — this is exactly what
+    // DefaultHoodieRecordPayload.compareOrderingVal relies on.
+    assertEquals(0, ((Comparable<Object>) ts111).compareTo(ts112));
+    assertEquals(0, ((Comparable<Object>) ts112).compareTo(ts111));
+
+    Object d111 = HoodieAvroUtils.getNestedFieldVal(avro111Form, "d", true, false);
+    Object d112 = HoodieAvroUtils.getNestedFieldVal(avro112Form, "d", true, false);
+    assertEquals(d111, d112);
+    assertEquals(0, ((Comparable<Object>) d111).compareTo(d112));
+  }
+
+  /**
+   * Cross-Avro-version invariant for {@link HoodieAvroUtils#rewritePrimaryType}: schema-evolution
+   * paths that legacy-cast {@code (Integer) oldValue} / {@code (Long) oldValue} (e.g. ALTER COLUMN
+   * TYPE from date → string, or timestamp-millis → timestamp-micros) must accept the java.time
+   * form (Avro 1.12.1 fast reader) as well as the primitive form (Avro 1.12.0 / 1.11.x), since the
+   * on-disk byte format is identical and a Spark 4.1 reader can be evolving records written by any
+   * version.
+   */
+  @Test
+  public void testRewritePrimaryTypeCrossAvroVersion() {
+    Schema stringSchema = Schema.create(Schema.Type.STRING);
+    Schema longSchema = Schema.create(Schema.Type.LONG);
+    Schema floatSchema = Schema.create(Schema.Type.FLOAT);
+    Schema doubleSchema = Schema.create(Schema.Type.DOUBLE);
+
+    // For each (oldSchema, target newSchema), both the primitive and java.time inputs must yield the
+    // same rewritten value — same on-disk semantics, no divergence between Spark profiles.
+    assertRewriteEquivalent(DATE_SCHEMA, stringSchema, FIXTURE_EPOCH_DAY, FIXTURE_LOCAL_DATE);
+    assertRewriteEquivalent(DATE_SCHEMA, longSchema, FIXTURE_EPOCH_DAY, FIXTURE_LOCAL_DATE);
+    assertRewriteEquivalent(DATE_SCHEMA, floatSchema, FIXTURE_EPOCH_DAY, FIXTURE_LOCAL_DATE);
+    assertRewriteEquivalent(DATE_SCHEMA, doubleSchema, FIXTURE_EPOCH_DAY, FIXTURE_LOCAL_DATE);
+
+    assertRewriteEquivalent(TS_MILLIS_SCHEMA, stringSchema, FIXTURE_EPOCH_MILLIS, FIXTURE_MILLIS_INSTANT);
+    assertRewriteEquivalent(TS_MILLIS_SCHEMA, floatSchema, FIXTURE_EPOCH_MILLIS, FIXTURE_MILLIS_INSTANT);
+    assertRewriteEquivalent(TS_MILLIS_SCHEMA, doubleSchema, FIXTURE_EPOCH_MILLIS, FIXTURE_MILLIS_INSTANT);
+
+    // In-place logical-type changes: the LONG → LONG branches in rewritePrimaryType explicitly cast
+    // to (Long) and would fail on Instant / LocalDateTime under Avro 1.12.1.
+    assertRewriteEquivalent(TS_MILLIS_SCHEMA, TS_MICROS_SCHEMA, FIXTURE_EPOCH_MILLIS, FIXTURE_MILLIS_INSTANT);
+    assertRewriteEquivalent(TS_MICROS_SCHEMA, TS_MILLIS_SCHEMA, FIXTURE_EPOCH_MICROS, FIXTURE_MICROS_INSTANT);
+    assertRewriteEquivalent(LOCAL_TS_MILLIS_SCHEMA, LOCAL_TS_MICROS_SCHEMA, FIXTURE_EPOCH_MILLIS, FIXTURE_LOCAL_DT_MILLIS);
+    assertRewriteEquivalent(LOCAL_TS_MICROS_SCHEMA, LOCAL_TS_MILLIS_SCHEMA, FIXTURE_EPOCH_MICROS, FIXTURE_LOCAL_DT_MICROS);
+  }
+
+  private static void assertRewriteEquivalent(Schema oldSchema, Schema newSchema,
+                                              Object avro111Value, Object avro112Value) {
+    assertEquals(HoodieAvroUtils.rewritePrimaryType(avro111Value, oldSchema, newSchema),
+        HoodieAvroUtils.rewritePrimaryType(avro112Value, oldSchema, newSchema));
   }
 
   @Test

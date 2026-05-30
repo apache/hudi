@@ -36,8 +36,8 @@ jobs:
             sparkRuntime: 'spark3.4.3'
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink1.17'
-            sparkProfile: 'spark3.3'
-            sparkRuntime: 'spark3.3.4'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.1'
     steps:
       - uses: actions/checkout@v5
       - name: Set up JDK 11
@@ -77,6 +77,10 @@ jobs:
             flinkProfile: 'flink1.20'
             sparkProfile: 'spark4.0'
             sparkRuntime: 'spark4.0.0'
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.20'
+            sparkProfile: 'spark4.1'
+            sparkRuntime: 'spark4.1.1'
     steps:
       - uses: actions/checkout@v5
       - name: Set up JDK 17
@@ -106,6 +110,10 @@ jobs:
         include:
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink2.0'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.1'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink2.1'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.1'
     steps:

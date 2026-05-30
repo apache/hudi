@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -196,6 +197,49 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
    * <p>Only top-level fields are inspected; Hudi BLOB and VECTOR are top-level types in the Hudi
    * schema model.
    */
+  /**
+   * Fail fast if the write schema contains any VARIANT-typed column. The Lance file format
+   * does not currently support VARIANT (see https://lance.org/guide/data_types/#arrow-type-system);
+   * without this guard the write would fail deep in the Avro-to-Arrow conversion layer with a
+   * cryptic error. Walks the schema recursively so nested VARIANT fields (inside records, unions,
+   * arrays, maps) are also caught.
+   */
+  static void validateNoVariantColumns(HoodieSchema schema) {
+    checkNoVariant(schema, "");
+  }
+
+  private static void checkNoVariant(HoodieSchema schema, String path) {
+    HoodieSchemaType type = schema.getType();
+    if (type == HoodieSchemaType.VARIANT) {
+      throw new HoodieNotSupportedException(
+          "Lance base-file format does not currently support VARIANT columns "
+              + "(see https://lance.org/guide/data_types/#arrow-type-system). "
+              + "Found VARIANT field at '" + (path.isEmpty() ? "<root>" : path) + "'. "
+              + "Use Parquet for tables with VARIANT columns.");
+    }
+    switch (type) {
+      case RECORD:
+        for (HoodieSchemaField f : schema.getFields()) {
+          String childPath = path.isEmpty() ? f.name() : path + "." + f.name();
+          checkNoVariant(f.schema(), childPath);
+        }
+        break;
+      case UNION:
+        for (HoodieSchema branch : schema.getTypes()) {
+          checkNoVariant(branch, path);
+        }
+        break;
+      case ARRAY:
+        checkNoVariant(schema.getElementType(), path + "[]");
+        break;
+      case MAP:
+        checkNoVariant(schema.getValueType(), path + ".<value>");
+        break;
+      default:
+        // Primitive or BLOB / VECTOR — nothing to recurse into for VARIANT detection.
+    }
+  }
+
   private static StructType enrichSparkSchemaForLance(StructType sparkSchema) {
     Map<Integer, HoodieSchema.Vector> vectorColumns =
         VectorConversionUtils.detectVectorColumnsFromMetadata(sparkSchema);

@@ -20,8 +20,10 @@ package org.apache.hudi.sink.partitioner;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metrics.FlinkBucketAssignMetrics;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -41,6 +43,7 @@ import java.util.List;
 
 import static org.apache.hudi.utils.TestData.insertRow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -48,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestMinibatchBucketAssignFunction {
   private OneInputStreamOperatorTestHarness<HoodieFlinkInternalRow, HoodieFlinkInternalRow> testHarness;
+  private MinibatchBucketAssignFunction function;
   private static Configuration conf;
 
   @TempDir
@@ -58,14 +62,14 @@ public class TestMinibatchBucketAssignFunction {
     final String basePath = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(basePath);
     conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
-    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
   }
 
   @BeforeEach
   public void beforeEach() throws Exception {
     // Create the MinibatchBucketAssignFunction
-    MinibatchBucketAssignFunction function = new MinibatchBucketAssignFunction(conf);
+    function = new MinibatchBucketAssignFunction(conf);
     // Set up test harness
     testHarness = new OneInputStreamOperatorTestHarness<>(new MiniBatchBucketAssignOperator(function, new OperatorID()), 1, 1, 0);
     testHarness.open();
@@ -240,8 +244,128 @@ public class TestMinibatchBucketAssignFunction {
     HoodieFlinkInternalRow record = new HoodieFlinkInternalRow("id1", "par1", "I",
         insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23, TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
     testHarness.processElement(new StreamRecord<>(record));
-    
+
     // Close should not throw any exceptions
     testHarness.close();
+  }
+
+  @Test
+  public void testInsertOperationFlushedByEndInput() throws Exception {
+    // With OPERATION=INSERT, endInput() should flush the partial buffer.
+    Configuration insertConf = Configuration.fromMap(conf.toMap());
+    insertConf.set(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
+
+    MinibatchBucketAssignFunction insertFunction = new MinibatchBucketAssignFunction(insertConf);
+    OneInputStreamOperatorTestHarness<HoodieFlinkInternalRow, HoodieFlinkInternalRow> insertHarness =
+        new OneInputStreamOperatorTestHarness<>(new MiniBatchBucketAssignOperator(insertFunction, new OperatorID()), 1, 1, 0);
+    insertHarness.open();
+    try {
+      for (int i = 0; i < 3; i++) {
+        String key = "ins_key_" + i;
+        HoodieFlinkInternalRow record = new HoodieFlinkInternalRow(key, "par9", "I",
+            insertRow(StringData.fromString(key), StringData.fromString("Name"), 30,
+                TimestampData.fromEpochMillis(1), StringData.fromString("par9")));
+        insertHarness.processElement(new StreamRecord<>(record));
+      }
+
+      // Buffer holds 3 records, no flush yet.
+      assertEquals(0, insertHarness.extractOutputValues().size(), "Records should still be buffered");
+
+      insertHarness.endInput();
+
+      List<HoodieFlinkInternalRow> output = insertHarness.extractOutputValues();
+      assertEquals(3, output.size(), "endInput should flush all buffered records");
+      for (HoodieFlinkInternalRow row : output) {
+        assertTrue(row.getFileId() != null && !row.getFileId().isEmpty(), "File ID should be assigned");
+        assertEquals("I", row.getInstantTime(), "All records should be INSERT bucket assignments");
+      }
+    } finally {
+      insertHarness.close();
+    }
+  }
+
+  @Test
+  public void testEmptyBufferPrepareSnapshotPreBarrierEmitsNothing() throws Exception {
+    // prepareSnapshotPreBarrier on an empty buffer should not throw and should emit no records.
+    testHarness.prepareSnapshotPreBarrier(1L);
+
+    List<HoodieFlinkInternalRow> output = testHarness.extractOutputValues();
+    assertEquals(0, output.size(), "Empty buffer should produce no output during snapshot");
+  }
+
+  @Test
+  public void testMultipleCheckpointFlushes() throws Exception {
+    // Each prepareSnapshotPreBarrier call should flush only the records buffered since the last flush.
+    HoodieFlinkInternalRow record1 = new HoodieFlinkInternalRow("id1", "par1", "I",
+        insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+            TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
+    HoodieFlinkInternalRow record2 = new HoodieFlinkInternalRow("id2", "par1", "I",
+        insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 33,
+            TimestampData.fromEpochMillis(2), StringData.fromString("par1")));
+
+    // First checkpoint cycle.
+    testHarness.processElement(new StreamRecord<>(record1));
+    testHarness.prepareSnapshotPreBarrier(1L);
+    assertEquals(1, testHarness.extractOutputValues().size(), "First checkpoint should flush 1 record");
+
+    // Second checkpoint cycle.
+    testHarness.processElement(new StreamRecord<>(record2));
+    testHarness.prepareSnapshotPreBarrier(2L);
+
+    List<HoodieFlinkInternalRow> output = testHarness.extractOutputValues();
+    assertEquals(2, output.size(), "Second checkpoint should have flushed 1 more record (2 cumulative)");
+    for (HoodieFlinkInternalRow row : output) {
+      assertTrue(row.getFileId() != null && !row.getFileId().isEmpty(), "File ID should be assigned");
+      assertEquals("U", row.getInstantTime(), "Previously written records should be updates");
+    }
+  }
+
+  @Test
+  public void testCustomMinibatchSizeAboveDefault() {
+    // When the configured size exceeds the default minimum, it should be used as-is.
+    Configuration customConf = Configuration.fromMap(conf.toMap());
+    customConf.set(FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE, 2000);
+    MinibatchBucketAssignFunction customFunction = new MinibatchBucketAssignFunction(customConf);
+    assertEquals(2000, customFunction.getMiniBatchSize(),
+        "Should use the configured size when it is above the default minimum");
+  }
+
+  @Test
+  public void testEndInputOnEmptyBufferDoesNotThrow() throws Exception {
+    // endInput with an empty buffer must not throw and should emit no records.
+    testHarness.endInput();
+    assertEquals(0, testHarness.extractOutputValues().size(), "No output expected when buffer was already empty");
+  }
+
+  @Test
+  public void testDelegateMetricsNonNullAfterOpen() {
+    FlinkBucketAssignMetrics delegateMetrics = function.getDelegateMetrics();
+    assertNotNull(delegateMetrics, "Delegate metrics should be initialized after open");
+  }
+
+  @Test
+  public void testBufferingMetricIncrementedAfterFullBatchFlush() throws Exception {
+    // Processing exactly miniBatchSize records triggers one automatic flush, recording one buffering sample.
+    for (int i = 0; i < FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE.defaultValue(); i++) {
+      String key = "batch_key_" + i;
+      HoodieFlinkInternalRow record = new HoodieFlinkInternalRow(key, "par5", "I",
+          insertRow(StringData.fromString(key), StringData.fromString("Name"), 25,
+              TimestampData.fromEpochMillis(1), StringData.fromString("par5")));
+      testHarness.processElement(new StreamRecord<>(record));
+    }
+    assertEquals(1, function.getDelegateMetrics().getRecordBufferingCount(),
+        "One buffering cycle should be recorded after a full batch flush");
+  }
+
+  @Test
+  public void testBufferingMetricIncrementedAfterCheckpointFlush() throws Exception {
+    // A partial buffer flushed by a checkpoint barrier records one buffering sample.
+    HoodieFlinkInternalRow record = new HoodieFlinkInternalRow("id1", "par1", "I",
+        insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+            TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
+    testHarness.processElement(new StreamRecord<>(record));
+    testHarness.prepareSnapshotPreBarrier(1L);
+    assertEquals(1, function.getDelegateMetrics().getRecordBufferingCount(),
+        "One buffering cycle should be recorded after a checkpoint flush");
   }
 }

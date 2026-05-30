@@ -497,6 +497,42 @@ public class HoodieCommitMetadata implements Serializable {
         maxEventTime == Long.MIN_VALUE ? Option.empty() : Option.of(maxEventTime));
   }
 
+  /**
+   * Returns per-partition min/max event time folded across this commit's write stats.
+   *
+   * <p>Each entry corresponds to a partition for which at least one write stat carried a
+   * non-null {@link HoodieWriteStat#getMinEventTime()} or {@link HoodieWriteStat#getMaxEventTime()}.
+   * Partitions whose write stats have no event-time information at all are omitted from the
+   * returned map. The min/max within a partition are folded with {@code Math.min} / {@code Math.max}
+   * over its write stats, mirroring the semantics of {@link #getMinAndMaxEventTime()}.
+   *
+   * <p>This is a pure aggregation over {@code partitionToWriteStats} — it adds no persisted
+   * bytes and does not change the commit avro schema.
+   */
+  public Map<String, Pair<Option<Long>, Option<Long>>> getMinAndMaxEventTimePerPartition() {
+    Map<String, Pair<Option<Long>, Option<Long>>> result = new HashMap<>();
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      long minEventTime = Long.MAX_VALUE;
+      long maxEventTime = Long.MIN_VALUE;
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        if (writeStat.getMinEventTime() != null) {
+          minEventTime = Math.min(writeStat.getMinEventTime(), minEventTime);
+        }
+        if (writeStat.getMaxEventTime() != null) {
+          maxEventTime = Math.max(writeStat.getMaxEventTime(), maxEventTime);
+        }
+      }
+      if (minEventTime != Long.MAX_VALUE || maxEventTime != Long.MIN_VALUE) {
+        result.put(
+            entry.getKey(),
+            Pair.of(
+                minEventTime == Long.MAX_VALUE ? Option.empty() : Option.of(minEventTime),
+                maxEventTime == Long.MIN_VALUE ? Option.empty() : Option.of(maxEventTime)));
+      }
+    }
+    return result;
+  }
+
   public HashSet<String> getWritePartitionPaths() {
     return new HashSet<>(partitionToWriteStats.keySet());
   }

@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport, SparkDatasetMixin}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, ScalaAssertionSupport, SparkDatasetMixin}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -1151,11 +1151,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       "_parquet_log"
     }
     val prevTimezone = spark.conf.get("spark.sql.session.timeZone")
-    val propertyValue: String = System.getProperty("spark.testing")
     try {
-      if (HoodieSparkUtils.isSpark3_3) {
-        System.setProperty("spark.testing", "true")
-      }
       spark.conf.set("spark.sql.session.timeZone", "UTC")
       val tableName = "trips_logical_types_json_mor_read_v" + tableVersion + logBlockString
       val dataPath = "file://" + basePath + "/" + tableName
@@ -1202,13 +1198,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       assertEquals(0, df.filter("local_ts_micros < CAST('2017-07-07 07:07:06.999999' AS TIMESTAMP_NTZ)").count())
     } finally {
       spark.conf.set("spark.sql.session.timeZone", prevTimezone)
-      if (HoodieSparkUtils.isSpark3_3) {
-        if (propertyValue == null) {
-          System.clearProperty("spark.testing")
-        } else {
-          System.setProperty("spark.testing", propertyValue)
-        }
-      }
     }
   }
 

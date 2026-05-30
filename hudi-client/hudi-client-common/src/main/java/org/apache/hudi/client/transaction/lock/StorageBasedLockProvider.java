@@ -86,6 +86,16 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   // However, since our lock leases are pretty long, we can use a high buffer.
   private static final long CLOCK_DRIFT_BUFFER_MS = 500;
 
+  // Max number of retry attempts on the lock-expire write after a THROTTLED response.
+  @VisibleForTesting
+  static final int THROTTLE_MAX_RETRIES = 3;
+
+  // Initial backoff delay; doubles on each subsequent retry (e.g. 1s, 2s, 4s for 3 retries).
+  // The base of 1s is tuned to outlast typical cloud-storage rate-limit windows
+  // (e.g., GCS's 1-write/sec per object limit) so the first retry has a reasonable chance of succeeding.
+  @VisibleForTesting
+  static final long THROTTLE_INITIAL_RETRY_DELAY_SECONDS = 1;
+
   // Use for testing
   private final Logger logger;
 
@@ -346,9 +356,24 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         newLockData,
         latestLock.getRight());
     if (lockUpdateStatus.getLeft() != LockUpsertResult.SUCCESS) {
-      // failed to acquire the lock, indicates concurrent contention
       logInfoLockState(FAILED_TO_ACQUIRE);
-      hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockAcquirePreconditionFailureMetric);
+      switch (lockUpdateStatus.getLeft()) {
+        case ACQUIRED_BY_OTHERS:
+          // failed to acquire the lock, indicates concurrent contention
+          hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockAcquirePreconditionFailureMetric);
+          break;
+        case THROTTLED:
+          // The write was rejected; we did not acquire. Transient — caller may retry.
+          hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockThrottledMetric);
+          break;
+        case UNKNOWN_ERROR:
+          // Lock state is unknown after the upsert attempt; surface it as such.
+          hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockStateUnknownMetric);
+          break;
+        default:
+          hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockProviderFatalErrorMetric);
+          break;
+      }
       return false;
     }
     this.setLock(lockUpdateStatus.getRight().get());
@@ -424,22 +449,62 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
    * Unlock by marking our current lock file "expired": true.
    */
   @Override
-  public synchronized void unlock() {
-    assertHeartbeatManagerExists();
-    if (!believesLockMightBeHeld()) {
-      return;
-    }
-    boolean believesNoLongerHoldsLock = true;
+  public void unlock() {
+    ExpireLockResult expireResult;
+    // Snapshot the exact StorageLockFile we intend to expire. Identity comparison in the retry
+    // path guards against a concurrent tryLock() that, if our original lock had expired during
+    // the 1s sleep, could have installed a fresh lock that the retry must NOT mark expired.
+    StorageLockFile lockToExpire;
+    synchronized (this) {
+      assertHeartbeatManagerExists();
+      if (!believesLockMightBeHeld()) {
+        return;
+      }
 
-    // Try to stop the heartbeat first
-    if (heartbeatManager.hasActiveHeartbeat()) {
-      logger.debug("Owner {}: Gracefully shutting down heartbeat.", ownerId);
-      believesNoLongerHoldsLock &= heartbeatManager.stopHeartbeat(true);
+      // Try to stop the heartbeat first
+      if (heartbeatManager.hasActiveHeartbeat()) {
+        logger.debug("Owner {}: Gracefully shutting down heartbeat.", ownerId);
+        if (!heartbeatManager.stopHeartbeat(true)) {
+          hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockReleaseFailureMetric);
+          throw new HoodieLockException(generateLockStateMessage(FAILED_TO_RELEASE));
+        }
+      }
+
+      // Then expire the current lock.
+      lockToExpire = getLock();
+      expireResult = tryExpireCurrentLock(false);
     }
 
-    // Then expire the current lock.
-    believesNoLongerHoldsLock &= tryExpireCurrentLock(false);
-    if (!believesNoLongerHoldsLock) {
+    // If throttled, retry up to THROTTLE_MAX_RETRIES times with exponential backoff. Each sleep
+    // happens outside the monitor so other threads aren't blocked during the wait.
+    // Note: when unlock() is called via close() -> shutdown(), the outer synchronized caller still
+    // holds the provider monitor through reentrant locking, so other threads remain blocked in
+    // that scenario. This is acceptable since close() is a shutdown path, not the hot path.
+    for (int attempt = 1; attempt <= THROTTLE_MAX_RETRIES && expireResult == ExpireLockResult.THROTTLED; attempt++) {
+      long delaySeconds = THROTTLE_INITIAL_RETRY_DELAY_SECONDS << (attempt - 1);
+      logger.warn("Owner {}: Lock expiration was throttled (retry {}/{}), backing off for {} seconds.",
+          ownerId, attempt, THROTTLE_MAX_RETRIES, delaySeconds);
+      try {
+        sleepForThrottleRetry(delaySeconds);
+      } catch (InterruptedException ie) {
+        // Re-set the interrupt flag and abandon the retry — an interrupted thread shouldn't keep
+        // doing work. The caller will see FAILED_TO_RELEASE below.
+        Thread.currentThread().interrupt();
+        hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockReleaseFailureMetric);
+        throw new HoodieLockException(generateLockStateMessage(FAILED_TO_RELEASE));
+      }
+      synchronized (this) {
+        // Bail out if the lock was either cleared by another path (e.g. shutdown hook,
+        // concurrent unlock) OR replaced by a concurrent tryLock(): operating on a fresh
+        // lock would mark a lock that another caller now holds as expired.
+        if (!believesLockMightBeHeld() || getLock() != lockToExpire) {
+          return;
+        }
+        expireResult = tryExpireCurrentLock(false);
+      }
+    }
+
+    if (expireResult != ExpireLockResult.SUCCESS) {
       hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockReleaseFailureMetric);
       throw new HoodieLockException(generateLockStateMessage(FAILED_TO_RELEASE));
     }
@@ -461,15 +526,26 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   }
 
   /**
-   * Tries to expire the currently held lock.
+   * Result of a single attempt to expire the currently held lock.
+   */
+  @VisibleForTesting
+  enum ExpireLockResult {
+    SUCCESS,
+    THROTTLED,
+    FAILED
+  }
+
+  /**
+   * Tries to expire the currently held lock. This is a single-attempt primitive;
+   * callers are responsible for retry policy.
    *
    * @param fromShutdownHook Whether we are attempting best effort quick unlock from shutdown hook.
-   * @return True if we were successfully able to upload an expired lock.
+   * @return The result of the expire attempt.
    */
-  private synchronized boolean tryExpireCurrentLock(boolean fromShutdownHook) {
+  @VisibleForTesting
+  synchronized ExpireLockResult tryExpireCurrentLock(boolean fromShutdownHook) {
     // It does not make sense to have heartbeat alive extending the lock lease while
-    // here we are trying
-    // to expire the lock.
+    // here we are trying to expire the lock.
     if (!fromShutdownHook && heartbeatManager.hasActiveHeartbeat()) {
       // broken function precondition.
       throw new HoodieLockException("Must stop heartbeat before expire lock file");
@@ -477,26 +553,30 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     logDebugLockState(RELEASING);
     // Upload metadata that will unlock this lock.
     StorageLockData expiredLockData = new StorageLockData(true, this.getLock().getValidUntilMs(), ownerId);
-    Pair<LockUpsertResult, Option<StorageLockFile>> result;
     long lockExpirationTimeMs = System.currentTimeMillis();
-    result = this.storageLockClient.tryUpsertLockFile(expiredLockData, Option.of(this.getLock()));
+    Pair<LockUpsertResult, Option<StorageLockFile>> result =
+        this.storageLockClient.tryUpsertLockFile(expiredLockData, Option.of(this.getLock()));
     switch (result.getLeft()) {
       case UNKNOWN_ERROR:
         // Here we do not know the state of the lock.
         logErrorLockState(FAILED_TO_RELEASE, "Lock state is unknown.");
         hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockStateUnknownMetric);
-        return false;
+        return ExpireLockResult.FAILED;
+      case THROTTLED:
+        logWarnLockState(FAILED_TO_RELEASE, "Lock expiration write was throttled.");
+        hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockThrottledMetric);
+        return ExpireLockResult.THROTTLED;
       case SUCCESS:
         logInfoLockState(RELEASED);
         recordAuditOperation(AuditOperationState.END, lockExpirationTimeMs);
         setLock(null);
-        return true;
+        return ExpireLockResult.SUCCESS;
       case ACQUIRED_BY_OTHERS:
         // Lock was acquired by others, indicating heartbeat failure during lock hold period.
         logErrorLockState(FAILED_TO_RELEASE, "lock was acquired by others, indicating heartbeat failure.");
         setLock(null);
         hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockAcquiredByOthersErrorMetric);
-        return false;
+        return ExpireLockResult.FAILED;
       default:
         hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockReleaseFailureMetric);
         throw new HoodieLockException("Unexpected lock update result: " + result.getLeft());
@@ -549,6 +629,12 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           // If the next heartbeat run identifies our lock has expired we will error out.
           logger.warn("Owner {}: Unable to renew lock due to unknown error, could be transient.", ownerId);
           hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockStateUnknownMetric);
+          // Let heartbeat retry later.
+          return true;
+        case THROTTLED:
+          // Throttling is transient, let the heartbeat retry on its next cycle.
+          logger.warn("Owner {}: Unable to renew lock due to throttling, will retry on next heartbeat.", ownerId);
+          hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockThrottledMetric);
           // Let heartbeat retry later.
           return true;
         case SUCCESS:
@@ -619,6 +705,11 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   @VisibleForTesting
   long getCurrentEpochMs() {
     return System.currentTimeMillis();
+  }
+
+  @VisibleForTesting
+  void sleepForThrottleRetry(long delaySeconds) throws InterruptedException {
+    TimeUnit.SECONDS.sleep(delaySeconds);
   }
 
   /**

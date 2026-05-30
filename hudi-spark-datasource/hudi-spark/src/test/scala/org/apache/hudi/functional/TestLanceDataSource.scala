@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewS
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.io.storage.HoodieSparkLanceReader
+import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
@@ -36,9 +37,10 @@ import org.apache.arrow.memory.RootAllocator
 import org.apache.arrow.vector.types.pojo.ArrowType
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
-import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertFalse, assertNotNull, assertTrue}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertFalse, assertNotNull, assertThrows, assertTrue}
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
 import org.lance.file.LanceFileReader
@@ -85,6 +87,23 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertEquals(expectedRows.length, result.length, "Row count mismatch")
     expectedRows.zip(result).foreach { case (expected, actual) =>
       assertEquals(expected, actual)
+    }
+  }
+
+  // For MOR tables, a compaction is recorded on the active timeline with action == "commit"
+  // (vs. "deltacommit" for regular writes). Builds a fresh meta client so callers see the
+  // current on-disk timeline state.
+  private def assertCompactionCommitPresence(tablePath: String, expectPresent: Boolean, message: String): Unit = {
+    val compactionCommits = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+      .getActiveTimeline.filterCompletedInstants().getInstants.asScala
+      .filter(instant => instant.getAction == "commit")
+    if (expectPresent) {
+      assertTrue(compactionCommits.nonEmpty, message)
+    } else {
+      assertTrue(compactionCommits.isEmpty, message)
     }
   }
 
@@ -851,8 +870,11 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     // Writer-side: prove the bytes actually routed through Lance's dedicated blob writer.
     assertLanceBlobEncoding(tablePath)
 
-    // Reader-side: in CONTENT mode the INLINE bytes come back directly in `data`.
-    val readRows = spark.read.format("hudi").load(tablePath)
+    // Reader-side: in CONTENT mode the INLINE bytes come back directly in `data`. Set the mode
+    // explicitly — the default is DESCRIPTOR, which would surface a reference instead.
+    val readRows = spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
       .select($"id", $"payload")
       .orderBy($"id")
       .collect()
@@ -876,9 +898,13 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       }
     }
 
-    // read_blob() resolution path: INLINE payloads resolve to the same bytes.
+    // read_blob() resolution path: INLINE payloads resolve to the same bytes. CONTENT is set
+    // explicitly here — under the DESCRIPTOR default, read_blob() throws for INLINE rows.
     val viewName = s"${tableName}_view"
-    spark.read.format("hudi").load(tablePath).createOrReplaceTempView(viewName)
+    spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(viewName)
     val materialized = spark.sql(
       s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
     assertEquals(numRows, materialized.length)
@@ -899,8 +925,10 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
    * DESCRIPTOR mode on INLINE rows: user writes `data` bytes; on read with
    * `hoodie.read.blob.inline.mode=DESCRIPTOR` each row comes back with type still set to
    * {@code INLINE} (preserving the original storage mode) but with {@code data=null} and a
-   * populated {@code reference} pointing at the Lance file. {@code read_blob()} then preads
-   * the bytes back from the .lance file via the reference.
+   * populated synthesized {@code reference} pointing at the Lance file. The synthesized
+   * reference is an internal pointer, not user-facing storage. {@code read_blob()} is
+   * therefore unsupported on INLINE rows in this mode and must throw a clear error so
+   * callers don't conflate the synthesized pointer with durable metadata.
    */
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
@@ -960,17 +988,458 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
         s"synthetic reference to the Lance file should be flagged managed (id=$i)")
     }
 
-    // read_blob() materializes bytes via BatchedBlobReader, which always reads with CONTENT
-    // mode (actual bytes) regardless of the user's inline read mode setting.
+    // read_blob() on INLINE rows under DESCRIPTOR mode is unsupported by design: DESCRIPTOR
+    // is metadata-only and the synthesized reference is an internal pointer into the .lance
+    // file's storage layout, not user-facing metadata. BatchedBlobReader must throw with a
+    // message that names both INLINE and DESCRIPTOR so the failure is actionable.
     val viewName = s"${tableName}_view"
-    spark.read.format("hudi").load(tablePath).createOrReplaceTempView(viewName)
+    spark.read.format("hudi")
+      .option(modeKey, "DESCRIPTOR")
+      .load(tablePath)
+      .createOrReplaceTempView(viewName)
+    val ex = assertThrows(classOf[Throwable], new Executable {
+      override def execute(): Unit = {
+        spark.sql(s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
+      }
+    })
+    val msgChain = Iterator.iterate[Throwable](ex)(_.getCause).takeWhile(_ != null)
+      .flatMap(t => Option(t.getMessage)).mkString(" | ")
+    assertTrue(msgChain.contains("INLINE") && msgChain.contains("DESCRIPTOR"),
+      s"error must mention INLINE and DESCRIPTOR; got: $msgChain")
+  }
+
+  /**
+   * Mixed-storage table on Lance: one blob column holds both INLINE rows (small payloads
+   * stored inline) and OUT_OF_LINE rows (external file references). Under CONTENT mode,
+   * read_blob() must materialize the correct bytes for both shapes in a single query —
+   * INLINE rows go through the 1-hop inline_data passthrough, OUT_OF_LINE rows go through
+   * the external pread (with BatchedBlobReader merging consecutive ranges).
+   */
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testBlobMixedInlineAndOutOfLineContentMode(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_blob_mixed_content_${tableType.name().toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    val payloadLen = 256
+    val numInline = 3
+    val numOutOfLine = 3
+    val externalFileSize = numOutOfLine * payloadLen
+    val externalDir = Files.createDirectories(
+      Paths.get(s"$basePath/_blob_ext_mixed_${tableType.name().toLowerCase}"))
+    val extPath = BlobTestHelpers.createTestFile(externalDir, "mixed_file.bin", externalFileSize)
+
+    val inlinePayloads: Seq[Array[Byte]] = (0 until numInline).map { i =>
+      (0 until payloadLen).map(j => ((i + j) % 256).toByte).toArray
+    }
+
+    val sparkSess = spark
+    import sparkSess.implicits._
+    val inlineDf = inlinePayloads.zipWithIndex.map { case (b, i) => (i, b) }
+      .toDF("id", "bytes")
+      .select($"id", BlobTestHelpers.inlineBlobStructCol("payload", $"bytes"))
+
+    val outOfLineDf = (0 until numOutOfLine).map { k =>
+      (numInline + k, extPath, (k * payloadLen).toLong, payloadLen.toLong)
+    }.toDF("id", "path", "offset", "length")
+      .select($"id", BlobTestHelpers.blobStructCol("payload", $"path", $"offset", $"length"))
+
+    val canonicalSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("payload", BlobType().asInstanceOf[StructType], nullable = true,
+        BlobTestHelpers.blobMetadata)
+    ))
+    val raw = inlineDf.unionByName(outOfLineDf)
+    val df = spark.createDataFrame(raw.rdd, canonicalSchema)
+
+    writeDataframe(tableType, tableName, tablePath, df, saveMode = SaveMode.Overwrite,
+      operation = Some("bulk_insert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id"))
+
+    assertLanceBlobEncoding(tablePath)
+
+    val viewName = s"${tableName}_mixed_view"
+    spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(viewName)
+
+    val rows = spark.sql(
+      s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
+    assertEquals(numInline + numOutOfLine, rows.length)
+
+    rows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val bytes = row.getAs[Array[Byte]]("bytes")
+      if (id < numInline) {
+        assertArrayEquals(inlinePayloads(id), bytes,
+          s"INLINE row: read_blob() bytes mismatch (id=$id)")
+      } else {
+        val k = id - numInline
+        assertEquals(payloadLen, bytes.length,
+          s"OUT_OF_LINE row: read_blob() length mismatch (id=$id)")
+        BlobTestHelpers.assertBytesContent(bytes, expectedOffset = k * payloadLen)
+      }
+    }
+  }
+
+  /**
+   * Shared writer for multi-blob-column INLINE tests: writes a table with two INLINE blob
+   * columns ({@code payload_a}, {@code payload_b}) and returns the table path plus the
+   * payloads written for each column so individual tests can assert on read.
+   *
+   * Distinct byte patterns are used per column so a column-swap regression would surface
+   * immediately as a byte mismatch rather than silently passing.
+   */
+  private def writeMultiBlobInlineTable(
+      tableType: HoodieTableType,
+      tableName: String,
+      numRows: Int = 4,
+      payloadLen: Int = 512): (String, Seq[Array[Byte]], Seq[Array[Byte]]) = {
+    val tablePath = s"$basePath/$tableName"
+    val payloadsA: Seq[Array[Byte]] = (0 until numRows).map { i =>
+      (0 until payloadLen).map(j => ((i + j) % 256).toByte).toArray
+    }
+    val payloadsB: Seq[Array[Byte]] = (0 until numRows).map { i =>
+      (0 until payloadLen).map(j => ((i + j + 128) % 256).toByte).toArray
+    }
+    val sparkSess = spark
+    import sparkSess.implicits._
+
+    val baseDf = (0 until numRows).map(i => (i, payloadsA(i), payloadsB(i)))
+      .toDF("id", "bytes_a", "bytes_b")
+    val rawDf = baseDf.select(
+      $"id",
+      BlobTestHelpers.inlineBlobStructCol("payload_a", $"bytes_a"),
+      BlobTestHelpers.inlineBlobStructCol("payload_b", $"bytes_b"))
+    val canonicalSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("payload_a", BlobType().asInstanceOf[StructType], nullable = true,
+        BlobTestHelpers.blobMetadata),
+      StructField("payload_b", BlobType().asInstanceOf[StructType], nullable = true,
+        BlobTestHelpers.blobMetadata)
+    ))
+    val df = spark.createDataFrame(rawDf.rdd, canonicalSchema)
+
+    writeDataframe(tableType, tableName, tablePath, df, saveMode = SaveMode.Overwrite,
+      operation = Some("bulk_insert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id"))
+    assertLanceBlobEncoding(tablePath)
+    (tablePath, payloadsA, payloadsB)
+  }
+
+  /**
+   * Plain struct projection across two INLINE blob columns: {@code SELECT payload_a, payload_b
+   * FROM table}. The single-column shape is already pinned by {@code testBlobInlineRoundTrip}
+   * (CONTENT) and {@code testBlobInlineDescriptorMode} (DESCRIPTOR); this test only asserts the
+   * per-column-independence properties that are unique to the multi-column case:
+   *
+   *   - CONTENT: each column's {@code data} carries its own written bytes (distinct byte
+   *     patterns per column rule out cross-column aliasing).
+   *   - DESCRIPTOR (default): both columns independently get {@code data=null} and a populated
+   *     synthesized {@code reference} — i.e. the synthesis fires per-column, not just on the
+   *     first blob column.
+   */
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testBlobInlineMultipleColumnsPlainSelect(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_blob_multi_plain_${tableType.name().toLowerCase}"
+    val payloadLen = 512
+    val numRows = 4
+    val (tablePath, payloadsA, payloadsB) = writeMultiBlobInlineTable(
+      tableType, tableName, numRows, payloadLen)
+    val sparkSess = spark
+    import sparkSess.implicits._
+    val modeKey = "hoodie.read.blob.inline.mode"
+
+    // CONTENT: per-column bytes must not alias — payload_a carries payloadsA, payload_b carries
+    // payloadsB. The byte patterns differ by construction (see writeMultiBlobInlineTable).
+    val contentRows = spark.read.format("hudi")
+      .option(modeKey, "CONTENT")
+      .load(tablePath)
+      .select($"id", $"payload_a", $"payload_b")
+      .orderBy($"id")
+      .collect()
+    assertEquals(numRows, contentRows.length)
+    contentRows.zipWithIndex.foreach { case (row, i) =>
+      val a = row.getStruct(row.fieldIndex("payload_a"))
+      val b = row.getStruct(row.fieldIndex("payload_b"))
+      assertArrayEquals(payloadsA(i), a.getAs[Array[Byte]](HoodieSchema.Blob.INLINE_DATA_FIELD),
+        s"payload_a: bytes must match written payloadsA under CONTENT (id=$i)")
+      assertArrayEquals(payloadsB(i), b.getAs[Array[Byte]](HoodieSchema.Blob.INLINE_DATA_FIELD),
+        s"payload_b: bytes must match written payloadsB under CONTENT (id=$i)")
+    }
+
+    // DESCRIPTOR (default): descriptor synthesis must fire per-column. data=null and a
+    // populated reference on BOTH columns is the property that distinguishes this from the
+    // single-column DESCRIPTOR test.
+    val descRows = spark.read.format("hudi")
+      .load(tablePath)
+      .select($"id", $"payload_a", $"payload_b")
+      .orderBy($"id")
+      .collect()
+    assertEquals(numRows, descRows.length)
+    descRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      Seq("payload_a", "payload_b").foreach { col =>
+        val payload = row.getStruct(row.fieldIndex(col))
+        assertTrue(payload.isNullAt(payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+          s"$col: data should be null under DESCRIPTOR (id=$id)")
+        assertNotNull(payload.getStruct(payload.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)),
+          s"$col: reference should be populated under DESCRIPTOR (id=$id)")
+      }
+    }
+  }
+
+  /**
+   * Materializing both INLINE blob columns via {@code read_blob()} in a single query under
+   * CONTENT mode: {@code SELECT read_blob(payload_a), read_blob(payload_b) FROM table}. Each
+   * column must resolve via the 1-hop {@code inline_data} passthrough with its own bytes —
+   * distinct byte patterns per column would surface a cross-column aliasing regression.
+   *
+   * The DESCRIPTOR-mode failure path for {@code read_blob()} on INLINE rows is pinned by
+   * {@code testBlobInlineDescriptorMode} (single column) and {@code
+   * testBlobInlineMultipleColumnsMixedSelect} (one read_blob + one struct projection); it is
+   * not re-asserted here.
+   */
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testBlobInlineMultipleColumnsReadBlobAll(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_blob_multi_readblob_${tableType.name().toLowerCase}"
+    val numRows = 4
+    val (tablePath, payloadsA, payloadsB) = writeMultiBlobInlineTable(
+      tableType, tableName, numRows)
+    val modeKey = "hoodie.read.blob.inline.mode"
+
+    val contentView = s"${tableName}_content_view"
+    spark.read.format("hudi")
+      .option(modeKey, "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(contentView)
+    val materialized = spark.sql(
+      s"SELECT id, read_blob(payload_a) AS bytes_a, read_blob(payload_b) AS bytes_b " +
+        s"FROM $contentView ORDER BY id").collect()
+    assertEquals(numRows, materialized.length)
+    materialized.zipWithIndex.foreach { case (row, i) =>
+      assertEquals(i, row.getInt(row.fieldIndex("id")))
+      assertArrayEquals(payloadsA(i), row.getAs[Array[Byte]]("bytes_a"),
+        s"read_blob(payload_a) should match under CONTENT (id=$i)")
+      assertArrayEquals(payloadsB(i), row.getAs[Array[Byte]]("bytes_b"),
+        s"read_blob(payload_b) should match under CONTENT (id=$i)")
+    }
+  }
+
+  /**
+   * Mixed projection across two INLINE blob columns: {@code SELECT read_blob(payload_a),
+   * payload_b FROM table}. One column is materialized via {@code read_blob()}, the other is
+   * left as a struct. This is the case explicitly raised in PR review — under the DESCRIPTOR
+   * default, a mixed query asking for bytes on one column and a pointer on another must fail
+   * loudly rather than silently returning one materialized and one synthesized shape.
+   *
+   *   - CONTENT: {@code payload_a} resolves to bytes (1-hop), {@code payload_b} comes back as
+   *     the same content-shape struct as {@code testBlobInlineMultipleColumnsPlainSelect}
+   *     (data=bytes, reference present-but-empty). Pinning both shapes in the same row
+   *     confirms the projection doesn't bleed across columns.
+   *   - DESCRIPTOR (default): the {@code read_blob()} call on {@code payload_a} still hits
+   *     the INLINE+DESCRIPTOR branch even though {@code payload_b} is only being projected as
+   *     a struct. {@code payload_b}'s shape doesn't soften the failure.
+   */
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testBlobInlineMultipleColumnsMixedSelect(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_blob_multi_mixed_${tableType.name().toLowerCase}"
+    val numRows = 4
+    val (tablePath, payloadsA, payloadsB) = writeMultiBlobInlineTable(
+      tableType, tableName, numRows)
+    val modeKey = "hoodie.read.blob.inline.mode"
+
+    // CONTENT: read_blob() materializes payload_a; payload_b returned as content-shape struct.
+    val contentView = s"${tableName}_content_view"
+    spark.read.format("hudi")
+      .option(modeKey, "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(contentView)
+    val rows = spark.sql(
+      s"SELECT id, read_blob(payload_a) AS bytes_a, payload_b " +
+        s"FROM $contentView ORDER BY id").collect()
+    assertEquals(numRows, rows.length)
+    rows.zipWithIndex.foreach { case (row, i) =>
+      assertEquals(i, row.getInt(row.fieldIndex("id")))
+      assertArrayEquals(payloadsA(i), row.getAs[Array[Byte]]("bytes_a"),
+        s"read_blob(payload_a) should return bytes under CONTENT (id=$i)")
+      val payloadB = row.getStruct(row.fieldIndex("payload_b"))
+      assertEquals(HoodieSchema.Blob.INLINE,
+        payloadB.getString(payloadB.fieldIndex(HoodieSchema.Blob.TYPE)),
+        s"payload_b: type should remain INLINE under CONTENT (id=$i)")
+      assertArrayEquals(payloadsB(i),
+        payloadB.getAs[Array[Byte]](HoodieSchema.Blob.INLINE_DATA_FIELD),
+        s"payload_b: data should match written bytes under CONTENT (id=$i)")
+      val refIdx = payloadB.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)
+      if (!payloadB.isNullAt(refIdx)) {
+        val ref = payloadB.getStruct(refIdx)
+        assertTrue(ref.isNullAt(ref.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH)),
+          s"payload_b: reference.external_path should be null under CONTENT (id=$i)")
+      }
+    }
+
+    // DESCRIPTOR (default): read_blob(payload_a) trips even though payload_b is just a struct.
+    val descView = s"${tableName}_desc_view"
+    spark.read.format("hudi")
+      .load(tablePath)
+      .createOrReplaceTempView(descView)
+    val ex = assertThrows(classOf[Throwable], new Executable {
+      override def execute(): Unit = {
+        spark.sql(
+          s"SELECT id, read_blob(payload_a) AS bytes_a, payload_b " +
+            s"FROM $descView ORDER BY id").collect()
+      }
+    })
+    val msgChain = Iterator.iterate[Throwable](ex)(_.getCause).takeWhile(_ != null)
+      .flatMap(t => Option(t.getMessage)).mkString(" | ")
+    assertTrue(msgChain.contains("INLINE") && msgChain.contains("DESCRIPTOR"),
+      s"read_blob(payload_a) under DESCRIPTOR must throw INLINE+DESCRIPTOR error even when " +
+        s"mixed with a struct projection of another blob column; got: $msgChain")
+  }
+
+  /**
+   * Compaction must preserve INLINE blob bytes under the DESCRIPTOR default. MOR compaction reads
+   * the base file via {@link HoodieSparkLanceReader}, which hard-pins CONTENT regardless of the
+   * user-facing {@code hoodie.read.blob.inline.mode}. If that pin were to honor the default
+   * (DESCRIPTOR), compaction would read null {@code data} and rewrite a base file without bytes,
+   * silently corrupting untouched rows. This test inserts INLINE blobs, upserts a subset to force
+   * compaction, and asserts that touched rows carry the new bytes while untouched rows retain the
+   * originals.
+   */
+  @Test
+  def testBlobInlineCompactionRoundTrip(): Unit = {
+    val tableType = HoodieTableType.MERGE_ON_READ
+    val tableName = "test_lance_blob_inline_compact_mor"
+    val tablePath = s"$basePath/$tableName"
+
+    val payloadLen = 1024
+    val numRows = 6
+    val initialPayloads: Seq[Array[Byte]] = (0 until numRows).map { i =>
+      (0 until payloadLen).map(j => ((i + j) % 256).toByte).toArray
+    }
+    val sparkSess = spark
+    import sparkSess.implicits._
+
+    val canonicalSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("payload", BlobType().asInstanceOf[StructType], nullable = true,
+        BlobTestHelpers.blobMetadata)
+    ))
+    def asInlineDf(idToBytes: Seq[(Int, Array[Byte])]): DataFrame = {
+      val rawDf = idToBytes.toDF("id", "bytes")
+        .select($"id", BlobTestHelpers.inlineBlobStructCol("payload", $"bytes"))
+      spark.createDataFrame(rawDf.rdd, canonicalSchema)
+    }
+
+    // First commit: bulk_insert ids 0..5 with the initial pattern. Lands in a base file.
+    writeDataframe(tableType, tableName, tablePath,
+      asInlineDf(initialPayloads.zipWithIndex.map { case (b, i) => (i, b) }),
+      saveMode = SaveMode.Overwrite,
+      operation = Some("bulk_insert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id"))
+
+    assertLanceBlobEncoding(tablePath)
+
+    // Second commit: upsert ids 0..2 with all-0xEE payloads, triggering inline compaction. The
+    // compactor reads the base file + log via the CONTENT-pinned reader and rewrites a new base
+    // file. Ids 3..5 are untouched: their bytes must survive the compaction read/rewrite even
+    // though the user-facing default is now DESCRIPTOR.
+    val updatedPayloadByte: Byte = 0xEE.toByte
+    val updatedIds = 0 until 3
+    val updatedPayloads = updatedIds.map(i => (i, Array.fill[Byte](payloadLen)(updatedPayloadByte)))
+    writeDataframe(tableType, tableName, tablePath,
+      asInlineDf(updatedPayloads),
+      operation = Some("upsert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id",
+        "hoodie.compact.inline" -> "true",
+        "hoodie.compact.inline.max.delta.commits" -> "1"))
+
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+    val completedInstants = metaClient.reloadActiveTimeline().filterCompletedInstants()
+      .getInstants.asScala
+    val deltaCommits = completedInstants.filter(_.getAction == "deltacommit")
+    assertTrue(deltaCommits.nonEmpty,
+      "Upsert must have written a deltacommit on MOR — without log files the compaction " +
+        "round-trip below would be a no-op and the test would silently pass even if the " +
+        "CONTENT-pin in HoodieSparkLanceReader were broken.")
+    val compactionCommits = completedInstants.filter(_.getAction == "commit")
+    assertTrue(compactionCommits.nonEmpty, "Compaction commit should be present after upsert")
+
+    // Walk file groups in the (non-partitioned) table and verify at least one historical file
+    // slice carries log files. After compaction the latest slice is post-compaction (no logs),
+    // but the pre-compaction slice is still in the FSV's history, so `hasLogFiles` will flag
+    // it. This catches a regression where the upsert silently fell into a CoW-like path.
+    val engineCtx = new HoodieLocalEngineContext(metaClient.getStorageConf)
+    val metadataCfg = HoodieMetadataConfig.newBuilder.build
+    val viewManager = FileSystemViewManager.createViewManager(
+      engineCtx, metadataCfg, FileSystemViewStorageConfig.newBuilder.build,
+      HoodieCommonConfig.newBuilder.build,
+      (mc: HoodieTableMetaClient) => metaClient.getTableFormat
+        .getMetadataFactory.create(engineCtx, mc.getStorage, metadataCfg, tablePath))
+    val fsView = viewManager.getFileSystemView(metaClient)
+    try {
+      fsView.loadAllPartitions()
+      val anyHadLogs = fsView.getAllFileGroups("").iterator().asScala.exists { fg =>
+        fg.getAllFileSlices.iterator().asScala.exists(_.hasLogFiles)
+      }
+      assertTrue(anyHadLogs,
+        s"MOR upsert must have produced log files in at least one file slice at $tablePath; " +
+          s"none observed — upsert may have silently bypassed the deltacommit path")
+    } finally {
+      fsView.close()
+    }
+
+    val expected: Map[Int, Array[Byte]] = (
+      updatedIds.map(i => i -> Array.fill[Byte](payloadLen)(updatedPayloadByte)) ++
+        (updatedIds.length until numRows).map(i => i -> initialPayloads(i))
+      ).toMap
+
+    // Verify via the realistic user-facing path. After the flip, a plain read yields the
+    // DESCRIPTOR shape: INLINE type, null `data`, populated reference. This confirms the new
+    // default is in effect end-to-end.
+    val readRows = spark.read.format("hudi")
+      .load(tablePath)
+      .select($"id", $"payload")
+      .orderBy($"id")
+      .collect()
+    assertEquals(numRows, readRows.length)
+    readRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val payload = row.getStruct(row.fieldIndex("payload"))
+      assertEquals(HoodieSchema.Blob.INLINE,
+        payload.getString(payload.fieldIndex(HoodieSchema.Blob.TYPE)),
+        s"Type must remain INLINE post-compaction (id=$id)")
+      assertTrue(payload.isNullAt(payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"DESCRIPTOR default should null `data` on plain read (id=$id)")
+      assertNotNull(payload.getStruct(payload.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)),
+        s"DESCRIPTOR default should populate reference on plain read (id=$id)")
+    }
+
+    // read_blob() under CONTENT mode is what we use to verify the post-compaction bytes
+    // because read_blob() on INLINE rows throws under the DESCRIPTOR default. The bytes can
+    // only come back if HoodieSparkLanceReader's CONTENT pin held during the compactor's
+    // base-file read — otherwise untouched ids 3..5 would have been rewritten with null
+    // `data` and CONTENT-mode read would surface that.
+    val viewName = s"${tableName}_view"
+    spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(viewName)
     val materialized = spark.sql(
       s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
     assertEquals(numRows, materialized.length)
-    materialized.zipWithIndex.foreach { case (row, i) =>
+    materialized.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
       val bytes = row.getAs[Array[Byte]]("bytes")
-      assertArrayEquals(expectedPayloads(i), bytes,
-        s"read_blob() bytes mismatch for id=$i")
+      assertArrayEquals(expected(id), bytes,
+        s"read_blob() must return correct bytes post-compaction (id=$id)")
     }
   }
 
@@ -1149,6 +1618,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     // Disable small file handling so the next insert creates a new file group
     // and updates in MOR generate log file(s)
     spark.sql(s"alter table $tableName set tblproperties ('hoodie.merge.small.file.group.candidates.limit' = '0')")
+    spark.sql(s"alter table $tableName set tblproperties ('hoodie.compact.inline.max.delta.commits' = '6')")
 
     // Test 3: INSERT with subset of columns (null handling)
     spark.sql(s"""
@@ -1174,15 +1644,18 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     )
 
     // Test 5: DELETE a row
-    // TODO(#18558): test DELETE with MOR table type once the bug is fixed
-    if (tableType == HoodieTableType.COPY_ON_WRITE) {
-      spark.sql(s"delete from $tableName where id = 3")
+    spark.sql(s"delete from $tableName where id = 3")
+    checkAnswer(s"select id, name, age, score, dt from $tableName order by id")(
+      Seq(1, "Alice", 31, 99.9, "2025-01-01"),
+      Seq(2, "Bob", 25, 87.3, "2025-01-02"),
+      Seq(4, "Diana", 40, null, "2025-01-01")
+    )
 
-      checkAnswer(s"select id, name, age, score, dt from $tableName order by id")(
-        Seq(1, "Alice", 31, 99.9, "2025-01-01"),
-        Seq(2, "Bob", 25, 87.3, "2025-01-02"),
-        Seq(4, "Diana", 40, null, "2025-01-01")
-      )
+    // For MOR: 5 deltacommits so far (insert x3, update, delete) — below the
+    // max.delta.commits=6 threshold, so no inline compaction should have run yet.
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      assertCompactionCommitPresence(tablePath, expectPresent = false,
+        "No compaction commit should be present before max.delta.commits=6 threshold is reached")
     }
 
     // Test 6: INSERT with static partition (only for partitioned tables)
@@ -1192,21 +1665,18 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
         values (28, 5, 'Eve')
       """.stripMargin)
 
-      if (tableType == HoodieTableType.COPY_ON_WRITE) {
-        checkAnswer(s"select id, name, age, score, dt from $tableName order by id")(
-          Seq(1, "Alice", 31, 99.9, "2025-01-01"),
-          Seq(2, "Bob", 25, 87.3, "2025-01-02"),
-          Seq(4, "Diana", 40, null, "2025-01-01"),
-          Seq(5, "Eve", 28, null, "2025-01-05")
-        )
-      } else {
-        checkAnswer(s"select id, name, age, score, dt from $tableName order by id")(
-          Seq(1, "Alice", 31, 99.9, "2025-01-01"),
-          Seq(2, "Bob", 25, 87.3, "2025-01-02"),
-          Seq(3, "Charlie", 35, 92.1, "2025-01-02"),
-          Seq(4, "Diana", 40, null, "2025-01-01"),
-          Seq(5, "Eve", 28, null, "2025-01-05")
-        )
+      checkAnswer(s"select id, name, age, score, dt from $tableName order by id")(
+        Seq(1, "Alice", 31, 99.9, "2025-01-01"),
+        Seq(2, "Bob", 25, 87.3, "2025-01-02"),
+        Seq(4, "Diana", 40, null, "2025-01-01"),
+        Seq(5, "Eve", 28, null, "2025-01-05")
+      )
+
+      // For MOR: this is the 6th deltacommit, which should trigger inline compaction
+      // (HoodieSparkSqlWriter auto-enables hoodie.compact.inline for MOR batch writes).
+      if (tableType == HoodieTableType.MERGE_ON_READ) {
+        assertCompactionCommitPresence(tablePath, expectPresent = true,
+          "Inline compaction commit should be present after 6th deltacommit")
       }
     }
 
@@ -1219,6 +1689,16 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     val baseFileFormat = metaClient.getTableConfig.getBaseFileFormat
     assertEquals(HoodieFileFormat.LANCE, baseFileFormat,
                  "Table should use Lance base file format")
+
+    // Column stats and partition stats indices are gated off for Lance base files in
+    // MetadataPartitionType — per-file column ranges aren't emitted for Lance yet, and
+    // empty ranges would silently prune everything on read. Confirm the metadata table
+    // never initialized these partitions.
+    val tableConfig = metaClient.getTableConfig
+    assertFalse(tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.COLUMN_STATS),
+      "Column stats metadata partition must not be initialized for Lance tables")
+    assertFalse(tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.PARTITION_STATS),
+      "Partition stats metadata partition must not be initialized for Lance tables")
   }
 
   /**
