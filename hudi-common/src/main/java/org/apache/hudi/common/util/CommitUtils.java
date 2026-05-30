@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -94,10 +95,30 @@ public class CommitUtils {
     if (extraMetadata.isPresent()) {
       extraMetadata.get().forEach(commitMetadata::addMetadata);
     }
-    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, (schemaToStoreInCommit == null || schemaToStoreInCommit.equals(NULL_SCHEMA_STR))
-        ? "" : schemaToStoreInCommit);
+    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY,
+        sanitizeSchemaForCommitMetadata(schemaToStoreInCommit));
     commitMetadata.setOperationType(operationType);
     return commitMetadata;
+  }
+
+  /**
+   * Returns the value to persist under {@link HoodieCommitMetadata#SCHEMA_KEY}.
+   * The schema stored in commit extraMetadata must be the user/write schema and
+   * must NOT contain Hudi meta fields ({@code _hoodie_commit_time}, etc.). If
+   * the caller-provided schema has meta fields (e.g. because some upstream code
+   * mutated the in-memory write config schema with reader-schema-with-meta-fields,
+   * or because a previously-polluted SCHEMA_KEY was read back into the config),
+   * this strips them so the persisted schema is always clean.
+   */
+  public static String sanitizeSchemaForCommitMetadata(String schemaToStoreInCommit) {
+    if (schemaToStoreInCommit == null || schemaToStoreInCommit.equals(NULL_SCHEMA_STR)) {
+      return "";
+    }
+    HoodieSchema schema = HoodieSchema.parse(schemaToStoreInCommit);
+    if (schema.isSchemaNull()) {
+      return "";
+    }
+    return HoodieSchemaUtils.removeMetadataFields(schema).toString();
   }
 
   private static HoodieCommitMetadata buildMetadataFromStats(List<HoodieWriteStat> writeStats,
