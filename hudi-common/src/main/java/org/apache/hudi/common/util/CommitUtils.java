@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -108,17 +109,30 @@ public class CommitUtils {
    * the caller-provided schema has meta fields (e.g. because some upstream code
    * mutated the in-memory write config schema with reader-schema-with-meta-fields,
    * or because a previously-polluted SCHEMA_KEY was read back into the config),
-   * this strips them so the persisted schema is always clean.
+   * this strips them so the persisted schema is always clean. When no meta fields
+   * are present, the input string is returned unchanged.
    */
   public static String sanitizeSchemaForCommitMetadata(String schemaToStoreInCommit) {
-    if (schemaToStoreInCommit == null || schemaToStoreInCommit.equals(NULL_SCHEMA_STR)) {
+    if (StringUtils.isNullOrEmpty(schemaToStoreInCommit) || schemaToStoreInCommit.equals(NULL_SCHEMA_STR)) {
       return "";
+    }
+    if (!containsHudiMetaField(schemaToStoreInCommit)) {
+      return schemaToStoreInCommit;
     }
     HoodieSchema schema = HoodieSchema.parse(schemaToStoreInCommit);
     if (schema.isSchemaNull()) {
       return "";
     }
     return HoodieSchemaUtils.removeMetadataFields(schema).toString();
+  }
+
+  private static boolean containsHudiMetaField(String schemaStr) {
+    for (String metaField : HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION) {
+      if (schemaStr.contains(metaField)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static HoodieCommitMetadata buildMetadataFromStats(List<HoodieWriteStat> writeStats,
