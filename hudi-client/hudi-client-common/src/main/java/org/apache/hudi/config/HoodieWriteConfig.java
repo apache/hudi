@@ -951,6 +951,18 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("1.1.0")
       .withDocumentation("Records event time watermark metadata in commit metadata when enabled");
 
+  public static final ConfigProperty<Boolean> TRACK_EVENT_TIME_PROPAGATE_FROM_UPSTREAM = ConfigProperty
+      .key("hoodie.write.track.event.time.propagate.from.upstream")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("When enabled, sources that read from an upstream Hudi table (e.g. HoodieIncrSource) "
+          + "propagate the upstream commit(s)' per-partition min/max event time into the downstream commit's "
+          + "per-partition write stats. This lets derived tables inherit freshness without retaining the "
+          + "event-time column in their schema. The propagation folds with any per-record event-time value "
+          + "via Math.min / Math.max, so it never regresses a value already set by the per-record path. "
+          + "Has no effect unless the upstream table itself was written with hoodie.write.track.event.time.watermark=true.");
+
   public static final ConfigProperty<String> MERGE_HANDLE_CLASS_NAME = ConfigProperty
       .key("hoodie.write.merge.handle.class")
       .defaultValue(FileGroupReaderBasedMergeHandle.class.getName())

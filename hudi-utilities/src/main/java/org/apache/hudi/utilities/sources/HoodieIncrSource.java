@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
@@ -33,9 +34,11 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -46,6 +49,7 @@ import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
+import org.apache.hudi.utilities.sources.helpers.UpstreamEventTimeWatermarkExtractor;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
@@ -163,6 +167,18 @@ public class HoodieIncrSource extends RowSource {
 
   private final Map<String, String> readOpts = new HashMap<>();
 
+  /**
+   * Per-partition (min, max) event time propagated from the upstream Hudi commits read in the
+   * most recent {@link #fetchNextBatch} call. Populated when
+   * {@code hoodie.write.track.event.time.propagate.from.upstream} is enabled and the upstream
+   * commits being read carry per-stat event-time metadata (i.e. were written with
+   * {@code hoodie.write.track.event.time.watermark=true}). Empty otherwise.
+   *
+   * <p>Reset to empty at the start of each {@code fetchNextBatch} call and read by the streamer
+   * via {@link #getUpstreamEventTimeWatermarks()} when constructing the InputBatch.
+   */
+  private transient Map<String, Pair<Long, Long>> upstreamEventTimeWatermarks = Collections.emptyMap();
+
   public HoodieIncrSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
                           StreamContext streamContext) {
     this(props, sparkContext, sparkSession, null, streamContext);
@@ -200,6 +216,9 @@ public class HoodieIncrSource extends RowSource {
 
   @Override
   public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+    // Reset between batches so a previous batch's watermarks never leak forward when the current
+    // batch has no new commits to read.
+    this.upstreamEventTimeWatermarks = Collections.emptyMap();
     String srcPath = getStringWithAltKeys(props, HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH);
     HoodieTableVersion sourceTableVersion = HoodieTableConfig.loadFromHoodieProps(
         HoodieStorageUtils.getStorage(srcPath, HadoopFSUtils.getStorageConf(sparkContext.hadoopConfiguration())), srcPath).getTableVersion();
@@ -208,6 +227,11 @@ public class HoodieIncrSource extends RowSource {
     } else {
       return fetchNextBatchBasedOnRequestedTime(lastCheckpoint, sourceLimit);
     }
+  }
+
+  @Override
+  public Map<String, Pair<Long, Long>> getUpstreamEventTimeWatermarks() {
+    return upstreamEventTimeWatermarks;
   }
 
   private Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatchBasedOnCompletionTime(
@@ -340,6 +364,9 @@ public class HoodieIncrSource extends RowSource {
       metricsOption.ifPresent(metrics -> metrics.updateStreamerSourceParallelism(sourceProfile.getSourcePartitions()));
       return coalesceOrRepartition(sourceWithMetaColumnsDropped, sourceProfile.getSourcePartitions());
     }).orElse(sourceWithMetaColumnsDropped);
+
+    maybeExtractUpstreamWatermarksCompletionTime(queryContext, endCompletionTime);
+
     return Pair.of(Option.of(src), new StreamerCheckpointV2(endCompletionTime));
   }
 
@@ -439,11 +466,69 @@ public class HoodieIncrSource extends RowSource {
       metricsOption.ifPresent(metrics -> metrics.updateStreamerSourceParallelism(sourceProfile.getSourcePartitions()));
       return coalesceOrRepartition(sourceWithMetaColumnsDropped, sourceProfile.getSourcePartitions());
     }).orElse(sourceWithMetaColumnsDropped);
+
+    maybeExtractUpstreamWatermarksRequestTime(srcPath, queryInfo.getStartInstant(), queryInfo.getEndInstant());
+
     return Pair.of(Option.of(src), new StreamerCheckpointV1(queryInfo.getEndInstant()));
   }
 
   // Try to fetch the latestSourceProfile, this ensures the profile is refreshed if it's no longer valid.
   private Option<SourceProfile<Integer>> getLatestSourceProfile() {
     return sourceProfileSupplier.map(SourceProfileSupplier::getSourceProfile);
+  }
+
+  private void maybeExtractUpstreamWatermarksCompletionTime(QueryContext queryContext, String endCompletionTime) {
+    if (!ConfigUtils.isPropagatingEventTimeFromUpstream(props)) {
+      return;
+    }
+    if (StringUtils.isNullOrEmpty(endCompletionTime)) {
+      return;
+    }
+    List<HoodieInstant> instants = queryContext.getInstants().stream()
+        .filter(i -> compareTimestamps(i.getCompletionTime(), LESSER_THAN_OR_EQUALS, endCompletionTime))
+        .collect(Collectors.toList());
+    if (instants.isEmpty()) {
+      return;
+    }
+    this.upstreamEventTimeWatermarks = UpstreamEventTimeWatermarkExtractor
+        .extractPerPartitionWatermarks(queryContext.getActiveTimeline(), instants);
+    if (!this.upstreamEventTimeWatermarks.isEmpty()) {
+      log.info("Propagating upstream event-time watermarks for {} partition(s) from {} commit(s)",
+          this.upstreamEventTimeWatermarks.size(), instants.size());
+    }
+  }
+
+  private void maybeExtractUpstreamWatermarksRequestTime(String srcPath, String startInstant, String endInstant) {
+    if (!ConfigUtils.isPropagatingEventTimeFromUpstream(props)) {
+      return;
+    }
+    if (StringUtils.isNullOrEmpty(endInstant)) {
+      return;
+    }
+    String startExclusive = StringUtils.isNullOrEmpty(startInstant) ? "" : startInstant;
+    try {
+      HoodieTableMetaClient srcMetaClient = HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration()))
+          .setBasePath(srcPath)
+          .setLoadActiveTimelineOnLoad(true)
+          .build();
+      HoodieTimeline completedCommits = srcMetaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+      // Match the incremental query's (start, end] semantics: include commits whose requestedTime
+      // is strictly greater than start and less than or equal to end.
+      List<HoodieInstant> instants = completedCommits.findInstantsInClosedRange(startExclusive, endInstant)
+          .getInstantsAsStream()
+          .filter(i -> startExclusive.isEmpty() || !i.requestedTime().equals(startExclusive))
+          .collect(Collectors.toList());
+      this.upstreamEventTimeWatermarks = UpstreamEventTimeWatermarkExtractor
+          .extractPerPartitionWatermarks(completedCommits, instants);
+      if (!this.upstreamEventTimeWatermarks.isEmpty()) {
+        log.info("Propagating upstream event-time watermarks for {} partition(s) from {} commit(s)",
+            this.upstreamEventTimeWatermarks.size(), instants.size());
+      }
+    } catch (Exception e) {
+      // Don't fail the source if watermark extraction has trouble; propagation is best-effort.
+      log.warn("Failed to extract upstream event-time watermarks (request-time path) from {} ({}..{}]: {}",
+          srcPath, startExclusive, endInstant, e.getMessage());
+    }
   }
 }

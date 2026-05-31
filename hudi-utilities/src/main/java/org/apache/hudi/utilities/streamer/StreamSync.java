@@ -42,10 +42,12 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
@@ -145,6 +147,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -902,7 +905,8 @@ public class StreamSync implements Serializable, Closeable {
               checkpointCommitMetadata, metaClient);
         }
 
-        success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty(),
+        success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds,
+            buildUpstreamWatermarkPreCommitFunc(inputBatch.getUpstreamEventTimeWatermarks()),
             Option.of(writeStatusValidator));
       } finally {
         if (shouldUnpersist) {
@@ -1380,6 +1384,43 @@ public class StreamSync implements Serializable, Closeable {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to load meta client", e);
     }
+  }
+
+  /**
+   * Build a {@link BiConsumer} pre-commit hook that folds source-propagated per-partition (min,
+   * max) event-time watermarks into the per-partition write stats of the about-to-be-committed
+   * downstream {@link HoodieCommitMetadata}.
+   *
+   * <p>Uses {@link HoodieWriteStat#setMinEventTime(Long)} / {@link HoodieWriteStat#setMaxEventTime(Long)},
+   * which do null-aware {@code Math.min} / {@code Math.max} folds. Per-record values set during
+   * write therefore win over propagated values when more extreme, and propagation only fills
+   * in fields the per-record path left unset. Returns {@code Option.empty()} when there is
+   * nothing to propagate (most common case), keeping the existing commit path unchanged.
+   */
+  @VisibleForTesting
+  static Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> buildUpstreamWatermarkPreCommitFunc(
+      Map<String, Pair<Long, Long>> upstreamWatermarks) {
+    if (upstreamWatermarks == null || upstreamWatermarks.isEmpty()) {
+      return Option.empty();
+    }
+    return Option.of((HoodieTableMetaClient metaClient, HoodieCommitMetadata metadata) -> {
+      for (Map.Entry<String, List<HoodieWriteStat>> entry : metadata.getPartitionToWriteStats().entrySet()) {
+        Pair<Long, Long> upstream = upstreamWatermarks.get(entry.getKey());
+        if (upstream == null) {
+          continue;
+        }
+        Long min = upstream.getLeft();
+        Long max = upstream.getRight();
+        for (HoodieWriteStat stat : entry.getValue()) {
+          if (min != null) {
+            stat.setMinEventTime(min);
+          }
+          if (max != null) {
+            stat.setMaxEventTime(max);
+          }
+        }
+      }
+    });
   }
 
   class WriteClientWriteResult {

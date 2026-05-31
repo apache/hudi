@@ -175,6 +175,15 @@ public class ConfigUtils {
   }
 
   /**
+   * Check if per-partition event-time watermarks should be propagated from the upstream
+   * Hudi source's commit metadata into the downstream commit. Has no effect unless the
+   * upstream table itself was written with watermark tracking enabled.
+   */
+  public static boolean isPropagatingEventTimeFromUpstream(TypedProperties props) {
+    return props.getBoolean("hoodie.write.track.event.time.propagate.from.upstream", false);
+  }
+
+  /**
    * Check if logical timestamp should be made consistent.
    */
   public static boolean shouldKeepConsistentLogicalTimestamp(TypedProperties props) {
