@@ -67,6 +67,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -75,7 +76,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
-import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -181,6 +181,8 @@ public class TestHiveSyncTool {
 
   private HiveSyncTool hiveSyncTool;
   private HoodieHiveSyncClient hiveClient;
+  @TempDir
+  java.nio.file.Path tempDir;
 
   @AfterAll
   public static void cleanUpClass() throws IOException {
@@ -213,7 +215,7 @@ public class TestHiveSyncTool {
 
   @BeforeEach
   public void setUp() throws Exception {
-    HiveTestUtil.setUp(Option.empty(), true);
+    HiveTestUtil.setUp(Option.empty(), true, tempDir);
   }
 
   @AfterEach
@@ -243,7 +245,7 @@ public class TestHiveSyncTool {
     HiveTestUtil.fileSystem.delete(new Path(basePath), true);
 
     // create a new cow table and reSync
-    basePath = Files.createTempDirectory("hivesynctest" + Instant.now().toEpochMilli()).toUri().toString();
+    basePath = createTempBasePath("hivesynctest");
     hiveSyncProps.setProperty(META_SYNC_BASE_PATH.key(), basePath);
     HiveTestUtil.createCOWTable(instantTime, 1, useSchemaFromCommitMetadata);
     reInitHiveSyncClient();
@@ -864,7 +866,7 @@ public class TestHiveSyncTool {
 
     String commitTime2 = "105";
     // let's update the basepath
-    basePath = Files.createTempDirectory("hivesynctest_new" + Instant.now().toEpochMilli()).toUri().toString();
+    basePath = createTempBasePath("hivesynctest-new");
     hiveSyncProps.setProperty(META_SYNC_BASE_PATH.key(), basePath);
 
     // let's create new table in new basepath
@@ -1116,7 +1118,7 @@ public class TestHiveSyncTool {
     reSyncHiveTable();
 
     // change the hoodie base path
-    basePath = Files.createTempDirectory("hivesynctest_new" + Instant.now().toEpochMilli()).toUri().toString();
+    basePath = createTempBasePath("hivesynctest-new");
     hiveSyncProps.setProperty(META_SYNC_BASE_PATH.key(), basePath);
 
     String instantTime2 = "102";
@@ -2266,6 +2268,10 @@ public class TestHiveSyncTool {
   private void reInitHiveSyncClient() {
     hiveSyncTool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf());
     hiveClient = (HoodieHiveSyncClient) hiveSyncTool.syncClient;
+  }
+
+  private String createTempBasePath(String prefix) throws IOException {
+    return Files.createTempDirectory(tempDir, prefix).toUri().toString();
   }
 
   private int getPartitionFieldSize() {

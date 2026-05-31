@@ -67,7 +67,7 @@ public class TestHudiHiveSyncJob {
 
   @BeforeEach
   void setUp() throws Exception {
-    HiveTestUtil.setUp(Option.empty(), true);
+    HiveTestUtil.setUp(Option.empty(), true, tempDir);
   }
 
   @AfterEach
