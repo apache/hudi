@@ -18,8 +18,9 @@
 
 package org.apache.hudi.integ.testsuite.converter;
 
-import java.io.Serializable;
 import org.apache.spark.api.java.JavaRDD;
+
+import java.io.Serializable;
 
 /**
  * Implementations of {@link Converter} will convert data from one format to another.

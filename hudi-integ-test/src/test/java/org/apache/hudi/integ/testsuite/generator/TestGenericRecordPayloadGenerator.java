@@ -18,8 +18,12 @@
 
 package org.apache.hudi.integ.testsuite.generator;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -29,11 +33,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
-import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit test for {@link GenericRecordFullPayloadGenerator} and {@link GenericRecordPartialPayloadGenerator}.

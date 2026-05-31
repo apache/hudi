@@ -20,10 +20,10 @@ package org.apache.hudi.integ.testsuite.dag;
 
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 
-import java.util.List;
-
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+
+import java.util.List;
 
 import static org.apache.hudi.integ.testsuite.dag.DagUtils.DEFAULT_DAG_NAME;
 import static org.apache.hudi.integ.testsuite.dag.DagUtils.DEFAULT_DAG_ROUNDS;

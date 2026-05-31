@@ -18,22 +18,24 @@
 
 package org.apache.hudi.integ.testsuite.converter;
 
-import static junit.framework.TestCase.assertTrue;
-
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import org.apache.hudi.integ.testsuite.utils.TestUtils;
+import org.apache.hudi.utilities.UtilHelpers;
 
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.integ.testsuite.utils.TestUtils;
-import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
 import scala.Tuple2;
+
+import static junit.framework.TestCase.assertTrue;
 
 /**
  * Test Cases for {@link UpdateConverter} APIs.

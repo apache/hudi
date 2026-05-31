@@ -18,16 +18,17 @@
 
 package org.apache.hudi.integ.testsuite.reader;
 
-import java.io.IOException;
-import java.util.Arrays;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.integ.testsuite.writer.AvroFileDeltaInputWriter;
+import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
+
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.PathFilter;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.SparkSession;
 
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.integ.testsuite.writer.AvroFileDeltaInputWriter;
-import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
+import java.io.IOException;
+import java.util.Arrays;
 
 /**
  * A reader of {@link DeltaOutputMode#DFS} and {@link DeltaInputType#AVRO}.
