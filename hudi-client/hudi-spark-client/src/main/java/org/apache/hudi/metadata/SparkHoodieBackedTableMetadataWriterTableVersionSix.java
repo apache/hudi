@@ -30,19 +30,17 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieSparkIndexClient;
+import org.apache.hudi.metadata.index.UnsupportedExpressionIndexRecordGenerator;
+import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -54,7 +52,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
@@ -92,7 +89,7 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
                                        Option<String> inflightInstantTimestamp) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, new UnsupportedExpressionIndexRecordGenerator(EngineType.SPARK), inflightInstantTimestamp);
   }
 
   @Override
@@ -113,8 +110,8 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
   }
 
   @Override
-  protected void commit(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
-    commitInternal(instantTime, partitionRecordsMap, false, Option.empty());
+  protected void commit(String instantTime, List<IndexPartitionAndRecords> partitionRecords) {
+    commitInternal(instantTime, partitionRecords, false, Option.empty());
   }
 
   @Override
@@ -158,7 +155,7 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
       String instantTime, String partitionPath, HoodieData<HoodieRecord> records,
       MetadataTableFileGroupIndexParser indexParser) {
     SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(indexParser);
-    commitInternal(instantTime, Collections.singletonMap(partitionPath, records), true, Option.of(partitioner));
+    commitInternal(instantTime, Collections.singletonList(IndexPartitionAndRecords.of(partitionPath, records)), true, Option.of(partitioner));
   }
 
   @Override
@@ -186,12 +183,5 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
   @Override
   protected void updateColumnsToIndexWithColStats(List<String> columnsToIndex) {
     new HoodieSparkIndexClient(dataWriteConfig, engineContext).createOrUpdateColumnStatsIndexDefinition(dataMetaClient, columnsToIndex);
-  }
-
-  @Override
-  protected HoodieData<HoodieRecord> getExpressionIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
-                                                               HoodieTableMetaClient metaClient, int parallelism, HoodieSchema tableSchema, HoodieSchema readerSchema,
-                                                               StorageConfiguration<?> storageConf, String instantTime) {
-    throw new HoodieNotSupportedException("Expression index not supported for Java metadata table writer yet.");
   }
 }

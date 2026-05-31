@@ -570,10 +570,11 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
             .withMetadataIndexBloomFilter(true)
             .withEnableGlobalRecordLevelIndex(true).build())
         .build();
-    for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues()) {
+    HoodieTableVersion tableVersion = metaClient.getTableConfig().getTableVersion();
+    for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues(tableVersion)) {
       metaClient.getTableConfig().setMetadataPartitionState(metaClient, partitionType.getPartitionPath(), true);
     }
-    metaClient.getTableConfig().setMetadataPartitionsInflight(metaClient, MetadataPartitionType.getValidValues());
+    metaClient.getTableConfig().setMetadataPartitionsInflight(metaClient, MetadataPartitionType.getValidValues(tableVersion));
     String metadataTableBasePath = Paths.get(basePath, METADATA_TABLE_FOLDER_PATH).toString();
     HoodieTableMetaClient metadataTableMetaClient = HoodieTestUtils.init(metadataTableBasePath, MERGE_ON_READ);
     HoodieMetadataTestTable.of(metadataTableMetaClient)
@@ -583,7 +584,8 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
     // validate the relevant table states before downgrade
     java.nio.file.Path recordIndexPartitionPath = Paths.get(basePath,
         METADATA_TABLE_FOLDER_PATH, RECORD_INDEX.getPartitionPath());
-    Set<String> allPartitions = MetadataPartitionType.getAllPartitionPaths();
+    MetadataPartitionType[] partitionTypes = MetadataPartitionType.getValidValues(metaClient.getTableConfig().getTableVersion());
+    Set<String> allPartitions = Arrays.stream(partitionTypes).map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
     assertTrue(Files.exists(recordIndexPartitionPath), "record index partition should exist.");
     assertEquals(allPartitions, metaClient.getTableConfig().getMetadataPartitions(),
         TABLE_METADATA_PARTITIONS.key() + " should contain all partitions.");

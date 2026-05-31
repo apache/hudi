@@ -22,8 +22,10 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.ActionType;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -34,9 +36,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
+import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -73,17 +78,9 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
                                                            HoodieWriteConfig writeConfig,
                                                            HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                            HoodieEngineContext engineContext,
+                                                           ExpressionIndexRecordGenerator expressionIndexRecordGenerator,
                                                            Option<String> inflightInstantTimestamp) {
-    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
-  }
-
-  @Override
-  List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient metaClient) {
-    return MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient).stream()
-        .filter(partition -> !partition.equals(MetadataPartitionType.SECONDARY_INDEX))
-        .filter(partition -> !partition.equals(MetadataPartitionType.EXPRESSION_INDEX))
-        .filter(partition -> !partition.equals(MetadataPartitionType.PARTITION_STATS))
-        .collect(Collectors.toList());
+    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, expressionIndexRecordGenerator, inflightInstantTimestamp);
   }
 
   @Override
@@ -233,7 +230,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
       // a. any log files as part of RB commit metadata that was added
       // b. log files added by the commit in DT being rolled back. By rolled back, we mean, a rollback block will be added and does not mean it will be deleted.
       // both above list should only be added to FILES partition.
-      processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, dataMetaClient, rollbackMetadata, instantTime));
+      processAndCommit(instantTime, () -> convertMetadataToRecords(engineContext, rollbackMetadata, instantTime));
 
       String rollbackInstantTime = createRollbackTimestamp(instantTime);
       if (metadataMetaClient.getActiveTimeline().containsInstant(deltaCommitInstant)) {
@@ -247,6 +244,22 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
       }
       closeInternal();
     }
+  }
+
+  /**
+   * Convert rollback action metadata to metadata table records.
+   * <p>
+   * We only need to handle FILES partition here as HUDI rollbacks on MOR table may end up adding a new log file. All other partitions
+   * are handled by actual rollback of the deltacommit which added records to those partitions.
+   */
+  public static List<IndexPartitionAndRecords> convertMetadataToRecords(
+      HoodieEngineContext engineContext, HoodieRollbackMetadata rollbackMetadata, String instantTime) {
+
+    List<HoodieRecord> filesPartitionRecords = HoodieTableMetadataUtil.convertMetadataToRollbackRecords(rollbackMetadata, instantTime);
+    final HoodieData<HoodieRecord> rollbackRecordsRDD = filesPartitionRecords.isEmpty() ? engineContext.emptyHoodieData()
+        : engineContext.parallelize(filesPartitionRecords, filesPartitionRecords.size());
+
+    return Collections.singletonList(IndexPartitionAndRecords.of(MetadataPartitionType.FILES.getPartitionPath(), rollbackRecordsRDD));
   }
 
   private void validateRollbackVersionSix(

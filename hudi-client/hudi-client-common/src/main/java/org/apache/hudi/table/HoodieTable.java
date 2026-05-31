@@ -1143,7 +1143,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     if (!config.isAutoDeleteMdtPartitionsEnabled()) {
       return;
     }
-    Stream.of(MetadataPartitionType.getValidValues()).forEach(partitionType -> {
+    Stream.of(MetadataPartitionType.getValidValues(metaClient.getTableConfig().getTableVersion())).forEach(partitionType -> {
       if (shouldDeleteMetadataPartition(partitionType)) {
         try {
           log.info("Deleting metadata partition because it is disabled in writer: " + partitionType.name());
