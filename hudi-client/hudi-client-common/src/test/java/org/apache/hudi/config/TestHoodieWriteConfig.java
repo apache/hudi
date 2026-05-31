@@ -29,6 +29,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -40,6 +41,12 @@ import org.apache.hudi.config.HoodieWriteConfig.Builder;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.Property;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -48,9 +55,11 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -907,5 +916,36 @@ public class TestHoodieWriteConfig {
         .withProperties(props)
         .build();
     assertEquals(customStrategy, writeConfig.getClusteringUpdatesStrategyClass());
+  }
+
+  @Test
+  public void testWarnsWhenEventTimeFieldSetWithoutWatermarkTracking() {
+    Properties props = new Properties();
+    props.setProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "ts");
+    // hoodie.write.track.event.time.watermark is not set; default is false.
+    List<LogEvent> captured = new ArrayList<>();
+    AbstractAppender appender = new AbstractAppender(
+        "CaptureAppender", null, null, true, Property.EMPTY_ARRAY) {
+      @Override
+      public void append(LogEvent event) {
+        captured.add(event.toImmutable());
+      }
+    };
+    appender.start();
+    Logger logger = (Logger) LogManager.getLogger(HoodieWriteConfig.class);
+    logger.addAppender(appender);
+    try {
+      HoodieWriteConfig.newBuilder().withPath("/tmp").withProperties(props).build();
+    } finally {
+      logger.removeAppender(appender);
+      appender.stop();
+    }
+    boolean foundHint = captured.stream()
+        .filter(e -> e.getLevel() == Level.WARN)
+        .map(e -> e.getMessage().getFormattedMessage())
+        .anyMatch(msg -> msg.contains(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY)
+            && msg.contains(HoodieWriteConfig.TRACK_EVENT_TIME_WATERMARK.key()));
+    assertTrue(foundHint,
+        "Expected warning hint about TRACK_EVENT_TIME_WATERMARK when event-time field is set without tracking");
   }
 }
