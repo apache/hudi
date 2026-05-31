@@ -27,6 +27,8 @@ import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.hash.MurmurHash;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
@@ -35,6 +37,7 @@ import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.util.Lazy;
 
 import java.io.IOException;
 
@@ -62,22 +65,37 @@ public class HFileReaderFactory {
   }
 
   public HFileReader createHFileReader() throws IOException {
-    if (fileSizeOpt.isEmpty()) {
-      fileSizeOpt = Option.of(determineFileSize());
-    }
-    final long fileSize = fileSizeOpt.get();
-    final SeekableDataInputStream inputStream = createInputStream(fileSize);
+    final Lazy<Long> lazyFileSize = Lazy.lazily(() -> {
+      if (fileSizeOpt.isEmpty()) {
+        try {
+          fileSizeOpt = Option.of(determineFileSize());
+        } catch (IOException e) {
+          throw new HoodieException(e);
+        }
+      }
+      return fileSizeOpt.get();
+    });
 
     if (shouldEnableBlockCaching()) {
       int blockCacheSize = ConfigUtils.getIntWithAltKeys(
           properties, HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE);
+      int indexBlockCacheSize = ConfigUtils.getIntWithAltKeys(
+          properties, HoodieReaderConfig.HFILE_INDEX_BLOCK_CACHE_SIZE);
       int cacheTtlMinutes = ConfigUtils.getIntWithAltKeys(
           properties, HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES);
       String filePath = getFilePath();
-      return new CachingHFileReaderImpl(inputStream, fileSize, filePath, blockCacheSize, cacheTtlMinutes);
+
+      return new CachingHFileReaderImpl(Lazy.lazily(() -> {
+        try {
+          return createInputStream(lazyFileSize.get());
+        } catch (IOException e) {
+          throw new HoodieIOException("Failed to create input stream.", e);
+        }
+      }), lazyFileSize, filePath, blockCacheSize, indexBlockCacheSize, cacheTtlMinutes);
     }
 
-    return new HFileReaderImpl(inputStream, fileSize);
+    final SeekableDataInputStream inputStream = createInputStream(lazyFileSize.get());
+    return new HFileReaderImpl(inputStream, lazyFileSize.get());
   }
 
   private boolean shouldEnableBlockCaching() {

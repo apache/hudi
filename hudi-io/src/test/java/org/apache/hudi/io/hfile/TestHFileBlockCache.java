@@ -48,7 +48,7 @@ public class TestHFileBlockCache {
     HFileBlockCache.BlockCacheKey key3 = new HFileBlockCache.BlockCacheKey(null, 300, 64);
 
     assertNotEquals(key1, key2);
-    assertEquals(new HFileBlockCache.BlockCacheKey(null,100, 64), key1);
+    assertEquals(new HFileBlockCache.BlockCacheKey(null, 100, 64), key1);
 
     // Create test blocks using mock implementation with valid HFile block data
     HFileContext context = HFileContext.builder()

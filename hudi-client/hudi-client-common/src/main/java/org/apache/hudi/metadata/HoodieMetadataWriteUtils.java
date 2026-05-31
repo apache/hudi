@@ -298,6 +298,8 @@ public class HoodieMetadataWriteUtils {
         writeConfig.getBooleanOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED));
     properties.put(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(),
         writeConfig.getIntOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE));
+    properties.put(HoodieReaderConfig.HFILE_INDEX_BLOCK_CACHE_SIZE.key(),
+        writeConfig.getIntOrDefault(HoodieReaderConfig.HFILE_INDEX_BLOCK_CACHE_SIZE));
     properties.put(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(),
         writeConfig.getIntOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES));
     builder.withProperties(properties);

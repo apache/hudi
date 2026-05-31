@@ -68,9 +68,8 @@ public class HFileBlockCache {
    * @param key      the cache key
    * @param loader   callable to load the block if not in cache
    * @return cached or newly computed block
-   * @throws Exception if the loader throws an exception
    */
-  public HFileBlock getOrCompute(BlockCacheKey key, Callable<HFileBlock> loader) throws Exception {
+  public HFileBlock getOrCompute(BlockCacheKey key, Callable<HFileBlock> loader) {
     // Caffeine uses Function instead of Callable, so we need to wrap the Callable
     return cache.get(key, (k) -> {
       try {
