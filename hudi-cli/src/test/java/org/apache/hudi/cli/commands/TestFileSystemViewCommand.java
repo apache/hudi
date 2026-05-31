@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.NumericUtils;
@@ -86,7 +87,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     nonpartitionedTablePath = tablePath(nonpartitionedTableName);
     new TableCommand().createTable(
         nonpartitionedTablePath, nonpartitionedTableName,
-        "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        "COPY_ON_WRITE", "", HoodieTableVersion.current().versionCode(), "org.apache.hudi.common.model.HoodieAvroPayload");
 
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
@@ -110,8 +111,9 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
         .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, testWriteToken)));
 
     // Write commit files
-    Files.createFile(Paths.get(nonpartitionedTablePath, ".hoodie", commitTime1 + ".commit"));
-    Files.createFile(Paths.get(nonpartitionedTablePath, ".hoodie", commitTime2 + ".commit"));
+    Files.createDirectories(Paths.get(metaClient.getTimelinePath().toString()));
+    Files.createFile(Paths.get(metaClient.getTimelinePath().toString()).resolve(commitTime1 + ".commit"));
+    Files.createFile(Paths.get(metaClient.getTimelinePath().toString()).resolve(commitTime2 + ".commit"));
 
     // Reload meta client and create fsView
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -127,7 +129,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     partitionedTablePath = tablePath(partitionedTableName);
     new TableCommand().createTable(
         partitionedTablePath, partitionedTableName,
-        "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        "COPY_ON_WRITE", "", HoodieTableVersion.current().versionCode(), "org.apache.hudi.common.model.HoodieAvroPayload");
 
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
@@ -153,8 +155,9 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
         .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, testWriteToken)));
 
     // Write commit files
-    Files.createFile(Paths.get(partitionedTablePath, ".hoodie", commitTime1 + ".commit"));
-    Files.createFile(Paths.get(partitionedTablePath, ".hoodie", commitTime2 + ".commit"));
+    Files.createDirectories(Paths.get(metaClient.getTimelinePath().toString()));
+    Files.createFile(Paths.get(metaClient.getTimelinePath().toString()).resolve(commitTime1 + ".commit"));
+    Files.createFile(Paths.get(metaClient.getTimelinePath().toString()).resolve(commitTime2 + ".commit"));
 
     // Reload meta client and create fsView
     metaClient = HoodieTableMetaClient.reload(metaClient);

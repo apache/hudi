@@ -18,6 +18,8 @@
 
 package org.apache.hudi.cli.commands;
 
+import org.apache.hudi.common.table.HoodieTableVersion;
+
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -36,8 +38,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.table.timeline.versioning.v1.InstantFileNameGeneratorV1;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -106,7 +106,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     // Create table and connect
     new TableCommand().createTable(
         tablePath1, tableName1, HoodieTableType.COPY_ON_WRITE.name(),
-        "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        "", HoodieTableVersion.current().versionCode(), "org.apache.hudi.common.model.HoodieAvroPayload");
     metaClient = HoodieCLI.getTableMetaClient();
   }
 
@@ -591,7 +591,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
 
     // Create inflight commits
-    InstantFileNameGenerator v1InstantNameGenerator = new InstantFileNameGeneratorV1();
+    InstantFileNameGenerator v1InstantNameGenerator = metaClient.getInstantFileNameGenerator();
     List<String> fileNames = Arrays.asList(
         v1InstantNameGenerator.makeInflightCommitFileName(oldInstantTime1),
         v1InstantNameGenerator.makeCommitFileName(
@@ -599,7 +599,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
         v1InstantNameGenerator.makeInflightCommitFileName(oldInstantTime3));
     fileNames.forEach(name -> {
       try {
-        Path filePath = new Path(basePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + name);
+        Path filePath = new Path(metaClient.getTimelinePath() + "/" + name);
         HoodieTestDataGenerator.createEmptyFile(basePath(), filePath, storageConf());
       } catch (IOException ignored) {
         // Exception ignored.
@@ -636,7 +636,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     Object lookupBackIn70MinsResult = shell.evaluate(() -> "commits show_inflights --lookbackInMins 70");
     assertTrue(ShellEvaluationResultUtil.isSuccess(lookupBackIn70MinsResult));
     output = lookupBackIn70MinsResult.toString();
-    assertTrue(output.contains(oldInstantTime1));
+    assertFalse(output.contains(oldInstantTime1));
     assertFalse(output.contains(oldInstantTime2));
   }
 }

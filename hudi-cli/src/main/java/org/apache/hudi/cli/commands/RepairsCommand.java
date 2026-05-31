@@ -201,7 +201,9 @@ public class RepairsCommand {
         TimelineUtils.deleteInstantFile(client.getStorage(), client.getTimelinePath(),
             instant, client.getInstantFileNameGenerator());
       } catch (IOException ioe) {
-        if (ioe.getMessage().contains("Not an Avro data file")) {
+        if (ioe.getMessage() == null || ioe.getMessage().contains("Not an Avro data file")
+            || ioe instanceof java.io.EOFException || ioe.getMessage().contains("EOF")
+            || ioe.getMessage().contains("unable to read")) {
           log.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
           TimelineUtils.deleteInstantFile(client.getStorage(), client.getTimelinePath(),
               instant, client.getInstantFileNameGenerator());
