@@ -25,7 +25,6 @@ import org.apache.flink.table.data.columnar.vector.heap.HeapBytesVector;
 import org.apache.flink.table.data.columnar.vector.heap.HeapIntVector;
 import org.apache.flink.table.data.columnar.vector.heap.HeapLongVector;
 import org.apache.flink.table.data.columnar.vector.heap.HeapShortVector;
-
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
