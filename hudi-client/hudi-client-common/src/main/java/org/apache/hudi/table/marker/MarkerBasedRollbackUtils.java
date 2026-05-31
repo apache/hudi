@@ -74,13 +74,13 @@ public class MarkerBasedRollbackUtils {
         // Do NOT fall back to TIMELINE_SERVER_BASED on transient IO failures (e.g., HDFS throttling).
         // The timeline server looks in a different location and would return 0 markers, causing the
         // rollback to skip deleting data files and leaving orphan files on the table.
-        LOG.warn(String.format("%s not present and %s marker listing failed with IO error: %s. "
+        log.warn(String.format("%s not present and %s marker listing failed with IO error: %s. "
                 + "Propagating exception — rollback will retry rather than fall back to %s.",
             MARKER_TYPE_FILENAME, DIRECT, e.getMessage(), TIMELINE_SERVER_BASED));
         throw e;
       } catch (IllegalArgumentException e) {
         // IllegalArgumentException indicates a marker path format mismatch — fall back to timeline server.
-        LOG.warn(String.format("%s not present and %s marker failed with error: %s. So, falling back to %s marker",
+        log.warn(String.format("%s not present and %s marker failed with error: %s. So, falling back to %s marker",
             MARKER_TYPE_FILENAME, DIRECT, e.getMessage(), TIMELINE_SERVER_BASED));
         return getTimelineServerBasedMarkers(context, parallelism, markerDir, fileSystem);
       }
