@@ -55,6 +55,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -1019,10 +1022,21 @@ public class StreamSync implements Serializable, Closeable {
       return Collections.emptyMap();
     }
 
-    // If we have a next checkpoint batch, use its metadata
+    // If we have a next checkpoint batch, use its metadata. Some Source implementations (e.g.
+    // DFSPathSelector-backed *DFSSource) unconditionally return a StreamerCheckpointV2 regardless
+    // of the target table version. The persisted checkpoint key must match the table version
+    // contract enforced by CheckpointUtils.shouldTargetCheckpointV2 (V2 keys are only valid for
+    // writeTableVersion >= 8 and outside the not-supported set). Normalize here so that a v6
+    // write does not get a V2 key stamped into its commit metadata.
     if (inputBatch.getCheckpointForNextBatch() != null) {
-      return inputBatch.getCheckpointForNextBatch()
-          .getCheckpointCommitMetadata(cfg.checkpoint, cfg.ignoreCheckpoint);
+      Checkpoint sourceCheckpoint = inputBatch.getCheckpointForNextBatch();
+      boolean targetV2 = CheckpointUtils.shouldTargetCheckpointV2(versionCode, cfg.sourceClassName);
+      if (targetV2 && sourceCheckpoint instanceof StreamerCheckpointV1) {
+        sourceCheckpoint = new StreamerCheckpointV2(sourceCheckpoint);
+      } else if (!targetV2 && sourceCheckpoint instanceof StreamerCheckpointV2) {
+        sourceCheckpoint = new StreamerCheckpointV1(sourceCheckpoint);
+      }
+      return sourceCheckpoint.getCheckpointCommitMetadata(cfg.checkpoint, cfg.ignoreCheckpoint);
     }
 
     // Otherwise create new checkpoint based on version
