@@ -598,6 +598,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   @Override
   public void close() {
     try {
+      writeLock.lock();
       LOG.info("Closing Rocksdb !!");
       closed = true;
       closeResources();
@@ -605,6 +606,8 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
       LOG.info("Closed Rocksdb !!");
     } catch (Exception e) {
       throw new HoodieException("Unable to close file system view", e);
+    } finally {
+      writeLock.unlock();
     }
   }
 
