@@ -47,7 +47,7 @@ ALLOWED_TAGS = {
     'data governance', 'compression', 'code sample', 'caching',
     'bytearray', 'best practices', 'backfilling', 'architecture',
     'apicurio registry', 'apache zeppelin', 'apache orc', 'apache dolphinscheduler',
-    'apache avro', 'apache', 'access control', 'lakehouse', 'merge on read',
+    'apache avro', 'apache', 'access control', 'lakehouse', 'merge on read', 'penn interactive',
 }
 
 # Tags that should not be used
