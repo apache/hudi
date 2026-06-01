@@ -18,6 +18,7 @@ import io.trino.plugin.hudi.util.HudiAvroSerializer;
 import io.trino.plugin.hudi.util.SynthesizedColumnHandler;
 import io.trino.spi.Page;
 import io.trino.spi.connector.ConnectorPageSource;
+import io.trino.spi.connector.SourcePage;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.Record;
@@ -104,7 +105,8 @@ public class HudiTrinoReaderContext
                     }
 
                     // Get next page and reset currentPosition
-                    currentPage = pageSource.getNextPage();
+                    SourcePage sourcePage = pageSource.getNextSourcePage();
+                    currentPage = sourcePage != null ? sourcePage.getPage() : null;
                     currentPosition = 0;
 
                     // If no more pages are available
