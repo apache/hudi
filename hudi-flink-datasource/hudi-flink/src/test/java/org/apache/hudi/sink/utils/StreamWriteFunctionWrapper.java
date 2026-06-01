@@ -368,18 +368,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public void coordinatorFails() throws Exception {
-    this.coordinator.close();
-    if (isStreamingWriteIndexEnabled) {
-      // RLI restore needs a synchronous executor before start() recreates the coordinator executor.
-      try (MockCoordinatorExecutor resetExecutor = new MockCoordinatorExecutor(coordinatorContext)) {
-        this.coordinator.setExecutor(resetExecutor);
-        resetCoordinatorToCheckpoint();
-      }
-    } else {
-      resetCoordinatorToCheckpoint();
-    }
-    this.coordinator.start();
-    this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
+    resetCoordinatorToCheckpoint();
   }
 
   public void restartCoordinator() throws Exception {
