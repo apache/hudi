@@ -727,6 +727,7 @@ public class TestHudiSmokeTest
                 .withRecordLevelIndexEnabled(false)
                 .withSecondaryIndexEnabled(false)
                 .withPartitionStatsIndexEnabled(false)
+                .withResolveColumnNameCasingEnabled(true)
                 .build();
         MaterializedResult prunedRes = getQueryRunner().execute(session, "SELECT * FROM  " + table + " WHERE name='Alice'");
         MaterializedResult totalRes = getQueryRunner().execute(session, "SELECT * FROM " + table);
@@ -751,9 +752,10 @@ public class TestHudiSmokeTest
                 .withRecordIndexTimeout("10s")
                 .withSecondaryIndexEnabled(false)
                 .withPartitionStatsIndexEnabled(false)
+                .withResolveColumnNameCasingEnabled(true)
                 .build();
-        MaterializedResult totalRes = getQueryRunner().execute(session, "SELECT * FROM " + HUDI_COW_TABLE_WITH_FIELD_NAMES_IN_CAPS);
         MaterializedResult prunedRes = getQueryRunner().execute(session, "SELECT * FROM  " + HUDI_COW_TABLE_WITH_FIELD_NAMES_IN_CAPS + " WHERE id='1'");
+        MaterializedResult totalRes = getQueryRunner().execute(session, "SELECT * FROM " + HUDI_COW_TABLE_WITH_FIELD_NAMES_IN_CAPS);
         int totalSplits = totalRes.getStatementStats().get().getTotalSplits();
         int totalRows = totalRes.getRowCount();
         int prunedSplits = prunedRes.getStatementStats().get().getTotalSplits();
@@ -775,6 +777,7 @@ public class TestHudiSmokeTest
                 .withRecordIndexTimeout("10s")
                 .withSecondaryIndexEnabled(false)
                 .withPartitionStatsIndexEnabled(false)
+                .withResolveColumnNameCasingEnabled(true)
                 .build();
         MaterializedResult totalRes = getQueryRunner().execute(session, "SELECT * FROM " + HUDI_COW_TABLE_WITH_MULTI_KEYS_AND_FIELD_NAMES_IN_CAPS);
         MaterializedResult prunedRes = getQueryRunner().execute(session, "SELECT * FROM  " + HUDI_COW_TABLE_WITH_MULTI_KEYS_AND_FIELD_NAMES_IN_CAPS + " WHERE id='1' and age=30");
