@@ -25,7 +25,6 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.utilities.config.HiveSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 
-import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.TableIdentifier;
@@ -84,16 +83,17 @@ public class HiveSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getSourceSchema() {
-    return sourceSchema.toAvroSchema();
+  public HoodieSchema getSourceHoodieSchema() {
+    return sourceSchema;
   }
 
   @Override
-  public Schema getTargetSchema() {
+  public HoodieSchema getTargetHoodieSchema() {
     if (targetSchema != null) {
-      return targetSchema.toAvroSchema();
+      return targetSchema;
     } else {
-      return super.getTargetSchema();
+      return super.getTargetHoodieSchema();
     }
   }
 }
+
