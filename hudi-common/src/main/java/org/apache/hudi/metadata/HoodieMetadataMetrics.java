@@ -40,7 +40,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Metrics for metadata.
@@ -95,19 +94,23 @@ public class HoodieMetadataMetrics implements Serializable {
     try {
       HoodieTableFileSystemView fileSystemView =
           HoodieTableFileSystemView.fileListingBasedFileSystemView(new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient, metaClient.getActiveTimeline());
-      return getStats(fileSystemView, detailed, metadata, metadataPartitions);
+      return getStats(fileSystemView, metaClient, detailed, metadata, metadataPartitions);
     } catch (IOException ioe) {
       throw new HoodieIOException("Unable to get metadata stats.", ioe);
     }
   }
 
-  private Map<String, String> getStats(HoodieTableFileSystemView fsView, boolean detailed, HoodieTableMetadata tableMetadata, Set<String> metadataPartitions)
+  private Map<String, String> getStats(HoodieTableFileSystemView fsView, HoodieTableMetaClient metaClient, boolean detailed,
+                                       HoodieTableMetadata tableMetadata, Set<String> metadataPartitions)
       throws IOException {
     Map<String, String> stats = new HashMap<>();
 
     // Total size of the metadata and count of base/log files for enabled partitions
     for (String metadataPartition : metadataPartitions) {
-      List<FileSlice> latestSlices = fsView.getLatestFileSlices(metadataPartition).collect(Collectors.toList());
+      // Route through getPartitionLatestFileSlices so the file slices are found whether or not the MDT
+      // partition is bucketed (when bucketing is enabled the file groups live under <partition>/<bucket>/).
+      List<FileSlice> latestSlices =
+          HoodieTableMetadataUtil.getPartitionLatestFileSlices(metaClient, Option.of(fsView), metadataPartition);
 
       // Total size of the metadata and count of base/log files
       long totalBaseFileSizeInBytes = 0;

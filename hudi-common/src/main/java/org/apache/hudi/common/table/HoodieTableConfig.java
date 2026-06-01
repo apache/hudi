@@ -1392,7 +1392,7 @@ public class HoodieTableConfig extends HoodieConfig {
    *
    * @param enable Whether to enable or disable bucketing
    */
-  public void setMetadataTableBucketing(boolean enable) {
+  public void setMetadataTablePartitionBucketing(boolean enable) {
     setValue(METADATA_TABLE_PARTITION_BUCKETING_ENABLE, String.valueOf(enable));
   }
 

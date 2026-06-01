@@ -2375,24 +2375,29 @@ public class HoodieTableMetadataUtil {
    *
    * @param dataMetaClient     MetaClient for the dataset
    * @param metadataMetaClient MetaClient for the MDT (may be null if MDT is not yet initialized)
-   * @param enabled            If true, metadata table is being used for this dataset, false otherwise
+   * @param enabled            If true, enable bucketing for MDT partitions; if false, disable it
    */
   public static HoodieTableMetaClient setMetadataTablePartitionBucketing(HoodieTableMetaClient dataMetaClient,
                                                                          HoodieTableMetaClient metadataMetaClient, boolean enabled) {
     // Only allowed on the main dataset
     ValidationUtils.checkArgument(!isMetadataTable(dataMetaClient.getBasePath().toString()), "Bucketing should only be enabled on the main dataset");
 
-    dataMetaClient.getTableConfig().setMetadataTableBucketing(enabled);
+    // Persist on the MDT first, then on the data table. The data table is the authoritative source for the
+    // retry guard in HoodieBackedTableMetadataWriter#initializeFileGroups
+    // (bucketingEnabled && !dataMetaClient...isMetadataTablePartitionBucketingEnabled()). Updating the data
+    // table last ensures that if the MDT update fails the data table stays un-flipped, so the next retry
+    // naturally re-attempts both updates rather than leaving the two configs permanently desynced.
+    if (metadataMetaClient != null) {
+      // Persist on MDT so reader code can determine bucketing from MDT props alone.
+      metadataMetaClient.getTableConfig().setMetadataTablePartitionBucketing(enabled);
+      HoodieTableConfig.update(metadataMetaClient.getStorage(), metadataMetaClient.getMetaPath(), metadataMetaClient.getTableConfig().getProps());
+    }
+
+    dataMetaClient.getTableConfig().setMetadataTablePartitionBucketing(enabled);
     HoodieTableConfig.update(dataMetaClient.getStorage(), dataMetaClient.getMetaPath(), dataMetaClient.getTableConfig().getProps());
     dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
     ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataTablePartitionBucketingEnabled() == enabled,
             "Metadata table state change should be persisted");
-
-    if (metadataMetaClient != null) {
-      // Also persist on MDT so reader code can determine bucketing from MDT props alone.
-      metadataMetaClient.getTableConfig().setMetadataTableBucketing(enabled);
-      HoodieTableConfig.update(metadataMetaClient.getStorage(), metadataMetaClient.getMetaPath(), metadataMetaClient.getTableConfig().getProps());
-    }
 
     log.info("Metadata table {} partition bucketing has been {}", dataMetaClient.getBasePath(), enabled ? "enabled" : "disabled");
     return dataMetaClient;

@@ -695,7 +695,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> FILE_GROUP_BUCKET_SIZE = ConfigProperty
           .key(METADATA_PREFIX + ".file.group.bucket.size")
           .defaultValue(1000)
-          .withDocumentation("This is paired with " + FILE_GROUP_BUCKETING_ENABLE.key() + ". This represents number of shards under a single bucket");
+          .withDocumentation("This is paired with " + FILE_GROUP_BUCKETING_ENABLE.key() + ". Maximum number of file groups per bucket sub-directory");
 
   private HoodieMetadataConfig() {
     super();
@@ -1390,7 +1390,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return metadataConfig;
     }
 
-    public Builder withFileGroupBucketingEnable(boolean fileGroupBucketingEnable) {
+    public Builder withFileGroupBucketingEnabled(boolean fileGroupBucketingEnable) {
       metadataConfig.setValue(FILE_GROUP_BUCKETING_ENABLE, String.valueOf(fileGroupBucketingEnable));
       return this;
     }
