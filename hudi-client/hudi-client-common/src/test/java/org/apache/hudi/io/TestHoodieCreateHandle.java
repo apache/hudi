@@ -34,6 +34,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.TestFileWriter;
@@ -390,6 +391,38 @@ public class TestHoodieCreateHandle extends HoodieCommonTestHarness {
     assertDoesNotThrow(() -> createHandle.fileWriter.close());
     assertFalse(createHandle.fileWriter.canWrite());
     assertDoesNotThrow(createHandle::close);
+  }
+
+  @Test
+  void testFileWriterClosedWhenDoWriteFails() throws Exception {
+    HoodieWriteConfig failOnWriteConfig = HoodieWriteConfig.newBuilder()
+        .withProps(writeConfig.getProps())
+        .withWriteIgnoreFailed(false)
+        .build();
+    HoodieTable failOnWriteTable = new TestBaseHoodieTable(failOnWriteConfig, getEngineContext(), metaClient);
+    CreateHandleWithFileWriterWriteFailure createHandle = new CreateHandleWithFileWriterWriteFailure(
+        failOnWriteConfig, TEST_INSTANT_TIME, failOnWriteTable, TEST_PARTITION_PATH, TEST_FILE_ID, taskContextSupplier);
+    HoodieRecord testRecord = dataGen.generateInserts(TEST_INSTANT_TIME, 1).get(0);
+
+    HoodieException exception = assertThrows(HoodieException.class, () ->
+        createHandle.doWrite(testRecord, TEST_SCHEMA, new TypedProperties()));
+
+    assertEquals("Simulated file writer write failure", exception.getMessage());
+    assertNull(createHandle.fileWriter);
+  }
+
+  private static class CreateHandleWithFileWriterWriteFailure extends HoodieCreateHandle<Object, Object, Object, Object> {
+    CreateHandleWithFileWriterWriteFailure(HoodieWriteConfig config, String instantTime,
+                                           HoodieTable<Object, Object, Object, Object> hoodieTable,
+                                           String partitionPath, String fileId,
+                                           TaskContextSupplier taskContextSupplier) {
+      super(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier);
+    }
+
+    @Override
+    protected HoodieFileWriter initializeFileWriter() throws IOException {
+      return new TestFileWriter(path, hoodieTable.getStorage(), false, true);
+    }
   }
 
   /**

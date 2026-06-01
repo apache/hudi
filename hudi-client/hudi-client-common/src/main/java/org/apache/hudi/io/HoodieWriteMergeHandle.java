@@ -51,6 +51,7 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.HoodieMergeHelper;
+import org.apache.hudi.util.AutoCloseableUtils;
 
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -457,12 +458,9 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       if (keyToNewRecords instanceof Closeable) {
         ((Closeable) keyToNewRecords).close();
       }
-
       keyToNewRecords = null;
       writtenRecordKeys = null;
-
-      fileWriter.close();
-      fileWriter = null;
+      closeFileWriter(null);
 
       long fileSizeInBytes = storage.getPathInfo(newFilePath).getLength();
       HoodieWriteStat stat = writeStatus.getStat();
@@ -485,8 +483,28 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
 
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {
+      closeFileWriterQuietly(e);
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
+    } catch (RuntimeException e) {
+      closeFileWriterQuietly(e);
+      throw e;
+    } finally {
+      keyToNewRecords = null;
+      writtenRecordKeys = null;
     }
+  }
+
+  private void closeFileWriter(Throwable failure) throws IOException {
+    try {
+      AutoCloseableUtils.closeWithSuppressed(fileWriter, failure);
+    } finally {
+      fileWriter = null;
+    }
+  }
+
+  private void closeFileWriterQuietly(Throwable failure) {
+    AutoCloseableUtils.closeQuietlyWithSuppressed(fileWriter, failure);
+    fileWriter = null;
   }
 
   public void performMergeDataValidationCheck(WriteStatus writeStatus) {
