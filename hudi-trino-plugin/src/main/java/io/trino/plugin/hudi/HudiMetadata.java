@@ -38,6 +38,7 @@ import io.trino.spi.connector.ConnectorTableMetadata;
 import io.trino.spi.connector.ConnectorTableVersion;
 import io.trino.spi.connector.Constraint;
 import io.trino.spi.connector.ConstraintApplicationResult;
+import io.trino.spi.connector.LimitApplicationResult;
 import io.trino.spi.connector.RelationColumnsMetadata;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.SchemaTablePrefix;
@@ -47,8 +48,8 @@ import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.statistics.Estimate;
 import io.trino.spi.statistics.TableStatistics;
 import io.trino.spi.type.TypeManager;
-import org.apache.avro.Schema;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
@@ -64,6 +65,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -91,6 +93,7 @@ import static io.trino.plugin.hudi.HudiTableProperties.LOCATION_PROPERTY;
 import static io.trino.plugin.hudi.HudiTableProperties.PARTITIONED_BY_PROPERTY;
 import static io.trino.plugin.hudi.HudiUtil.buildTableMetaClient;
 import static io.trino.plugin.hudi.HudiUtil.getLatestTableSchema;
+import static io.trino.plugin.hudi.HudiUtil.getOrderingColumnHandles;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.StandardErrorCode.QUERY_REJECTED;
 import static io.trino.spi.StandardErrorCode.UNSUPPORTED_TABLE_TYPE;
@@ -162,7 +165,7 @@ public class HudiMetadata
         String inputFormat = table.getStorage().getStorageFormat().getInputFormat();
         HoodieTableType hoodieTableType = HudiTableTypeUtils.fromInputFormat(inputFormat);
         Lazy<HoodieTableMetaClient> lazyMetaClient = Lazy.lazily(() -> buildTableMetaClient(fileSystem, tableName.toString(), basePath));
-        Optional<Lazy<Schema>> hudiTableSchema = isResolveColumnNameCasingEnabled(session) ?
+        Optional<Lazy<HoodieSchema>> hudiTableSchema = isResolveColumnNameCasingEnabled(session) ?
                 Optional.of(Lazy.lazily(() -> getLatestTableSchema(lazyMetaClient.get(), tableName.getTableName()))) : Optional.empty();
 
         return new HudiTableHandle(
@@ -173,9 +176,11 @@ public class HudiMetadata
                 table.getStorage().getLocation(),
                 hoodieTableType,
                 getPartitionKeyColumnHandles(table, typeManager),
+                Lazy.lazily(() -> getOrderingColumnHandles(table, typeManager, lazyMetaClient, NANOSECONDS)),
                 ImmutableSet.of(),
                 TupleDomain.all(),
                 TupleDomain.all(),
+                OptionalLong.empty(),
                 hudiTableSchema);
     }
 
@@ -260,6 +265,22 @@ public class HudiMetadata
     }
 
     @Override
+    public Optional<LimitApplicationResult<ConnectorTableHandle>> applyLimit(ConnectorSession session, ConnectorTableHandle handle, long limit)
+    {
+        HudiTableHandle table = (HudiTableHandle) handle;
+
+        if (table.getLimit().isPresent() && table.getLimit().getAsLong() <= limit) {
+            return Optional.empty();
+        }
+
+        // limitGuaranteed=false: the connector can't bound row count across splits without
+        // coordinator-side coordination. Trino keeps the Limit operator above the TableScan.
+        // The stored limit is consumed by HudiSplitSource for split-listing short-circuit when
+        // row-count estimates from the Hudi metadata table become available (TODO).
+        return Optional.of(new LimitApplicationResult<>(table.withLimit(limit), false, false));
+    }
+
+    @Override
     public Map<String, ColumnHandle> getColumnHandles(ConnectorSession session, ConnectorTableHandle tableHandle)
     {
         HudiTableHandle hudiTableHandle = (HudiTableHandle) tableHandle;
@@ -276,7 +297,7 @@ public class HudiMetadata
     }
 
     @Override
-    public Optional<Object> getInfo(ConnectorTableHandle tableHandle)
+    public Optional<Object> getInfo(ConnectorSession session, ConnectorTableHandle tableHandle)
     {
         HudiTableHandle table = (HudiTableHandle) tableHandle;
         return Optional.of(new HudiTableInfo(table.getSchemaTableName(), table.getTableType().name(), table.getBasePath()));

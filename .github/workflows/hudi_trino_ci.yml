@@ -1,0 +1,67 @@
+name: Hudi Trino Connector CI
+
+on:
+  push:
+    branches:
+      - master
+      - 'release-*'
+    paths:
+      - 'hudi-trino-plugin/**'
+      - '.github/workflows/hudi_trino_ci.yml'
+  pull_request:
+    branches:
+      - master
+      - 'release-*'
+    paths:
+      - 'hudi-trino-plugin/**'
+      - '.github/workflows/hudi_trino_ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: hudi-trino-ci-${{ github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'release-') }}
+
+env:
+  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log
+
+jobs:
+  build-and-test:
+    name: Build and test connector
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # Hudi targets Java 11 and uses Lombok 1.18.36, which does not run on JDK 25.
+      # Build the upstream modules hudi-trino-plugin depends on under JDK 17 first,
+      # install them into the local m2, then build the connector itself under JDK 25.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+      - name: Install upstream Hudi modules (JDK 17)
+        # hudi-client-common and hudi-java-client are pulled in here for the test stage;
+        # they live behind the hudi-trino-tests profile but the test step needs them.
+        run: mvn $MVN_ARGS install -pl :hudi-common,:hudi-hive-sync,:hudi-io,:hudi-sync-common,:hudi-client-common,:hudi-java-client -am -Dmaven.test.skip=true -Drat.skip -Dcheckstyle.skip
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+      # Trino does not publish trino-spi / trino-filesystem / trino-hive test-jars to
+      # Maven Central. Check out the matching release tag and install just the modules
+      # whose test classifiers we need into the local m2.
+      - name: Checkout trinodb/trino at 481
+        uses: actions/checkout@v5
+        with:
+          repository: trinodb/trino
+          ref: '481'
+          path: trino-src
+      - name: Install Trino test-jars (JDK 25)
+        working-directory: trino-src
+        run: mvn $MVN_ARGS install -pl :trino-spi,:trino-filesystem,:trino-hive,:trino-main -am -DskipTests -Dair.check.skip-all=true
+      - name: Build connector (JDK 25)
+        run: mvn $MVN_ARGS -Phudi-trino -pl hudi-trino-plugin install -Dmaven.test.skip=true
+      - name: Test connector (JDK 25)
+        run: mvn $MVN_ARGS -Phudi-trino,hudi-trino-tests -pl hudi-trino-plugin test

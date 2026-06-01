@@ -20,9 +20,11 @@ import io.trino.plugin.hudi.util.SynthesizedColumnHandler;
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
 import io.trino.spi.connector.ConnectorPageSource;
+import io.trino.spi.connector.SourcePage;
 import io.trino.spi.metrics.Metrics;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import java.io.IOException;
 import java.util.List;
@@ -41,6 +43,7 @@ public class HudiPageSource
     PageBuilder pageBuilder;
     HudiAvroSerializer avroSerializer;
     List<HiveColumnHandle> columnHandles;
+    ClosableIterator<IndexedRecord> recordIterator;
 
     public HudiPageSource(
             ConnectorPageSource pageSource,
@@ -51,11 +54,29 @@ public class HudiPageSource
     {
         this.pageSource = pageSource;
         this.fileGroupReader = fileGroupReader;
-        this.initFileGroupReader();
         this.readerContext = readerContext;
         this.columnHandles = columnHandles;
         this.pageBuilder = new PageBuilder(columnHandles.stream().map(HiveColumnHandle::getType).toList());
         this.avroSerializer = new HudiAvroSerializer(columnHandles, synthesizedColumnHandler);
+        try {
+            this.recordIterator = fileGroupReader.getClosableIterator();
+        }
+        catch (IOException e) {
+            // Clean up resources on initialization failure
+            try {
+                fileGroupReader.close();
+            }
+            catch (IOException closeException) {
+                e.addSuppressed(closeException);
+            }
+            try {
+                pageSource.close();
+            }
+            catch (IOException closeException) {
+                e.addSuppressed(closeException);
+            }
+            throw new RuntimeException("Failed to initialize file group reader!", e);
+        }
     }
 
     @Override
@@ -79,30 +100,20 @@ public class HudiPageSource
     @Override
     public boolean isFinished()
     {
-        try {
-            return !fileGroupReader.hasNext();
-        }
-        catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        return !recordIterator.hasNext();
     }
 
     @Override
-    public Page getNextPage()
+    public SourcePage getNextSourcePage()
     {
         checkState(pageBuilder.isEmpty(), "PageBuilder is not empty at the beginning of a new page");
-        try {
-            while (fileGroupReader.hasNext()) {
-                avroSerializer.buildRecordInPage(pageBuilder, fileGroupReader.next());
-            }
-        }
-        catch (IOException e) {
-            throw new RuntimeException(e);
+        while (recordIterator.hasNext()) {
+            avroSerializer.buildRecordInPage(pageBuilder, recordIterator.next());
         }
 
         Page newPage = pageBuilder.build();
         pageBuilder.reset();
-        return newPage;
+        return SourcePage.create(newPage);
     }
 
     @Override
@@ -115,8 +126,32 @@ public class HudiPageSource
     public void close()
             throws IOException
     {
-        fileGroupReader.close();
-        pageSource.close();
+        IOException closeException = null;
+
+        recordIterator.close();
+
+        try {
+            fileGroupReader.close();
+        }
+        catch (IOException e) {
+            closeException = e;
+        }
+
+        try {
+            pageSource.close();
+        }
+        catch (IOException e) {
+            if (closeException == null) {
+                closeException = e;
+            }
+            else {
+                closeException.addSuppressed(e);
+            }
+        }
+
+        if (closeException != null) {
+            throw closeException;
+        }
     }
 
     @Override
@@ -129,15 +164,5 @@ public class HudiPageSource
     public Metrics getMetrics()
     {
         return pageSource.getMetrics();
-    }
-
-    protected void initFileGroupReader()
-    {
-        try {
-            this.fileGroupReader.initRecordIterators();
-        }
-        catch (IOException e) {
-            throw new RuntimeException("Failed to initialize file group reader!", e);
-        }
     }
 }

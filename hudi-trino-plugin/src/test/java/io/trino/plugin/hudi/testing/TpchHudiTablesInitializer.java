@@ -19,8 +19,6 @@ import io.airlift.log.Logger;
 import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystem;
 import io.trino.filesystem.TrinoFileSystemFactory;
-import io.trino.hdfs.HdfsContext;
-import io.trino.hdfs.HdfsEnvironment;
 import io.trino.metastore.Column;
 import io.trino.metastore.HiveMetastore;
 import io.trino.metastore.HiveMetastoreFactory;
@@ -45,6 +43,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieJavaWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -54,7 +53,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -64,12 +62,10 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.intellij.lang.annotations.Language;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -90,9 +86,7 @@ import static io.trino.metastore.HiveType.HIVE_DOUBLE;
 import static io.trino.metastore.HiveType.HIVE_INT;
 import static io.trino.metastore.HiveType.HIVE_LONG;
 import static io.trino.metastore.HiveType.HIVE_STRING;
-import static io.trino.plugin.hive.HiveTestUtils.HDFS_ENVIRONMENT;
 import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
-import static io.trino.testing.TestingConnectorSession.SESSION;
 import static java.lang.String.format;
 import static java.nio.file.Files.createTempDirectory;
 import static java.util.Collections.unmodifiableList;
@@ -112,7 +106,6 @@ public class TpchHudiTablesInitializer
             new Column("_hoodie_record_key", HIVE_STRING, Optional.empty(), Map.of()),
             new Column("_hoodie_partition_path", HIVE_STRING, Optional.empty(), Map.of()),
             new Column("_hoodie_file_name", HIVE_STRING, Optional.empty(), Map.of()));
-    private static final HdfsContext CONTEXT = new HdfsContext(SESSION);
 
     private final List<TpchTable<?>> tpchTables;
 
@@ -156,7 +149,7 @@ public class TpchHudiTablesInitializer
 
     public void load(TpchTable<?> tpchTables, QueryRunner queryRunner, java.nio.file.Path tableDirectory)
     {
-        try (HoodieJavaWriteClient<HoodieAvroPayload> writeClient = createWriteClient(tpchTables, HDFS_ENVIRONMENT, new Path(tableDirectory.toUri()))) {
+        try (HoodieJavaWriteClient<HoodieAvroPayload> writeClient = createWriteClient(tpchTables, new Path(tableDirectory.toUri()))) {
             RecordConverter recordConverter = createRecordConverter(tpchTables);
 
             @Language("SQL") String sql = generateScanSql(TPCH_TINY, tpchTables);
@@ -168,9 +161,9 @@ public class TpchHudiTablesInitializer
                     .map(MaterializedRow::getFields)
                     .map(recordConverter::toRecord)
                     .collect(Collectors.toList());
-            String timestamp = HoodieInstantTimeGenerator.formatDate(Date.from(Instant.now()));
-            writeClient.startCommitWithTime(timestamp);
-            writeClient.insert(records, timestamp);
+            String instantTime = writeClient.startCommit();
+            List<WriteStatus> writeStatuses = writeClient.insert(records, instantTime);
+            writeClient.commit(instantTime, writeStatuses);
         }
     }
 
@@ -211,10 +204,10 @@ public class TpchHudiTablesInitializer
                 .build();
     }
 
-    private static HoodieJavaWriteClient<HoodieAvroPayload> createWriteClient(TpchTable<?> table, HdfsEnvironment hdfsEnvironment, Path tablePath)
+    private static HoodieJavaWriteClient<HoodieAvroPayload> createWriteClient(TpchTable<?> table, Path tablePath)
     {
         Schema schema = createAvroSchema(table);
-        Configuration conf = hdfsEnvironment.getConfiguration(CONTEXT, tablePath);
+        Configuration conf = new Configuration();
 
         try {
             HoodieTableMetaClient.newTableBuilder()

@@ -131,7 +131,7 @@ public class IndexSupportFactory
         if (isResolveColumnNameCasingEnabled(session)) {
             // if column case reconciliation is enabled, transform the tuple domain keys to match the column names from the Hudi table.
             return tupleDomain.transformKeys(hiveColumnHandle ->
-                    getFieldFromSchema(hiveColumnHandle.getName(), hudiTableHandle.getTableSchema()).name());
+                    getFieldFromSchema(hiveColumnHandle.getName(), hudiTableHandle.getTableSchema().toAvroSchema()).name());
         }
         return tupleDomain.transformKeys(HiveColumnHandle::getName);
     }

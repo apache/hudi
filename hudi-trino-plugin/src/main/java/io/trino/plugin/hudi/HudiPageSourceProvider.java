@@ -34,12 +34,9 @@ import io.trino.parquet.reader.ParquetReader;
 import io.trino.parquet.reader.RowGroupInfo;
 import io.trino.plugin.base.metrics.FileFormatDataSourceStats;
 import io.trino.plugin.hive.HiveColumnHandle;
-import io.trino.plugin.hive.ReaderColumns;
 import io.trino.plugin.hive.parquet.ParquetReaderConfig;
 import io.trino.plugin.hudi.file.HudiBaseFile;
 import io.trino.plugin.hudi.reader.HudiTrinoReaderContext;
-import io.trino.plugin.hudi.storage.HudiTrinoStorage;
-import io.trino.plugin.hudi.storage.TrinoStorageConfiguration;
 import io.trino.plugin.hudi.util.SynthesizedColumnHandler;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
@@ -55,10 +52,9 @@ import io.trino.spi.predicate.TupleDomain;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.io.MessageColumnIO;
@@ -68,7 +64,6 @@ import org.joda.time.DateTimeZone;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -82,8 +77,6 @@ import static io.trino.parquet.ParquetTypeUtils.getColumnIO;
 import static io.trino.parquet.ParquetTypeUtils.getDescriptors;
 import static io.trino.parquet.predicate.PredicateUtils.buildPredicate;
 import static io.trino.parquet.predicate.PredicateUtils.getFilteredRowGroups;
-import static io.trino.plugin.hive.HiveColumnHandle.partitionColumnHandle;
-import static io.trino.plugin.hive.HivePageSourceProvider.projectBaseColumns;
 import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.ParquetReaderProvider;
 import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.createDataSource;
 import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.createParquetPageSource;
@@ -104,10 +97,9 @@ import static io.trino.plugin.hudi.HudiUtil.buildTableMetaClient;
 import static io.trino.plugin.hudi.HudiUtil.constructSchema;
 import static io.trino.plugin.hudi.HudiUtil.convertToFileSlice;
 import static io.trino.plugin.hudi.HudiUtil.getLatestTableSchema;
-import static io.trino.plugin.hudi.HudiUtil.prependHudiMetaColumns;
+import static io.trino.plugin.hudi.HudiUtil.prependHudiMetaAndOrderingColumns;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
-import static java.util.stream.Collectors.toUnmodifiableList;
 
 public class HudiPageSourceProvider
         implements ConnectorPageSourceProvider
@@ -184,7 +176,7 @@ public class HudiPageSourceProvider
         // The `columns` list could be empty when count(*) is issued,
         // prepending hoodie meta columns for Hudi split with log files
         // to allow a non-empty dataPageSource to be returned
-        List<HiveColumnHandle> hudiMetaAndDataColumnHandles = prependHudiMetaColumns(dataColumnHandles);
+        List<HiveColumnHandle> hudiMetaAndDataColumnHandles = prependHudiMetaAndOrderingColumns(hudiTableHandle, dataColumnHandles);
 
         TrinoFileSystem fileSystem = fileSystemFactory.create(session);
         ConnectorPageSource dataPageSource = createPageSource(
@@ -193,22 +185,21 @@ public class HudiPageSourceProvider
                 hudiSplit,
                 fileSystem.newInputFile(Location.of(hudiBaseFileOpt.get().getPath()), hudiBaseFileOpt.get().getFileSize()),
                 dataSourceStats,
-                options
+                ParquetReaderOptions.builder(options)
                         .withIgnoreStatistics(isParquetIgnoreStatistics(session))
                         .withMaxReadBlockSize(getParquetMaxReadBlockSize(session))
                         .withMaxReadBlockRowCount(getParquetMaxReadBlockRowCount(session))
                         .withSmallFileThreshold(getParquetSmallFileThreshold(session))
                         .withUseColumnIndex(isParquetUseColumnIndex(session))
                         .withBloomFilter(useParquetBloomFilter(session))
-                        .withVectorizedDecodingEnabled(isParquetVectorizedDecodingEnabled(session)),
+                        .withVectorizedDecodingEnabled(isParquetVectorizedDecodingEnabled(session))
+                        .build(),
                 timeZone, dynamicFilter, isBaseFileOnly);
 
         SynthesizedColumnHandler synthesizedColumnHandler = SynthesizedColumnHandler.create(hudiSplit);
 
         // Avoid avro serialization if split/filegroup only contains base files
         if (isBaseFileOnly) {
-            ValidationUtils.checkArgument(!hiveColumnHandles.isEmpty(),
-                    "Column handles should always be present for providing Hudi data page source on a base file");
             return new HudiBaseFileOnlyPageSource(
                     dataPageSource,
                     hiveColumnHandles,
@@ -219,34 +210,31 @@ public class HudiPageSourceProvider
         // TODO: Move this into HudiTableHandle
         HoodieTableMetaClient metaClient = buildTableMetaClient(
                 fileSystemFactory.create(session), hudiTableHandle.getSchemaTableName().toString(), hudiTableHandle.getBasePath());
-
         HudiTrinoReaderContext readerContext = new HudiTrinoReaderContext(
+                metaClient.getStorageConf(),
+                metaClient.getTableConfig(),
                 dataPageSource,
                 dataColumnHandles,
                 hudiMetaAndDataColumnHandles,
                 synthesizedColumnHandler);
-        Schema dataSchema =
+        HoodieSchema dataSchema =
                 Optional.ofNullable(hudiTableHandle.getTableSchema())
                         .orElseGet(() -> getLatestTableSchema(metaClient, hudiTableHandle.getTableName()));
 
-        // Construct an Avro schema for log file reader
-        Schema requestedSchema = constructSchema(dataSchema, hudiMetaAndDataColumnHandles.stream().map(HiveColumnHandle::getName).toList());
+        Schema requestedSchema = constructSchema(dataSchema.toAvroSchema(), hudiMetaAndDataColumnHandles.stream().map(HiveColumnHandle::getName).toList());
         HoodieFileGroupReader<IndexedRecord> fileGroupReader =
-                new HoodieFileGroupReader<>(
-                        readerContext,
-                        new HudiTrinoStorage(fileSystemFactory.create(session), new TrinoStorageConfiguration()),
-                        hudiTableHandle.getBasePath(),
-                        hudiTableHandle.getLatestCommitTime(),
-                        convertToFileSlice(hudiSplit, hudiTableHandle.getBasePath()),
-                        dataSchema,
-                        requestedSchema,
-                        Option.empty(),
-                        metaClient,
-                        metaClient.getTableConfig().getProps(),
-                        start,
-                        length,
-                        false);
-
+                HoodieFileGroupReader.<IndexedRecord>newBuilder()
+                        .withReaderContext(readerContext)
+                        .withHoodieTableMetaClient(metaClient)
+                        .withFileSlice(convertToFileSlice(hudiSplit, hudiTableHandle.getBasePath()))
+                        .withDataSchema(dataSchema)
+                        .withRequestedSchema(HoodieSchema.fromAvroSchema(requestedSchema))
+                        .withLatestCommitTime(hudiTableHandle.getLatestCommitTime())
+                        .withProps(metaClient.getTableConfig().getProps())
+                        .withShouldUseRecordPosition(false)
+                        .withStart(start)
+                        .withLength(length)
+                        .build();
         return new HudiPageSource(
                 dataPageSource,
                 fileGroupReader,
@@ -311,17 +299,12 @@ public class HudiPageSourceProvider
                     DOMAIN_COMPACTION_THRESHOLD,
                     options);
 
-            Optional<ReaderColumns> readerProjections = projectBaseColumns(columns);
-            List<HiveColumnHandle> baseColumns = readerProjections.map(projection ->
-                            projection.get().stream()
-                                    .map(HiveColumnHandle.class::cast)
-                                    .collect(toUnmodifiableList()))
-                    .orElse(columns);
             ParquetDataSourceId dataSourceId = dataSource.getId();
             ParquetDataSource finalDataSource = dataSource;
-            ParquetReaderProvider parquetReaderProvider = fields -> new ParquetReader(
+            ParquetReaderProvider parquetReaderProvider = (fields, appendRowNumberColumn) -> new ParquetReader(
                     Optional.ofNullable(fileMetaData.getCreatedBy()),
                     fields,
+                    appendRowNumberColumn,
                     rowGroups,
                     finalDataSource,
                     timeZone,
@@ -329,8 +312,9 @@ public class HudiPageSourceProvider
                     options,
                     exception -> handleException(dataSourceId, exception),
                     Optional.of(parquetPredicate),
-                    Optional.empty());
-            return createParquetPageSource(baseColumns, fileSchema, messageColumn, useColumnNames, parquetReaderProvider);
+                    Optional.empty(),
+                    parquetMetadata.getDecryptionContext());
+            return createParquetPageSource(columns, fileSchema, messageColumn, useColumnNames, parquetReaderProvider);
         }
         catch (IOException | RuntimeException e) {
             try {
@@ -430,15 +414,8 @@ public class HudiPageSourceProvider
     private static List<HiveColumnHandle> getHiveColumns(List<ColumnHandle> columns,
                                                          boolean isBaseFileOnly)
     {
-        if (!isBaseFileOnly || !columns.isEmpty()) {
-            return columns.stream()
-                    .map(HiveColumnHandle.class::cast)
-                    .toList();
-        }
-
-        // The `columns` list containing the requested columns to read could be empty
-        // when count(*) is in the statement; to make sure the page source works properly,
-        // the synthesized partition column is added in this case.
-        return Collections.singletonList(partitionColumnHandle());
+        return columns.stream()
+                .map(HiveColumnHandle.class::cast)
+                .toList();
     }
 }

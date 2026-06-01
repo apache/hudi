@@ -19,7 +19,6 @@ import com.google.common.util.concurrent.Futures;
 import io.airlift.log.Logger;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
-import io.trino.filesystem.cache.CachingHostAddressProvider;
 import io.trino.metastore.Partition;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hive.HivePartitionKey;
@@ -44,6 +43,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.util.Lazy;
 
@@ -92,8 +93,7 @@ public class HudiSplitSource
             int maxOutstandingSplits,
             Lazy<Map<String, Partition>> lazyPartitions,
             DynamicFilter dynamicFilter,
-            Duration dynamicFilteringWaitTimeoutMillis,
-            CachingHostAddressProvider cachingHostAddressProvider)
+            Duration dynamicFilteringWaitTimeoutMillis)
     {
         boolean enableMetadataTable = isHudiMetadataTableEnabled(session);
         Lazy<HoodieTableMetadata> lazyTableMetadata = Lazy.lazily(() -> {
@@ -104,9 +104,24 @@ public class HudiSplitSource
             HoodieTableMetaClient metaClient = tableHandle.getMetaClient();
             HoodieEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorage().getConf());
 
-            HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(
-                    engineContext,
-                    tableHandle.getMetaClient().getStorage(), metadataConfig, metaClient.getBasePath().toString(), true);
+            HoodieTableMetadata tableMetadata;
+            if (enableMetadataTable) {
+                HoodieBackedTableMetadata mdt = new HoodieBackedTableMetadata(
+                        engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString(), true);
+                if (mdt.isMetadataTableInitialized()) {
+                    tableMetadata = mdt;
+                }
+                else {
+                    log.warn("Metadata table not initialized on disk for %s; falling back to FileSystemBackedTableMetadata",
+                            tableHandle.getSchemaTableName());
+                    tableMetadata = new FileSystemBackedTableMetadata(
+                            engineContext, metaClient.getStorage(), metaClient.getBasePath().toString());
+                }
+            }
+            else {
+                tableMetadata = new FileSystemBackedTableMetadata(
+                        engineContext, metaClient.getStorage(), metaClient.getBasePath().toString());
+            }
             log.info("Loaded table metadata for table: %s in %s ms", tableHandle.getSchemaTableName(), timer.endTimer());
             return tableMetadata;
         });
@@ -128,7 +143,6 @@ public class HudiSplitSource
                 lazyPartitions,
                 enableMetadataTable,
                 lazyTableMetadata,
-                cachingHostAddressProvider,
                 throwable -> {
                     trinoException.compareAndSet(null, new TrinoException(HUDI_CANNOT_OPEN_SPLIT,
                             "Failed to generate splits for " + tableHandle.getSchemaTableName(), throwable));

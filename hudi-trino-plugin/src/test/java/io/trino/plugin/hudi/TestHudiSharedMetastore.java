@@ -17,7 +17,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.trino.Session;
 import io.trino.filesystem.Location;
-import io.trino.plugin.hive.TestingHivePlugin;
+import io.trino.plugin.hive.HivePlugin;
 import io.trino.plugin.hudi.testing.TpchHudiTablesInitializer;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.DistributedQueryRunner;
@@ -65,8 +65,15 @@ final class TestHudiSharedMetastore
                         "hive.metastore.catalog.dir", dataDirectory.toString(),
                         "fs.hadoop.enabled", "true"));
 
-        queryRunner.installPlugin(new TestingHivePlugin(dataDirectory));
-        queryRunner.createCatalog("hive", "hive");
+        queryRunner.installPlugin(new HivePlugin());
+        queryRunner.createCatalog(
+                "hive",
+                "hive",
+                ImmutableMap.of(
+                        // Intentionally sharing the file metastore directory with Hudi
+                        "hive.metastore", "file",
+                        "hive.metastore.catalog.dir", dataDirectory.toString(),
+                        "fs.hadoop.enabled", "true"));
 
         queryRunner.execute("CREATE SCHEMA hive.default");
 

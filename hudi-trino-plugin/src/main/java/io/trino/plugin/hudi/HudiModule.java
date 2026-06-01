@@ -26,7 +26,6 @@ import io.trino.plugin.base.session.SessionPropertiesProvider;
 import io.trino.plugin.hive.HideDeltaLakeTables;
 import io.trino.plugin.hive.HiveNodePartitioningProvider;
 import io.trino.plugin.hive.HiveTransactionHandle;
-import io.trino.plugin.hive.metastore.thrift.TranslateHiveViews;
 import io.trino.plugin.hive.parquet.ParquetReaderConfig;
 import io.trino.plugin.hive.parquet.ParquetWriterConfig;
 import io.trino.plugin.hudi.cache.HudiCacheKeyProvider;
@@ -44,7 +43,7 @@ import static com.google.inject.multibindings.Multibinder.newSetBinder;
 import static com.google.inject.multibindings.OptionalBinder.newOptionalBinder;
 import static io.airlift.concurrent.Threads.daemonThreadsNamed;
 import static io.airlift.configuration.ConfigBinder.configBinder;
-import static io.trino.plugin.base.ClosingBinder.closingBinder;
+import static io.airlift.bootstrap.ClosingBinder.closingBinder;
 import static java.util.concurrent.Executors.newCachedThreadPool;
 import static java.util.concurrent.Executors.newScheduledThreadPool;
 import static org.weakref.jmx.guice.ExportBinder.newExporter;
@@ -59,7 +58,6 @@ public class HudiModule
 
         configBinder(binder).bindConfig(HudiConfig.class);
 
-        binder.bind(boolean.class).annotatedWith(TranslateHiveViews.class).toInstance(false);
         binder.bind(boolean.class).annotatedWith(HideDeltaLakeTables.class).toInstance(false);
 
         newSetBinder(binder, SessionPropertiesProvider.class).addBinding().to(HudiSessionProperties.class).in(Scopes.SINGLETON);

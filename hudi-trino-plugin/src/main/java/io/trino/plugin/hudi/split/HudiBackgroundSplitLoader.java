@@ -19,7 +19,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.concurrent.BoundedExecutor;
 import io.airlift.log.Logger;
 import io.trino.filesystem.Location;
-import io.trino.filesystem.cache.CachingHostAddressProvider;
 import io.trino.metastore.Column;
 import io.trino.metastore.Partition;
 import io.trino.metastore.StorageFormat;
@@ -101,14 +100,13 @@ public class HudiBackgroundSplitLoader
             Lazy<Map<String, Partition>> lazyPartitionMap,
             boolean enableMetadataTable,
             Lazy<HoodieTableMetadata> lazyTableMetadata,
-            CachingHostAddressProvider cachingHostAddressProvider,
             Consumer<Throwable> errorListener)
     {
         this.tableHandle = requireNonNull(tableHandle, "tableHandle is null");
         this.hudiDirectoryLister = requireNonNull(hudiDirectoryLister, "hudiDirectoryLister is null");
         this.asyncQueue = requireNonNull(asyncQueue, "asyncQueue is null");
         this.splitGeneratorNumThreads = getSplitGeneratorParallelism(session);
-        this.hudiSplitFactory = new HudiSplitFactory(tableHandle, hudiSplitWeightProvider, getTargetSplitSize(session), cachingHostAddressProvider);
+        this.hudiSplitFactory = new HudiSplitFactory(tableHandle, hudiSplitWeightProvider, getTargetSplitSize(session));
         this.lazyPartitionMap = requireNonNull(lazyPartitionMap, "partitions is null");
         this.enableMetadataTable = enableMetadataTable;
         this.executor = requireNonNull(executor, "executor is null");
