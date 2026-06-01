@@ -52,6 +52,7 @@ import org.lance.file.LanceFileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -119,7 +120,23 @@ public class HoodieRowDataLanceReader implements HoodieFileReader<RowData> {
 
   @Override
   public Set<Pair<String, Long>> filterRowKeys(Set<String> candidateRowKeys) {
-    throw new HoodieException("Filtering row keys from Lance files is not supported for Flink append-only tables without primary keys: " + path);
+    Set<Pair<String, Long>> result = new HashSet<>();
+    long position = 0;
+    boolean includeAllKeys = candidateRowKeys == null || candidateRowKeys.isEmpty();
+
+    try (ClosableIterator<String> keyIterator = getRecordKeyIterator()) {
+      while (keyIterator.hasNext()) {
+        String recordKey = keyIterator.next();
+        if (includeAllKeys || candidateRowKeys.contains(recordKey)) {
+          result.add(Pair.of(recordKey, position));
+        }
+        position++;
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to filter row keys from Lance file: " + path, e);
+    }
+
+    return result;
   }
 
   @Override
