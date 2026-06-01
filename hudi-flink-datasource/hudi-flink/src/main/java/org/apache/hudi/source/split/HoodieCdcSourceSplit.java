@@ -18,11 +18,11 @@
 
 package org.apache.hudi.source.split;
 
-import lombok.ToString;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.util.Option;
 
 import lombok.Getter;
+import lombok.ToString;
 
 /**
  * A {@link HoodieSourceSplit} for CDC (Change Data Capture) reads.

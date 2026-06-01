@@ -18,13 +18,14 @@
 
 package org.apache.hudi.source.split.assign;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.source.split.HoodieSourceSplit;
+
+import org.apache.flink.configuration.Configuration;
 
 /**
  * Implementation of {@link HoodieSplitAssigner} that assigns Hoodie

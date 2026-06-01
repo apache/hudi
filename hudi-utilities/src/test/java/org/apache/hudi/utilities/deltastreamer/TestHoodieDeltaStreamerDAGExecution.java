@@ -22,8 +22,8 @@ package org.apache.hudi.utilities.deltastreamer;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 
 import org.apache.spark.scheduler.SparkListener;

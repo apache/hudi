@@ -21,6 +21,7 @@ package org.apache.hudi.sink.compact.handler;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
+
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.util.Collector;
 

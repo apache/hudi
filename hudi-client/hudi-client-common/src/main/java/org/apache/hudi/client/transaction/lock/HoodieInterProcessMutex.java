@@ -19,9 +19,10 @@
 
 package org.apache.hudi.client.transaction.lock;
 
+import org.apache.hudi.common.config.LockConfiguration;
+
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
-import org.apache.hudi.common.config.LockConfiguration;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;

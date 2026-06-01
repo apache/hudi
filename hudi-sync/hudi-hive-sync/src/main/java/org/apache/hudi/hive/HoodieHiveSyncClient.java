@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hive;
 
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hudi.HoodieVersion;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -45,6 +44,7 @@ import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.SerDeInfo;

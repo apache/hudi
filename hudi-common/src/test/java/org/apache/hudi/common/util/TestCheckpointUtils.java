@@ -20,6 +20,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.util.CheckpointUtils.CheckpointFormat;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;

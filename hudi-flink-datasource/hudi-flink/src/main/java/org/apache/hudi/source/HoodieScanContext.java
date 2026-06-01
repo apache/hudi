@@ -21,6 +21,7 @@ package org.apache.hudi.source;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.storage.StoragePath;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -28,7 +29,6 @@ import lombok.Getter;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.hudi.storage.StoragePath;
 
 import java.io.Serializable;
 import java.time.Duration;

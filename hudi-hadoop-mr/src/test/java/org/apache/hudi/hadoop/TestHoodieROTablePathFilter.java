@@ -24,11 +24,11 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
-
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieTimeTravelException;
 import org.apache.hudi.storage.StorageConfiguration;
+
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

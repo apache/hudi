@@ -44,14 +44,14 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCluster;
+import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createClusterInflight;
+import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createClusterRequested;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommit;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommitMetadata;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCompaction;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCompactionRequested;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createInflightCommit;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createReplace;
-import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createClusterInflight;
-import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createClusterRequested;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createRollbackInflight;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createRollbackRequested;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;

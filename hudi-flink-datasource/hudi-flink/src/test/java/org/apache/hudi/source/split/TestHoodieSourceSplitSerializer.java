@@ -18,11 +18,10 @@
 
 package org.apache.hudi.source.split;
 
-import org.apache.hudi.common.table.log.InstantRange;
-import org.apache.hudi.common.util.Option;
-
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase;
+import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
 

@@ -34,12 +34,12 @@ import org.apache.hudi.io.storage.row.parquet.ParquetSchemaConverter;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;

@@ -18,6 +18,13 @@
 
 package org.apache.hudi.examples.k8s.quickstart;
 
+import org.apache.hudi.adapter.SourceFunctionAdapter;
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.examples.k8s.quickstart.utils.DataGenerator;
+import org.apache.hudi.util.HoodiePipeline;
+
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.environment.CheckpointConfig;
@@ -26,13 +33,6 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.types.RowKind;
-
-import org.apache.hudi.adapter.SourceFunctionAdapter;
-import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.examples.k8s.quickstart.utils.DataGenerator;
-import org.apache.hudi.util.HoodiePipeline;
-import org.apache.hudi.common.config.HoodieCommonConfig;
 
 import java.util.HashMap;
 import java.util.List;

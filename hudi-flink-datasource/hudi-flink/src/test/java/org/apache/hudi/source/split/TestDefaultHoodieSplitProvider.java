@@ -18,12 +18,12 @@
 
 package org.apache.hudi.source.split;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.hudi.common.util.Option;
-
+import org.apache.hudi.source.split.assign.DefaultHoodieSplitAssigner;
 import org.apache.hudi.source.split.assign.HoodieSplitBucketAssigner;
 import org.apache.hudi.source.split.assign.HoodieSplitNumberAssigner;
-import org.apache.hudi.source.split.assign.DefaultHoodieSplitAssigner;
+
+import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

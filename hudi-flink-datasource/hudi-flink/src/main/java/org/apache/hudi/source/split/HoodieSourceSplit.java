@@ -18,13 +18,13 @@
 
 package org.apache.hudi.source.split;
 
-import lombok.ToString;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
 import org.apache.flink.api.connector.source.SourceSplit;
 
 import javax.annotation.Nullable;

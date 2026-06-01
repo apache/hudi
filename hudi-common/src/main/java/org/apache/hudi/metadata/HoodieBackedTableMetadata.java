@@ -72,12 +72,12 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.LazyConcatenatingIterator;
+import org.apache.hudi.util.PartitionPathFilterUtil;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hudi.util.PartitionPathFilterUtil;
 
 import java.io.IOException;
 import java.util.ArrayList;

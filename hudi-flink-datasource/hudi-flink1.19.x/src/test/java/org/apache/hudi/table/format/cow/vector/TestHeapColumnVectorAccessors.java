@@ -21,7 +21,6 @@ package org.apache.hudi.table.format.cow.vector;
 import org.apache.flink.table.data.columnar.vector.heap.HeapIntVector;
 import org.apache.flink.table.data.columnar.vector.heap.HeapLongVector;
 import org.apache.flink.table.data.columnar.vector.writable.WritableColumnVector;
-
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;

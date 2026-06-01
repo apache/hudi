@@ -18,6 +18,8 @@
 
 package org.apache.hudi.adapter;
 
+import org.apache.hudi.common.util.Option;
+
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
@@ -25,7 +27,6 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.types.variant.BinaryVariant;
 import org.apache.flink.types.variant.Variant;
-import org.apache.hudi.common.util.Option;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
 
 import java.lang.reflect.Method;

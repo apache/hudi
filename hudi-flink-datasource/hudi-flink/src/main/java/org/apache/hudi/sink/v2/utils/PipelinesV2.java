@@ -33,9 +33,9 @@ import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.sink.v2.CleanFunctionV2;
+import org.apache.hudi.sink.v2.HoodieSink;
 import org.apache.hudi.sink.v2.clustering.ClusteringCommitSinkV2;
 import org.apache.hudi.sink.v2.compact.CompactionCommitSinkV2;
-import org.apache.hudi.sink.v2.HoodieSink;
 
 import org.apache.flink.FlinkVersion;
 import org.apache.flink.api.common.typeinfo.TypeInformation;

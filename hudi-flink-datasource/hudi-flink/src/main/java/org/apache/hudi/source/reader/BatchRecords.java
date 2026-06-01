@@ -18,14 +18,16 @@
 
 package org.apache.hudi.source.reader;
 
-import org.apache.flink.connector.base.source.reader.RecordsBySplits;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
+import org.apache.flink.connector.base.source.reader.RecordsBySplits;
+import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
+
+import javax.annotation.Nullable;
+
 import java.util.Collections;
 import java.util.Set;
-import javax.annotation.Nullable;
-import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 
 /**
  * Implementation of RecordsWithSplitIds with a list record inside.

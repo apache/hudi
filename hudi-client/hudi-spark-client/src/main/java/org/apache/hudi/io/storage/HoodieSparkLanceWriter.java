@@ -34,7 +34,6 @@ import org.apache.hudi.io.storage.row.HoodieInternalRowFileWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.lance.spark.arrow.LanceArrowWriter;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -52,6 +51,7 @@ import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.LanceArrowUtils;
 import org.apache.spark.unsafe.types.UTF8String;
+import org.lance.spark.arrow.LanceArrowWriter;
 
 import java.io.IOException;
 import java.util.ArrayList;

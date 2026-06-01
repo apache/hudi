@@ -18,8 +18,9 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.util.Option;
+
+import org.apache.avro.generic.GenericRecord;
 
 /**
  * {@link HoodieRecordPayload} impl that honors ordering field in both preCombine and combineAndGetUpdateValue.
