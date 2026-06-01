@@ -230,13 +230,13 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     // by AbstractTableFileSystemView.close(). This prevents a race where a concurrent reader
     // holding readLock could be mid-call in RocksDBDAO.put() when the handles are cleared,
     // causing a NullPointerException at RocksDB.put(null_handle, ...).
+    super.closeResources();
     closeFileGroupsMapIfPresent();
     closePendingClusteringMapIfPresent();
     closePendingCompactionMapIfPresent();
     closePendingLogCompactionMapIfPresent();
     closeBootstrapFileMapIfPresent();
     closeReplaceInstantsMapIfPresent();
-    super.closeResources();
   }
 
   private void closeReplaceInstantsMapIfPresent() {
