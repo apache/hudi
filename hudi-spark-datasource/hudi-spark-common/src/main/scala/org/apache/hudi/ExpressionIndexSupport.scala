@@ -41,7 +41,7 @@ import org.apache.hudi.util.JFunction
 
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, EqualTo, Expression, FromUnixTime, In, Literal, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BinaryExpression, DateAdd, DateFormatClass, DateSub, EqualTo, Expression, FromUnixTime, In, Literal, Or, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
 import org.apache.spark.sql.catalyst.util.TimestampFormatter
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
@@ -486,11 +486,57 @@ class ExpressionIndexSupport(spark: SparkSession,
     }
     val expressionIndexQueries = filterQueriesWithFunctionalFilterKey(queryFilters, Option.apply(indexDefinition.getSourceFields.get(0)), attributeFetcher)
     var queryAndLiteralsOpt: Option[(Expression, List[String])] = Option.empty
+    val sourceColumnName = indexDefinition.getSourceFields.get(0)
     expressionIndexQueries.foreach { tuple =>
       val (expr, literals) = (tuple._1, tuple._2)
-      queryAndLiteralsOpt = Option.apply(Tuple2.apply(expr, literals))
+      if (!isDirectColumnQuery(queryFilters, sourceColumnName)) {
+        queryAndLiteralsOpt = Option.apply(Tuple2.apply(expr, literals))
+      }
     }
     queryAndLiteralsOpt
+  }
+
+  private def isDirectColumnQuery(queryFilters: Seq[Expression], sourceColumnName: String): Boolean = {
+    queryFilters.exists { filter =>
+      containsDirectColumnReference(filter, sourceColumnName)
+    }
+  }
+
+  /**
+   * Recursively checks if an expression contains a direct column reference (AttributeReference)
+   * to the specified source column name, without being wrapped in any function.
+   *
+   * Examples:
+   * - `ts = 1000` → returns true (direct column reference)
+   * - `from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-01'` → returns false (column wrapped in function)
+   * - `ts > 1000 AND ts < 2000` → returns true (direct column references in both operands)
+   * - `ts IN (1000, 2000)` → returns true (direct column reference in IN expression)
+   *
+   * Example - `from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-01'` → returns false
+   *   Expression structure:
+   *   ```
+   *   EqualTo(
+   *     left: FromUnixTime(
+   *       sec: AttributeReference("ts", LongType, nullable=true),
+   *       format: Literal("yyyy-MM-dd", StringType)
+   *     ),
+   *     right: Literal("1970-01-01", StringType)
+   *   )
+   */
+  private def containsDirectColumnReference(expr: Expression, sourceColumnName: String): Boolean = {
+    def isTargetAttr(e: Expression): Boolean = e.isInstanceOf[AttributeReference] &&
+      e.asInstanceOf[AttributeReference].name.equals(sourceColumnName)
+
+    expr match {
+      case attr: AttributeReference if attr.name.equals(sourceColumnName) => true
+      case binary: BinaryExpression if binary.isInstanceOf[And] || binary.isInstanceOf[Or] =>
+        containsDirectColumnReference(binary.left, sourceColumnName) ||
+        containsDirectColumnReference(binary.right, sourceColumnName)
+      // BinaryExpression is a catch-all for other binary expressions (e.g., EqualTo, GreaterThan, etc.)
+      case binary: BinaryExpression => isTargetAttr(binary.left) || isTargetAttr(binary.right)
+      case in: In => isTargetAttr(in.value)
+      case _ => false
+    }
   }
 
   private def loadExpressionIndexRecords(indexPartition: String,
