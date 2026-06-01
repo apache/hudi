@@ -99,34 +99,9 @@
             <version>${flink.version}</version>
             <scope>provided</scope>
             <exclusions>
-                <!-- flink-parquet bundles parquet 1.15.x; exclude to avoid mixing with Hudi's parquet version. -->
                 <exclusion>
                     <groupId>org.apache.parquet</groupId>
                     <artifactId>parquet-hadoop</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-column</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-common</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-avro</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-protobuf</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-format-structures</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-encoding</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -147,11 +122,6 @@
         <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-column</artifactId>
-            <version>${parquet.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.parquet</groupId>
-            <artifactId>parquet-hadoop</artifactId>
             <version>${parquet.version}</version>
         </dependency>
 
@@ -220,30 +190,6 @@
                 <exclusion>
                     <groupId>ch.qos.logback</groupId>
                     <artifactId>*</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-hadoop</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-hadoop-bundle</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-column</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-common</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-avro</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-encoding</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -326,4 +272,94 @@
             </resource>
         </resources>
     </build>
+
+    <profiles>
+        <!--
+          VARIANT support requires parquet >= 1.16.0 (logical type annotation). The variant CI build passes
+          -Dflink.format.parquet.version=1.16.0; this profile then aligns flink-parquet/hive-exec transitive
+          parquet onto Hudi's ${parquet.version}. It is inactive for default builds, so their effective POM is
+          unchanged. Exclusions declared here are merged (unioned) with the base dependency declarations.
+        -->
+        <profile>
+            <id>flink-variant-parquet</id>
+            <activation>
+                <property>
+                    <name>flink.format.parquet.version</name>
+                    <value>1.16.0</value>
+                </property>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>org.apache.flink</groupId>
+                    <artifactId>${flink.parquet.artifactId}</artifactId>
+                    <version>${flink.version}</version>
+                    <scope>provided</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-column</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-common</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-avro</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-protobuf</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-format-structures</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-encoding</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-hadoop</artifactId>
+                    <version>${parquet.version}</version>
+                </dependency>
+                <dependency>
+                    <groupId>${hive.groupid}</groupId>
+                    <artifactId>hive-exec</artifactId>
+                    <version>${hive.version}</version>
+                    <scope>test</scope>
+                    <classifier>${hive.exec.classifier}</classifier>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-hadoop</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-hadoop-bundle</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-column</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-common</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-avro</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-encoding</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
 </project>

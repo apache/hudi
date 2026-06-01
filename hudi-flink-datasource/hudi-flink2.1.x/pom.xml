@@ -30,7 +30,6 @@
 
     <properties>
         <main.basedir>${project.parent.parent.basedir}</main.basedir>
-        <parquet.version>${flink.format.parquet.version}</parquet.version>
     </properties>
 
     <dependencies>
@@ -115,63 +114,6 @@
             <artifactId>flink-parquet</artifactId>
             <version>${flink2.1.version}</version>
             <scope>provided</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-hadoop</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-column</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-common</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-avro</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-encoding</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.parquet</groupId>
-                    <artifactId>parquet-format-structures</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <!-- flink-parquet parquet artifacts are excluded above; pin ${flink.format.parquet.version} for compile. -->
-        <dependency>
-            <groupId>org.apache.parquet</groupId>
-            <artifactId>parquet-column</artifactId>
-            <version>${parquet.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.parquet</groupId>
-            <artifactId>parquet-common</artifactId>
-            <version>${parquet.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.parquet</groupId>
-            <artifactId>parquet-encoding</artifactId>
-            <version>${parquet.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.parquet</groupId>
-            <artifactId>parquet-hadoop</artifactId>
-            <version>${parquet.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.parquet</groupId>
-            <artifactId>parquet-format-structures</artifactId>
-            <version>${parquet.version}</version>
-            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
@@ -229,4 +171,88 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+          VARIANT support requires parquet >= 1.16.0 (logical type annotation). The variant CI build passes
+          -Dflink.format.parquet.version=1.16.0; this profile then aligns flink-parquet's transitive parquet
+          onto Hudi's ${parquet.version}. It is inactive for default builds, so their effective POM is unchanged.
+        -->
+        <profile>
+            <id>flink-variant-parquet</id>
+            <activation>
+                <property>
+                    <name>flink.format.parquet.version</name>
+                    <value>1.16.0</value>
+                </property>
+            </activation>
+            <properties>
+                <parquet.version>${flink.format.parquet.version}</parquet.version>
+            </properties>
+            <dependencies>
+                <dependency>
+                    <groupId>org.apache.flink</groupId>
+                    <artifactId>flink-parquet</artifactId>
+                    <version>${flink2.1.version}</version>
+                    <scope>provided</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-hadoop</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-column</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-common</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-avro</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-encoding</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.apache.parquet</groupId>
+                            <artifactId>parquet-format-structures</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-column</artifactId>
+                    <version>${parquet.version}</version>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-common</artifactId>
+                    <version>${parquet.version}</version>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-encoding</artifactId>
+                    <version>${parquet.version}</version>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-hadoop</artifactId>
+                    <version>${parquet.version}</version>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-format-structures</artifactId>
+                    <version>${parquet.version}</version>
+                    <scope>provided</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
 </project>
