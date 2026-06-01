@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.hudi.dml.others
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, ScalaAssertionSupport}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
@@ -1786,7 +1786,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
          """.stripMargin)
       spark.sql(s"insert into $sourceTable values(1, 'a1', 10, 1000)")
       val nonExistentTable = "hudi_test_table"
-      val exception = intercept[org.apache.spark.sql.AnalysisException] {
+      val exception = intercept[Exception] {
         spark.sql(
           s"""
              | MERGE INTO $nonExistentTable AS target
@@ -1797,6 +1797,13 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |   ts = source.ts
              | WHEN NOT MATCHED THEN INSERT *
          """.stripMargin)
+      }
+      if (HoodieSparkUtils.gteqSpark4_2) {
+        assert(exception.isInstanceOf[org.apache.spark.SparkException],
+          s"Expected SparkException on Spark 4.2+, but got: ${exception.getClass.getName}")
+      } else {
+        assert(exception.isInstanceOf[org.apache.spark.sql.AnalysisException],
+          s"Expected AnalysisException on Spark < 4.2, but got: ${exception.getClass.getName}")
       }
       assert(exception.getMessage.contains("TABLE_OR_VIEW_NOT_FOUND") ||
         exception.getMessage.contains("Table or view not found"),

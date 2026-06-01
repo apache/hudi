@@ -33,7 +33,9 @@ trait SparkAdapterSupport {
 object SparkAdapterSupport {
 
   lazy val sparkAdapter: SparkAdapter = {
-    val adapterClass = if (HoodieSparkUtils.isSpark4_1) {
+    val adapterClass = if (HoodieSparkUtils.isSpark4_2) {
+      "org.apache.spark.sql.adapter.Spark4_2Adapter"
+    } else if (HoodieSparkUtils.isSpark4_1) {
       "org.apache.spark.sql.adapter.Spark4_1Adapter"
     } else if (HoodieSparkUtils.isSpark4_0) {
       "org.apache.spark.sql.adapter.Spark4_0Adapter"

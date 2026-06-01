@@ -258,9 +258,9 @@
 
     <!-- LZ4 Hash Utils -->
     <dependency>
-      <groupId>org.lz4</groupId>
+      <groupId>${lz4.groupId}</groupId>
       <artifactId>lz4-java</artifactId>
-      <version>1.8.0</version>
+      <version>${lz4.version}</version>
     </dependency>
 
     <dependency>
