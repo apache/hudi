@@ -117,6 +117,9 @@
         <artifactId>scalatest-maven-plugin</artifactId>
         <configuration>
           <tagsToExclude>org.apache.hudi.functional.SparkSQLCoreFlow</tagsToExclude>
+          <!-- Base JVM args plus the JNI ext-opens Gluten/Velox needs to reach
+               java.nio / sun.nio.ch / jdk.internal.misc off-heap memory. -->
+          <argLine>-Xmx3g -Xms128m -XX:-OmitStackTraceInFastThrow --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-exports=java.base/jdk.internal.misc=ALL-UNNAMED -Dio.netty.tryReflectionSetAccessible=true</argLine>
         </configuration>
       </plugin>
       <plugin>
@@ -148,6 +151,16 @@
   </build>
 
   <dependencies>
+
+    <!-- Gluten/Velox bundle (test only) for the data-type sweep. Installed into the local
+         Maven repo via `mvn install:install-file` from the prebuilt quanton-velox-bundle JAR.
+         Plain test scope so the scalatest-forked JVM (useSystemClassLoader=false) picks it up. -->
+    <dependency>
+      <groupId>org.apache.gluten</groupId>
+      <artifactId>quanton-velox-bundle</artifactId>
+      <version>1.5.1-SNAPSHOT</version>
+      <scope>test</scope>
+    </dependency>
 
     <!-- Logging -->
     <dependency>

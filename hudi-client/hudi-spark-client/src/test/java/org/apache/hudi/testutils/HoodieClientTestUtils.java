@@ -97,6 +97,32 @@ public class HoodieClientTestUtils {
         .set("spark.sql.shuffle.partitions", "4")
         .set("spark.default.parallelism", "4");
 
+    // Gluten/Velox sweep: gate behind -Dhudi.test.gluten.enabled=true so the harness can be
+    // flipped back to vanilla Spark without code changes.
+    //
+    // NOTE: the prebuilt bundle is Onehouse's "Quanton" rebrand of Gluten -- every upstream
+    // `org.apache.gluten.*` class and `spark.gluten.*` config is relocated to
+    // `ai.onehouse.quanton.*` / `spark.quanton.*`. The shuffle manager stays in org.apache.spark.
+    //
+    // Fallback handling: this Gluten version has NO throw-on-fallback config (the old
+    // spark.gluten.sql.columnar.fallback.enabled was removed). We approximate fail-loud by
+    // collapsing any partially-offloaded query fully back to vanilla (threshold=1) and turning
+    // on the fallback reporter + debug so the fallback reason is logged. See sweep notes.
+    if (Boolean.parseBoolean(System.getProperty("hudi.test.gluten.enabled", "false"))) {
+      sparkConf
+          .set("spark.plugins", "ai.onehouse.quanton.QuantonPlugin")
+          .set("spark.shuffle.manager", "org.apache.spark.shuffle.sort.ColumnarShuffleManager")
+          .set("spark.memory.offHeap.enabled", "true")
+          .set("spark.memory.offHeap.size", "4g")
+          .set("spark.quanton.enabled", "true")
+          .set("spark.quanton.sql.columnar.libname", "gluten")
+          .set("spark.quanton.sql.columnar.query.fallback.threshold", "1")
+          .set("spark.quanton.sql.columnar.wholeStage.fallback.threshold", "1")
+          .set("spark.quanton.sql.columnar.fallbackReporter", "true")
+          .set("spark.quanton.sql.validation.printStackOnFailure", "true")
+          .set("spark.quanton.sql.debug", "true");
+    }
+
     // NOTE: This utility is used in modules where this class might not be present, therefore
     //       to avoid littering output w/ [[ClassNotFoundException]]s we will skip adding it
     //       in case this utility is used in the module not providing it

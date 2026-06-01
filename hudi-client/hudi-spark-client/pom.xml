@@ -30,6 +30,15 @@
   <packaging>jar</packaging>
 
   <dependencies>
+    <!-- Gluten/Velox bundle (test only) for the data-type sweep. Installed into the local
+         Maven repo via `mvn install:install-file` from the prebuilt quanton-velox-bundle JAR. -->
+    <dependency>
+      <groupId>org.apache.gluten</groupId>
+      <artifactId>quanton-velox-bundle</artifactId>
+      <version>1.5.1-SNAPSHOT</version>
+      <scope>test</scope>
+    </dependency>
+
     <!-- Scala -->
     <dependency>
       <groupId>org.scala-lang</groupId>
