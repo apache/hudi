@@ -34,11 +34,15 @@ public abstract class UpdateStrategy<T, I> implements Serializable {
   protected final transient HoodieEngineContext engineContext;
   protected HoodieTable table;
   protected Set<HoodieFileGroupId> fileGroupsInPendingClustering;
+  protected Set<HoodieFileGroupId> fileGroupsToBeReplaced;
 
-  public UpdateStrategy(HoodieEngineContext engineContext, HoodieTable table, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
+  public UpdateStrategy(HoodieEngineContext engineContext, HoodieTable table,
+                        Set<HoodieFileGroupId> fileGroupsInPendingClustering,
+                        Set<HoodieFileGroupId> fileGroupsToBeReplaced) {
     this.engineContext = engineContext;
     this.table = table;
     this.fileGroupsInPendingClustering = fileGroupsInPendingClustering;
+    this.fileGroupsToBeReplaced = fileGroupsToBeReplaced;
   }
 
   /**
