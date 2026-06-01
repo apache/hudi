@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
+import org.apache.hudi.common.util.HoodieVectorUtils
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, Pair => HPair}
@@ -385,11 +386,11 @@ object SparkFileFormatInternalRowReaderContext {
 
   /**
    * Detects VECTOR columns from HoodieSchema.
-   * Delegates to [[VectorConversionUtils.detectVectorColumns]].
+   * Delegates to [[HoodieVectorUtils.detectVectorColumns]].
    * @return Map of ordinal to Vector schema for VECTOR fields.
    */
   private[hudi] def detectVectorColumns(schema: HoodieSchema): Map[Int, HoodieSchema.Vector] = {
-    VectorConversionUtils.detectVectorColumns(schema).asScala.map { case (k, v) => (k.intValue(), v) }.toMap
+    HoodieVectorUtils.detectVectorColumns(schema).asScala.map { case (k, v) => (k.intValue(), v) }.toMap
   }
 
   /**

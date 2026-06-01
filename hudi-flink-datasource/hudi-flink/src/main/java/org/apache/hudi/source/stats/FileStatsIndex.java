@@ -64,7 +64,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.source.stats.ColumnStatsSchemas.COL_STATS_DATA_TYPE;
 import static org.apache.hudi.source.stats.ColumnStatsSchemas.COL_STATS_TARGET_POS;
-import static org.apache.hudi.source.stats.ColumnStatsSchemas.METADATA_DATA_TYPE;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.METADATA_SCHEMA;
 import static org.apache.hudi.source.stats.ColumnStatsSchemas.ORD_COL_NAME;
 import static org.apache.hudi.source.stats.ColumnStatsSchemas.ORD_FILE_NAME;
 import static org.apache.hudi.source.stats.ColumnStatsSchemas.ORD_MAX_VAL;
@@ -404,7 +404,7 @@ public class FileStatsIndex implements ColumnStatsIndex {
             HoodieListData.lazy(rawKeys), getIndexPartitionName(), false);
 
     org.apache.hudi.util.AvroToRowDataConverters.AvroToRowDataConverter converter =
-        AvroToRowDataConverters.createRowConverter((RowType) METADATA_DATA_TYPE.getLogicalType());
+        AvroToRowDataConverters.createRowConverter(METADATA_SCHEMA);
     List<RowData> rows = records.collectAsList().stream().parallel().map(record -> {
           // schema and props are ignored for generating metadata record from the payload
           // instead, the underlying file system, or bloom filter, or columns stats metadata (part of payload) are directly used
