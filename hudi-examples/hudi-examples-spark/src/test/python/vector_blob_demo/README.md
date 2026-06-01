@@ -222,10 +222,20 @@ Look for:
 
 `hoodie.read.blob.inline.mode` controls how INLINE blobs come back:
 
-- `CONTENT` (default) — `image_bytes.data` returns the raw bytes directly.
+- `CONTENT` — `image_bytes.data` returns the raw bytes directly.
 - `DESCRIPTOR` — `image_bytes.data` is null; `image_bytes.reference.*` is
   synthesized to point at the underlying base file (`.lance` for Lance
   base files), and `read_blob(image_bytes)` materializes bytes lazily.
+
+Per-format **implicit defaults** as of Hudi 1.2.0
+([apache/hudi#18744](https://github.com/apache/hudi/pull/18744)): Parquet
+defaults to `CONTENT`, Lance defaults to `DESCRIPTOR`. The same release
+also added a strict guard in `BatchedBlobReader` that raises
+`IllegalStateException` if `read_blob()` is called on an INLINE row whose
+load is in DESCRIPTOR mode — what used to be a silent null is now a hard
+failure. Demos that target both formats therefore set the mode explicitly
+(see the SQL and DataFrame demos for the session-level pattern; the blob
+reader demo scopes it per-load).
 
 The blob reader demo exposes this via `HUDI_INLINE_READ_MODE`:
 
@@ -238,12 +248,14 @@ HUDI_BLOB_MODE=inline HUDI_INLINE_READ_MODE=descriptor python hudi_blob_reader_d
 ```
 
 **Important wiring detail (matches `TestLanceDataSource.testBlobInlineDescriptorMode`):**
-the `DESCRIPTOR` option is scoped to a single per-load read in
-`show_descriptors()`; `read_blob_and_save()` uses a separate default-mode
-load so `read_blob()` can actually materialize bytes. Setting
-`hoodie.read.blob.inline.mode=DESCRIPTOR` at the SparkSession level would
-make every read return `data=null`, including the read backing `read_blob()`,
-so it would also return null.
+the option is scoped per-load — `show_descriptors()` sets the user-selected
+mode on its inspection view, and `read_blob_and_save()` sets `CONTENT`
+explicitly on its own reader. The latter cannot rely on the format's
+implicit default because Lance's flipped to `DESCRIPTOR` in 1.2.0
+(see above); on that format, the new `BatchedBlobReader` guard would turn
+the silent-null behavior of older releases into a hard `IllegalStateException`.
+Setting `hoodie.read.blob.inline.mode=DESCRIPTOR` at the SparkSession level
+would similarly poison every read, including the one backing `read_blob()`.
 
 The setting is a no-op for `HUDI_BLOB_MODE=out_of_line` — those rows are
 already descriptors (no inline bytes to suppress); `read_blob()` always
@@ -462,8 +474,15 @@ Every Spark config line has a purpose:
 
 `hoodie.read.blob.inline.mode` is intentionally **not** set on the session —
 the blob reader demo scopes it per-load (see "Switching BLOB read mode"
-above) so that `read_blob()` can run against a default-mode load and
-materialize bytes.
+above): `show_descriptors()` picks up the user-chosen mode for its
+inspection view, and `read_blob_and_save()` opts into `CONTENT` explicitly
+on its own reader. Explicit is required because Lance's implicit default
+flipped to `DESCRIPTOR` in
+[apache/hudi#18744](https://github.com/apache/hudi/pull/18744) and the
+new `BatchedBlobReader` guard raises if `read_blob()` runs against a
+descriptor-mode load. The SQL and DataFrame demos take the simpler route
+of setting `CONTENT` once on the session (they don't need DESCRIPTOR
+anywhere in their flow).
 
 ### Section 2 — `load_dataset()`
 

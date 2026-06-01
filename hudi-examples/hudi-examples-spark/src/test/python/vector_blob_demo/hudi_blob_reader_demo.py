@@ -179,13 +179,14 @@ def create_spark() -> SparkSession:
             "org.apache.spark.sql.hudi.catalog.HoodieCatalog",
         )
         .config("spark.sql.session.timeZone", "UTC")
-        # NOTE: `hoodie.read.blob.inline.mode` is intentionally NOT set on the SparkSession.
-        # If it were, EVERY hudi load — including the one read_blob() runs internally —
-        # would suppress INLINE bytes, and read_blob() would return null. Instead we scope
-        # the DESCRIPTOR option per-load in show_descriptors() so read_blob() in
-        # read_blob_and_save() runs against a default-mode (CONTENT) load and can
-        # materialize bytes. See TestLanceDataSource.testBlobInlineDescriptorMode for the
-        # canonical pattern.
+        # NOTE: `hoodie.read.blob.inline.mode` is intentionally NOT set on the SparkSession —
+        # session-wide DESCRIPTOR would suppress INLINE bytes on every load, including the
+        # one read_blob() runs internally. We scope the option per-load instead:
+        # show_descriptors() picks up the user-selected mode for its inspection view, and
+        # read_blob_and_save() explicitly sets CONTENT on its own reader (it cannot rely on
+        # the format's implicit default — apache/hudi#18744 flipped Lance to default to
+        # DESCRIPTOR in 1.2.0, while Parquet stays at CONTENT). See
+        # TestLanceDataSource.testBlobInlineDescriptorMode for the canonical pattern.
         .config("spark.default.parallelism", "2")
         .config("spark.sql.shuffle.partitions", "2")
     )
@@ -474,12 +475,19 @@ def read_blob_and_save(spark: SparkSession):
         f"(works regardless of inline_read_mode={CONFIG['inline_read_mode']}):"
     )
 
-    # IMPORTANT: register a fresh load WITHOUT the inline.mode option so the underlying
-    # read sees `data` populated (CONTENT mode). If we read from the DESCRIPTORS_VIEW
-    # registered in show_descriptors(), read_blob() would see data=null because that
-    # view was loaded in DESCRIPTOR mode — and BatchedBlobReader dispatches on the row's
-    # storage_type=INLINE before checking `reference`, so it would return null bytes.
-    spark.read.format("hudi").load(CONFIG["table_path"]).createOrReplaceTempView(RESOLVE_VIEW)
+    # IMPORTANT: register a fresh load with hoodie.read.blob.inline.mode=CONTENT so the
+    # underlying read sees `data` populated. Two things are at play:
+    #   1) Parquet's default for that option is CONTENT, but Lance's default flipped to
+    #      DESCRIPTOR in 1.2.0 (apache/hudi#18744) — relying on the implicit default
+    #      worked for Parquet but silently returned null bytes on Lance.
+    #   2) As of 1.2.0, BatchedBlobReader also raises IllegalStateException when
+    #      read_blob() is invoked on an INLINE row under DESCRIPTOR mode, so the silent
+    #      null is now a hard failure. Setting CONTENT explicitly here works on both
+    #      formats and survives any future default changes.
+    (spark.read.format("hudi")
+        .option("hoodie.read.blob.inline.mode", "CONTENT")
+        .load(CONFIG["table_path"])
+        .createOrReplaceTempView(RESOLVE_VIEW))
 
     sql = f"""
         SELECT image_id,
