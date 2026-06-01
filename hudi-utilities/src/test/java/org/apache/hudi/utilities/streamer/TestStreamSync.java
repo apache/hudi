@@ -28,6 +28,8 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
@@ -52,7 +54,9 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -62,6 +66,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1;
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_RESET_KEY_V2;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA;
 import static org.apache.hudi.utilities.config.HoodieStreamerConfig.CHECKPOINT_FORCE_SKIP;
@@ -373,6 +379,90 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
     expected.put(CHECKPOINT_IGNORE_KEY, "test-ignore");
     expected.put(STREAMER_CHECKPOINT_RESET_KEY_V2, "test-checkpoint");
     assertEquals(expected, result, "Should return default metadata when checkpoint is null");
+  }
+
+  /**
+   * Coerces a source-emitted V2 checkpoint to V1 when the target table version is below 8.
+   * Many source helpers (DFSPathSelector, DatePartitionPathSelector, KafkaSource via InputBatch
+   * String constructor, etc.) construct StreamerCheckpointV2 unconditionally; on a v6 write we
+   * must downgrade before persisting the commit's extraMetadata.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "org.apache.hudi.utilities.sources.ParquetDFSSource",
+      "org.apache.hudi.utilities.sources.JsonDFSSource",
+      "org.apache.hudi.utilities.sources.AvroDFSSource",
+      "org.apache.hudi.utilities.sources.CsvDFSSource",
+      "org.apache.hudi.utilities.sources.ORCDFSSource",
+      "org.apache.hudi.utilities.sources.KafkaSource",
+      "org.apache.hudi.utilities.sources.JsonKafkaSource",
+      "org.apache.hudi.utilities.sources.AvroKafkaSource",
+      "org.apache.hudi.utilities.sources.KinesisSource",
+      "org.apache.hudi.utilities.sources.PulsarSource",
+      "org.apache.hudi.utilities.sources.JdbcSource",
+      "org.apache.hudi.utilities.sources.SqlSource",
+      "org.apache.hudi.utilities.sources.SqlFileBasedSource",
+      "org.apache.hudi.utilities.sources.HiveIncrPullSource",
+      "org.apache.hudi.utilities.sources.HoodieIncrSource",
+      "org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource",
+      "org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource",
+      "org.apache.hudi.utilities.sources.GcsEventsSource"
+  })
+  public void testExtractCheckpointMetadata_V2FromSourceDowngradedToV1OnV6Write(String sourceClassName) {
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.sourceClassName = sourceClassName;
+    StreamSync streamSync = setupStreamSync();
+    TypedProperties props = new TypedProperties();
+
+    InputBatch inputBatch = mock(InputBatch.class);
+    when(inputBatch.getCheckpointForNextBatch()).thenReturn(new StreamerCheckpointV2("v2-key"));
+
+    Map<String, String> result = streamSync.extractCheckpointMetadata(
+        inputBatch, props, HoodieTableVersion.SIX.versionCode(), cfg);
+
+    assertEquals("v2-key", result.get(STREAMER_CHECKPOINT_KEY_V1),
+        "V6 write should persist V1 key (downgrade applied) for source " + sourceClassName);
+    assertNull(result.get(STREAMER_CHECKPOINT_KEY_V2),
+        "V6 write must not persist V2 key for source " + sourceClassName);
+  }
+
+  /**
+   * Symmetric direction: a v8+ write against a source that returns V1 must be upgraded to V2,
+   * unless the source is in DATASOURCES_NOT_SUPPORTED_WITH_CKPT_V2 (S3/Gcs IncrSources stay V1).
+   */
+  @ParameterizedTest
+  @CsvSource({
+      "org.apache.hudi.utilities.sources.ParquetDFSSource, true",
+      "org.apache.hudi.utilities.sources.JsonDFSSource, true",
+      "org.apache.hudi.utilities.sources.KafkaSource, true",
+      "org.apache.hudi.utilities.sources.HoodieIncrSource, true",
+      "org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource, false",
+      "org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource, false"
+  })
+  public void testExtractCheckpointMetadata_V1FromSourceUpgradedToV2OnV8Write(String sourceClassName, boolean expectV2) {
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.sourceClassName = sourceClassName;
+    StreamSync streamSync = setupStreamSync();
+    TypedProperties props = new TypedProperties();
+
+    InputBatch inputBatch = mock(InputBatch.class);
+    when(inputBatch.getCheckpointForNextBatch()).thenReturn(new StreamerCheckpointV1("v1-key"));
+
+    Map<String, String> result = streamSync.extractCheckpointMetadata(
+        inputBatch, props, HoodieTableVersion.EIGHT.versionCode(), cfg);
+
+    if (expectV2) {
+      assertEquals("v1-key", result.get(STREAMER_CHECKPOINT_KEY_V2),
+          "V8 write should persist V2 key for source " + sourceClassName);
+      assertNull(result.get(STREAMER_CHECKPOINT_KEY_V1),
+          "V8 write must not persist V1 key for source " + sourceClassName);
+    } else {
+      // S3/Gcs IncrSources are not supported on V2 — stays V1 even on v8.
+      assertEquals("v1-key", result.get(STREAMER_CHECKPOINT_KEY_V1),
+          "V8 write should still persist V1 key for V2-unsupported source " + sourceClassName);
+      assertNull(result.get(STREAMER_CHECKPOINT_KEY_V2),
+          "V8 write must not persist V2 key for V2-unsupported source " + sourceClassName);
+    }
   }
 
   @Test
