@@ -149,6 +149,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
         config.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
         new HadoopStorageConfiguration(writeSupport.getHadoopConf()),
         config.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
-        config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
+        config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED),
+        config.getIntOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL));
   }
 }

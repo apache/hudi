@@ -47,6 +47,10 @@ public class HoodieRowDataParquetOutputStreamWriter implements HoodieRowDataFile
       HoodieRowDataParquetWriteSupport writeSupport,
       HoodieParquetConfig<HoodieRowDataParquetWriteSupport> parquetConfig) throws IOException {
     this.writeSupport = writeSupport;
+    Configuration hadoopConf = HoodieParquetConfig.applyZstdLevel(
+        parquetConfig.getStorageConf().unwrapAs(Configuration.class),
+        parquetConfig.getCompressionCodecName(),
+        parquetConfig.getZstdLevel());
     ParquetWriter.Builder parquetWriterbuilder = new ParquetWriter.Builder(
         new OutputStreamBackedOutputFile(outputStream)) {
       @Override
@@ -66,7 +70,7 @@ public class HoodieRowDataParquetOutputStreamWriter implements HoodieRowDataFile
     parquetWriterbuilder.withDictionaryPageSize(parquetConfig.getPageSize());
     parquetWriterbuilder.withDictionaryEncoding(parquetConfig.isDictionaryEnabled());
     parquetWriterbuilder.withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION);
-    parquetWriterbuilder.withConf(parquetConfig.getStorageConf().unwrapAs(Configuration.class));
+    parquetWriterbuilder.withConf(hadoopConf);
     this.writer = parquetWriterbuilder.build();
   }
 

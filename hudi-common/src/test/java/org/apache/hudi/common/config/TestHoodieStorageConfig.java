@@ -29,8 +29,10 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_DYN
 import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_FPP_VALUE;
 import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE;
 import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_TYPE;
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestHoodieStorageConfig {
   @Test
@@ -73,5 +75,26 @@ public class TestHoodieStorageConfig {
     assertEquals(BLOOM_FILTER_NUM_ENTRIES_VALUE.defaultValue(), storageConfig.getString(BLOOM_FILTER_NUM_ENTRIES_VALUE));
     assertEquals(BLOOM_FILTER_FPP_VALUE.defaultValue(), storageConfig.getString(BLOOM_FILTER_FPP_VALUE));
     assertEquals(BLOOM_FILTER_DYNAMIC_MAX_ENTRIES.defaultValue(), storageConfig.getString(BLOOM_FILTER_DYNAMIC_MAX_ENTRIES));
+  }
+
+  @Test
+  void testParquetZstdLevelBuilderRoundTrip() {
+    HoodieStorageConfig storageConfig = HoodieStorageConfig.newBuilder()
+        .parquetCompressionCodecZstdLevel(15).build();
+    assertEquals(15, storageConfig.getInt(PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL));
+  }
+
+  @Test
+  void testParquetZstdLevelDefault() {
+    HoodieStorageConfig storageConfig = HoodieStorageConfig.newBuilder().build();
+    assertEquals("3", storageConfig.getString(PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL));
+  }
+
+  @Test
+  void testParquetZstdLevelOutOfRangeRejected() {
+    assertThrows(IllegalArgumentException.class,
+        () -> HoodieStorageConfig.newBuilder().parquetCompressionCodecZstdLevel(23));
+    assertThrows(IllegalArgumentException.class,
+        () -> HoodieStorageConfig.newBuilder().parquetCompressionCodecZstdLevel(-23));
   }
 }

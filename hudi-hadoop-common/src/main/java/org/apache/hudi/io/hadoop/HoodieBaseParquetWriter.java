@@ -54,7 +54,10 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
 
   public HoodieBaseParquetWriter(StoragePath file,
                                  HoodieParquetConfig<? extends WriteSupport<R>> parquetConfig) throws IOException {
-    Configuration hadoopConf = parquetConfig.getStorageConf().unwrapAs(Configuration.class);
+    Configuration hadoopConf = HoodieParquetConfig.applyZstdLevel(
+        parquetConfig.getStorageConf().unwrapAs(Configuration.class),
+        parquetConfig.getCompressionCodecName(),
+        parquetConfig.getZstdLevel());
     ParquetWriter.Builder parquetWriterbuilder = new ParquetWriter.Builder(
         HoodieWrapperFileSystem.convertToHoodiePath(file, hadoopConf)) {
       @Override
