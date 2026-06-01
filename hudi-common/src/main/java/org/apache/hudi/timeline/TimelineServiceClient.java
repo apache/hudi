@@ -23,7 +23,9 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.client.utils.URIBuilder;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -39,12 +41,14 @@ public class TimelineServiceClient extends TimelineServiceClientBase {
   protected final String timelineServerHost;
   protected final int timelineServerPort;
   protected final int timeoutMs;
+  protected final String responseCharsetName;
 
   public TimelineServiceClient(FileSystemViewStorageConfig config) {
     super(config);
     this.timelineServerHost = config.getRemoteViewServerHost();
     this.timelineServerPort = config.getRemoteViewServerPort();
     this.timeoutMs = (int) TimeUnit.SECONDS.toMillis(config.getRemoteTimelineClientTimeoutSecs());
+    this.responseCharsetName = config.getStringOrDefault(FileSystemViewStorageConfig.REMOTE_RESPONSE_CHARSET);
   }
 
   @Override
@@ -59,7 +63,7 @@ public class TimelineServiceClient extends TimelineServiceClientBase {
     String url = builder.toString();
     log.debug("Sending request : ({})", url);
     org.apache.http.client.fluent.Response response = get(request.getMethod(), url, timeoutMs);
-    return new Response(response.returnContent().asStream());
+    return new Response( new ByteArrayInputStream(response.returnContent().asString(Charset.forName(responseCharsetName)).getBytes(Charset.forName(responseCharsetName))));
   }
 
   private org.apache.http.client.fluent.Response get(RequestMethod method, String url, int timeoutMs) throws IOException {
