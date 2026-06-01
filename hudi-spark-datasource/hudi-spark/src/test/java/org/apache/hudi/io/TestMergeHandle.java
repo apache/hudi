@@ -82,6 +82,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -158,13 +159,16 @@ public class TestMergeHandle extends BaseTestHandle {
     }
     assertTrue(numDeletes > 0);
     HoodieWriteMergeHandle mergeHandle;
+    MergeContext mergeContext = MergeContext.create(newRecords.size(), (Iterator) newRecords.iterator());
     if (useFileGroupReader) {
-      mergeHandle = new FileGroupReaderBasedMergeHandle(config, instantTime, table, newRecords.iterator(), partitionPath, fileId,
+      mergeHandle = new FileGroupReaderBasedMergeHandle(config, instantTime, table, mergeContext, partitionPath, fileId,
           new LocalTaskContextSupplier(), Option.empty());
     } else {
-      mergeHandle = new HoodieWriteMergeHandle(config, instantTime, table, newRecords.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
+      mergeHandle = new HoodieWriteMergeHandle(config, instantTime, table, mergeContext, partitionPath, fileId, new LocalTaskContextSupplier(),
           new HoodieBaseFile(fileGroup.getAllBaseFiles().findFirst().get()), Option.empty());
     }
+    assertEquals(newRecords.size(), mergeHandle.getNumIncomingUpdates(),
+        "Merge handle should receive the correct number of incoming updates from the caller");
     mergeHandle.doMerge();
     WriteStatus writeStatus = (WriteStatus) mergeHandle.close().get(0);
     // verify stats after merge
@@ -238,8 +242,7 @@ public class TestMergeHandle extends BaseTestHandle {
     instantTime = client.startCommit();
     List<HoodieRecord> updates = dataGenerator.generateUniqueUpdates(instantTime, 10);
     FileGroupReaderBasedMergeHandle fileGroupReaderBasedMergeHandle = new FileGroupReaderBasedMergeHandle(
-        config, instantTime, table, updates.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
-        Option.empty());
+        config, instantTime, table, MergeContext.create(updates.size(), (Iterator) updates.iterator()), partitionPath, fileId, new LocalTaskContextSupplier(), Option.empty());
     List<WriteStatus> writeStatuses;
     String recordKeyForFailure = updates.get(5).getRecordKey();
 
@@ -347,8 +350,11 @@ public class TestMergeHandle extends BaseTestHandle {
     }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     FileGroupReaderBasedMergeHandle fileGroupReaderBasedMergeHandle = new FileGroupReaderBasedMergeHandle(
-        config, instantTime, table, inputAndExpectedDataSet.getRecordsToMerge().iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
-        Option.empty());
+        config, instantTime, table,
+        MergeContext.create(inputAndExpectedDataSet.getRecordsToMerge().size(), (Iterator) inputAndExpectedDataSet.getRecordsToMerge().iterator()),
+        partitionPath, fileId, new LocalTaskContextSupplier(), Option.empty());
+    assertEquals(inputAndExpectedDataSet.getRecordsToMerge().size(), fileGroupReaderBasedMergeHandle.getNumIncomingUpdates(),
+        "Merge handle should receive the correct numUpdates");
 
     fileGroupReaderBasedMergeHandle.doMerge();
     List<WriteStatus> writeStatuses = fileGroupReaderBasedMergeHandle.close();

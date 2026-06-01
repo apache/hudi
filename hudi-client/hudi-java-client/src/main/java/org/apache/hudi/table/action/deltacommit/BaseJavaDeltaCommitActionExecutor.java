@@ -68,12 +68,14 @@ abstract class BaseJavaDeltaCommitActionExecutor<T> extends BaseJavaCommitAction
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) throws IOException {
+  public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
+                                                  long numUpdates,
+                                                  Iterator<HoodieRecord<T>> recordItr) throws IOException {
     log.info("Merging updates for commit " + instantTime + " for file " + fileId);
     if (!table.getIndex().canIndexLogFiles() && partitioner != null
         && partitioner.getSmallFileIds().contains(fileId)) {
       log.info("Small file corrections for updates for commit " + instantTime + " for file " + fileId);
-      return super.handleUpdate(partitionPath, fileId, recordItr);
+      return super.handleUpdate(partitionPath, fileId, numUpdates, recordItr);
     } else {
       HoodieAppendHandle<?, ?, ?, ?> appendHandle = new HoodieAppendHandle<>(config, instantTime, table,
           partitionPath, fileId, recordItr, taskContextSupplier);
