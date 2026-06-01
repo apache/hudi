@@ -43,7 +43,7 @@ import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
-import org.apache.spark.sql.catalyst.plans.LeftOuter
+import org.apache.spark.sql.catalyst.plans.{LeftOuter, QueryPlan}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
@@ -112,6 +112,12 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   with SparkAdapterSupport
   with ProvidesHoodieConfig
   with PredicateHelper {
+
+  // Required so that `HoodieLeafLike#children = Nil` (kept for Catalyst optimizer
+  // safety) does not also hide the source/target/merge-condition from EXPLAIN, lineage
+  // extractors, and other plan walkers. `innerChildren` is not traversed by `transform`
+  // or `mapChildren`.
+  override def innerChildren: Seq[QueryPlan[_]] = Seq(mergeInto)
 
   private var sparkSession: SparkSession = _
 
