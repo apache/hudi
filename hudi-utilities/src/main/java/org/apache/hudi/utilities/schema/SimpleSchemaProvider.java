@@ -21,20 +21,19 @@ package org.apache.hudi.utilities.schema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 
-import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 public class SimpleSchemaProvider extends SchemaProvider {
-
-  private final Schema sourceSchema;
-
+  private final HoodieSchema sourceSchema;
+  
   public SimpleSchemaProvider(JavaSparkContext jssc, HoodieSchema sourceSchema, TypedProperties props) {
     super(props, jssc);
-    this.sourceSchema = sourceSchema.toAvroSchema();
+    this.sourceSchema = sourceSchema;  
   }
-
+  
   @Override
-  public Schema getSourceSchema() {
+  public HoodieSchema getSourceHoodieSchema() {  
     return sourceSchema;
   }
 }
+
