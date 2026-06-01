@@ -58,18 +58,22 @@ class CopyToTempViewProcedure extends BaseProcedure with ProcedureBuilder with L
     val replace = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[Boolean]
     val global = getArgValueOrDefault(args, PARAMETERS(7)).get.asInstanceOf[Boolean]
 
-    val tablePath = getBasePath(tableName)
+    val hoodieCatalogTable = getHoodieCatalogTable(tableName)
+    val tablePath = hoodieCatalogTable.tableLocation
+    val tableProperties = hoodieCatalogTable.catalogProperties
 
     val sourceDataFrame = queryType match {
       case DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL => if (asOfInstant.nonEmpty) {
         sparkSession.read
           .format("org.apache.hudi")
+          .options(tableProperties)
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
           .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, asOfInstant)
           .load(tablePath)
       } else {
         sparkSession.read
           .format("org.apache.hudi")
+          .options(tableProperties)
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
           .load(tablePath)
       }
@@ -77,6 +81,7 @@ class CopyToTempViewProcedure extends BaseProcedure with ProcedureBuilder with L
         assert(beginInstance.nonEmpty && endInstance.nonEmpty, "when the query_type is incremental, begin_instance_time and end_instance_time can not be null.")
         sparkSession.read
           .format("org.apache.hudi")
+          .options(tableProperties)
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
           .option(DataSourceReadOptions.START_COMMIT.key, beginInstance)
           .option(DataSourceReadOptions.END_COMMIT.key, endInstance)
@@ -84,6 +89,7 @@ class CopyToTempViewProcedure extends BaseProcedure with ProcedureBuilder with L
       case DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL =>
         sparkSession.read
           .format("org.apache.hudi")
+          .options(tableProperties)
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
           .load(tablePath)
     }
