@@ -145,6 +145,28 @@ public class BucketAssignFunction
     this.recordProcessor = initRecordProcessor();
     this.metrics = new FlinkBucketAssignMetrics(getRuntimeContext().getMetricGroup());
     this.metrics.registerMetrics();
+    initRliShardAssignMetric();
+  }
+
+  /**
+   * Computes and registers the number of RLI shards assigned to this task when global RLI is active.
+   * Each task owns the file groups whose index satisfies {@code fgIndex % numPartitions == taskIndex}.
+   * No-ops when global RLI is not enabled or during index bootstrap (metadata table file-group count
+   * may be unavailable at bootstrap time), leaving {@code numShardsAssigned} at its sentinel -1.
+   */
+  private void initRliShardAssignMetric() {
+    if (!OptionsResolver.isGlobalRecordLevelIndex(conf) || conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
+      return;
+    }
+    try {
+      int numFileGroups = GlobalRecordIndexPartitioner.getNumFileGroupsForRecordIndexPartition(conf);
+      int taskIndex = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
+      int numPartitions = RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext());
+      this.metrics.setNumShardsAssigned(
+          GlobalRecordIndexPartitioner.computeNumShardsAssigned(taskIndex, numPartitions, numFileGroups));
+    } catch (Exception e) {
+      log.warn("Failed to compute RLI shard assignment count for metrics", e);
+    }
   }
 
   @Override

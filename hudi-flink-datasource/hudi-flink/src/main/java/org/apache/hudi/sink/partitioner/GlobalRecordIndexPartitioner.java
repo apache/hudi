@@ -67,7 +67,7 @@ public class GlobalRecordIndexPartitioner implements Partitioner<HoodieKey> {
   public int partition(HoodieKey recordKey, int numPartitions) {
     // initialize numFileGroupsForRecordIndexPartition lazily.
     if (numFileGroupsForRecordIndexPartition < 0) {
-      numFileGroupsForRecordIndexPartition = getNumFileGroupsForRecordIndexPartition();
+      numFileGroupsForRecordIndexPartition = getNumFileGroupsForRecordIndexPartition(conf);
     }
     int fgIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(
         recordKey.getRecordKey(), numFileGroupsForRecordIndexPartition);
@@ -75,15 +75,29 @@ public class GlobalRecordIndexPartitioner implements Partitioner<HoodieKey> {
   }
 
   /**
-   * Get the number of file groups for record index partition in metadata table.
+   * Returns the number of RLI shards (file group indices in [0, numFileGroups)) assigned to the given task.
+   *
+   * <p>The assignment follows the same modulo logic used in {@link #partition}: shard {@code fgIndex}
+   * is owned by task {@code fgIndex % numPartitions}. The count is {@code numFileGroups / numPartitions},
+   * plus one for tasks whose index is less than {@code numFileGroups % numPartitions}.
    */
-  private int getNumFileGroupsForRecordIndexPartition() {
+  public static int computeNumShardsAssigned(int taskIndex, int numPartitions, int numFileGroups) {
+    int base = numFileGroups / numPartitions;
+    int remainder = numFileGroups % numPartitions;
+    return taskIndex < remainder ? base + 1 : base;
+  }
+
+  /**
+   * Reads the file group count for the record index partition from the metadata table.
+   */
+  static int getNumFileGroupsForRecordIndexPartition(Configuration conf) {
+    String tablePath = conf.get(FlinkOptions.PATH);
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
     try (HoodieTableMetadata metadataTable = metaClient.getTableFormat().getMetadataFactory().create(
         HoodieFlinkEngineContext.DEFAULT,
         metaClient.getStorage(),
         StreamerUtil.metadataConfig(conf),
-        conf.get(FlinkOptions.PATH))) {
+        tablePath)) {
       return metadataTable.getNumFileGroupsForPartition(MetadataPartitionType.RECORD_INDEX);
     } catch (Exception e) {
       throw new HoodieException("Failed to get file group count for global record index partition.", e);

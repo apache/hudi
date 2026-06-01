@@ -368,4 +368,32 @@ public class TestMinibatchBucketAssignFunction {
     assertEquals(1, function.getDelegateMetrics().getRecordBufferingCount(),
         "One buffering cycle should be recorded after a checkpoint flush");
   }
+
+  @Test
+  public void testNumShardsAssignedMetricIsSet() throws Exception {
+    // With global RLI enabled the numShardsAssigned gauge must be a non-negative value after open().
+    // The test harness runs with parallelism 1, so this single task owns all shards.
+    FlinkBucketAssignMetrics metrics = function.getDelegateMetrics();
+    assertTrue(metrics.getNumShardsAssigned() >= 0,
+            "numShardsAssigned must be set when global RLI is active");
+  }
+
+  @Test
+  public void testNumShardsAssignedIsNegativeOneWhenBootstrapEnabled() throws Exception {
+    // During index bootstrap the metadata file-group count may be unavailable;
+    // numShardsAssigned must stay at its sentinel -1.
+    Configuration bootstrapConf = Configuration.fromMap(conf.toMap());
+    bootstrapConf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+
+    MinibatchBucketAssignFunction bootstrapFunction = new MinibatchBucketAssignFunction(bootstrapConf);
+    OneInputStreamOperatorTestHarness<HoodieFlinkInternalRow, HoodieFlinkInternalRow> bootstrapHarness =
+        new OneInputStreamOperatorTestHarness<>(new MiniBatchBucketAssignOperator(bootstrapFunction, new OperatorID()), 1, 1, 0);
+    bootstrapHarness.open();
+    try {
+      assertEquals(-1, bootstrapFunction.getDelegateMetrics().getNumShardsAssigned(),
+          "numShardsAssigned must remain -1 when INDEX_BOOTSTRAP_ENABLED is true");
+    } finally {
+      bootstrapHarness.close();
+    }
+  }
 }
