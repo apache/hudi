@@ -153,11 +153,13 @@
   <dependencies>
 
     <!-- Gluten/Velox bundle (test only) for the data-type sweep. Installed into the local
-         Maven repo via `mvn install:install-file` from the prebuilt quanton-velox-bundle JAR.
-         Plain test scope so the scalatest-forked JVM (useSystemClassLoader=false) picks it up. -->
+         Maven repo via `mvn install:install-file` from the prebuilt, non-rebranded
+         gluten-velox-bundle JAR (upstream org.apache.gluten namespace; the quanton-rebranded
+         bundle has a native/Java JNI relocation mismatch that aborts the JVM at init).
+         Plain test scope so the forked test JVM picks it up. -->
     <dependency>
       <groupId>org.apache.gluten</groupId>
-      <artifactId>quanton-velox-bundle</artifactId>
+      <artifactId>gluten-velox-bundle</artifactId>
       <version>1.5.1-SNAPSHOT</version>
       <scope>test</scope>
     </dependency>
