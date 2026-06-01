@@ -2204,6 +2204,40 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(count, 0)
   }
 
+  @Test
+  def testReadOfAnEmptyTableWithUserSuppliedSchema(): Unit = {
+    val (writeOpts, _) = getWriterReaderOpts(HoodieRecordType.AVRO)
+
+    // Insert + then delete the only completed commit so the table has no resolvable schema.
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    inputDF.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val fileStatuses = storage.listDirectEntries(
+      new StoragePath(basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME
+        + StoragePath.SEPARATOR + HoodieTableMetaClient.TIMELINEFOLDER_NAME),
+      new StoragePathFilter {
+        override def accept(path: StoragePath): Boolean = {
+          path.getName.endsWith(HoodieTimeline.COMMIT_ACTION)
+        }
+      })
+    storage.deleteFile(fileStatuses.get(0).getPath)
+
+    // spark.read.schema(...) triggers Spark's SchemaRelationProvider path which calls the
+    // 3-arg DefaultSource.createRelation overload directly. Without the catch on that
+    // overload, this would fail with HoodieSchemaNotFoundException.
+    val userSchema = inputDF.schema
+    val df = spark.read.schema(userSchema).format("hudi").load(basePath)
+    assertEquals(0, df.count())
+    // The caller-supplied schema must be preserved on the EmptyRelation so subsequent query
+    // analysis (e.g. column resolution) sees the user-known columns.
+    assertEquals(userSchema, df.schema)
+  }
+
   /**
    * Test incremental queries and time travel queries with event time ordering.
    *
