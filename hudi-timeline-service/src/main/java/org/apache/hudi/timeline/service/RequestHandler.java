@@ -171,6 +171,18 @@ public class RequestHandler {
     return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MIN_INSTANT_PARAM, String.class).getOrDefault("");
   }
 
+  private static String getInstantParam(Context ctx) {
+    return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INSTANT_PARAM, String.class).getOrDefault("");
+  }
+
+  private static String getInstantActionParam(Context ctx) {
+    return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INSTANT_ACTION_PARAM, String.class).getOrDefault("");
+  }
+
+  private static String getInstantStateParam(Context ctx) {
+    return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INSTANT_STATE_PARAM, String.class).getOrDefault("");
+  }
+
   private static String getMarkerDirParam(Context ctx) {
     return ctx.queryParamAsClass(MarkerOperation.MARKER_DIR_PATH_PARAM, String.class).getOrDefault("");
   }
@@ -239,6 +251,30 @@ public class RequestHandler {
       metricsRegistry.add("TIMELINE", 1);
       TimelineDTO dto = instantHandler.getTimeline(getBasePathParam(ctx));
       writeValueAsString(ctx, dto);
+    }, false));
+
+    app.get(RemoteHoodieTableFileSystemView.TIMELINE_V2_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("TIMELINE_V2", 1);
+      org.apache.hudi.common.table.timeline.dto.v2.TimelineDTO dto = instantHandler.getTimelineV2(getBasePathParam(ctx));
+      writeValueAsString(ctx, dto);
+    }, false));
+
+    app.get(RemoteHoodieTableFileSystemView.INSTANT_DETAILS_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("INSTANT_DETAILS", 1);
+      Object instantDetailsObj = instantHandler.getInstantDetails(getBasePathParam(ctx),
+          getInstantParam(ctx), getInstantActionParam(ctx), getInstantStateParam(ctx));
+      writeValueAsString(ctx, instantDetailsObj);
+    }, false));
+
+    app.get("/v2/hoodie/view/table/config", new ViewHandler(ctx -> {
+      metricsRegistry.add("TABLE_CONFIG", 1);
+      writeValueAsString(ctx, instantHandler.getTableConfig(getBasePathParam(ctx)));
+    }, false));
+
+    app.get("/v2/hoodie/view/table/schema/history", new ViewHandler(ctx -> {
+      metricsRegistry.add("SCHEMA_HISTORY", 1);
+      int limit = Integer.parseInt(ctx.queryParamAsClass("limit", String.class).getOrDefault("200"));
+      writeValueAsString(ctx, instantHandler.getSchemaHistory(getBasePathParam(ctx), limit));
     }, false));
   }
 

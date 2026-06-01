@@ -1,0 +1,335 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hudi Timeline Explorer</title>
+  <!-- Bootstrap 5 CSS: CDN with bundled fallback -->
+  <link id="bootstrap-css" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+        onerror="this.onerror=null;this.href='/lib/bootstrap/bootstrap.min.css';" />
+  <!-- vis-timeline CSS: CDN with bundled fallback -->
+  <link id="vis-css" href="https://unpkg.com/vis-timeline@7.7.3/styles/vis-timeline-graph2d.min.css"
+        rel="stylesheet" type="text/css"
+        onerror="this.onerror=null;this.href='/lib/vis-timeline/vis-timeline-graph2d.min.css';" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav class="navbar navbar-dark bg-dark">
+    <div class="container-fluid">
+      <span class="navbar-brand mb-0 h1">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+             fill="currentColor" class="hudi-brand-icon me-2" aria-hidden="true">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48
+                   10-10S17.52 2 12 2zm-.5 5v5.25l4.5 2.67-.75 1.23L11
+                   13V7h1.5z"/>
+        </svg>
+        Hudi Timeline Explorer
+      </span>
+      <button class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#helpModal"
+              title="Keyboard shortcuts &amp; help (?)">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <span class="d-none d-sm-inline ms-1">Help</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Help modal -->
+  <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="helpModalLabel">Keyboard Shortcuts &amp; Controls</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <h6 class="text-muted mb-2">Keyboard Shortcuts</h6>
+          <table class="table table-sm mb-4">
+            <tbody>
+              <tr><td><kbd>?</kbd></td><td>Open this help dialog</td></tr>
+              <tr><td><kbd>&larr;</kbd> / <kbd>&rarr;</kbd></td><td>Select previous / next instant</td></tr>
+              <tr><td><kbd>Esc</kbd></td><td>Deselect current instant</td></tr>
+            </tbody>
+          </table>
+          <h6 class="text-muted mb-2">Timeline Navigation</h6>
+          <table class="table table-sm mb-4">
+            <tbody>
+              <tr><td><strong>Scroll</strong></td><td>Pan the timeline left / right</td></tr>
+              <tr><td><strong>Shift + Scroll</strong></td><td>Zoom in / out</td></tr>
+              <tr><td><strong>Click instant</strong></td><td>View instant details &amp; metadata</td></tr>
+              <tr><td><strong>Now button</strong></td><td>Jump timeline to current time</td></tr>
+              <tr><td><strong>Focus search</strong></td><td>Jump to an instant by timestamp (<code>yyyyMMddHHmmssSSS</code>)</td></tr>
+            </tbody>
+          </table>
+          <h6 class="text-muted mb-2">Tabs</h6>
+          <table class="table table-sm mb-4">
+            <tbody>
+              <tr><td><kbd>1</kbd></td><td>Switch to Timeline tab</td></tr>
+              <tr><td><kbd>2</kbd></td><td>Switch to Table Config tab</td></tr>
+              <tr><td><kbd>3</kbd></td><td>Switch to Schema History tab</td></tr>
+            </tbody>
+          </table>
+          <h6 class="text-muted mb-2">Filters &amp; Stats</h6>
+          <table class="table table-sm mb-0">
+            <tbody>
+              <tr><td><strong>State pills</strong></td><td>Toggle visibility of Completed / Inflight / Requested instants</td></tr>
+              <tr><td><strong>Action pills</strong></td><td>Toggle visibility by action type (commit, clean, etc.)</td></tr>
+              <tr><td><strong>Summary cards</strong></td><td>Update automatically to reflect active filters</td></tr>
+              <tr><td><strong>URL sharing</strong></td><td>Table path is saved in the URL &mdash; bookmark or share it</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="modal-footer">
+          <small class="text-muted me-auto">Press <kbd>?</kbd> anytime to toggle this dialog</small>
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="bg-light border-bottom py-2">
+    <div class="container-fluid">
+      <form id="timelineForm" class="row g-2 align-items-center">
+        <div class="col">
+          <div class="input-group">
+            <input type="text" id="tablePath" name="tablePath" class="form-control font-monospace"
+                   placeholder="/path/to/hudi/table" required />
+            <button type="submit" class="btn btn-primary" id="loadBtn">Load Timeline</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main content area -->
+  <div class="container-fluid mt-3">
+
+    <!-- Empty state -->
+    <div id="stateEmpty" class="text-center text-muted py-5">
+      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+           stroke-linejoin="round" class="mb-3" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </svg>
+      <p class="lead">Enter a Hudi table path above to view its timeline</p>
+    </div>
+
+    <!-- Loading state -->
+    <div id="stateLoading" class="text-center py-5 d-none">
+      <div class="spinner-border text-primary mb-3" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="text-muted">Loading timeline...</p>
+    </div>
+
+    <!-- Error state -->
+    <div id="stateError" class="d-none">
+      <div class="alert alert-danger" role="alert" id="errorMessage"></div>
+    </div>
+
+    <!-- Loaded state -->
+    <div id="stateLoaded" class="d-none">
+
+      <!-- Nav tabs -->
+      <ul class="nav nav-tabs mb-3" id="mainTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="tab-timeline" data-bs-toggle="tab"
+                  data-bs-target="#tabTimeline" type="button" role="tab"
+                  aria-controls="tabTimeline" aria-selected="true">Timeline</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-config" data-bs-toggle="tab"
+                  data-bs-target="#tabConfig" type="button" role="tab"
+                  aria-controls="tabConfig" aria-selected="false">Table Config</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-schema" data-bs-toggle="tab"
+                  data-bs-target="#tabSchema" type="button" role="tab"
+                  aria-controls="tabSchema" aria-selected="false">Schema History</button>
+        </li>
+      </ul>
+
+      <div class="tab-content">
+        <!-- Timeline tab -->
+        <div class="tab-pane fade show active" id="tabTimeline" role="tabpanel" aria-labelledby="tab-timeline">
+
+          <!-- Summary statistics -->
+          <div id="summaryStats" class="row row-cols-2 row-cols-md-4 g-2 mb-3">
+            <div class="col"><div class="card text-center"><div class="card-body py-2">
+              <div class="fs-4 fw-bold" id="statTotal">&mdash;</div>
+              <small class="text-muted">Total Instants</small>
+            </div></div></div>
+            <div class="col"><div class="card text-center"><div class="card-body py-2">
+              <div id="statByState" class="d-flex justify-content-center align-items-center gap-2 fs-4" style="min-height:1.5em">
+                <span class="badge bg-success">&mdash;</span>
+                <span class="badge bg-warning text-dark">&mdash;</span>
+                <span class="badge bg-danger">&mdash;</span>
+              </div>
+              <small class="text-muted">Completed / Inflight / Requested</small>
+            </div></div></div>
+            <div class="col"><div class="card text-center"><div class="card-body py-2">
+              <div class="fs-4 fw-bold" id="statTimeSpan">&mdash;</div>
+              <small class="text-muted">Time Span</small>
+            </div></div></div>
+            <div class="col"><div class="card text-center"><div class="card-body py-2">
+              <div class="fs-4 fw-bold" id="statAvgDuration">&mdash;</div>
+              <small class="text-muted">Avg Commit Duration</small>
+            </div></div></div>
+          </div>
+
+          <!-- Timeline card -->
+          <div class="card mb-3">
+            <div class="card-header d-flex align-items-center">
+              <strong>Timeline</strong>
+              <span id="instantCount" class="badge bg-secondary ms-2"></span>
+              <span class="color-legend d-none d-md-inline-flex gap-2 ms-2 small text-muted">
+                <span><span style="color:var(--hudi-completed)">&#9679;</span> Completed</span>
+                <span><span style="color:var(--hudi-inflight)">&#9679;</span> Inflight</span>
+                <span><span style="color:var(--hudi-requested)">&#9679;</span> Requested</span>
+              </span>
+              <div class="d-flex align-items-center gap-2 ms-auto">
+                <button id="goToNowBtn" class="btn btn-sm btn-outline-secondary" title="Focus on current time">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                       fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                       stroke-linejoin="round" class="me-1" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                  </svg>Now
+                </button>
+                <div class="input-group input-group-sm" style="width: 280px;">
+                  <input type="text" id="instantSearchInput" class="form-control font-monospace"
+                         placeholder="yyyyMMddHHmmssSSS" />
+                  <button id="instantSearchBtn" class="btn btn-outline-primary" type="button">Focus</button>
+                </div>
+              </div>
+              <div id="filterControls" class="d-flex flex-wrap align-items-center gap-1 w-100 mt-2">
+                <small class="text-muted me-1">Filter:</small>
+                <button class="btn btn-sm filter-pill active" data-filter-state="COMPLETED">Completed</button>
+                <button class="btn btn-sm filter-pill active" data-filter-state="INFLIGHT">Inflight</button>
+                <button class="btn btn-sm filter-pill active" data-filter-state="REQUESTED">Requested</button>
+                <span class="vr mx-1"></span>
+                <span id="actionFilters" class="d-flex flex-wrap gap-1"></span>
+              </div>
+            </div>
+            <div class="card-body p-0">
+              <div id="timeline"></div>
+            </div>
+          </div>
+
+          <!-- Detail card -->
+          <div id="detailCard" class="card d-none">
+            <div class="card-header">
+              <div class="d-flex align-items-center flex-wrap gap-2">
+                <code id="detailInstantId" class="fs-6"></code>
+                <span id="detailAction" class="badge bg-primary"></span>
+                <span id="detailState" class="badge"></span>
+              </div>
+              <small id="detailMeta" class="text-muted"></small>
+            </div>
+            <div class="card-body" id="detailBody"></div>
+          </div>
+
+        </div>
+
+        <!-- Table Config tab -->
+        <div class="tab-pane fade" id="tabConfig" role="tabpanel" aria-labelledby="tab-config">
+          <div id="configLoading" class="text-center py-5 d-none">
+            <div class="spinner-border text-primary mb-2" role="status"></div>
+            <p class="text-muted">Loading table configuration...</p>
+          </div>
+          <div id="configError" class="d-none">
+            <div class="alert alert-danger" id="configErrorMessage"></div>
+          </div>
+          <div id="configContent" class="d-none">
+            <div class="card">
+              <div class="card-header d-flex align-items-center gap-2">
+                <strong>Table Configuration</strong>
+                <input type="text" id="configFilter" class="form-control form-control-sm config-filter-input"
+                       placeholder="Filter properties..." />
+              </div>
+              <div class="card-body p-0">
+                <table class="table table-striped table-hover table-sm mb-0">
+                  <thead>
+                    <tr><th>Property</th><th>Value</th></tr>
+                  </thead>
+                  <tbody id="configTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Schema History tab -->
+        <div class="tab-pane fade" id="tabSchema" role="tabpanel" aria-labelledby="tab-schema">
+          <div id="schemaLoading" class="text-center py-5 d-none">
+            <div class="spinner-border text-primary mb-2" role="status"></div>
+            <p class="text-muted">Loading schema history...</p>
+          </div>
+          <div id="schemaError" class="d-none">
+            <div class="alert alert-danger" id="schemaErrorMessage"></div>
+          </div>
+          <div id="schemaContent" class="d-none">
+            <!-- Current fields -->
+            <div class="card mb-3">
+              <div class="card-header"><strong>Current Fields</strong></div>
+              <div class="card-body p-0">
+                <table class="table table-striped table-sm mb-0">
+                  <thead><tr><th>Field Name</th><th>Type</th><th>Nullable</th></tr></thead>
+                  <tbody id="currentFieldsBody"></tbody>
+                </table>
+              </div>
+            </div>
+            <!-- Current schema -->
+            <div class="card mb-3">
+              <div class="card-header"><strong>Current Schema</strong></div>
+              <div class="card-body" id="currentSchemaTree"></div>
+            </div>
+            <!-- Schema change history -->
+            <h5 class="mt-4 mb-3">Schema Change History</h5>
+            <div id="schemaHistoryList"></div>
+          </div>
+        </div>
+
+      </div><!-- /.tab-content -->
+    </div>
+
+  </div>
+
+  <!-- vis-timeline JS: CDN with bundled fallback -->
+  <script src="https://unpkg.com/vis-timeline@7.7.3/standalone/umd/vis-timeline-graph2d.min.js"
+          onerror="var s=document.createElement('script');s.src='/lib/vis-timeline/vis-timeline-graph2d.min.js';document.head.appendChild(s);"></script>
+  <!-- renderjson: CDN with bundled fallback -->
+  <script src="https://cdn.jsdelivr.net/npm/renderjson@1.4.0/renderjson.js"
+          onerror="var s=document.createElement('script');s.src='/lib/renderjson/renderjson.js';document.head.appendChild(s);"></script>
+  <!-- Bootstrap 5 JS: CDN with bundled fallback -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+          onerror="var s=document.createElement('script');s.src='/lib/bootstrap/bootstrap.bundle.min.js';document.head.appendChild(s);"></script>
+  <script src="/js/timeline.js"></script>
+</body>
+</html>
