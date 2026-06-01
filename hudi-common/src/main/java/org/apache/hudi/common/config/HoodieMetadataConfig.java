@@ -236,6 +236,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "For the Spark engine, this config defaults to true (enabled), overriding the base default of false. "
           + "For Flink and Java engines, this remains false by default.");
 
+  public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_PARTITION_STATS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.partition.stats.enable")
+      .defaultValue(false)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Enable indexing column ranges of user data files under metadata table key lookups for each partition.");
+
+
   public static final ConfigProperty<Integer> METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.file.group.count")
       .defaultValue(2)
@@ -920,7 +927,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   }
 
   public boolean isPartitionStatsIndexEnabled() {
-    return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS);
+    return getBooleanOrDefault(ENABLE_METADATA_INDEX_PARTITION_STATS);
   }
 
   public int getPartitionStatsIndexFileGroupCount() {
@@ -1435,13 +1442,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       }
     }
   }
-
-  /**
-   * The config is now deprecated. Partition stats are configured using the column stats config itself.
-   */
-  @Deprecated
-  public static final String ENABLE_METADATA_INDEX_PARTITION_STATS =
-      METADATA_PREFIX + ".index.partition.stats.enable";
 
   /**
    * @deprecated Use {@link #ENABLE} and its methods.
