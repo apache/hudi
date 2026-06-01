@@ -58,7 +58,7 @@ public class ReusableFileGroupRecordBufferLoader<T> extends LogScanningRecordBuf
                                                                                          ReaderParameters readerParameters,
                                                                                          HoodieReadStats readStats,
                                                                                          Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
-    UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback, props);
+    UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.isEmitDeletes(), fileGroupUpdateCallback, props);
     Option<PartialUpdateMode> partialUpdateModeOpt = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
     if (cachedResults == null) {
       // Create an initial buffer to process the log files

@@ -123,7 +123,7 @@ public class SecondaryIndexRecordGenerationUtils {
       // validate that for a given fileId, either we have 1 parquet file or N log files.
       AtomicInteger totalParquetFiles = new AtomicInteger();
       AtomicInteger totalLogFiles = new AtomicInteger();
-      writeStats.stream().forEach(writeStat -> {
+      writeStats.forEach(writeStat -> {
         if (FSUtils.isLogFile(new StoragePath(basePath, writeStat.getPath()))) {
           totalLogFiles.getAndIncrement();
         } else {
@@ -156,7 +156,7 @@ public class SecondaryIndexRecordGenerationUtils {
         } else { // log files are added in current commit
           // add new log files to existing latest file slice and compute the secondary index to primary key mapping.
           FileSlice latestFileSlice = fileSliceOption.get();
-          writeStats.stream().forEach(writeStat -> {
+          writeStats.forEach(writeStat -> {
             StoragePathInfo logFile = new StoragePathInfo(new StoragePath(basePath, writeStat.getPath()), writeStat.getFileSizeInBytes(), false, (short) 0, 0, 0);
             latestFileSlice.addLogFile(new HoodieLogFile(logFile));
           });
@@ -286,9 +286,11 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                                 boolean allowInflightInstants) throws IOException {
     String secondaryKeyField = indexDefinition.getSourceFieldsKey();
     HoodieSchema requestedSchema = getRequestedSchemaForSecondaryIndex(metaClient, tableSchema, secondaryKeyField);
-    HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
+    HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>builder()
         .withReaderContext(readerContext)
-        .withFileSlice(fileSlice)
+        .withBaseFileOption(fileSlice.getBaseFile())
+        .withLogFiles(fileSlice.getLogFiles())
+        .withPartitionPath(fileSlice.getPartitionPath())
         .withHoodieTableMetaClient(metaClient)
         .withProps(props)
         .withLatestCommitTime(instantTime)
