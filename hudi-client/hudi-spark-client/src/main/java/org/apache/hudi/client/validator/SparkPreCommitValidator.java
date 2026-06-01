@@ -82,6 +82,11 @@ public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<Writ
     HoodieTimer timer = HoodieTimer.start();
     try {
       validateRecordsBeforeAndAfter(before, after, getPartitionsModified(writeResult));
+    } catch (HoodieValidationException e) {
+      throw e;
+    } catch (Exception e) {
+      log.error("Validator failed for instant {}", instantTime, e);
+      throw new HoodieValidationException("Validator failed for instant " + instantTime, e);
     } finally {
       long duration = timer.endTimer();
       log.info(getClass() + " validator took " + duration + " ms" + ", metrics on? " + getWriteConfig().isMetricsOn());
