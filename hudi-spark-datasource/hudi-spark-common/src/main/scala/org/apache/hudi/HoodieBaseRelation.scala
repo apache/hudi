@@ -348,6 +348,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * NOTE: DO NOT OVERRIDE THIS METHOD
    */
   override final def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
+    // NOTE: We're refreshing the file-index and timeline here to make sure that we're not missing any files
+    fileIndex.refresh()
+    metaClient.reloadActiveTimeline()
     // NOTE: PLEASE READ CAREFULLY BEFORE MAKING CHANGES
     //       *Appending* additional columns to the ones requested by the caller is not a problem, as those
     //       will be eliminated by the caller's projection;
