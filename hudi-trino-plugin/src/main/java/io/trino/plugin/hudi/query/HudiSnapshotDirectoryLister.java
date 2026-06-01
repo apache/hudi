@@ -33,6 +33,7 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static io.trino.plugin.hudi.HudiSessionProperties.isScopeFsvToPrunedPartitions;
 import static io.trino.plugin.hudi.HudiUtil.getFileSystemView;
 
 public class HudiSnapshotDirectoryLister
@@ -42,6 +43,8 @@ public class HudiSnapshotDirectoryLister
     private final HudiTableHandle tableHandle;
     private final Lazy<HoodieTableFileSystemView> lazyFileSystemView;
     private final Optional<HudiIndexSupport> indexSupportOpt;
+    private final boolean scopeFsvToPrunedPartitions;
+    private volatile List<String> prunedPartitionPaths;
 
     public HudiSnapshotDirectoryLister(
             ConnectorSession session,
@@ -50,21 +53,38 @@ public class HudiSnapshotDirectoryLister
             Lazy<HoodieTableMetadata> lazyTableMetadata)
     {
         this.tableHandle = tableHandle;
+        this.scopeFsvToPrunedPartitions = isScopeFsvToPrunedPartitions(session);
         SchemaTableName schemaTableName = tableHandle.getSchemaTableName();
         this.lazyFileSystemView = Lazy.lazily(() -> {
             HoodieTimer timer = HoodieTimer.start();
             HoodieTableMetaClient metaClient = tableHandle.getMetaClient();
             HoodieTableFileSystemView fileSystemView = getFileSystemView(lazyTableMetadata.get(), metaClient);
             if (enableMetadataTable) {
-                fileSystemView.loadAllPartitions();
+                List<String> scopedPaths = prunedPartitionPaths;
+                if (scopeFsvToPrunedPartitions && scopedPaths != null) {
+                    fileSystemView.loadPartitions(scopedPaths);
+                    log.info("Created file system view of table %s with %d pruned partitions in %s ms",
+                            schemaTableName, scopedPaths.size(), timer.endTimer());
+                }
+                else {
+                    fileSystemView.loadAllPartitions();
+                    log.info("Created file system view of table %s in %s ms", schemaTableName, timer.endTimer());
+                }
             }
-            log.info("Created file system view of table %s in %s ms", schemaTableName, timer.endTimer());
             return fileSystemView;
         });
 
         Lazy<HoodieTableMetaClient> lazyMetaClient = Lazy.lazily(tableHandle::getMetaClient);
         this.indexSupportOpt = enableMetadataTable ?
                 IndexSupportFactory.createIndexSupport(tableHandle, lazyMetaClient, lazyTableMetadata, tableHandle.getRegularPredicates(), session) : Optional.empty();
+    }
+
+    @Override
+    public void setPrunedPartitionPaths(List<String> relativePartitionPaths)
+    {
+        List<String> paths = ImmutableList.copyOf(relativePartitionPaths);
+        this.prunedPartitionPaths = paths;
+        indexSupportOpt.ifPresent(indexSupport -> indexSupport.setPrunedPartitionPaths(paths));
     }
 
     @Override

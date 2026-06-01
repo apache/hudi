@@ -23,4 +23,11 @@ public interface HudiDirectoryLister
         extends Closeable
 {
     List<FileSlice> listStatus(HudiPartitionInfo partitionInfo, boolean useIndex);
+
+    /**
+     * Hint the lister with the set of partitions known to be relevant for this query so that
+     * the underlying file system view can be loaded for only those partitions instead of all.
+     * Must be called before the first {@link #listStatus} invocation. Default is a no-op.
+     */
+    default void setPrunedPartitionPaths(List<String> relativePartitionPaths) {}
 }

@@ -18,55 +18,54 @@ import io.trino.plugin.hudi.util.HudiAvroSerializer;
 import io.trino.plugin.hudi.util.SynthesizedColumnHandler;
 import io.trino.spi.Page;
 import io.trino.spi.connector.ConnectorPageSource;
+import io.trino.spi.connector.SourcePage;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericData.Record;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
-import org.apache.hudi.common.model.HoodieEmptyRecord;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.UnaryOperator;
 
 public class HudiTrinoReaderContext
         extends HoodieReaderContext<IndexedRecord>
 {
     ConnectorPageSource pageSource;
     private final HudiAvroSerializer avroSerializer;
-    Map<String, Integer> colToPosMap;
-    List<HiveColumnHandle> dataHandles;
-    List<HiveColumnHandle> columnHandles;
 
     public HudiTrinoReaderContext(
+            StorageConfiguration<?> storageConf,
+            HoodieTableConfig tableConfig,
             ConnectorPageSource pageSource,
             List<HiveColumnHandle> dataHandles,
             List<HiveColumnHandle> columnHandles,
             SynthesizedColumnHandler synthesizedColumnHandler)
     {
+        super(storageConf, tableConfig, Option.empty(), Option.empty(), createRecordContext(tableConfig, columnHandles));
         this.pageSource = pageSource;
         this.avroSerializer = new HudiAvroSerializer(columnHandles, synthesizedColumnHandler);
-        this.dataHandles = dataHandles;
-        this.columnHandles = columnHandles;
-        this.colToPosMap = new HashMap<>();
+    }
+
+    private static HudiTrinoRecordContext createRecordContext(HoodieTableConfig tableConfig, List<HiveColumnHandle> columnHandles)
+    {
+        Map<String, Integer> colToPosMap = new HashMap<>();
         for (int i = 0; i < columnHandles.size(); i++) {
             HiveColumnHandle handle = columnHandles.get(i);
             colToPosMap.put(handle.getBaseColumnName(), i);
         }
+        return new HudiTrinoRecordContext(tableConfig, tableConfig.getPayloadClass(), colToPosMap);
     }
 
     @Override
@@ -77,6 +76,23 @@ public class HudiTrinoReaderContext
             Schema dataSchema,
             Schema requiredSchema,
             HoodieStorage storage)
+    {
+        return createRecordIterator();
+    }
+
+    @Override
+    public ClosableIterator<IndexedRecord> getFileRecordIterator(
+            StoragePathInfo storagePathInfo,
+            long start,
+            long length,
+            Schema dataSchema,
+            Schema requiredSchema,
+            HoodieStorage storage)
+    {
+        return createRecordIterator();
+    }
+
+    private ClosableIterator<IndexedRecord> createRecordIterator()
     {
         return new ClosableIterator<>()
         {
@@ -97,14 +113,15 @@ public class HudiTrinoReaderContext
             @Override
             public boolean hasNext()
             {
-                // If all records in the current page are consume, try to get next page
+                // If all records in the current page are consumed, try to get next page
                 if (currentPage == null || currentPosition >= currentPage.getPositionCount()) {
                     if (pageSource.isFinished()) {
                         return false;
                     }
 
                     // Get next page and reset currentPosition
-                    currentPage = pageSource.getNextPage();
+                    SourcePage sourcePage = pageSource.getNextSourcePage();
+                    currentPage = sourcePage != null ? sourcePage.getPage() : null;
                     currentPosition = 0;
 
                     // If no more pages are available
@@ -118,7 +135,6 @@ public class HudiTrinoReaderContext
             public IndexedRecord next()
             {
                 if (!hasNext()) {
-                    // TODO: This can probably be removed or ignored, added this as a sanity check
                     throw new RuntimeException("No more records in the iterator");
                 }
 
@@ -130,98 +146,19 @@ public class HudiTrinoReaderContext
     }
 
     @Override
-    public IndexedRecord convertAvroRecord(IndexedRecord record)
-    {
-        return record;
-    }
-
-    @Override
-    public GenericRecord convertToAvroRecord(IndexedRecord record, Schema schema)
-    {
-        GenericRecord ret = new GenericData.Record(schema);
-        for (Schema.Field field : schema.getFields()) {
-            ret.put(field.name(), record.get(field.pos()));
-        }
-        return ret;
-    }
-
-    @Override
     public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses)
     {
-        return Option.of(HoodieAvroRecordMerger.INSTANCE);
-    }
-
-    @Override
-    public Object getValue(IndexedRecord record, Schema schema, String fieldName)
-    {
-        if (colToPosMap.containsKey(fieldName)) {
-            return record.get(colToPosMap.get(fieldName));
-        }
-        else {
-            // record doesn't have the queried field, return null
-            return null;
-        }
-    }
-
-    @Override
-    public IndexedRecord seal(IndexedRecord record)
-    {
-        // TODO: this can rely on colToPos map directly instead of schema
-        Schema schema = record.getSchema();
-        IndexedRecord newRecord = new Record(schema);
-        List<Schema.Field> fields = schema.getFields();
-        for (Schema.Field field : fields) {
-            int pos = schema.getField(field.name()).pos();
-            newRecord.put(pos, record.get(pos));
-        }
-        return newRecord;
-    }
-
-    @Override
-    public IndexedRecord toBinaryRow(Schema schema, IndexedRecord record)
-    {
-        return record;
+        return Option.of(new HoodiePreCombineAvroRecordMerger());
     }
 
     @Override
     public ClosableIterator<IndexedRecord> mergeBootstrapReaders(
-            ClosableIterator closableIterator, Schema schema,
-            ClosableIterator closableIterator1, Schema schema1)
+            ClosableIterator<IndexedRecord> skeletonFileIterator,
+            Schema skeletonRequiredSchema,
+            ClosableIterator<IndexedRecord> dataFileIterator,
+            Schema dataRequiredSchema,
+            List<Pair<String, Object>> partitionFields)
     {
         return null;
-    }
-
-    @Override
-    public UnaryOperator<IndexedRecord> projectRecord(
-            Schema from,
-            Schema to,
-            Map<String, String> renamedColumns)
-    {
-        List<Schema.Field> toFields = to.getFields();
-        int[] projection = new int[toFields.size()];
-        for (int i = 0; i < projection.length; i++) {
-            projection[i] = from.getField(toFields.get(i).name()).pos();
-        }
-
-        return fromRecord -> {
-            IndexedRecord toRecord = new Record(to);
-            for (int i = 0; i < projection.length; i++) {
-                toRecord.put(i, fromRecord.get(projection[i]));
-            }
-            return toRecord;
-        };
-    }
-
-    @Override
-    public HoodieRecord<IndexedRecord> constructHoodieRecord(
-            BufferedRecord<IndexedRecord> bufferedRecord)
-    {
-        if (bufferedRecord.isDelete()) {
-            return new HoodieEmptyRecord<>(
-                    new HoodieKey(bufferedRecord.getRecordKey(), null),
-                    HoodieRecord.HoodieRecordType.AVRO);
-        }
-
-        return new HoodieAvroIndexedRecord(bufferedRecord.getRecord());
     }
 }

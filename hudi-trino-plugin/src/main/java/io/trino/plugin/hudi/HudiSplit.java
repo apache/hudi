@@ -80,7 +80,6 @@ public class HudiSplit
         this.cachingHostAddresses = requireNonNull(cachingHostAddresses, "cachingHostAddresses is null");
     }
 
-    @Override
     public Map<String, String> getSplitInfo()
     {
         return ImmutableMap.<String, String>builder()

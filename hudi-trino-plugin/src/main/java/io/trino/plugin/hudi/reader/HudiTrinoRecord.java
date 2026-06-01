@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -58,7 +59,7 @@ public class HudiTrinoRecord
     }
 
     @Override
-    public Comparable<?> doGetOrderingValue(Schema schema, Properties properties)
+    public Comparable<?> doGetOrderingValue(Schema schema, Properties properties, String[] orderingFields)
     {
         return null;
     }
@@ -99,6 +100,18 @@ public class HudiTrinoRecord
     }
 
     @Override
+    public Object convertColumnValueForLogicalType(Schema schema, Object value, boolean consistentLogicalTimestampEnabled)
+    {
+        return value;
+    }
+
+    @Override
+    public Object getColumnValueAsJava(Schema schema, String columnName, Properties properties)
+    {
+        return null;
+    }
+
+    @Override
     public HoodieRecord joinWith(HoodieRecord hoodieRecord, Schema schema)
     {
         return null;
@@ -119,7 +132,7 @@ public class HudiTrinoRecord
     }
 
     @Override
-    public boolean isDelete(Schema schema, Properties properties)
+    protected boolean checkIsDelete(DeleteContext deleteContext, Properties properties)
             throws IOException
     {
         return false;
