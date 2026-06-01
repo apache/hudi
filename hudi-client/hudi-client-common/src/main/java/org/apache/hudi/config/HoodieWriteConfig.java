@@ -326,7 +326,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<HoodieFileFormat> BASE_FILE_FORMAT = ConfigProperty
       .key("hoodie.base.file.format")
       .defaultValue(HoodieFileFormat.PARQUET)
-      .withValidValues(HoodieFileFormat.PARQUET.name(), HoodieFileFormat.ORC.name(), HoodieFileFormat.HFILE.name())
+      .withValidValues(
+          HoodieFileFormat.PARQUET.name(),
+          HoodieFileFormat.ORC.name(),
+          HoodieFileFormat.HFILE.name(),
+          HoodieFileFormat.LANCE.name())
       .withAlternatives("hoodie.table.ro.file.format")
       .markAdvanced()
       .withDocumentation(HoodieFileFormat.class, "File format to store all the base file data.");
@@ -2385,6 +2389,9 @@ public class HoodieWriteConfig extends HoodieConfig {
   public long getMaxFileSize(HoodieFileFormat format) {
     switch (format) {
       case PARQUET:
+      case LANCE:
+        // Lance is a columnar format conceptually similar to Parquet at the sizing layer;
+        // reuse the Parquet limit until a dedicated Lance sizing config is introduced.
         return getParquetMaxFileSize();
       case HFILE:
         return getHFileMaxFileSize();
@@ -3090,6 +3097,9 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static class Builder {
 
+    // Class name referenced by string so hudi-client-common does not depend on hudi-spark-client.
+    private static final String DEFAULT_SPARK_RECORD_MERGER_CLASS = "org.apache.hudi.DefaultSparkRecordMerger";
+
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
     protected EngineType engineType = EngineType.SPARK;
     private boolean isIndexConfigSet = false;
@@ -3708,6 +3718,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
+      autoSelectSparkRecordMergerForBaseFileFormat();
       // Make sure the props is propagated
       writeConfig.setDefaultOnCondition(
           !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(
@@ -3754,6 +3765,40 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieTTLConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
 
       autoAdjustConfigsForConcurrencyMode(isLockProviderPropertySet);
+    }
+
+    /**
+     * When the table's base file format requires SPARK record type (e.g. Lance) but the user
+     * has not configured a Spark-compatible record merger, inject
+     * {@link #DEFAULT_SPARK_RECORD_MERGER_CLASS} into {@link HoodieWriteConfig#RECORD_MERGE_IMPL_CLASSES}.
+     *
+     * <p>The injection runs for every merge mode (not just {@link RecordMergeMode#CUSTOM}) because
+     * the Hudi write path resolves the engine-side record type from
+     * {@code config.getRecordMerger().getRecordType()} when picking a {@code HoodieFileWriter}.
+     * For Lance, that resolution must yield {@code SPARK}; otherwise the writer falls back to
+     * the AVRO path and writes throw
+     * {@code ClassCastException: SerializableIndexedRecord cannot be cast to InternalRow}.
+     * On the read side, {@code COMMIT_TIME} and {@code EVENT_TIME} hardcode their merger
+     * instances in {@code BaseSparkInternalRowReaderContext.getRecordMerger}, so the value
+     * populated here is harmless for those modes and only takes effect under {@code CUSTOM}.
+     */
+    private void autoSelectSparkRecordMergerForBaseFileFormat() {
+      HoodieFileFormat tableConfigFormat = HoodieFileFormat.getValue(writeConfig.getString(HoodieTableConfig.BASE_FILE_FORMAT.key()));
+      HoodieFileFormat format = tableConfigFormat != null ? tableConfigFormat : writeConfig.getBaseFileFormat();
+      if (format == null || !format.requiresSparkRecordType()) {
+        return;
+      }
+      if (engineType != EngineType.SPARK) {
+        throw new HoodieNotSupportedException(format + " base file format requires the SPARK engine");
+      }
+      // Only inject when the user has not explicitly configured any merger class. A user who
+      // knowingly picks a non-Spark merger for a Spark-only format will still fail fast at
+      // write time — that's a deliberate choice, not a usability gap.
+      String currentMergers = writeConfig.getString(RECORD_MERGE_IMPL_CLASSES);
+      if (!StringUtils.isNullOrEmpty(currentMergers)) {
+        return;
+      }
+      writeConfig.setValue(RECORD_MERGE_IMPL_CLASSES, DEFAULT_SPARK_RECORD_MERGER_CLASS);
     }
 
     private boolean isLockRequiredForSingleWriter() {

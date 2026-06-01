@@ -47,7 +47,7 @@ import java.io.IOException;
 import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
-public class HoodieHFileRecordReader implements RecordReader<NullWritable, ArrayWritable> {
+public class HoodieLanceRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
   private long count = 0;
   private final ArrayWritable valueObj;
@@ -55,13 +55,14 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
   private ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator;
   private final HoodieSchema schema;
 
-  public HoodieHFileRecordReader(Configuration conf, InputSplit split, JobConf job) throws IOException {
+  public HoodieLanceRecordReader(Configuration conf, InputSplit split, JobConf job) throws IOException {
     FileSplit fileSplit = (FileSplit) split;
     StoragePath path = convertToStoragePath(fileSplit.getPath());
     StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConf(conf);
     HoodieConfig hoodieConfig = getReaderConfigs(storageConf);
-    reader = HoodieIOFactory.getIOFactory(HoodieStorageUtils.getStorage(path, storageConf)).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-        .getFileReader(hoodieConfig, path, HoodieFileFormat.HFILE, Option.empty());
+    HoodieIOFactory ioFactory = HoodieIOFactory.getIOFactory(HoodieStorageUtils.getStorage(path, storageConf));
+    reader = ioFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+        .getFileReader(hoodieConfig, path, HoodieFileFormat.LANCE, Option.empty());
 
     schema = reader.getSchema();
     valueObj = new ArrayWritable(Writable.class, new Writable[schema.getFields().size()]);
@@ -69,6 +70,8 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
 
   @Override
   public boolean next(NullWritable key, ArrayWritable value) throws IOException {
+    // Defer iterator creation to first next() so the file is not opened for splits
+    // the MR framework constructs but never iterates.
     if (recordIterator == null) {
       recordIterator = reader.getRecordIterator(schema);
     }
@@ -86,7 +89,7 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
 
   @Override
   public NullWritable createKey() {
-    return null;
+    return NullWritable.get();
   }
 
   @Override
@@ -96,7 +99,6 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
 
   @Override
   public long getPos() throws IOException {
-    // TODO Auto-generated method stub
     return 0;
   }
 

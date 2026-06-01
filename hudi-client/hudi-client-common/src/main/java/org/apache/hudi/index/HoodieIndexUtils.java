@@ -30,10 +30,10 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -251,8 +251,13 @@ public class HoodieIndexUtils {
       return Collections.emptyList();
     }
     log.info("Going to filter {} keys from file {}", candidateRecordKeys.size(), filePath);
+    // TODO: The AVRO fallback here ignores the merger's configured type. This pre-dates
+    //  the Lance PR and is tracked at https://github.com/apache/hudi/issues/18496 — respect the
+    //  merger's record type for all formats.
+    HoodieRecord.HoodieRecordType recordType = HoodieFileFormat.resolveRecordTypeForExtension(
+        filePath.getFileExtension(), HoodieRecord.HoodieRecordType.AVRO);
     try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
-        .getReaderFactory(HoodieRecordType.AVRO)
+        .getReaderFactory(recordType)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
       // Load all rowKeys from the file, to double-confirm
       HoodieTimer timer = HoodieTimer.start();
@@ -494,8 +499,10 @@ public class HoodieIndexUtils {
     RecordContext<R> incomingRecordContext = readerContext.getRecordContext();
     // Create a reader context for the existing records. In the case of merge-into commands, the incoming records
     // can be using an expression payload so here we rely on the table's configured payload class if it is required.
+    HoodieRecord.HoodieRecordType recordTypeForExistingRecords =
+        hoodieTable.getMetaClient().getTableConfig().getBaseFileFormat().resolveRecordType(config.getRecordMerger().getRecordType());
     ReaderContextFactory<R> readerContextFactoryForExistingRecords = (ReaderContextFactory<R>) hoodieTable.getContext()
-        .getReaderContextFactoryForWrite(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType(), hoodieTable.getMetaClient().getTableConfig().getProps());
+        .getReaderContextFactoryForWrite(hoodieTable.getMetaClient(), recordTypeForExistingRecords, hoodieTable.getMetaClient().getTableConfig().getProps());
     RecordContext<R> existingRecordContext = readerContextFactoryForExistingRecords.getContext().getRecordContext();
     // merged existing records with current locations being set
     HoodieSchema writerSchemaWithMetaFields = HoodieSchemaUtils.addMetadataFields(writerSchema, updatedConfig.allowOperationMetadataField());
@@ -581,8 +588,10 @@ public class HoodieIndexUtils {
     HoodiePairData<String, HoodieRecord<R>> keyAndIncomingRecords =
         incomingRecords.mapToPair(record -> Pair.of(record.getRecordKey(), record));
 
+    HoodieRecord.HoodieRecordType recordType =
+        table.getMetaClient().getTableConfig().getBaseFileFormat().resolveRecordType(config.getRecordMerger().getRecordType());
     ReaderContextFactory<R> readerContextFactory = (ReaderContextFactory<R>) table.getContext()
-        .getReaderContextFactoryForWrite(table.getMetaClient(), config.getRecordMerger().getRecordType(), config.getProps());
+        .getReaderContextFactoryForWrite(table.getMetaClient(), recordType, config.getProps());
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
     readerContext.initRecordMergerForIngestion(config.getProps());
     TypedProperties properties = readerContext.getMergeProps(config.getProps());

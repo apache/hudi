@@ -18,19 +18,23 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -135,19 +139,59 @@ public interface UpdateProcessor<T> {
       if (previousRecord == null) {
         // special case for payloads when there is no previous record
         HoodieSchema recordSchema = readerContext.getRecordContext().decodeAvroSchema(mergedRecord.getSchemaId());
-        GenericRecord record = readerContext.getRecordContext().convertToAvroRecord(mergedRecord.getRecord(), recordSchema);
-        HoodieAvroRecord hoodieRecord = new HoodieAvroRecord<>(null, HoodieRecordUtils.loadPayload(payloadClass, record, mergedRecord.getOrderingValue()));
-        try {
-          if (hoodieRecord.shouldIgnore(recordSchema, properties)) {
-            return null;
-          } else {
-            HoodieSchema readerSchema = readerContext.getSchemaHandler().getRequestedSchema();
-            // If the record schema is different from the reader schema, rewrite the record using the payload methods to ensure consistency with legacy writer paths
-            hoodieRecord.rewriteRecordWithNewSchema(recordSchema, properties, readerSchema).toIndexedRecord(readerSchema, properties)
-                .ifPresent(rewrittenRecord -> mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(rewrittenRecord.getData())));
+        GenericRecord originalAvro = mergedRecord.getOriginalAvroRecord();
+        Schema recordAvroSchema = recordSchema.toAvroSchema();
+
+        // When the merged record carries an originalAvroRecord (populated by extractDataFromRecord
+        // for ExpressionPayload in the COW write path via ExtractedData), the record is already in
+        // write-schema format with correctly evaluated expressions. Convert directly and skip the
+        // payload path.
+        //
+        // NOTE: this branch bypasses shouldIgnore. That is safe today because the only payload that
+        // populates originalAvroRecord is ExpressionPayload, which never returns shouldIgnore=true.
+        // If a future payload starts producing an originalAvroRecord, it must add a shouldIgnore
+        // check here.
+        if (originalAvro != null) {
+          // After replaceRecord(), mergedRecord.getSchemaId() still references the original schema.
+          // This is safe because the record is emitted immediately via super.handleNonDeletes() below,
+          // which calls seal() and produces the output row — the record is not spilled to disk
+          // (via toBinary()) between replaceRecord and emit in this single-record path. If this
+          // assumption changes, the schemaId must be updated after replaceRecord.
+          mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(originalAvro));
+        } else {
+          GenericRecord record = readerContext.getRecordContext().convertToAvroRecord(mergedRecord.getRecord(), recordSchema);
+          HoodieAvroRecord hoodieRecord = new HoodieAvroRecord<>(null, HoodieRecordUtils.loadPayload(payloadClass, record, mergedRecord.getOrderingValue()));
+          try {
+            if (hoodieRecord.shouldIgnore(recordSchema, properties)) {
+              return null;
+            }
+            // Evaluate the payload to get the insert value
+            Option<IndexedRecord> insertValueOpt = hoodieRecord.getData().getInsertValue(recordAvroSchema, properties);
+            if (insertValueOpt.isPresent()) {
+              IndexedRecord insertRecord = insertValueOpt.get();
+              HoodieSchema readerSchema = readerContext.getSchemaHandler().getRequestedSchema();
+              GenericRecord finalRecord;
+              if (insertRecord.getSchema().equals(recordAvroSchema)) {
+                // Payload preserved the schema (e.g., OverwriteWithLatestAvroPayload).
+                // Rewrite to full reader schema including meta fields.
+                finalRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(insertRecord, readerSchema.toAvroSchema());
+              } else {
+                // Payload transformed the schema (e.g., ExpressionPayload maps source→target fields).
+                // The result has different field names than recordSchema. Use data-only schema as
+                // the rewrite target to maintain arity consistency with BufferedRecord's schemaId,
+                // which is immutable and corresponds to the data-only recordSchema.
+                HoodieSchema dataSchema = HoodieSchemaUtils.removeMetadataFields(readerSchema);
+                finalRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(insertRecord, dataSchema.toAvroSchema());
+              }
+              mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(finalRecord));
+            } else {
+              // Payload returned empty (e.g., soft-deleted record in DefaultHoodieRecordPayload).
+              // Suppress the record — do not emit it as an insert.
+              return null;
+            }
+          } catch (IOException e) {
+            throw new HoodieIOException("Error processing record with payload class: " + payloadClass, e);
           }
-        } catch (IOException e) {
-          throw new HoodieIOException("Error processing record with payload class: " + payloadClass, e);
         }
       }
       return super.handleNonDeletes(previousRecord, mergedRecord);

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.common.engine.ExtractedData;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -41,11 +42,12 @@ public class BufferedRecords {
 
   public static <T> BufferedRecord<T> fromHoodieRecord(HoodieRecord record, HoodieSchema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields, boolean isDelete) {
     HoodieKey hoodieKey = record.getKey();
-    T data = recordContext.extractDataFromRecord(record, schema, props);
+    ExtractedData<T> extracted = recordContext.extractDataFromRecord(record, schema, props);
+    T data = extracted.getData();
     String recordKey = hoodieKey == null ? recordContext.getRecordKey(data, schema) : hoodieKey.getRecordKey();
     Integer schemaId = recordContext.encodeSchema(schema);
     Comparable orderingValue = record.getOrderingValue(schema, props, orderingFields);
-    return new BufferedRecord<>(recordKey, orderingValue, data, schemaId, inferOperation(isDelete, record.getOperation()));
+    return new BufferedRecord<>(recordKey, orderingValue, data, schemaId, inferOperation(isDelete, record.getOperation()), extracted.getOriginalAvroRecord());
   }
 
   public static <T> BufferedRecord<T> fromEngineRecord(T record, HoodieSchema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {

@@ -23,6 +23,8 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.OrderingValues;
 
+import org.apache.avro.generic.GenericRecord;
+
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
@@ -40,17 +42,27 @@ public class BufferedRecord<T> implements Serializable {
   private final Comparable orderingValue;
   private final Integer schemaId;
   @Nullable private HoodieOperation hoodieOperation;
+  // Original Avro record from the source payload (e.g. ExpressionPayload), kept alongside
+  // the engine-native row so downstream code can recover the source schema without re-serializing.
+  // Transient: this hint is only useful in-memory and must not survive spill or shuffle.
+  @Nullable private transient GenericRecord originalAvroRecord;
 
   public BufferedRecord() {
     this(null, null, null, null, null);
   }
 
   public BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, @Nullable HoodieOperation hoodieOperation) {
+    this(recordKey, orderingValue, record, schemaId, hoodieOperation, null);
+  }
+
+  public BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, @Nullable HoodieOperation hoodieOperation,
+                        @Nullable GenericRecord originalAvroRecord) {
     this.recordKey = recordKey;
     this.orderingValue = orderingValue;
     this.record = record;
     this.schemaId = schemaId;
     this.hoodieOperation = hoodieOperation;
+    this.originalAvroRecord = originalAvroRecord;
   }
 
   public String getRecordKey() {
@@ -110,13 +122,22 @@ public class BufferedRecord<T> implements Serializable {
   public BufferedRecord<T> project(UnaryOperator<T> converter) {
     if (record != null) {
       this.record = converter.apply(record);
+      // Projection produces a new row whose schema differs from the original Avro record.
+      this.originalAvroRecord = null;
     }
     return this;
   }
 
   public BufferedRecord<T> replaceRecord(T record) {
     this.record = record;
+    // The new record no longer corresponds to the previously-cached Avro hint.
+    this.originalAvroRecord = null;
     return this;
+  }
+
+  @Nullable
+  public GenericRecord getOriginalAvroRecord() {
+    return originalAvroRecord;
   }
 
   public BufferedRecord<T> replaceRecordKey(String recordKey) {

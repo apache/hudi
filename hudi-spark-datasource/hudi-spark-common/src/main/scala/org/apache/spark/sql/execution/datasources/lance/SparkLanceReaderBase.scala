@@ -43,6 +43,7 @@ import org.apache.spark.sql.util.LanceArrowUtils
 import org.lance.file.{BlobReadMode, FileReadOptions, LanceFileReader}
 
 import java.io.IOException
+import java.util.NoSuchElementException
 
 import scala.collection.JavaConverters._
 
@@ -79,8 +80,32 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
     val filePath = file.filePath.toString
 
     if (requiredSchema.isEmpty && partitionSchema.isEmpty) {
-      // No columns requested - return empty iterator
-      Iterator.empty
+      // No column data needed (e.g. count() on a non-partitioned table). Open the Lance file to
+      // get the actual row count and return that many empty rows, so Spark computes the correct count.
+      val countAllocator = HoodieArrowAllocator.newChildAllocator(
+        getClass.getSimpleName + "-count-" + file.filePath,
+        HoodieStorageConfig.LANCE_READ_ALLOCATOR_SIZE_BYTES.defaultValue().toLong)
+      try {
+        val lanceReader = LanceFileReader.open(file.filePath.toString, countAllocator)
+        try {
+          val rowCount: Long = lanceReader.numRows()
+          // Lazy Long-backed iterator: Iterator.fill/take require Int, which caps at ~2.1B rows.
+          // This custom iterator counts with Long so the count(*) path is not bounded by Int.MaxValue.
+          new Iterator[InternalRow] {
+            private var remaining: Long = rowCount
+            override def hasNext: Boolean = remaining > 0L
+            override def next(): InternalRow = {
+              if (remaining <= 0L) throw new NoSuchElementException
+              remaining -= 1L
+              InternalRow.empty
+            }
+          }
+        } finally {
+          lanceReader.close()
+        }
+      } finally {
+        countAllocator.close()
+      }
     } else {
       // Track iterator for cleanup. Typed as ClosableIterator so we can swap in the
       // DESCRIPTOR-mode iterator when the user opts into that blob read mode.

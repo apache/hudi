@@ -74,13 +74,53 @@ public enum HoodieFileFormat {
     return extension;
   }
 
+  /**
+   * Returns true if this file format requires the SPARK record type for reading/writing.
+   * Lance only supports the Spark-native InternalRow representation, not Avro.
+   */
+  public boolean requiresSparkRecordType() {
+    return this == LANCE;
+  }
+
+  /**
+   * Resolves the record type to use for this file format: returns SPARK if this format
+   * requires it, otherwise returns the given fallback type.
+   */
+  public HoodieRecord.HoodieRecordType resolveRecordType(HoodieRecord.HoodieRecordType fallback) {
+    return requiresSparkRecordType() ? HoodieRecord.HoodieRecordType.SPARK : fallback;
+  }
+
+  /**
+   * Resolves the record type for the given file extension: looks up the matching
+   * {@link HoodieFileFormat} and returns its {@link #resolveRecordType(HoodieRecord.HoodieRecordType)},
+   * falling back to {@code fallback} when the extension is unrecognised.
+   */
+  public static HoodieRecord.HoodieRecordType resolveRecordTypeForExtension(
+      String extension, HoodieRecord.HoodieRecordType fallback) {
+    HoodieFileFormat format = fromFileExtensionOrNull(extension);
+    return format != null ? format.resolveRecordType(fallback) : fallback;
+  }
+
   public static HoodieFileFormat fromFileExtension(String extension) {
+    HoodieFileFormat format = fromFileExtensionOrNull(extension);
+    if (format == null) {
+      throw new IllegalArgumentException("Unknown file extension :" + extension);
+    }
+    return format;
+  }
+
+  /**
+   * Returns the {@link HoodieFileFormat} matching the given file extension, or {@code null}
+   * if no match is found. Useful when the caller wants to handle unknown extensions without
+   * exception-based control flow.
+   */
+  public static HoodieFileFormat fromFileExtensionOrNull(String extension) {
     for (HoodieFileFormat format : HoodieFileFormat.values()) {
       if (format.getFileExtension().equals(extension)) {
         return format;
       }
     }
-    throw new IllegalArgumentException("Unknown file extension :" + extension);
+    return null;
   }
 
   public static HoodieFileFormat getValue(String fileFormat) {
