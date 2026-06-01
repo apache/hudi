@@ -184,9 +184,12 @@ public class MarkerHandler extends Handler {
    * @param context Javalin app context
    * @param markerDir marker directory path
    * @param markerName marker name
+   * @param basePath base path
+   * @param requestId optional request ID for idempotent retries (POST only); null for legacy or when TLS recovers
    * @return the {@code CompletableFuture} instance for the request
    */
-  public CompletableFuture<String> createMarker(Context context, String markerDir, String markerName, String basePath) {
+  public CompletableFuture<String> createMarker(Context context, String markerDir, String markerName, String basePath,
+                                                String requestId) {
     // Step1 do early conflict detection if enable
     if (timelineServiceConfig.earlyConflictDetectionEnable) {
       try {
@@ -232,26 +235,24 @@ public class MarkerHandler extends Handler {
       } catch (HoodieEarlyConflictDetectionException he) {
         log.error("Detected the write conflict due to a concurrent writer, "
             + "failing the marker creation as the early conflict detection is enabled", he);
-        return finishCreateMarkerFuture(context, markerDir, markerName);
+        return finishCreateMarkerFuture(context, markerDir, markerName, requestId);
       } catch (Exception e) {
         log.warn("Failed to execute early conflict detection. Marker creation will continue.", e);
         // When early conflict detection fails to execute, we still allow the marker creation
         // to continue
-        return addMarkerCreationRequestForAsyncProcessing(context, markerDir, markerName);
+        return addMarkerCreationRequestForAsyncProcessing(context, markerDir, markerName, requestId);
       }
     }
 
     // Step 2 create marker
-    return addMarkerCreationRequestForAsyncProcessing(context, markerDir, markerName);
+    return addMarkerCreationRequestForAsyncProcessing(context, markerDir, markerName, requestId);
   }
 
   private MarkerCreationFuture addMarkerCreationRequestForAsyncProcessing(
-      Context context, String markerDir, String markerName) {
-    log.debug("Request: Create marker: {}", markerName);
-    MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
-    // Add the future to the list
+      Context context, String markerDir, String markerName, String requestId) {
+    log.debug("Request: Create marker: {} with requestId: {}", markerName, requestId);
     MarkerDirState markerDirState = getMarkerDirState(markerDir);
-    markerDirState.addMarkerCreationFuture(future);
+    MarkerCreationFuture future = markerDirState.getOrCreateMarkerCreationFuture(context, markerName, requestId);
     if (!firstCreationRequestSeen) {
       synchronized (firstCreationRequestSeenLock) {
         if (!firstCreationRequestSeen) {
@@ -265,8 +266,9 @@ public class MarkerHandler extends Handler {
     return future;
   }
 
-  private CompletableFuture<String> finishCreateMarkerFuture(Context context, String markerDir, String markerName) {
-    MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
+  private CompletableFuture<String> finishCreateMarkerFuture(Context context, String markerDir, String markerName,
+      String requestId) {
+    MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName, requestId);
     try {
       future.complete(jsonifyResult(
           future.getContext(), future.isSuccessful(), metricsRegistry));
