@@ -30,7 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
-import static org.apache.hudi.common.fs.FSUtils.s3aToS3;
+import static org.apache.hudi.common.fs.FSUtils.normalizeBasePathForLocking;
 
 /**
  * A zookeeper based lock. This {@link LockProvider} implementation allows to lock table operations
@@ -44,18 +44,27 @@ import static org.apache.hudi.common.fs.FSUtils.s3aToS3;
 public class ZookeeperBasedImplicitBasePathLockProvider extends BaseZookeeperBasedLockProvider {
 
   public static final String LOCK_KEY = "lock_key";
-  private final String hudiTableBasePath;
+  private final String normalizedHudiTableBasePath;
 
+  /**
+   * Compute the Zookeeper lock base path for a given Hudi table base path.
+   *
+   * <p>Accepts a raw basePath — normalization is applied here. {@code normalizeBasePathForLocking}
+   * is idempotent, so callers that already hold a normalized value (e.g. the constructor's
+   * {@code normalizedHudiTableBasePath} field) can pass it through without harm.
+   */
   public static String getLockBasePath(String hudiTableBasePath) {
-    // Ensure consistent format for S3 URI.
-    String lockBasePath = "/tmp/" + HashID.generateXXHashAsString(s3aToS3(hudiTableBasePath), HashID.Size.BITS_64);
-    log.info("The Zookeeper lock key for the base path {} is {}", hudiTableBasePath, lockBasePath);
+    String normalized = normalizeBasePathForLocking(hudiTableBasePath);
+    String lockBasePath = "/tmp/" + HashID.generateXXHashAsString(normalized, HashID.Size.BITS_64);
+    log.info("The Zookeeper lock key for the base path {} (normalized: {}) is {}",
+        hudiTableBasePath, normalized, lockBasePath);
     return lockBasePath;
   }
 
   public ZookeeperBasedImplicitBasePathLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
     super(lockConfiguration, conf);
-    hudiTableBasePath = s3aToS3(lockConfiguration.getConfig().getString(HoodieCommonConfig.BASE_PATH.key()));
+    normalizedHudiTableBasePath = normalizeBasePathForLocking(
+        lockConfiguration.getConfig().getString(HoodieCommonConfig.BASE_PATH.key()));
   }
 
   @Override
@@ -73,6 +82,6 @@ public class ZookeeperBasedImplicitBasePathLockProvider extends BaseZookeeperBas
   @Override
   protected String generateLogSuffixString() {
     return StringUtils.join("ZkBasePath = ", zkBasePath,
-        ", lock key = ", lockKey, ", hudi table base path = ", hudiTableBasePath);
+        ", lock key = ", lockKey, ", hudi table base path = ", normalizedHudiTableBasePath);
   }
 }

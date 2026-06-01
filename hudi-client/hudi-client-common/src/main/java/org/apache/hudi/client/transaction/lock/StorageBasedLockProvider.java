@@ -59,6 +59,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS;
+import static org.apache.hudi.common.fs.FSUtils.normalizeBasePathForLocking;
 import static org.apache.hudi.common.lock.LockState.ACQUIRED;
 import static org.apache.hudi.common.lock.LockState.ACQUIRING;
 import static org.apache.hudi.common.lock.LockState.FAILED_TO_ACQUIRE;
@@ -109,7 +110,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   private final transient Thread shutdownThread;
   private final Option<HoodieLockMetrics> hoodieLockMetrics;
   private Option<AuditService> auditService;
-  private final String basePath;
+  private final String normalizedHudiTableBasePath;
 
   @GuardedBy("this")
   private StorageLockFile currentLockObj = null;
@@ -194,8 +195,8 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     StorageBasedLockConfig config = new StorageBasedLockConfig.Builder().fromProperties(properties).build();
     long heartbeatPollSeconds = config.getRenewIntervalSecs();
     this.lockValiditySecs = config.getValiditySeconds();
-    this.basePath = config.getHudiTableBasePath();
-    String lockFolderPath = StorageLockClient.getLockFolderPath(basePath);
+    this.normalizedHudiTableBasePath = normalizeBasePathForLocking(config.getHudiTableBasePath());
+    String lockFolderPath = StorageLockClient.getLockFolderPath(normalizedHudiTableBasePath);
     this.lockFilePath = new StoragePath(lockFolderPath, DEFAULT_TABLE_LOCK_FILE_NAME).toString();
     this.heartbeatManager = heartbeatManagerLoader.apply(ownerId, TimeUnit.SECONDS.toMillis(heartbeatPollSeconds), this::renewLock);
     this.storageLockClient = storageLockClientLoader.apply(ownerId, lockFilePath, properties);
@@ -402,7 +403,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     // Create audit service lazily on first successful lock acquisition if auditing is enabled
     if (auditService.isEmpty()) {
       auditService = AuditServiceFactory.createLockProviderAuditService(
-          ownerId, basePath, storageLockClient, acquisitionTimestamp,
+          ownerId, normalizedHudiTableBasePath, storageLockClient, acquisitionTimestamp,
           this::calculateLockExpiration, this::actuallyHoldsLock);
     }
 
