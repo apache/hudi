@@ -759,6 +759,47 @@ public class FSUtils {
     return s3aUrl.replaceFirst("(?i)^s3a://", "s3://");
   }
 
+  /**
+   * Canonicalize a Hudi table base path for use as the input to implicit lock-key derivation.
+   *
+   * <p>Implicit lock providers (DynamoDB and Zookeeper variants) hash this string to choose the
+   * lock row / znode for a table. Two callers writing to the same table must produce the same
+   * hash, so any benign formatting drift in the basePath has to be eliminated before hashing.
+   * This method trims surrounding whitespace, normalizes s3a:// to s3://, then forces exactly
+   * one trailing slash. Inner double slashes are intentionally preserved.
+   *
+   * <p>Scheme-only inputs (e.g. {@code "s3://"}, {@code "s3a:///"}) and all-slash inputs
+   * (e.g. {@code "///"}) are rejected — stripping the trailing slashes from those leaves
+   * nothing meaningful to lock against. Paths whose final key segment legitimately ends
+   * with {@code ':'} (e.g. {@code "s3://bucket/foo:/"}) are preserved — S3 object keys
+   * are allowed to contain {@code ':'}.
+   */
+  public static String normalizeBasePathForLocking(String basePath) {
+    if (basePath == null) {
+      throw new IllegalArgumentException("Hudi table base path cannot be null");
+    }
+    String trimmed = basePath.trim();
+    if (trimmed.isEmpty()) {
+      throw new IllegalArgumentException("Hudi table base path cannot be empty");
+    }
+    String schemeNormalized = s3aToS3(trimmed);
+    int end = schemeNormalized.length();
+    while (end > 0 && schemeNormalized.charAt(end - 1) == '/') {
+      end--;
+    }
+    // Reject "///"-style inputs (nothing left after stripping) and scheme-only inputs
+    // like "s3://" / "s3a:///" — those collapse to just "<scheme>:" with no '/' character
+    // remaining. Real paths that end with ':' (e.g. "s3://bucket/foo:/") keep the '/'
+    // characters from the scheme's "://" separator, so they pass this check.
+    if (end == 0
+        || (schemeNormalized.charAt(end - 1) == ':'
+            && schemeNormalized.lastIndexOf('/', end - 1) < 0)) {
+      throw new IllegalArgumentException(
+          "Hudi table base path is not a valid lockable path: '" + basePath + "'");
+    }
+    return schemeNormalized.substring(0, end) + "/";
+  }
+
   public static StoragePathInfo toStoragePathInfo(HoodieFileStatus fileStatus) {
     if (null == fileStatus) {
       return null;
