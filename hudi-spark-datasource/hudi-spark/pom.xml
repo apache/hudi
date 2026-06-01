@@ -123,6 +123,17 @@
         </configuration>
       </plugin>
       <plugin>
+        <!-- The Gluten sweep target tests are JUnit @Test and run under surefire, not scalatest.
+             Gluten's columnar shuffle deserialization uses netty off-heap DirectByteBuffers, which
+             on JDK17 need io.netty.tryReflectionSetAccessible plus the jdk.internal.misc open/export.
+             Append them to the inherited argLine, which already carries the base add-opens set. -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <argLine>@{argLine} --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-exports=java.base/jdk.internal.misc=ALL-UNNAMED -Dio.netty.tryReflectionSetAccessible=true</argLine>
+        </configuration>
+      </plugin>
+      <plugin>
         <groupId>org.scalastyle</groupId>
         <artifactId>scalastyle-maven-plugin</artifactId>
       </plugin>
