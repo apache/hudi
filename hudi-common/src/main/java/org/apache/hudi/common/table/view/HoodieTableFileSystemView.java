@@ -438,8 +438,8 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   }
 
   @Override
-  public void close() {
-    super.close();
+  protected void closeResources() throws Exception {
+    super.closeResources();
     this.fgIdToPendingCompaction = null;
     this.fgIdToPendingLogCompaction = null;
     this.partitionToFileGroupsMap = null;
@@ -447,6 +447,11 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     this.fgIdToReplaceInstants = null;
     this.fgIdToPendingClustering = null;
     this.closed = true;
+  }
+
+  @Override
+  public void close() {
+    super.close();
   }
 
   @Override
