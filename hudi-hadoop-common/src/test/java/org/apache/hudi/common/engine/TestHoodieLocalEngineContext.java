@@ -170,4 +170,5 @@ public class TestHoodieLocalEngineContext {
     assertTrue(resultList.contains(42));
     assertTrue(resultList.contains(17));
   }
+
 } 
