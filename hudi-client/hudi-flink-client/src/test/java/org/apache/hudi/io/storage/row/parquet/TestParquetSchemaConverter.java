@@ -242,6 +242,20 @@ public class TestParquetSchemaConverter {
   }
 
   @Test
+  void testUnannotatedFixedLenByteArrayConvertsToBytes() {
+    MessageType messageType = new MessageType(
+        "test",
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, Type.Repetition.REQUIRED).named("id"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, Type.Repetition.OPTIONAL)
+            .length(8)
+            .named("embedding"));
+
+    RowType rowType = ParquetSchemaConverter.convertToRowType(messageType);
+
+    assertEquals(DataTypes.BYTES().getLogicalType(), rowType.getTypeAt(1));
+  }
+
+  @Test
   void testVectorFooterMetadataComesFromHoodieSchema() {
     HoodieSchema hoodieSchema = HoodieSchema.createRecord(
         "vector_record",
