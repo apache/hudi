@@ -62,6 +62,10 @@ public abstract class HoodieStorageLayout implements Serializable {
     @EnumFieldDescription("Each file group contains records of a set of keys which map "
         + "to a certain range of hash values, so that using the hash function can easily "
         + "identify the file group a record belongs to, based on the record key.")
-    BUCKET
+    BUCKET,
+
+    @EnumFieldDescription("Each file group contains records sorted by record key within "
+        + "each file (base and log), enabling sorted merge for reads and compaction.")
+    LSM_TREE
   }
 }

@@ -32,9 +32,12 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.config.HoodieLockConfig;
+import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.table.storage.HoodieLayoutFactory;
+import org.apache.hudi.table.storage.HoodieLSMTreeLayout;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import org.junit.jupiter.api.Test;
@@ -44,6 +47,7 @@ import java.util.function.Function;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -187,5 +191,44 @@ class TestHoodieTable extends HoodieCommonTestHarness {
     // This should not throw and should be a no-op since auto-delete is disabled
     hoodieTable.deleteMetadataIndexIfNecessary();
     // If we reach here without exception, the test passes
+  }
+
+  @Test
+  void testRequireSortedRecordsWithLSMTreeLayout() throws IOException {
+    initMetaClient();
+    HoodieEngineContext context = mock(HoodieEngineContext.class);
+
+    // Default layout: sorted records not required
+    HoodieWriteConfig defaultConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .build();
+    HoodieTable defaultTable = new TestBaseHoodieTable(defaultConfig, context, metaClient);
+    assertFalse(defaultTable.requireSortedRecords());
+
+    // LSM_TREE layout: sorted records required
+    HoodieWriteConfig lsmConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withProperties(HoodieLayoutConfig.newBuilder()
+            .withLayoutType(HoodieStorageLayout.LayoutType.LSM_TREE.name())
+            .build()
+            .getProps())
+        .build();
+    HoodieTable lsmTable = new TestBaseHoodieTable(lsmConfig, context, metaClient);
+    assertTrue(lsmTable.requireSortedRecords());
+  }
+
+  @Test
+  void testLSMTreeLayoutFactory() {
+    HoodieWriteConfig lsmConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/test_lsm_layout")
+        .withProperties(HoodieLayoutConfig.newBuilder()
+            .withLayoutType(HoodieStorageLayout.LayoutType.LSM_TREE.name())
+            .build()
+            .getProps())
+        .build();
+    HoodieStorageLayout layout = HoodieLayoutFactory.createLayout(lsmConfig);
+    assertTrue(layout instanceof HoodieLSMTreeLayout);
+    assertFalse(layout.determinesNumFileGroups());
+    assertTrue(layout.layoutPartitionerClass().isEmpty());
   }
 }

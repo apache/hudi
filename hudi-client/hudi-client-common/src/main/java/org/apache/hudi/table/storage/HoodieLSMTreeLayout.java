@@ -18,30 +18,32 @@
 
 package org.apache.hudi.table.storage;
 
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieNotSupportedException;
 
 /**
- * A factory to generate layout.
+ * Storage layout with LSM tree organization. Records within each file (base and log)
+ * are sorted by record key, enabling efficient sorted merge for reads and compaction.
  */
-public final class HoodieLayoutFactory {
-  public static HoodieStorageLayout createLayout(HoodieWriteConfig config) {
-    switch (config.getLayoutType()) {
-      case DEFAULT:
-        return new HoodieDefaultLayout(config);
-      case BUCKET:
-        switch (config.getBucketIndexEngineType()) {
-          case SIMPLE:
-            return new HoodieSimpleBucketLayout(config);
-          case CONSISTENT_HASHING:
-            return new HoodieConsistentBucketLayout(config);
-          default:
-            throw new HoodieNotSupportedException("Unknown bucket index engine type: " + config.getBucketIndexEngineType());
-        }
-      case LSM_TREE:
-        return new HoodieLSMTreeLayout(config);
-      default:
-        throw new HoodieNotSupportedException("Unknown layout type, set " + config.getLayoutType());
-    }
+public class HoodieLSMTreeLayout extends HoodieStorageLayout {
+
+  public HoodieLSMTreeLayout(HoodieWriteConfig config) {
+    super(config);
+  }
+
+  @Override
+  public boolean determinesNumFileGroups() {
+    return false;
+  }
+
+  @Override
+  public Option<String> layoutPartitionerClass() {
+    return Option.empty();
+  }
+
+  @Override
+  public boolean writeOperationSupported(WriteOperationType operationType) {
+    return true;
   }
 }
