@@ -47,6 +47,11 @@ public class TestActiveTimeline extends ActiveTimelineV2 {
     this.metaClient = metaClient;
   }
 
+  public TestActiveTimeline(HoodieTableMetaClient metaClient, List<HoodieInstant> instants) {
+    this.setInstants(instants);
+    this.metaClient = metaClient;
+  }
+
   public TestActiveTimeline(HoodieTableMetaClient metaClient) {
     this(metaClient, Collections.unmodifiableSet(VALID_EXTENSIONS_IN_ACTIVE_TIMELINE), true);
   }

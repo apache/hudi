@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 
+import java.util.List;
 import java.util.stream.Stream;
 
 public class TimelineV2Factory extends TimelineFactory {
@@ -82,5 +83,10 @@ public class TimelineV2Factory extends TimelineFactory {
   @Override
   public CompletionTimeQueryView createCompletionTimeQueryView(HoodieTableMetaClient metaClient) {
     return new CompletionTimeQueryViewV2(metaClient);
+  }
+
+  @Override
+  public HoodieActiveTimeline createActiveTimeline(HoodieTableMetaClient metaClient, List<HoodieInstant> instants) {
+    return new ActiveTimelineV2(metaClient, instants);
   }
 }
