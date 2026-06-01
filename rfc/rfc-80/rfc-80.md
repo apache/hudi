@@ -50,7 +50,7 @@ The logic of compaction and reading is the same. Compaction costs across column 
 The log merge we can make it pluggable to decide between hash or sort merge - we need to introduce new log headers or standard mechanism for merging to determine if base file or log files are sorted.
 
 ## Background
-Currently, Hudi organizes data according to fileGroup granularity. The fileGroup is further divided into column clusters to introduce the columngroup concept.  
+Currently, Hudi organizes data according to fileGroup granularity. The fileGroup is further divided into column clusters to introduce the columngroup concept. Within a ColumnGroup, there is a ColumnSegment that allows for multiple file slices for the same column group to prevent large files. Inside each ColumnSegment, there are one or more FileSlices. 
 The organizational form of Hudi files is divided according to the following rules:  
 The data in the partition is divided into buckets according to hash (each bucket maps to a file group); the files in each bucket are divided according to columngroup; multiple colgroup files in the bucket form a completed fileGroup; when there is only one columngroup, it degenerates into the native Hudi bucket table.
 
@@ -81,8 +81,8 @@ The bucket is divided into multiple columngroups by column cluster. When columng
 ### Proposed Storage Format Changes
 After splitting the fileGroup by columngroup, the naming rules for base files and log files change. We add the cfName suffix at the end of all file names to facilitate Hudi itself to distinguish column groups. If it's not present, we assume default column group.
 So, new file name templates will be as follows:  
-- Base file: [file_id]\_[write_token]\_[begin_time][_cfName].[extension]  
-- Log file: [file_id]\_[begin_instant_time][_cfName].log.[version]_[write_token]  
+- Base file: [file_id]\_[write_token]\_[begin_time][_cgName_cgSegment].[extension]  
+- Log file: [file_id]\_[begin_instant_time][_cgName_cgSegment].log.[version]_[write_token]  
 
 Also, we should evolve the metadata table files schema to additionally track a column group name.  
 
@@ -118,7 +118,22 @@ Specific steps:
 1. The engine divides the written data into buckets according to hash and shuffles the data (the writing engine completes it by itself and is consistent with the current writing of the native bucket).  
 2. The Hudi kernel sorts the data to be written to each bucket by primary key (both Spark and Flink has its own ExternalSorter, we can refer those ExternalSorter to finish sort).  
 3. After sorting, split the data into column groups.  
-4. Write the segmented data into the log file of the corresponding column group.  
+4. Write the segmented data into the log file of the corresponding column group.
+
+Alternative approach:
+For Inserts:
+1. The engine splits the new rows into file groups with the assumption that the smallest file in the group should meet the target file size.
+2. The records are then written out to the base files for each column group through a single task in the engine to guarantee that the ordering within the files is consistent without forcing a sorting.
+3. If the base file size exceeds the target file size within a column group, a new base file is created for that column group. This prevents overly large files.
+
+For Updates and Deletes:
+1. The engine will be able to split the incoming records into smaller records based on the column groups. If an incoming record is a delete, then a delete is sent to all the column groups. After this, the update is then very similar to the update pattern today.
+2. For CoW tables, the impacted column groups will produce new base files with the updated records. For MoR tables, the impacted column groups will produce new log files with the updated records.
+
+Open Question: How to track ordering values?
+   Option 1: We track a meta field in each file. If we do this, we may need to update the value on every update. For example, if an insert is performed at T1, then partial update is performed on a row at time T3 and only updates column group 2, and later there is a delete with time T2, that should be ignored but only one of the column groups is aware of the update at time T3
+   Option 2: Always fetch the pair of record key and ordering values from the column group that contains the fields. This also implies that the ordering value is always updated per update. This should already be true since we require ordering value for updates in with event time ordering
+
 
 #### Common API interface
 After the table columns are clustered, the writing process includes the process of sorting and splitting the data compared to the original bucket bucketing. A new append interface needs to be introduced to support column groups.  
@@ -132,13 +147,14 @@ Introduce ColumngroupAppendHandle extend AppendHandle to implement column group 
 
 Hudi internal row reader reading steps:  
 1. Hudi organizes files by column groups to be read.
-2. Introduce groupReader to merge and read each column group's own baseFile and logfile to achieve column group-level data reading.  
+2. Utilize the FileGroupReader to merge and read each column group's own baseFile and logfile to achieve column group-level data reading.  
     * Since log files are written after being sorted by primary key, groupReader merges its own baseFile and logFile by primary key using sortMerge.
-    * groupReader supports upstream incoming column pruning to reduce IO overhead when reading data.  
-    * During the merging process, if the user specifies the precombie field for the column group, the merging strategy will be selected based on the precombie field. This logic reuses Hudi's own precombine logic and does not need to be modified.    
-3. Row reader merges the data read by multiple groupReaders according to the primary key.  
+    * FileGroupReader supports upstream incoming column pruning to reduce IO overhead when reading data.  
+    * During the merging process, if the user specifies the ordering field for the column group, the merging strategy will be selected based on the ordering field. This logic reuses Hudi's own ordering logic and does not need to be modified. (Open Questions) What if the user wants to use a single ordering field for the full table instead of some field per column group? How does different ordering fields impact ordered deletes?  
+3. Row reader merges the data read by multiple FileGroupReaders according to the primary key. The metadata columns will be repeated between the column groups. To resolve the final values for these columns, we will take the max of the values except the file name column which will become a comma separated list of the files involved. 
 
 Since the data read by each groupReader is sorted by the primary key, the row reader merges the data read by each groupReader in the form of sortMergeJoin and returns the complete data.  
+Open Question: Can we perform the merge on a single executor instead of shuffling with sortMergeJoin by iterating through the column groups and producing a joined-row with the final result? 
 
 The entire reading process involves a large amount of data merging, but because the data itself is sorted, the memory consumption of the entire merging process is very low and the merging is fast. Compared with Hudi's native merging method, the memory pressure and the merging time are significantly reduced.
 
@@ -147,8 +163,7 @@ The entire reading process involves a large amount of data merging, but because 
 
 1) The engine itself delivers the data files that need to be scanned to executor/woker/taskmanger.  
 2) executor/worker/taskmanger calls Hudi’s rowReader interface and passes in column clipping and filter conditions to rowReader.  
-3) The Hudi kernel completes the data reading of rowReader and returns complete data. The data format is Avro.  
-4) The engine gets the Avro format data and needs to convert it into the data format it needs. For example, spark needs to be converted into unsaferow, hetu into block, flink into row, and hive into arrayWritable.
+3) The Hudi kernel completes the data reading of rowReader and returns complete data.
 
 ### Column group level compaction
 Extend Hudi's compaction schedule module to merge each column group's own base file and log file:
