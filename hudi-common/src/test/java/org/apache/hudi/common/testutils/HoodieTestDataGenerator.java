@@ -192,11 +192,36 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final String EXTRA_COL_SCHEMA2 = "{\"name\": \"extra_column2\", \"type\": [\"null\", \"string\"], \"default\": null},";
   public static final String EXTRA_COL_SCHEMA_FOR_AWS_DMS_PAYLOAD = "{\"name\": \"Op\", \"type\": [\"null\", \"string\"], \"default\": null},";
   public static final String EXTRA_COL_SCHEMA_FOR_POSTGRES_PAYLOAD = "{\"name\": \"_event_lsn\", \"type\": [\"null\", \"long\"], \"default\": null},";
+
+  // Unstructured types fragment: nullable VARIANT, VECTOR (8-dim FLOAT, FIXED-backed) and BLOB.
+  // Built from canonical HoodieSchema factories so the avro logicalType metadata stays in sync.
+  // Spliced into TRIP_EXAMPLE_SCHEMA so it is the forward-looking default. Existing test infra
+  // continues to use the legacy TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED via the parsed AVRO_SCHEMA /
+  // HOODIE_SCHEMA constants and the no-arg data generator constructor; tests will be migrated
+  // schema-by-schema in follow-up PRs to surface bugs in writer/reader paths.
+  public static final String UNSTRUCTURED_TYPES_SCHEMA;
+  static {
+    String variantType = HoodieSchema.createVariant().toAvroSchema().toString();
+    String vectorType =
+        HoodieSchema.createVector(8, HoodieSchema.Vector.VectorElementType.FLOAT).toAvroSchema().toString();
+    String blobType = HoodieSchema.createBlob().toAvroSchema().toString();
+    UNSTRUCTURED_TYPES_SCHEMA =
+        "{\"name\":\"variant_data\",\"type\":[\"null\"," + variantType + "],\"default\":null},"
+            + "{\"name\":\"embedding\",\"type\":[\"null\"," + vectorType + "],\"default\":null},"
+            + "{\"name\":\"blob_data\",\"type\":[\"null\"," + blobType + "],\"default\":null},";
+  }
+
   public static final String TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS =
       TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
           + TIP_NESTED_SCHEMA + EXTRA_COL_SCHEMA_FOR_AWS_DMS_PAYLOAD + EXTRA_COL_SCHEMA_FOR_POSTGRES_PAYLOAD + TRIP_SCHEMA_SUFFIX;
-  public static final String TRIP_EXAMPLE_SCHEMA =
+  // Legacy schema without VARIANT/VECTOR/BLOB. Currently aliased by the convenience parsed schemas
+  // (AVRO_SCHEMA, HOODIE_SCHEMA, etc.) so existing tests preserve behavior. Slated for removal
+  // once all tests/engines round-trip the unstructured-types default.
+  public static final String TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED =
       TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
+  public static final String TRIP_EXAMPLE_SCHEMA =
+      TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA
+          + UNSTRUCTURED_TYPES_SCHEMA + TRIP_SCHEMA_SUFFIX;
   public static final String TRIP_EXAMPLE_SCHEMA_EVOLVED_1 =
       TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + EXTRA_COL_SCHEMA1 + TRIP_SCHEMA_SUFFIX;
   public static final String TRIP_EXAMPLE_SCHEMA_EVOLVED_2 =
@@ -231,12 +256,23 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
 
   public static final String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
+  // Hive-side column types matching TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED (the legacy schema currently
+  // backing AVRO_SCHEMA). The unstructured-aware counterpart maps variant -> struct of binaries,
+  // vector -> binary, blob -> nested struct.
   public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,string,string,double,double,double,double,int,bigint,float,binary,int,bigint,decimal(10,6),"
       + "map<string,string>,struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
+  public static final String TRIP_HIVE_COLUMN_TYPES_WITH_UNSTRUCTURED = "bigint,string,string,string,string,string,double,double,double,double,int,bigint,float,binary,int,bigint,decimal(10,6),"
+      + "map<string,string>,struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,"
+      + "struct<value:binary,metadata:binary>,"
+      + "binary,"
+      + "struct<type:string,data:binary,reference:struct<external_path:string,offset:bigint,length:bigint,managed:boolean>>,"
+      + "boolean";
 
 
-  public static final Schema AVRO_SCHEMA = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
+  public static final Schema AVRO_SCHEMA = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
+  public static final Schema AVRO_SCHEMA_WITH_UNSTRUCTURED = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
   public static final HoodieSchema HOODIE_SCHEMA = HoodieSchema.fromAvroSchema(AVRO_SCHEMA);
+  public static final HoodieSchema HOODIE_SCHEMA_WITH_UNSTRUCTURED = HoodieSchema.fromAvroSchema(AVRO_SCHEMA_WITH_UNSTRUCTURED);
   public static final Schema AVRO_SCHEMA_WITH_SPECIFIC_COLUMNS = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS);
   public static final Schema NESTED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_NESTED_EXAMPLE_SCHEMA);
   public static final HoodieSchema NESTED_SCHEMA = HoodieSchema.fromAvroSchema(NESTED_AVRO_SCHEMA);
@@ -276,7 +312,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   public HoodieTestDataGenerator(long seed, String[] partitionPaths, Map<Integer, KeyPartition> keyPartitionMap) {
-    this(TRIP_EXAMPLE_SCHEMA, seed, partitionPaths, keyPartitionMap);
+    this(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, seed, partitionPaths, keyPartitionMap);
   }
 
   public HoodieTestDataGenerator(String schema, long seed, String[] partitionPaths, Map<Integer, KeyPartition> keyPartitionMap) {
@@ -384,8 +420,10 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     if (!isDelete) {
       if (TRIP_FLATTENED_SCHEMA.equals(schemaStr)) {
         return generateRandomValue(key, commitTime, true, timestamp);
-      } else if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
+      } else if (TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED.equals(schemaStr)) {
         return generateRandomValue(key, commitTime, isFlattened, timestamp);
+      } else if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
+        return generatePayloadForUnstructuredSchema(key, commitTime, timestamp);
       } else if (TRIP_EXAMPLE_SCHEMA_EVOLVED_1.equals(schemaStr)) {
         return generateRandomValueForSchemaEvolved1(key, commitTime, isFlattened, timestamp);
       } else if (TRIP_ENCODED_DECIMAL_SCHEMA.equals(schemaStr)) {
@@ -408,8 +446,13 @@ public class HoodieTestDataGenerator implements AutoCloseable {
         return generatePayloadForLogicalTypesSchemaNoLTSV6(key, commitTime, false, timestamp);
       }
     } else {
-      if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
+      if (TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED.equals(schemaStr)) {
         return generateRandomDeleteValue(key, commitTime, timestamp);
+      } else if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
+        // delete record uses the same with-unstructured payload shape; the writer reuses
+        // _hoodie_is_deleted on the legacy path.
+        return generateRecordForUnstructuredSchema(key.getRecordKey(), key.getPartitionPath(),
+            "rider-" + commitTime, "driver-" + commitTime, timestamp, true);
       } else if (TRIP_LOGICAL_TYPES_SCHEMA.equals(schemaStr)) {
         return generatePayloadForLogicalTypesSchema(key, commitTime, true, timestamp);
       } else if (TRIP_LOGICAL_TYPES_SCHEMA_V6.equals(schemaStr)) {
@@ -470,6 +513,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     generateMapTypeValues(rec);
     generateFareNestedValues(rec);
     generateTipNestedValues(rec);
+    generateUnstructuredTypeValues(rec);
 
     // Add the evolved column
     rec.put("extra_column1", "extra_value_" + instantTime);
@@ -509,6 +553,33 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
   public IndexedRecord generatePayloadForLogicalTypesSchemaV6(HoodieKey key, String commitTime, boolean isDelete, long timestamp) {
     return generateRecordForTripLogicalTypesSchema(key, "rider-" + commitTime, "driver-" + commitTime, timestamp, isDelete, true, true);
+  }
+
+  /**
+   * Generates a new avro record with TRIP_EXAMPLE_SCHEMA (the unstructured-types default).
+   */
+  public IndexedRecord generatePayloadForUnstructuredSchema(HoodieKey key, String commitTime, long timestamp) {
+    return generateRecordForUnstructuredSchema(key.getRecordKey(), key.getPartitionPath(),
+        "rider-" + commitTime, "driver-" + commitTime, timestamp, false);
+  }
+
+  /**
+   * Build a TRIP_EXAMPLE_SCHEMA (with unstructured types) record. Reuses the legacy field helpers,
+   * which are tolerant to having a different but structurally compatible Schema object on the
+   * outer record.
+   */
+  public GenericRecord generateRecordForUnstructuredSchema(String rowKey, String partitionPath,
+                                                            String riderName, String driverName,
+                                                            long timestamp, boolean isDeleteRecord) {
+    GenericRecord rec = new GenericData.Record(AVRO_SCHEMA_WITH_UNSTRUCTURED);
+    generateTripPrefixValues(rec, rowKey, partitionPath, riderName, driverName, timestamp);
+    generateExtraSchemaValues(rec);
+    generateMapTypeValues(rec);
+    generateFareNestedValues(rec);
+    generateTipNestedValues(rec);
+    generateUnstructuredTypeValues(rec);
+    generateTripSuffixValues(rec, isDeleteRecord);
+    return rec;
   }
 
   /**
@@ -633,6 +704,52 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   /**
+   * Populate rec with values for UNSTRUCTURED_TYPES_SCHEMA: variant_data, embedding (vector), blob_data.
+   * Skips fields that are not declared in the record's schema, so callers can safely invoke this on
+   * legacy schemas without unstructured fields.
+   */
+  private void generateUnstructuredTypeValues(GenericRecord rec) {
+    Schema schema = rec.getSchema();
+    if (schema.getField("variant_data") != null) {
+      Schema variantSchema = unwrapNullableSchema(schema.getField("variant_data").schema());
+      GenericRecord variantValue = new GenericData.Record(variantSchema);
+      // Minimal valid variant binary: metadata header v1 with no shredded fields, value = primitive null.
+      variantValue.put("metadata", ByteBuffer.wrap(new byte[]{0x01, 0x00, 0x00}));
+      variantValue.put("value", ByteBuffer.wrap(new byte[]{0x00}));
+      rec.put("variant_data", variantValue);
+    }
+    if (schema.getField("embedding") != null) {
+      Schema vectorSchema = unwrapNullableSchema(schema.getField("embedding").schema());
+      byte[] vectorBytes = new byte[vectorSchema.getFixedSize()];
+      ByteBuffer bb = ByteBuffer.wrap(vectorBytes).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+      while (bb.remaining() >= 4) {
+        bb.putFloat(rand.nextFloat());
+      }
+      rec.put("embedding", GenericData.get().createFixed(null, vectorBytes, vectorSchema));
+    }
+    if (schema.getField("blob_data") != null) {
+      Schema blobSchema = unwrapNullableSchema(schema.getField("blob_data").schema());
+      GenericRecord blobValue = new GenericData.Record(blobSchema);
+      Schema typeEnumSchema = unwrapNullableSchema(blobSchema.getField("type").schema());
+      blobValue.put("type", new GenericData.EnumSymbol(typeEnumSchema, "INLINE"));
+      blobValue.put("data", ByteBuffer.wrap(getUTF8Bytes("blob payload")));
+      blobValue.put("reference", null);
+      rec.put("blob_data", blobValue);
+    }
+  }
+
+  private static Schema unwrapNullableSchema(Schema schema) {
+    if (schema.getType() == Schema.Type.UNION) {
+      for (Schema s : schema.getTypes()) {
+        if (s.getType() != Schema.Type.NULL) {
+          return s;
+        }
+      }
+    }
+    return schema;
+  }
+
+  /**
    * Populate rec with values for TIP_NESTED_SCHEMA
    */
   private void generateTipNestedValues(GenericRecord rec) {
@@ -662,7 +779,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   /**
-   * Generate record conforming to TRIP_EXAMPLE_SCHEMA or TRIP_FLATTENED_SCHEMA if isFlattened is true
+   * Generate record conforming to TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED or TRIP_FLATTENED_SCHEMA if isFlattened is true
    */
   public GenericRecord generateGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,
                                              long timestamp, boolean isDeleteRecord,
@@ -677,6 +794,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       generateMapTypeValues(rec);
       generateFareNestedValues(rec);
       generateTipNestedValues(rec);
+      generateUnstructuredTypeValues(rec);
     }
     generateCustomValues(rec, "customField");
     generateTripSuffixValues(rec, isDeleteRecord);
@@ -697,6 +815,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     generateMapTypeValues(rec);
     generateFareNestedValues(rec);
     generateTipNestedValues(rec);
+    generateUnstructuredTypeValues(rec);
     generateOpColumnValue(rec);
     generateEventLSNValue(rec);
     generateTripSuffixValues(rec, false);
@@ -1021,7 +1140,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   }
 
   /**
-   * Generates new inserts for TRIP_EXAMPLE_SCHEMA with nested schema, uniformly across the partition paths above.
+   * Generates new inserts for TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED with nested schema, uniformly across the partition paths above.
    * It also updates the list of existing keys.
    */
   public List<HoodieRecord> generateInserts(String instantTime, Integer n) {
@@ -1029,7 +1148,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   }
 
   public List<HoodieRecord> generateInserts(String instantTime, Integer n, long timestamp) {
-    return generateInsertsStream(instantTime, n, false, TRIP_EXAMPLE_SCHEMA, timestamp).collect(Collectors.toList());
+    return generateInsertsStream(instantTime, n, false, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, timestamp).collect(Collectors.toList());
   }
 
   public List<HoodieRecord> generateInsertsNestedExample(String instantTime, Integer n) {
@@ -1046,7 +1165,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    * @return  List of {@link HoodieRecord}s
    */
   public List<HoodieRecord> generateInserts(String instantTime, Integer n, boolean isFlattened) {
-    return generateInsertsStream(instantTime, n, isFlattened, isFlattened ? TRIP_FLATTENED_SCHEMA : TRIP_EXAMPLE_SCHEMA, System.currentTimeMillis()).collect(Collectors.toList());
+    return generateInsertsStream(instantTime, n, isFlattened, isFlattened ? TRIP_FLATTENED_SCHEMA : TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, System.currentTimeMillis()).collect(Collectors.toList());
   }
 
   /**
@@ -1061,7 +1180,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       throw new HoodieIOException("n must greater then partitionPaths length");
     }
     long timestamp = System.currentTimeMillis();
-    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, true, timestamp).collect(Collectors.toList());
+    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, true, timestamp).collect(Collectors.toList());
   }
 
   public List<HoodieRecord> generateInsertsForPartitionPerSchema(String instantTime, Integer n, String partition, String schemaStr) {
@@ -1071,7 +1190,8 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
 
   public List<HoodieRecord> generateInsertsForPartition(String instantTime, Integer n, String partition) {
     long timestamp = System.currentTimeMillis();
-    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, false, () -> partition, () -> genPseudoRandomUUID(rand).toString(), timestamp).collect(Collectors.toList());
+    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, false,
+        () -> partition, () -> genPseudoRandomUUID(rand).toString(), timestamp).collect(Collectors.toList());
   }
 
   public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions, long timestamp) {
@@ -1214,7 +1334,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   }
 
   public List<HoodieRecord> generateUpdates(String instantTime, Integer n) throws IOException {
-    return generateUpdates(instantTime, n, TRIP_EXAMPLE_SCHEMA);
+    return generateUpdates(instantTime, n, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
   }
 
   /**
@@ -1245,7 +1365,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    */
   public List<HoodieRecord> generateUpdatesForAllRecords(String instantTime) {
     List<HoodieRecord> updates = new ArrayList<>();
-    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
     existingKeys.values().forEach(kp -> {
       try {
         HoodieRecord record = generateUpdateRecord(kp.key, instantTime);
@@ -1269,11 +1389,11 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    * @return list of hoodie record updates
    */
   public List<HoodieRecord> generateUniqueUpdates(String instantTime, Integer n) {
-    return generateUniqueUpdatesStream(instantTime, n, TRIP_EXAMPLE_SCHEMA).collect(Collectors.toList());
+    return generateUniqueUpdatesStream(instantTime, n, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED).collect(Collectors.toList());
   }
 
   public List<HoodieRecord> generateUniqueUpdates(String instantTime, Integer n, long timestamp) {
-    return generateUniqueUpdatesStream(instantTime, n, TRIP_EXAMPLE_SCHEMA, timestamp).collect(Collectors.toList());
+    return generateUniqueUpdatesStream(instantTime, n, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, timestamp).collect(Collectors.toList());
   }
 
   public List<HoodieRecord> generateUniqueUpdates(String instantTime, Integer n, String schemaStr) {
@@ -1348,8 +1468,8 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    */
   public Stream<HoodieKey> generateUniqueDeleteStream(Integer n) {
     final Set<KeyPartition> used = new HashSet<>();
-    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
-    Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
+    Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
     if (n > numExistingKeys) {
       throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
     }
@@ -1367,7 +1487,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       used.add(kp);
       result.add(kp.key);
     }
-    numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, numExistingKeys);
+    numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, numExistingKeys);
     return result.stream();
   }
 
@@ -1381,7 +1501,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    * @return stream of hoodie records for delete
    */
   private Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n, boolean updatePartition, long timestamp) {
-    return generateUniqueDeleteRecordStream(instantTime, n, updatePartition, TRIP_EXAMPLE_SCHEMA, timestamp);
+    return generateUniqueDeleteRecordStream(instantTime, n, updatePartition, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, timestamp);
   }
 
   public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n, boolean updatePartition, String schemaStr, long timestamp) {
@@ -1444,15 +1564,15 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   }
 
   public boolean deleteExistingKeyIfPresent(HoodieKey key) {
-    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
-    Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
+    Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
     for (Map.Entry<Integer, KeyPartition> entry : existingKeys.entrySet()) {
       if (entry.getValue().key.equals(key)) {
         int index = entry.getKey();
         existingKeys.put(index, existingKeys.get(numExistingKeys - 1));
         existingKeys.remove(numExistingKeys - 1);
         numExistingKeys--;
-        numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, numExistingKeys);
+        numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, numExistingKeys);
         return true;
       }
     }
@@ -1475,7 +1595,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   }
 
   public List<String> getExistingKeys() {
-    return getExistingKeys(TRIP_EXAMPLE_SCHEMA);
+    return getExistingKeys(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
   }
 
   public List<String> getExistingKeys(String schemaStr) {

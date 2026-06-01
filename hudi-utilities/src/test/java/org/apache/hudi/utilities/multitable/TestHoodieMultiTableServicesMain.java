@@ -255,7 +255,7 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     return HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withParallelism(4, 4)
         .withBulkInsertParallelism(4)
         .withFinalizeWriteParallelism(2)

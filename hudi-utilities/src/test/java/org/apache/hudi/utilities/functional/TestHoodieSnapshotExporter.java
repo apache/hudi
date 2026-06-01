@@ -125,7 +125,7 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     return HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withEmbeddedTimelineServerEnabled(false)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withParallelism(2, 2)
         .withBulkInsertParallelism(2)
         .withDeleteParallelism(2)

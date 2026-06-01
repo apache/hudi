@@ -77,7 +77,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
 
   @Test
   public void testReadingMORTableWithoutBaseFile() throws Exception {
-    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED,
         HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2).build())
         .build();
@@ -112,7 +112,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
   @EnumSource(value = HoodieIndex.IndexType.class, names = {"INMEMORY", "SIMPLE"})
   public void testClusteringOnMORTable(HoodieIndex.IndexType indexType) throws Exception {
     // INMEMORY index will only generate log files, SIMPLE will generate a base file and log files.
-    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, indexType)
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, indexType)
         .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClusteringNumCommits(3).build())
         .build();
     SparkRDDWriteClient client = getHoodieWriteClient(config);
@@ -148,7 +148,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
 
   @Test
   public void testCompactionOnMORTable() throws Exception {
-    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED,
         HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2).build())
         .build();
@@ -185,7 +185,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         .withMaxNumDeltaCommitsBeforeCompaction(1)
         .withLogCompactionBlocksThreshold(1)
         .build();
-    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED,
         HoodieIndex.IndexType.INMEMORY).withCompactionConfig(compactionConfig).build();
     SparkRDDWriteClient client = getHoodieWriteClient(config);
 
@@ -245,7 +245,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         .withMaxNumDeltaCommitsBeforeCompaction(1)
         .withLogCompactionBlocksThreshold(1)
         .build();
-    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED,
         HoodieIndex.IndexType.INMEMORY).withCompactionConfig(compactionConfig).build();
     SparkRDDWriteClient client = getHoodieWriteClient(config);
 
@@ -288,7 +288,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         .withMaxNumDeltaCommitsBeforeCompaction(1)
         .withLogCompactionBlocksThreshold(1)
         .build();
-    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED,
         HoodieIndex.IndexType.INMEMORY).withCompactionConfig(compactionConfig).build();
     SparkRDDWriteClient client = getHoodieWriteClient(config);
 
@@ -323,7 +323,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         .withMaxNumDeltaCommitsBeforeCompaction(1)
         .withLogCompactionBlocksThreshold(1)
         .build();
-    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED,
         HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(compactionConfig)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
@@ -360,7 +360,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
 
   @Test
   public void testCleanFunctionalityWhenCompactionRequestedInstantIsPresent() throws Exception {
-    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED,
         HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(1)
@@ -420,9 +420,9 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         .withMaxNumDeltaCommitsBeforeCompaction(1)
         .withLogCompactionBlocksThreshold(1)
         .build();
-    HoodieWriteConfig lcConfig = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.INMEMORY)
+    HoodieWriteConfig lcConfig = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(compactionConfig).build();
-    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.INMEMORY)
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, HoodieIndex.IndexType.INMEMORY)
         .build();
     try (SparkRDDWriteClient lcClient = new SparkRDDWriteClient(context, lcConfig);
          SparkRDDWriteClient client = new SparkRDDWriteClient(context, config)) {
@@ -511,13 +511,13 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         .withMaxNumDeltaCommitsBeforeCompaction(1)
         .withLogCompactionBlocksThreshold(1)
         .build();
-    HoodieWriteConfig lcWriteConfig = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+    HoodieWriteConfig lcWriteConfig = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED,
         HoodieIndex.IndexType.INMEMORY).withCompactionConfig(logCompactionConfig).build();
 
     HoodieCompactionConfig compactionConfig = HoodieCompactionConfig.newBuilder()
         .withMaxNumDeltaCommitsBeforeCompaction(1)
         .build();
-    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.INMEMORY)
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(compactionConfig)
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(2).build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())

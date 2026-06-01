@@ -437,7 +437,7 @@ class TestGlobalRecordLevelIndex extends RecordLevelIndexTestBase {
       saveMode = SaveMode.Overwrite)
 
     val writeConfig = getWriteConfig(hudiOpts)
-    writeConfig.setSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+    writeConfig.setSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
     getHoodieWriteClient(writeConfig).dropIndex(Collections.singletonList(MetadataPartitionType.RECORD_INDEX.getPartitionPath))
     assertEquals(0, getFileGroupCountForRecordIndex(writeConfig))
     metaClient = HoodieTableMetaClient.reload(metaClient)

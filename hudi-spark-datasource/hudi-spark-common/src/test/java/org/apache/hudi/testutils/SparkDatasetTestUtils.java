@@ -224,7 +224,7 @@ public class SparkDatasetTestUtils {
   }
 
   public static HoodieWriteConfig.Builder getConfigBuilder(String basePath, int timelineServicePort) {
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withPopulateMetaFields(true)
         .withParallelism(2, 2)
         .withDeleteParallelism(2)

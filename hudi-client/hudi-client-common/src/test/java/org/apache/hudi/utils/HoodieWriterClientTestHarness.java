@@ -127,7 +127,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.NULL_SCHEMA;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
@@ -224,7 +224,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
    * @return Config Builder
    */
   protected HoodieWriteConfig.Builder getConfigBuilder() {
-    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
   }
 
   protected EngineType getEngineType() {
@@ -237,7 +237,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
    * @return Config Builder
    */
   public HoodieWriteConfig.Builder getConfigBuilder(HoodieFailedWritesCleaningPolicy cleaningPolicy) {
-    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.SIMPLE, cleaningPolicy);
+    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, HoodieIndex.IndexType.SIMPLE, cleaningPolicy);
   }
 
   /**
@@ -246,7 +246,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
    * @return Config Builder
    */
   public HoodieWriteConfig.Builder getConfigBuilder(HoodieIndex.IndexType indexType) {
-    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, indexType, HoodieFailedWritesCleaningPolicy.EAGER);
+    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, indexType, HoodieFailedWritesCleaningPolicy.EAGER);
   }
 
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr) {
@@ -496,7 +496,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
    * Build Hoodie Write Config for specified small file sizes.
    */
   protected HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, boolean useNullSchema, long smallFileSize, boolean mergeAllowDuplicateInserts) {
-    String schemaStr = useNullSchema ? NULL_SCHEMA : TRIP_EXAMPLE_SCHEMA;
+    String schemaStr = useNullSchema ? NULL_SCHEMA : TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
     return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, mergeAllowDuplicateInserts);
   }
 
@@ -920,7 +920,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   protected Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> testInsertTwoBatches(boolean populateMetaFields, String partitionPath, Properties props, boolean failInlineClustering,
                                                                                                       Function createBrokenClusteringClientFn) throws IOException {
     // create config to not update small files.
-    HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, false, populateMetaFields,
+    HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, 10, false, populateMetaFields,
             populateMetaFields ? props : getPropertiesForKeyGen());
     return insertTwoBatches(getHoodieWriteClient(config), (BaseHoodieWriteClient) createBrokenClusteringClientFn.apply(config), populateMetaFields, partitionPath, failInlineClustering);
   }
@@ -1026,7 +1026,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     final int insertSplitLimit = 100;
     // setup the small file handling params
     HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit,
-            TRIP_EXAMPLE_SCHEMA, dataGen.getEstimatedFileSizeInBytes(150), populateMetaFields, populateMetaFields
+            TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, dataGen.getEstimatedFileSizeInBytes(150), populateMetaFields, populateMetaFields
                     ? new Properties() : getPropertiesForKeyGen());
     dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
     BaseHoodieWriteClient client = getHoodieWriteClient(config);

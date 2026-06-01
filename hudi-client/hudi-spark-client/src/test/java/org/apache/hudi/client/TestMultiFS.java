@@ -130,7 +130,8 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
       // Write generated data to hdfs (only inserts)
       String readCommitTime = hdfsWriteClient.startCommit();
       log.info("Starting commit {}", readCommitTime);
-      List<HoodieRecord> records = dataGen.generateInserts(readCommitTime, 10);
+      List<HoodieRecord> records = dataGen.generateInsertsAsPerSchema(readCommitTime, 10,
+          HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 2);
       JavaRDD<WriteStatus> writeStatusJavaRDD = hdfsWriteClient.upsert(writeRecords, readCommitTime);
       hdfsWriteClient.commit(readCommitTime, writeStatusJavaRDD, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
@@ -151,7 +152,8 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
 
       String writeCommitTime = localWriteClient.startCommit();
       log.info("Starting write commit {}", writeCommitTime);
-      List<HoodieRecord> localRecords = dataGen.generateInserts(writeCommitTime, 10);
+      List<HoodieRecord> localRecords = dataGen.generateInsertsAsPerSchema(writeCommitTime, 10,
+          HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
       JavaRDD<HoodieRecord> localWriteRecords = jsc.parallelize(localRecords, 2);
       log.info("Writing to path: {}", tablePath);
       writeStatusJavaRDD = localWriteClient.upsert(localWriteRecords, writeCommitTime);

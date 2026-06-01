@@ -92,7 +92,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -567,7 +567,7 @@ public class TestMergeHandle extends BaseTestHandle {
             .withSecondaryIndexForColumn("rider")
             .build())
         .withKeyGenerator(KeyGeneratorForDataGeneratorRecords.class.getCanonicalName())
-        .withSchema(TRIP_EXAMPLE_SCHEMA);
+        .withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
   }
 
   private List<HoodieRecord> overrideOrderingValue(List<HoodieRecord> hoodieRecords, HoodieWriteConfig config, String payloadClass, String partitionPath, long orderingValue) {

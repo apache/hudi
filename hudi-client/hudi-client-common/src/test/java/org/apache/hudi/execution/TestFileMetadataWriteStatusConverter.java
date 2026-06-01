@@ -89,7 +89,7 @@ public class TestFileMetadataWriteStatusConverter extends HoodieCommonTestHarnes
   @Test
   public void testWriteStatusConversion() throws IOException {
     HoodieWriteConfig writeConfig =
-        getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM)
+        getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, HoodieIndex.IndexType.BLOOM)
             .build();
     String fileId = UUID.randomUUID().toString();
     String prevCommitTime = InProcessTimeGenerator.createNewInstantTime();

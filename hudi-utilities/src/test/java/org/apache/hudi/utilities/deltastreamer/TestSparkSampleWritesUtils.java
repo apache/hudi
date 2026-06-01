@@ -95,7 +95,7 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
         .withProperties(props)
         .forTable("foo")
         .withPath(basePath())
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .build();
 
     String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(1);

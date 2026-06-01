@@ -101,7 +101,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getLogFileListFromFileSlice;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -326,7 +326,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                             String operation,
                             boolean firstCommit,
                             Map<String, String> writeConfigs) {
-    commitToTable(recordList, operation, firstCommit, writeConfigs, TRIP_EXAMPLE_SCHEMA);
+    commitToTable(recordList, operation, firstCommit, writeConfigs, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
   }
 
   public abstract void assertRecordsEqual(HoodieSchema schema, T expected, T actual);
@@ -511,7 +511,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       schemaEvolutionConfigs.floatToStringSupport = false;
     }
 
-    try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
+    try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, 0xDEEF)) {
       dataGen.extendSchemaBeforeEvolution(schemaEvolutionConfigs);
 
       // Write a base file with schema A
@@ -574,7 +574,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       schemaEvolutionConfigs.floatToStringSupport = false;
     }
 
-    try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
+    try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, 0xDEEF)) {
       dataGen.extendSchemaBeforeEvolution(schemaEvolutionConfigs);
 
       // Write a base file with schema A
@@ -629,7 +629,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
 
     try (HoodieTestDataGenerator baseFileDataGen =
-             new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
+             new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, 0xDEEF)) {
       baseFileDataGen.extendSchemaBeforeEvolution(schemaEvolutionConfigs);
 
       // Write base file with schema A
@@ -675,7 +675,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
 
     try (HoodieTestDataGenerator baseFileDataGen =
-             new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
+             new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, 0xDEEF)) {
       baseFileDataGen.extendSchemaBeforeEvolution(getSchemaEvolutionConfigs());
 
       // Write base file with schema A
@@ -740,7 +740,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
 
     try (HoodieTestDataGenerator baseFileDataGen =
-             new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
+             new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, 0xDEEF)) {
       baseFileDataGen.extendSchemaBeforeEvolution(getSchemaEvolutionConfigs());
 
       // Write base file with schema A

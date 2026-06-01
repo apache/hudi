@@ -38,7 +38,7 @@ import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -77,7 +77,7 @@ public class TestWriteClient extends HoodieSparkClientTestBase {
       HoodieCommitMetadata metadata = timeline.readCommitMetadata(timeline.lastInstant().get());
       assertTrue(metadata.getExtraMetadata().get("schema").isEmpty());
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-      assertEquals(HoodieSchema.parse(TRIP_EXAMPLE_SCHEMA), tableSchemaResolver.getTableSchema(false));
+      assertEquals(HoodieSchema.parse(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED), tableSchemaResolver.getTableSchema(false));
       // Data Validations.
       Dataset<Row> df = sparkSession.read().format("hudi").load(basePath);
       assertEquals(numRecords, df.collectAsList().size());

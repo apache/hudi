@@ -576,7 +576,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     properties.put("hoodie.clustering.plan.strategy.partition.selected", DEFAULT_FIRST_PARTITION_PATH);
     properties.put("hoodie.clustering.plan.partition.filter.mode","SELECTED_PARTITIONS");
     SparkRDDWriteClient clusteringClient = getHoodieWriteClient(
-        ClusteringTestUtils.getClusteringConfig(basePath, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, properties));
+        ClusteringTestUtils.getClusteringConfig(basePath, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, properties));
 
     // Save an older instant for us to run clustering.
     // Now execute clustering on the saved instant and do not allow it to commit.
@@ -585,7 +585,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
 
     properties.put("hoodie.clustering.plan.strategy.partition.selected", DEFAULT_SECOND_PARTITION_PATH);
     clusteringClient = getHoodieWriteClient(
-        ClusteringTestUtils.getClusteringConfig(basePath, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, properties));
+        ClusteringTestUtils.getClusteringConfig(basePath, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, properties));
     // Create completed clustering commit
     ClusteringTestUtils.runClustering(clusteringClient, false, true);
     clusteringClient.close();
@@ -595,7 +595,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
 
     properties.put("hoodie.clustering.plan.strategy.partition.selected", DEFAULT_FIRST_PARTITION_PATH);
     clusteringClient = getHoodieWriteClient(
-        ClusteringTestUtils.getClusteringConfig(basePath, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, properties));
+        ClusteringTestUtils.getClusteringConfig(basePath, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, properties));
 
     // Schedule rollback
     String rollbackInstant = WriteClientTestUtils.createNewInstantTime();

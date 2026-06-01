@@ -262,7 +262,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
                                                            boolean archiveProceedBeyondSavepoints) throws Exception {
     init(tableType);
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED).withParallelism(2, 2)
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).withFailedWritesCleaningPolicy(failedWritesCleaningPolicy).build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
             .withTimelineCompactionBatchSize(archiveFilesBatch)
@@ -288,7 +288,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
   public void testArchiveEmptyTable() throws Exception {
     init();
     HoodieWriteConfig cfg =
-        HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
             .withParallelism(2, 2).forTable("test-trip-table").build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
@@ -995,7 +995,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
   public void testArchiveCommitSavepointNoHole(boolean enableMetadataTable, boolean archiveBeyondSavepoint) throws Exception {
     init();
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED).withParallelism(2, 2)
         .forTable("test-trip-table")
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 5)
             .withArchiveBeyondSavepoint(archiveBeyondSavepoint).build())
@@ -1192,7 +1192,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
   public void testArchiveCommitTimeline(boolean enableMetadataTable) throws Exception {
     init();
     HoodieWriteConfig cfg =
-        HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
             .withParallelism(2, 2).forTable("test-trip-table")
             .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
             .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
@@ -1243,7 +1243,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
                 .on(true)
                 .withReporterType("INMEMORY")
                 .build())
-            .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+            .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
             .withParallelism(2, 2).forTable("test-trip-table").build();
     HoodieMetrics metrics = new HoodieMetrics(cfg, storage);
     BaseHoodieWriteClient client = getHoodieWriteClient(cfg);
@@ -1436,7 +1436,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     int minInstantsToKeep = 2;
     int maxInstantsToKeep = 10;
     HoodieWriteConfig cfg =
-        HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
             .withParallelism(2, 2).forTable("test-trip-table")
             .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
             .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(minInstantsToKeep, maxInstantsToKeep).build())
@@ -1778,7 +1778,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     init(HoodieTableType.COPY_ON_WRITE);
     // Test configs where metadata table has more aggressive archival configs than the compaction config
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED).withParallelism(2, 2)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 6).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
@@ -2335,7 +2335,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
   private HoodieWriteConfig buildECTRTestConfig(int minCommits, int maxCommits, boolean blockArchivalOnCleanECTR) {
     return HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withParallelism(2, 2)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
             .archiveCommitsWith(minCommits, maxCommits)
