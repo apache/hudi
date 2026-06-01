@@ -99,7 +99,9 @@ public class HiveSyncConfigHolder {
       .key("hoodie.datasource.hive_sync.sync_as_datasource")
       .defaultValue("true")
       .markAdvanced()
-      .withDocumentation("");
+      .withDocumentation("Add information to setup the spark datasource, including tables properties and spark schema."
+          + " This allow spark to use optimized reader."
+          + " Column comments are also added for the first level only.");
   public static final ConfigProperty<Integer> HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD = ConfigProperty
       .key("hoodie.datasource.hive_sync.schema_string_length_thresh")
       .defaultValue(4000)
