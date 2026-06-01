@@ -46,7 +46,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, GreaterThan, Literal, Or}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, GreaterThan, IsNull, Literal, Or}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api._
@@ -1403,8 +1403,17 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
         GreaterThan(AttributeReference("c4", StringType, nullable = true)(), Literal("c4 filed value"))
       )
 
+      // `c1 > 1` translates to `c1_maxValue > 1`, wrapped with a null-safety OR-guard
+      // for files whose stats are unreliable (NaN-poisoned or value-size truncated):
+      // see DataSkippingUtils.withUnreliableStatsGuard. c4 is not indexed → TrueLiteral.
       val expectedAndConditionIndexedFilter = And(
-        GreaterThan(UnresolvedAttribute("c1_maxValue"), Literal(1)),
+        Or(
+          GreaterThan(UnresolvedAttribute("c1_maxValue"), Literal(1)),
+          And(
+            IsNull(UnresolvedAttribute("c1_minValue")),
+            GreaterThan(UnresolvedAttribute("valueCount"), UnresolvedAttribute("c1_nullCount"))
+          )
+        ),
         Literal(true)
       )
 

@@ -146,7 +146,7 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            Not(genColumnOnlyValuesEqualToExpression(colName, value, targetExprBuilder))
+            Not(genColumnOnlyValuesEqualToExpressionForNegation(colName, value, targetExprBuilder))
           }.orElse({
           Option.empty
         })
@@ -155,7 +155,7 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            Not(genColumnOnlyValuesEqualToExpression(colName, value, targetExprBuilder))
+            Not(genColumnOnlyValuesEqualToExpressionForNegation(colName, value, targetExprBuilder))
           }.orElse({
           Option.empty
         })
@@ -175,7 +175,7 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            LessThan(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
+            withUnreliableStatsGuard(LessThan(targetExprBuilder.apply(genColMinValueExpr(colName)), value), colName)
           }.orElse({
           Option.empty
         })
@@ -184,7 +184,7 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
               val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-              LessThan(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
+              withUnreliableStatsGuard(LessThan(targetExprBuilder.apply(genColMinValueExpr(colName)), value), colName)
           }.orElse({
           Option.empty
         })
@@ -195,7 +195,7 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            GreaterThan(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
+            withUnreliableStatsGuard(GreaterThan(targetExprBuilder.apply(genColMaxValueExpr(colName)), value), colName)
           }.orElse({
           Option.empty
         })
@@ -204,7 +204,7 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            GreaterThan(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
+            withUnreliableStatsGuard(GreaterThan(targetExprBuilder.apply(genColMaxValueExpr(colName)), value), colName)
           }.orElse({
           Option.empty
         })
@@ -215,7 +215,7 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            LessThanOrEqual(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
+            withUnreliableStatsGuard(LessThanOrEqual(targetExprBuilder.apply(genColMinValueExpr(colName)), value), colName)
           }.orElse({
           Option.empty
         })
@@ -224,7 +224,7 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            LessThanOrEqual(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
+            withUnreliableStatsGuard(LessThanOrEqual(targetExprBuilder.apply(genColMinValueExpr(colName)), value), colName)
           }.orElse({
           Option.empty
         })
@@ -235,7 +235,7 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            GreaterThanOrEqual(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
+            withUnreliableStatsGuard(GreaterThanOrEqual(targetExprBuilder.apply(genColMaxValueExpr(colName)), value), colName)
           }.orElse({
           Option.empty
         })
@@ -244,7 +244,7 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            GreaterThanOrEqual(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
+            withUnreliableStatsGuard(GreaterThanOrEqual(targetExprBuilder.apply(genColMaxValueExpr(colName)), value), colName)
           }.orElse({
           Option.empty
         })
@@ -312,7 +312,7 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            Not(list.map(lit => genColumnOnlyValuesEqualToExpression(colName, lit, targetExprBuilder)).reduce(Or))
+            Not(list.map(lit => genColumnOnlyValuesEqualToExpressionForNegation(colName, lit, targetExprBuilder)).reduce(Or))
           }.orElse({
           Option.empty
         })
@@ -341,7 +341,10 @@ object DataSkippingUtils extends Logging {
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             val minValueExpr = targetExprBuilder.apply(genColMinValueExpr(colName))
             val maxValueExpr = targetExprBuilder.apply(genColMaxValueExpr(colName))
-            Not(And(StartsWith(minValueExpr, value), StartsWith(maxValueExpr, value)))
+            // When stats are unavailable, the inner conjunction is gated on IsNotNull(min) so it
+            // evaluates to false; Not(false) = true, ensuring the file is scanned.
+            Not(And(IsNotNull(genColMinValueExpr(colName)),
+                    And(StartsWith(minValueExpr, value), StartsWith(maxValueExpr, value))))
           }.orElse({
           Option.empty
         })
@@ -479,22 +482,58 @@ object ColumnStatsExpressionUtils {
   @inline def genColNumNullsExpr(colName: String): Expression = sparkAdapter.getExpressionFromColumn(col(getNullCountColumnNameFor(colName)))
   @inline def genColValueCountExpr: Expression = sparkAdapter.getExpressionFromColumn(col(getValueCountColumnNameFor))
 
+  /**
+   * Wraps a min/max-based skipping predicate with a null-safety check. When parquet-mr reports
+   * stats as unreliable (e.g. any NaN in a FLOAT/DOUBLE column, or a column-chunk where stats
+   * were omitted due to value-size truncation), Hudi's writer persists min/max as null so the
+   * stats can't be trusted. A bare `colA_maxValue > X` predicate would evaluate to null in that
+   * case, which Spark treats as false in WHERE — silently pruning a file that may contain
+   * matching rows. Adding an `OR colA_minValue IS NULL` term makes the file pass through and
+   * be scanned, preserving correctness at the cost of skipping an opportunity.
+   *
+   * The OR-IsNull term must NOT fire for a legitimately all-null column (no non-null values
+   * to bound), where min/max are correctly null and any non-null predicate should still prune.
+   * We distinguish the two cases with {@code valueCount > nullCount}: the unreliable case has
+   * non-null values whose bounds we couldn't determine, the all-null case has none.
+   *
+   * Note: min/max are written jointly (both null or both non-null), so checking min is sufficient.
+   */
+  @inline def withUnreliableStatsGuard(skipExpr: Expression, colName: String): Expression = {
+    Or(
+      skipExpr,
+      And(IsNull(genColMinValueExpr(colName)),
+          GreaterThan(genColValueCountExpr, genColNumNullsExpr(colName))))
+  }
+
   @inline def genColumnValuesEqualToExpression(colName: String,
                                                value: Expression,
                                                targetExprBuilder: Function[Expression, Expression] = Predef.identity): Expression = {
     val minValueExpr = targetExprBuilder.apply(genColMinValueExpr(colName))
     val maxValueExpr = targetExprBuilder.apply(genColMaxValueExpr(colName))
     // Only case when column C contains value V is when min(C) <= V <= max(c)
-    And(LessThanOrEqual(minValueExpr, value), GreaterThanOrEqual(maxValueExpr, value))
+    withUnreliableStatsGuard(
+      And(LessThanOrEqual(minValueExpr, value), GreaterThanOrEqual(maxValueExpr, value)),
+      colName)
   }
 
-  def genColumnOnlyValuesEqualToExpression(colName: String,
-                                           value: Expression,
-                                           targetExprBuilder: Function[Expression, Expression] = Predef.identity): Expression = {
+  /**
+   * Generates the predicate "column C contains _only_ value V" (i.e. min(C) = V AND max(C) = V),
+   * intended to be wrapped in {@code Not(...)} by the caller — typically for `colA != V` or
+   * `colA NOT IN (...)`.
+   *
+   * IMPORTANT: This helper is correct ONLY when used inside {@code Not(...)}. The IsNotNull guard
+   * makes the inner expression evaluate to false when stats are unavailable (min is null), so the
+   * outer Not(...) flips it to true and the file is preserved — preventing accidental pruning of
+   * files whose stats can't be trusted (NaN, value-size truncation; see [[withUnreliableStatsGuard]]).
+   * Without the Not(...) wrap, this helper would over-prune the same files.
+   */
+  def genColumnOnlyValuesEqualToExpressionForNegation(colName: String,
+                                                      value: Expression,
+                                                      targetExprBuilder: Function[Expression, Expression] = Predef.identity): Expression = {
     val minValueExpr = targetExprBuilder.apply(genColMinValueExpr(colName))
     val maxValueExpr = targetExprBuilder.apply(genColMaxValueExpr(colName))
-    // Only case when column C contains _only_ value V is when min(C) = V AND max(c) = V
-    And(EqualTo(minValueExpr, value), EqualTo(maxValueExpr, value))
+    val ifStatsAvailable = And(EqualTo(minValueExpr, value), EqualTo(maxValueExpr, value))
+    And(IsNotNull(genColMinValueExpr(colName)), ifStatsAvailable)
   }
 
   def swapAttributeRefInExpr(sourceExpr: Expression, from: AttributeReference, to: Expression): Expression = {

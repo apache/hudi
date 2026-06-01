@@ -38,7 +38,7 @@ import org.apache.hudi.util.JavaConversions
 
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BitwiseOr, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, LessThanOrEqual, Literal, Or}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BitwiseOr, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, IsNull, LessThanOrEqual, Literal, Or}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types.StringType
@@ -311,8 +311,20 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
   }
 
   def generateColStatsExprForGreaterthanOrEquals(colName: String, colValue: String): Expression = {
-    val expectedExpr: Expression = GreaterThanOrEqual(UnresolvedAttribute(colName + "_maxValue"), literal(colValue))
-    And(LessThanOrEqual(UnresolvedAttribute(colName + "_minValue"), literal(colValue)), expectedExpr)
+    // `colName = colValue` translates to `min <= V AND max >= V`, wrapped with the
+    // null-safety OR-guard introduced by DataSkippingUtils.withUnreliableStatsGuard
+    // for files whose stats are unreliable (NaN-poisoned or value-size truncated).
+    val innerExpr = And(
+      LessThanOrEqual(UnresolvedAttribute(colName + "_minValue"), literal(colValue)),
+      GreaterThanOrEqual(UnresolvedAttribute(colName + "_maxValue"), literal(colValue))
+    )
+    Or(
+      innerExpr,
+      And(
+        IsNull(UnresolvedAttribute(colName + "_minValue")),
+        GreaterThan(UnresolvedAttribute("valueCount"), UnresolvedAttribute(colName + "_nullCount"))
+      )
+    )
   }
 
   @ParameterizedTest

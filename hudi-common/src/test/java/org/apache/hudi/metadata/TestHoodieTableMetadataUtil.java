@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
@@ -351,5 +352,94 @@ class TestHoodieTableMetadataUtil {
       assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(stringSchema, rt, HoodieIndexVersion.V1),
           "STRING should remain supported for record type " + recordType);
     }
+  }
+
+  /**
+   * Verifies the NaN-detection helper used by {@code collectColumnRangeMetadata} to skip
+   * NaN values during streaming min/max accumulation (#18754, writer-side). Without this
+   * gate, {@code Double.compare(NaN, x) == +1} would let a single NaN poison the running
+   * max forever, and the persisted stats would mislead read-side data-skipping into
+   * pruning files that contain matching values.
+   */
+  @Test
+  void testIsFloatingPointNaN() {
+    // The two cases the gate must catch
+    assertTrue(HoodieTableMetadataUtil.isFloatingPointNaN(Double.NaN));
+    assertTrue(HoodieTableMetadataUtil.isFloatingPointNaN(Float.NaN));
+
+    // Everything else must pass through unchanged — including the legitimate Inf values
+    // that parquet-mr treats as valid stats (see #18754 issue body).
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(null));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(0.0));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(0.0f));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(123.45));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(-123.45f));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(Double.POSITIVE_INFINITY));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(Double.NEGATIVE_INFINITY));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(Float.POSITIVE_INFINITY));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(Float.NEGATIVE_INFINITY));
+    // Non-floating-point values are not NaN regardless of value
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(42));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN(42L));
+    assertFalse(HoodieTableMetadataUtil.isFloatingPointNaN("NaN"));
+  }
+
+  /**
+   * Regression test for the boxed-{@link Long} reference-equality bug in
+   * {@code isStatsUnreliable}. The Avro schema declares {@code nullCount} and
+   * {@code valueCount} as {@code ["null","long"]}, which generates boxed {@link Long}
+   * fields. Comparing with {@code !=} is reference equality — and since
+   * {@code Long.valueOf} only caches values in [-128, 127], two autoboxed values like
+   * 1000L produce distinct {@code Long} instances and {@code !=} returns true even when
+   * numerically equal. That misclassifies legitimately all-null columns as "stats
+   * unreliable" for any realistic row count, losing the all-null pruning fast path in
+   * MDT compaction merge. Fix uses {@code !nullCount.equals(valueCount)} instead.
+   */
+  @Test
+  void testIsStatsUnreliableUsesValueEqualityOnBoxedLong() {
+    // Case (1): all-null column with row count > 127 (forces fresh Long instances).
+    // Bug would return true here (misclassified as unreliable); fix returns false.
+    HoodieMetadataColumnStats allNullLargeN = mock(HoodieMetadataColumnStats.class);
+    when(allNullLargeN.getNullCount()).thenReturn(1000L);
+    when(allNullLargeN.getValueCount()).thenReturn(1000L);
+    assertFalse(HoodieTableMetadataUtil.isStatsUnreliable(allNullLargeN, null),
+        "all-null column with row count > Long cache must be reliable (null min/max are legitimate)");
+
+    // Case (2): all-null column at the boundary (row count exactly in Long cache).
+    // Old code happened to work here by accident; fix still works.
+    HoodieMetadataColumnStats allNullSmallN = mock(HoodieMetadataColumnStats.class);
+    when(allNullSmallN.getNullCount()).thenReturn(50L);
+    when(allNullSmallN.getValueCount()).thenReturn(50L);
+    assertFalse(HoodieTableMetadataUtil.isStatsUnreliable(allNullSmallN, null),
+        "all-null column with row count in Long cache must also be reliable");
+
+    // Case (3): non-null value present → never unreliable regardless of counts.
+    HoodieMetadataColumnStats reliable = mock(HoodieMetadataColumnStats.class);
+    when(reliable.getNullCount()).thenReturn(10L);
+    when(reliable.getValueCount()).thenReturn(1000L);
+    assertFalse(HoodieTableMetadataUtil.isStatsUnreliable(reliable, "some-value"),
+        "stats with a non-null min/max are reliable irrespective of nullCount/valueCount");
+
+    // Case (4): unreliable — null min/max but nullCount < valueCount
+    // (parquet-mr signalled stats absent for files with non-null rows, e.g. NaN poisoning,
+    // value-size truncation). Must be flagged.
+    HoodieMetadataColumnStats unreliableLargeN = mock(HoodieMetadataColumnStats.class);
+    when(unreliableLargeN.getNullCount()).thenReturn(100L);
+    when(unreliableLargeN.getValueCount()).thenReturn(1000L);
+    assertTrue(HoodieTableMetadataUtil.isStatsUnreliable(unreliableLargeN, null),
+        "null min/max with nullCount < valueCount is the unreliable signal");
+
+    // Case (5): missing counts → conservatively unreliable.
+    HoodieMetadataColumnStats missingNullCount = mock(HoodieMetadataColumnStats.class);
+    when(missingNullCount.getNullCount()).thenReturn(null);
+    when(missingNullCount.getValueCount()).thenReturn(1000L);
+    assertTrue(HoodieTableMetadataUtil.isStatsUnreliable(missingNullCount, null),
+        "absent nullCount must be treated as unreliable (can't prove all-null)");
+
+    HoodieMetadataColumnStats missingValueCount = mock(HoodieMetadataColumnStats.class);
+    when(missingValueCount.getNullCount()).thenReturn(1000L);
+    when(missingValueCount.getValueCount()).thenReturn(null);
+    assertTrue(HoodieTableMetadataUtil.isStatsUnreliable(missingValueCount, null),
+        "absent valueCount must be treated as unreliable (can't prove all-null)");
   }
 }

@@ -117,6 +117,9 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
       // if there are any non indexed cols or we can't translate source expr, we have to read all files and may not benefit from col stats lookup.
        fileNamesFromPrunedPartitions
     } else {
+      // The stats-unreliability null-safety is applied at the per-predicate translation
+      // level (DataSkippingUtils.withUnreliableStatsGuard), so the indexFilter here already
+      // includes the right "OR colMin IS NULL AND valueCount > nullCount" guards.
       // only lookup in col stats if all filters are eligible to be looked up in col stats index in MDT
       val prunedCandidateFileNames =
         indexDf.where(sparkAdapter.createColumnFromExpression(indexFilter))
