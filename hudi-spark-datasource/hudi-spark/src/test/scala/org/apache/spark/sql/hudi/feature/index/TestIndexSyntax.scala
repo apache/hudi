@@ -131,6 +131,10 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
         )
 
         spark.sql(s"create index record_index on $tableName (id)")
+        checkNestedException(s"create index record_index on $tableName (id)")(
+          "Index already exists: record_index"
+        )
+        spark.sql(s"create index if not exists record_index on $tableName (id)")
         spark.sql(s"drop index record_index on $tableName")
 
         // Test record index creation with using clause
