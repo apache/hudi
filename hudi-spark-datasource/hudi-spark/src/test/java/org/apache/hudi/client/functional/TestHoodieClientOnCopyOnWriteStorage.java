@@ -139,7 +139,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMI
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_EVOLVED_1;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -829,7 +829,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     props.setProperty(ASYNC_CLUSTERING_ENABLE.key(), "true");
     props.setProperty(UPDATES_STRATEGY.key(), SparkRejectUpdateStrategy.class.getName());
     HoodieWriteConfig config = getSmallInsertWriteConfig(100,
-        TRIP_EXAMPLE_SCHEMA, dataGen.getEstimatedFileSizeInBytes(150), true, props);
+        TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, dataGen.getEstimatedFileSizeInBytes(150), true, props);
     SparkRDDWriteClient client = getHoodieWriteClient(config);
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
 
@@ -877,7 +877,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     final int insertSplitLimit = 100;
     // hold upto 200 records max
     HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit,
-        TRIP_EXAMPLE_SCHEMA, dataGen.getEstimatedFileSizeInBytes(150));
+        TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, dataGen.getEstimatedFileSizeInBytes(150));
     dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
     SparkRDDWriteClient client = getHoodieWriteClient(config);
     FileFormatUtils fileUtils = getFileUtilsInstance(metaClient);
@@ -971,7 +971,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // setup the small file handling params
     // hold upto 200 records max
     HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit,
-        TRIP_EXAMPLE_SCHEMA, dataGen.getEstimatedFileSizeInBytes(150));
+        TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, dataGen.getEstimatedFileSizeInBytes(150));
     dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
 
     SparkRDDWriteClient client = getHoodieWriteClient(config);
@@ -1202,7 +1202,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @Test
   public void testWriteSchemaUsageOnPreCommitValidators() throws Exception {
     // Create first commit on DEFAULT_FIRST_PARTITION_PATH partition with basic schema
-    String schemaStr = TRIP_EXAMPLE_SCHEMA;
+    String schemaStr = TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
     HoodieWriteConfig writeConfig =
         getConfigBuilder(schemaStr)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
@@ -1358,7 +1358,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   private void verifyInsertOverwritePartitionHandling(int batch1RecordsCount, int batch2RecordsCount, boolean populateMetaFields) throws Exception {
     final String testPartitionPath = "americas";
     HoodieWriteConfig config = getSmallInsertWriteConfig(2000,
-        TRIP_EXAMPLE_SCHEMA, dataGen.getEstimatedFileSizeInBytes(150), populateMetaFields, getPropertiesForKeyGen(populateMetaFields));
+        TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, dataGen.getEstimatedFileSizeInBytes(150), populateMetaFields, getPropertiesForKeyGen(populateMetaFields));
     SparkRDDWriteClient client = getHoodieWriteClient(config);
     dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
 
@@ -1447,7 +1447,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   private void verifyDeletePartitionsHandling(int batch1RecordsCount, int batch2RecordsCount, int batch3RecordsCount,
                                               boolean populateMetaFields) throws Exception {
     HoodieWriteConfig config = getSmallInsertWriteConfig(2000,
-        TRIP_EXAMPLE_SCHEMA, dataGen.getEstimatedFileSizeInBytes(150), populateMetaFields, getPropertiesForKeyGen(populateMetaFields));
+        TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, dataGen.getEstimatedFileSizeInBytes(150), populateMetaFields, getPropertiesForKeyGen(populateMetaFields));
     SparkRDDWriteClient client = getHoodieWriteClient(config);
     dataGen = new HoodieTestDataGenerator();
 
@@ -2001,7 +2001,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String schemaKey = HoodieCommitMetadata.SCHEMA_KEY;
     dataGen = new HoodieTestDataGenerator(new String[] {DEFAULT_FIRST_PARTITION_PATH});
 
-    HoodieWriteConfig writeConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA)
+    HoodieWriteConfig writeConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .compactionSmallFileSize(0).build())
         .withRollingMetadataKeys(schemaKey)
@@ -2015,10 +2015,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // Insert multiple batches to create file groups for clustering
     for (int i = 0; i < 5; i++) {
-      insertCommitWithSchema(client, dataGen, 20, TRIP_EXAMPLE_SCHEMA);
+      insertCommitWithSchema(client, dataGen, 20, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
     }
 
-    HoodieWriteConfig clusterConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA)
+    HoodieWriteConfig clusterConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withClusteringConfig(createClusteringBuilder(true, 1).build())
         .withRollingMetadataKeys(schemaKey)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
@@ -2038,7 +2038,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       // remains on the active timeline after archival
       if (round < 1) {
         for (int i = 0; i < 3; i++) {
-          insertCommitWithSchema(client, dataGen, 20, TRIP_EXAMPLE_SCHEMA);
+          insertCommitWithSchema(client, dataGen, 20, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
         }
       }
     }

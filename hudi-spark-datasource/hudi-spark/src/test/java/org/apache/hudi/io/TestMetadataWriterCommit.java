@@ -58,7 +58,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
@@ -95,7 +95,7 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
     String instantTime = InProcessTimeGenerator.createNewInstantTime();
 
     // create a parquet file and obtain corresponding write status
-    config.setSchema(TRIP_EXAMPLE_SCHEMA);
+    config.setSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
     Pair<WriteStatus, List<HoodieRecord>> statusListPair = createParquetFile(config, table, partitionPath, fileId, instantTime, dataGenerator);
     WriteStatus writeStatus = statusListPair.getLeft();
@@ -161,7 +161,7 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
     HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
     // commit is needed to populate schema of the table. We use a different partition path in the commit below than what is used
     // for actual test
-    config.setSchema(TRIP_EXAMPLE_SCHEMA);
+    config.setSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[1]});
     SparkRDDWriteClient client = getHoodieWriteClient(config);
     String instantTime = writeClient.startCommit();
@@ -189,7 +189,7 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
             .withStreamingWriteEnabled(true)
             .build())
         .build();
-    config.setSchema(TRIP_EXAMPLE_SCHEMA);
+    config.setSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
 
     // Just replicating the production code path to create the metadata table
     metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build();

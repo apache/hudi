@@ -123,7 +123,7 @@ public class TestDFSHoodieDatasetInputReader extends UtilitiesTestBase {
         .withParallelism(2, 2)
         .withDeleteParallelism(2)
         .withSchema(HoodieTestDataGenerator
-            .TRIP_EXAMPLE_SCHEMA);
+            .TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
   }
 
 }

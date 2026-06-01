@@ -86,7 +86,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createSimpleRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -417,7 +417,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
   @Test
   public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
     HoodieWriteConfig config =
-        HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
+        HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
             .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
                 .withRemoteServerPort(timelineServicePort).build())
             .withStorageConfig(HoodieStorageConfig.newBuilder()
@@ -462,7 +462,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
   private void testBulkInsertRecords(String bulkInsertMode) {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
-        .withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withBulkInsertParallelism(2).withBulkInsertSortMode(bulkInsertMode).build();
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
     String instantTime = writeClient.startCommit();
@@ -488,7 +488,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
   public void testPartitionMetafileFormat(boolean partitionMetafileUseBaseFormat) throws Exception {
     // By default there is no format specified for partition metafile
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
-        .withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA).build();
+        .withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED).build();
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
     assertFalse(table.getPartitionMetafileFormat().isPresent());
 

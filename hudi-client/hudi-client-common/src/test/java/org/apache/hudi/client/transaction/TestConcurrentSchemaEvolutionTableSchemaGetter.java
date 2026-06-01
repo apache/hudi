@@ -481,7 +481,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     initMetaClient(false, tableType);
     testTable = HoodieTestTable.of(metaClient);
 
-    HoodieSchema schema1 = HoodieSchema.parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    HoodieSchema schema1 = HoodieSchema.parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
     HoodieSchema schema2 = HoodieSchema.parse(TRIP_SCHEMA);
 
     // Create two commits with different schemas
@@ -548,7 +548,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     testTable = HoodieTestTable.of(metaClient);
 
     // Create test schema
-    HoodieSchema schema1 = HoodieSchema.parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    HoodieSchema schema1 = HoodieSchema.parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
     HoodieSchema schema2 = HoodieSchema.parse(HoodieTestDataGenerator.SHORT_TRIP_SCHEMA);
 
     // Create a commit with schema1

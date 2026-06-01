@@ -238,7 +238,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
   private SparkRDDWriteClient createWriteClient(String basePath, String tableName, boolean reuseTimelineServer, Option<TimelineService> timelineService) {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withParallelism(2, 2)
         .withBulkInsertParallelism(2)
         .withFinalizeWriteParallelism(2)

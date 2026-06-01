@@ -73,7 +73,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
                                                      validate: Boolean = true,
                                                      numUpdates: Int = 1,
                                                      onlyUpdates: Boolean = false,
-                                                     schemaStr: String = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+                                                     schemaStr: String = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED,
                                                      timestamp: Long = System.currentTimeMillis()): DataFrame = {
     var latestBatch: mutable.Buffer[String] = null
     if (operation == UPSERT_OPERATION_OPT_VAL) {

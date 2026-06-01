@@ -83,7 +83,7 @@ class TestTableSchemaResolver {
 
   @Test
   void testRecreateSchemaWhenDropPartitionColumns() {
-    HoodieSchema originSchema = HoodieSchema.parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    HoodieSchema originSchema = HoodieSchema.parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
 
     // case2
     String[] pts1 = new String[0];

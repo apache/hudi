@@ -41,7 +41,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -77,7 +77,7 @@ public class TestCreateHandle extends BaseTestHandle {
     String fileId = UUID.randomUUID().toString();
     String instantTime = "000";
 
-    config.setSchema(TRIP_EXAMPLE_SCHEMA);
+    config.setSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     table = HoodieSparkTable.create(config, context, metaClient);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});

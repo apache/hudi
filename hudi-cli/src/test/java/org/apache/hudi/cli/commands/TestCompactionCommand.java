@@ -168,7 +168,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
   private void generateArchive() throws IOException {
     // Generate archive
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
-        .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+        .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED).withParallelism(2, 2)
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()

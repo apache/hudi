@@ -260,7 +260,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
   }
 
   public HoodieWriteConfig.Builder getConfigBuilder() {
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withParallelism(2, 2)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)
         .forTable("clustering-table")

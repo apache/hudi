@@ -671,7 +671,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   private static HoodieWriteConfig.Builder getWriteConfigBuilder(String basePath, String tableName) {
     return HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withParallelism(2, 2)
         .withBulkInsertParallelism(2)
         .withFinalizeWriteParallelism(2)

@@ -54,7 +54,7 @@ public class TestSparkWriteHelper extends TestWriterHelperBase<HoodieData<Hoodie
         HoodieClientTestUtils.getSparkConfForTest(TestSparkWriteHelper.class.getName()));
     this.context = new HoodieSparkEngineContext(jsc);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withEmbeddedTimelineServerEnabled(false)
         .build();
     this.table = HoodieSparkTable.create(config, context, metaClient);

@@ -85,7 +85,7 @@ import static org.apache.hudi.common.bloom.BloomFilterTypeCode.DYNAMIC_V0;
 import static org.apache.hudi.common.bloom.BloomFilterTypeCode.SIMPLE;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -223,7 +223,7 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
   public void testSupportBinaryStreamCopy() throws IOException {
     HoodieWriteConfig writeConfig = new HoodieWriteConfig.Builder()
         .withPath(basePath)
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withEmbeddedTimelineServerEnabled(false)
         .build();
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);

@@ -50,7 +50,7 @@ import java.util.stream.Stream;
 
 public abstract class AbstractBaseTestSource extends AvroSource {
 
-  public static String schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+  public static String schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 
   private static final Logger LOG = LoggerFactory.getLogger(AbstractBaseTestSource.class);
 

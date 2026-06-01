@@ -284,7 +284,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
   private Map<String, Integer[]> generateDataAndArchive(boolean enableMetadataTable) throws Exception {
     // Generate archive
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath1)
-        .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+        .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED).withParallelism(2, 2)
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
@@ -327,7 +327,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
   public void testShowArchivedCommitsWithMultiCommitsFile(boolean enableMetadataTable) throws Exception {
     // Generate archive
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath1)
-        .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+        .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED).withParallelism(2, 2)
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()

@@ -57,7 +57,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -109,7 +109,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withProperties(getPropertiesForKeyGen(true))
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withParallelism(2, 2)
         .withDeleteParallelism(2)
         .withEmbeddedTimelineServerEnabled(false).forTable("test-trip-table")

@@ -51,7 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -191,7 +191,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
     HoodieWriteConfig config = HoodieWriteConfig
         .newBuilder()
         .withPath("/")
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withBulkInsertSortMode(sortMode.name())
         .withPopulateMetaFields(populateMetaFields)
         .build();
@@ -220,7 +220,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
     HoodieWriteConfig config = HoodieWriteConfig
         .newBuilder()
         .withPath("/")
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withUserDefinedBulkInsertPartitionerClass(RDDCustomColumnsSortPartitioner.class.getName())
         .withUserDefinedBulkInsertPartitionerSortColumns(sortColumnString)
         .build();

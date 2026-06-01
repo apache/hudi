@@ -71,7 +71,7 @@ class TestStreamSourceReadByStateTransitionTime extends StreamTest  {
         val writeConfig = HoodieWriteConfig.newBuilder()
             .withEngineType(EngineType.SPARK)
           .withPath(tablePath)
-          .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+          .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
           .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .build())
