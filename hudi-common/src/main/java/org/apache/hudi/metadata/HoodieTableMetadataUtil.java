@@ -479,31 +479,29 @@ public class HoodieTableMetadataUtil {
               String partitionStatName = entry.getKey();
               List<HoodieWriteStat> writeStats = entry.getValue();
 
-              HashMap<String, Long> updatedFilesToSizesMapping =
-                  writeStats.stream().reduce(new HashMap<>(writeStats.size()),
-                      (map, stat) -> {
-                        String pathWithPartition = stat.getPath();
-                        if (pathWithPartition == null) {
-                          // Empty partition
-                          log.warn("Unable to find path in write stat to update metadata table {}", stat);
-                          return map;
-                        }
+              HashMap<String, Long> updatedFilesToSizesMapping = new HashMap<>(writeStats.size());
+              for (HoodieWriteStat stat : writeStats) {
+                String pathWithPartition = stat.getPath();
+                if (pathWithPartition == null) {
+                  // Empty partition
+                  log.warn("Unable to find path in write stat to update metadata table {}", stat);
+                  continue;
+                }
 
-                        String fileName = FSUtils.getFileName(pathWithPartition, partitionStatName);
+                String fileName = FSUtils.getFileName(pathWithPartition, partitionStatName);
 
-                        // Since write-stats are coming in no particular order, if the same
-                        // file have previously been appended to w/in the txn, we simply pick max
-                        // of the sizes as reported after every write, since file-sizes are
-                        // monotonically increasing (ie file-size never goes down, unless deleted)
-                        map.merge(fileName, stat.getFileSizeInBytes(), Math::max);
+                // Since write-stats are coming in no particular order, if the same
+                // file have previously been appended to w/in the txn, we simply pick max
+                // of the sizes as reported after every write, since file-sizes are
+                // monotonically increasing (ie file-size never goes down, unless deleted)
+                updatedFilesToSizesMapping.merge(fileName, stat.getFileSizeInBytes(), Math::max);
 
-                        Map<String, Long> cdcPathAndSizes = stat.getCdcStats();
-                        if (cdcPathAndSizes != null && !cdcPathAndSizes.isEmpty()) {
-                          cdcPathAndSizes.forEach((key, value) -> map.put(FSUtils.getFileName(key, partitionStatName), value));
-                        }
-                        return map;
-                      },
-                      CollectionUtils::combine);
+                Map<String, Long> cdcPathAndSizes = stat.getCdcStats();
+                if (cdcPathAndSizes != null && !cdcPathAndSizes.isEmpty()) {
+                  cdcPathAndSizes.forEach((key, value) ->
+                      updatedFilesToSizesMapping.put(FSUtils.getFileName(key, partitionStatName), value));
+                }
+              }
 
               newFileCount.add(updatedFilesToSizesMapping.size());
               return HoodieMetadataPayload.createPartitionFilesRecord(partitionStatName, updatedFilesToSizesMapping,
