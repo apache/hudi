@@ -313,7 +313,9 @@ public class ITTestVariantFlinkTableServices {
   /**
    * Batch SQL INSERT jobs do not drive the append-mode clustering operator through checkpoints;
    * schedule and execute clustering via {@link HoodieFlinkClusteringJob} (same pattern as
-   * {@code ITTestHoodieFlinkClustering}).
+   * {@code ITTestHoodieFlinkClustering}). Schedules once with a write client, then runs the job with
+   * {@code cfg.schedule = false} so {@link HoodieFlinkClusteringJob.AsyncClusteringService#cluster} executes the
+   * pending plan instead of calling {@code scheduleClustering} again (which no-ops when a plan already exists).
    */
   private static void runClusteringService(String tablePath, int clusteringDeltaCommits) throws Exception {
     FlinkClusteringConfig cfg = new FlinkClusteringConfig();
@@ -340,6 +342,11 @@ public class ITTestVariantFlinkTableServices {
           writeClient.scheduleClustering(Option.empty()).isPresent(),
           "Clustering plan should be schedulable after inserts");
     }
+
+    // HoodieFlinkClusteringJob#cluster with cfg.schedule true calls scheduleClustering again; that returns
+    // empty when a REQUESTED plan already exists, so the job returns without env.execute(). Run execute
+    // against the plan we just scheduled.
+    cfg.schedule = false;
 
     HoodieFlinkClusteringJob.AsyncClusteringService service =
         new HoodieFlinkClusteringJob.AsyncClusteringService(cfg, conf);
