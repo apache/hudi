@@ -1,6 +1,6 @@
 ---
 title: "Deploying Apache Hudi at Penn Interactive: A Journey in Building a Scalable Data Platform"
-excerpt: "How Penn Interactive, the online sports betting arm of Penn Entertainment, modernized its data platform using Apache Hudi DeltaStreamer to ingest CDC from hundreds of Kafka topics, orchestrate 100+ concurrent jobs with Argo Workflows, and deliver near real-time data freshness across thousands of tables."
+excerpt: "How Penn Interactive, the online sports betting arm of Penn Entertainment, modernized its data platform using Apache Hudi HudiStreamer to ingest CDC from hundreds of Kafka topics, orchestrate 100+ concurrent jobs with Argo Workflows, and deliver near real-time data freshness across thousands of tables."
 author: The Hudi Community
 category: case-study
 image: /assets/images/blog/2026-05-26-penn-interactive/img1.png
@@ -17,9 +17,9 @@ _This post summarizes Penn Interactive's presentation at the Apache Hudi Communi
 
 ![og](/assets/images/blog/2026-05-26-penn-interactive/img1.png)
 
-[Penn Interactive](https://www.pennentertainment.com) and The Score, part of Penn Entertainment, operate at the forefront of the online and retail sports betting industry, catering to customers across the U.S. and Canada. Known for apps like Barstool Sportsbook and The Score Bet, the company spans both the betting domain and sports media. 
+[Penn Interactive](https://www.pennentertainment.com) and The Score merged in 2022 under Penn Entertainment, combining sports betting and sports media for customers across the U.S. and Canada. Known for apps like Barstool Sportsbook and The Score Bet, the company operates at the forefront of the online and retail sports betting industry.
 
-Following the merger of these two companies in 2022, the data engineering team faced the challenge of building a new data analytics platform from scratch. At the core of this platform was Apache Hudi, chosen for its flexibility, scalability, and integration capabilities with a modern data ecosystem.
+After the merger, the data engineering team faced the challenge of building a new data analytics platform from scratch. At the core of this platform was Apache Hudi, chosen for its flexibility, scalability, and integration capabilities with a modern data ecosystem.
 
 ## Challenges in Building a Data Platform
 
@@ -38,13 +38,13 @@ The platform ingests data from dozens of PostgreSQL operational databases across
 
 The target environment is structured in layers:
 
-1. **Raw Layer:** A mirror of the source data, stored in S3 using the Parquet file format and written efficiently by Hudi DeltaStreamer.
+1. **Raw Layer:** A mirror of the source data, stored in S3 using the Parquet file format and written efficiently by HudiStreamer.
 2. **Query Layer:** Redshift external tables provide a structured access point over the S3 data for easy querying.
 3. **Curated Layers:** The data team further refines this raw data into models and analysis views for BI and data science.
 
 <img src="/assets/images/blog/2026-05-26-penn-interactive/img2.png" alt="Source and Target Ecosystems" width="800"/>
 
-## The Solution: Apache Hudi and DeltaStreamer
+## The Solution: Apache Hudi and HudiStreamer
 
 Apache Hudi was selected as the ideal foundation for the data lakehouse architecture for several reasons:
 
@@ -52,10 +52,10 @@ Apache Hudi was selected as the ideal foundation for the data lakehouse architec
 * **Diverse Data Ingestion:** Hudi gracefully handles both streaming CDC messages and external batch sources.
 * **Ecosystem Compatibility:** Hudi integrates smoothly with the Apache ecosystem and tools like Spark, simplifying operations.
 
-DeltaStreamer became the core database replication tool. It natively processes CDC messages streamed through Kafka topics, applying the exact changes to the Hudi tables to maintain synchronization. The team leveraged its capabilities for:
+HudiStreamer became the core database replication tool. It natively processes CDC messages streamed through Kafka topics, applying the exact changes to the Hudi tables to maintain synchronization. The team leveraged its capabilities for:
 
 * **Operational Flexibility:** Choosing between continuous mode (for high-throughput, near real-time tables) and run-once mode (for smaller, periodic jobs).
-* **Scalability:** Managing over a hundred concurrent DeltaStreamer jobs, consuming from nearly a thousand topics, by optimizing resource use through table grouping.
+* **Scalability:** Managing over a hundred concurrent HudiStreamer jobs, consuming from nearly a thousand topics, by optimizing resource use through table grouping.
 
 ## The Journey of Implementation and Scale
 
@@ -65,11 +65,11 @@ The implementation process involved several key phases, moving from initial conc
 
 ### 1. Proof of Concept
 
-Early experiments with homegrown solutions and traditional streaming methods highlighted major pain points such as manual checkpointing, batch sizing, and scalability concerns. The combination of Debezium, Kafka, and Apache Hudi DeltaStreamer was ultimately chosen, as DeltaStreamer provided built-in solutions for these complex operational challenges.
+Early experiments with homegrown solutions and traditional streaming methods highlighted major pain points such as manual checkpointing, batch sizing, and scalability concerns. The combination of Debezium, Kafka, and Apache Hudi HudiStreamer was ultimately chosen, as HudiStreamer provided built-in solutions for these complex operational challenges.
 
 <img src="/assets/images/blog/2026-05-26-penn-interactive/img4.png" alt="Proof of Concept" width="800"/>
 
-The data platform's CDC pipeline relies on Debezium connectors to capture changes from PostgreSQL databases, streaming them into Kafka topics hosted on Confluent Cloud. DeltaStreamer consumes these messages, applies the updates to Hudi tables in S3, and integrates them into the Redshift query layer.
+The data platform's CDC pipeline relies on Debezium connectors to capture changes from PostgreSQL databases, streaming them into Kafka topics hosted on Confluent Cloud. HudiStreamer consumes these messages, applies the updates to Hudi tables in S3, and integrates them into the Redshift query layer.
 
 The system also handles non-CDC data sources, such as:
 
@@ -101,19 +101,19 @@ To ingest data from thousands of tables without manual shell scripts, the team b
 ### 5. Scaling and Reliability
 
 The Argo workflow includes a crucial pulse check and resubmission mechanism. It constantly monitors continuous mode jobs and quickly resubmits any that fail due to network timeouts or platform glitches, ensuring high reliability for 24/7 ingestion.
-The team established a workflow for Disaster Recovery for scenarios where Kafka logs have expired. They developed a process to temporarily pause the streaming job and kick off a dedicated DeltaStreamer job with a JDBC source. This job directly upserts missing data from the source, quickly patching the data gap before the streaming job is resumed.
+The team established a workflow for Disaster Recovery for scenarios where Kafka logs have expired. They developed a process to temporarily pause the streaming job and kick off a dedicated HudiStreamer job with a JDBC source. This job directly upserts missing data from the source, quickly patching the data gap before the streaming job is resumed.
 
-<img src="/assets/images/blog/2026-05-26-penn-interactive/img5.png" alt="DeltaStreamer Job" width="800"/>
+<img src="/assets/images/blog/2026-05-26-penn-interactive/img6.png" alt="HudiStreamer Job" width="800"/>
 
 ### 6. Monitoring Data Freshness
 
 A final piece of the puzzle was ensuring data freshness. Given the extreme variance in Kafka offsets, a custom, more insightful monitoring solution was required.Custom scripts and Datadog dashboards were used initially, but as the system scaled, a web-based monitoring interface was developed. This API continuously crawls each Hudi table, retrieving its maximum timestamp and comparing it against established freshness thresholds. 
 This solution provides a user-friendly web interface that gives the entire team a single, clear view of all tables, easily highlighting any that are lagging. This capability is being integrated into a comprehensive alerting system to minimize the need for manual intervention during data latency incidents.
 
-<img src="/assets/images/blog/2026-05-26-penn-interactive/img6.png" alt="Crawler UI" width="800"/>
+<img src="/assets/images/blog/2026-05-26-penn-interactive/img5.png" alt="Crawler UI" width="800"/>
 
 ## Conclusion
 
-The implementation of Apache Hudi has been transformative for Penn Interactive and The Score's data platform. By choosing Apache Hudi, the organization successfully consolidated data from diverse sources with high flexibility and scalability. The custom automation, robust monitoring, and disaster recovery processes built around DeltaStreamer ensure the platform provides accurate and timely insights to stakeholders across business intelligence, marketing, and data science.
+The implementation of Apache Hudi has been transformative for Penn Interactive and The Score's data platform. By choosing Apache Hudi, the organization successfully consolidated data from diverse sources with high flexibility and scalability. The custom automation, robust monitoring, and disaster recovery processes built around HudiStreamer ensure the platform provides accurate and timely insights to stakeholders across business intelligence, marketing, and data science.
 
 With Apache Hudi at its core, the data platform is well-positioned to scale alongside the growing demands of the online sports betting and media industry.
