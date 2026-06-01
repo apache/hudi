@@ -28,6 +28,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Properties;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -56,6 +58,21 @@ public class TestHiveSyncContext {
 
     assertEquals(hiveSyncPartitionField, props1.getProperty(META_SYNC_PARTITION_FIELDS.key()));
     assertEquals(partitionPathField, props2.getProperty(META_SYNC_PARTITION_FIELDS.key()));
+  }
+
+  /**
+   * Test table path syncs to both canonical and meta sync base path configs.
+   */
+  @Test
+  void testSyncedBasePath() {
+    Configuration configuration = new Configuration();
+    String basePath = "/tmp/hudi_table";
+    configuration.set(FlinkOptions.PATH, basePath);
+
+    Properties props = HiveSyncContext.buildSyncConfig(configuration);
+
+    assertEquals(basePath, props.getProperty(BASE_PATH.key()));
+    assertEquals(basePath, props.getProperty(META_SYNC_BASE_PATH.key()));
   }
 
   /**
