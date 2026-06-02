@@ -25,7 +25,6 @@ import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.function.SerializableBiFunction;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -109,11 +108,7 @@ public enum MetadataPartitionType {
   COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-", 3) {
     @Override
     public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
-      // Lance base files do not yet emit column-range metadata, so per-file column stats
-      // aggregate as empty entries and silently prune everything on read. Disable until
-      // HoodieTableMetadataUtil#readColumnRangeMetadataFrom has a LANCE branch.
-      return tableConfig.getBaseFileFormat() != HoodieFileFormat.LANCE
-          && metadataConfig.isColumnStatsIndexEnabled();
+      return metadataConfig.isColumnStatsIndexEnabled();
     }
 
     @Override
@@ -245,11 +240,7 @@ public enum MetadataPartitionType {
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-", 6) {
     @Override
     public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
-      // Partition stats aggregate per-file column ranges. Lance base files contribute none
-      // (see HoodieTableMetadataUtil#readColumnRangeMetadataFrom), so partition records end
-      // up with empty ranges and the partition stats index prunes everything on read.
-      return tableConfig.getBaseFileFormat() != HoodieFileFormat.LANCE
-          && tableConfig.isTablePartitioned() && metadataConfig.isPartitionStatsIndexEnabled();
+      return tableConfig.isTablePartitioned() && metadataConfig.isPartitionStatsIndexEnabled();
     }
 
     @Override

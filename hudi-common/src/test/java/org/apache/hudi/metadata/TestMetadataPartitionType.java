@@ -20,6 +20,7 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -109,6 +110,20 @@ public class TestMetadataPartitionType {
     // Verify partition type is enabled due to config
     assertEquals(expectedEnabledPartitions, enabledPartitions.size());
     assertTrue(enabledPartitions.contains(partitionType) || MetadataPartitionType.ALL_PARTITIONS.equals(partitionType));
+  }
+
+  @Test
+  public void testColumnAndPartitionStatsEnabledForLanceTables() {
+    HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
+    Mockito.when(tableConfig.getBaseFileFormat()).thenReturn(HoodieFileFormat.LANCE);
+    Mockito.when(tableConfig.isTablePartitioned()).thenReturn(true);
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true)
+        .withMetadataIndexColumnStats(true)
+        .build();
+
+    assertTrue(MetadataPartitionType.COLUMN_STATS.isMetadataPartitionEnabled(metadataConfig, tableConfig));
+    assertTrue(MetadataPartitionType.PARTITION_STATS.isMetadataPartitionEnabled(metadataConfig, tableConfig));
   }
 
   @Test
