@@ -125,6 +125,14 @@
             <version>${parquet.version}</version>
         </dependency>
 
+        <!-- Explicit parquet-hadoop ensures the correct version is on the compile classpath
+             regardless of which version flink-parquet or other transitives bring in. -->
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-hadoop</artifactId>
+            <version>${parquet.version}</version>
+        </dependency>
+
         <!-- Kryo -->
         <dependency>
             <groupId>com.esotericsoftware</groupId>
