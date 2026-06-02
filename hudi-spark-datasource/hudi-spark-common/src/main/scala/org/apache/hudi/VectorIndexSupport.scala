@@ -19,15 +19,16 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.DataSourceReadOptions.{VECTOR_INDEX_NAME, VECTOR_QUERY_NPROBES, VECTOR_QUERY_VECTOR}
+import org.apache.hudi.DataSourceReadOptions.{VECTOR_INDEX_NAME, VECTOR_QUERY_NPROBES, VECTOR_QUERY_TOPK, VECTOR_QUERY_VECTOR}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieListData
-import org.apache.hudi.common.index.vector.{VectorDistanceMetric, VectorIndexOptions, VectorIndexPruner}
+import org.apache.hudi.common.index.vector.{VectorDistanceMetric, VectorIndexMdtSearchUtils, VectorIndexMetadataCache, VectorIndexOptions, VectorIndexPruner}
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil, RawKey, VectorClusterRawKey}
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.Expression
 
@@ -40,7 +41,14 @@ class VectorIndexSupport(spark: SparkSession,
                          tableSchema: HoodieSchema,
                          metadataConfig: HoodieMetadataConfig,
                          metaClient: HoodieTableMetaClient)
-  extends SparkBaseIndexSupport(spark, metadataConfig, metaClient) {
+  extends SparkBaseIndexSupport(spark, metadataConfig, metaClient) with Logging {
+
+  /**
+   * Driver-side metadata cache. Holds centroids, manifest, quantizer config, and
+   * all cluster manifests. Loaded once from MDT, reused across queries until the
+   * timeline advances. Volatile for safe publication across threads.
+   */
+  @volatile private var metadataCacheHolder: VectorIndexMetadataCache = _
 
   override def getIndexName: String = VectorIndexSupport.INDEX_NAME
 
@@ -66,15 +74,17 @@ class VectorIndexSupport(spark: SparkSession,
           if (vectorSchema.getDimension != querySpec.queryVector.length) {
             Option.empty
           } else {
-            loadPruner(querySpec, vectorSchema, prunedPartitionsAndFileSlices).flatMap { pruner =>
-              val candidateFileGroups = pruner.probe(querySpec.queryVector, querySpec.numProbes).asScala.toSet
-              if (candidateFileGroups.isEmpty) {
+            Option(getOrLoadCache(querySpec.indexPartition, vectorSchema)).flatMap { cache =>
+              val topClusters = cache.findTopClusters(querySpec.queryVector, querySpec.numProbes, querySpec.metric)
+              if (topClusters.isEmpty) {
                 Option.empty
               } else {
-                Some(VectorIndexSupport.collectCandidateFileNames(
-                  candidateFileGroups,
-                  prunedPartitionsAndFileSlices,
-                  fileIndex.includeLogFiles))
+                querySpec.topK match {
+                  case Some(topK) =>
+                    computeFineCandidateFiles(cache, querySpec, topClusters, topK, prunedPartitionsAndFileSlices, fileIndex.includeLogFiles)
+                  case None =>
+                    computeCoarseCandidateFiles(cache, topClusters, prunedPartitionsAndFileSlices, fileIndex.includeLogFiles)
+                }
               }
             }
           }
@@ -84,9 +94,93 @@ class VectorIndexSupport(spark: SparkSession,
   }
 
   override def invalidateCaches(): Unit = {
-    // No long-lived cache yet. Vector metadata can change after index rebuild/rebalance,
-    // so we always reload from MDT on demand.
+    metadataCacheHolder = null
   }
+
+  // ---- Private: Cache management ----------------------------------------
+
+  private def getOrLoadCache(indexPartition: String, vectorSchema: HoodieSchema.Vector): VectorIndexMetadataCache = {
+    val currentInstant = metaClient.getActiveTimeline.lastInstant()
+      .map[String](_.requestedTime)
+      .orElse("")
+
+    val existing = metadataCacheHolder
+    if (existing != null && !existing.isStaleFor(currentInstant)) {
+      existing
+    } else {
+      // ONE MDT round trip to load everything
+      val loaded = VectorIndexMetadataCache.load(metadataTable, indexPartition, vectorSchema, currentInstant)
+      if (loaded != null) {
+        metadataCacheHolder = loaded
+      }
+      loaded
+    }
+  }
+
+  // ---- Private: Coarse pruning (cluster → file groups, no posting IO) ----
+
+  private def computeCoarseCandidateFiles(cache: VectorIndexMetadataCache,
+                                          topClusters: Array[Int],
+                                          prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                          includeLogFiles: Boolean): Option[Set[String]] = {
+    val candidateFileGroups = cache.getFileGroupsForClusters(topClusters, null).asScala.toSet
+    if (candidateFileGroups.isEmpty) {
+      Option.empty
+    } else {
+      Some(VectorIndexSupport.collectCandidateFileNames(candidateFileGroups, prunedPartitionsAndFileSlices, includeLogFiles))
+    }
+  }
+
+  // ---- Private: Fine-grained pruning (posting scan + RaBitQ + top-K) ----
+
+  private def computeFineCandidateFiles(cache: VectorIndexMetadataCache,
+                                        querySpec: VectorIndexSupport.QuerySpec,
+                                        topClusters: Array[Int],
+                                        topK: Int,
+                                        prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                        includeLogFiles: Boolean): Option[Set[String]] = {
+    // All from cache: shard counts for probed clusters
+    val shardCounts = cache.getShardCounts(topClusters)
+
+    // ONE MDT IO: prefix scan posting rows for probed cluster shards
+    val postings = VectorIndexMdtSearchUtils.readPostingMatches(
+      metadataTable,
+      querySpec.indexPartition,
+      cache.getGenerationId,
+      shardCounts,
+      false)
+
+    // Pure CPU: RaBitQ approximate scoring
+    val scored = VectorIndexMdtSearchUtils.scorePostingMatches(
+      postings,
+      querySpec.queryVector,
+      cache.getDimension,
+      cache.getQuantizerSeed,
+      cache.isAssumeNormalized)
+
+    // Pure CPU: bounded top-K selection
+    val topKResults = VectorIndexMdtSearchUtils.selectTopK(scored, topK)
+
+    val topKList = try {
+      topKResults.collectAsList()
+    } finally {
+      topKResults.unpersistWithDependencies()
+    }
+
+    if (topKList.isEmpty) {
+      Option.empty
+    } else {
+      // Extract ONLY the file groups containing top-K records
+      val targetFileGroups = topKList.asScala.map(_.getFileGroupId).filter(_ != null).toSet
+      if (targetFileGroups.isEmpty) {
+        Option.empty
+      } else {
+        Some(VectorIndexSupport.collectCandidateFileNames(targetFileGroups, prunedPartitionsAndFileSlices, includeLogFiles))
+      }
+    }
+  }
+
+  // ---- Private: Schema resolution ---------------------------------------
 
   private def resolveVectorSchema(sourceColumn: String): Option[HoodieSchema.Vector] = {
     if (tableSchema == null) {
@@ -97,76 +191,17 @@ class VectorIndexSupport(spark: SparkSession,
         .collect { case vector: HoodieSchema.Vector => vector }
     }
   }
-
-  private def loadPruner(querySpec: VectorIndexSupport.QuerySpec,
-                         vectorSchema: HoodieSchema.Vector,
-                         prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])])
-  : Option[VectorIndexPruner] = {
-    val partitionFilter = prunedPartitionsAndFileSlices
-      .flatMap(_._1.map(_.getPath))
-      .toSet
-    val effectivePartitionFilter =
-      if (partitionFilter.nonEmpty) Some(partitionFilter) else None
-
-    val bootstrapRecords = metadataTable
-      .getRecordsByKeyPrefixes(HoodieListData.eager(VectorIndexSupport.bootstrapLookupKeys), querySpec.indexPartition, true)
-      .collectAsList()
-      .asScala
-      .toSeq
-
-    val centroidsOpt = VectorIndexSupport.extractCentroids(bootstrapRecords, vectorSchema)
-
-    centroidsOpt.filter(_.nonEmpty).flatMap { centroids =>
-      val topClusterIds = VectorIndexSupport.findTopClusters(centroids, querySpec.queryVector, querySpec.numProbes, querySpec.metric)
-
-      val clusterToFileGroups =
-        VectorIndexSupport.resolveCurrentGenerationId(bootstrapRecords)
-          .map { generationId =>
-            val clusterKeys = topClusterIds.map(clusterId => new VectorClusterRawKey(generationId, clusterId): RawKey).toList.asJava
-            metadataTable
-              .getRecordsByKeyPrefixes(HoodieListData.eager(clusterKeys), querySpec.indexPartition, true)
-              .collectAsList()
-              .asScala
-              .toSeq
-          }
-          .map(records => VectorIndexSupport.buildClusterMapFromClusterRecords(records, effectivePartitionFilter))
-          .filter(_.nonEmpty)
-          .getOrElse(VectorIndexSupport.buildClusterMapFromLegacyFgRecords(bootstrapRecords, effectivePartitionFilter))
-
-      if (clusterToFileGroups.isEmpty) {
-        Option.empty
-      } else {
-        val clusterToFileGroupsJava = new java.util.HashMap[Integer, java.util.Set[String]]()
-        clusterToFileGroups.foreach { case (clusterId, fileGroups) =>
-          clusterToFileGroupsJava.put(Int.box(clusterId), fileGroups.asJava)
-        }
-        Some(new VectorIndexPruner(centroids, clusterToFileGroupsJava, querySpec.metric))
-      }
-    }
-  }
 }
 
 object VectorIndexSupport {
   val INDEX_NAME = "vector_index"
-  private val bootstrapLookupKeys = java.util.Arrays.asList[RawKey](
-    new RawKey {
-      override def encode(): String = HoodieTableMetadataUtil.VECTOR_INDEX_CENTROIDS_KEY
-    },
-    new RawKey {
-      override def encode(): String = HoodieTableMetadataUtil.VECTOR_INDEX_MANIFEST_KEY
-    },
-    new RawKey {
-      override def encode(): String = HoodieTableMetadataUtil.VECTOR_INDEX_GENERATION_MANIFEST_KEY_PREFIX
-    },
-    new RawKey {
-      override def encode(): String = HoodieTableMetadataUtil.VECTOR_INDEX_FG_MAPPING_KEY_PREFIX
-    })
 
   case class QuerySpec(indexPartition: String,
                        sourceColumn: String,
                        queryVector: Array[Float],
                        numProbes: Int,
-                       metric: VectorDistanceMetric)
+                       metric: VectorDistanceMetric,
+                       topK: Option[Int])
 
   def resolveQuerySpec(metaClient: HoodieTableMetaClient, options: Map[String, String]): Option[QuerySpec] = {
     val indexNameOpt = options.get(VECTOR_INDEX_NAME.key)
@@ -183,7 +218,8 @@ object VectorIndexSupport {
             indexDefinition.getSourceFields.get(0),
             parseQueryVector(queryVectorOpt.get),
             options.get(VECTOR_QUERY_NPROBES.key).map(_.toInt).getOrElse(VectorIndexOptions.getNumProbes(indexDefinition.getIndexOptions)),
-            VectorIndexOptions.getMetric(indexDefinition.getIndexOptions))
+            VectorIndexOptions.getMetric(indexDefinition.getIndexOptions),
+            options.get(VECTOR_QUERY_TOPK.key).map(_.toInt))
         }
     }
   }
@@ -206,23 +242,26 @@ object VectorIndexSupport {
       .map(_.toFloat)
   }
 
-  def deserializeCentroids(bytes: ByteBuffer, vectorSchema: HoodieSchema.Vector): Array[Array[Float]] = {
-    val elementType = vectorSchema.getVectorElementType
-    val dimension = vectorSchema.getDimension
-    val duplicate = bytes.duplicate().order(HoodieSchema.VectorLogicalType.VECTOR_BYTE_ORDER)
-    val bytesPerCentroid = dimension * elementType.getElementSize
-    val centroidCount =
-      if (bytesPerCentroid == 0) 0 else duplicate.remaining() / bytesPerCentroid
+  def collectCandidateFileNames(candidateFileGroups: Set[String],
+                                prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                includeLogFiles: Boolean): Set[String] = {
+    prunedPartitionsAndFileSlices.flatMap {
+      case (_, fileSlices) =>
+        fileSlices
+          .filter(fs => candidateFileGroups.contains(fs.getFileId))
+          .flatMap { fileSlice =>
+            val baseFileName = Option(fileSlice.getBaseFile.orElse(null)).map(_.getFileName).toSeq
+            val logFileNames =
+              if (includeLogFiles) fileSlice.getLogFiles.iterator.asScala.map(_.getFileName).toSeq else Seq.empty
+            baseFileName ++ logFileNames
+          }
+    }.toSet
+  }
 
-    Array.tabulate(centroidCount) { _ =>
-      Array.tabulate(dimension) { _ =>
-        elementType match {
-          case HoodieSchema.Vector.VectorElementType.FLOAT => duplicate.getFloat()
-          case HoodieSchema.Vector.VectorElementType.DOUBLE => duplicate.getDouble().toFloat
-          case HoodieSchema.Vector.VectorElementType.INT8 => duplicate.get().toFloat
-        }
-      }
-    }
+  // ---- Legacy helpers (kept for backward compatibility with existing tests) ----
+
+  def deserializeCentroids(bytes: ByteBuffer, vectorSchema: HoodieSchema.Vector): Array[Array[Float]] = {
+    VectorIndexMetadataCache.deserializeCentroids(bytes, vectorSchema)
   }
 
   private[hudi] def extractCentroids(records: Seq[HoodieRecord[HoodieMetadataPayload]],
@@ -288,6 +327,17 @@ object VectorIndexSupport {
       }
   }
 
+  private[hudi] def mergeClusterMaps(primary: Map[Int, Set[String]],
+                                     fallback: Map[Int, Set[String]]): Map[Int, Set[String]] = {
+    fallback.foldLeft(primary) { case (acc, (clusterId, fileGroups)) =>
+      if (fileGroups.isEmpty) {
+        acc
+      } else {
+        acc.updated(clusterId, acc.getOrElse(clusterId, Set.empty[String]) ++ fileGroups)
+      }
+    }
+  }
+
   private def extractVectorMetadata(record: HoodieRecord[HoodieMetadataPayload]) = {
     val payload = record.getData.asInstanceOf[HoodieMetadataPayload]
     if (payload.getVectorIndexMetadata.isPresent) Some(payload.getVectorIndexMetadata.get) else None
@@ -298,21 +348,5 @@ object VectorIndexSupport {
       scala.util.Try(Integer.parseUnsignedInt(generationId)).toOption
         .orElse(scala.util.Try(Integer.parseInt(generationId)).toOption)
     }
-  }
-
-  def collectCandidateFileNames(candidateFileGroups: Set[String],
-                                prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
-                                includeLogFiles: Boolean): Set[String] = {
-    prunedPartitionsAndFileSlices.flatMap {
-      case (_, fileSlices) =>
-        fileSlices
-          .filter(fs => candidateFileGroups.contains(fs.getFileId))
-          .flatMap { fileSlice =>
-            val baseFileName = Option(fileSlice.getBaseFile.orElse(null)).map(_.getFileName).toSeq
-            val logFileNames =
-              if (includeLogFiles) fileSlice.getLogFiles.iterator.asScala.map(_.getFileName).toSeq else Seq.empty
-            baseFileName ++ logFileNames
-          }
-    }.toSet
   }
 }

@@ -210,6 +210,14 @@ object DataSourceReadOptions {
     .markAdvanced()
     .withDocumentation("Override for the number of IVF clusters to probe during MDT-backed vector coarse pruning.")
 
+  val VECTOR_QUERY_TOPK: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.vector.query.topk")
+    .noDefaultValue()
+    .markAdvanced()
+    .withDocumentation("When set, enables fine-grained vector search: posting rows are scanned and scored "
+      + "with RaBitQ, and only the file groups containing the top-K approximate matches are returned to Spark. "
+      + "Without this option, coarse cluster-level file group pruning is used instead.")
+
   val EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH: ConfigProperty[Boolean] =
     ConfigProperty.key("hoodie.datasource.read.extract.partition.values.from.path")
       .defaultValue(false)
