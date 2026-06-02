@@ -30,6 +30,7 @@ import org.apache.hudi.metadata.RawKey;
 
 import java.io.Serializable;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -136,12 +137,31 @@ public final class VectorIndexMetadataCache implements Serializable {
                                               String indexPartition,
                                               HoodieSchema.Vector vectorSchema,
                                               String currentInstant) {
-    // ONE MDT fetch: centroids + manifest + quantizer + C| prefix for all clusters
-    List<RawKey> lookupKeys = Arrays.asList(
+    return load(metadataTable, indexPartition, vectorSchema, currentInstant, true);
+  }
+
+  /**
+   * Loads cacheable vector index metadata.
+   *
+   * <p>When {@code shouldLoadClusterManifests} is false, this intentionally avoids
+   * reading all {@code C|} rows or legacy {@code __fg__/} rows into the driver. Use
+   * this mode for posting-based searches where selected cluster shard counts and
+   * file groups are derived from the probed postings instead.
+   */
+  public static VectorIndexMetadataCache load(HoodieTableMetadata metadataTable,
+                                              String indexPartition,
+                                              HoodieSchema.Vector vectorSchema,
+                                              String currentInstant,
+                                              boolean shouldLoadClusterManifests) {
+    // Hot-path routing metadata. Cluster manifests are optional because they can
+    // be large at scale when they carry file-group mappings.
+    List<RawKey> lookupKeys = new ArrayList<>(Arrays.asList(
         simpleKey(HoodieTableMetadataUtil.VECTOR_INDEX_CENTROIDS_KEY),
         simpleKey(HoodieTableMetadataUtil.VECTOR_INDEX_MANIFEST_KEY),
-        simpleKey(HoodieTableMetadataUtil.VECTOR_INDEX_QUANTIZER_KEY),
-        simpleKey(HoodieTableMetadataUtil.VECTOR_INDEX_CLUSTER_KEY_PREFIX));
+        simpleKey(HoodieTableMetadataUtil.VECTOR_INDEX_QUANTIZER_KEY)));
+    if (shouldLoadClusterManifests) {
+      lookupKeys.add(simpleKey(HoodieTableMetadataUtil.VECTOR_INDEX_CLUSTER_KEY_PREFIX));
+    }
 
     List<HoodieRecord<HoodieMetadataPayload>> records = metadataTable
         .getRecordsByKeyPrefixes(HoodieListData.eager(lookupKeys), indexPartition, true)
@@ -230,7 +250,8 @@ public final class VectorIndexMetadataCache implements Serializable {
     }
 
     // If no cluster manifests from C| records, fall back to legacy __fg__/ rows
-    if (clusterManifests.isEmpty()) {
+    // only for callers that explicitly asked for cluster/file-group metadata.
+    if (shouldLoadClusterManifests && clusterManifests.isEmpty()) {
       clusterManifests = loadLegacyFgMappings(metadataTable, indexPartition);
     }
 
