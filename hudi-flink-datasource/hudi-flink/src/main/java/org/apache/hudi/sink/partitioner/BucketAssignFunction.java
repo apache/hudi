@@ -200,9 +200,7 @@ public class BucketAssignFunction
   protected void processChangingRecord(
       HoodieFlinkInternalRow record,
       String recordKey,
-      Collector<HoodieFlinkInternalRow> out,
-      HoodieRecordGlobalLocation prefetchedOldLoc,
-      boolean prefetched) throws Exception {
+      Collector<HoodieFlinkInternalRow> out) throws Exception {
     // 1. put the record into the BucketAssigner;
     // 2. look up the state for location, if the record has a location, just send it out;
     // 3. if it is an INSERT, decide the location using the BucketAssigner then send it out.
@@ -211,7 +209,7 @@ public class BucketAssignFunction
     // Only changing records need looking up the index for the location,
     // append only records are always recognized as INSERT.
     // Structured as Tuple(partition, fileId, instantTime).
-    HoodieRecordGlobalLocation oldLoc = prefetched ? prefetchedOldLoc : indexBackend.get(recordKey);
+    HoodieRecordGlobalLocation oldLoc = indexBackend.get(recordKey);
     if (oldLoc != null) {
       // Set up the instant time as "U" to mark the bucket as an update bucket.
       String partitionFromState = oldLoc.getPartitionPath();
@@ -266,7 +264,7 @@ public class BucketAssignFunction
    */
   private Processor initRecordProcessor() {
     if (isChangingRecords) {
-      return (value, out) -> processChangingRecord(value, value.getRecordKey(), out, null, false);
+      return (value, out) -> processChangingRecord(value, value.getRecordKey(), out);
     } else {
       return this::processInsertRecord;
     }

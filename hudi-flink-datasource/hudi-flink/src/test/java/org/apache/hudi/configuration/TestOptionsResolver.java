@@ -18,6 +18,7 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -25,6 +26,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
@@ -190,5 +192,29 @@ public class TestOptionsResolver {
 
     assertFalse(OptionsResolver.needsAsyncClustering(conf));
     assertFalse(OptionsResolver.needsScheduleClustering(conf));
+  }
+
+  @Test
+  void testEstimateFileGroupCountForPartitionedRLI() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "3");
+    conf.setString(HoodieMetadataConfig.RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "3");
+
+    assertEquals(3, OptionsResolver.estimateFileGroupCountForRLI(conf));
+  }
+
+  @Test
+  void testEstimateFileGroupCountForGlobalRLI() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "11");
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "11");
+
+    assertEquals(11, OptionsResolver.estimateFileGroupCountForRLI(conf));
   }
 }
