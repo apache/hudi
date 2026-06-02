@@ -2478,7 +2478,9 @@
         <slf4j.version>2.0.6</slf4j.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
+        <spark33orEarlier>false</spark33orEarlier>
         <spark32orEarlier>false</spark32orEarlier>
+        <spark31orEarlier>false</spark31orEarlier>
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.4.x</module>
