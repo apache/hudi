@@ -36,7 +36,7 @@ shows INLINE blobs + vector search); this one shows OUT_OF_LINE blobs +
 `read_blob()`.
 
 Env vars (shares the same conventions as the other demos):
-  HUDI_BUNDLE_JAR         (defaults to ~/Downloads/hudi-spark3.5-bundle_2.12-1.2.0-rc1.jar)
+  HUDI_BUNDLE_JAR         (defaults to ~/Downloads/hudi-spark3.5-bundle_2.12-1.2.0.jar)
   HUDI_BASE_FILE_FORMAT   (default 'lance'; set to 'parquet' to use Parquet)
   LANCE_BUNDLE_JAR        (defaults to ~/Downloads/lance-spark-bundle-3.5_2.12-0.4.0.jar; only used when HUDI_BASE_FILE_FORMAT=lance)
   HUDI_BLOB_MODE          (default 'out_of_line'; 'inline' stores bytes in the Hudi table)
@@ -117,11 +117,11 @@ def ensure_dir(p: Path) -> None:
 
 
 def default_hudi_bundle_jar() -> str:
-    # Defaults to the Apache 1.2.0-rc1 staging jar in ~/Downloads/. Grab it with:
-    #   curl -L -o ~/Downloads/hudi-spark3.5-bundle_2.12-1.2.0-rc1.jar \
-    #     https://repository.apache.org/content/repositories/orgapachehudi-1176/org/apache/hudi/hudi-spark3.5-bundle_2.12/1.2.0-rc1/hudi-spark3.5-bundle_2.12-1.2.0-rc1.jar
+    # Defaults to the Apache Hudi 1.2.0 release jar in ~/Downloads/. Grab it with:
+    #   curl -L -o ~/Downloads/hudi-spark3.5-bundle_2.12-1.2.0.jar \
+    #     https://repo1.maven.org/maven2/org/apache/hudi/hudi-spark3.5-bundle_2.12/1.2.0/hudi-spark3.5-bundle_2.12-1.2.0.jar
     # Override via HUDI_BUNDLE_JAR=/abs/path/to/jar to point at a locally built bundle.
-    return str(Path.home() / "Downloads" / "hudi-spark3.5-bundle_2.12-1.2.0-rc1.jar")
+    return str(Path.home() / "Downloads" / "hudi-spark3.5-bundle_2.12-1.2.0.jar")
 
 
 def default_lance_bundle_jar() -> str:
@@ -137,9 +137,9 @@ def resolve_jars() -> str:
     if not Path(hudi_jar).is_file():
         sys.exit(
             f"ERROR: HUDI_BUNDLE_JAR does not exist at {hudi_jar}\n"
-            "Download the Apache 1.2.0-rc1 staging jar with:\n"
-            "  curl -L -o ~/Downloads/hudi-spark3.5-bundle_2.12-1.2.0-rc1.jar \\\n"
-            "    https://repository.apache.org/content/repositories/orgapachehudi-1176/org/apache/hudi/hudi-spark3.5-bundle_2.12/1.2.0-rc1/hudi-spark3.5-bundle_2.12-1.2.0-rc1.jar\n"
+            "Download the Apache Hudi 1.2.0 release jar with:\n"
+            "  curl -L -o ~/Downloads/hudi-spark3.5-bundle_2.12-1.2.0.jar \\\n"
+            "    https://repo1.maven.org/maven2/org/apache/hudi/hudi-spark3.5-bundle_2.12/1.2.0/hudi-spark3.5-bundle_2.12-1.2.0.jar\n"
             "or set HUDI_BUNDLE_JAR=/abs/path/to/locally-built.jar."
         )
 

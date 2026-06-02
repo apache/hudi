@@ -71,27 +71,21 @@ See [`notebooks/README.md`](notebooks/README.md) for setup details.
 
 - Java 11
 - Python **3.12** (PySpark 3.5 does NOT support Python 3.13/3.14)
-- Hudi Spark bundle (Apache 1.2.0-rc1 staging jar, or build from source)
+- Hudi Spark bundle (Apache Hudi 1.2.0 release jar, or build from source)
 - Lance Spark bundle jar
 
 ## 1. Get the Hudi bundle
 
 The scripts default `HUDI_BUNDLE_JAR` to
-`~/Downloads/hudi-spark3.5-bundle_2.12-1.2.0-rc1.jar`, so you can drop the
-Apache 1.2.0-rc1 staging jar there and skip exporting anything.
+`~/Downloads/hudi-spark3.5-bundle_2.12-1.2.0.jar`, so you can drop the
+Apache Hudi 1.2.0 release jar there and skip exporting anything.
 
-**Option A — Download the rc1 staging jar (recommended; no build required):**
+**Option A — Download the 1.2.0 release jar from Maven Central (recommended; no build required):**
 
 ```bash
-curl -L -o ~/Downloads/hudi-spark3.5-bundle_2.12-1.2.0-rc1.jar \
-  https://repository.apache.org/content/repositories/orgapachehudi-1176/org/apache/hudi/hudi-spark3.5-bundle_2.12/1.2.0-rc1/hudi-spark3.5-bundle_2.12-1.2.0-rc1.jar
+curl -L -o ~/Downloads/hudi-spark3.5-bundle_2.12-1.2.0.jar \
+  https://repo1.maven.org/maven2/org/apache/hudi/hudi-spark3.5-bundle_2.12/1.2.0/hudi-spark3.5-bundle_2.12-1.2.0.jar
 ```
-
-This is the exact jar published to Apache's Nexus staging repo for the
-1.2.0-rc1 vote — running the demo against it doubles as smoke-testing the
-release candidate. Note: the staging URL (`orgapachehudi-1176`) rolls forward
-each RC; if you're reading this after rc1 closes, find the current staging
-repo at <https://repository.apache.org/#stagingRepositories>.
 
 **Option B — Build from source:**
 
@@ -191,7 +185,7 @@ etc.) with similarity scores in the 0.3–0.5 range at N=100, tighter at N=1000.
 
 | Var | Default | Purpose |
 |---|---|---|
-| `HUDI_BUNDLE_JAR` | `~/Downloads/hudi-spark3.5-bundle_2.12-1.2.0-rc1.jar` (Apache 1.2.0-rc1 staging jar) | Hudi spark bundle. Override to point at a locally built `*-SNAPSHOT.jar` if you go the Option B route. |
+| `HUDI_BUNDLE_JAR` | `~/Downloads/hudi-spark3.5-bundle_2.12-1.2.0.jar` (Apache Hudi 1.2.0 release jar) | Hudi spark bundle. Override to point at a locally built `*-SNAPSHOT.jar` if you go the Option B route. |
 | `LANCE_BUNDLE_JAR` | `~/Downloads/lance-spark-bundle-3.5_2.12-0.4.0.jar` (Maven Central) | Lance spark bundle. Used only when `HUDI_BASE_FILE_FORMAT=lance`; Parquet runs skip it entirely. |
 | `HUDI_BASE_FILE_FORMAT` | `lance` | Set to `parquet` to write Parquet base files instead |
 | `HUDI_BLOB_MODE` | `out_of_line` | Blob reader demo only. Set to `inline` to embed PNG bytes directly in the Hudi table (no external container file) |
