@@ -31,6 +31,7 @@ import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.VectorConversionUtils;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.io.FileInputFormat;
@@ -55,6 +56,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -76,7 +78,9 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
 
   private final String[] fullFieldNames;
   private final DataType[] fullFieldTypes;
+  private final DataType[] readFieldTypes;
   private final int[] selectedFields;
+  private final Map<Integer, HoodieSchema.Vector> vectorColumnInfo;
   private final String partDefaultName;
   private final String partPathField;
   private final boolean hiveStylePartitioning;
@@ -107,7 +111,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       long limit,
       Configuration conf,
       boolean utcTimestamp,
-      InternalSchemaManager internalSchemaManager) {
+      InternalSchemaManager internalSchemaManager,
+      HoodieSchema tableSchema) {
     super.setFilePaths(paths);
     this.predicates = predicates;
     this.limit = limit;
@@ -116,7 +121,9 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     this.hiveStylePartitioning = hiveStylePartitioning;
     this.fullFieldNames = fullFieldNames;
     this.fullFieldTypes = fullFieldTypes;
+    this.readFieldTypes = VectorConversionUtils.getParquetReadFieldTypes(fullFieldNames, fullFieldTypes, tableSchema);
     this.selectedFields = selectedFields;
+    this.vectorColumnInfo = VectorConversionUtils.detectVectorColumns(fullFieldNames, selectedFields, tableSchema);
     this.conf = new SerializableConfiguration(conf);
     this.utcTimestamp = utcTimestamp;
     this.internalSchemaManager = internalSchemaManager;
@@ -135,13 +142,14 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
           this.partPathField,
           this.hiveStylePartitioning
       );
-      this.itr = RecordIterators.getParquetRecordIterator(
+
+      ClosableIterator<RowData> rowDataItr = RecordIterators.getParquetRecordIterator(
           internalSchemaManager,
           utcTimestamp,
           true,
           conf.conf(),
           fullFieldNames,
-          fullFieldTypes,
+          readFieldTypes,
           partObjects,
           selectedFields,
           2048,
@@ -149,6 +157,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
           fileSplit.getStart(),
           fileSplit.getLength(),
           predicates);
+      this.itr = vectorColumnInfo.isEmpty() ? rowDataItr : VectorConversionUtils.wrapVectorColumnIterator(rowDataItr, fullFieldTypes, selectedFields, vectorColumnInfo);
     }
     this.currentReadCount = 0L;
   }

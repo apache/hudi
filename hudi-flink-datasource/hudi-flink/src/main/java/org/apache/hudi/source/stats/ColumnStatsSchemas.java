@@ -35,7 +35,8 @@ public class ColumnStatsSchemas {
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
-  public static final DataType METADATA_DATA_TYPE = getMetadataDataType();
+  public static final HoodieSchema METADATA_SCHEMA = HoodieSchema.fromAvroSchema(HoodieMetadataRecord.SCHEMA$);
+  public static final DataType METADATA_DATA_TYPE = HoodieSchemaConverter.convertToDataType(METADATA_SCHEMA);
   public static final DataType COL_STATS_DATA_TYPE = getColStatsDataType();
   public static final int[] COL_STATS_TARGET_POS = getColStatsTargetPos();
 
@@ -52,10 +53,6 @@ public class ColumnStatsSchemas {
   public static final int ORD_NULL_CNT = 3;
   public static final int ORD_VAL_CNT = 4;
   public static final int ORD_COL_NAME = 5;
-
-  private static DataType getMetadataDataType() {
-    return HoodieSchemaConverter.convertToDataType(HoodieSchema.fromAvroSchema(HoodieMetadataRecord.SCHEMA$));
-  }
 
   private static DataType getColStatsDataType() {
     int pos = HoodieMetadataRecord.SCHEMA$.getField(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).pos();

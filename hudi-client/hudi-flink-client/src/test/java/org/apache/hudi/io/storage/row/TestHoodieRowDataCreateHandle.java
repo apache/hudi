@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.GenericRowData;
@@ -110,6 +111,7 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         .withPath(basePath)
         .withProperties(props)
         .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(HoodieSchemaConverter.convertToSchema(baseRowType).getAvroSchema().toString())
         .build();
 
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, context, metaClient);
@@ -141,6 +143,7 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         .withPath(basePath)
         .withProperties(props)
         .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(HoodieSchemaConverter.convertToSchema(baseRowType).getAvroSchema().toString())
         .build();
 
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, context, metaClient);
@@ -171,6 +174,7 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         .withPath(basePath)
         .withProperties(props)
         .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(HoodieSchemaConverter.convertToSchema(baseRowType).getAvroSchema().toString())
         .build();
 
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, context, metaClient);
@@ -199,6 +203,7 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(HoodieSchemaConverter.convertToSchema(baseRowType).getAvroSchema().toString())
         // No event time field configured
         .build();
 
@@ -229,6 +234,7 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withProperties(props)
+        .withSchema(HoodieSchemaConverter.convertToSchema(baseRowType).getAvroSchema().toString())
         .withEmbeddedTimelineServerEnabled(false)
         .build();
 
@@ -301,6 +307,7 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         .withPath(basePath)
         .withProperties(props)
         .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(HoodieSchemaConverter.convertToSchema(baseRowType).getAvroSchema().toString())
         .build();
 
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, context, metaClient);
@@ -358,6 +365,7 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         .withPath(basePath)
         .withProperties(props)
         .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(HoodieSchemaConverter.convertToSchema(baseRowType).getAvroSchema().toString())
         .build();
 
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, context, metaClient);
@@ -405,6 +413,7 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(HoodieSchemaConverter.convertToSchema(baseRowType).getAvroSchema().toString())
         // No event time field configured
         .build();
 

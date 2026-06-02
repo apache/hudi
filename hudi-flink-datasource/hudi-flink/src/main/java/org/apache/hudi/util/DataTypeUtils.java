@@ -19,6 +19,10 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.exception.HoodieCatalogException;
 
 import org.apache.flink.table.api.DataTypes;
@@ -118,6 +122,49 @@ public class DataTypeUtils {
   public static int[] projectOrdinals(RowType rowType, RowType producedRowType) {
     List<String> fieldNames = rowType.getFieldNames();
     return producedRowType.getFieldNames().stream().mapToInt(fieldNames::indexOf).toArray();
+  }
+
+  /**
+   * Creates the hoodie required schema for a projected Flink row type.
+   *
+   * <p>When a requested field is a hoodie specific logical type in {@code tableSchema}, this method
+   * reuses the table schema field to preserve logical metadata that cannot be recovered from Flink
+   * {@link RowType}, for example VARIANT semantics or VECTOR element type and dimension. Other
+   * fields are taken from the schema converted from {@code requiredRowType}, so readers use the
+   * projected field schema and can still keep missing required columns in the requested schema for
+   * later schema-evolution/default-value handling.
+   *
+   * @param tableSchema     source table schema with hoodie logical type metadata
+   * @param requiredRowType projected Flink row type requested by the query
+   * @return required hoodie schema matching the projected field order
+   */
+  public static HoodieSchema createRequiredSchema(HoodieSchema tableSchema, RowType requiredRowType) {
+    HoodieSchema fallbackRequiredSchema = HoodieSchemaConverter.convertToSchema(requiredRowType);
+    List<HoodieSchemaField> requiredFields = new ArrayList<>(requiredRowType.getFieldCount());
+
+    for (String fieldName : requiredRowType.getFieldNames()) {
+      HoodieSchemaField tableField = tableSchema.getField(fieldName).orElse(null);
+      HoodieSchemaField field = tableField != null && useTableSchemaField(tableField)
+          ? tableField : fallbackRequiredSchema.getField(fieldName).get();
+      requiredFields.add(HoodieSchemaUtils.createNewSchemaField(field));
+    }
+
+    return HoodieSchema.createRecord(
+        tableSchema.getName(),
+        tableSchema.getNamespace().orElse(null),
+        tableSchema.getDoc().orElse(null),
+        requiredFields);
+  }
+
+  /**
+   * Returns whether the required schema should reuse the field from the table schema.
+   *
+   * <p>Only types whose logical metadata cannot be fully reconstructed from Flink
+   * {@link RowType} are reused from the table schema.
+   */
+  private static boolean useTableSchemaField(HoodieSchemaField field) {
+    HoodieSchemaType fieldType = field.schema().getNonNullType().getType();
+    return fieldType == HoodieSchemaType.VARIANT || fieldType == HoodieSchemaType.VECTOR;
   }
 
   /**
