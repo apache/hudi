@@ -1690,15 +1690,14 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertEquals(HoodieFileFormat.LANCE, baseFileFormat,
                  "Table should use Lance base file format")
 
-    // Column stats and partition stats indices are gated off for Lance base files in
-    // MetadataPartitionType — per-file column ranges aren't emitted for Lance yet, and
-    // empty ranges would silently prune everything on read. Confirm the metadata table
-    // never initialized these partitions.
+    // Column stats now read per-file ranges from Lance base files, so the metadata table
+    // should initialize column stats for Lance tables. Partition stats remain available
+    // only when the table itself is partitioned.
     val tableConfig = metaClient.getTableConfig
-    assertFalse(tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.COLUMN_STATS),
-      "Column stats metadata partition must not be initialized for Lance tables")
-    assertFalse(tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.PARTITION_STATS),
-      "Partition stats metadata partition must not be initialized for Lance tables")
+    assertTrue(tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.COLUMN_STATS),
+      "Column stats metadata partition must be initialized for Lance tables")
+    assertEquals(isPartitioned, tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.PARTITION_STATS),
+      "Partition stats metadata partition availability should match table partitioning")
   }
 
   /**
