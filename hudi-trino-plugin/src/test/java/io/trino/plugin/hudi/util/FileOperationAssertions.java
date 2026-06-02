@@ -38,7 +38,7 @@ public final class FileOperationAssertions
     /**
      * Asserts that file system accesses match expected operations.
      * This version uses manual filtering for Input/InputFile operations.
-     * Logs detailed comparison at WARN level for debugging test failures.
+     * On assertion failure, logs a detailed comparison at WARN level to aid debugging.
      */
     public static void assertFileSystemAccesses(
             QueryRunner queryRunner,
@@ -53,14 +53,19 @@ public final class FileOperationAssertions
         // across the boundary and counts get scrambled. Poll until the span set is stable for
         // two consecutive reads.
         Multiset<FileOperation> actualCacheAccesses = waitForStableSpans(() -> getFileOperations(queryRunner));
-        printFileAccessDebugInfo(queryRunner, actualCacheAccesses, expectedCacheAccesses);
-        assertMultisetsEqual(actualCacheAccesses, expectedCacheAccesses);
+        try {
+            assertMultisetsEqual(actualCacheAccesses, expectedCacheAccesses);
+        }
+        catch (AssertionError e) {
+            printFileAccessDebugInfo(queryRunner, actualCacheAccesses, expectedCacheAccesses);
+            throw e;
+        }
     }
 
     /**
      * Asserts that file system accesses match expected operations for Alluxio cache tests.
      * This version uses getCacheOperationSpans for filtering.
-     * Logs detailed comparison at WARN level for debugging test failures.
+     * On assertion failure, logs a detailed comparison at WARN level to aid debugging.
      */
     public static void assertAlluxioFileSystemAccesses(
             QueryRunner queryRunner,
@@ -71,8 +76,13 @@ public final class FileOperationAssertions
         queryRunner.executeWithPlan(queryRunner.getDefaultSession(), query);
         // See assertFileSystemAccesses for the rationale behind polling instead of a fixed sleep.
         Multiset<FileOperation> actualCacheAccesses = waitForStableSpans(() -> getAlluxioFileOperations(queryRunner));
-        printFileAccessDebugInfo(queryRunner, actualCacheAccesses, expectedCacheAccesses);
-        assertMultisetsEqual(actualCacheAccesses, expectedCacheAccesses);
+        try {
+            assertMultisetsEqual(actualCacheAccesses, expectedCacheAccesses);
+        }
+        catch (AssertionError e) {
+            printFileAccessDebugInfo(queryRunner, actualCacheAccesses, expectedCacheAccesses);
+            throw e;
+        }
     }
 
     /**
