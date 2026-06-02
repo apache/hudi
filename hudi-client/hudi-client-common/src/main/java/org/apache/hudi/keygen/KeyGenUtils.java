@@ -39,11 +39,9 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.BiFunction;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
@@ -72,7 +70,7 @@ public class KeyGenUtils {
    */
   public static KeyGeneratorType inferKeyGeneratorType(
       Option<String> recordsKeyFields, String partitionFields) {
-    int numRecordKeyFields = recordsKeyFields.map(fields -> fields.split(",").length).orElse(0);
+    int numRecordKeyFields = recordsKeyFields.map(keyStr -> getRecordKeyFields(keyStr).size()).orElse(0);
     KeyGeneratorType partitionKeyGeneratorType = inferKeyGeneratorTypeFromPartitionFields(partitionFields);
     if (numRecordKeyFields <= 1) {
       return partitionKeyGeneratorType;
@@ -331,13 +329,13 @@ public class KeyGenUtils {
   }
 
   public static List<String> getRecordKeyFields(TypedProperties props) {
-    return Option.ofNullable(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null))
-        .map(recordKeyConfigValue ->
-            Arrays.stream(recordKeyConfigValue.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .collect(Collectors.toList())
-        ).orElse(Collections.emptyList());
+    return getRecordKeyFields(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null));
+  }
+
+  public static List<String> getRecordKeyFields(String recordKeyConfigValue) {
+    return Option.ofNullable(recordKeyConfigValue)
+        .map(value -> StringUtils.split(value, ","))
+        .orElse(Collections.emptyList());
   }
 
   /**
