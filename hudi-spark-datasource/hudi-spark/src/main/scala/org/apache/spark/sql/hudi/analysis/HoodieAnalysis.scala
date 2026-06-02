@@ -410,7 +410,8 @@ case class ResolveImplementationsEarly(spark: SparkSession) extends Rule[Logical
       // Convert to CreateHoodieTableAsSelectCommand
       case ct @ CreateTable(table, mode, Some(query))
         if sparkAdapter.isHoodieTable(table) && ct.query.forall(_.resolved) =>
-        val alignedQuery = stripMetaFieldAttributes(query)
+        val alignedQuery = alignCtasQueryByPartitionOrder(
+          stripMetaFieldAttributes(query), table.partitionColumnNames)
         CreateHoodieTableAsSelectCommand(table, mode, alignedQuery)
 
       case ct: CreateTable =>
@@ -430,6 +431,36 @@ case class ResolveImplementationsEarly(spark: SparkSession) extends Rule[Logical
         plan
 
       case _ => plan
+    }
+  }
+
+  private def alignCtasQueryByPartitionOrder(query: LogicalPlan, partitionColumns: Seq[String]): LogicalPlan = {
+    if (partitionColumns.isEmpty) {
+      query
+    } else {
+      val resolver = spark.sessionState.conf.resolver
+      val (dataAttrs, partitionAttrs) = query.output.partition { attr =>
+        !partitionColumns.exists(partition => resolver(partition, attr.name))
+      }
+
+      if (partitionAttrs.size != partitionColumns.size) {
+        throw new HoodieAnalysisException(s"Partition columns ${partitionColumns.mkString("[", ", ", "]")} " +
+          s"do not match query output ${query.output.map(_.name).mkString("[", ", ", "]")}")
+      }
+
+      val alreadyAligned = partitionColumns.zip(partitionAttrs).forall {
+        case (partition, attr) => resolver(partition, attr.name)
+      }
+      if (alreadyAligned) {
+        query
+      } else {
+        val orderedPartitionAttrs = partitionColumns.map { partition =>
+          partitionAttrs.find(attr => resolver(partition, attr.name)).getOrElse {
+            throw new HoodieAnalysisException(s"Cannot resolve partition column $partition in CTAS query output")
+          }
+        }
+        Project(dataAttrs ++ orderedPartitionAttrs, query)
+      }
     }
   }
 }
