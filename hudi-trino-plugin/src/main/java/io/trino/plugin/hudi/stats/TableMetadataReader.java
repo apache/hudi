@@ -48,7 +48,7 @@ public class TableMetadataReader
      * @return a map from column name to their corresponding {@link HoodieColumnRangeMetadata}
      * @throws HoodieMetadataException if an error occurs while fetching the column statistics
      */
-    public Map<String, HoodieColumnRangeMetadata> getColumnsRange(List<Pair<String, String>> partitionNameFileNameList, List<String> columnNames)
+    Map<String, HoodieColumnRangeMetadata> getColumnsRange(List<Pair<String, String>> partitionNameFileNameList, List<String> columnNames)
             throws HoodieMetadataException
     {
         Map<Pair<String, String>, List<HoodieMetadataColumnStats>> columnStatsMap = getColumnStats(partitionNameFileNameList, columnNames);
