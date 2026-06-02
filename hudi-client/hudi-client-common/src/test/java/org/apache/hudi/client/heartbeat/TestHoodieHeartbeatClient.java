@@ -21,12 +21,17 @@ package org.apache.hudi.client.heartbeat;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.awaitility.Awaitility.await;
@@ -112,5 +117,61 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
     hoodieHeartbeatClient.stopHeartbeatTimers();
     assertFalse(hoodieHeartbeatClient.isHeartbeatExpired(instantTime1));
     assertTrue(hoodieHeartbeatClient.getHeartbeat(instantTime1).isHeartbeatStopped());
+  }
+
+  /**
+   * Regression test for the heartbeat-expiry incident: a single slow/hung storage write must not
+   * freeze the heartbeat timer, and the expiry detection must not interrupt/kill the timer thread.
+   * The first heartbeat write blocks (simulating a hung cloud-storage call); we assert the timer keeps
+   * producing heartbeats once the storage recovers, proving the timer was neither blocked (#1) nor
+   * killed by a self-interrupt (#2).
+   */
+  @Test
+  public void testTimerSurvivesHungHeartbeatWrite() {
+    CountDownLatch releaseFirstWrite = new CountDownLatch(1);
+    SlowCreateStorage slowStorage =
+        new SlowCreateStorage((FileSystem) metaClient.getStorage().getFileSystem(), releaseFirstWrite);
+    // interval 1s, tolerableMisses 1 => maxAllowable = 1s and write timeout = 1s, so the next tick
+    // after the blocked write also exercises the expiry branch (formerly the self-interrupt path).
+    HoodieHeartbeatClient hoodieHeartbeatClient =
+        new HoodieHeartbeatClient(slowStorage, metaClient.getBasePath().toString(),
+            heartBeatInterval, numTolerableMisses);
+    try {
+      hoodieHeartbeatClient.start(instantTime1);
+      // Despite the first write hanging, the timer must keep generating heartbeats on fresh threads.
+      await().atMost(15, SECONDS)
+          .until(() -> hoodieHeartbeatClient.getHeartbeat(instantTime1).getNumHeartbeats() >= 2);
+    } finally {
+      releaseFirstWrite.countDown();
+      hoodieHeartbeatClient.close();
+    }
+  }
+
+  /**
+   * A storage wrapper whose first {@code create()} call blocks until released, simulating a hung
+   * storage write. All subsequent calls delegate normally.
+   */
+  private static class SlowCreateStorage extends HoodieHadoopStorage {
+
+    private final AtomicBoolean firstCall = new AtomicBoolean(true);
+    private final CountDownLatch releaseFirstWrite;
+
+    SlowCreateStorage(FileSystem fs, CountDownLatch releaseFirstWrite) {
+      super(fs);
+      this.releaseFirstWrite = releaseFirstWrite;
+    }
+
+    @Override
+    public OutputStream create(StoragePath path, boolean overwrite) throws IOException {
+      if (firstCall.getAndSet(false)) {
+        try {
+          releaseFirstWrite.await();
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new IOException("Interrupted while simulating a hung heartbeat write", e);
+        }
+      }
+      return super.create(path, overwrite);
+    }
   }
 }
