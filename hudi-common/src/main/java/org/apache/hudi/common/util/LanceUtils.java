@@ -24,6 +24,8 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -32,6 +34,7 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -40,12 +43,15 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 public class LanceUtils extends FileFormatUtils {
 
@@ -175,7 +181,30 @@ public class LanceUtils extends FileFormatUtils {
                                                                                   StoragePath filePath,
                                                                                   List<String> columnList,
                                                                                   HoodieIndexVersion indexVersion) {
-    throw new UnsupportedOperationException("readColumnStatsFromMetadata is not yet supported for Lance format");
+    try {
+      HoodieSchema fileSchema = readSchema(storage, filePath);
+      List<Pair<String, HoodieSchemaField>> fieldsToIndex = columnList.stream()
+          .map(columnName -> HoodieSchemaUtils.getNestedField(fileSchema, columnName))
+          .filter(Option::isPresent)
+          .map(Option::get)
+          .collect(Collectors.toList());
+      if (fieldsToIndex.isEmpty()) {
+        return Collections.emptyList();
+      }
+
+      HoodieSchema readSchema = HoodieSchemaUtils.projectSchema(
+          fileSchema, fieldsToIndex.stream().map(Pair::getKey).collect(Collectors.toList()));
+      try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
+          .getReaderFactory(HoodieRecord.HoodieRecordType.SPARK)
+          .getFileReader(ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER, filePath, HoodieFileFormat.LANCE);
+           ClosableIterator<HoodieRecord> recordIterator = fileReader.getRecordIterator(readSchema)) {
+        Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata =
+            HoodieTableMetadataUtil.collectColumnRangeMetadata(recordIterator, fieldsToIndex, filePath.getName(), readSchema, storage.getConf(), indexVersion);
+        return new ArrayList<>(columnRangeMetadata.values());
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read column stats from Lance file " + filePath, e);
+    }
   }
 
   @Override

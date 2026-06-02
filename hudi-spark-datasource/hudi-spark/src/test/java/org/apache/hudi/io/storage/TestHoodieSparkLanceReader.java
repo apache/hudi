@@ -24,6 +24,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 import org.apache.hudi.common.bloom.SimpleBloomFilter;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -33,6 +34,8 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -64,7 +67,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.bloom.BloomFilterTypeCode.DYNAMIC_V0;
@@ -380,6 +386,38 @@ public class TestHoodieSparkLanceReader {
   }
 
   @Test
+  public void testReadColumnStatsFromMetadata() throws Exception {
+    StructType schema = new StructType()
+        .add("id", DataTypes.IntegerType, false)
+        .add("name", DataTypes.StringType, true)
+        .add("age", DataTypes.LongType, true)
+        .add("score", DataTypes.DoubleType, true);
+
+    List<InternalRow> rows = Arrays.asList(
+        createRow(1, "Alice", 20L, 10.5),
+        createRow(2, "Bob", 25L, null),
+        createRow(3, null, null, 5.25),
+        createRow(4, "Dora", 30L, 20.0)
+    );
+
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_column_stats.lance");
+    try (HoodieSparkLanceReader ignored = writeAndCreateReader(path, schema, rows)) {
+      List<HoodieColumnRangeMetadata<Comparable>> columnStats = HoodieIOFactory.getIOFactory(storage)
+          .getFileFormatUtils(HoodieFileFormat.LANCE)
+          .readColumnStatsFromMetadata(storage, path, Arrays.asList("id", "name", "age", "score", "missing"), HoodieIndexVersion.V2);
+
+      Map<String, HoodieColumnRangeMetadata<Comparable>> statsByColumn = columnStats.stream()
+          .collect(Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity()));
+
+      assertEquals(Set.of("id", "name", "age", "score"), statsByColumn.keySet());
+      assertColumnStats(statsByColumn.get("id"), 1, 4, 0L, 4L);
+      assertColumnStats(statsByColumn.get("name"), "Alice", "Dora", 1L, 4L);
+      assertColumnStats(statsByColumn.get("age"), 20L, 30L, 1L, 4L);
+      assertColumnStats(statsByColumn.get("score"), 5.25, 20.0, 1L, 4L);
+    }
+  }
+
+  @Test
   public void testFilterRowKeysWithCandidates() throws Exception {
     // Create schema with all 5 Hudi metadata fields
     StructType schema = new StructType()
@@ -423,6 +461,18 @@ public class TestHoodieSparkLanceReader {
         Arguments.of(Collections.emptySet()),
         Arguments.of((Set<String>) null)
     );
+  }
+
+  private static void assertColumnStats(HoodieColumnRangeMetadata<Comparable> columnStats,
+                                        Comparable expectedMinValue,
+                                        Comparable expectedMaxValue,
+                                        long expectedNullCount,
+                                        long expectedValueCount) {
+    assertNotNull(columnStats);
+    assertEquals(expectedMinValue, columnStats.getMinValue());
+    assertEquals(expectedMaxValue, columnStats.getMaxValue());
+    assertEquals(expectedNullCount, columnStats.getNullCount());
+    assertEquals(expectedValueCount, columnStats.getValueCount());
   }
 
   @ParameterizedTest
