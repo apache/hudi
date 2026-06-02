@@ -53,8 +53,7 @@ public class TableMetadataReader
     {
         Map<Pair<String, String>, List<HoodieMetadataColumnStats>> columnStatsMap = getColumnStats(partitionNameFileNameList, columnNames);
         return columnStatsMap.values().stream().flatMap(Collection::stream).collect(Collectors.groupingBy(
-                HoodieMetadataColumnStats::getColumnName,
-                Collectors.mapping(colStats -> colStats, Collectors.toList())))
+                HoodieMetadataColumnStats::getColumnName, Collectors.toList()))
                 .entrySet().stream()
             .collect(Collectors.toMap(
                     Map.Entry::getKey,
