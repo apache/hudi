@@ -22,11 +22,14 @@ import io.trino.spi.connector.SourcePage;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.AvroRecordContext;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.OverwriteWithLatestMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -39,6 +42,8 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 
 public class HudiTrinoReaderContext
         extends HoodieReaderContext<IndexedRecord>
@@ -151,7 +156,25 @@ public class HudiTrinoReaderContext
     @Override
     protected Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses)
     {
-        return Option.of(new HoodiePreCombineAvroRecordMerger());
+        // Dispatch on the table's merge mode, mirroring HoodieAvroReaderContext. The Trino reader
+        // operates on IndexedRecord, so the Avro mergers apply directly. Using the read-time merger
+        // (combineAndGetUpdateValue) rather than a fixed preCombine merger keeps COMMIT_TIME_ORDERING
+        // and custom-payload tables correct on MoR reads.
+        // TODO(apache/hudi#18898): add MoR read tests for delete markers and custom payloads to
+        //  exercise the EVENT_TIME_ORDERING (combineAndGetUpdateValue) and CUSTOM branches below.
+        switch (mergeMode) {
+            case EVENT_TIME_ORDERING:
+                return Option.of(new HoodieAvroRecordMerger());
+            case COMMIT_TIME_ORDERING:
+                return Option.of(new OverwriteWithLatestMerger());
+            case CUSTOM:
+            default:
+                Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergeImplClasses, mergeStrategyId);
+                if (recordMerger.isEmpty()) {
+                    throw new IllegalArgumentException("No valid merger implementation set for `" + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");
+                }
+                return recordMerger;
+        }
     }
 
     @Override
