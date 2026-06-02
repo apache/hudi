@@ -56,8 +56,6 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
@@ -455,19 +453,10 @@ public final class HudiUtil
      */
     public static <K, V> Map<K, V> collectAsMap(HoodiePairData<K, V> pairData)
     {
-        // Map each pair to (Option<Pair.key>, V) to handle null keys uniformly
-        // If there are multiple entries sharing the same key, use the incoming one
-        return pairData.mapToPair(pair ->
-                        Pair.of(
-                                Option.ofNullable(pair.getKey()),
-                                pair.getValue()))
-                .collectAsList()
-                .stream()
+        // HashMap allows null keys, so collect directly; on duplicate keys the later entry wins.
+        return pairData.collectAsList().stream()
                 .collect(HashMap::new,
-                        (map, pair) -> {
-                            K key = pair.getKey().orElse(null);
-                            map.put(key, pair.getValue());
-                        },
+                        (map, pair) -> map.put(pair.getKey(), pair.getValue()),
                         HashMap::putAll);
     }
 }
