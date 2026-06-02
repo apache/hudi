@@ -22,7 +22,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.ReaderContextFactory
 import org.apache.hudi.common.index.vector.{VectorIndexMdtSearchUtils, VectorIndexMetadataCache, VectorIndexOptions}
-import org.apache.hudi.common.model.{FileSlice, HoodieFileGroupId, HoodieIndexDefinition, HoodieRecord}
+import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
@@ -34,7 +34,6 @@ import org.apache.hudi.exception.HoodieIOException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
-import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
@@ -49,7 +48,6 @@ import org.apache.spark.sql.types.{ArrayType, ByteType, DataType, DoubleType, Fl
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
-import scala.util.{Failure, Success, Try}
 
 case class VectorSearchTable(df: DataFrame, basePath: Option[String])
 
@@ -466,149 +464,140 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
     val numProbes = math.min(math.max(1, VectorIndexOptions.getNumProbes(indexOptions.asJava)), cache.numClusters())
     val topClusters = cache.findTopClusters(queryVector, numProbes, metric)
 
-    // Fetch shard counts for ONLY the probed clusters. The routing cache skips cluster
-    // manifests (they grow large at scale); we query just the nprobe entries we need.
-    val shardCounts = VectorIndexMdtSearchUtils.readClusterShardCounts(
-      metadataTable,
-      indexPartition,
-      cache.getGenerationId,
-      topClusters.map(Int.box).toList.asJava)
-
+    // Shard counts from cache — no extra MDT IO.
+    val shardCounts = cache.getShardCounts(topClusters)
     if (shardCounts.isEmpty) {
-      sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(
+      return sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(
         spark, spark.sparkContext.emptyRDD[InternalRow], outputSchema)
-    } else {
-      val refineK = math.max(k, k * VectorIndexOptions.getRefineFactor(indexOptions.asJava))
-
-      val postings = VectorIndexMdtSearchUtils.readPostingMatches(
-        metadataTable,
-        indexPartition,
-        cache.getGenerationId,
-        shardCounts,
-        false)
-      val scored = VectorIndexMdtSearchUtils.scorePostingMatches(
-        postings,
-        queryVector,
-        cache.getDimension,
-        cache.getQuantizerSeed,
-        cache.isAssumeNormalized)
-      val topCandidates = VectorIndexMdtSearchUtils.selectTopK(scored, refineK)
-
-      readExactCandidatesFromFileGroups(
-        spark,
-        basePath,
-        metaClient,
-        engineContext,
-        HoodieJavaRDD.getJavaRDD(topCandidates).rdd,
-        outputSchema)
     }
-  }
 
-  private def readExactCandidatesFromFileGroups(
-      spark: SparkSession,
-      basePath: String,
-      metaClient: HoodieTableMetaClient,
-      engineContext: HoodieSparkEngineContext,
-      candidates: RDD[VectorIndexMdtSearchUtils.ScoredPostingMatch],
-      outputSchema: StructType): DataFrame = {
     val timeline = metaClient.getActiveTimeline.getCommitsAndCompactionTimeline.filterCompletedInstants()
     val latestInstant = timeline.lastInstant().orElseThrow(() =>
       new HoodieAnalysisException(s"No completed commits found for table '${metaClient.getBasePath}'."))
     val latestInstantTime = latestInstant.requestedTime()
+
+    // Pre-resolve FileSlices for ALL candidate file groups BEFORE the posting scan.
+    // Cluster manifests (cached, ~200 KB) give us the superset of possible FG IDs.
+    // We resolve them upfront and broadcast so executors never need to collect back
+    // to the driver or do directory listings.
+    val candidateFgIds = cache.getFileGroupsForClusters(topClusters, null)
+    val fileSliceMap = preResolveFileSlices(
+      metadataTable, metaClient, timeline, latestInstantTime, candidateFgIds)
+    val bFileSliceMap = spark.sparkContext.broadcast(fileSliceMap)
+
     val tableSchemaWithMetaFields = HoodieSchemaUtils.addMetadataFields(
       new TableSchemaResolver(metaClient).getTableSchema(false), false)
     val sparkSchemaWithMetaFields = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableSchemaWithMetaFields)
     val readerContextFactory = engineContext.getReaderContextFactory(metaClient)
       .asInstanceOf[ReaderContextFactory[InternalRow]]
     val recordKeyOrdinal = sparkSchemaWithMetaFields.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-    val storageConf = metaClient.getStorageConf
 
-    // Collect the bounded candidate set to the driver and group by (partitionPath, fileGroupId).
-    // refineK bounds the size (typically a few hundred rows), so this collect is cheap.
-    // It lets us resolve every FileSlice ONCE on the driver instead of doing a
-    // directory listing + FSView construction per executor task.
-    val candidatesByGroup: Array[((String, String), Set[String])] = candidates
-      .filter(_.getFileGroupId != null)
-      .map(c => ((Option(c.getPartitionPath).getOrElse(""), c.getFileGroupId), c.getRecordKey))
-      .groupByKey()
-      .mapValues(_.toSet)
-      .collect()
-
+    val refineK = math.max(k, k * VectorIndexOptions.getRefineFactor(indexOptions.asJava))
     val emptyDf = sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(
       spark, spark.sparkContext.emptyRDD[InternalRow], sparkSchemaWithMetaFields)
 
-    if (candidatesByGroup.isEmpty) {
-      emptyDf
-    } else {
-      // List each distinct partition ONCE on the driver and build a single FSView
-      // covering all candidate partitions. This replaces the per-task listing.
-      val distinctPartitions = candidatesByGroup.map(_._1._1).distinct
-      val allPathInfos = new java.util.ArrayList[StoragePathInfo]()
-      distinctPartitions.foreach { partition =>
-        val partPath = if (partition.isEmpty) new StoragePath(basePath) else new StoragePath(basePath, partition)
-        Try(allPathInfos.addAll(metaClient.getStorage.listDirectEntries(partPath))).toOption
-      }
-      val fsView = new HoodieTableFileSystemView(metaClient, timeline, allPathInfos)
+    // ---- Single distributed pipeline: posting scan → score → top-K → read → rerank ----
+    // No intermediate collect() to driver. Only ONE reduce for top-K selection,
+    // then a repartition by fileGroupId so each task reads one file.
 
-      // Resolve FileSlice for each (partitionPath, fileGroupId) pair on the driver.
-      // FileSlice implements Serializable so it can be parallelized directly.
-      val resolvedTasks: Array[(FileSlice, Set[String])] = try {
-        candidatesByGroup.flatMap { case ((partitionPath, fileGroupId), recordKeys) =>
-          val sliceOpt = fsView
-            .getLatestMergedFileSlicesBeforeOrOn(partitionPath, latestInstantTime)
-            .filter(_.getFileId == fileGroupId)
-            .findFirst()
-          if (sliceOpt.isPresent) Array((sliceOpt.get(), recordKeys)) else Array.empty[(FileSlice, Set[String])]
-        }
-      } finally {
-        fsView.close()
-      }
+    val postings = VectorIndexMdtSearchUtils.readPostingMatches(
+      metadataTable, indexPartition, cache.getGenerationId, shardCounts, false)
+    val scored = VectorIndexMdtSearchUtils.scorePostingMatches(
+      postings, queryVector, cache.getDimension, cache.getQuantizerSeed, cache.isAssumeNormalized)
+    val topCandidates = VectorIndexMdtSearchUtils.selectTopK(scored, refineK)
 
-      if (resolvedTasks.isEmpty) {
-        emptyDf
+    val topKRdd = HoodieJavaRDD.getJavaRDD(topCandidates).rdd
+      .filter(_.getFileGroupId != null)
+
+    if (topKRdd.isEmpty()) {
+      bFileSliceMap.destroy()
+      return emptyDf
+    }
+
+    // Repartition by fileGroupId so candidates for the same file land in one task.
+    // This is a lightweight shuffle of ~refineK rows (~100-1000), not a full-data shuffle.
+    val byFileGroup: RDD[(String, Iterable[VectorIndexMdtSearchUtils.ScoredPostingMatch])] = topKRdd
+      .keyBy(_.getFileGroupId)
+      .groupByKey()
+
+    val exactRows: RDD[InternalRow] = byFileGroup.flatMap { case (fgId, candidates) =>
+      val fileSliceOpt = bFileSliceMap.value.get(fgId)
+      if (fileSliceOpt.isEmpty) {
+        Iterator.empty
       } else {
-        // One task per file group. Executors receive the pre-resolved FileSlice and
-        // record key set; no FSView construction or directory listing happens on executors.
-        val resolvedRdd = spark.sparkContext.parallelize(resolvedTasks.toSeq, resolvedTasks.length)
-        val exactRows: RDD[InternalRow] = resolvedRdd.flatMap { case (fileSlice, recordKeys) =>
-          val taskMetaClient = HoodieTableMetaClient.builder()
-            .setConf(storageConf.newInstance())
-            .setBasePath(basePath)
-            .build()
-          val fileGroupReader = HoodieFileGroupReader.newBuilder[InternalRow]()
-            .withReaderContext(readerContextFactory.getContext)
-            .withHoodieTableMetaClient(taskMetaClient)
-            .withLatestCommitTime(latestInstantTime)
-            .withFileSlice(fileSlice)
-            .withDataSchema(tableSchemaWithMetaFields)
-            .withRequestedSchema(tableSchemaWithMetaFields)
-            .withInternalSchema(HOption.empty[InternalSchema]())
-            .withProps(taskMetaClient.getTableConfig.getProps)
-            .withShouldUseRecordPosition(false)
-            .build()
+        val recordKeys = candidates.map(_.getRecordKey).toSet
+        val taskMetaClient = HoodieTableMetaClient.builder()
+          .setConf(storageConf.newInstance())
+          .setBasePath(basePath)
+          .build()
+        val fileGroupReader = HoodieFileGroupReader.newBuilder[InternalRow]()
+          .withReaderContext(readerContextFactory.getContext)
+          .withHoodieTableMetaClient(taskMetaClient)
+          .withLatestCommitTime(latestInstantTime)
+          .withFileSlice(fileSliceOpt.get)
+          .withDataSchema(tableSchemaWithMetaFields)
+          .withRequestedSchema(tableSchemaWithMetaFields)
+          .withInternalSchema(HOption.empty[InternalSchema]())
+          .withProps(taskMetaClient.getTableConfig.getProps)
+          .withShouldUseRecordPosition(false)
+          .build()
+        try {
+          val iterator = fileGroupReader.getClosableIterator
+          CloseableIteratorListener.addListener(iterator)
+          val rows = ArrayBuffer.empty[InternalRow]
           try {
-            val iterator = fileGroupReader.getClosableIterator
-            CloseableIteratorListener.addListener(iterator)
-            val rows = ArrayBuffer.empty[InternalRow]
-            try {
-              while (iterator.hasNext) {
-                val row = iterator.next()
-                if (recordKeys.contains(row.getString(recordKeyOrdinal))) {
-                  rows += row.copy()
-                }
+            while (iterator.hasNext) {
+              val row = iterator.next()
+              if (recordKeys.contains(row.getString(recordKeyOrdinal))) {
+                rows += row.copy()
               }
-            } finally {
-              iterator.close()
             }
-            rows.iterator
-          } catch {
-            case ioe: java.io.IOException =>
-              throw new HoodieIOException(
-                s"Unable to read vector candidate file group ${fileSlice.getFileGroupId}", ioe)
+          } finally {
+            iterator.close()
+          }
+          rows.iterator
+        } catch {
+          case ioe: java.io.IOException =>
+            throw new HoodieIOException(
+              s"Unable to read vector candidate file group $fgId", ioe)
+        }
+      }
+    }
+    sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(spark, exactRows, sparkSchemaWithMetaFields)
+  }
+
+  /**
+   * Pre-resolve FileSlices for candidate file groups using MDT-backed FSView.
+   * Uses the MDT FILES partition for listing — no GCS/HDFS directory listing.
+   * Returns a serializable map suitable for broadcast.
+   */
+  private def preResolveFileSlices(
+      metadataTable: HoodieTableMetadata,
+      metaClient: HoodieTableMetaClient,
+      timeline: org.apache.hudi.common.table.timeline.HoodieTimeline,
+      latestInstantTime: String,
+      candidateFgIds: java.util.Set[String]): Map[String, FileSlice] = {
+    val fsView = new HoodieTableFileSystemView(metadataTable, metaClient, timeline)
+    try {
+      // ONE MDT FILES-partition read — no GCS/HDFS directory listing.
+      // For tables with millions of partitions this could be heavy; in that case
+      // adding partition paths to ClusterManifest would let us call
+      // fsView.loadPartitions(candidatePartitions) instead.
+      fsView.loadAllPartitions()
+      val result = scala.collection.mutable.Map.empty[String, FileSlice]
+      val fgIter = fsView.getAllFileGroups.iterator()
+      while (fgIter.hasNext) {
+        val fg = fgIter.next()
+        if (candidateFgIds.contains(fg.getFileGroupId.getFileId)) {
+          val sliceOpt = fg.getLatestFileSliceBeforeOrOn(latestInstantTime)
+          if (sliceOpt.isPresent) {
+            result(fg.getFileGroupId.getFileId) = sliceOpt.get()
           }
         }
-        sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(spark, exactRows, sparkSchemaWithMetaFields)
       }
+      result.toMap
+    } finally {
+      fsView.close()
     }
   }
 
@@ -654,10 +643,12 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
     metadataCaches.get(cacheKey) match {
       case Some(existing) if !existing.isStaleFor(currentInstant) => existing
       case _ =>
-        // Routing cache only: centroids, manifest, quantizer. Cluster manifests and
-        // file-group mappings grow with index size; those are fetched per-query for
-        // the probed clusters only, not loaded into driver memory up-front.
-        val loaded = VectorIndexMetadataCache.load(metadataTable, indexPartition, vectorSchema, currentInstant, false)
+        // Full cache: centroids, manifest, quantizer, AND cluster manifests.
+        // Cluster manifests are ~K rows (~200 KB for 4096 clusters) and stable
+        // until rebuild. Caching them eliminates the per-query readClusterShardCounts
+        // MDT IO and provides the file-group superset needed for FileSlice
+        // pre-resolution (broadcast pattern, no intermediate collect).
+        val loaded = VectorIndexMetadataCache.load(metadataTable, indexPartition, vectorSchema, currentInstant, true)
         if (loaded != null) {
           metadataCaches = metadataCaches.updated(cacheKey, loaded)
         }
