@@ -72,7 +72,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -417,7 +416,7 @@ public final class HudiUtil
     public static List<HiveColumnHandle> getOrderingColumnHandles(Table table, TypeManager typeManager, Lazy<HoodieTableMetaClient> lazyMetaClient, HiveTimestampPrecision timestampPrecision)
     {
         RecordMergeMode recordMergeMode = lazyMetaClient.get().getTableConfig().getRecordMergeMode();
-        if (Objects.isNull(recordMergeMode) || recordMergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING)) {
+        if (recordMergeMode == null || recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING) {
             // if commit time ordering is enabled, return empty list
             return Collections.emptyList();
         }
