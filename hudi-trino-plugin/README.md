@@ -9,6 +9,7 @@ The source directory is named `hudi-trino-plugin/`; the Maven artifactId is `hud
 Excluded from default builds. Activate the `hudi-trino` Maven profile:
 
 ```
+# tests need Trino test-jars not on Maven Central (see Running tests); skip them in the default build
 mvn -Phudi-trino -pl hudi-trino-plugin install -Dmaven.test.skip=true
 ```
 
