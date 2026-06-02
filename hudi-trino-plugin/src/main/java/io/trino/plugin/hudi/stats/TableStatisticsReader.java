@@ -113,6 +113,6 @@ public class TableStatisticsReader
                 .stream().flatMap(entry -> entry.getValue()
                         .map(baseFile -> Pair.of(entry.getKey(), baseFile.getFileName())))
                 .toList();
-        return tableMetadata.getColumnsRange(filePaths, columnNames);
+        return tableMetadata.getColumnRanges(filePaths, columnNames);
     }
 }
