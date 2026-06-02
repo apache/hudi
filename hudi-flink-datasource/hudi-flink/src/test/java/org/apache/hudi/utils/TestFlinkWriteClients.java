@@ -113,6 +113,19 @@ public class TestFlinkWriteClients {
   }
 
   @Test
+  void testBucketRemotePartitionerConfig() {
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.set(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, HoodieIndex.BucketIndexEngineType.SIMPLE.name());
+
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertFalse(writeConfig.isUsingRemotePartitioner());
+
+    conf.set(FlinkOptions.BUCKET_INDEX_REMOTE_PARTITIONER_ENABLE, true);
+    writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertTrue(writeConfig.isUsingRemotePartitioner());
+  }
+
+  @Test
   void testUserConfiguredGlobalRecordIndexMinFileGroupCountIsNotOverridden() {
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
     conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "12");

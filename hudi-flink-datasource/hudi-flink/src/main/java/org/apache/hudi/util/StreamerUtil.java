@@ -218,6 +218,7 @@ public class StreamerUtil {
         .withRecordKeyField(conf.get(FlinkOptions.RECORD_KEY_FIELD))
         .withIndexKeyField(OptionsResolver.getIndexKeyField(conf))
         .withBucketIndexEngineType(OptionsResolver.getBucketEngineType(conf))
+        .enableBucketRemotePartitioner(OptionsResolver.isBucketRemotePartitionerEnabled(conf))
         .withEngineType(EngineType.FLINK)
         .build();
   }

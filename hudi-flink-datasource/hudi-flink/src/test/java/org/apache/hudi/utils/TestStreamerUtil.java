@@ -28,9 +28,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Triple;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.util.StreamerUtil;
@@ -104,6 +106,18 @@ class TestStreamerUtil {
     assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, mergeBehavior.getLeft());
     assertEquals(PartialUpdateAvroPayload.class.getName(), mergeBehavior.getMiddle());
     assertNull(mergeBehavior.getRight());
+  }
+
+  @Test
+  void testGetIndexConfigUsesFlinkBucketRemotePartitionerConfig() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.set(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, HoodieIndex.BucketIndexEngineType.SIMPLE.name());
+
+    assertFalse(StreamerUtil.getIndexConfig(conf).getBoolean(HoodieIndexConfig.BUCKET_PARTITIONER));
+
+    conf.set(FlinkOptions.BUCKET_INDEX_REMOTE_PARTITIONER_ENABLE, true);
+    assertTrue(StreamerUtil.getIndexConfig(conf).getBoolean(HoodieIndexConfig.BUCKET_PARTITIONER));
   }
 
   @Test
@@ -200,4 +214,3 @@ class TestStreamerUtil {
     }
   }
 }
-

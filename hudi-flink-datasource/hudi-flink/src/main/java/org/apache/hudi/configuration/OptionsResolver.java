@@ -259,6 +259,24 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether the simple bucket index should use remote partitioner.
+   */
+  public static boolean enableBucketRemotePartitioner(Configuration conf) {
+    return isSimpleBucketIndexType(conf)
+        && isBucketRemotePartitionerEnabled(conf)
+        && Boolean.parseBoolean(conf.getString(
+            HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(),
+            HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.defaultValue()));
+  }
+
+  /**
+   * Returns whether the bucket index remote partitioner option is enabled.
+   */
+  public static boolean isBucketRemotePartitionerEnabled(Configuration conf) {
+    return conf.get(FlinkOptions.BUCKET_INDEX_REMOTE_PARTITIONER_ENABLE);
+  }
+
+  /**
    * Returns the default plan strategy class.
    */
   public static String getDefaultPlanStrategyClassName(Configuration conf) {

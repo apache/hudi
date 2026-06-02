@@ -100,6 +100,30 @@ public class TestOptionsResolver {
   }
 
   @Test
+  void testEnableBucketRemotePartitioner() {
+    Configuration conf = getConf();
+    assertFalse(conf.get(FlinkOptions.BUCKET_INDEX_REMOTE_PARTITIONER_ENABLE));
+    assertFalse(OptionsResolver.isBucketRemotePartitionerEnabled(conf));
+    assertFalse(OptionsResolver.enableBucketRemotePartitioner(conf));
+
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.set(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, HoodieIndex.BucketIndexEngineType.SIMPLE.name());
+    assertFalse(OptionsResolver.isBucketRemotePartitionerEnabled(conf));
+    assertFalse(OptionsResolver.enableBucketRemotePartitioner(conf));
+
+    conf.set(FlinkOptions.BUCKET_INDEX_REMOTE_PARTITIONER_ENABLE, true);
+    assertTrue(OptionsResolver.isBucketRemotePartitionerEnabled(conf));
+    assertTrue(OptionsResolver.enableBucketRemotePartitioner(conf));
+
+    conf.setString(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "false");
+    assertFalse(OptionsResolver.enableBucketRemotePartitioner(conf));
+
+    conf.setString(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "true");
+    conf.set(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING.name());
+    assertFalse(OptionsResolver.enableBucketRemotePartitioner(conf));
+  }
+
+  @Test
   void testIsLazyFailedWritesCleanPolicy() {
     Configuration conf = new Configuration();
     // add any parameter

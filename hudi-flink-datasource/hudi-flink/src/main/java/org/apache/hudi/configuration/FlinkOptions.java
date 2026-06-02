@@ -638,6 +638,14 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Users can use this parameter to specify expression and the corresponding bucket "
           + "numbers (separated by commas).Multiple rules are separated by semicolons like "
           + "hoodie.bucket.index.partition.expressions=expression1,bucket-number1;expression2,bucket-number2");
+
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> BUCKET_INDEX_REMOTE_PARTITIONER_ENABLE = ConfigOptions
+      .key(HoodieIndexConfig.BUCKET_PARTITIONER.key())
+      .booleanType()
+      .defaultValue(HoodieIndexConfig.BUCKET_PARTITIONER.defaultValue())
+      .withDescription("Whether to use remote partitioner backed by the embedded timeline server for simple bucket index.");
+
   public static final ConfigOption<String> PARTITION_PATH_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
       .stringType()
