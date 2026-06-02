@@ -13,6 +13,7 @@
  */
 package io.trino.plugin.hudi;
 
+import com.google.common.io.Closer;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hudi.reader.HudiTrinoReaderContext;
 import io.trino.plugin.hudi.util.HudiAvroSerializer;
@@ -32,6 +33,7 @@ import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 
 import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.base.Throwables.throwIfUnchecked;
 
 public class HudiPageSource
         implements ConnectorPageSource
@@ -61,20 +63,24 @@ public class HudiPageSource
         try {
             this.recordIterator = fileGroupReader.getClosableIterator();
         }
-        catch (IOException e) {
-            // Clean up resources on initialization failure
+        catch (Throwable e) {
+            // getClosableIterator() can fail with checked (IOException) or unchecked
+            // (HoodieIOException, NPE/IAE from schema/file validation) exceptions; clean up
+            // in all cases so we don't leak the reader/page-source handles.
             try {
                 fileGroupReader.close();
             }
-            catch (IOException closeException) {
+            catch (Exception closeException) {
                 e.addSuppressed(closeException);
             }
             try {
                 pageSource.close();
             }
-            catch (IOException closeException) {
+            catch (Exception closeException) {
                 e.addSuppressed(closeException);
             }
+            // Preserve the original exception type (RuntimeException/Error) instead of masking it.
+            throwIfUnchecked(e);
             throw new RuntimeException("Failed to initialize file group reader!", e);
         }
     }
@@ -126,31 +132,13 @@ public class HudiPageSource
     public void close()
             throws IOException
     {
-        IOException closeException = null;
-
-        recordIterator.close();
-
-        try {
-            fileGroupReader.close();
-        }
-        catch (IOException e) {
-            closeException = e;
-        }
-
-        try {
-            pageSource.close();
-        }
-        catch (IOException e) {
-            if (closeException == null) {
-                closeException = e;
-            }
-            else {
-                closeException.addSuppressed(e);
-            }
-        }
-
-        if (closeException != null) {
-            throw closeException;
+        // Closer attempts every close and aggregates failures via addSuppressed, rethrowing the
+        // first. Registration is LIFO, so registering in reverse gives the original close order:
+        // recordIterator (wraps the readers) first, then fileGroupReader, then pageSource.
+        try (Closer closer = Closer.create()) {
+            closer.register(pageSource::close);
+            closer.register(fileGroupReader::close);
+            closer.register(recordIterator::close);
         }
     }
 
