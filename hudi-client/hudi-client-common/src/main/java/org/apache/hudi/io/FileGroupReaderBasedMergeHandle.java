@@ -301,7 +301,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
         // The stats of inserts, updates, and deletes are updated once at the end
         // These will be set in the write stat when closing the merge handle
-        this.readStats = fileGroupReader.getStats();
+        this.readStats = fileGroupReader.getReadStats();
         this.insertRecordsWritten = readStats.getNumInserts();
         this.updatedRecordsWritten = readStats.getNumUpdates();
         this.recordsDeleted = readStats.getNumDeletes();
@@ -318,10 +318,10 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
   private HoodieFileGroupReader<T> getFileGroupReader(boolean usePosition, Option<InternalSchema> internalSchemaOption, TypedProperties props,
                                                         Option<Stream<HoodieLogFile>> logFileStreamOpt, Iterator<HoodieRecord<T>> incomingRecordsItr) {
-    HoodieFileGroupReader.Builder<T> fileGroupBuilder = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
+    HoodieFileGroupReader.HoodieFileGroupReaderBuilder<T> fileGroupBuilder = HoodieFileGroupReader.<T>builder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(maxInstantTime).withPartitionPath(partitionPath).withBaseFileOption(Option.ofNullable(baseFileToMerge))
         .withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
-        .withInternalSchema(internalSchemaOption).withProps(props)
+        .withInternalSchemaOpt(internalSchemaOption).withProps(props)
         .withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords())
         .withFileGroupUpdateCallback(createCallback());
 

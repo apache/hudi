@@ -513,13 +513,15 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   }
 
   private def loadFileSlice(fileSlice: FileSlice, readerContext: SparkFileFormatInternalRowReaderContext): Iterator[BufferedRecord[InternalRow]] = {
-    val fileGroupReader = HoodieFileGroupReader.newBuilder()
+    val fileGroupReader = HoodieFileGroupReader.builder()
       .withReaderContext(readerContext)
       .withHoodieTableMetaClient(metaClient)
-      .withFileSlice(fileSlice)
+      .withBaseFileOption(fileSlice.getBaseFile)
+      .withLogFiles(fileSlice.getLogFiles)
+      .withPartitionPath(fileSlice.getPartitionPath)
       .withDataSchema(schema)
       .withRequestedSchema(schema)
-      .withInternalSchema(toJavaOption(originTableSchema.internalSchema))
+      .withInternalSchemaOpt(toJavaOption(originTableSchema.internalSchema))
       .withProps(readerProperties)
       .withLatestCommitTime(split.changes.last.getInstant)
       .build()
