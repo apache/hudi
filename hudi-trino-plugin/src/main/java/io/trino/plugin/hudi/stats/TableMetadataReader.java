@@ -52,24 +52,25 @@ public class TableMetadataReader
             throws HoodieMetadataException
     {
         Map<Pair<String, String>, List<HoodieMetadataColumnStats>> columnStatsMap = getColumnStats(partitionNameFileNameList, columnNames);
-        return columnStatsMap.values().stream().flatMap(Collection::stream).collect(Collectors.groupingBy(
-                HoodieMetadataColumnStats::getColumnName, Collectors.toList()))
+        return columnStatsMap.values().stream()
+                .flatMap(Collection::stream)
+                .collect(Collectors.groupingBy(HoodieMetadataColumnStats::getColumnName, Collectors.toList()))
                 .entrySet().stream()
-            .collect(Collectors.toMap(
-                    Map.Entry::getKey,
-                    e -> {
-                        long valueCount = 0L;
-                        long nullCount = 0L;
-                        long totalSize = 0L;
-                        long totalUncompressedSize = 0L;
-                        for (HoodieMetadataColumnStats stats : e.getValue()) {
-                            valueCount += stats.getValueCount();
-                            nullCount += stats.getNullCount();
-                            totalSize += stats.getTotalSize();
-                            totalUncompressedSize += stats.getTotalUncompressedSize();
-                        }
-                        return HoodieColumnRangeMetadata.create(
-                                "", e.getKey(), null, null, nullCount, valueCount, totalSize, totalUncompressedSize, ValueMetadata.NULL_METADATA);
-                    }));
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> {
+                            long valueCount = 0L;
+                            long nullCount = 0L;
+                            long totalSize = 0L;
+                            long totalUncompressedSize = 0L;
+                            for (HoodieMetadataColumnStats stats : e.getValue()) {
+                                valueCount += stats.getValueCount();
+                                nullCount += stats.getNullCount();
+                                totalSize += stats.getTotalSize();
+                                totalUncompressedSize += stats.getTotalUncompressedSize();
+                            }
+                            return HoodieColumnRangeMetadata.create(
+                                    "", e.getKey(), null, null, nullCount, valueCount, totalSize, totalUncompressedSize, ValueMetadata.NULL_METADATA);
+                        }));
     }
 }
