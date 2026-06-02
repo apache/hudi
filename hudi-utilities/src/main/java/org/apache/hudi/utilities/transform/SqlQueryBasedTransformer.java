@@ -22,12 +22,11 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.config.SqlTransformerConfig;
 import org.apache.hudi.utilities.exception.HoodieTransformExecutionException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
 
@@ -38,9 +37,8 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
  *
  * The query should reference the source as a table named "\<SRC\>"
  */
+@Slf4j
 public class SqlQueryBasedTransformer implements Transformer {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SqlQueryBasedTransformer.class);
 
   private static final String SRC_PATTERN = "<SRC>";
   private static final String TMP_TABLE = "HOODIE_SRC_TMP_TABLE_";
@@ -53,10 +51,10 @@ public class SqlQueryBasedTransformer implements Transformer {
     try {
       // tmp table name doesn't like dashes
       String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
-      LOG.info("Registering tmp table: {}", tmpTable);
+      log.info("Registering tmp table: {}", tmpTable);
       rowDataset.createOrReplaceTempView(tmpTable);
       String sqlStr = transformerSQL.replaceAll(SRC_PATTERN, tmpTable);
-      LOG.debug("SQL Query for transformation: {}", sqlStr);
+      log.debug("SQL Query for transformation: {}", sqlStr);
       Dataset<Row> transformed = sparkSession.sql(sqlStr);
       sparkSession.catalog().dropTempView(tmpTable);
       return transformed;
