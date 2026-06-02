@@ -144,7 +144,7 @@ The current implementation is a distributed brute-force scan and assumes embeddi
 
 #### Lance File Format
 
-The new logical types are useful on Parquet, but vector and blob workloads have access patterns that columnar formats designed for analytical scans don't optimize for. [Lance](https://lancedb.github.io/lance/) is a modern columnar format built around fast random access and efficient encoding of large fixed-size arrays.
+The new logical types are useful on Parquet, but vector and blob workloads have access patterns that columnar formats designed for analytical scans don't optimize for. [Lance](https://github.com/lance-format/lance) is a modern columnar format built around fast random access and efficient encoding of large fixed-size arrays.
 
 Hudi 1.2.0 adds Lance as a supported base-file format alongside Parquet, ORC, and HFile. VECTOR columns on Lance use Lance's native `FixedSizeList<Float32/Float64, dim>` encoding. BLOB columns on Lance use Lance's native blob-encoding and integrate with the `DESCRIPTOR` read mode so byte materialization stays deferred.
 
