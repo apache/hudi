@@ -125,6 +125,14 @@
             <version>${parquet.version}</version>
         </dependency>
 
+        <!-- Explicit parquet-hadoop ensures the correct version is on the compile classpath
+             regardless of which version flink-parquet or other transitives bring in. -->
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-hadoop</artifactId>
+            <version>${parquet.version}</version>
+        </dependency>
+
         <!-- Kryo -->
         <dependency>
             <groupId>com.esotericsoftware</groupId>
@@ -190,6 +198,36 @@
                 <exclusion>
                     <groupId>ch.qos.logback</groupId>
                     <artifactId>*</artifactId>
+                </exclusion>
+                <!-- hive-exec 2.3.x bundles parquet 1.8.x which causes NoSuchMethodError
+                     at test runtime when ${parquet.version} uses newer parquet APIs. -->
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-hadoop</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-hadoop-bundle</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-column</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-common</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-avro</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-encoding</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-format-structures</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
