@@ -43,9 +43,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
-import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.NativeTableMetadataFactory;
 import org.apache.hudi.util.Lazy;
 
 import java.util.HashMap;
@@ -104,24 +103,11 @@ public class HudiSplitSource
             HoodieTableMetaClient metaClient = tableHandle.getMetaClient();
             HoodieEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorage().getConf());
 
-            HoodieTableMetadata tableMetadata;
-            if (enableMetadataTable) {
-                HoodieBackedTableMetadata mdt = new HoodieBackedTableMetadata(
-                        engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString(), true);
-                if (mdt.isMetadataTableInitialized()) {
-                    tableMetadata = mdt;
-                }
-                else {
-                    log.warn("Metadata table not initialized on disk for %s; falling back to FileSystemBackedTableMetadata",
-                            tableHandle.getSchemaTableName());
-                    tableMetadata = new FileSystemBackedTableMetadata(
-                            engineContext, metaClient.getStorage(), metaClient.getBasePath().toString());
-                }
-            }
-            else {
-                tableMetadata = new FileSystemBackedTableMetadata(
-                        engineContext, metaClient.getStorage(), metaClient.getBasePath().toString());
-            }
+            // Defer to the native factory, which creates a HoodieBackedTableMetadata when the
+            // metadata table is enabled and initialized, and falls back to FileSystemBackedTableMetadata
+            // otherwise.
+            HoodieTableMetadata tableMetadata = NativeTableMetadataFactory.getInstance().create(
+                    engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString(), true);
             log.info("Loaded table metadata for table: %s in %s ms", tableHandle.getSchemaTableName(), timer.endTimer());
             return tableMetadata;
         });
