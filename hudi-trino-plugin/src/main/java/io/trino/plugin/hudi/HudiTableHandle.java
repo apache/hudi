@@ -76,7 +76,7 @@ public class HudiTableHandle
             @JsonProperty("tableSchemaStr") String tableSchemaStr,
             @JsonProperty("latestCommitTime") String latestCommitTime)
     {
-        this(Optional.empty(), Optional.empty(), schemaName, tableName, basePath, tableType, partitionColumns, Lazy.lazily(() -> orderingColumns), ImmutableSet.of(),
+        this(Optional.empty(), Optional.empty(), schemaName, tableName, basePath, tableType, partitionColumns, Lazy.eagerly(orderingColumns), ImmutableSet.of(),
                 partitionPredicates, regularPredicates, limit, buildTableSchema(tableSchemaStr), () -> latestCommitTime);
     }
 
