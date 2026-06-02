@@ -368,10 +368,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public void coordinatorFails() throws Exception {
-    this.coordinator.close();
     resetCoordinatorToCheckpoint();
-    this.coordinator.start();
-    this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
   }
 
   public void restartCoordinator() throws Exception {

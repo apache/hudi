@@ -167,9 +167,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public void coordinatorFails() throws Exception {
-    this.coordinator.close();
-    this.coordinator.start();
-    this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
+    // Do nothing since there is no state recovery for bulk insert.
   }
 
   public void restartCoordinator() throws Exception {
