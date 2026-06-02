@@ -29,13 +29,12 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.utilities.UtilHelpers;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,8 +48,8 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
 /**
  * Utils for executing multi-table services.
  */
+@Slf4j
 public class MultiTableServiceUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(MultiTableServiceUtils.class);
 
   public static class Constants {
     public static final String TABLES_TO_BE_SERVED_PROP = "hoodie.tableservice.tablesToServe";
@@ -79,7 +78,7 @@ public class MultiTableServiceUtils {
               return true;
             } else {
               // Log the wrong path in console.
-              LOG.info("Hoodie table not found in path {}, skip", tablePath);
+              log.info("Hoodie table not found in path {}, skip", tablePath);
               return false;
             }
           }).collect(Collectors.toList());
