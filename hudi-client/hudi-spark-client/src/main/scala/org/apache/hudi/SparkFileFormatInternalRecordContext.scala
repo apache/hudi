@@ -20,14 +20,18 @@
 package org.apache.hudi
 
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
-import org.apache.hudi.common.engine.RecordContext
+import org.apache.hudi.common.engine.{ExtractedData, RecordContext}
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.hudi.SparkAdapter
 
+import java.io.IOException
+import java.util.Properties
 import scala.collection.mutable
 
 trait SparkFileFormatInternalRecordContext extends BaseSparkInternalRecordContext {
@@ -38,6 +42,43 @@ trait SparkFileFormatInternalRecordContext extends BaseSparkInternalRecordContex
 
   override def supportsParquetRowIndex: Boolean = {
     HoodieSparkUtils.gteqSpark3_5
+  }
+
+  /**
+   * Extracts the engine-native record data from a [[HoodieRecord]].
+   *
+   * For Spark records the data is already an [[InternalRow]]. For records coming from
+   * Avro-payload-based paths (e.g. [[org.apache.spark.sql.hudi.command.payload.ExpressionPayload]]
+   * used in SQL MERGE INTO operations), the Avro representation is extracted via
+   * [[HoodieRecord#toIndexedRecord]] and then deserialized to [[InternalRow]]. When the Avro
+   * record's schema differs from the BufferedRecord schema (e.g. ExpressionPayload's
+   * getInsertValue returns a data-schema record while the buffered schema is
+   * writeSchemaWithMetaFields), the original Avro record is propagated through
+   * [[ExtractedData]] so downstream code can decode it with the correct source schema.
+   */
+  override def extractDataFromRecord(record: HoodieRecord[_], schema: HoodieSchema, properties: Properties): ExtractedData[InternalRow] = {
+    val data = record.getData
+    if (data == null || data.isInstanceOf[InternalRow]) {
+      ExtractedData.of(data.asInstanceOf[InternalRow])
+    } else {
+      try {
+        val avroRecordOpt = record.toIndexedRecord(schema, properties)
+        if (avroRecordOpt.isPresent) {
+          val indexedRecord = avroRecordOpt.get().getData
+          val row = convertAvroRecord(indexedRecord)
+          val originalAvro = indexedRecord match {
+            case g: GenericRecord if !g.getSchema.equals(schema.toAvroSchema) => g
+            case _ => null
+          }
+          ExtractedData.of(row, originalAvro)
+        } else {
+          ExtractedData.of(null.asInstanceOf[InternalRow])
+        }
+      } catch {
+        case e: IOException =>
+          throw new HoodieException("Failed to extract data from record: " + record, e)
+      }
+    }
   }
 
   /**

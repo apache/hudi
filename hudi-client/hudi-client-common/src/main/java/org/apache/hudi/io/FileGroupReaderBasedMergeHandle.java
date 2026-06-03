@@ -430,7 +430,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       if (record == null || record.getRecord() == null) {
         return null;
       }
-      return recordContext.convertToAvroRecord(record.getRecord(), recordContext.getSchemaFromBufferRecord(record));
+      return recordContext.convertToAvroRecord(record, recordContext.getSchemaFromBufferRecord(record));
     }
   }
 

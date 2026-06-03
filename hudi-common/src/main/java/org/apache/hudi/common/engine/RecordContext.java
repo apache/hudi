@@ -88,8 +88,16 @@ public abstract class RecordContext<T> implements Serializable {
     this.partitionPath = partitionPath;
   }
 
-  public T extractDataFromRecord(HoodieRecord record, HoodieSchema schema, Properties properties) {
-    return (T) record.getData();
+  /**
+   * Extracts the engine-native record data from a {@link HoodieRecord}.
+   *
+   * <p>Returns an {@link ExtractedData} so engines whose extraction path goes through an Avro
+   * payload (e.g. {@code ExpressionPayload} in SQL MERGE INTO on Spark) can hand the original
+   * Avro record back to downstream callers without losing its source schema. The default
+   * implementation returns the record's data with no Avro hint.
+   */
+  public ExtractedData<T> extractDataFromRecord(HoodieRecord record, HoodieSchema schema, Properties properties) {
+    return ExtractedData.of((T) record.getData());
   }
 
   /**
@@ -136,6 +144,30 @@ public abstract class RecordContext<T> implements Serializable {
    */
   public HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord) {
     return constructHoodieRecord(bufferedRecord, partitionPath);
+  }
+
+  /**
+   * Schema-aware variant of {@link #constructHoodieRecord(BufferedRecord, String)}.
+   *
+   * <p>Use this when the {@link BufferedRecord} was produced against a different
+   * {@link RecordContext} (e.g. after an Avro-merger created a new BufferedRecord and encoded
+   * its schemaId into the {@code incoming} context), so that this context can resolve the schema
+   * by registering it locally and constructing a thin wrapper with a locally-valid schemaId.
+   * If the schema is already encoded with the same id, the call is forwarded directly.
+   */
+  public HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord, String partitionPath, HoodieSchema schema) {
+    Integer localSchemaId = encodeSchema(schema);
+    if (localSchemaId.equals(bufferedRecord.getSchemaId())) {
+      return constructHoodieRecord(bufferedRecord, partitionPath);
+    }
+    BufferedRecord<T> rewrapped = new BufferedRecord<>(
+        bufferedRecord.getRecordKey(),
+        bufferedRecord.getOrderingValue(),
+        bufferedRecord.getRecord(),
+        localSchemaId,
+        bufferedRecord.getHoodieOperation(),
+        bufferedRecord.getOriginalAvroRecord());
+    return constructHoodieRecord(rewrapped, partitionPath);
   }
 
   /**
@@ -243,6 +275,21 @@ public abstract class RecordContext<T> implements Serializable {
   public abstract T convertAvroRecord(IndexedRecord avroRecord);
 
   public abstract GenericRecord convertToAvroRecord(T record, HoodieSchema schema);
+
+  /**
+   * Returns the Avro representation of the given buffered record. If the record was extracted
+   * from an Avro payload (e.g. {@code ExpressionPayload}) and still carries the original Avro
+   * record on the {@link BufferedRecord}, that record is returned directly so its source schema
+   * is preserved. Otherwise the engine-native row is serialized to Avro via
+   * {@link #convertToAvroRecord(Object, HoodieSchema)}.
+   */
+  public GenericRecord convertToAvroRecord(BufferedRecord<T> bufferedRecord, HoodieSchema schema) {
+    GenericRecord original = bufferedRecord.getOriginalAvroRecord();
+    if (original != null) {
+      return original;
+    }
+    return convertToAvroRecord(bufferedRecord.getRecord(), schema);
+  }
 
   /**
    * Fills an empty row with record key fields and returns.

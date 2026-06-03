@@ -19,6 +19,7 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.engine.ExtractedData;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -128,9 +129,10 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public IndexedRecord extractDataFromRecord(HoodieRecord record, HoodieSchema schema, Properties properties) {
+  public ExtractedData<IndexedRecord> extractDataFromRecord(HoodieRecord record, HoodieSchema schema, Properties properties) {
     try {
-      return record.toIndexedRecord(schema, properties).map(HoodieAvroIndexedRecord::getData).orElse(null);
+      IndexedRecord data = record.toIndexedRecord(schema, properties).map(HoodieAvroIndexedRecord::getData).orElse(null);
+      return ExtractedData.of(data);
     } catch (IOException e) {
       throw new HoodieException("Failed to extract data from record: " + record, e);
     }

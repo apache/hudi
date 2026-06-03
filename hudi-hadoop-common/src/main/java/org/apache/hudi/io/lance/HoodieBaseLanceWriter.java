@@ -312,7 +312,7 @@ public abstract class HoodieBaseLanceWriter<R, K extends Comparable<K>> implemen
    * Initialize LanceFileWriter (lazy initialization).
    */
   private void initializeWriter() throws IOException {
-    writer = LanceFileWriter.open(path.toString(), allocator, null);
+    writer = LanceFileWriter.open(path.toUri().toString(), allocator, null);
   }
 
   /**

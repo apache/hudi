@@ -21,6 +21,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.HoodieDataSourceHelpers.{hasNewCommits, latestCompletedCommit, listCommitsSince, streamCompletedInstantSince}
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.model.WriteOperationType.{BULK_INSERT, INSERT, UPSERT}
@@ -47,24 +48,31 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
   val colsToCompare = "timestamp, _row_key, partition_path, rider, driver, begin_lat, begin_lon, end_lat, end_lon, fare.amount, fare.currency, _hoodie_is_deleted"
 
   //params for core flow tests
-  val params: List[String] = List(
-    "COPY_ON_WRITE|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
-    "COPY_ON_WRITE|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
-    "COPY_ON_WRITE|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
-    "COPY_ON_WRITE|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
-    "COPY_ON_WRITE|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
-    "COPY_ON_WRITE|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
-    "COPY_ON_WRITE|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
-    "COPY_ON_WRITE|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
-    "MERGE_ON_READ|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
-    "MERGE_ON_READ|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
-    "MERGE_ON_READ|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
-    "MERGE_ON_READ|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
-    "MERGE_ON_READ|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
-    "MERGE_ON_READ|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
-    "MERGE_ON_READ|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
-    "MERGE_ON_READ|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE"
-  )
+  val params: List[String] = {
+    val allParams: List[String] = List(
+      "COPY_ON_WRITE|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM|parquet",
+      "COPY_ON_WRITE|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM|parquet",
+      "COPY_ON_WRITE|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE|parquet",
+      "COPY_ON_WRITE|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE|parquet",
+      "COPY_ON_WRITE|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM|parquet",
+      "COPY_ON_WRITE|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM|parquet",
+      "COPY_ON_WRITE|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|parquet",
+      "COPY_ON_WRITE|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|parquet",
+      "MERGE_ON_READ|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM|parquet",
+      "MERGE_ON_READ|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM|parquet",
+      "MERGE_ON_READ|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE|parquet",
+      "MERGE_ON_READ|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE|parquet",
+      "MERGE_ON_READ|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM|parquet",
+      "MERGE_ON_READ|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM|parquet",
+      "MERGE_ON_READ|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|parquet",
+      "MERGE_ON_READ|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|parquet",
+      // Lance coverage in this PR is intentionally narrow: COW + non-global index + base upsert.
+      // MOR, GLOBAL_BLOOM, and partition-path-update paths are deferred to follow-up PRs so the
+      // initial Lance integration can be reviewed and benchmarked in isolation.
+      "COPY_ON_WRITE|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|lance"
+    )
+    withLanceIfSupported(allParams)
+  }
 
   //extracts the params and runs each core flow test
   forAll(params) { (paramStr: String) =>
@@ -75,17 +83,18 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
           tableType = splits(0),
           isMetadataEnabled = splits(1).toBoolean,
           keyGenClass = splits(2),
-          indexType = splits(3))
+          indexType = splits(3),
+          baseFileFormat = splits(4))
       }
     }
   }
 
   def testCoreFlows(basePath: File, tableType: String, isMetadataEnabled: Boolean,
-                    keyGenClass: String, indexType: String): Unit = {
+                    keyGenClass: String, indexType: String, baseFileFormat: String): Unit = {
     //Create table and set up for testing
     val tableName = generateTableName
     val tableBasePath = basePath.getCanonicalPath + "/" + tableName
-    val writeOptions = getWriteOptions(tableName, tableType, keyGenClass, indexType)
+    val writeOptions = getWriteOptions(tableName, tableType, keyGenClass, indexType, baseFileFormat)
     createTable(tableName, keyGenClass, writeOptions, tableBasePath)
     val fs = HadoopFSUtils.getFs(tableBasePath, spark.sparkContext.hadoopConfiguration)
     val dataGen = new HoodieTestDataGenerator(HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA, 0xDEED)
@@ -207,7 +216,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
     }
   }
 
-  def getWriteOptions(tableName: String, tableType: String, keyGenClass: String, indexType: String): String = {
+  def getWriteOptions(tableName: String, tableType: String, keyGenClass: String, indexType: String, baseFileFormat: String): String = {
     val typeString = if (tableType.equals("COPY_ON_WRITE")) {
       "cow"
     } else if (tableType.equals("MERGE_ON_READ")) {
@@ -221,6 +230,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
        |  type = '$typeString',
        |  primaryKey = '_row_key',
        |  orderingFields = 'timestamp',
+       |  hoodie.table.base.file.format = '$baseFileFormat',
        |  hoodie.bulkinsert.shuffle.parallelism = 4,
        |  hoodie.database.name = "databaseName",
        |  hoodie.table.keygenerator.class = '$keyGenClass',
@@ -410,40 +420,49 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
   }
 
   //params for immutable user flow
-  val paramsForImmutable: List[String] = List(
-    "COPY_ON_WRITE|insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
-    "COPY_ON_WRITE|insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
-    "COPY_ON_WRITE|insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
-    "COPY_ON_WRITE|insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
-    "COPY_ON_WRITE|insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
-    "COPY_ON_WRITE|insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
-    "COPY_ON_WRITE|insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
-    "COPY_ON_WRITE|insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
-    "MERGE_ON_READ|insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
-    "MERGE_ON_READ|insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
-    "MERGE_ON_READ|insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
-    "MERGE_ON_READ|insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
-    "MERGE_ON_READ|insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
-    "MERGE_ON_READ|insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
-    "MERGE_ON_READ|insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
-    "MERGE_ON_READ|insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
-    "COPY_ON_WRITE|bulk_insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
-    "COPY_ON_WRITE|bulk_insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
-    "COPY_ON_WRITE|bulk_insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
-    "COPY_ON_WRITE|bulk_insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
-    "COPY_ON_WRITE|bulk_insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
-    "COPY_ON_WRITE|bulk_insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
-    "COPY_ON_WRITE|bulk_insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
-    "COPY_ON_WRITE|bulk_insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
-    "MERGE_ON_READ|bulk_insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
-    "MERGE_ON_READ|bulk_insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
-    "MERGE_ON_READ|bulk_insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
-    "MERGE_ON_READ|bulk_insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
-    "MERGE_ON_READ|bulk_insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
-    "MERGE_ON_READ|bulk_insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
-    "MERGE_ON_READ|bulk_insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
-    "MERGE_ON_READ|bulk_insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE"
-  )
+  val paramsForImmutable: List[String] = {
+    val allParamsForImmutable: List[String] = List(
+      "COPY_ON_WRITE|insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM|parquet",
+      "COPY_ON_WRITE|insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM|parquet",
+      "COPY_ON_WRITE|insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE|parquet",
+      "COPY_ON_WRITE|insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE|parquet",
+      "COPY_ON_WRITE|insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM|parquet",
+      "COPY_ON_WRITE|insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM|parquet",
+      "COPY_ON_WRITE|insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|parquet",
+      "COPY_ON_WRITE|insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|parquet",
+      "MERGE_ON_READ|insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM|parquet",
+      "MERGE_ON_READ|insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM|parquet",
+      "MERGE_ON_READ|insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE|parquet",
+      "MERGE_ON_READ|insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE|parquet",
+      "MERGE_ON_READ|insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM|parquet",
+      "MERGE_ON_READ|insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM|parquet",
+      "MERGE_ON_READ|insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|parquet",
+      "MERGE_ON_READ|insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|parquet",
+      "COPY_ON_WRITE|bulk_insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM|parquet",
+      "COPY_ON_WRITE|bulk_insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM|parquet",
+      "COPY_ON_WRITE|bulk_insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE|parquet",
+      "COPY_ON_WRITE|bulk_insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE|parquet",
+      "COPY_ON_WRITE|bulk_insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM|parquet",
+      "COPY_ON_WRITE|bulk_insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM|parquet",
+      "COPY_ON_WRITE|bulk_insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|parquet",
+      "COPY_ON_WRITE|bulk_insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|parquet",
+      "MERGE_ON_READ|bulk_insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM|parquet",
+      "MERGE_ON_READ|bulk_insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM|parquet",
+      "MERGE_ON_READ|bulk_insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE|parquet",
+      "MERGE_ON_READ|bulk_insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE|parquet",
+      "MERGE_ON_READ|bulk_insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM|parquet",
+      "MERGE_ON_READ|bulk_insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM|parquet",
+      "MERGE_ON_READ|bulk_insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|parquet",
+      "MERGE_ON_READ|bulk_insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|parquet"
+    )
+    // Lance immutable-write parameterization is dropped from this PR; the strict scope is
+    // COW + base upserts only, which lives in `params` above.
+    allParamsForImmutable
+  }
+
+  private def withLanceIfSupported(params: List[String]): List[String] = {
+    if (HoodieSparkUtils.gteqSpark3_4) params else params.filterNot(_.endsWith("|lance"))
+  }
 
   //extracts the params and runs each immutable user flow test
   forAll(paramsForImmutable) { (paramStr: String) =>
@@ -462,17 +481,18 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
           writeOp = writeOp,
           isMetadataEnabled = splits(2).toBoolean,
           keyGenClass = splits(3),
-          indexType = splits(4))
+          indexType = splits(4),
+          baseFileFormat = splits(5))
       }
     }
   }
 
   def testImmutableUserFlow(basePath: File, tableType: String, writeOp: WriteOperationType,
                             isMetadataEnabled: Boolean, keyGenClass: String,
-                            indexType: String): Unit = {
+                            indexType: String, baseFileFormat: String): Unit = {
     val tableName = generateTableName
     val tableBasePath = basePath.getCanonicalPath + "/" + tableName
-    val writeOptions = getWriteOptions(tableName, tableType, keyGenClass, indexType)
+    val writeOptions = getWriteOptions(tableName, tableType, keyGenClass, indexType, baseFileFormat)
     createTable(tableName, keyGenClass, writeOptions, tableBasePath)
     val fs = HadoopFSUtils.getFs(tableBasePath, spark.sparkContext.hadoopConfiguration)
 

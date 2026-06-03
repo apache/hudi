@@ -176,6 +176,8 @@ public class HoodieInputFormatUtils {
       case PARQUET:
       case HFILE:
       case LANCE:
+        // Lance uses Parquet output format for Hive metastore registration only.
+        // Actual writes go through Spark-native Lance writers; Hive never writes Lance files directly.
         return MapredParquetOutputFormat.class.getName();
       case ORC:
         return OrcOutputFormat.class.getName();
@@ -189,6 +191,8 @@ public class HoodieInputFormatUtils {
       case PARQUET:
       case HFILE:
       case LANCE:
+        // Lance uses Parquet SerDe for Hive metastore registration only.
+        // Actual reads go through Spark-native Lance readers.
         return ParquetHiveSerDe.class.getName();
       case ORC:
         return OrcSerde.class.getName();
