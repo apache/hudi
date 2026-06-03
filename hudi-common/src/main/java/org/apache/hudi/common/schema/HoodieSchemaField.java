@@ -55,6 +55,8 @@ public class HoodieSchemaField implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
+  public static final String METADATA_DOC_PREFIX = "Hudi metadata field: ";
+
   private final Schema.Field avroField;
   private final HoodieSchema fieldSchema;
 
@@ -148,7 +150,7 @@ public class HoodieSchemaField implements Serializable {
     ValidationUtils.checkArgument(name != null && !name.isEmpty(), "Metadata field name cannot be null or empty");
     ValidationUtils.checkArgument(schema != null, "Metadata field schema cannot be null");
 
-    return HoodieSchemaField.of(name, schema, "Hudi metadata field: " + name, HoodieJsonProperties.NULL_VALUE);
+    return HoodieSchemaField.of(name, schema, METADATA_DOC_PREFIX + name, HoodieJsonProperties.NULL_VALUE);
   }
 
   /**
