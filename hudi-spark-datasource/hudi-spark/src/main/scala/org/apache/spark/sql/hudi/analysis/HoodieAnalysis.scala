@@ -451,6 +451,7 @@ case class ResolveImplementationsEarly(spark: SparkSession) extends Rule[Logical
       val alreadyAligned = partitionColumns.zip(partitionAttrs).forall {
         case (partition, attr) => resolver(partition, attr.name)
       }
+      // Avoid adding a redundant Project when partition columns are already in the table-defined order.
       if (alreadyAligned) {
         query
       } else {
