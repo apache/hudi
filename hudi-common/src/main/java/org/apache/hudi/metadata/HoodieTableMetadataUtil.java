@@ -189,6 +189,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_MISSIN
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
+import static org.apache.hudi.metadata.HoodieTableMetadata.isMetadataTable;
 import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
 import static org.apache.hudi.metadata.MetadataPartitionType.isNewExpressionIndexDefinitionRequired;
 import static org.apache.hudi.metadata.MetadataPartitionType.isNewSecondaryIndexDefinitionRequired;
@@ -1514,22 +1515,30 @@ public class HoodieTableMetadataUtil {
     HoodieTableFileSystemView fsView = null;
     try {
       fsView = fileSystemView.orElseGet(() -> getFileSystemViewForMetadataTable(metaClient));
-      Stream<FileSlice> fileSliceStream;
-      if (mergeFileSlices) {
-        if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
-          fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
-              // including pending compaction instant as the last instant so that the finished delta commits
-              // that start earlier than the compaction can be queried.
-              partition, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant().get().requestedTime());
+      // Check if bucketing is enabled
+      boolean bucketingEnabled = isBucketingEnabledForMDT(metaClient);
+      List<String> partitionsToList = getPartitionsToList(metaClient, partition, bucketingEnabled);
+
+      List<FileSlice> fileSlices = new ArrayList<>();
+      for (String partitionToList : partitionsToList) {
+        Stream<FileSlice> fileSliceStream;
+        if (mergeFileSlices) {
+          if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
+            fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
+                // including pending compaction instant as the last instant so that the finished delta commits
+                // that start earlier than the compaction can be queried.
+                partitionToList, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant().get().requestedTime());
+          } else {
+            fileSliceStream = Stream.empty();
+          }
         } else {
-          return Collections.emptyList();
+          fileSliceStream = fsView.getLatestFileSlices(partitionToList);
         }
-      } else {
-        fileSliceStream = fsView.getLatestFileSlices(partition);
+        fileSliceStream.forEach(fileSlices::add);
       }
-      return fileSliceStream.sorted(Comparator.comparing(FileSlice::getFileId)).collect(Collectors.toList());
+      return fileSlices.stream().sorted(Comparator.comparing(FileSlice::getFileId)).collect(Collectors.toList());
     } finally {
-      if (!fileSystemView.isPresent()) {
+      if (!fileSystemView.isPresent() && fsView != null) {
         fsView.close();
       }
     }
@@ -1549,8 +1558,16 @@ public class HoodieTableMetadataUtil {
     HoodieTableFileSystemView fsView = null;
     try {
       fsView = fileSystemView.orElseGet(() -> getFileSystemViewForMetadataTable(metaClient));
-      Stream<FileSlice> fileSliceStream = fsView.getLatestFileSlicesIncludingInflight(partition);
-      return fileSliceStream
+      // Check if bucketing is enabled
+      boolean bucketingEnabled = isBucketingEnabledForMDT(metaClient);
+      List<String> partitionsToList = getPartitionsToList(metaClient, partition, bucketingEnabled);
+
+      List<FileSlice> fileSlices = new ArrayList<>();
+      for (String partitionToList : partitionsToList) {
+        Stream<FileSlice> fileSliceStream = fsView.getLatestFileSlicesIncludingInflight(partitionToList);
+        fileSliceStream.forEach(fileSlices::add);
+      }
+      return fileSlices.stream()
           .sorted(Comparator.comparing(FileSlice::getFileId))
           .collect(Collectors.toList());
     } finally {
@@ -2311,6 +2328,98 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
+   * Returns true if bucketing is enabled for the metadata table.
+   *
+   * <p>Reads the property from the MDT's own table config so we avoid an extra disk read of the
+   * data table's hoodie.properties on every file-slice lookup. The property is persisted on both
+   * the data table and the MDT during MDT initialization (see
+   * {@link #setMetadataTablePartitionBucketing(HoodieTableMetaClient, HoodieTableMetaClient, boolean)}).
+   *
+   * @param metaClient MetaClient for the metadata table
+   * @return true if bucketing is enabled
+   */
+  private static boolean isBucketingEnabledForMDT(HoodieTableMetaClient metaClient) {
+    return metaClient.getTableConfig().isMetadataTablePartitionBucketingEnabled();
+  }
+
+  /**
+   * Returns the list of partitions to list for file slices.
+   * When bucketing is enabled, returns the bucket sub-directories.
+   * When bucketing is disabled, returns the partition itself.
+   *
+   * <p>Note: bucketing is fixed at MDT initialization time (see
+   * {@link org.apache.hudi.metadata.HoodieBackedTableMetadataWriter#initializeFileGroups}). A given
+   * MDT is therefore either fully bucketed or fully non-bucketed; mixed-state file groups under
+   * partition/ alongside partition/&lt;bucket&gt;/ cannot occur. We deliberately do not also scan the
+   * partition root when bucketing is enabled.
+   *
+   * @param metaClient MetaClient for the metadata table
+   * @param partition The partition path
+   * @param bucketingEnabled Whether bucketing is enabled
+   * @return List of partition paths to list
+   */
+  private static List<String> getPartitionsToList(HoodieTableMetaClient metaClient, String partition, boolean bucketingEnabled) {
+    List<String> partitionsToList = new ArrayList<>();
+    try {
+      if (bucketingEnabled) {
+        // Find all the buckets in the partition
+        StoragePath partitionPath = new StoragePath(metaClient.getBasePath(), partition);
+        List<StoragePathInfo> statuses = metaClient.getStorage().listDirectEntries(partitionPath);
+        for (StoragePathInfo status : statuses) {
+          if (status.isDirectory()) {
+            partitionsToList.add(partition + StoragePath.SEPARATOR + status.getPath().getName());
+          }
+        }
+        log.info("Listing {} buckets in metadata table partition {}", partitionsToList.size(), partition);
+      } else {
+        // Only list the partition folder as bucketing is not enabled
+        partitionsToList.add(partition);
+        log.info("Listing non-bucketed metadata table partition {}", partition);
+      }
+    } catch (IOException e) {
+      throw new HoodieMetadataException("Failed to check for bucketing in metadata table partition " + partition, e);
+    }
+    return partitionsToList;
+  }
+
+  /**
+   * Set the bucketing of partitions within the metadata table.
+   *
+   * <p>The property is persisted on both the data table (authoritative source for MDT initialization
+   * decisions) and the MDT (to allow reader code to determine bucketing without loading data table
+   * properties on every call).
+   *
+   * @param dataMetaClient     MetaClient for the dataset
+   * @param metadataMetaClient MetaClient for the MDT (may be null if MDT is not yet initialized)
+   * @param enabled            If true, enable bucketing for MDT partitions; if false, disable it
+   */
+  public static HoodieTableMetaClient setMetadataTablePartitionBucketing(HoodieTableMetaClient dataMetaClient,
+                                                                         HoodieTableMetaClient metadataMetaClient, boolean enabled) {
+    // Only allowed on the main dataset
+    ValidationUtils.checkArgument(!isMetadataTable(dataMetaClient.getBasePath().toString()), "Bucketing should only be enabled on the main dataset");
+
+    // Persist on the MDT first, then on the data table. The data table is the authoritative source for the
+    // retry guard in HoodieBackedTableMetadataWriter#initializeFileGroups
+    // (bucketingEnabled && !dataMetaClient...isMetadataTablePartitionBucketingEnabled()). Updating the data
+    // table last ensures that if the MDT update fails the data table stays un-flipped, so the next retry
+    // naturally re-attempts both updates rather than leaving the two configs permanently desynced.
+    if (metadataMetaClient != null) {
+      // Persist on MDT so reader code can determine bucketing from MDT props alone.
+      metadataMetaClient.getTableConfig().setMetadataTablePartitionBucketing(enabled);
+      HoodieTableConfig.update(metadataMetaClient.getStorage(), metadataMetaClient.getMetaPath(), metadataMetaClient.getTableConfig().getProps());
+    }
+
+    dataMetaClient.getTableConfig().setMetadataTablePartitionBucketing(enabled);
+    HoodieTableConfig.update(dataMetaClient.getStorage(), dataMetaClient.getMetaPath(), dataMetaClient.getTableConfig().getProps());
+    dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
+    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataTablePartitionBucketingEnabled() == enabled,
+            "Metadata table state change should be persisted");
+
+    log.info("Metadata table {} partition bucketing has been {}", dataMetaClient.getBasePath(), enabled ? "enabled" : "disabled");
+    return dataMetaClient;
+  }
+
+  /**
    * Return the complete fileID for a file group within a MDT partition.
    * <p>
    * MDT fileGroups have the format <fileIDPrefix>-<index>. The fileIDPrefix is hardcoded for each MDT partition and index is an integer.
@@ -2367,6 +2476,22 @@ public class HoodieTableMetadataUtil {
    */
   public static String getFileGroupPrefix(String fileId) {
     return fileId.substring(0, getFileIdLengthWithoutFileIndex(fileId));
+  }
+
+  /**
+   * Returns the relative path of a bucket in an MDT partition.
+   *
+   * Example: For record_index partition and bucket 5, returns record_index/0005
+   *
+   * @param partitionType The MDT partition (e.g. files, record_index)
+   * @param bucketIndex Index of the bucket
+   */
+  public static String getBucketRelativePath(MetadataPartitionType partitionType, int bucketIndex) {
+    return getBucketRelativePath(partitionType.getPartitionPath(), bucketIndex);
+  }
+
+  public static String getBucketRelativePath(String partitionRelativePath, int bucketIndex) {
+    return String.format("%s%s%04d", partitionRelativePath, StoragePath.SEPARATOR, bucketIndex);
   }
 
   /**

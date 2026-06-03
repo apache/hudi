@@ -59,7 +59,9 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -100,6 +102,7 @@ import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -648,6 +651,22 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
     List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient, false);
+
+    List<MetadataPartitionType> enabledPartitionTypes = metadataWriter.getEnabledPartitionTypes();
+    if (writeConfig.getMetadataConfig().isFileGroupBucketingEnabled()) {
+      // Each enabled partition should have its first bucket sub-directory present
+      for (MetadataPartitionType partitionType : enabledPartitionTypes) {
+        assertTrue(metadataTablePartitions.contains(HoodieTableMetadataUtil.getBucketRelativePath(partitionType, 0)),
+            "Missing bucket-0 for partition: " + partitionType.getPartitionPath());
+      }
+    } else {
+      // partition path is the only partition
+      assertEquals(enabledPartitionTypes.size(), metadataTablePartitions.size());
+      assertTrue(metadataTablePartitions.contains(MetadataPartitionType.FILES.getPartitionPath()));
+    }
+
+    Map<String, MetadataPartitionType> partitionTypeMap = enabledPartitionTypes.stream()
+        .collect(Collectors.toMap(MetadataPartitionType::getPartitionPath, Function.identity()));
 
     // Metadata table should automatically compact and clean
     // versions are +1 as autoClean / compaction happens end of commits
