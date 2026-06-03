@@ -44,7 +44,6 @@ import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFileReader;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
-import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.TestLogReaderUtils;
@@ -207,10 +206,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   @Test
   public void testEmptyLog() throws IOException {
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder()
+            .withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
     assertEquals(0, writer.getCurrentSize(), "Just created this log, size should be 0");
     assertTrue(writer.getLogFile().getFileName().startsWith("."), "Check all log files should start with a .");
     assertEquals(1, writer.getLogFile().getLogVersion(), "Version should be 1 for new log created");
@@ -220,15 +223,18 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @ParameterizedTest
   @EnumSource(names = {"AVRO_DATA_BLOCK", "HFILE_DATA_BLOCK", "PARQUET_DATA_BLOCK"})
   public void testBasicAppend(HoodieLogBlockType dataBlockType) throws IOException, InterruptedException, URISyntaxException {
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder()
+            .withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
     Map<HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    long pos = writer.getCurrentSize();
     HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records, header);
     AppendResult result = writer.appendBlock(dataBlock);
 
@@ -245,10 +251,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   @Test
   public void testRollover() throws IOException, InterruptedException, URISyntaxException {
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder()
+            .withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
@@ -265,10 +275,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     // Create a writer with the size threshold as the size we just wrote - so this has to roll
     writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+        HoodieLogFormatWriter.builder()
+            .withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage)
-            .withSizeThreshold(size - 1).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .withSizeThreshold(size - 1)
+            .build();
     records = SchemaTestUtil.generateTestRecords(0, 100);
     dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records, header);
     AppendResult secondAppend = writer.appendBlock(dataBlock);
@@ -306,14 +320,19 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   private void testConcurrentAppend(boolean logFileExists, boolean newLogFileFormat) throws Exception {
-    HoodieLogFormat.WriterBuilder builder1 =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-            .withInstantTime("100").withStorage(storage);
-    HoodieLogFormat.WriterBuilder builder2 =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-            .withInstantTime("100").withStorage(storage);
+    HoodieLogFormatWriter.HoodieLogFormatWriterBuilder builder1 = HoodieLogFormatWriter.builder()
+        .withParentPath(partitionPath)
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withLogFileId("test-fileid1")
+        .withInstantTime("100")
+        .withStorage(storage);
+
+    HoodieLogFormatWriter.HoodieLogFormatWriterBuilder builder2 = HoodieLogFormatWriter.builder()
+        .withParentPath(partitionPath)
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withLogFileId("test-fileid1")
+        .withInstantTime("100")
+        .withStorage(storage);
 
     if (newLogFileFormat && logFileExists) {
       // Assume there is an existing log-file with write token
@@ -330,14 +349,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     } else {
       builder1 = builder1.withLogVersion(1).withLogWriteToken(HoodieLogFormat.UNKNOWN_WRITE_TOKEN);
     }
-    Writer writer = builder1.build();
+    HoodieLogFormat.Writer writer = builder1.build();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
     HoodieDataBlock dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records, header);
     writer.appendBlock(dataBlock);
-    Writer writer2 = builder2.build();
+    HoodieLogFormat.Writer writer2 = builder2.build();
     writer2.appendBlock(dataBlock);
     HoodieLogFile logFile1 = writer.getLogFile();
     HoodieLogFile logFile2 = writer2.getLogFile();
@@ -350,11 +369,15 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @ParameterizedTest
   @EnumSource(names = {"AVRO_DATA_BLOCK", "HFILE_DATA_BLOCK", "PARQUET_DATA_BLOCK"})
   public void testMultipleAppend(HoodieLogBlockType dataBlockType) throws IOException, URISyntaxException, InterruptedException {
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder()
+            .withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withLogVersion(1).withInstantTime("100")
-            .withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withLogVersion(1)
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
@@ -365,10 +388,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
 
     writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+        HoodieLogFormatWriter.builder()
+            .withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withLogVersion(1).withInstantTime("100")
-            .withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withLogVersion(1)
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
     ((HoodieLogFormatWriter) writer).withOutputStream((FSDataOutputStream)
         storage.append(writer.getLogFile().getPath()));
     records = SchemaTestUtil.generateTestRecords(0, 100);
@@ -384,10 +411,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     // Close and Open again and append 100 more records
     writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+        HoodieLogFormatWriter.builder()
+            .withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withLogVersion(1).withInstantTime("100")
-            .withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withLogVersion(1)
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
     ((HoodieLogFormatWriter) writer).withOutputStream(
         (FSDataOutputStream) storage.append(writer.getLogFile().getPath()));
     records = SchemaTestUtil.generateTestRecords(0, 100);
@@ -402,7 +433,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
 
     // Cannot get the current size after closing the log
-    final Writer closedWriter = writer;
+    final HoodieLogFormat.Writer closedWriter = writer;
     assertThrows(IllegalStateException.class, closedWriter::getCurrentSize, "getCurrentSize should fail after the logAppender is closed");
   }
 
@@ -424,8 +455,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieDataBlock dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records, header);
 
     for (int i = 0; i < 2; i++) {
-      Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
-          .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits")
+      HoodieLogFormat.Writer writer = HoodieLogFormatWriter.builder()
+          .withParentPath(testPath)
+          .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
+          .withLogFileId("commits")
           .withInstantTime("")
           .withStorage(localStorage).build();
       writer.appendBlock(dataBlock);
@@ -440,11 +473,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @ParameterizedTest
   @ValueSource(ints = {6, 8})
   public void testBasicWriteAndScan(int tableVersion) throws IOException, URISyntaxException, InterruptedException {
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder()
+            .withParentPath(partitionPath)
             .withTableVersion(HoodieTableVersion.fromVersionCode(tableVersion))
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
     HoodieSchema schema = getSimpleSchema();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
     List<IndexedRecord> copyOfRecords = records.stream()
@@ -475,10 +509,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   @Test
   public void testHugeLogFileWrite() throws IOException, URISyntaxException, InterruptedException {
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage)
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
             .withSizeThreshold(3L * 1024 * 1024 * 1024)
             .build();
     HoodieSchema schema = getSimpleSchema();
@@ -525,10 +561,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @ParameterizedTest
   @EnumSource(names = {"AVRO_DATA_BLOCK", "HFILE_DATA_BLOCK", "PARQUET_DATA_BLOCK"})
   public void testBasicAppendAndRead(HoodieLogBlockType dataBlockType) throws IOException, URISyntaxException, InterruptedException {
-    Writer writer = HoodieLogFormat.newWriterBuilder()
-        .onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer = HoodieLogFormatWriter.builder()
+        .withParentPath(partitionPath)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-        .withFileId("test-fileid1")
+        .withLogFileId("test-fileid1")
         .withInstantTime("100")
         .withStorage(storage)
         .build();
@@ -543,10 +579,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
-    writer = HoodieLogFormat.newWriterBuilder()
-        .onParentPath(partitionPath)
+    writer = HoodieLogFormatWriter.builder()
+        .withParentPath(partitionPath)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-        .withFileId("test-fileid1")
+        .withLogFileId("test-fileid1")
         .withInstantTime("100")
         .withStorage(storage)
         .build();
@@ -562,10 +598,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
 
     // Close and Open again and append 100 more records
-    writer = HoodieLogFormat.newWriterBuilder()
-        .onParentPath(partitionPath)
+    writer = HoodieLogFormatWriter.builder()
+        .withParentPath(partitionPath)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-        .withFileId("test-fileid1")
+        .withLogFileId("test-fileid1")
         .withInstantTime("100")
         .withStorage(storage)
         .build();
@@ -614,10 +650,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   @Test
   public void testCDCBlock() throws IOException, InterruptedException {
-    Writer writer = HoodieLogFormat.newWriterBuilder()
-        .onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer = HoodieLogFormatWriter.builder()
+        .withParentPath(partitionPath)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-        .withFileId("test-fileid1")
+        .withLogFileId("test-fileid1")
         .withInstantTime("100")
         .withStorage(storage)
         .build();
@@ -1062,10 +1098,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   private HoodieLogFile addValidBlock(String fileId, String commitTime, int numRecords) throws IOException, URISyntaxException, InterruptedException {
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId(fileId).withInstantTime(commitTime).withStorage(storage).build();
+            .withLogFileId(fileId)
+            .withInstantTime(commitTime)
+            .withStorage(storage)
+            .build();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, numRecords);
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
@@ -1079,10 +1118,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   private HoodieLogFile appendValidBlock(StoragePath path, String fileId, String commitTime,
                                          int numRecords)
       throws IOException, URISyntaxException, InterruptedException {
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId(fileId).withInstantTime(commitTime).withStorage(storage).build();
+            .withLogFileId(fileId)
+            .withInstantTime(commitTime)
+            .withStorage(storage)
+            .build();
     ((HoodieLogFormatWriter) writer).withOutputStream(
         (FSDataOutputStream) storage.append(path));
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, numRecords);
@@ -1097,10 +1139,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   @Test
   public void testValidateCorruptBlockEndPosition() throws IOException, URISyntaxException, InterruptedException {
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
@@ -1153,11 +1198,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       throws IOException, URISyntaxException, InterruptedException {
     HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage)
-            .withSizeThreshold(500).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .withSizeThreshold(500L)
+            .build();
     SchemaTestUtil testUtil = new SchemaTestUtil();
 
     // Write 1
@@ -1197,10 +1245,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       throws IOException, URISyntaxException, InterruptedException {
     HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
 
     // Write 1
     SchemaTestUtil testUtil = new SchemaTestUtil();
@@ -1260,10 +1311,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       throws IOException, URISyntaxException, InterruptedException {
     HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
 
     // Write 1
     SchemaTestUtil testUtil = new SchemaTestUtil();
@@ -1298,9 +1352,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     outputStream.close();
 
     writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
     // Write 3
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "103");
     List<IndexedRecord> records3 = testUtil.generateHoodieTestRecords(0, 100);
@@ -1330,10 +1387,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       throws IOException, URISyntaxException, InterruptedException {
     HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
 
     // Write 1
     SchemaTestUtil testUtil = new SchemaTestUtil();
@@ -1471,10 +1531,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
     String fileId = "test-fileid111";
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId(fileId).withInstantTime("100").withStorage(storage).build();
+            .withLogFileId(fileId)
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
 
     // Write 1 -> 100 records are written
     SchemaTestUtil testUtil = new SchemaTestUtil();
@@ -1579,10 +1642,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       throws IOException, URISyntaxException, InterruptedException {
     HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
 
     // Write 1
     SchemaTestUtil testUtil = new SchemaTestUtil();
@@ -1712,10 +1778,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Write a Data block and Delete block with same InstantTime (written in same batch)
     HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
 
     // Write 1
     SchemaTestUtil testUtil = new SchemaTestUtil();
@@ -1781,10 +1850,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Write a Data block and Delete block with same InstantTime (written in same batch)
     HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
 
     // Write 1
     SchemaTestUtil testUtil = new SchemaTestUtil();
@@ -1833,10 +1905,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       throws IOException, URISyntaxException, InterruptedException {
     HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
 
     // Write 1
     SchemaTestUtil testUtil = new SchemaTestUtil();
@@ -1870,10 +1945,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Write a 3 Data blocs with same InstantTime (written in same batch)
     HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
 
     // Write 1
     SchemaTestUtil testUtil = new SchemaTestUtil();
@@ -1924,10 +2002,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       throws IOException, URISyntaxException, InterruptedException {
     HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
     List<String> deleteKeyListInV2Block = Arrays.asList(
         "d448e1b8-a0d4-45c0-bf2d-a9e16ff3c8ce",
         "df3f71cd-5b68-406c-bb70-861179444adb",
@@ -2047,10 +2128,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       throws IOException, URISyntaxException, InterruptedException {
     HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
 
     // Write 1
     SchemaTestUtil testUtil = new SchemaTestUtil();
@@ -2107,10 +2191,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Write a 3 Data blocs with same InstantTime (written in same batch)
     HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
 
     // Write 1
     SchemaTestUtil testUtil = new SchemaTestUtil();
@@ -2152,9 +2239,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     outputStream.close();
 
     writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+        HoodieLogFormatWriter.builder()
+            .withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
 
     writer.appendBlock(dataBlock);
     writer.close();
@@ -2172,9 +2263,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     outputStream.close();
 
     writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
     // Write 1 rollback block for the last commit instant
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "101");
     header.put(HeaderMetadataType.TARGET_INSTANT_TIME, "100");
@@ -2202,10 +2296,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Write a 3 Data blocks with same InstantTime (written in same batch)
     HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
 
     // Write 1st data blocks multiple times.
     SchemaTestUtil testUtil = new SchemaTestUtil();
@@ -2275,9 +2372,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     outputStream.close();
 
     writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
     ((HoodieLogFormatWriter) writer).withOutputStream(
         (FSDataOutputStream) storage.append(writer.getLogFile().getPath()));
 
@@ -2405,9 +2505,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       List<IndexedRecord> records2 = new ArrayList<>(records);
 
       // Write1 with numRecordsInLog1 records written to log.1
-      Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-          .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-          .withInstantTime("100").withStorage(storage).build();
+      HoodieLogFormat.Writer writer = HoodieLogFormatWriter.builder()
+          .withParentPath(partitionPath)
+          .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+          .withLogFileId("test-fileid1")
+          .withInstantTime("100")
+          .withStorage(storage)
+          .build();
 
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
@@ -2419,9 +2523,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       writer.close();
 
       // write2 with numRecordsInLog2 records written to log.2
-      Writer writer2 = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-          .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-          .withInstantTime("100").withStorage(storage).withSizeThreshold(size - 1).build();
+      HoodieLogFormat.Writer writer2 = HoodieLogFormatWriter.builder()
+          .withParentPath(partitionPath)
+          .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+          .withLogFileId("test-fileid1")
+          .withInstantTime("100")
+          .withStorage(storage)
+          .withSizeThreshold(size - 1)
+          .build();
 
       Map<HoodieLogBlock.HeaderMetadataType, String> header2 = new HashMap<>();
       header2.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
@@ -2498,10 +2607,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @Test
   public void testBasicAppendAndReadInReverse()
       throws IOException, URISyntaxException, InterruptedException {
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder()
+            .withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
     HoodieSchema schema = getSimpleSchema();
     List<IndexedRecord> records1 = SchemaTestUtil.generateTestRecords(0, 100);
     List<IndexedRecord> copyOfRecords1 = records1.stream()
@@ -2568,10 +2681,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @Test
   public void testAppendAndReadOnCorruptedLogInReverse()
       throws IOException, URISyntaxException, InterruptedException {
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
     HoodieSchema schema = getSimpleSchema();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
@@ -2602,9 +2718,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     // Should be able to append a new block
     writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
     ((HoodieLogFormatWriter) writer).withOutputStream(
         (FSDataOutputStream) storage.append(writer.getLogFile().getPath()));
     records = SchemaTestUtil.generateTestRecords(0, 100);
@@ -2630,10 +2749,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @Test
   public void testBasicAppendAndTraverseInReverse()
       throws IOException, URISyntaxException, InterruptedException {
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder().withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+            .withLogFileId("test-fileid1")
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
     HoodieSchema schema = getSimpleSchema();
     List<IndexedRecord> records1 = SchemaTestUtil.generateTestRecords(0, 100);
     List<IndexedRecord> copyOfRecords1 = records1.stream()
@@ -2717,10 +2839,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   public void testDataBlockFormatAppendAndReadWithProjectedSchema(
       HoodieLogBlockType dataBlockType
   ) throws IOException, URISyntaxException, InterruptedException {
-    Writer writer = HoodieLogFormat.newWriterBuilder()
-        .onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer = HoodieLogFormatWriter.builder()
+        .withParentPath(partitionPath)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-        .withFileId("test-fileid1")
+        .withLogFileId("test-fileid1")
         .withInstantTime("100")
         .withStorage(storage)
         .build();
@@ -2862,10 +2984,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   private HoodieLogFormat.Reader createCorruptedFile(String fileId) throws Exception {
     // block is corrupted, but check is skipped.
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormatWriter.builder()
+            .withParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId(fileId).withInstantTime("100").withStorage(storage).build();
+            .withLogFileId(fileId)
+            .withInstantTime("100")
+            .withStorage(storage)
+            .build();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
