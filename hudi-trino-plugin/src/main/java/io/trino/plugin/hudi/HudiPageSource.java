@@ -132,12 +132,12 @@ public class HudiPageSource
     public void close()
             throws IOException
     {
-        // Closer attempts every close and aggregates failures via addSuppressed, rethrowing the
-        // first. Registration is LIFO, so registering in reverse gives the original close order:
-        // recordIterator (wraps the readers) first, then fileGroupReader, then pageSource.
+        // recordIterator is the outermost wrapper: CloseableMappingIterator ->
+        // HoodieFileGroupReaderIterator -> fileGroupReader.close() -> baseFileIterator.close()
+        // (which closes the Trino pageSource) + recordBuffer.close(). Closing it alone therefore
+        // releases every underlying resource exactly once; also registering fileGroupReader/
+        // pageSource would re-close the same handles, since close() does not null its fields.
         try (Closer closer = Closer.create()) {
-            closer.register(pageSource::close);
-            closer.register(fileGroupReader::close);
             closer.register(recordIterator::close);
         }
     }
