@@ -86,8 +86,8 @@ public interface HoodieLogFormat {
     // version number for this log file. If not specified, then the current version will be
     // computed by inspecting the file system
     protected Integer logVersion;
-    // file len of this log file
-    protected Long fileSize = 0L;
+    // file size of this log file
+    protected Long fileSize;
     // Location of the directory containing the log
     protected StoragePath parentPath;
     // Log File Write Token

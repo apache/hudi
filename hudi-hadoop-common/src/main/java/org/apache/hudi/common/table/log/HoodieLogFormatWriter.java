@@ -226,7 +226,10 @@ public class HoodieLogFormatWriter extends HoodieLogFormat.Writer {
             false,
             getBufferSize(),
             getReplication(),
-            getSizeThreshold()
+            // HDFS block size is intentionally a fixed constant, independent of the
+            // log rollover threshold (getSizeThreshold()). A small rollover threshold
+            // must not shrink the underlying file's block size below HDFS limits.
+            DEFAULT_SIZE_THRESHOLD
         ),
         new FileSystem.Statistics(getStorage().getScheme())
     );
