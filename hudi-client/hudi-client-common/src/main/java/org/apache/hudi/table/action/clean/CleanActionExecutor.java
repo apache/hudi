@@ -182,7 +182,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
           .withDeleteBootstrapBasePathPatterns(partitionCleanStat.getDeleteBootstrapBasePathPatterns())
           .withSuccessDeleteBootstrapBaseFiles(partitionCleanStat.getSuccessfulDeleteBootstrapBaseFiles())
           .withFailedDeleteBootstrapBaseFiles(partitionCleanStat.getFailedDeleteBootstrapBaseFiles())
-          .withIsPartitionDeleted(partitionsToBeDeleted.contains(partitionPath))
+          .withPartitionDeleted(partitionsToBeDeleted.contains(partitionPath))
           .build();
     }).collect(Collectors.toList());
   }

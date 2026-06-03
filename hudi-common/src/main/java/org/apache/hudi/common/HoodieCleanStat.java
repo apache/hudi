@@ -59,5 +59,5 @@ public class HoodieCleanStat implements Serializable {
   @Builder.Default
   List<String> failedDeleteBootstrapBaseFiles = CollectionUtils.createImmutableList();
   // set to true if partition is deleted
-  boolean isPartitionDeleted;
+  boolean partitionDeleted;
 }
