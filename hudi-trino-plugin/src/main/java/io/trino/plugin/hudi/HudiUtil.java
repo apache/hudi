@@ -97,7 +97,9 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
 
 public final class HudiUtil
 {
-    public static final List<String> HOODIE_META_COLUMNS =
+    // Minimal meta-column subset the file-group reader/merger requires, distinct from the upstream
+    // 5-field HoodieRecord.HOODIE_META_COLUMNS (commit time, seqno, key, partition path, file name).
+    public static final List<String> HUDI_REQUIRED_META_COLUMNS =
             CollectionUtils.createImmutableList(RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD);
 
     private static final Logger log = Logger.get(HudiUtil.class);
@@ -347,8 +349,8 @@ public final class HudiUtil
         List<HiveColumnHandle> columns = new ArrayList<>();
 
         // Add missing Hudi meta columns first
-        for (int i = 0; i < HOODIE_META_COLUMNS.size(); i++) {
-            String metaColumn = HOODIE_META_COLUMNS.get(i);
+        for (int i = 0; i < HUDI_REQUIRED_META_COLUMNS.size(); i++) {
+            String metaColumn = HUDI_REQUIRED_META_COLUMNS.get(i);
             if (existingColumns.add(metaColumn)) { // add() returns false if already present
                 columns.add(new HiveColumnHandle(
                         metaColumn,
