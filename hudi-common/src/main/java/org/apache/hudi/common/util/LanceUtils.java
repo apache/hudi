@@ -43,7 +43,6 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -212,7 +211,7 @@ public class LanceUtils extends FileFormatUtils {
                 recordIterator, fieldsToIndex, filePath.getName(), projectedSchema, storage.getConf(), indexVersion);
         return fieldsToIndex.stream()
             .map(field -> columnRangeMetadataMap.get(field.getKey()))
-            .collect(Collectors.toCollection(ArrayList::new));
+            .collect(Collectors.toList());
       }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read column stats from Lance file " + filePath, e);
