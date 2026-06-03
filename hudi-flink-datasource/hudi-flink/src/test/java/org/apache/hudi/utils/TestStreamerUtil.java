@@ -116,7 +116,7 @@ class TestStreamerUtil {
 
     assertFalse(StreamerUtil.getIndexConfig(conf).getBoolean(HoodieIndexConfig.BUCKET_PARTITIONER));
 
-    conf.set(FlinkOptions.BUCKET_INDEX_REMOTE_PARTITIONER_ENABLE, true);
+    conf.setString(HoodieIndexConfig.BUCKET_PARTITIONER.key(), "true");
     assertTrue(StreamerUtil.getIndexConfig(conf).getBoolean(HoodieIndexConfig.BUCKET_PARTITIONER));
   }
 

@@ -62,14 +62,14 @@ public class BucketIndexRemotePartitioner<T extends HoodieKey> implements Partit
       NumBucketsFunction numBucketsFunction,
       String partitionPath,
       int curBucket,
-      int partitionNum) {
+      int numPartitions) {
     String normalizedPartitionPath = normalizePartitionPath(partitionPath);
     try {
       int partition = remotePartitionHelper.getPartition(
           numBucketsFunction.getNumBuckets(normalizedPartitionPath),
           normalizedPartitionPath,
           curBucket,
-          partitionNum);
+          numPartitions);
       if (partition < 0) {
         throw new RuntimeException(
             "Get remote partition succeeded, but the subtask id is negative: " + partition);

@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
@@ -261,19 +262,18 @@ public class OptionsResolver {
   /**
    * Returns whether the simple bucket index should use remote partitioner.
    */
-  public static boolean enableBucketRemotePartitioner(Configuration conf) {
+  public static boolean shouldUseBucketRemotePartitioner(Configuration conf) {
     return isSimpleBucketIndexType(conf)
-        && isBucketRemotePartitionerEnabled(conf)
-        && Boolean.parseBoolean(conf.getString(
-            HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(),
-            HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.defaultValue()));
+        && isBucketRemotePartitionerEnabled(conf);
   }
 
   /**
    * Returns whether the bucket index remote partitioner option is enabled.
    */
   public static boolean isBucketRemotePartitionerEnabled(Configuration conf) {
-    return conf.get(FlinkOptions.BUCKET_INDEX_REMOTE_PARTITIONER_ENABLE);
+    return Boolean.parseBoolean(conf.getString(
+        HoodieIndexConfig.BUCKET_PARTITIONER.key(),
+        HoodieIndexConfig.BUCKET_PARTITIONER.defaultValue().toString()));
   }
 
   /**

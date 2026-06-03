@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.HoodieIndex;
@@ -120,9 +121,20 @@ public class TestFlinkWriteClients {
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     assertFalse(writeConfig.isUsingRemotePartitioner());
 
-    conf.set(FlinkOptions.BUCKET_INDEX_REMOTE_PARTITIONER_ENABLE, true);
+    conf.setString(HoodieIndexConfig.BUCKET_PARTITIONER.key(), "true");
     writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     assertTrue(writeConfig.isUsingRemotePartitioner());
+  }
+
+  @Test
+  void testEmbeddedTimelineServerConfigUsesCallSiteFlag() {
+    conf.setString(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "false");
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, true, false);
+    assertTrue(writeConfig.isEmbeddedTimelineServerEnabled());
+
+    conf.setString(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "true");
+    writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertFalse(writeConfig.isEmbeddedTimelineServerEnabled());
   }
 
   @Test

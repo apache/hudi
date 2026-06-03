@@ -78,7 +78,7 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
    */
   private Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc;
 
-  private boolean remotePartitionerEnabled;
+  private boolean isRemotePartitionerEnabled;
 
   private transient RemotePartitionHelper remotePartitionHelper;
 
@@ -114,8 +114,8 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
     this.isInsertOverwrite = OptionsResolver.isInsertOverwrite(config);
     this.numBucketsFunction = new NumBucketsFunction(config.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
         config.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), config.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
-    this.remotePartitionerEnabled = OptionsResolver.enableBucketRemotePartitioner(config);
-    if (remotePartitionerEnabled) {
+    this.isRemotePartitionerEnabled = OptionsResolver.shouldUseBucketRemotePartitioner(config);
+    if (isRemotePartitionerEnabled) {
       this.remotePartitionHelper = new RemotePartitionHelper(writeClient.getConfig().getViewStorageConfig());
       log.info("BucketStreamWriteFunction enables remote partitioner.");
     }
@@ -170,7 +170,7 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
    * partitionIndex == this taskID belongs to this task.
    */
   public boolean isBucketToLoad(int bucketNumber, String partition) {
-    if (remotePartitionerEnabled) {
+    if (isRemotePartitionerEnabled) {
       return BucketIndexRemotePartitioner.getRemotePartition(
           remotePartitionHelper, numBucketsFunction, partition, bucketNumber, parallelism) == taskID;
     }

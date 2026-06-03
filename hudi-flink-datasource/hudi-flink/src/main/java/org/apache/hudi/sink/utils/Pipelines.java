@@ -142,7 +142,7 @@ public class Pipelines {
       }
       String indexKeys = OptionsResolver.getIndexKeyField(conf);
       Partitioner<HoodieKey> partitioner =
-          OptionsResolver.enableBucketRemotePartitioner(conf)
+          OptionsResolver.shouldUseBucketRemotePartitioner(conf)
               ? new BucketIndexRemotePartitioner<>(conf, indexKeys)
               : new BucketIndexPartitioner<>(conf, indexKeys);
       RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, rowType);
@@ -378,7 +378,7 @@ public class Pipelines {
           // [HUDI-9036] BucketIndexPartitioner is also used in bulk insert mode,
           // keep use of HoodieKey here in partitionCustom for now
           Partitioner<HoodieKey> partitioner =
-              OptionsResolver.enableBucketRemotePartitioner(conf)
+              OptionsResolver.shouldUseBucketRemotePartitioner(conf)
                   ? new BucketIndexRemotePartitioner<>(conf, indexKeyFields)
                   : new BucketIndexPartitioner<>(conf, indexKeyFields);
           SingleOutputStreamOperator<RowData> bucketWriteStream = dataStream

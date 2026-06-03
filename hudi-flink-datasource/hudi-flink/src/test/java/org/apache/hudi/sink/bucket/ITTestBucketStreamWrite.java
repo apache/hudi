@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
@@ -133,8 +134,8 @@ public class ITTestBucketStreamWrite {
     options.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
     options.put(FlinkOptions.INDEX_TYPE.key(), IndexType.BUCKET.name());
     options.put(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key(), "4");
-    options.put(FlinkOptions.BUCKET_INDEX_REMOTE_PARTITIONER_ENABLE.key(), "true");
-    options.put(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "true");
+    options.put(HoodieIndexConfig.BUCKET_PARTITIONER.key(), "true");
+    options.put(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "false");
     options.put(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED.key(), "false");
 
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
