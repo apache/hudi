@@ -20,7 +20,6 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -115,7 +114,6 @@ public class TestMetadataPartitionType {
   @Test
   public void testColumnAndPartitionStatsEnabledForLanceTables() {
     HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
-    Mockito.when(tableConfig.getBaseFileFormat()).thenReturn(HoodieFileFormat.LANCE);
     Mockito.when(tableConfig.isTablePartitioned()).thenReturn(true);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true)
