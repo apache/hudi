@@ -38,6 +38,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -68,6 +69,8 @@ import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 import org.apache.hudi.testutils.SparkRDDValidationUtils;
 
+import lombok.AccessLevel;
+import lombok.Setter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -925,10 +928,10 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
                                        String baseInstantTime,
                                        String instantTime,
                                        boolean writeDataBlock) throws IOException, InterruptedException {
-    try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
-        .onParentPath(new StoragePath(tempDir.toString()))
+    try (HoodieLogFormat.Writer writer = HoodieLogFormatWriter.builder()
+        .withParentPath(new StoragePath(tempDir.toString()))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-        .withFileId(fileId)
+        .withLogFileId(fileId)
         .withInstantTime(instantTime)
         .withStorage(storage)
         .withSizeThreshold(Long.MAX_VALUE).build()) {
@@ -1345,6 +1348,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     }
   }
 
+  @Setter(AccessLevel.PACKAGE)
   class MockHoodieMetadataTableValidator extends HoodieMetadataTableValidator {
 
     private List<String> metadataPartitionsToReturn;
@@ -1353,18 +1357,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
     public MockHoodieMetadataTableValidator(JavaSparkContext jsc, Config cfg) {
       super(jsc, cfg);
-    }
-
-    void setMetadataPartitionsToReturn(List<String> metadataPartitionsToReturn) {
-      this.metadataPartitionsToReturn = metadataPartitionsToReturn;
-    }
-
-    void setFsPartitionsToReturn(List<String> fsPartitionsToReturn) {
-      this.fsPartitionsToReturn = fsPartitionsToReturn;
-    }
-
-    void setPartitionCreationTime(Option<String> partitionCreationTime) {
-      this.partitionCreationTime = partitionCreationTime;
     }
 
     @Override
@@ -1449,6 +1441,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   /**
    * Class to assist with testing a false positive case with RLI validation.
    */
+  @Setter
   static class MockHoodieMetadataTableValidatorForRli extends HoodieMetadataTableValidator {
 
     private String destFilePath;
@@ -1465,14 +1458,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       // move the completed file back to ".hoodie" to simuate the false positive case.
       new File(destFilePath).renameTo(new File(originalFilePath));
       return super.getRecordLocationsFromRLI(sparkEngineContext, basePath, latestCompletedCommit);
-    }
-
-    public void setDestFilePath(String destFilePath) {
-      this.destFilePath = destFilePath;
-    }
-
-    public void setOriginalFilePath(String originalFilePath) {
-      this.originalFilePath = originalFilePath;
     }
   }
 

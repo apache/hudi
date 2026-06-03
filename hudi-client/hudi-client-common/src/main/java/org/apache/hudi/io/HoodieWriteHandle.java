@@ -37,6 +37,7 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -289,9 +290,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected HoodieLogFormat.Writer createLogWriter(String instantTime, String fileSuffix, Option<FileSlice> fileSliceOpt) {
     try {
       if (config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-        return HoodieLogFormat.newWriterBuilder()
-            .onParentPath(FSUtils.constructAbsolutePath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
-            .withFileId(fileId)
+        return HoodieLogFormatWriter.builder()
+            .withParentPath(FSUtils.constructAbsolutePath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
+            .withLogFileId(fileId)
             .withInstantTime(instantTime)
             .withFileSize(0L)
             .withSizeThreshold(config.getLogFileMaxSize())
@@ -306,9 +307,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         Option<HoodieLogFile> latestLogFile = fileSliceOpt.isPresent()
             ? fileSliceOpt.get().getLatestLogFile()
             : Option.empty();
-        return HoodieLogFormat.newWriterBuilder()
-            .onParentPath(FSUtils.constructAbsolutePath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
-            .withFileId(fileId)
+        return HoodieLogFormatWriter.builder()
+            .withParentPath(FSUtils.constructAbsolutePath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
+            .withLogFileId(fileId)
             .withInstantTime(instantTime)
             .withLogVersion(latestLogFile.map(HoodieLogFile::getLogVersion).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
             .withFileSize(latestLogFile.map(HoodieLogFile::getFileSize).orElse(0L))

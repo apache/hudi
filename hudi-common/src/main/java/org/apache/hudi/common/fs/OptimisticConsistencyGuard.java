@@ -21,8 +21,7 @@ package org.apache.hudi.common.fs;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.List;
@@ -49,9 +48,8 @@ import java.util.concurrent.TimeoutException;
  * With this, if any files that was created, should be available within configured threshold(eventual consistency).
  * Delete() will return false if FileNotFound. So, both cases are taken care of this {@link ConsistencyGuard}.
  */
+@Slf4j
 public class OptimisticConsistencyGuard extends FailSafeConsistencyGuard {
-
-  private static final Logger LOG = LoggerFactory.getLogger(OptimisticConsistencyGuard.class);
 
   public OptimisticConsistencyGuard(HoodieStorage storage,
                                     ConsistencyGuardConfig consistencyGuardConfig) {
@@ -65,7 +63,7 @@ public class OptimisticConsistencyGuard extends FailSafeConsistencyGuard {
         Thread.sleep(consistencyGuardConfig.getOptimisticConsistencyGuardSleepTimeMs());
       }
     } catch (IOException | InterruptedException ioe) {
-      LOG.warn("Got IOException or InterruptedException waiting for file visibility. Ignoring",
+      log.warn("Got IOException or InterruptedException waiting for file visibility. Ignoring",
           ioe);
     }
   }
@@ -83,7 +81,7 @@ public class OptimisticConsistencyGuard extends FailSafeConsistencyGuard {
         Thread.sleep(consistencyGuardConfig.getOptimisticConsistencyGuardSleepTimeMs());
       }
     } catch (InterruptedException ie) {
-      LOG.warn("Got InterruptedException waiting for file visibility. Ignoring", ie);
+      log.warn("Got InterruptedException waiting for file visibility. Ignoring", ie);
     }
   }
 
