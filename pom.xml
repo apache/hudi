@@ -1977,6 +1977,16 @@
       </snapshots>
     </repository>
     <repository>
+      <id>confluent</id>
+      <url>https://packages.confluent.io/maven/</url>
+    </repository>
+    <repository>
+      <!-- Required for com.github.everit-org.json-schema:org.everit.json.schema:1.12.1,
+           a transitive dep of io.confluent:kafka-json-schema-{serializer,provider} (not on Maven Central). -->
+      <id>jitpack.io</id>
+      <url>https://jitpack.io</url>
+    </repository>
+    <repository>
       <id>cloudera-repo-releases</id>
       <url>https://repository.cloudera.com/artifactory/public/</url>
       <releases>
@@ -1985,10 +1995,6 @@
       <snapshots>
         <enabled>false</enabled>
       </snapshots>
-    </repository>
-    <repository>
-      <id>confluent</id>
-      <url>https://packages.confluent.io/maven/</url>
     </repository>
   </repositories>
 
