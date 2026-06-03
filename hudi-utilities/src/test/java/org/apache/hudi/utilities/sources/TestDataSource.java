@@ -24,12 +24,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.testutils.sources.AbstractBaseTestSource;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -37,9 +36,9 @@ import java.util.stream.Collectors;
 /**
  * An implementation of {@link Source}, that emits test upserts.
  */
+@Slf4j
 public class TestDataSource extends AbstractBaseTestSource {
 
-  private static final Logger LOG = LoggerFactory.getLogger(TestDataSource.class);
   public static boolean returnEmptyBatch = false;
   public static Option<String> recordInstantTime = Option.empty();
   private static int counter = 0;
@@ -56,14 +55,14 @@ public class TestDataSource extends AbstractBaseTestSource {
 
     int nextCommitNum = lastCheckpoint.map(s -> Integer.parseInt(s.getCheckpointKey()) + 1).orElse(0);
     String instantTime = String.format("%05d", nextCommitNum);
-    LOG.info("Source Limit is set to " + sourceLimit);
+    log.info("Source Limit is set to {}", sourceLimit);
 
     // No new data.
     if (sourceLimit <= 0 || returnEmptyBatch) {
-      LOG.warn("Return no new data from Test Data source " + counter + ", source limit " + sourceLimit);
+      log.warn("Return no new data from Test Data source {}, source limit {}", counter, sourceLimit);
       return new InputBatch<>(Option.empty(), lastCheckpoint.orElse(null));
     } else {
-      LOG.warn("Returning valid data from Test Data source " + counter + ", source limit " + sourceLimit);
+      log.warn("Returning valid data from Test Data source {}, source limit {}", counter, sourceLimit);
     }
     counter++;
 

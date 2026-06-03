@@ -26,12 +26,11 @@ import org.apache.hudi.utilities.config.SourceTestConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -39,9 +38,8 @@ import java.util.stream.IntStream;
 /**
  * A Test DataSource which scales test-data generation by using spark parallelism.
  */
+@Slf4j
 public class DistributedTestDataSource extends AbstractBaseTestSource {
-
-  private static final Logger LOG = LoggerFactory.getLogger(DistributedTestDataSource.class);
 
   private final int numTestSourcePartitions;
 
@@ -55,7 +53,7 @@ public class DistributedTestDataSource extends AbstractBaseTestSource {
   protected InputBatch<JavaRDD<GenericRecord>> readFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     int nextCommitNum = lastCheckpoint.map(s -> Integer.parseInt(s.getCheckpointKey()) + 1).orElse(0);
     String instantTime = String.format("%05d", nextCommitNum);
-    LOG.info("Source Limit is set to {}", sourceLimit);
+    log.info("Source Limit is set to {}", sourceLimit);
 
     // No new data.
     if (sourceLimit <= 0) {
@@ -73,7 +71,7 @@ public class DistributedTestDataSource extends AbstractBaseTestSource {
     JavaRDD<GenericRecord> avroRDD =
         sparkContext.parallelize(IntStream.range(0, numTestSourcePartitions).boxed().collect(Collectors.toList()),
             numTestSourcePartitions).mapPartitionsWithIndex((p, idx) -> {
-              LOG.info("Initializing source with newProps={}", newProps);
+              log.info("Initializing source with newProps={}", newProps);
               if (!dataGeneratorMap.containsKey(p)) {
                 initDataGen(newProps, p);
               }

@@ -29,6 +29,7 @@ import org.apache.hudi.utilities.schema.HiveSchemaProvider;
 import org.apache.hudi.utilities.testutils.SparkClientFunctionalTestHarnessWithHiveSupport;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException;
 import org.junit.jupiter.api.Assertions;
@@ -36,8 +37,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -46,9 +45,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 /**
  * Basic tests against {@link HiveSchemaProvider}.
  */
+@Slf4j
 @Tag("functional")
 public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarnessWithHiveSupport {
-  private static final Logger LOG = LoggerFactory.getLogger(TestHiveSchemaProvider.class);
+
   private static final TypedProperties PROPS = new TypedProperties();
   private static final String SOURCE_SCHEMA_TABLE_NAME = "schema_registry.source_schema_tab";
   private static final String TARGET_SCHEMA_TABLE_NAME = "schema_registry.target_schema_tab";
@@ -75,7 +75,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarnessWith
         assertNotNull(originalField);
       }
     } catch (HoodieException e) {
-      LOG.error("Failed to get source schema. ", e);
+      log.error("Failed to get source schema. ", e);
       throw e;
     }
   }
@@ -97,7 +97,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarnessWith
         assertNotNull(originalField);
       }
     } catch (HoodieException e) {
-      LOG.error("Failed to get source/target schema. ", e);
+      log.error("Failed to get source/target schema. ", e);
       throw e;
     }
   }
