@@ -51,6 +51,7 @@ import io.trino.spi.connector.EmptyPageSource;
 import io.trino.spi.predicate.TupleDomain;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -222,11 +223,14 @@ public class HudiPageSourceProvider
                         .orElseGet(() -> getLatestTableSchema(metaClient, hudiTableHandle.getTableName()));
 
         Schema requestedSchema = constructSchema(dataSchema.toAvroSchema(), hudiMetaAndDataColumnHandles.stream().map(HiveColumnHandle::getName).toList());
+        FileSlice fileSlice = convertToFileSlice(hudiSplit, hudiTableHandle.getBasePath());
         HoodieFileGroupReader<IndexedRecord> fileGroupReader =
-                HoodieFileGroupReader.<IndexedRecord>newBuilder()
+                HoodieFileGroupReader.<IndexedRecord>builder()
                         .withReaderContext(readerContext)
                         .withHoodieTableMetaClient(metaClient)
-                        .withFileSlice(convertToFileSlice(hudiSplit, hudiTableHandle.getBasePath()))
+                        .withBaseFileOption(fileSlice.getBaseFile())
+                        .withLogFiles(fileSlice.getLogFiles())
+                        .withPartitionPath(fileSlice.getPartitionPath())
                         .withDataSchema(dataSchema)
                         .withRequestedSchema(HoodieSchema.fromAvroSchema(requestedSchema))
                         .withLatestCommitTime(hudiTableHandle.getLatestCommitTime())
