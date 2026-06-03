@@ -455,10 +455,9 @@ public final class HudiUtil
      */
     public static <K, V> Map<K, V> collectAsMap(HoodiePairData<K, V> pairData)
     {
-        // HashMap allows null keys, so collect directly; on duplicate keys the later entry wins.
-        return pairData.collectAsList().stream()
-                .collect(HashMap::new,
-                        (map, pair) -> map.put(pair.getKey(), pair.getValue()),
-                        HashMap::putAll);
+        // HashMap allows null keys, so put directly; on duplicate keys the later entry wins.
+        Map<K, V> result = new HashMap<>();
+        pairData.collectAsList().forEach(pair -> result.put(pair.getKey(), pair.getValue()));
+        return result;
     }
 }
