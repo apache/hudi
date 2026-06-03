@@ -37,7 +37,6 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
-import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.HoodieIndex;
@@ -114,20 +113,15 @@ public class TestFlinkWriteClients {
   }
 
   @Test
-  void testBucketRemotePartitionerConfig() {
-    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
-    conf.set(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, HoodieIndex.BucketIndexEngineType.SIMPLE.name());
-
+  void testUserConfiguredGlobalRecordIndexMinFileGroupCountIsNotOverridden() {
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "12");
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
-    assertFalse(writeConfig.isUsingRemotePartitioner());
-
-    conf.setString(HoodieIndexConfig.BUCKET_PARTITIONER.key(), "true");
-    writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
-    assertTrue(writeConfig.isUsingRemotePartitioner());
+    assertEquals(12, writeConfig.getGlobalRecordLevelIndexMinFileGroupCount());
   }
 
   @Test
-  void testEmbeddedTimelineServerConfigUsesCallSiteFlag() {
+  void testHoodieClientConfigPrecedence() {
     conf.setString(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "false");
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, true, false);
     assertTrue(writeConfig.isEmbeddedTimelineServerEnabled());
@@ -135,14 +129,15 @@ public class TestFlinkWriteClients {
     conf.setString(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "true");
     writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     assertFalse(writeConfig.isEmbeddedTimelineServerEnabled());
-  }
 
-  @Test
-  void testUserConfiguredGlobalRecordIndexMinFileGroupCountIsNotOverridden() {
-    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
-    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "12");
-    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
-    assertEquals(12, writeConfig.getGlobalRecordLevelIndexMinFileGroupCount());
+    conf.setString(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED.key(), "false");
+    writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertFalse(writeConfig.isEmbeddedTimelineServerReuseEnabled());
+
+    conf.set(FlinkOptions.CHANGELOG_ENABLED, true);
+    conf.setString(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key(), "false");
+    writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertFalse(writeConfig.allowOperationMetadataField());
   }
 
   @ParameterizedTest

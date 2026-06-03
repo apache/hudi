@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.RemotePartitionHelper;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.util.ViewStorageProperties;
@@ -54,7 +55,7 @@ public class BucketIndexRemotePartitioner<T extends HoodieKey> implements Partit
     String partitionPath = normalizePartitionPath(key.getPartitionPath());
     int numBuckets = numBucketsFunction.getNumBuckets(partitionPath);
     int curBucket = BucketIdentifier.getBucketId(key.getRecordKey(), indexKeyFields, numBuckets);
-    return getRemotePartition(getRemotePartitionHelper(), numBucketsFunction, partitionPath, curBucket, numPartitions);
+    return getRemotePartition(getRemotePartitionHelper(), numBuckets, partitionPath, curBucket, numPartitions);
   }
 
   public static int getRemotePartition(
@@ -64,20 +65,31 @@ public class BucketIndexRemotePartitioner<T extends HoodieKey> implements Partit
       int curBucket,
       int numPartitions) {
     String normalizedPartitionPath = normalizePartitionPath(partitionPath);
+    int numBuckets = numBucketsFunction.getNumBuckets(normalizedPartitionPath);
+    return getRemotePartition(remotePartitionHelper, numBuckets, normalizedPartitionPath, curBucket, numPartitions);
+  }
+
+  private static int getRemotePartition(
+      RemotePartitionHelper remotePartitionHelper,
+      int numBuckets,
+      String partitionPath,
+      int curBucket,
+      int numPartitions) {
+    int partition;
     try {
-      int partition = remotePartitionHelper.getPartition(
-          numBucketsFunction.getNumBuckets(normalizedPartitionPath),
-          normalizedPartitionPath,
+      partition = remotePartitionHelper.getPartition(
+          numBuckets,
+          partitionPath,
           curBucket,
           numPartitions);
-      if (partition < 0) {
-        throw new RuntimeException(
-            "Get remote partition succeeded, but the subtask id is negative: " + partition);
-      }
-      return partition;
     } catch (Exception e) {
-      throw new RuntimeException("Get remote partition failed.", e);
+      throw new HoodieException("Get remote partition failed.", e);
     }
+    if (partition < 0) {
+      throw new HoodieException(
+          "Get remote partition succeeded, but the subtask id is negative: " + partition);
+    }
+    return partition;
   }
 
   private static String normalizePartitionPath(String partitionPath) {

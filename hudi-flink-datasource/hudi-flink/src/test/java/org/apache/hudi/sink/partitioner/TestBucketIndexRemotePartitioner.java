@@ -21,6 +21,7 @@ package org.apache.hudi.sink.partitioner;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.RemotePartitionHelper;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 
@@ -31,7 +32,6 @@ import java.lang.reflect.Field;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -62,7 +62,7 @@ class TestBucketIndexRemotePartitioner {
 
     when(remotePartitionHelper.getPartition(4, "par1", 1, 6)).thenThrow(new Exception("remote unavailable"));
 
-    RuntimeException error = assertThrows(RuntimeException.class, () ->
+    HoodieException error = assertThrows(HoodieException.class, () ->
         BucketIndexRemotePartitioner.getRemotePartition(remotePartitionHelper, numBucketsFunction, "par1", 1, 6));
 
     assertEquals("Get remote partition failed.", error.getMessage());
@@ -76,11 +76,10 @@ class TestBucketIndexRemotePartitioner {
 
     when(remotePartitionHelper.getPartition(4, "par1", 1, 6)).thenReturn(-1);
 
-    RuntimeException error = assertThrows(RuntimeException.class, () ->
+    HoodieException error = assertThrows(HoodieException.class, () ->
         BucketIndexRemotePartitioner.getRemotePartition(remotePartitionHelper, numBucketsFunction, "par1", 1, 6));
 
-    assertEquals("Get remote partition failed.", error.getMessage());
-    assertTrue(error.getCause().getMessage().contains("negative"));
+    assertEquals("Get remote partition succeeded, but the subtask id is negative: -1", error.getMessage());
   }
 
   @Test
@@ -88,10 +87,10 @@ class TestBucketIndexRemotePartitioner {
     Configuration conf = new Configuration();
     conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 8);
     RemotePartitionHelper remotePartitionHelper = mock(RemotePartitionHelper.class);
-    HoodieKey key = new HoodieKey("id1", "par1");
+    HoodieKey key = new HoodieKey("id1", null);
     int currentBucket = BucketIdentifier.getBucketId(key.getRecordKey(), "id", 8);
 
-    when(remotePartitionHelper.getPartition(8, "par1", currentBucket, 16)).thenReturn(11);
+    when(remotePartitionHelper.getPartition(8, "", currentBucket, 16)).thenReturn(11);
 
     BucketIndexRemotePartitioner<HoodieKey> partitioner = new BucketIndexRemotePartitioner<>(conf, "id");
     setRemotePartitionHelper(partitioner, remotePartitionHelper);

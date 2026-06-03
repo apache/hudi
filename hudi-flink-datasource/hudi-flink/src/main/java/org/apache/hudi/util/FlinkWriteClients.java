@@ -242,10 +242,10 @@ public class FlinkWriteClients {
                 .build())
             .withIndexConfig(StreamerUtil.getIndexConfig(conf))
             .withPayloadConfig(getPayloadConfig(conf))
-            .withProps(flinkConf2TypedProperties(conf))
-            .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineService)
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
             .withAllowOperationMetadataField(conf.get(FlinkOptions.CHANGELOG_ENABLED))
+            .withProps(flinkConf2TypedProperties(conf))
+            .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineService)
             .withSchema(getSourceSchema(conf).toString())
             .withWriteIgnoreFailed(conf.get(FlinkOptions.IGNORE_FAILED));
 
