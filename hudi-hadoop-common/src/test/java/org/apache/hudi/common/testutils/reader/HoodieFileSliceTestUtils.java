@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -288,10 +289,10 @@ public class HoodieFileSliceTestUtils {
       Map<String, Long> keyToPositionMap
   ) throws InterruptedException, IOException {
     try (HoodieLogFormat.Writer writer =
-             HoodieLogFormat.newWriterBuilder()
-                 .onParentPath(new StoragePath(logFilePath).getParent())
+             HoodieLogFormatWriter.builder()
+                 .withParentPath(new StoragePath(logFilePath).getParent())
                  .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-                 .withFileId(fileId)
+                 .withLogFileId(fileId)
                  .withInstantTime(logInstantTime)
                  .withLogVersion(version)
                  .withStorage(storage).build()) {
