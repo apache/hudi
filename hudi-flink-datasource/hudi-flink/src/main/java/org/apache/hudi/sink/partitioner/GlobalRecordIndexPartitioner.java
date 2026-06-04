@@ -97,7 +97,7 @@ public class GlobalRecordIndexPartitioner implements Partitioner<HoodieKey> {
     // For flink adaptive batch execution, writer coordinator is not started yet, so metadata table
     // is not initialized for a new table.
     if (!metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) {
-      // Get the minimum file group count used to initialize global record level index
+      // estimate the minimum file group count used to initialize global record level index
       return OptionsResolver.estimateFileGroupCountForRLI(conf);
     }
     try (HoodieTableMetadata metadataTable = metaClient.getTableFormat().getMetadataFactory().create(

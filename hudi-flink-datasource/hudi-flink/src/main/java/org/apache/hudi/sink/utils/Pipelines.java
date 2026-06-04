@@ -291,13 +291,13 @@ public class Pipelines {
       boolean bounded) {
     DataStream<HoodieFlinkInternalRow> dataStream1 = rowDataToHoodieRecord(conf, rowType, dataStream);
 
-    boolean isRliBootstrap = OptionsResolver.isGlobalRecordLevelIndex(conf);
-    if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || (bounded && !isRliBootstrap)) {
+    boolean isGlobalRLI = OptionsResolver.isGlobalRecordLevelIndex(conf);
+    if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || (bounded && !isGlobalRLI)) {
       dataStream1 = dataStream1
           .transform(
               "index_bootstrap",
               new HoodieFlinkInternalRowTypeInfo(rowType),
-              isRliBootstrap ? new RLIBootstrapOperator(conf) : new BootstrapOperator(conf))
+              isGlobalRLI ? new RLIBootstrapOperator(conf) : new BootstrapOperator(conf))
           .setParallelism(conf.getOptional(FlinkOptions.INDEX_BOOTSTRAP_TASKS).orElse(dataStream1.getParallelism()))
           .uid(opUID("index_bootstrap", conf));
       ((OneInputTransformation<?, ?>) dataStream1.getTransformation()).setChainingStrategy(ChainingStrategy.ALWAYS);

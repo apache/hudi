@@ -200,9 +200,13 @@ public class TestOptionsResolver {
     conf.set(FlinkOptions.METADATA_ENABLED, true);
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
     conf.setString(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+
+    // testing default value
+    assertEquals(1, OptionsResolver.estimateFileGroupCountForRLI(conf));
+
+    // testing user configured value
     conf.setString(HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "3");
     conf.setString(HoodieMetadataConfig.RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "3");
-
     assertEquals(3, OptionsResolver.estimateFileGroupCountForRLI(conf));
   }
 
@@ -212,9 +216,13 @@ public class TestOptionsResolver {
     conf.set(FlinkOptions.METADATA_ENABLED, true);
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
     conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+
+    // testing default value
+    assertEquals(8, OptionsResolver.estimateFileGroupCountForRLI(conf));
+
+    // testing user configured value
     conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "11");
     conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "11");
-
     assertEquals(11, OptionsResolver.estimateFileGroupCountForRLI(conf));
   }
 }
