@@ -679,9 +679,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES = ConfigProperty
       .key("hoodie.client.heartbeat.tolerable.misses")
-      .defaultValue(2)
+      .defaultValue(10)
       .markAdvanced()
-      .withDocumentation("Number of heartbeat misses, before a writer is deemed not alive and all pending writes are aborted.");
+      .withDocumentation("Number of heartbeat misses, before a writer is deemed not alive and all pending writes are aborted. "
+          + "A higher value tolerates transient driver pauses (e.g. GC) or storage-latency spikes that would otherwise "
+          + "delay a heartbeat and cause a still-healthy writer's commit to be aborted.");
 
   public static final ConfigProperty<Boolean> CLUSTERING_BLOCK_FOR_PENDING_INGESTION = ConfigProperty
       .key("hoodie.clustering.fail.on.pending.ingestion.during.conflict.resolution")

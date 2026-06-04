@@ -68,13 +68,15 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   // Maximum time the timer thread will wait for a single heartbeat file write to complete before
   // abandoning it and letting the next tick retry. Bounded to one interval so that a slow/hung
   // storage write cannot block the timer thread (and thus freeze all subsequent heartbeats).
-  private final long heartbeatWriteTimeoutMs;
+  private final Long heartbeatWriteTimeoutMs;
   private final Map<String, Heartbeat> instantToHeartbeatMap;
   // Daemon executor used to perform the (potentially slow) storage write off the timer thread so the
   // write can be time-bounded. A cached pool is intentional: if one write hangs, that thread is left
   // parked while the next tick proceeds on a fresh thread. Lazily created and marked transient since
   // this client is Serializable with a transient storage handle.
   private transient ExecutorService heartbeatWriteExecutor;
+  // Guards against repeated/concurrent close().
+  private transient boolean closed = false;
 
   public HoodieHeartbeatClient(HoodieStorage storage, String basePath, Long heartbeatIntervalInMs,
                                Integer numTolerableHeartbeatMisses) {
@@ -89,6 +91,9 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   }
 
   private synchronized ExecutorService getHeartbeatWriteExecutor() {
+    if (closed) {
+      throw new HoodieException("Heartbeat client is already closed");
+    }
     if (heartbeatWriteExecutor == null) {
       heartbeatWriteExecutor =
           Executors.newCachedThreadPool(new CustomizedThreadFactory("heartbeat_write", true));
@@ -203,17 +208,18 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   public boolean isHeartbeatExpired(String instantTime) throws IOException {
     Long currentTime = System.currentTimeMillis();
     Heartbeat lastHeartbeatForWriter = instantToHeartbeatMap.get(instantTime);
-    if (lastHeartbeatForWriter == null) {
-      log.info("Heartbeat not found in internal map, falling back to reading from DFS");
-      long lastHeartbeatForWriterTime = getLastHeartbeatTime(this.storage, basePath, instantTime);
-      lastHeartbeatForWriter = new Heartbeat();
-      lastHeartbeatForWriter.setLastHeartbeatTime(lastHeartbeatForWriterTime);
-      lastHeartbeatForWriter.setInstantTime(instantTime);
-      lastHeartbeatForWriter.getTimer().cancel();
+    Long lastHeartbeatTime = lastHeartbeatForWriter == null ? null : lastHeartbeatForWriter.getLastHeartbeatTime();
+    // lastHeartbeatTime can be null when the heartbeat is not in the internal map, or when it is in the
+    // map but no heartbeat has been generated yet (e.g. the first write timed out). In both cases fall
+    // back to reading the last heartbeat time from DFS (returns 0 if no heartbeat file exists, which is
+    // correctly treated as expired).
+    if (lastHeartbeatTime == null) {
+      log.info("Heartbeat time not available in internal map, falling back to reading from DFS");
+      lastHeartbeatTime = getLastHeartbeatTime(this.storage, basePath, instantTime);
     }
-    if (currentTime - lastHeartbeatForWriter.getLastHeartbeatTime() > this.maxAllowableHeartbeatIntervalInMs) {
+    if (currentTime - lastHeartbeatTime > this.maxAllowableHeartbeatIntervalInMs) {
       log.warn("Heartbeat expired, currentTime = {}, last heartbeat = {}, heartbeat interval = {}", currentTime,
-          lastHeartbeatForWriter, this.heartbeatIntervalInMs);
+          lastHeartbeatTime, this.heartbeatIntervalInMs);
       return true;
     }
     return false;
@@ -225,13 +231,18 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
       writeHeartbeatFile(instantTime);
       Heartbeat heartbeat = instantToHeartbeatMap.get(instantTime);
       if (heartbeat.getLastHeartbeatTime() != null && isHeartbeatExpired(instantTime)) {
-        // A previous refresh was delayed past the tolerable interval (e.g. due to a slow storage write
-        // or driver pressure). Do NOT interrupt the timer thread here: that would permanently kill all
-        // future heartbeats for this instant, turning a transient delay into a permanent blackout.
-        // Enforcement is done at commit time in HeartbeatUtils.abortIfHeartbeatExpired(), which is the
-        // correct and sole enforcement point.
-        log.warn("Missed generating heartbeat for instant {} within allowable interval {} ms; continuing to refresh",
+        // A previous refresh was delayed past the tolerable interval. Stop refreshing this heartbeat
+        // (cancel the timer) and do NOT advance the last heartbeat time, so the heartbeat stays expired
+        // and the writer aborts at commit time via HeartbeatUtils.abortIfHeartbeatExpired(). We must not
+        // keep refreshing here: a concurrent process (e.g. an async cleaner under LAZY failed-writes
+        // policy) may already have started rolling back this instant once it observed the expiry, and
+        // resurrecting the heartbeat could let this writer commit on top of rolled-back files.
+        // The timer is cancelled cleanly rather than via Thread.interrupt(), which would permanently
+        // kill the timer thread (turning a transient delay into a permanent blackout on the first miss).
+        log.error("Missed generating heartbeat for instant {} within allowable interval {} ms; stopping heartbeat refresh",
             instantTime, this.maxAllowableHeartbeatIntervalInMs);
+        heartbeat.getTimer().cancel();
+        return;
       }
       heartbeat.setInstantTime(instantTime);
       heartbeat.setLastHeartbeatTime(newHeartbeatTime);
@@ -289,14 +300,16 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   }
 
   @Override
-  public void close() {
+  public synchronized void close() {
+    if (closed) {
+      return;
+    }
+    closed = true;
     this.stopHeartbeatTimers();
     this.instantToHeartbeatMap.clear();
-    synchronized (this) {
-      if (heartbeatWriteExecutor != null) {
-        heartbeatWriteExecutor.shutdownNow();
-        heartbeatWriteExecutor = null;
-      }
+    if (heartbeatWriteExecutor != null) {
+      heartbeatWriteExecutor.shutdownNow();
+      heartbeatWriteExecutor = null;
     }
   }
 }
