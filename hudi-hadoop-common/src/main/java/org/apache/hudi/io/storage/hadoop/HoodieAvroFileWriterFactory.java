@@ -155,7 +155,11 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
     return (HoodieAvroWriteSupport) ReflectionUtils.loadClass(
         config.getStringOrDefault(HoodieStorageConfig.HOODIE_AVRO_WRITE_SUPPORT_CLASS),
         new Class<?>[] {MessageType.class, HoodieSchema.class, Option.class, Properties.class},
-        getAvroSchemaConverter((Configuration) storageConf.unwrapAs(Configuration.class)).convert(schema), schema, filter, props);
+        // Build the Parquet schema from the effective (possibly shredded) schema so the message type
+        // matches the records actually written - a shredded variant has a nullable value and a
+        // typed_value column; converting the original schema would mark value REQUIRED and drop
+        // typed_value, failing the write with "Null-value for required field: value".
+        getAvroSchemaConverter((Configuration) storageConf.unwrapAs(Configuration.class)).convert(effectiveSchema), schema, filter, props);
   }
 
   /**
