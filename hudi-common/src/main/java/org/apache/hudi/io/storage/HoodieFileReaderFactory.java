@@ -134,7 +134,7 @@ public class HoodieFileReaderFactory {
   }
 
   protected HoodieFileReader newLanceFileReader(HoodieConfig hoodieConfig, StoragePath path) {
-    throw new UnsupportedOperationException(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG);
+    throw new UnsupportedOperationException(HoodieFileFormat.LANCE_UNSUPPORTED_ERROR_MSG);
   }
 
   public HoodieFileReader newBootstrapFileReader(HoodieFileReader skeletonFileReader,

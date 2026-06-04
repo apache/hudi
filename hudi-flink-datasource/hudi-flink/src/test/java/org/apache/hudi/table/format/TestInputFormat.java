@@ -954,14 +954,16 @@ public class TestInputFormat {
     testReadChangelogInternal(commits);
   }
 
-  @Test
-  void testReadChangelogIncrementallyForMorWithCompaction() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"PARQUET", "LANCE"})
+  void testReadChangelogIncrementallyForMorWithCompaction(String baseFileFormat) throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_INCREMENTAL);
     options.put(FlinkOptions.CDC_ENABLED.key(), "true");
     options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "true");
     options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "1");   // compact for every commit
     options.put(FlinkOptions.INDEX_BOOTSTRAP_ENABLED.key(), "true"); // for batch update
+    options.put("hoodie.table.base.file.format", baseFileFormat);
     beforeEach(HoodieTableType.MERGE_ON_READ, options);
 
     // write 3 commits first

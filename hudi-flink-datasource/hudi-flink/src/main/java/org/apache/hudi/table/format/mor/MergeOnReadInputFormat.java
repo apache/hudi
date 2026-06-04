@@ -34,14 +34,11 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.FormatUtils;
-import org.apache.hudi.table.format.HoodieRowDataLanceReader;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
 import lombok.Getter;
@@ -51,12 +48,10 @@ import org.apache.flink.api.common.io.RichInputFormat;
 import org.apache.flink.api.common.io.statistics.BaseStatistics;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.io.InputSplitAssigner;
-import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -277,19 +272,7 @@ public class MergeOnReadInputFormat
 
   protected ClosableIterator<RowData> getBaseFileIterator(String path) throws IOException {
     if (path.endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
-      DataType selectedDataType = DataTypes.ROW(Arrays.stream(requiredPos)
-              .mapToObj(i -> DataTypes.FIELD(fieldNames.get(i), fieldTypes.get(i)))
-              .toArray(DataTypes.Field[]::new))
-          .bridgedTo(RowData.class);
-      HoodieSchema requestedSchema = HoodieSchemaConverter.convertToSchema(selectedDataType.getLogicalType());
-      HoodieRowDataLanceReader reader = new HoodieRowDataLanceReader(
-          new StoragePath(path), StreamerUtil.getLanceReadConfig(hadoopConf));
-      try {
-        return reader.getRowDataIterator(selectedDataType, requestedSchema);
-      } catch (RuntimeException e) {
-        reader.close();
-        throw e;
-      }
+      return FormatUtils.getLanceRecordIterator(path, fieldNames, fieldTypes, requiredPos, hadoopConf);
     }
 
     LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(

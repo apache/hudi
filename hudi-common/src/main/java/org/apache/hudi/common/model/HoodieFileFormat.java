@@ -55,7 +55,7 @@ public enum HoodieFileFormat {
           + "and designed for ML and AI workloads")
   LANCE(".lance");
 
-  public static final String LANCE_SPARK_ONLY_ERROR_MSG =
+  public static final String LANCE_UNSUPPORTED_ERROR_MSG =
       "Lance base file format is not supported by this reader or writer path. "
           + "Please use an engine-specific Lance reader/writer, or use Parquet, ORC, or HFile.";
 
