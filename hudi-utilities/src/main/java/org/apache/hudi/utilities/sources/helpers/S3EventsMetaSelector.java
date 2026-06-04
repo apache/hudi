@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -157,7 +158,7 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
       }
       // Re-wrap a prior V2 checkpoint as V1 to avoid leaking it back to commit metadata.
       Checkpoint newCheckpoint = newCheckpointTime == 0
-          ? lastCheckpoint.map(c -> createCheckpoint(lastCheckpoint.get())).orElse(null)
+          ? lastCheckpoint.map(CheckpointUtils::createCheckpoint).orElse(null)
           : createCheckpoint(String.valueOf(newCheckpointTime));
       return new ImmutablePair<>(filteredEventRecords, newCheckpoint);
     } catch (JSONException | IOException e) {

@@ -35,6 +35,7 @@ import org.apache.hudi.utilities.sources.helpers.KinesisOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KinesisOffsetGen.KinesisShardRange;
 import org.apache.hudi.utilities.sources.helpers.gcs.PubsubMessagesFetcher;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
+import org.apache.hudi.utilities.streamer.StreamerCheckpointUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -272,8 +273,8 @@ class TestStreamerSourceCheckpointVersion {
     String gcs = GcsEventsHoodieIncrSource.class.getName();
     assertTrue(CheckpointUtils.DATASOURCES_NOT_SUPPORTED_WITH_CKPT_V2.contains(s3));
     assertTrue(CheckpointUtils.DATASOURCES_NOT_SUPPORTED_WITH_CKPT_V2.contains(gcs));
-    assertFalse(CheckpointUtils.shouldTargetCheckpointV2(8, s3));
-    assertFalse(CheckpointUtils.shouldTargetCheckpointV2(8, gcs));
+    assertFalse(StreamerCheckpointUtils.shouldTargetCheckpointV2(8, s3));
+    assertFalse(StreamerCheckpointUtils.shouldTargetCheckpointV2(8, gcs));
   }
 
   private static TypedProperties propsWith(int writeTableVersion) {

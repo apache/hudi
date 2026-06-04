@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
+import org.apache.hudi.common.table.checkpoint.UnresolvedStreamerCheckpointBasedOnCfg;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -41,6 +42,8 @@ import org.apache.hudi.utilities.exception.HoodieStreamerException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
@@ -51,11 +54,13 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorage
 import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.streamer.StreamSync.CHECKPOINT_IGNORE_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(MockitoExtension.class)
 public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarness {
+  private static final String CHECKPOINT_TO_RESUME = "20240101000000";
   private TypedProperties props;
   private HoodieStreamer.Config streamerConfig;
   protected HoodieTableMetaClient metaClient;
@@ -66,6 +71,53 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     props = new TypedProperties();
     streamerConfig = new HoodieStreamer.Config();
     streamerConfig.tableType = HoodieTableType.COPY_ON_WRITE.name();
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      // version, sourceClassName, expectedV2
+      // Only HoodieIncrSource family on v8+ targets V2.
+      "8, org.apache.hudi.utilities.sources.HoodieIncrSource, true",
+      "9, org.apache.hudi.utilities.sources.HoodieIncrSource, true",
+      "8, org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource, true",
+      // v6/v7 always V1.
+      "7, org.apache.hudi.utilities.sources.HoodieIncrSource, false",
+      "6, org.apache.hudi.utilities.sources.HoodieIncrSource, false",
+      // Non-incremental sources always V1 regardless of version.
+      "8, org.apache.hudi.utilities.sources.KafkaSource, false",
+      "9, org.apache.hudi.utilities.sources.JdbcSource, false",
+      // V2-not-supported allowlist always V1.
+      "8, org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource, false",
+      "8, org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource, false",
+      "8, org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource, false",
+      "8, org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource, false"
+  })
+  void testShouldTargetCheckpointV2(int version, String sourceClassName, boolean expectedV2) {
+    assertEquals(expectedV2, StreamerCheckpointUtils.shouldTargetCheckpointV2(version, sourceClassName));
+  }
+
+  @Test
+  void testBuildCheckpointFromConfigOverride() {
+    Checkpoint hoodieIncrV8 = StreamerCheckpointUtils.buildCheckpointFromConfigOverride(
+        "org.apache.hudi.utilities.sources.HoodieIncrSource",
+        HoodieTableVersion.EIGHT.versionCode(),
+        CHECKPOINT_TO_RESUME);
+    assertInstanceOf(UnresolvedStreamerCheckpointBasedOnCfg.class, hoodieIncrV8);
+    assertEquals(CHECKPOINT_TO_RESUME, hoodieIncrV8.getCheckpointKey());
+
+    Checkpoint nonIncrV8 = StreamerCheckpointUtils.buildCheckpointFromConfigOverride(
+        "org.apache.hudi.utilities.sources.KafkaSource",
+        HoodieTableVersion.EIGHT.versionCode(),
+        CHECKPOINT_TO_RESUME);
+    assertInstanceOf(StreamerCheckpointV1.class, nonIncrV8);
+    assertEquals(CHECKPOINT_TO_RESUME, nonIncrV8.getCheckpointKey());
+
+    Checkpoint hoodieIncrV6 = StreamerCheckpointUtils.buildCheckpointFromConfigOverride(
+        "org.apache.hudi.utilities.sources.HoodieIncrSource",
+        HoodieTableVersion.SIX.versionCode(),
+        CHECKPOINT_TO_RESUME);
+    assertInstanceOf(StreamerCheckpointV1.class, hoodieIncrV6);
+    assertEquals(CHECKPOINT_TO_RESUME, hoodieIncrV6.getCheckpointKey());
   }
 
   @Test

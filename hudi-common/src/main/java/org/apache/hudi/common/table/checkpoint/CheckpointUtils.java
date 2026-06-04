@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.checkpoint;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
@@ -89,28 +88,6 @@ public class CheckpointUtils {
    */
   public static Checkpoint createCheckpoint(Checkpoint checkpointToResume) {
     return new StreamerCheckpointV1(checkpointToResume);
-  }
-
-  /**
-   * Wraps a user-supplied checkpoint override string. For HoodieIncrSource family on table version
-   * 8+, returns {@link UnresolvedStreamerCheckpointBasedOnCfg} so the source can resolve V1/V2
-   * cursor semantics from the override's prefix; for everything else returns V1.
-   */
-  public static Checkpoint buildCheckpointFromConfigOverride(
-      String sourceClassName, int writeTableVersion, String checkpointToResume) {
-    return shouldTargetCheckpointV2(writeTableVersion, sourceClassName)
-        ? new UnresolvedStreamerCheckpointBasedOnCfg(checkpointToResume)
-        : new StreamerCheckpointV1(checkpointToResume);
-  }
-
-  /**
-   * True only for the HoodieIncrSource family on table version 8+, where V2 (completion-time)
-   * cursor semantics differ from V1 (requested-time). Every other source operates on V1 only.
-   */
-  public static boolean shouldTargetCheckpointV2(int writeTableVersion, String sourceClassName) {
-    return writeTableVersion >= HoodieTableVersion.EIGHT.versionCode()
-        && HOODIE_INCREMENTAL_SOURCES.contains(sourceClassName)
-        && !DATASOURCES_NOT_SUPPORTED_WITH_CKPT_V2.contains(sourceClassName);
   }
 
   // TODO(yihua): for checkpoint translation, handle cases where the checkpoint is not exactly the
