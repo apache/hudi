@@ -35,8 +35,8 @@ import java.util.function.Supplier;
 
 /**
  * A {@link Transformer} to chain other {@link Transformer}s and apply sequentially.
- * Adds errorTableCorruptRecordColumn at the beginning of transformations and validates
- * if that column is not dropped in any of the transformations.
+ * Adds errorTableCorruptRecordColumn at the beginning of transformations and re-injects
+ * it after each transformer if dropped (e.g. by custom column-projecting transformers).
  */
 public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
   public ErrorTableAwareChainedTransformer(List<String> configuredTransformers, Supplier<Option<HoodieSchema>> sourceSchemaSupplier) {
