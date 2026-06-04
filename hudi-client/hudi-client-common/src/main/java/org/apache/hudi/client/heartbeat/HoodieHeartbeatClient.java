@@ -75,8 +75,6 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   // parked while the next tick proceeds on a fresh thread. Lazily created and marked transient since
   // this client is Serializable with a transient storage handle.
   private transient ExecutorService heartbeatWriteExecutor;
-  // Guards against repeated/concurrent close().
-  private transient boolean closed = false;
 
   public HoodieHeartbeatClient(HoodieStorage storage, String basePath, Long heartbeatIntervalInMs,
                                Integer numTolerableHeartbeatMisses) {
@@ -91,9 +89,6 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   }
 
   private synchronized ExecutorService getHeartbeatWriteExecutor() {
-    if (closed) {
-      throw new HoodieException("Heartbeat client is already closed");
-    }
     if (heartbeatWriteExecutor == null) {
       heartbeatWriteExecutor =
           Executors.newCachedThreadPool(new CustomizedThreadFactory("heartbeat_write", true));
@@ -301,10 +296,6 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
 
   @Override
   public synchronized void close() {
-    if (closed) {
-      return;
-    }
-    closed = true;
     this.stopHeartbeatTimers();
     this.instantToHeartbeatMap.clear();
     if (heartbeatWriteExecutor != null) {
