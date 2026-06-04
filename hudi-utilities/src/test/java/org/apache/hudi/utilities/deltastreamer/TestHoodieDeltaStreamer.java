@@ -470,8 +470,15 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         metaClient, metaClient.getActiveTimeline().lastInstant().get());
     assertFalse(metadata.isEmpty());
     Map<String, String> extraMetadata = metadata.get().getExtraMetadata();
-    assertTrue(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V2));
-    assertFalse(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V1));
+    // V1 vs V2 is driven by CheckpointUtils.shouldTargetCheckpointV2 — for v6 tables the contract
+    // is V1, so the assertion is conditional on the on-disk table version.
+    if (metaClient.getTableConfig().getTableVersion().versionCode() >= HoodieTableVersion.EIGHT.versionCode()) {
+      assertTrue(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V2));
+      assertFalse(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V1));
+    } else {
+      assertTrue(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V1));
+      assertFalse(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V2));
+    }
   }
 
   @Test
