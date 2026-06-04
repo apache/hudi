@@ -20,12 +20,12 @@ LABEL maintainer="Hoodie"
 USER root
 
 # Default to UTF-8 file.encoding
-ENV LANG C.UTF-8
+ENV LANG=C.UTF-8
 
-ARG HADOOP_VERSION=2.8.4 
+ARG HADOOP_VERSION=2.8.4
 ARG HADOOP_URL=https://archive.apache.org/dist/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz
-ENV HADOOP_VERSION ${HADOOP_VERSION}
-ENV HADOOP_URL ${HADOOP_URL}
+ENV HADOOP_VERSION=${HADOOP_VERSION}
+ENV HADOOP_URL=${HADOOP_URL}
 
 RUN set -x \
     && DEBIAN_FRONTEND=noninteractive apt-get -yq update && apt-get -yq install curl wget netcat procps \
@@ -45,7 +45,7 @@ ENV MULTIHOMED_NETWORK=1
 ENV HADOOP_HOME=${HADOOP_PREFIX}
 ENV HADOOP_INSTALL=${HADOOP_HOME}
 ENV USER=root
-ENV PATH /usr/bin:/bin:$HADOOP_PREFIX/bin/:$PATH
+ENV PATH=/usr/bin:/bin:$HADOOP_PREFIX/bin/:$PATH
 
 # Exposing a union of ports across hadoop versions
 # Well known ports including ssh
