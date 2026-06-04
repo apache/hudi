@@ -45,10 +45,10 @@ import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
-import org.apache.hudi.utilities.streamer.StreamerCheckpointUtils;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
+import org.apache.hudi.utilities.streamer.StreamerCheckpointUtils;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
