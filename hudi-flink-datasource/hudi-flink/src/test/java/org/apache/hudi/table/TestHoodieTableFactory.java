@@ -788,7 +788,7 @@ public class TestHoodieTableFactory {
   }
 
   @Test
-  void testLanceFormatSupportedForCopyOnWriteTables() {
+  void testLanceFormatSupportedForFlinkTables() {
     Configuration lanceConf = new Configuration();
     lanceConf.set(FlinkOptions.PATH, new File(tempFile, "lance").getAbsolutePath());
     lanceConf.set(FlinkOptions.TABLE_NAME, "lance_t1");
@@ -807,9 +807,7 @@ public class TestHoodieTableFactory {
     Configuration morConf = new Configuration(lanceConf);
     morConf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
     final MockContext morContext = MockContext.getInstance(morConf, appendOnlySchema, "f2");
-    HoodieValidationException morEx = assertThrows(HoodieValidationException.class,
-        () -> new HoodieTableFactory().createDynamicTableSink(morContext));
-    assertThat(morEx.getMessage(), is("Flink Lance base-file support is only available for COPY_ON_WRITE tables."));
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(morContext));
 
     Configuration schemaEvolutionConf = new Configuration(lanceConf);
     schemaEvolutionConf.setString(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), "true");

@@ -20,6 +20,7 @@ package org.apache.hudi.source.reader.function;
 
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -43,8 +44,10 @@ import org.apache.hudi.source.reader.BatchRecords;
 import org.apache.hudi.source.reader.HoodieRecordWithPosition;
 import org.apache.hudi.source.split.HoodieCdcSourceSplit;
 import org.apache.hudi.source.split.HoodieSourceSplit;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.FormatUtils;
+import org.apache.hudi.table.format.HoodieRowDataLanceReader;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.table.format.cdc.CdcImageManager;
@@ -52,15 +55,18 @@ import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cdc.CdcIterators;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -278,8 +284,24 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
     }
   }
 
-  /** Reads a parquet CDC base file returning required-schema records. */
+  /** Reads a CDC base file returning required-schema records. */
   private ClosableIterator<RowData> getBaseFileIterator(String path) throws IOException {
+    if (path.endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
+      DataType selectedDataType = DataTypes.ROW(Arrays.stream(tableState.getRequiredPositions())
+              .mapToObj(i -> DataTypes.FIELD(tableState.getRowType().getFieldNames().get(i), fieldTypes.get(i)))
+              .toArray(DataTypes.Field[]::new))
+          .bridgedTo(RowData.class);
+      HoodieSchema requestedSchema = HoodieSchemaConverter.convertToSchema(selectedDataType.getLogicalType());
+      HoodieRowDataLanceReader reader = new HoodieRowDataLanceReader(
+          new StoragePath(path), StreamerUtil.getLanceReadConfig(getHadoopConf()));
+      try {
+        return reader.getRowDataIterator(selectedDataType, requestedSchema);
+      } catch (RuntimeException e) {
+        reader.close();
+        throw e;
+      }
+    }
+
     String[] fieldNames = tableState.getRowType().getFieldNames().toArray(new String[0]);
     DataType[] fieldTypesArray = fieldTypes.toArray(new DataType[0]);
     LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(

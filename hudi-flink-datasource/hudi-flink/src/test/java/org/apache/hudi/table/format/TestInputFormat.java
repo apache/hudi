@@ -170,9 +170,12 @@ public class TestInputFormat {
     assertThat(actual, is(expected));
   }
 
-  @Test
-  void testReadBaseAndLogFiles() throws Exception {
-    beforeEach(HoodieTableType.MERGE_ON_READ);
+  @ParameterizedTest
+  @ValueSource(strings = {"PARQUET", "LANCE"})
+  void testReadBaseAndLogFiles(String baseFileFormat) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put("hoodie.table.base.file.format", baseFileFormat);
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
 
     // write base first with compaction
     conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);

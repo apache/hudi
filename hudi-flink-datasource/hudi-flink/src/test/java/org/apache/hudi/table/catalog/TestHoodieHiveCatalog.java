@@ -401,7 +401,7 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
     HoodieCatalogException ex = assertThrows(HoodieCatalogException.class,
         () -> hoodieCatalog.createTable(tablePath, table, false));
     assertThat(ex.getCause(), instanceOf(HoodieValidationException.class));
-    assertThat(ex.getCause().getMessage(), containsString("Lance base file format is currently only supported with the Spark engine"));
+    assertThat(ex.getCause().getMessage(), containsString("Lance base file format is not supported by this reader or writer path"));
   }
 
   @ParameterizedTest
