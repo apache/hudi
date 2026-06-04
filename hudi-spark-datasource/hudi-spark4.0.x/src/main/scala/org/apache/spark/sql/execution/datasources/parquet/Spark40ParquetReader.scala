@@ -19,6 +19,7 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
 
@@ -277,7 +278,10 @@ object Spark40ParquetReader extends SparkParquetReaderBuilder {
     hadoopConf.setBoolean(SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED.key, sqlConf.parquetInferTimestampNTZEnabled)
 
     hadoopConf.setBoolean(SQLConf.VARIANT_ALLOW_READING_SHREDDED.key,
-      options.getOrElse("hoodie.parquet.variant.allow.reading.shredded", "true").toBoolean)
+      options.getOrElse(
+        HoodieStorageConfig.PARQUET_VARIANT_ALLOW_READING_SHREDDED.key(),
+        HoodieStorageConfig.PARQUET_VARIANT_ALLOW_READING_SHREDDED.defaultValue.toString)
+        .toBoolean)
 
     val enableLogicalTimestampRepair = hadoopConf.getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true)
     val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
