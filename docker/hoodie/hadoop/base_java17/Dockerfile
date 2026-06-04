@@ -36,7 +36,7 @@ LABEL maintainer="Hoodie"
 USER root
 
 # Default to UTF-8 file.encoding
-ENV LANG C.UTF-8
+ENV LANG=C.UTF-8
 
 ARG HADOOP_VERSION=3.4.0
 ENV HADOOP_VERSION=${HADOOP_VERSION}
