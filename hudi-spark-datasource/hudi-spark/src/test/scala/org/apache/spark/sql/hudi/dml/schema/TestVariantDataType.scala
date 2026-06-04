@@ -698,14 +698,8 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
 
   /**
    * Checks whether a GroupType contains a field with the given name.
-   * Uses try/catch on getFieldIndex to avoid Scala-Java collection converter dependencies.
    */
   private def groupContainsField(group: GroupType, fieldName: String): Boolean = {
-    try {
-      group.getFieldIndex(fieldName)
-      true
-    } catch {
-      case _: Exception => false
-    }
+    group.containsField(fieldName)
   }
 }
