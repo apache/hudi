@@ -96,10 +96,10 @@ class TestHoodieLogFormatWriter {
   }
 
   private HoodieLogFormatWriter newWriter(HoodieStorage storage) throws IOException {
-    return (HoodieLogFormatWriter) HoodieLogFormat.newWriterBuilder()
-        .onParentPath(new StoragePath(tempDir.toString()))
+    return HoodieLogFormatWriter.builder()
+        .withParentPath(new StoragePath(tempDir.toString()))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-        .withFileId("test-fileid")
+        .withLogFileId("test-fileid")
         .withInstantTime("100")
         .withLogVersion(1)
         .withStorage(storage)

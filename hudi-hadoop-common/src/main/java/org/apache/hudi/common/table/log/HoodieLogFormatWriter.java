@@ -259,7 +259,7 @@ public class HoodieLogFormatWriter extends HoodieLogFormat.Writer {
       // Persist all buffered data to DataNodes before closing so downstream
       // readers can observe a fully-written log file at commit-level visibility.
       sync();
-    } catch (IOException | RuntimeException e) {
+    } catch (Exception e) {
       syncException = e;
     }
 
@@ -268,13 +268,13 @@ public class HoodieLogFormatWriter extends HoodieLogFormat.Writer {
     } catch (IOException | RuntimeException closeException) {
       if (syncException != null) {
         syncException.addSuppressed(closeException);
-        throwAsIOExceptionOrRuntimeException(syncException);
+        rethrow(syncException);
       }
-      throwAsIOExceptionOrRuntimeException(closeException);
+      rethrow(closeException);
     }
 
     if (syncException != null) {
-      throwAsIOExceptionOrRuntimeException(syncException);
+      rethrow(syncException);
     }
   }
 
@@ -298,7 +298,7 @@ public class HoodieLogFormatWriter extends HoodieLogFormat.Writer {
     }
   }
 
-  private void throwAsIOExceptionOrRuntimeException(Exception exception) throws IOException {
+  private void rethrow(Exception exception) throws IOException {
     if (exception instanceof IOException) {
       throw (IOException) exception;
     }
