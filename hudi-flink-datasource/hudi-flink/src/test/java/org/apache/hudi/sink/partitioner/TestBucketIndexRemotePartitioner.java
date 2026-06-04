@@ -28,8 +28,6 @@ import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Field;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
@@ -92,17 +90,9 @@ class TestBucketIndexRemotePartitioner {
 
     when(remotePartitionHelper.getPartition(8, "", currentBucket, 16)).thenReturn(11);
 
-    BucketIndexRemotePartitioner<HoodieKey> partitioner = new BucketIndexRemotePartitioner<>(conf, "id");
-    setRemotePartitionHelper(partitioner, remotePartitionHelper);
+    BucketIndexRemotePartitioner<HoodieKey> partitioner =
+        new BucketIndexRemotePartitioner<>(conf, "id", remotePartitionHelper);
 
     assertEquals(11, partitioner.partition(key, 16));
-  }
-
-  private void setRemotePartitionHelper(
-      BucketIndexRemotePartitioner<HoodieKey> partitioner,
-      RemotePartitionHelper remotePartitionHelper) throws Exception {
-    Field field = BucketIndexRemotePartitioner.class.getDeclaredField("remotePartitionHelper");
-    field.setAccessible(true);
-    field.set(partitioner, remotePartitionHelper);
   }
 }

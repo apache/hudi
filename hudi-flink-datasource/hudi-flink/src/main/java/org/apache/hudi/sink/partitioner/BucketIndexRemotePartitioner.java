@@ -33,7 +33,7 @@ import org.apache.flink.configuration.Configuration;
 /**
  * Bucket index input partitioner backed by the embedded timeline service.
  *
- * @param <T> The type of object to hash
+ * @param <T> The Hoodie key type used for bucket partitioning
  */
 public class BucketIndexRemotePartitioner<T extends HoodieKey> implements Partitioner<T> {
 
@@ -50,12 +50,17 @@ public class BucketIndexRemotePartitioner<T extends HoodieKey> implements Partit
         conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
   }
 
+  BucketIndexRemotePartitioner(Configuration conf, String indexKeyFields, RemotePartitionHelper remotePartitionHelper) {
+    this(conf, indexKeyFields);
+    this.remotePartitionHelper = remotePartitionHelper;
+  }
+
   @Override
   public int partition(T key, int numPartitions) {
     String partitionPath = normalizePartitionPath(key.getPartitionPath());
     int numBuckets = numBucketsFunction.getNumBuckets(partitionPath);
     int curBucket = BucketIdentifier.getBucketId(key.getRecordKey(), indexKeyFields, numBuckets);
-    return getRemotePartition(getRemotePartitionHelper(), numBuckets, partitionPath, curBucket, numPartitions);
+    return doGetRemotePartition(getRemotePartitionHelper(), numBuckets, partitionPath, curBucket, numPartitions);
   }
 
   public static int getRemotePartition(
@@ -66,10 +71,10 @@ public class BucketIndexRemotePartitioner<T extends HoodieKey> implements Partit
       int numPartitions) {
     String normalizedPartitionPath = normalizePartitionPath(partitionPath);
     int numBuckets = numBucketsFunction.getNumBuckets(normalizedPartitionPath);
-    return getRemotePartition(remotePartitionHelper, numBuckets, normalizedPartitionPath, curBucket, numPartitions);
+    return doGetRemotePartition(remotePartitionHelper, numBuckets, normalizedPartitionPath, curBucket, numPartitions);
   }
 
-  private static int getRemotePartition(
+  private static int doGetRemotePartition(
       RemotePartitionHelper remotePartitionHelper,
       int numBuckets,
       String partitionPath,
