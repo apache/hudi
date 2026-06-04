@@ -31,7 +31,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -83,11 +82,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Slf4j
@@ -740,10 +741,24 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       HoodieInstant lastInstant = timeline.lastInstant().get();
       HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(lastInstant);
       assertEquals(totalCommits, timeline.countInstants());
+      assertEquals(expected, commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_KEY));
+      assertNull(commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2));
+      return lastInstant;
+    }
+
+    static HoodieInstant assertCommitMetadataForIncrSource(String expected, String tablePath, int totalCommits)
+        throws IOException {
+      HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
+      HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+      HoodieInstant lastInstant = timeline.lastInstant().get();
+      HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(lastInstant);
+      assertEquals(totalCommits, timeline.countInstants());
       if (meta.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-        assertEquals(expected, commitMetadata.getMetadata(StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2));
+        assertEquals(expected, commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2));
+        assertNull(commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_KEY));
       } else {
         assertEquals(expected, commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_KEY));
+        assertNull(commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2));
       }
       return lastInstant;
     }

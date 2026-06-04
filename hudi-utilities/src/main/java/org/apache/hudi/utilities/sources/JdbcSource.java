@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -52,6 +51,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
@@ -263,12 +263,12 @@ public class JdbcSource extends RowSource {
         final String max = rowDataset.agg(functions.max(incrementalColumn).cast(DataTypes.StringType)).first().getString(0);
         log.info("Checkpointing column {} with value: {}", incrementalColumn, max);
         if (max != null) {
-          return new StreamerCheckpointV2(max);
+          return createCheckpoint(max);
         }
         return lastCheckpoint.isPresent() && !StringUtils.isNullOrEmpty(lastCheckpoint.get().getCheckpointKey())
-            ? lastCheckpoint.get() : new StreamerCheckpointV2(StringUtils.EMPTY_STRING);
+            ? createCheckpoint(lastCheckpoint.get()) : createCheckpoint(StringUtils.EMPTY_STRING);
       } else {
-        return new StreamerCheckpointV2(StringUtils.EMPTY_STRING);
+        return createCheckpoint(StringUtils.EMPTY_STRING);
       }
     } catch (Exception e) {
       log.error("Failed to checkpoint");

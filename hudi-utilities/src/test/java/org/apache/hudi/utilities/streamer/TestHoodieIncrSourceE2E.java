@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
@@ -512,9 +511,9 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
   @Test
   public void testTargetCheckpointV2ForS3Gcs() {
     // To ensure we properly track sources that must use checkpoint V1.
-    assertFalse(CheckpointUtils.shouldTargetCheckpointV2(8, S3EventsHoodieIncrSource.class.getName()));
-    assertFalse(CheckpointUtils.shouldTargetCheckpointV2(6, S3EventsHoodieIncrSource.class.getName()));
-    assertFalse(CheckpointUtils.shouldTargetCheckpointV2(8, GcsEventsHoodieIncrSource.class.getName()));
-    assertFalse(CheckpointUtils.shouldTargetCheckpointV2(6, GcsEventsHoodieIncrSource.class.getName()));
+    assertFalse(StreamerCheckpointUtils.shouldTargetCheckpointV2(8, S3EventsHoodieIncrSource.class.getName()));
+    assertFalse(StreamerCheckpointUtils.shouldTargetCheckpointV2(6, S3EventsHoodieIncrSource.class.getName()));
+    assertFalse(StreamerCheckpointUtils.shouldTargetCheckpointV2(8, GcsEventsHoodieIncrSource.class.getName()));
+    assertFalse(StreamerCheckpointUtils.shouldTargetCheckpointV2(6, GcsEventsHoodieIncrSource.class.getName()));
   }
 }
