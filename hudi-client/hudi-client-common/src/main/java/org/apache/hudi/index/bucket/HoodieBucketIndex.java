@@ -29,13 +29,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +57,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
     super(config);
 
     this.numBuckets = config.getBucketIndexNumBuckets();
-    this.indexKeyFields = Arrays.asList(config.getBucketIndexHashField().split(","));
+    this.indexKeyFields = KeyGenUtils.getIndexKeyFields(config.getBucketIndexHashField());
     log.info("Use bucket index, numBuckets = " + numBuckets + ", indexFields: " + indexKeyFields);
   }
 

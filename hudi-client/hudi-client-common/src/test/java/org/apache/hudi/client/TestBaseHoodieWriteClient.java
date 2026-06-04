@@ -46,6 +46,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -242,7 +243,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     if (tableVersion <= 8 && enableComplexKeyGeneratorValidation
         && (ComplexAvroKeyGenerator.class.getCanonicalName().equals(keyGeneratorClass)
         || "org.apache.hudi.keygen.ComplexKeyGenerator".equals(keyGeneratorClass))
-        && recordKeyFields.split(",").length == 1) {
+        && KeyGenUtils.getRecordKeyFields(recordKeyFields).size() == 1) {
       assertComplexKeyGeneratorValidationThrows(() -> writeClient.initTable(WriteOperationType.INSERT, Option.empty()), "ingestion");
     } else {
       writeClient.initTable(WriteOperationType.INSERT, Option.empty());

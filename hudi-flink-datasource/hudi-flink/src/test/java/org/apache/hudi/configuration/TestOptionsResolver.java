@@ -84,7 +84,7 @@ public class TestOptionsResolver {
     assertArrayEquals(new String[]{}, OptionsResolver.getRecordKeys(conf));
 
     conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid, name");
-    assertArrayEquals(new String[]{"uuid", " name"}, OptionsResolver.getRecordKeys(conf));
+    assertArrayEquals(new String[]{"uuid", "name"}, OptionsResolver.getRecordKeys(conf));
   }
 
   @Test
@@ -96,7 +96,7 @@ public class TestOptionsResolver {
     assertArrayEquals(new String[]{}, OptionsResolver.getBucketIndexKeys(conf));
 
     conf.set(FlinkOptions.INDEX_KEY_FIELD, "uuid, name");
-    assertArrayEquals(new String[]{"uuid", " name"}, OptionsResolver.getBucketIndexKeys(conf));
+    assertArrayEquals(new String[]{"uuid", "name"}, OptionsResolver.getBucketIndexKeys(conf));
   }
 
   @Test
