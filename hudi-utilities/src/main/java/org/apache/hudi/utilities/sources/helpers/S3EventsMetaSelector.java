@@ -20,7 +20,6 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -42,6 +41,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
@@ -155,8 +155,10 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
       for (Map<String, Object> eventRecord : eventRecords) {
         filteredEventRecords.add(SdkHttpUtils.urlDecode(MAPPER.writeValueAsString(eventRecord)));
       }
-      // Return the old checkpoint if no messages to consume from queue.
-      Checkpoint newCheckpoint = newCheckpointTime == 0 ? lastCheckpoint.orElse(null) : new StreamerCheckpointV2(String.valueOf(newCheckpointTime));
+      // Re-wrap a prior V2 checkpoint as V1 to avoid leaking it back to commit metadata.
+      Checkpoint newCheckpoint = newCheckpointTime == 0
+          ? lastCheckpoint.map(c -> createCheckpoint(lastCheckpoint.get())).orElse(null)
+          : createCheckpoint(String.valueOf(newCheckpointTime));
       return new ImmutablePair<>(filteredEventRecords, newCheckpoint);
     } catch (JSONException | IOException e) {
       throw new HoodieException("Unable to read from SQS: ", e);

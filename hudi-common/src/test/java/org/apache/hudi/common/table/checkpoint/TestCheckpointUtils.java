@@ -56,7 +56,6 @@ public class TestCheckpointUtils {
   private HoodieActiveTimeline activeTimeline;
 
   private static final String CHECKPOINT_TO_RESUME = "20240101000000";
-  private static final String GENERAL_SOURCE = "org.apache.hudi.utilities.sources.GeneralSource";
 
   @BeforeEach
   public void setUp() {
@@ -199,62 +198,58 @@ public class TestCheckpointUtils {
 
   @ParameterizedTest
   @CsvSource({
-      // version, sourceClassName, expectedResult
-      // Version >= 8 with allowed sources should return true
-      "8, org.apache.hudi.utilities.sources.TestSource, true",
-      "9, org.apache.hudi.utilities.sources.AnotherSource, true",
-      // Version < 8 should return false regardless of source
-      "7, org.apache.hudi.utilities.sources.TestSource, false",
-      "6, org.apache.hudi.utilities.sources.AnotherSource, false",
-      // Disallowed sources should return false even with version >= 8
+      // version, sourceClassName, expectedV2
+      // Only HoodieIncrSource family on v8+ targets V2.
+      "8, org.apache.hudi.utilities.sources.HoodieIncrSource, true",
+      "9, org.apache.hudi.utilities.sources.HoodieIncrSource, true",
+      "8, org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource, true",
+      // v6/v7 always V1.
+      "7, org.apache.hudi.utilities.sources.HoodieIncrSource, false",
+      "6, org.apache.hudi.utilities.sources.HoodieIncrSource, false",
+      // Non-incremental sources always V1 regardless of version.
+      "8, org.apache.hudi.utilities.sources.KafkaSource, false",
+      "9, org.apache.hudi.utilities.sources.JdbcSource, false",
+      // V2-not-supported allowlist always V1.
       "8, org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource, false",
       "8, org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource, false",
       "8, org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource, false",
       "8, org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource, false"
   })
-  public void testTargetCheckpointV2(int version, String sourceClassName, boolean isV2Checkpoint) {
-    assertEquals(isV2Checkpoint, CheckpointUtils.buildCheckpointFromGeneralSource(sourceClassName, version, "ignored") instanceof StreamerCheckpointV2);
+  void testShouldTargetCheckpointV2(int version, String sourceClassName, boolean expectedV2) {
+    assertEquals(expectedV2, CheckpointUtils.shouldTargetCheckpointV2(version, sourceClassName));
   }
 
   @Test
-  public void testBuildCheckpointFromGeneralSource() {
-    // Test V2 checkpoint creation (newer table version + general source)
-    Checkpoint checkpoint1 = CheckpointUtils.buildCheckpointFromGeneralSource(
-        GENERAL_SOURCE,
-        HoodieTableVersion.EIGHT.versionCode(),
-        CHECKPOINT_TO_RESUME
-    );
-    assertInstanceOf(StreamerCheckpointV2.class, checkpoint1);
-    assertEquals(CHECKPOINT_TO_RESUME, checkpoint1.getCheckpointKey());
-
-    // Test V1 checkpoint creation (older table version)
-    Checkpoint checkpoint2 = CheckpointUtils.buildCheckpointFromGeneralSource(
-        GENERAL_SOURCE,
-        HoodieTableVersion.SEVEN.versionCode(),
-        CHECKPOINT_TO_RESUME
-    );
-    assertInstanceOf(StreamerCheckpointV1.class, checkpoint2);
-    assertEquals(CHECKPOINT_TO_RESUME, checkpoint2.getCheckpointKey());
+  void testCreateCheckpoint() {
+    Checkpoint checkpoint = CheckpointUtils.createCheckpoint(CHECKPOINT_TO_RESUME);
+    assertInstanceOf(StreamerCheckpointV1.class, checkpoint);
+    assertEquals(CHECKPOINT_TO_RESUME, checkpoint.getCheckpointKey());
   }
 
   @Test
-  public void testBuildCheckpointFromConfigOverride() {
-    // Test checkpoint from config creation (newer table version + general source)
-    Checkpoint checkpoint1 = CheckpointUtils.buildCheckpointFromConfigOverride(
-        GENERAL_SOURCE,
+  void testBuildCheckpointFromConfigOverride() {
+    // HoodieIncrSource on v8+ gets the unresolved wrapper so the source can pick V1/V2 from the prefix.
+    Checkpoint hoodieIncrV8 = CheckpointUtils.buildCheckpointFromConfigOverride(
+        "org.apache.hudi.utilities.sources.HoodieIncrSource",
         HoodieTableVersion.EIGHT.versionCode(),
-        CHECKPOINT_TO_RESUME
-    );
-    assertInstanceOf(UnresolvedStreamerCheckpointBasedOnCfg.class, checkpoint1);
-    assertEquals(CHECKPOINT_TO_RESUME, checkpoint1.getCheckpointKey());
+        CHECKPOINT_TO_RESUME);
+    assertInstanceOf(UnresolvedStreamerCheckpointBasedOnCfg.class, hoodieIncrV8);
+    assertEquals(CHECKPOINT_TO_RESUME, hoodieIncrV8.getCheckpointKey());
 
-    // Test V1 checkpoint creation (older table version)
-    Checkpoint checkpoint2 = CheckpointUtils.buildCheckpointFromConfigOverride(
-        GENERAL_SOURCE,
-        HoodieTableVersion.SEVEN.versionCode(),
-        CHECKPOINT_TO_RESUME
-    );
-    assertInstanceOf(StreamerCheckpointV1.class, checkpoint2);
-    assertEquals(CHECKPOINT_TO_RESUME, checkpoint2.getCheckpointKey());
+    // Non-incremental source on v8 gets a plain V1.
+    Checkpoint nonIncrV8 = CheckpointUtils.buildCheckpointFromConfigOverride(
+        "org.apache.hudi.utilities.sources.KafkaSource",
+        HoodieTableVersion.EIGHT.versionCode(),
+        CHECKPOINT_TO_RESUME);
+    assertInstanceOf(StreamerCheckpointV1.class, nonIncrV8);
+    assertEquals(CHECKPOINT_TO_RESUME, nonIncrV8.getCheckpointKey());
+
+    // HoodieIncrSource on v6 gets V1 (V2 cursor semantics only apply on v8+).
+    Checkpoint hoodieIncV6 = CheckpointUtils.buildCheckpointFromConfigOverride(
+        "org.apache.hudi.utilities.sources.HoodieIncrSource",
+        HoodieTableVersion.SIX.versionCode(),
+        CHECKPOINT_TO_RESUME);
+    assertInstanceOf(StreamerCheckpointV1.class, hoodieIncV6);
+    assertEquals(CHECKPOINT_TO_RESUME, hoodieIncV6.getCheckpointKey());
   }
 }

@@ -71,22 +71,45 @@ public class CheckpointUtils {
     throw new HoodieException("Checkpoint is not found in the commit metadata: " + commitMetadata.getExtraMetadata());
   }
 
-  public static Checkpoint buildCheckpointFromGeneralSource(
-      String sourceClassName, int writeTableVersion, String checkpointToResume) {
-    return CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, sourceClassName)
-        ? new StreamerCheckpointV2(checkpointToResume) : new StreamerCheckpointV1(checkpointToResume);
+  /**
+   * For sources that do not have a semantic change in the checkpoint, always use checkpoint V1.
+   *
+   * @param checkpointToResume value of the checkpoint to resume
+   * @return {@link Checkpoint} instance
+   */
+  public static Checkpoint createCheckpoint(String checkpointToResume) {
+    return new StreamerCheckpointV1(checkpointToResume);
   }
 
-  // Whenever we create checkpoint from streamer config checkpoint override, we should use this function
-  // to build checkpoints.
+  /**
+   * For sources that do not have a semantic change in the checkpoint, always use checkpoint V1.
+   *
+   * @param checkpointToResume the checkpoint to resume
+   * @return {@link Checkpoint} instance
+   */
+  public static Checkpoint createCheckpoint(Checkpoint checkpointToResume) {
+    return new StreamerCheckpointV1(checkpointToResume);
+  }
+
+  /**
+   * Wraps a user-supplied checkpoint override string. For HoodieIncrSource family on table version
+   * 8+, returns {@link UnresolvedStreamerCheckpointBasedOnCfg} so the source can resolve V1/V2
+   * cursor semantics from the override's prefix; for everything else returns V1.
+   */
   public static Checkpoint buildCheckpointFromConfigOverride(
       String sourceClassName, int writeTableVersion, String checkpointToResume) {
-    return CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, sourceClassName)
-        ? new UnresolvedStreamerCheckpointBasedOnCfg(checkpointToResume) : new StreamerCheckpointV1(checkpointToResume);
+    return shouldTargetCheckpointV2(writeTableVersion, sourceClassName)
+        ? new UnresolvedStreamerCheckpointBasedOnCfg(checkpointToResume)
+        : new StreamerCheckpointV1(checkpointToResume);
   }
 
+  /**
+   * True only for the HoodieIncrSource family on table version 8+, where V2 (completion-time)
+   * cursor semantics differ from V1 (requested-time). Every other source operates on V1 only.
+   */
   public static boolean shouldTargetCheckpointV2(int writeTableVersion, String sourceClassName) {
     return writeTableVersion >= HoodieTableVersion.EIGHT.versionCode()
+        && HOODIE_INCREMENTAL_SOURCES.contains(sourceClassName)
         && !DATASOURCES_NOT_SUPPORTED_WITH_CKPT_V2.contains(sourceClassName);
   }
 
