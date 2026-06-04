@@ -21,7 +21,7 @@ package org.apache.hudi
 import org.apache.hudi.HoodieBaseRelation.{convertToHoodieSchema, isSchemaEvolutionEnabledOnRead}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.cdc.HoodieCDCFileIndex
-import org.apache.hudi.common.config.HoodieReaderConfig
+import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
@@ -40,7 +40,6 @@ import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedFileFormat
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
-import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
@@ -68,11 +67,14 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   // before query execution starts here during table resolution
   if (HoodieSparkUtils.gteqSpark4_0) {
     val sqlConf = sqlContext.sparkSession.sessionState.conf
-    val hoodieParquetAllowReadingShreddedConfKey = "hoodie.parquet.variant.allow.reading.shredded"
+    val hoodieConfKey = HoodieStorageConfig.PARQUET_VARIANT_ALLOW_READING_SHREDDED.key
+    // Literal, not SQLConf.VARIANT_ALLOW_READING_SHREDDED.key: that field is absent when this module compiles against Spark 3.x.
+    val sparkConfKey = "spark.sql.variant.allowReadingShredded"
     val allowReadingShredded = options.getOrElse(
-      hoodieParquetAllowReadingShreddedConfKey,
-      sqlConf.getConfString(hoodieParquetAllowReadingShreddedConfKey, "true"))
-    sqlConf.setConfString(SQLConf.VARIANT_ALLOW_READING_SHREDDED.key, allowReadingShredded)
+      hoodieConfKey,
+      sqlConf.getConfString(hoodieConfKey,
+        HoodieStorageConfig.PARQUET_VARIANT_ALLOW_READING_SHREDDED.defaultValue.toString))
+    sqlConf.setConfString(sparkConfKey, allowReadingShredded)
   }
 
   protected lazy val sparkSession: SparkSession = sqlContext.sparkSession
