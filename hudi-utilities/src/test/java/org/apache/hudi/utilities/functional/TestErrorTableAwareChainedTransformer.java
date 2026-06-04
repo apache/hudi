@@ -75,7 +75,7 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
   }
 
   @Test
-  public void testCorruptRecordReInjectedAfterTransformerDropsIt() {
+  void testCorruptRecordReInjectedAfterTransformerDropsIt() {
     // Regression for ENG-41958: a custom transformer (e.g. ColumnFilter with mode=include)
     // that does dataset.select(userColumns) drops _corrupt_record. The chain re-injects it.
     Dataset<Row> original = getTestDataset();
@@ -94,7 +94,7 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
   }
 
   @Test
-  public void testCustomColumnProjectionPreservesCorruptRecord() {
+  void testCustomColumnProjectionPreservesCorruptRecord() {
     // Single custom transformer doing column projection — drops _corrupt_record.
     Dataset<Row> original = getTestDataset();
 
@@ -111,7 +111,7 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
   }
 
   @Test
-  public void testTransformerPreservingCorruptRecordIsNoOp() {
+  void testTransformerPreservingCorruptRecordIsNoOp() {
     // Transformer that keeps all columns — re-injection is a no-op.
     Dataset<Row> original = getTestDataset();
 
