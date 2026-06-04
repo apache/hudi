@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -163,11 +164,13 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
     // Load shredding provider via reflection if needed
     if (shreddedVariantFieldIndices.length > 0) {
       String providerClass = properties.getProperty(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key());
-      if (providerClass != null && !providerClass.isEmpty()) {
-        this.shreddingProvider = (VariantShreddingProvider) ReflectionUtils.loadClass(providerClass);
-      } else {
-        this.shreddingProvider = null;
+      if (providerClass == null || providerClass.isEmpty()) {
+        throw new HoodieException("Variant write shredding is enabled and the write schema requires shredding "
+            + "(typed_value columns present), but no VariantShreddingProvider is configured or available on the "
+            + "classpath. Set " + PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key() + " or add a provider "
+            + "implementation (e.g. the Spark variant module) to the classpath.");
       }
+      this.shreddingProvider = (VariantShreddingProvider) ReflectionUtils.loadClass(providerClass);
     } else {
       this.shreddingProvider = null;
     }
