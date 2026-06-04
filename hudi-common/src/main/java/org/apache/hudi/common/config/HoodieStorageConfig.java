@@ -235,11 +235,12 @@ public class HoodieStorageConfig extends HoodieConfig {
       .noDefaultValue()
       .markAdvanced()
       .sinceVersion("1.1.0")
-      .withDocumentation("Forces a specific shredding schema for all variant columns, intended for testing. "
+      .withDocumentation("Test-only: forces a specific shredding schema for all variant columns. Not intended "
+          + "for production use; it exists solely to exercise the shredding write path in tests, mirroring "
+          + "Spark's internal spark.sql.variant.forceShreddingSchemaForTest. "
           + "The value should be a DDL-format schema string (e.g., 'a int, b string, c decimal(15, 1)'). "
           + "When set and write shredding is enabled, this schema overrides the schema-driven shredding "
-          + "configuration for all variant columns. "
-          + "Equivalent to Spark's spark.sql.variant.forceShreddingSchemaForTest.");
+          + "configuration for all variant columns.");
 
   public static final ConfigProperty<Boolean> PARQUET_VARIANT_ALLOW_READING_SHREDDED = ConfigProperty
       .key("hoodie.parquet.variant.allow.reading.shredded")
@@ -603,11 +604,6 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder parquetVariantWriteShreddingEnabled(boolean enabled) {
       storageConfig.setValue(PARQUET_VARIANT_WRITE_SHREDDING_ENABLED, String.valueOf(enabled));
-      return this;
-    }
-
-    public Builder parquetVariantForceShreddingSchemaForTest(String schemaString) {
-      storageConfig.setValue(PARQUET_VARIANT_FORCE_SHREDDING_SCHEMA_FOR_TEST, schemaString);
       return this;
     }
 
