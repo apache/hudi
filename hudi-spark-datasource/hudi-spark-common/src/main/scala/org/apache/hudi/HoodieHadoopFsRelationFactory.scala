@@ -70,10 +70,13 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     val hoodieConfKey = HoodieStorageConfig.PARQUET_VARIANT_ALLOW_READING_SHREDDED.key
     // Literal, not SQLConf.VARIANT_ALLOW_READING_SHREDDED.key: that field is absent when this module compiles against Spark 3.x.
     val sparkConfKey = "spark.sql.variant.allowReadingShredded"
+    // Precedence: table option > hoodie session key > explicit Spark conf > Hudi default.
+    // Fall back to any explicit Spark conf value so we don't clobber a user-set spark.sql.variant.allowReadingShredded.
+    val sparkConfDefault = sqlConf.getConfString(sparkConfKey,
+      HoodieStorageConfig.PARQUET_VARIANT_ALLOW_READING_SHREDDED.defaultValue.toString)
     val allowReadingShredded = options.getOrElse(
       hoodieConfKey,
-      sqlConf.getConfString(hoodieConfKey,
-        HoodieStorageConfig.PARQUET_VARIANT_ALLOW_READING_SHREDDED.defaultValue.toString))
+      sqlConf.getConfString(hoodieConfKey, sparkConfDefault))
     sqlConf.setConfString(sparkConfKey, allowReadingShredded)
   }
 
