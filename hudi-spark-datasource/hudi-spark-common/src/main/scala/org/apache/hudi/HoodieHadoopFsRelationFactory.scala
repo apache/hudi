@@ -56,6 +56,18 @@ trait HoodieHadoopFsRelationFactory {
   def buildOptions(): Map[String, String]
 }
 
+object HoodieBaseHadoopFsRelationFactory {
+  /**
+   * Resolves the variant allow-reading-shredded value using the precedence:
+   * table option > hoodie session conf > explicit Spark conf > Hudi default.
+   */
+  private[hudi] def resolveVariantAllowReadingShredded(tableOption: Option[String],
+                                                       hoodieSessionValue: Option[String],
+                                                       sparkConfValue: Option[String],
+                                                       hudiDefault: String): String =
+    tableOption.orElse(hoodieSessionValue).orElse(sparkConfValue).getOrElse(hudiDefault)
+}
+
 abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
                                                  val metaClient: HoodieTableMetaClient,
                                                  val options: Map[String, String],
@@ -71,12 +83,11 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     // Literal, not SQLConf.VARIANT_ALLOW_READING_SHREDDED.key: that field is absent when this module compiles against Spark 3.x.
     val sparkConfKey = "spark.sql.variant.allowReadingShredded"
     // Precedence: table option > hoodie session key > explicit Spark conf > Hudi default.
-    // Fall back to any explicit Spark conf value so we don't clobber a user-set spark.sql.variant.allowReadingShredded.
-    val sparkConfDefault = sqlConf.getConfString(sparkConfKey,
+    val allowReadingShredded = HoodieBaseHadoopFsRelationFactory.resolveVariantAllowReadingShredded(
+      options.get(hoodieConfKey),
+      if (sqlConf.contains(hoodieConfKey)) Some(sqlConf.getConfString(hoodieConfKey)) else None,
+      if (sqlConf.contains(sparkConfKey)) Some(sqlConf.getConfString(sparkConfKey)) else None,
       HoodieStorageConfig.PARQUET_VARIANT_ALLOW_READING_SHREDDED.defaultValue.toString)
-    val allowReadingShredded = options.getOrElse(
-      hoodieConfKey,
-      sqlConf.getConfString(hoodieConfKey, sparkConfDefault))
     sqlConf.setConfString(sparkConfKey, allowReadingShredded)
   }
 
