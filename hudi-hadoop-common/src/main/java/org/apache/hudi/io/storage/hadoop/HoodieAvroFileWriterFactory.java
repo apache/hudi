@@ -24,6 +24,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -142,7 +143,8 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
                                                            boolean enableBloomFilter) {
     Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
     HoodieSchema effectiveSchema = HoodieAvroWriteSupport.generateEffectiveSchema(schema, config);
-    Properties props = config.getProps();
+    // Work on a copy so we never mutate the shared config's internal Properties.
+    Properties props = TypedProperties.copy(config.getProps());
     // Auto-detect variant shredding provider from classpath if not explicitly configured
     if (!props.containsKey(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key())) {
       String detected = detectShreddingProvider();
@@ -153,7 +155,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
     return (HoodieAvroWriteSupport) ReflectionUtils.loadClass(
         config.getStringOrDefault(HoodieStorageConfig.HOODIE_AVRO_WRITE_SUPPORT_CLASS),
         new Class<?>[] {MessageType.class, HoodieSchema.class, Option.class, Properties.class},
-        getAvroSchemaConverter((Configuration) storageConf.unwrapAs(Configuration.class)).convert(schema), schema, filter, config.getProps());
+        getAvroSchemaConverter((Configuration) storageConf.unwrapAs(Configuration.class)).convert(schema), schema, filter, props);
   }
 
   /**
