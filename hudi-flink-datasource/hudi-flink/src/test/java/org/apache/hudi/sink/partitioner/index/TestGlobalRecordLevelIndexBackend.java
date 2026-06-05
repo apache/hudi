@@ -81,10 +81,12 @@ public class TestGlobalRecordLevelIndexBackend {
       assertEquals("par1", location.getPartitionPath());
       assertEquals(firstCommitTime, location.getInstantTime());
 
+      HoodieRecordGlobalLocation location1 = globalRecordLevelIndexBackend.get("id1");
+      assertEquals(location1, location);
+
       // get record location with non existed key
       location = globalRecordLevelIndexBackend.get(Collections.singletonList("new_key")).get("new_key");
       assertNull(location);
-      assertThrows(UnsupportedOperationException.class, () -> globalRecordLevelIndexBackend.get("id1"));
 
       // get records locations for multiple record keys
       Map<String, HoodieRecordGlobalLocation> locations = globalRecordLevelIndexBackend.get(Arrays.asList("id1", "id2", "id3"));

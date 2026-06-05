@@ -42,6 +42,8 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.sink.buffer.BufferMemoryType;
 import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
 import org.apache.hudi.table.format.FilePathUtils;
@@ -61,11 +63,21 @@ import java.util.Locale;
 import java.util.Map;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_GROWTH_FACTOR_PROP;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP;
+import static org.apache.hudi.metadata.HoodieBackedTableMetadataWriter.RECORD_INDEX_AVERAGE_RECORD_SIZE;
 
 /**
  * Tool helping to resolve the flink options {@link FlinkOptions}.
  */
 public class OptionsResolver {
+
+  // Value to override the default minimum file group count for global record level index.
+  public static String GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_DEFAULT = "8";
 
   /**
    * Returns whether the current runtime mode is adaptive batch execution.
@@ -225,6 +237,35 @@ public class OptionsResolver {
   public static boolean isGlobalRecordLevelIndex(Configuration conf) {
     HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
     return indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
+  }
+
+  /**
+   * Estimates the file group count to use for RLI partition of a new table.
+   */
+  public static int estimateFileGroupCountForRLI(Configuration conf) {
+    int minFileGroupCount;
+    int maxFileGroupCount;
+    if (OptionsResolver.isRecordLevelIndex(conf)) {
+      minFileGroupCount = Integer.parseInt(conf.getString(RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(),
+          RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.defaultValue() + ""));
+      maxFileGroupCount = Integer.parseInt(conf.getString(RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(),
+          RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.defaultValue() + ""));
+    } else {
+      minFileGroupCount = Integer.parseInt(conf.getString(GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(),
+          GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_DEFAULT));
+      maxFileGroupCount = Integer.parseInt(conf.getString(GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(),
+          GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.defaultValue() + ""));
+    }
+    return HoodieTableMetadataUtil.estimateFileGroupCount(
+        MetadataPartitionType.RECORD_INDEX,
+        () -> 0L,
+        RECORD_INDEX_AVERAGE_RECORD_SIZE,
+        minFileGroupCount,
+        maxFileGroupCount,
+        Float.parseFloat(conf.getString(RECORD_INDEX_GROWTH_FACTOR_PROP.key(),
+            RECORD_INDEX_GROWTH_FACTOR_PROP.defaultValue() + "")),
+        Long.parseLong(conf.getString(RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP.key(),
+            RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP.defaultValue() + "")));
   }
 
   /**
