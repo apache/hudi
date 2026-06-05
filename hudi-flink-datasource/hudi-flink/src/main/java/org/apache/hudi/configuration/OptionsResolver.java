@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
@@ -292,6 +293,23 @@ public class OptionsResolver {
    */
   public static boolean isSimpleBucketIndexType(Configuration conf) {
     return isBucketIndexType(conf) && getBucketEngineType(conf).equals(HoodieIndex.BucketIndexEngineType.SIMPLE);
+  }
+
+  /**
+   * Returns whether the simple bucket index should use remote partitioner.
+   */
+  public static boolean shouldUseBucketRemotePartitioner(Configuration conf) {
+    return isSimpleBucketIndexType(conf)
+        && isBucketRemotePartitionerEnabled(conf);
+  }
+
+  /**
+   * Returns whether the bucket index remote partitioner option is enabled.
+   */
+  public static boolean isBucketRemotePartitionerEnabled(Configuration conf) {
+    return Boolean.parseBoolean(conf.getString(
+        HoodieIndexConfig.BUCKET_PARTITIONER.key(),
+        HoodieIndexConfig.BUCKET_PARTITIONER.defaultValue().toString()));
   }
 
   /**

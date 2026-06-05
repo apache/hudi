@@ -120,6 +120,26 @@ public class TestFlinkWriteClients {
     assertEquals(12, writeConfig.getGlobalRecordLevelIndexMinFileGroupCount());
   }
 
+  @Test
+  void testHoodieClientConfigPrecedence() {
+    conf.setString(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "false");
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, true, false);
+    assertTrue(writeConfig.isEmbeddedTimelineServerEnabled());
+
+    conf.setString(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "true");
+    writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertFalse(writeConfig.isEmbeddedTimelineServerEnabled());
+
+    conf.setString(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED.key(), "false");
+    writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertFalse(writeConfig.isEmbeddedTimelineServerReuseEnabled());
+
+    conf.set(FlinkOptions.CHANGELOG_ENABLED, true);
+    conf.setString(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key(), "false");
+    writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertFalse(writeConfig.allowOperationMetadataField());
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"", "DIRECT", "TIMELINE_SERVER_BASED"})
   void testMarkerType(String markerType) throws Exception {

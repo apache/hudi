@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utils.TestConfigurations;
@@ -99,6 +100,28 @@ public class TestOptionsResolver {
 
     conf.set(FlinkOptions.INDEX_KEY_FIELD, "uuid, name");
     assertArrayEquals(new String[]{"uuid", "name"}, OptionsResolver.getBucketIndexKeys(conf));
+  }
+
+  @Test
+  void testEnableBucketRemotePartitioner() {
+    Configuration conf = getConf();
+    assertFalse(OptionsResolver.isBucketRemotePartitionerEnabled(conf));
+    assertFalse(OptionsResolver.shouldUseBucketRemotePartitioner(conf));
+
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.set(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, HoodieIndex.BucketIndexEngineType.SIMPLE.name());
+    assertFalse(OptionsResolver.isBucketRemotePartitionerEnabled(conf));
+    assertFalse(OptionsResolver.shouldUseBucketRemotePartitioner(conf));
+
+    conf.setString(HoodieIndexConfig.BUCKET_PARTITIONER.key(), "true");
+    assertTrue(OptionsResolver.isBucketRemotePartitionerEnabled(conf));
+    assertTrue(OptionsResolver.shouldUseBucketRemotePartitioner(conf));
+
+    conf.setString(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "false");
+    assertTrue(OptionsResolver.shouldUseBucketRemotePartitioner(conf));
+
+    conf.set(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING.name());
+    assertFalse(OptionsResolver.shouldUseBucketRemotePartitioner(conf));
   }
 
   @Test
