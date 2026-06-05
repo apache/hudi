@@ -28,7 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Utilities for decoding Hudi VECTOR fixed-bytes payloads.
+ * Utilities for decoding Hoodie VECTOR fixed-bytes payloads.
  */
 public final class HoodieVectorUtils {
 
@@ -62,7 +62,7 @@ public final class HoodieVectorUtils {
    *
    * @param bytes        raw bytes read from Parquet
    * @param vectorSchema vector schema
-   * @return an ArrayData containing the decoded float[], double[], or byte[] array
+   * @return the decoded float[], double[], or byte[] array
    * @throws IllegalArgumentException if byte array length doesn't match expected size
    */
   public static Object decodeVectorBytes(byte[] bytes, HoodieSchema.Vector vectorSchema) {
@@ -75,7 +75,7 @@ public final class HoodieVectorUtils {
    * @param bytes    raw bytes read from Parquet
    * @param dim      vector dimension (number of elements)
    * @param elemType element type (FLOAT, DOUBLE, or INT8)
-   * @return an ArrayData containing the decoded float[], double[], or byte[] array
+   * @return the decoded float[], double[], or byte[] array
    * @throws IllegalArgumentException if byte array length doesn't match expected size
    */
   public static Object decodeVectorBytes(

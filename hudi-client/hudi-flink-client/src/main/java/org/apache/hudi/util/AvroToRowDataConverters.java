@@ -104,11 +104,7 @@ public class AvroToRowDataConverters {
   }
 
   /**
-   * Creates a row converter using only the Flink row type.
-   *
-   * <p>This converter cannot recover Hoodie-specific logical type metadata from {@link RowType}.
-   * Use {@link #createRowConverter(HoodieSchema, RowType, boolean)} when a Hoodie schema is
-   * available, especially for VECTOR columns.
+   * Creates a row converter using Hoodie schema.
    */
   public static AvroToRowDataConverter createRowConverter(HoodieSchema hoodieSchema) {
     return createRowConverter(hoodieSchema, (RowType) HoodieSchemaConverter.convertToDataType(hoodieSchema).getLogicalType(), true);

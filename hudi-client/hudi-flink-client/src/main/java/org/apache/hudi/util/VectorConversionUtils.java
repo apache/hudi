@@ -259,7 +259,7 @@ public final class VectorConversionUtils {
   }
 
   /**
-   * Wraps a decoded primitive vector array as Flink array data.
+   * Decodes raw vector bytes and wraps the decoded primitive vector array as Flink array data.
    */
   public static GenericArrayData createVectorArrayData(byte[] bytes, HoodieSchema.Vector vectorSchema) {
     Object vectorArray = HoodieVectorUtils.decodeVectorBytes(bytes, vectorSchema);
@@ -273,6 +273,13 @@ public final class VectorConversionUtils {
     throw new UnsupportedOperationException("Unsupported decoded vector array type: " + vectorArray.getClass());
   }
 
+  /**
+   * Validates that a Flink ARRAY logical type uses the element type required by the VECTOR schema.
+   *
+   * @param vectorSchema VECTOR schema defining the expected element type
+   * @param type         Flink ARRAY logical type to validate
+   * @throws SchemaCompatibilityException if the ARRAY element type does not match the VECTOR element type
+   */
   public static void validateVectorLogicalType(HoodieSchema.Vector vectorSchema, LogicalType type) {
     LogicalTypeRoot elementTypeRoot = ((ArrayType) type).getElementType().getTypeRoot();
     LogicalTypeRoot expectedElementTypeRoot = expectedVectorElementTypeRoot(vectorSchema.getVectorElementType());

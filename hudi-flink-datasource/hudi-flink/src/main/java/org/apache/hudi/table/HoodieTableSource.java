@@ -300,6 +300,7 @@ public class HoodieTableSource extends FileIndexReader implements
     final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableSchema);
     final RowType rowType = (RowType) rowDataType.getLogicalType();
     final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();
+    final HoodieSchema requiredHoodieSchema = DataTypeUtils.toHoodieSchema(requiredRowType, tableSchema);
 
     HoodieScanContext context = createHoodieScanContext(rowType);
     final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.get(FlinkOptions.TABLE_TYPE));
@@ -308,7 +309,7 @@ public class HoodieTableSource extends FileIndexReader implements
             rowType,
             requiredRowType,
             tableSchema.toString(),
-            DataTypeUtils.toHoodieSchemaWithLogicalMetadata(requiredRowType, tableSchema).toString(),
+            requiredHoodieSchema.toString(),
             new ArrayList<>());
     boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ && context.isStreaming();
     if (conf.get(FlinkOptions.CDC_ENABLED)) {
@@ -324,7 +325,7 @@ public class HoodieTableSource extends FileIndexReader implements
       splitReaderFunction = new HoodieSplitReaderFunction(
           conf,
           tableSchema,
-          DataTypeUtils.toHoodieSchemaWithLogicalMetadata(requiredRowType, tableSchema),
+          requiredHoodieSchema,
           internalSchemaManager,
           conf.get(FlinkOptions.MERGE_TYPE),
           predicates,
@@ -613,7 +614,7 @@ public class HoodieTableSource extends FileIndexReader implements
         rowType,
         requiredRowType,
         tableSchema.toString(),
-        DataTypeUtils.toHoodieSchemaWithLogicalMetadata(requiredRowType, tableSchema).toString(),
+        DataTypeUtils.toHoodieSchema(requiredRowType, tableSchema).toString(),
         inputSplits);
     return CdcInputFormat.builder()
         .config(this.conf)
@@ -638,7 +639,7 @@ public class HoodieTableSource extends FileIndexReader implements
         rowType,
         requiredRowType,
         tableAvroSchema.toString(),
-        DataTypeUtils.toHoodieSchemaWithLogicalMetadata(requiredRowType, tableAvroSchema).toString(),
+        DataTypeUtils.toHoodieSchema(requiredRowType, tableAvroSchema).toString(),
         inputSplits);
     return MergeOnReadInputFormat.builder()
         .config(this.conf)

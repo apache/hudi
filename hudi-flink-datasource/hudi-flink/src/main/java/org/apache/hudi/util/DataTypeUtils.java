@@ -137,7 +137,7 @@ public class DataTypeUtils {
    * @param tableSchema source table schema with hoodie logical type metadata
    * @return hoodie schema matching the row type field order
    */
-  public static HoodieSchema toHoodieSchemaWithLogicalMetadata(RowType rowType, HoodieSchema tableSchema) {
+  public static HoodieSchema toHoodieSchema(RowType rowType, HoodieSchema tableSchema) {
     HoodieSchema convertedSchema = HoodieSchemaConverter.convertToSchema(rowType);
     List<HoodieSchemaField> schemaFields = new ArrayList<>(rowType.getFieldCount());
 
