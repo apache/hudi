@@ -20,6 +20,8 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -58,7 +60,12 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_DYNAMIC_MAX_ENTRIES;
+import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_FPP_VALUE;
+import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE;
+import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_TYPE;
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
+import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_WITH_BLOOM_FILTER_ENABLED;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
@@ -192,6 +199,8 @@ public class HFileUtils extends FileFormatUtils {
                                                           String keyFieldName,
                                                           Map<String, String> paramsMap) throws IOException {
     CompressionCodec compressionCodec = getHFileCompressionAlgorithm(paramsMap);
+    boolean enableBloomFilter = isHFileBloomFilterEnabled(paramsMap);
+    BloomFilter bloomFilter = enableBloomFilter ? createBloomFilter(paramsMap) : null;
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     try (OutputStream ostream = new DataOutputStream(baos)) {
       HFileContext context = HFileContext.builder()
@@ -206,6 +215,8 @@ public class HFileUtils extends FileFormatUtils {
       Option<HoodieSchemaField> keyField = writerSchema.getField(keyFieldName);
       try (HFileWriter writer = new HFileWriterImpl(context, ostream)) {
         String previousRecordKey = null;
+        String minRecordKey = null;
+        String maxRecordKey = null;
         // It is assumed that the input records are sorted based on the record key
         // for HFile block
         for (int i = 0; i < records.size(); i++) {
@@ -229,16 +240,41 @@ public class HFileUtils extends FileFormatUtils {
           } catch (IOException e) {
             throw new HoodieIOException("IOException serializing records", e);
           }
+          if (enableBloomFilter) {
+            bloomFilter.add(recordKey);
+            if (minRecordKey == null) {
+              minRecordKey = recordKey;
+            }
+            maxRecordKey = recordKey;
+          }
           previousRecordKey = recordKey;
         }
 
         writer.appendFileInfo(
             HoodieAvroHFileReaderImplBase.SCHEMA_KEY,
             getUTF8Bytes(readerSchema.toString()));
+        if (enableBloomFilter) {
+          appendBloomFilter(writer, minRecordKey, maxRecordKey, bloomFilter);
+        }
       }
       ostream.flush();
     }
     return baos;
+  }
+
+  public static void appendBloomFilter(HFileWriter writer, String minRecordKey, String maxRecordKey, BloomFilter bloomFilter) {
+    writer.appendFileInfo(
+        HoodieAvroHFileReaderImplBase.KEY_MIN_RECORD,
+        getUTF8Bytes(minRecordKey == null ? StringUtils.EMPTY_STRING : minRecordKey));
+    writer.appendFileInfo(
+        HoodieAvroHFileReaderImplBase.KEY_MAX_RECORD,
+        getUTF8Bytes(maxRecordKey == null ? StringUtils.EMPTY_STRING : maxRecordKey));
+    writer.appendFileInfo(
+        HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_TYPE_CODE,
+        getUTF8Bytes(bloomFilter.getBloomFilterTypeCode().toString()));
+    writer.appendMetaInfo(
+        HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK,
+        getUTF8Bytes(bloomFilter.serializeToString()));
   }
 
   /**
@@ -268,6 +304,19 @@ public class HFileUtils extends FileFormatUtils {
 
   private static Option<String> getRecordKey(HoodieRecord record, HoodieSchema readerSchema, String keyFieldName) {
     return Option.ofNullable(record.getRecordKey(readerSchema, keyFieldName));
+  }
+
+  private static boolean isHFileBloomFilterEnabled(Map<String, String> paramsMap) {
+    return Boolean.parseBoolean(paramsMap.getOrDefault(
+        HFILE_WITH_BLOOM_FILTER_ENABLED.key(), String.valueOf(HFILE_WITH_BLOOM_FILTER_ENABLED.defaultValue())));
+  }
+
+  private static BloomFilter createBloomFilter(Map<String, String> paramsMap) {
+    return BloomFilterFactory.createBloomFilter(
+        Integer.parseInt(paramsMap.getOrDefault(BLOOM_FILTER_NUM_ENTRIES_VALUE.key(), BLOOM_FILTER_NUM_ENTRIES_VALUE.defaultValue())),
+        Double.parseDouble(paramsMap.getOrDefault(BLOOM_FILTER_FPP_VALUE.key(), BLOOM_FILTER_FPP_VALUE.defaultValue())),
+        Integer.parseInt(paramsMap.getOrDefault(BLOOM_FILTER_DYNAMIC_MAX_ENTRIES.key(), BLOOM_FILTER_DYNAMIC_MAX_ENTRIES.defaultValue())),
+        paramsMap.getOrDefault(BLOOM_FILTER_TYPE.key(), BLOOM_FILTER_TYPE.defaultValue()));
   }
 
   private static byte[] serializeRecord(HoodieRecord<?> record, HoodieSchema schema, Option<HoodieSchemaField> keyField) throws IOException {

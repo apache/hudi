@@ -263,7 +263,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   public final <T> ClosableIterator<T> getEngineRecordIterator(HoodieReaderContext<T> readerContext, List<String> keys, boolean fullKey) throws IOException {
     boolean fullScan = keys.isEmpty();
     if (!fullScan) {
-      return lookupEngineRecords(keys, fullKey);
+      return lookupEngineRecords(readerContext, keys, fullKey);
     } else {
       throw new IllegalStateException("Unexpected code reached. Expected to be called only with keySpec defined for non FILES partition in Metadata table");
     }
@@ -323,7 +323,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     );
   }
 
-  protected <T> ClosableIterator<T> lookupEngineRecords(List<String> keys, boolean fullKey) throws IOException {
+  protected <T> ClosableIterator<T> lookupEngineRecords(HoodieReaderContext<T> readerContext, List<String> keys, boolean fullKey) throws IOException {
     throw new UnsupportedOperationException(
         String.format("Point lookups are not supported by this Data block type (%s)", getBlockType())
     );

@@ -232,16 +232,7 @@ public class FlinkWriteClients {
                 .parquetMaxFileSize(conf.get(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE) * 1024 * 1024L)
                 .withWriteUtcTimezone(conf.get(FlinkOptions.WRITE_UTC_TIMEZONE))
                 .build())
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-                .withEngineType(EngineType.FLINK) // this affects the default value inference
-                .enable(conf.get(FlinkOptions.METADATA_ENABLED))
-                .withRecordIndexFileGroupCount(
-                    Integer.parseInt(conf.getString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(),
-                        GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_DEFAULT)),
-                    Integer.parseInt(conf.getString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(),
-                        HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.defaultValue() + "")))
-                .withMaxNumDeltaCommitsBeforeCompaction(conf.get(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS))
-                .build())
+            .withMetadataConfig(getMetadataConfig(conf, false))
             .withIndexConfig(StreamerUtil.getIndexConfig(conf))
             .withPayloadConfig(getPayloadConfig(conf))
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
@@ -278,5 +269,42 @@ public class FlinkWriteClients {
       writeConfig.setViewStorageConfig(viewStorageConfig);
     }
     return writeConfig;
+  }
+
+  /**
+   * Builds a {@link HoodieMetadataConfig} from the given Flink configuration, including any
+   * additional metadata table properties set via raw config options.
+   *
+   * @param conf the Flink configuration.
+   * @return the {@link HoodieMetadataConfig} constructed from the Flink configuration.
+   */
+  public static HoodieMetadataConfig getMetadataConfig(Configuration conf) {
+    return getMetadataConfig(conf, true);
+  }
+
+  /**
+   * Builds a {@link HoodieMetadataConfig} from the given Flink configuration.
+   *
+   * @param conf                 the Flink configuration.
+   * @param includeAllProperties whether to also apply any additional metadata table properties
+   *                             set via raw config options on top of the well-known Flink options.
+   * @return the {@link HoodieMetadataConfig} constructed from the Flink configuration.
+   */
+  public static HoodieMetadataConfig getMetadataConfig(Configuration conf, boolean includeAllProperties) {
+    HoodieMetadataConfig.Builder metadataConfigBuilder =
+        HoodieMetadataConfig.newBuilder()
+        .withEngineType(EngineType.FLINK) // this affects the default value inference
+        .enable(conf.get(FlinkOptions.METADATA_ENABLED))
+        .withRecordIndexFileGroupCount(
+            Integer.parseInt(conf.getString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(),
+                GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_DEFAULT)),
+            Integer.parseInt(conf.getString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(),
+                HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.defaultValue() + "")))
+        .withMaxNumDeltaCommitsBeforeCompaction(conf.get(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS));
+
+    if (includeAllProperties) {
+      metadataConfigBuilder.fromProperties(flinkConf2TypedProperties(conf));
+    }
+    return metadataConfigBuilder.build();
   }
 }

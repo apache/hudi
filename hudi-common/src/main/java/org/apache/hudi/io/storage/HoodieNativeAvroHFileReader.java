@@ -333,8 +333,8 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   private static BloomFilter readBloomFilter(HFileReader reader) throws HoodieException {
     try {
-      ByteBuffer byteBuffer = reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK).get();
-      return BloomFilterFactory.fromByteBuffer(byteBuffer,
+      ByteBuffer byteBuffer = reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK).orElse(null);
+      return byteBuffer == null ? null : BloomFilterFactory.fromByteBuffer(byteBuffer,
           fromUTF8Bytes(reader.getMetaInfo(new UTF8StringKey(KEY_BLOOM_FILTER_TYPE_CODE)).get()));
     } catch (IOException e) {
       throw new HoodieException("Could not read bloom filter from HFile", e);

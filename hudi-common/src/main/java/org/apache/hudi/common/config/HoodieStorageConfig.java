@@ -125,6 +125,13 @@ public class HoodieStorageConfig extends HoodieConfig {
           + "reader for footer/metadata operations (schema, bloom filter). Independent of the "
           + "data allocator since metadata allocations are small and short-lived.");
 
+  public static final ConfigProperty<Boolean> HFILE_WITH_BLOOM_FILTER_ENABLED = ConfigProperty
+      .key("hoodie.hfile.bloom.filter.enabled")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Control whether to write bloom filter or not to HFile.");
+
   public static final ConfigProperty<Boolean> HFILE_WRITER_TO_ALLOW_DUPLICATES = ConfigProperty
       .key("hoodie.hfile.writes.allow.duplicates")
       .defaultValue(false)
@@ -576,6 +583,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder parquetBloomFilterEnable(boolean parquetBloomFilterEnable) {
       storageConfig.setValue(PARQUET_WITH_BLOOM_FILTER_ENABLED, String.valueOf(parquetBloomFilterEnable));
+      return this;
+    }
+
+    public Builder hfileBloomFilterEnable(boolean hfileBloomFilterEnable) {
+      storageConfig.setValue(HFILE_WITH_BLOOM_FILTER_ENABLED, String.valueOf(hfileBloomFilterEnable));
       return this;
     }
 
