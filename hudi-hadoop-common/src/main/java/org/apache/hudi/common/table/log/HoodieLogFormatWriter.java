@@ -302,7 +302,10 @@ public class HoodieLogFormatWriter extends HoodieLogFormat.Writer {
     if (exception instanceof IOException) {
       throw (IOException) exception;
     }
-    throw (RuntimeException) exception;
+    if (exception instanceof RuntimeException) {
+      throw (RuntimeException) exception;
+    }
+    throw new IOException(exception);
   }
 
   @Override
