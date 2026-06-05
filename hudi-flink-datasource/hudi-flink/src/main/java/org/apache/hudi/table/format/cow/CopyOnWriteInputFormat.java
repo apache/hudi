@@ -19,7 +19,6 @@
 package org.apache.hudi.table.format.cow;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
