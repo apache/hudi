@@ -69,7 +69,6 @@ declare -a ALL_VERSION_OPTS=(
 "-T 1C -Dscala-2.12 -Dspark3 -pl packaging/hudi-spark-bundle -am" # for legacy bundle name hudi-spark3-bundle_2.12
 
 # Upload Flink bundles (overwriting previous uploads)
-"-T 1C -Dscala-2.12 -Dspark3.5 -Dflink1.17 -Davro.version=1.11.4 -Dparquet.version=1.12.3 -pl packaging/hudi-flink-bundle -am"
 "-T 1C -Dscala-2.12 -Dspark3.5 -Dflink1.18 -Davro.version=1.11.4 -Dparquet.version=1.13.1 -pl packaging/hudi-flink-bundle -am"
 "-T 1C -Dscala-2.12 -Dspark3.5 -Dflink1.19 -Davro.version=1.11.4 -Dparquet.version=1.13.1 -pl packaging/hudi-flink-bundle -am"
 "-T 1C -Dscala-2.12 -Dspark3.5 -Dflink1.20 -Davro.version=1.11.4 -Dparquet.version=1.13.1 -pl packaging/hudi-flink-bundle -am"

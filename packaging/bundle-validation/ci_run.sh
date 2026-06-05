@@ -99,8 +99,8 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.12' ]];
     IMAGE_TAG=flink211hive313spark351
     FLINK_VERSION=2.1.1
   else
-    IMAGE_TAG=flink1170hive313spark351
-    FLINK_VERSION=1.17.0
+    echo "Unsupported Flink profile ${FLINK_PROFILE}"
+    exit 1
   fi
 elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
   HADOOP_VERSION=3.3.5
@@ -211,9 +211,7 @@ else
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
   fi
 
-  if [[ ${FLINK_PROFILE} == 'flink1.17' ]]; then
-    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.17-bundle
-  elif [[ ${FLINK_PROFILE} == 'flink1.18' ]]; then
+  if [[ ${FLINK_PROFILE} == 'flink1.18' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.18-bundle
   elif [[ ${FLINK_PROFILE} == 'flink1.19' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.19-bundle

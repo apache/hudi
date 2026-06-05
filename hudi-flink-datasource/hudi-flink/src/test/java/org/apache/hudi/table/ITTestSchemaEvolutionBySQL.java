@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.adapter.TestHoodieCatalogs;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
@@ -37,7 +36,6 @@ import org.apache.flink.util.CollectionUtil;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.List;
@@ -52,7 +50,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * IT cases for schema evolution by alter table SQL using catalog.
  */
-@EnabledIf("supportAdvancedAlterTableSyntax")
 @ExtendWith(FlinkMiniCluster.class)
 public abstract class ITTestSchemaEvolutionBySQL {
   protected static final String CATALOG_NAME = "hudi_catalog";
@@ -262,10 +259,6 @@ public abstract class ITTestSchemaEvolutionBySQL {
         "Should throw exception because AddWatermark is not supported.");
     assertTrue(e.getCause() instanceof HoodieNotSupportedException);
     assertTrue(e.getCause().getMessage().contains("AddWatermark is not supported."));
-  }
-
-  static boolean supportAdvancedAlterTableSyntax() {
-    return TestHoodieCatalogs.supportAdvancedAlterTableSyntax();
   }
 
   private void execInsertSql(TableEnvironment tEnv, String insert) {

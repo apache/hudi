@@ -445,8 +445,8 @@ public class TestHoodieContinuousSplitEnumerator {
   }
 
   /**
-   * Verify that when the metricGroup is null (Flink 1.17 path), discovering splits with
-   * non-empty results does not throw a NullPointerException.
+   * Verify that when the metricGroup is null, discovering splits with non-empty results
+   * does not throw a NullPointerException.
    */
   @Test
   public void testProcessDiscoveredSplitsWithNullMetricGroup() {
