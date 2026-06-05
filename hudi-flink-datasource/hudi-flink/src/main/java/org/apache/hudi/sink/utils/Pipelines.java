@@ -55,8 +55,7 @@ import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
-import org.apache.hudi.sink.partitioner.BucketIndexPartitioner;
-import org.apache.hudi.sink.partitioner.BucketIndexRemotePartitioner;
+import org.apache.hudi.sink.partitioner.BucketIndexPartitionerFactory;
 import org.apache.hudi.sink.partitioner.DynamicBucketAssignFunction;
 import org.apache.hudi.sink.partitioner.DynamicBucketAssignOperator;
 import org.apache.hudi.sink.partitioner.GlobalRecordIndexPartitioner;
@@ -141,10 +140,7 @@ public class Pipelines {
             "Consistent hashing bucket index does not work with bulk insert using FLINK engine. Use simple bucket index or Spark engine.");
       }
       String indexKeys = OptionsResolver.getIndexKeyField(conf);
-      Partitioner<HoodieKey> partitioner =
-          OptionsResolver.shouldUseBucketRemotePartitioner(conf)
-              ? new BucketIndexRemotePartitioner<>(conf, indexKeys)
-              : new BucketIndexPartitioner<>(conf, indexKeys);
+      Partitioner<HoodieKey> partitioner = BucketIndexPartitionerFactory.create(conf, indexKeys);
       RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, rowType);
       RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
       InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(rowTypeWithFileId);
@@ -374,13 +370,9 @@ public class Pipelines {
       HoodieIndex.BucketIndexEngineType bucketIndexEngineType = OptionsResolver.getBucketEngineType(conf);
       switch (bucketIndexEngineType) {
         case SIMPLE:
-          String indexKeyFields = OptionsResolver.getIndexKeyField(conf);
           // [HUDI-9036] BucketIndexPartitioner is also used in bulk insert mode,
           // keep use of HoodieKey here in partitionCustom for now
-          Partitioner<HoodieKey> partitioner =
-              OptionsResolver.shouldUseBucketRemotePartitioner(conf)
-                  ? new BucketIndexRemotePartitioner<>(conf, indexKeyFields)
-                  : new BucketIndexPartitioner<>(conf, indexKeyFields);
+          Partitioner<HoodieKey> partitioner = BucketIndexPartitionerFactory.create(conf);
           SingleOutputStreamOperator<RowData> bucketWriteStream = dataStream
               .partitionCustom(
                   partitioner,

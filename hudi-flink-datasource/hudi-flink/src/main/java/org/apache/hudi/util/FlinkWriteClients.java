@@ -245,6 +245,8 @@ public class FlinkWriteClients {
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
             .withAllowOperationMetadataField(conf.get(FlinkOptions.CHANGELOG_ENABLED))
             .withProps(flinkConf2TypedProperties(conf))
+            // Keep timeline service enablement controlled by the caller:
+            // coordinator-side clients enable it, while task-side clients disable it.
             .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineService)
             .withSchema(getSourceSchema(conf).toString())
             .withWriteIgnoreFailed(conf.get(FlinkOptions.IGNORE_FAILED));
