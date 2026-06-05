@@ -216,7 +216,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   }
 
   /**
-   * Validate the base file format. Flink Lance support is scoped to COW tables.
+   * Validate the base file format.
    */
   private void checkBaseFileFormatForRead(Configuration conf) {
     checkLanceBaseFileFormat(conf);
@@ -229,9 +229,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   private void checkLanceBaseFileFormat(Configuration conf) {
     if (!isLanceBaseFileFormat(conf)) {
       return;
-    }
-    if (OptionsResolver.isMorTable(conf)) {
-      throw new HoodieValidationException("Flink Lance base-file support is only available for COPY_ON_WRITE tables.");
     }
     if (OptionsResolver.isSchemaEvolutionEnabled(conf)) {
       throw new HoodieValidationException("Flink Lance base-file support does not support schema evolution. Set '"

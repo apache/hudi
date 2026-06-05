@@ -1684,6 +1684,34 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(updatedRows, TestData.DATA_SET_SOURCE_MERGED);
   }
 
+  @Test
+  void testLanceFormatMergeOnReadUpsertWriteAndRead() {
+    String createHoodieTable = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
+        .option(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, true)
+        .option(FlinkOptions.COMPACTION_ASYNC_ENABLED, true)
+        .option(FlinkOptions.COMPACTION_DELTA_COMMITS, 1)
+        .option("hoodie.table.base.file.format", "LANCE")
+        .end();
+    batchTableEnv.executeSql(createHoodieTable);
+
+    execInsertSql(batchTableEnv, TestSQL.INSERT_T1);
+    assertTrue(TestUtils.hasCompleteCompactionInstant(tempFile.getAbsolutePath()),
+        "The first MOR insert should have complete compaction");
+
+    List<Row> rows = CollectionUtil.iteratorToList(
+        batchTableEnv.executeSql("select * from t1").collect());
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+
+    execInsertSql(batchTableEnv, TestSQL.UPDATE_INSERT_T1);
+
+    List<Row> updatedRows = CollectionUtil.iteratorToList(
+        batchTableEnv.executeSql("select * from t1").collect());
+    assertRowsEquals(updatedRows, TestData.DATA_SET_SOURCE_MERGED);
+  }
+
   @ParameterizedTest
   @EnumSource(value = ExecMode.class)
   void testWriteAndReadDebeziumJson(ExecMode execMode) throws Exception {

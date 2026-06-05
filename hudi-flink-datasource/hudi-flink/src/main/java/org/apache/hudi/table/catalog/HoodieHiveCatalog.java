@@ -639,7 +639,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     HoodieFileFormat baseFileFormat = HoodieFileFormat.PARQUET;
     String baseFileFormatStr = properties.get(HoodieTableConfig.BASE_FILE_FORMAT.key());
     if (baseFileFormatStr != null && HoodieFileFormat.LANCE.name().equalsIgnoreCase(baseFileFormatStr)) {
-      throw new HoodieValidationException(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG);
+      throw new HoodieValidationException(HoodieFileFormat.LANCE_UNSUPPORTED_ERROR_MSG);
     }
     //ignore uber input Format
     String inputFormatClassName = HoodieInputFormatUtils.getInputFormatClassName(baseFileFormat, useRealTimeInputFormat);

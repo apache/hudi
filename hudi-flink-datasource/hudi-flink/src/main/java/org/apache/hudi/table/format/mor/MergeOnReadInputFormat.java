@@ -20,6 +20,7 @@ package org.apache.hudi.table.format.mor;
 
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -270,6 +271,10 @@ public class MergeOnReadInputFormat
   }
 
   protected ClosableIterator<RowData> getBaseFileIterator(String path) throws IOException {
+    if (path.endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
+      return FormatUtils.getLanceRecordIterator(path, fieldNames, fieldTypes, requiredPos, hadoopConf);
+    }
+
     LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(
         path,
         fieldNames,
