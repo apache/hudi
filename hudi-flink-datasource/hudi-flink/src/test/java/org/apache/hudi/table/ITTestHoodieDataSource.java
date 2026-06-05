@@ -1537,8 +1537,8 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieIndex.IndexType.class,  names = {"FLINK_STATE", "GLOBAL_RECORD_LEVEL_INDEX"})
-  void testWriteGlobalIndex(HoodieIndex.IndexType indexType) {
+  @MethodSource("indexAndBooleanParams")
+  void testWriteGlobalIndex(String indexType, boolean bootstrapEnabled) {
     // the source generates 4 commits
     String createSource = TestConfigurations.getFileSourceDDL(
         "source", "test_source_4.data", 4);
@@ -1548,7 +1548,8 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .options(getDefaultKeys())
         .option(FlinkOptions.INDEX_GLOBAL_ENABLED, true)
-        .option(FlinkOptions.INDEX_TYPE, indexType.name())
+        .option(FlinkOptions.INDEX_TYPE, indexType)
+        .option(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, bootstrapEnabled)
         .option(FlinkOptions.PRE_COMBINE, true)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
@@ -3437,6 +3438,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .options(getDefaultKeys())
         .option(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name())
+        .option(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true)
         .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
         .option(FlinkOptions.TABLE_TYPE, MERGE_ON_READ.name())
         .end();
@@ -3735,6 +3737,18 @@ public class ITTestHoodieDataSource {
             {"FLINK_STATE", true},
             {"BUCKET", false},
             {"BUCKET", true}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  /**
+   * Return test params => (index type, boolean).
+   */
+  private static Stream<Arguments> indexAndBooleanParams() {
+    Object[][] data =
+        new Object[][] {
+            {"FLINK_STATE", false},
+            {"GLOBAL_RECORD_LEVEL_INDEX", false},
+            {"GLOBAL_RECORD_LEVEL_INDEX", true}};
     return Stream.of(data).map(Arguments::of);
   }
 

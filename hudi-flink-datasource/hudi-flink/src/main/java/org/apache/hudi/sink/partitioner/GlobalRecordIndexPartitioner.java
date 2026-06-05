@@ -22,6 +22,7 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -93,6 +94,12 @@ public class GlobalRecordIndexPartitioner implements Partitioner<HoodieKey> {
   static int getNumFileGroupsForRecordIndexPartition(Configuration conf) {
     String tablePath = conf.get(FlinkOptions.PATH);
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    // For flink adaptive batch execution, writer coordinator is not started yet, so metadata table
+    // is not initialized for a new table.
+    if (!metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) {
+      // estimate the minimum file group count used to initialize global record level index
+      return OptionsResolver.estimateFileGroupCountForRLI(conf);
+    }
     try (HoodieTableMetadata metadataTable = metaClient.getTableFormat().getMetadataFactory().create(
         HoodieFlinkEngineContext.DEFAULT,
         metaClient.getStorage(),

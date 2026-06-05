@@ -50,6 +50,7 @@ import org.apache.flink.configuration.Configuration;
 import java.io.IOException;
 import java.util.Locale;
 
+import static org.apache.hudi.configuration.OptionsResolver.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_DEFAULT;
 import static org.apache.hudi.util.StreamerUtil.flinkConf2TypedProperties;
 import static org.apache.hudi.util.StreamerUtil.getLockConfig;
 import static org.apache.hudi.util.StreamerUtil.getPayloadConfig;
@@ -235,7 +236,8 @@ public class FlinkWriteClients {
                 .withEngineType(EngineType.FLINK) // this affects the default value inference
                 .enable(conf.get(FlinkOptions.METADATA_ENABLED))
                 .withRecordIndexFileGroupCount(
-                    Integer.parseInt(conf.getString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "8")),
+                    Integer.parseInt(conf.getString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(),
+                        GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_DEFAULT)),
                     Integer.parseInt(conf.getString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(),
                         HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.defaultValue() + "")))
                 .withMaxNumDeltaCommitsBeforeCompaction(conf.get(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS))

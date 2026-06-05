@@ -20,7 +20,6 @@ package org.apache.hudi.sink.partitioner;
 
 import org.apache.hudi.adapter.ProcessFunctionAdapter;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
-import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -41,7 +40,6 @@ import org.apache.flink.util.Collector;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -160,11 +158,11 @@ public class MinibatchBucketAssignFunction
         public void process(List<HoodieFlinkInternalRow> records, Collector<HoodieFlinkInternalRow> out) throws Exception {
           List<String> recordKeys = records.stream().map(HoodieFlinkInternalRow::getRecordKey).collect(Collectors.toList());
           MinibatchIndexBackend minibatchIndexBackend = (MinibatchIndexBackend) delegateFunction.getIndexBackend();
-          // get record locations by minibatch
-          Map<String, HoodieRecordGlobalLocation> recordLocations = minibatchIndexBackend.get(recordKeys);
+          // warm up the in-memory cache for record level index
+          minibatchIndexBackend.get(recordKeys);
           for (HoodieFlinkInternalRow record: records) {
             String recordKey = record.getRecordKey();
-            delegateFunction.processChangingRecord(record, recordKey, out, recordLocations.get(recordKey), true);
+            delegateFunction.processChangingRecord(record, recordKey, out);
           }
         }
       };

@@ -785,6 +785,23 @@ public class TestHoodieTableFactory {
         (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf));
     Configuration conf2 = tableSink2.getConf();
     assertThat(conf2.get(FlinkOptions.PRE_COMBINE), is(false));
+
+    // Global RLI setup should not enable index bootstrap implicitly.
+    Configuration globalRLIConf = new Configuration(this.conf);
+    globalRLIConf.set(FlinkOptions.OPERATION, "upsert");
+    globalRLIConf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    globalRLIConf.set(FlinkOptions.METADATA_ENABLED, true);
+    globalRLIConf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, true);
+    HoodieTableSink globalRLISink =
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(globalRLIConf));
+    Configuration globalRLIResolvedConf = globalRLISink.getConf();
+    assertThat(globalRLIResolvedConf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED), is(false));
+
+    globalRLIConf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    HoodieTableSink globalRLIWithBootstrapSink =
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(globalRLIConf));
+    Configuration globalRLIWithBootstrapResolvedConf = globalRLIWithBootstrapSink.getConf();
+    assertThat(globalRLIWithBootstrapResolvedConf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED), is(true));
   }
 
   @Test
