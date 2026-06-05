@@ -183,6 +183,7 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
      * VariantType is stored in Parquet as a struct with binary fields: "metadata" and "value".
      * Supports both unshredded (2 fields) and shredded (3 fields with "typed_value") layouts.
      */
+    // TODO(voon) parquet-1.16: replace this name/arity shape heuristic with a VariantLogicalTypeAnnotation check once all supported parquet versions are >= 1.16.
     def isVariantPhysicalSchema(structType: StructType): Boolean = {
       val fieldMap = structType.fields.map(f => (f.name, f.dataType)).toMap
       val hasRequiredFields = fieldMap.contains(HoodieSchema.Variant.VARIANT_VALUE_FIELD) &&
@@ -262,6 +263,7 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     applyVariantLogicalType(builder).named(fieldName)
   }
 
+  // TODO(HUDI-XXXX) drop-spark4.0: when all remaining 4.x adapters are parquet 1.16+, apply variantType() in this base and delete the no-op default plus the Spark4_1Adapter override.
   protected def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = builder
 
   override def isVariantShreddingStruct(structType: StructType): Boolean = {
