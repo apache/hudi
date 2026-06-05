@@ -19,22 +19,34 @@
 
 package org.apache.hudi.io.hadoop;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.io.storage.HoodieNativeAvroHFileReader;
 import org.apache.hudi.io.storage.hadoop.HoodieAvroOrcReader;
 import org.apache.hudi.io.storage.hadoop.HoodieAvroParquetReader;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -44,6 +56,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestHoodieAvroFileReaderFactory {
   @TempDir
   public java.nio.file.Path tempDir;
+
+  private static final StoragePath HFILE_PATH = new StoragePath("/partition/path/f1_1-0-1_000.hfile");
 
   @Test
   public void testGetFileReader() throws IOException {
@@ -69,5 +83,57 @@ public class TestHoodieAvroFileReaderFactory {
         .getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, orcPath);
     assertTrue(orcReader instanceof HoodieAvroOrcReader);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testHFileReaderPassesBloomFilterConfig(boolean bloomFilterEnabled)
+      throws IOException, ReflectiveOperationException {
+    HoodieStorage storage = HoodieTestUtils.getDefaultStorage();
+    HoodieFileReaderFactory readerFactory = HoodieIOFactory.getIOFactory(storage)
+        .getReaderFactory(HoodieRecordType.AVRO);
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .withProperties(DEFAULT_HUDI_CONFIG_FOR_READER.getProps())
+        .withProperties(bloomFilterProps(bloomFilterEnabled))
+        .build();
+
+    assertBloomFilterConfig(readerFactory.getFileReader(metadataConfig, HFILE_PATH),
+        bloomFilterEnabled);
+    assertBloomFilterConfig(readerFactory.getFileReader(metadataConfig,
+        new StoragePathInfo(HFILE_PATH, 100, false, (short) 0, 0, 0), HoodieFileFormat.HFILE,
+        Option.<HoodieSchema>empty()), bloomFilterEnabled);
+    assertBloomFilterConfig(readerFactory.getContentReader(metadataConfig, HFILE_PATH, HoodieFileFormat.HFILE,
+        storage, new byte[0], Option.<HoodieSchema>empty()),
+        bloomFilterEnabled);
+  }
+
+  @Test
+  public void testHFileReaderDoesNotUseBloomFilterByDefault()
+      throws IOException, ReflectiveOperationException {
+    HoodieStorage storage = HoodieTestUtils.getDefaultStorage();
+    HoodieFileReaderFactory readerFactory = HoodieIOFactory.getIOFactory(storage)
+        .getReaderFactory(HoodieRecordType.AVRO);
+
+    assertBloomFilterConfig(readerFactory.getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, HFILE_PATH), false);
+    assertBloomFilterConfig(readerFactory.getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER,
+        new StoragePathInfo(HFILE_PATH, 100, false, (short) 0, 0, 0), HoodieFileFormat.HFILE,
+        Option.<HoodieSchema>empty()), false);
+    assertBloomFilterConfig(readerFactory.getContentReader(DEFAULT_HUDI_CONFIG_FOR_READER, HFILE_PATH,
+        HoodieFileFormat.HFILE, storage, new byte[0], Option.<HoodieSchema>empty()),
+        false);
+  }
+
+  private static TypedProperties bloomFilterProps(boolean enableBloomFilter) {
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(HoodieMetadataConfig.BLOOM_FILTER_ENABLE.key(), Boolean.toString(enableBloomFilter));
+    return properties;
+  }
+
+  private static void assertBloomFilterConfig(HoodieFileReader reader, boolean expectedBloomFilterEnabled)
+      throws ReflectiveOperationException {
+    HoodieNativeAvroHFileReader hfileReader = assertInstanceOf(HoodieNativeAvroHFileReader.class, reader);
+    Field useBloomFilterField = HoodieNativeAvroHFileReader.class.getDeclaredField("useBloomFilter");
+    useBloomFilterField.setAccessible(true);
+    assertEquals(expectedBloomFilterEnabled, useBloomFilterField.getBoolean(hfileReader));
   }
 }
