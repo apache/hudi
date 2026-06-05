@@ -126,9 +126,9 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           partialUpdateModeOpt);
     }
 
-    Pair<Function<T, T>, HoodieSchema> projectedTransformer = getProjectedTransformer(dataBlock);
+    Pair<Function<T, T>, HoodieSchema> schemaTransformer = getSchemaTransformerWithEvolvedSchema(dataBlock);
 
-    HoodieSchema schema = HoodieSchemaCache.intern(projectedTransformer.getRight());
+    HoodieSchema schema = HoodieSchemaCache.intern(schemaTransformer.getRight());
 
     // TODO: Return an iterator that can generate sequence number with the record.
     //       Then we can hide this logic into data block.
@@ -144,9 +144,9 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         }
 
         long recordPosition = recordPositions.get(recordIndex++);
-        T projectedNextRecord = projectedTransformer.getLeft().apply(nextRecord);
-        boolean isDelete = readerContext.getRecordContext().isDeleteRecord(projectedNextRecord, deleteContext);
-        BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(projectedNextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
+        T transformedNextRecord = schemaTransformer.getLeft().apply(nextRecord);
+        boolean isDelete = readerContext.getRecordContext().isDeleteRecord(transformedNextRecord, deleteContext);
+        BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(transformedNextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
         processNextDataRecord(bufferedRecord, recordPosition);
       }
     }

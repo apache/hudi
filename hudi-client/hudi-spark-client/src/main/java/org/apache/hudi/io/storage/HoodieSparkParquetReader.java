@@ -144,7 +144,20 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
    */
   public ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema, List<Filter> readFilters) throws IOException {
     HoodieSchema nonNullSchema = requestedSchema.getNonNullType();
-    StructType structSchema = HoodieInternalRowUtils.getCachedSchema(nonNullSchema);
+    return getUnsafeRowIterator(nonNullSchema, HoodieInternalRowUtils.getCachedSchema(nonNullSchema), readFilters);
+  }
+
+  /**
+   * Variant overload. {@code projectedRequestedStruct} is the requested Spark schema, which may carry
+   * a Spark 4.1 PushVariantIntoScan variant projection (per-field {@code VariantMetadata}) that
+   * {@link HoodieSchema} cannot represent. Using it as the requested schema makes parquet-mr decode
+   * variant columns into the projected struct shape natively (mirroring the base-file read path)
+   * rather than returning the full {@code VariantType}. {@code requestedSchema} is still used for
+   * vector-column detection (orthogonal to variants) and the timestamp-repair MessageType.
+   */
+  public ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema, StructType projectedRequestedStruct, List<Filter> readFilters) throws IOException {
+    HoodieSchema nonNullSchema = requestedSchema.getNonNullType();
+    StructType structSchema = projectedRequestedStruct;
 
     // Detect vector columns: ordinal → Vector schema
     Map<Integer, HoodieSchema.Vector> vectorColumnInfo = HoodieVectorUtils.detectVectorColumns(nonNullSchema);

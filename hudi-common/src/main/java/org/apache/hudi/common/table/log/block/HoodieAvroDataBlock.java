@@ -169,7 +169,10 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   protected <T> ClosableIterator<T> deserializeRecords(HoodieReaderContext<T> readerContext, byte[] content) throws IOException {
     checkState(this.readerSchema != null, "Reader's schema has to be non-null");
     RecordIterator iterator = RecordIterator.getInstance(this, content, readerContext.enableLogicalTimestampFieldRepair());
-    return new CloseableMappingIterator<>(iterator, data -> readerContext.getRecordContext().convertAvroRecord(data));
+    ClosableIterator<T> records = new CloseableMappingIterator<>(iterator, data -> readerContext.getRecordContext().convertAvroRecord(data));
+    // Align records with the engine's projected read schema (e.g. Spark 4.1 PushVariantIntoScan).
+    // No-op for engines/queries that don't need it. Parquet log blocks project natively in the reader.
+    return readerContext.projectLogBlockRecords(records, this.readerSchema);
   }
 
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {

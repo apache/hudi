@@ -24,13 +24,14 @@ import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForB
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
+import org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.HoodieVectorUtils
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, Pair => HPair}
+import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, CloseableMappingIterator, Pair => HPair}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader, VectorConversionUtils}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
@@ -86,6 +87,14 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
 
   // For each field of `target`, replace its dataType with the matching field's projected
   // variant struct from `source` (when present). Non-matching fields pass through.
+  //
+  // Why a parallel `sparkRequiredSchema` overlay exists at all (#18739 sub-task 4): a Spark 4.1
+  // PushVariantIntoScan projection carries per-field `VariantMetadata` (extraction path / timezone /
+  // failOnError) that `HoodieSchema` has nowhere to store — `HoodieSparkSchemaConverters` collapses
+  // the projected struct back to a plain VARIANT and the reverse can't reconstruct the metadata. So
+  // the engine must keep the projected Spark schema alongside the HoodieSchema; it cannot be
+  // recovered from a HoodieSchema round-trip. Kept Spark-side on purpose so the engine-neutral schema
+  // model stays free of Spark-4.1 variant concepts.
   private def overlayVariantProjections(target: StructType, source: StructType): StructType = {
     StructType(target.fields.map { f =>
       SparkFileFormatInternalRowReaderContext.findFieldByName(source, f.name).map(_.dataType) match {
@@ -96,29 +105,45 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     })
   }
 
-  // Aligns log-block records with the PushVariantIntoScan-projected variant shape before
-  // they reach the merger. Preserves merger metadata cols (_hoodie_record_key,
-  // _tmp_metadata_row_index) which the merger reads by ordinal — projecting down to the
-  // bare required schema would drop them and the merger would read garbage offsets.
-  override def getLogBlockRecordProjection(
-      dataBlockSchema: HoodieSchema): HOption[JFunction[InternalRow, InternalRow]] = {
-    val needsProjection = sparkRequiredSchema.exists(_.fields.exists(f => f.dataType match {
+  // True only when there is a Spark 4.1 PushVariantIntoScan projection to apply AND the table is
+  // not using a custom (payload-based) merger. Payload-based tables round-trip records through
+  // PayloadUpdateProcessor.convertToAvroRecord against a schema that still types variant fields as
+  // VariantType, so a row already rewritten into the projected struct shape would be mis-decoded.
+  // Single source of truth for both reader paths (parquet native projection + avro rewrite).
+  private def shouldProjectVariants: Boolean = {
+    val hasVariantProjection = sparkRequiredSchema.exists(_.fields.exists(_.dataType match {
       case st: StructType => sparkAdapter.isVariantProjectionStruct(st)
       case _ => false
     }))
-    if (!needsProjection) {
-      return HOption.empty[JFunction[InternalRow, InternalRow]]()
+    hasVariantProjection && {
+      val merger = getRecordMerger()
+      !(merger != null && merger.isPresent && merger.get.getMergingStrategy == PAYLOAD_BASED_MERGE_STRATEGY_UUID)
+    }
+  }
+
+  // Aligns avro log-block records with the PushVariantIntoScan-projected variant shape before
+  // they reach the merger. Preserves merger metadata cols (_hoodie_record_key,
+  // _tmp_metadata_row_index) which the merger reads by ordinal — projecting down to the bare
+  // required schema would drop them and the merger would read garbage offsets. Parquet log blocks
+  // project natively in getFileRecordIterator, so only the avro log reader calls this hook.
+  override def projectLogBlockRecords(
+      recordIterator: ClosableIterator[InternalRow],
+      dataBlockSchema: HoodieSchema): ClosableIterator[InternalRow] = {
+    if (!shouldProjectVariants) {
+      return recordIterator
     }
     val req = sparkRequiredSchema.get
     val dataStruct = HoodieInternalRowUtils.getCachedSchema(dataBlockSchema)
     val targetStruct = overlayVariantProjections(dataStruct, req)
     sparkAdapter.buildVariantProjector(dataStruct, targetStruct) match {
-      case Some(p) => HOption.of(new JFunction[InternalRow, InternalRow] {
-        // .copy() because the buffer stores rows into ExternalSpillableMap and
-        // UnsafeProjection reuses a single output buffer.
-        override def apply(r: InternalRow): InternalRow = p(r).copy()
-      })
-      case None => HOption.empty[JFunction[InternalRow, InternalRow]]()
+      case Some(p) =>
+        new CloseableMappingIterator[InternalRow, InternalRow](recordIterator,
+          new JFunction[InternalRow, InternalRow] {
+            // .copy() because the buffer stores rows into ExternalSpillableMap and
+            // UnsafeProjection reuses a single output buffer.
+            override def apply(r: InternalRow): InternalRow = p(r).copy()
+          })
+      case None => recordIterator
     }
   }
 
@@ -159,11 +184,18 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
 
     val (readSchema, readFilters) = getSchemaAndFiltersForRead(parquetReadStructType, hasRowIndexField)
     if (FSUtils.isLogFile(filePath)) {
-      // NOTE: now only primary key based filtering is supported for log files
-      // Variant alignment happens later via getLogBlockRecordProjection in the merge buffer.
-      new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
-        .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(requiredSchema, readFilters.asJava)
-        .asInstanceOf[ClosableIterator[InternalRow]]
+      // NOTE: now only primary key based filtering is supported for log files.
+      val reader = new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
+        .asInstanceOf[HoodieSparkParquetReader]
+      val rawIterator = if (shouldProjectVariants) {
+        // Thread the variant-overlaid struct (carrying VariantMetadata that HoodieSchema can't
+        // represent) so parquet-mr decodes variants into the projected struct shape natively,
+        // mirroring the base-file branch below. Gated so payload-based tables keep full variants.
+        reader.getUnsafeRowIterator(requiredSchema, structType, readFilters.asJava)
+      } else {
+        reader.getUnsafeRowIterator(requiredSchema, readFilters.asJava)
+      }
+      rawIterator.asInstanceOf[ClosableIterator[InternalRow]]
     } else {
       // partition value is empty because the spark parquet reader will append the partition columns to
       // each row if they are given. That is the only usage of the partition values in the reader.
