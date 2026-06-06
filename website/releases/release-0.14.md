@@ -10,6 +10,7 @@ This page contains release notes for all Apache Hudi 0.14.x releases, including:
 
 - [Release 0.14.0](#release-0140)
 - [Release 0.14.1](#release-0141)
+- [Release 0.14.2](#release-0142)
 
 ---
 
@@ -384,4 +385,57 @@ The raw release notes are available [here](https://issues.apache.org/jira/secure
 
 :::tip
 0.14.1 release also contains all the new features and bug fixes from 0.14.0, of which the release notes are [here](/releases/release-0.14#release-0140)
+:::
+
+---
+
+## [Release 0.14.2](https://github.com/apache/hudi/releases/tag/release-0.14.2) {#release-0142}
+
+## Migration Guide
+
+* This release (0.14.2) does not introduce any new table version, thus no migration is needed if you are on 0.14.0 or 0.14.1.
+* If migrating from an older release, please check the migration guide from the previous release notes, specifically
+  the upgrade instructions in [0.6.0](/releases/release-0.6.0),
+  [0.9.0](/releases/release-0.9.0), [0.10.0](/releases/release-0.10.0),
+  [0.11.0](/releases/release-0.11.0), [0.12.0](/releases/release-0.12.0), [0.13.0](/releases/release-0.13.0), and
+  [0.14.0](/releases/release-0.14#release-0140)
+
+### Bundle Updates
+
+#### New Flink Bundle
+
+This release adds support for Flink 1.18 through the
+[hudi-flink1.18-bundle](https://mvnrepository.com/artifact/org.apache.hudi/hudi-flink1.18-bundle).
+
+### Bug fixes and improvements
+
+0.14.2 is a patch release focused on stability and selected backports from later development. The fixes span across:
+
+* Flink engine support, including Flink 1.18 compatibility and fixes for schema evolution with decimal and nested types.
+* Metadata table and indexing correctness, including column stats index fixes and marker-file handling for log files.
+* Concurrency control, including storage-based lock provider support, lock metrics, audit logging scaffolding, and Hive metastore lock credential handling.
+* Schema and key generation handling, including timestamp logical type fixes and a guard for complex key generator record-key encoding.
+* Meta sync stability, including table recreation handling on selected sync failures.
+* Spark write path stability, including clustering row-writer fixes.
+
+## Known Regressions
+
+0.14.2 fixes the ComplexKeyGenerator regression reported in 0.14.1 for tables using a single record key field with
+multiple partition fields. The fix restores the old key encoding by default and adds validation to guard against affected
+tables.
+
+:::tip
+Users on 0.14.1 with ComplexKeyGenerator, a single record key field, and multiple partition fields should evaluate their
+tables before upgrading. If duplicate records were already written while running 0.14.1, repair may be needed before
+resuming normal writes.
+:::
+
+## Raw Release Notes
+
+The incremental code changes from 0.14.1 are available in the
+[0.14.1 to 0.14.2 compare view](https://github.com/apache/hudi/compare/release-0.14.1...release-0.14.2).
+
+:::tip
+0.14.2 release also contains all the new features and bug fixes from 0.14.0 and 0.14.1, of which the release notes are
+[here](/releases/release-0.14#release-0140) and [here](/releases/release-0.14#release-0141).
 :::
