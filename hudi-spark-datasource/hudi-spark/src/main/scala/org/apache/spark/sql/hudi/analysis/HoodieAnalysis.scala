@@ -57,7 +57,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val adaptIngestionTargetLogicalRelations: RuleBuilder = session => AdaptIngestionTargetLogicalRelations(session)
 
     rules += adaptIngestionTargetLogicalRelations
-    val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark4_1) {
+    val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark4_2) {
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark42DataSourceV2ToV1Fallback"
+    } else if (HoodieSparkUtils.isSpark4_1) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark41DataSourceV2ToV1Fallback"
     } else if (HoodieSparkUtils.isSpark4_0) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark40DataSourceV2ToV1Fallback"
@@ -80,7 +82,10 @@ object HoodieAnalysis extends SparkAdapterSupport {
     // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
     rules ++= Seq(dataSourceV2ToV1Fallback, resolveReferences)
 
-    if (HoodieSparkUtils.isSpark4_1) {
+    if (HoodieSparkUtils.isSpark4_2) {
+      rules += (_ => instantiateKlass(
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark42ResolveColumnsForInsertInto"))
+    } else if (HoodieSparkUtils.isSpark4_1) {
       rules += (_ => instantiateKlass(
         "org.apache.spark.sql.hudi.analysis.HoodieSpark41ResolveColumnsForInsertInto"))
     } else if (HoodieSparkUtils.isSpark4_0) {
@@ -92,7 +97,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
     }
 
     val resolveAlterTableCommandsClass =
-      if (HoodieSparkUtils.isSpark4_1) {
+      if (HoodieSparkUtils.isSpark4_2) {
+        "org.apache.spark.sql.hudi.Spark42ResolveHudiAlterTableCommand"
+      } else if (HoodieSparkUtils.isSpark4_1) {
         "org.apache.spark.sql.hudi.Spark41ResolveHudiAlterTableCommand"
       } else if (HoodieSparkUtils.isSpark4_0) {
         "org.apache.spark.sql.hudi.Spark40ResolveHudiAlterTableCommand"
@@ -137,7 +144,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
     )
 
     val nestedSchemaPruningClass =
-      if (HoodieSparkUtils.isSpark4_1) {
+      if (HoodieSparkUtils.isSpark4_2) {
+        "org.apache.spark.sql.execution.datasources.Spark42NestedSchemaPruning"
+      } else if (HoodieSparkUtils.isSpark4_1) {
         "org.apache.spark.sql.execution.datasources.Spark41NestedSchemaPruning"
       } else if (HoodieSparkUtils.isSpark4_0) {
         "org.apache.spark.sql.execution.datasources.Spark40NestedSchemaPruning"
