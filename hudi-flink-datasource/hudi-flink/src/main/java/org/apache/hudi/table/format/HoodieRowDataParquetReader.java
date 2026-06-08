@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.util.HoodieVectorUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -35,6 +36,7 @@ import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.HoodieSchemaConverter;
+import org.apache.hudi.util.VectorConversionUtils;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
@@ -46,6 +48,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -100,7 +103,15 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
       DataType dataType,
       HoodieSchema requestedSchema,
       List<Predicate> predicates) throws IOException {
-    return RecordIterators.getParquetRecordIterator(storage.getConf(), internalSchemaManager, dataType, requestedSchema, path, predicates);
+    Map<Integer, HoodieSchema.Vector> vectorColumnInfo = HoodieVectorUtils.detectVectorColumns(requestedSchema);
+    ClosableIterator<RowData> rowDataItr = RecordIterators.getParquetRecordIterator(
+        storage.getConf(), internalSchemaManager, VectorConversionUtils.getParquetReadDataType(dataType, requestedSchema, vectorColumnInfo),
+        requestedSchema, path, predicates);
+    if (vectorColumnInfo.isEmpty()) {
+      return rowDataItr;
+    }
+    RowType requestedRowType = HoodieSchemaConverter.convertToRowType(requestedSchema);
+    return VectorConversionUtils.wrapVectorColumnIterator(rowDataItr, requestedRowType, vectorColumnInfo);
   }
 
   @Override

@@ -365,7 +365,15 @@ public class ParquetSplitReaderUtil {
       case VARCHAR:
       case BINARY:
       case VARBINARY:
-        return new BytesColumnReader(descriptor, pageReader);
+        switch (descriptor.getPrimitiveType().getPrimitiveTypeName()) {
+          case BINARY:
+            return new BytesColumnReader(descriptor, pageReader);
+          case FIXED_LEN_BYTE_ARRAY:
+            return new FixedLenBytesColumnReader(
+                descriptor, pageReader);
+          default:
+            throw new AssertionError();
+        }
       case TIMESTAMP_WITHOUT_TIME_ZONE:
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
         switch (descriptor.getPrimitiveType().getPrimitiveTypeName()) {
@@ -496,7 +504,9 @@ public class ParquetSplitReaderUtil {
       case BINARY:
       case VARBINARY:
         checkArgument(
-            typeName == PrimitiveType.PrimitiveTypeName.BINARY, getPrimitiveTypeCheckFailureMessage(typeName, fieldType));
+            typeName == PrimitiveType.PrimitiveTypeName.BINARY
+                || typeName == PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY,
+            getPrimitiveTypeCheckFailureMessage(typeName, fieldType));
         return new HeapBytesVector(batchSize);
       case TIMESTAMP_WITHOUT_TIME_ZONE:
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:

@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
+import org.apache.hudi.common.util.HoodieVectorUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.ParquetUtils;
@@ -146,7 +147,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     StructType structSchema = HoodieInternalRowUtils.getCachedSchema(nonNullSchema);
 
     // Detect vector columns: ordinal → Vector schema
-    Map<Integer, HoodieSchema.Vector> vectorColumnInfo = VectorConversionUtils.detectVectorColumns(nonNullSchema);
+    Map<Integer, HoodieSchema.Vector> vectorColumnInfo = HoodieVectorUtils.detectVectorColumns(nonNullSchema);
 
     // For vector columns, replace ArrayType(FloatType) with BinaryType in the read schema
     // so SparkBasicSchemaEvolution sees matching types (file has FIXED_LEN_BYTE_ARRAY → BinaryType)
