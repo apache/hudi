@@ -135,13 +135,16 @@ public class HoodieLookupFunction extends LookupFunction implements Serializable
     }
 
     HoodieActiveTimeline latestCommit = metaClient.reloadActiveTimeline();
-    Option<HoodieInstant> latestCommitInstant = latestCommit.getCommitsTimeline().lastInstant();
-    if (latestCommit.empty()) {
+    Option<HoodieInstant> latestCommitInstant =
+        latestCommit.getCommitsTimeline().filterCompletedInstants().lastInstant();
+    if (!latestCommitInstant.isPresent()) {
+      scheduleNextLoad();
       log.info("No commit instant found currently.");
       return;
     }
     // Determine whether to reload data by comparing instant
     if (latestCommitInstant.get().equals(currentCommit)) {
+      scheduleNextLoad();
       log.info("Ignore loading data because the commit instant " + currentCommit + " has not changed.");
       return;
     }
@@ -162,7 +165,7 @@ public class HoodieLookupFunction extends LookupFunction implements Serializable
         }
         partitionReader.close();
         currentCommit = latestCommitInstant.get();
-        nextLoadTime = System.currentTimeMillis() + reloadInterval.toMillis();
+        scheduleNextLoad();
         log.info("Loaded {} row(s) into lookup join cache", count);
         return;
       } catch (Exception e) {
@@ -183,6 +186,10 @@ public class HoodieLookupFunction extends LookupFunction implements Serializable
         }
       }
     }
+  }
+
+  private void scheduleNextLoad() {
+    nextLoadTime = System.currentTimeMillis() + reloadInterval.toMillis();
   }
 
   private RowData extractLookupKey(RowData row) {
