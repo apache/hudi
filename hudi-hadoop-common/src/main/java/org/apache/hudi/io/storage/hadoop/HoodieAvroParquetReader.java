@@ -185,19 +185,23 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     //       sure that in case the file-schema is not equal to read-schema we'd still
     //       be able to read that file (in case projection is a proper one)
     Configuration hadoopConf = storage.getConf().unwrapCopyAs(Configuration.class);
-    HoodieSchema repairedFileSchema = HoodieSchemaRepair.repairLogicalTypes(getSchema(), schema);
+    // If the on-disk file shreds variant columns, read them in their shredded (typed_value-bearing)
+    // shape and reconstruct the unshredded variant per-record below (#18931). null when not needed.
+    VariantReconstruction reconstruction = VariantReconstruction.create(getSchema(), schema, storage);
+    HoodieSchema readSchema = reconstruction == null ? schema : reconstruction.intermediateSchema();
+    HoodieSchema repairedFileSchema = HoodieSchemaRepair.repairLogicalTypes(getSchema(), readSchema);
     Option<HoodieSchema> promotedSchema = Option.empty();
-    if (!renamedColumns.isEmpty() || HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(repairedFileSchema.toAvroSchema(), schema.toAvroSchema())) {
+    if (!renamedColumns.isEmpty() || HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(repairedFileSchema.toAvroSchema(), readSchema.toAvroSchema())) {
       AvroReadSupport.setAvroReadSchema(hadoopConf, repairedFileSchema.toAvroSchema());
       AvroReadSupport.setRequestedProjection(hadoopConf, repairedFileSchema.toAvroSchema());
-      promotedSchema = Option.of(schema);
+      promotedSchema = Option.of(readSchema);
     } else {
-      AvroReadSupport.setAvroReadSchema(hadoopConf, schema.toAvroSchema());
-      AvroReadSupport.setRequestedProjection(hadoopConf, schema.toAvroSchema());
+      AvroReadSupport.setAvroReadSchema(hadoopConf, readSchema.toAvroSchema());
+      AvroReadSupport.setRequestedProjection(hadoopConf, readSchema.toAvroSchema());
     }
     ParquetReader<IndexedRecord> reader =
         new HoodieAvroParquetReaderBuilder<IndexedRecord>(path)
-            .withTableSchema(getAvroSchemaConverter(hadoopConf).convert(schema))
+            .withTableSchema(getAvroSchemaConverter(hadoopConf).convert(readSchema))
             .withConf(hadoopConf)
             .set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, hadoopConf.get(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS))
             .set(ParquetInputFormat.STRICT_TYPE_CHECKING, hadoopConf.get(ParquetInputFormat.STRICT_TYPE_CHECKING))
@@ -206,7 +210,10 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
         ? new HoodieAvroParquetReaderIterator(reader, promotedSchema.get(), renamedColumns)
         : new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
-    return parquetReaderIterator;
+    if (reconstruction == null) {
+      return parquetReaderIterator;
+    }
+    return new CloseableMappingIterator<>(parquetReaderIterator, reconstruction::reconstruct);
   }
 
   @Override

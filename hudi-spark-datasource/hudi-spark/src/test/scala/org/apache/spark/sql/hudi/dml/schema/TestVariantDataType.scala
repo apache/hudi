@@ -130,6 +130,8 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath
+      // Shred variants on write so the compacted base file is shredded; the AVRO read path must
+      // then reconstruct the unshredded variant when reading it back (#18931).
       spark.sql(
         s"""
            |create table $tableName (
@@ -142,6 +144,8 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
            |  primaryKey = 'id',
            |  type = 'mor',
            |  preCombineField = 'ts',
+           |  hoodie.parquet.variant.write.shredding.enabled = 'true',
+           |  hoodie.parquet.variant.force.shredding.schema.for.test = 'key string',
            |  hoodie.index.type = 'INMEMORY',
            |  hoodie.compact.inline = 'true',
            |  hoodie.compact.inline.max.delta.commits = '5',

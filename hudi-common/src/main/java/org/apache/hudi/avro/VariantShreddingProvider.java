@@ -63,4 +63,24 @@ public interface VariantShreddingProvider {
       GenericRecord unshreddedVariant,
       Schema shreddedSchema,
       HoodieSchema.Variant variantSchema);
+
+  /**
+   * Reconstruct an unshredded variant GenericRecord from a shredded one (the inverse of
+   * {@link #shredVariantRecord}).
+   * <p>
+   * Used on the read path: records read from an already-shredded base file (compaction/clustering)
+   * arrive with {@code typed_value} populated. This rebuilds the full variant binary so the record
+   * presents the standard unshredded {@code {metadata, value}} shape before it reaches the
+   * merger/writer.
+   *
+   * @param shreddedVariant  GenericRecord with {value, metadata, typed_value} read from a shredded base file
+   * @param shreddedSchema   the Avro schema of {@code shreddedVariant} (carries typed_value)
+   * @param unshreddedSchema target Avro schema with {value: ByteBuffer, metadata: ByteBuffer}
+   * @return a GenericRecord conforming to {@code unshreddedSchema} with the full reconstructed
+   *         variant binary in {@code value}, or null if the input metadata is missing
+   */
+  GenericRecord rebuildVariantRecord(
+      GenericRecord shreddedVariant,
+      Schema shreddedSchema,
+      Schema unshreddedSchema);
 }
