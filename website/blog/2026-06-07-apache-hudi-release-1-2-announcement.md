@@ -93,7 +93,7 @@ The initial implementation performs distributed brute-force search, while ongoin
 
 Modern AI applications increasingly manage more than structured records. Images, documents, audio, video, application logs, model outputs, agent traces, and telemetry have become first-class data assets. Hudi 1.2 introduces two new logical types to embrace such data types.
 
-[BLOB](https://hudi.apache.org/docs/sql_ddl#blob) introduces native support for binary objects within Hudi, enabling images, documents, audio, video, and other unstructured assets to be managed directly in the lakehouse. Both inline and out-of-line variants are supported. Hudi also added support for read_blob() table-valued function to enable lazy materialization for efficient access to metadata for applications. [VARIANT](https://hudi.apache.org/docs/sql_ddl#variant) introduces native support for semi-structured data, preserving rich hierarchical structures without requiring rigid schemas. Together, these capabilities allow structured data, binary objects, and semi-structured data to coexist within the same transactional lakehouse table.
+[BLOB](https://hudi.apache.org/docs/sql_ddl#blob) introduces native support for binary objects within Hudi, enabling images, documents, audio, video, and other unstructured assets to be managed directly in the lakehouse. Both inline and out-of-line variants are supported. Hudi also added support for [read_blob()](https://hudi.apache.org/docs/sql_queries#reading-blob-columns) table-valued function to enable lazy materialization for efficient access to metadata for applications. [VARIANT](https://hudi.apache.org/docs/sql_ddl#variant) introduces native support for semi-structured data, preserving rich hierarchical structures without requiring rigid schemas. Together, these capabilities allow structured data, binary objects, and semi-structured data to coexist within the same transactional lakehouse table.
 
 ```sql
 CREATE TABLE media_assets (
@@ -122,13 +122,13 @@ Hudi 1.2 includes significant investments across Flink ingestion, indexing, and 
 
 ![Record Level Index (RLI) support on Flink](/assets/images/blog/2026-06-07-apache-hudi-release-1-2-announcement/5-flink-rli.png)
 
-The release also introduces a new FLIP-27 based [Flink Source V2](https://github.com/apache/hudi/blob/master/rfc/rfc-95/rfc-95.md) with resumable split assignment, improved fault tolerance, and stronger pushdown capabilities. Together, these improvements strengthen Hudi's ability to power large-scale real-time AI and streaming workloads.
+The release also introduces a new FLIP-27 based [Flink Source V2](https://hudi.apache.org/docs/ingestion_flink#flink-source-v2) with resumable split assignment, improved fault tolerance, and stronger pushdown capabilities. Together, these improvements strengthen Hudi's ability to power large-scale real-time AI and streaming workloads.
 
 ### Operational Foundations: Table Services and Multi-Writer Concurrency
 
 Supporting multimodal and AI workloads requires more than new data types. Large-scale data platforms must also manage storage growth, optimize file layouts, coordinate concurrent writers, and maintain predictable performance over time. These operational concerns are often where specialized systems introduce additional complexity.
 
-Hudi 1.2 continues to strengthen the lakehouse foundation through investments in table services, metadata management, and concurrency control. Cleaning and clustering gain new planning and automation capabilities, while cloud-native multi-writer support now extends across all major cloud providers through [native storage-based locking](https://hudi.apache.org/docs/concurrency_control/#azure-storage-based-lock) for S3, GCS, Azure Blob Storage, and ADLS Gen2. Together with Hudi's ACID guarantees, incremental processing framework, and automated table services, these capabilities help organizations operate large-scale lakehouse deployments without building custom operational tooling.
+Hudi 1.2 continues to strengthen the lakehouse foundation through investments in table services, metadata management, and concurrency control. Cleaning and clustering gain new planning and automation capabilities, while cloud-native multi-writer support now extends across all major cloud providers through [native storage-based locking](https://hudi.apache.org/docs/concurrency_control#azure-storage-based-lock) for S3, GCS, Azure Blob Storage, and ADLS Gen2. Together with Hudi's ACID guarantees, incremental processing framework, and automated table services, these capabilities help organizations operate large-scale lakehouse deployments without building custom operational tooling.
 
 ## What's Next
 
@@ -142,4 +142,4 @@ The community is already investing in the next generation of capabilities, inclu
 
 Whether you are building retrieval systems, recommendation engines, AI observability platforms, multimodal datasets, or large-scale streaming applications, we invite you to try Apache Hudi 1.2 and help shape the future of the open lakehouse.
 
-Check out the [1.2 release notes](https://hudi.apache.org/releases/release-1.2) and [quick start guides]()https://hudi.apache.org/docs/quick-start-guide to learn more. Join the Apache Hudi community on [Slack](https://hudi.apache.org/slack/), [GitHub](https://github.com/apache/hudi), [LinkedIn](https://www.linkedin.com/company/apache-hudi), [X](http://x.com/apachehudi), and the [dev@hudi.apache.org mailing list](mailto:dev@hudi.apache.org). We look forward to building the next generation of the open lakehouse together.
+Check out the [1.2 release notes](https://hudi.apache.org/releases/release-1.2) and [quick start guide](https://hudi.apache.org/docs/quick-start-guide) to learn more. Join the Apache Hudi community on [Slack](https://hudi.apache.org/slack/), [GitHub](https://github.com/apache/hudi), [LinkedIn](https://www.linkedin.com/company/apache-hudi), [X](http://x.com/apachehudi), and the [dev@hudi.apache.org mailing list](mailto:dev@hudi.apache.org). We look forward to building the next generation of the open lakehouse together.
