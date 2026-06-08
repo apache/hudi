@@ -18,7 +18,6 @@ module.exports = {
                 'python-rust-quick-start-guide',
                 'unstructured-data-quick-start-guide',
                 'docker_demo',
-                "notebooks",
                 'use_cases',
             ],
         },

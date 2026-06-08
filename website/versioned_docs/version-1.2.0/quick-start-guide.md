@@ -1277,3 +1277,7 @@ to get your transactional data lakes up and running quickly, across a variety qu
 We have put together a [demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that showcases all of this on a docker based setup with all
 dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following
 steps [here](docker_demo.md) to get a taste for it. 
+
+### Interactive Notebooks
+Alternatively, you can also bring up the required services locally using Docker via the interactive notebooks setup. Unlike the full Dockerized Demo setup above, this is a much more lightweight environment designed specifically for quick, hands-on experimentation. It provisions only the essential local components—including Spark, Hive, and a local S3-compatible store—bundled seamlessly via Docker Compose. All you need is a cloned copy of the Hudi repository and Docker installed on your system (tested on macOS).
+Please refer to the [Notebooks](notebooks.md) page for step-by-step setup instructions and more details.
