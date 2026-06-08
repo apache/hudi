@@ -22,17 +22,21 @@ package org.apache.hudi.variant;
 import org.apache.hudi.avro.VariantShreddingProvider;
 import org.apache.hudi.common.schema.HoodieSchema;
 
+import org.apache.avro.Conversions;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.types.variant.ShreddingUtils;
 import org.apache.spark.types.variant.Variant;
 import org.apache.spark.types.variant.VariantSchema;
 import org.apache.spark.types.variant.VariantShreddingWriter;
 import org.apache.spark.types.variant.VariantShreddingWriter.ShreddedResult;
 import org.apache.spark.types.variant.VariantShreddingWriter.ShreddedResultBuilder;
 
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -84,6 +88,32 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
         VariantShreddingWriter.castShredded(variant, sparkSchema, builder);
 
     return result.toGenericRecord();
+  }
+
+  @Override
+  public GenericRecord rebuildVariantRecord(
+      GenericRecord shreddedVariant,
+      Schema shreddedSchema,
+      Schema unshreddedSchema) {
+
+    if (shreddedVariant == null) {
+      return null;
+    }
+    ByteBuffer metadataBuf = (ByteBuffer) shreddedVariant.get(METADATA_FIELD);
+    if (metadataBuf == null) {
+      return null;
+    }
+
+    // Reuse the same VariantSchema index assignment as the write path (no builder needed on read).
+    VariantSchema sparkSchema = buildVariantSchema(shreddedSchema, true, null);
+
+    // Delegate to Spark's reconstruction algorithm (inverse of castShredded).
+    Variant variant = ShreddingUtils.rebuild(new AvroVariantRow(shreddedVariant, sparkSchema), sparkSchema);
+
+    GenericRecord out = new GenericData.Record(unshreddedSchema);
+    out.put(METADATA_FIELD, ByteBuffer.wrap(variant.getMetadata()));
+    out.put(VALUE_FIELD, ByteBuffer.wrap(variant.getValue()));
+    return out;
   }
 
   /**
@@ -150,7 +180,11 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
         typedIdx, variantIdx, topLevelMetadataIdx, numFields,
         scalarSchema, objectSchema, arraySchema);
 
-    builder.registerSchema(result, avroSchema);
+    // The read (rebuild) path passes a null builder: it needs the VariantSchema indices but no
+    // Avro-schema registration (registration only feeds write-side result construction).
+    if (builder != null) {
+      builder.registerSchema(result, avroSchema);
+    }
 
     return result;
   }
@@ -396,6 +430,239 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
     @Override
     public boolean allowNumericScaleChanges() {
       return true;
+    }
+  }
+
+  /**
+   * Base {@link ShreddingUtils.ShreddedRow} with all accessors throwing; concrete rows override
+   * only the accessors valid for their nesting context. This is the read-path mirror of the
+   * write-path {@link AvroShreddedResult}: it reads Avro records to feed Spark's reconstruction
+   * ({@link ShreddingUtils#rebuild}).
+   */
+  abstract static class BaseAvroShreddedRow implements ShreddingUtils.ShreddedRow {
+    @Override
+    public boolean isNullAt(int ordinal) {
+      throw unsupported();
+    }
+
+    @Override
+    public boolean getBoolean(int ordinal) {
+      throw unsupported();
+    }
+
+    @Override
+    public byte getByte(int ordinal) {
+      throw unsupported();
+    }
+
+    @Override
+    public short getShort(int ordinal) {
+      throw unsupported();
+    }
+
+    @Override
+    public int getInt(int ordinal) {
+      throw unsupported();
+    }
+
+    @Override
+    public long getLong(int ordinal) {
+      throw unsupported();
+    }
+
+    @Override
+    public float getFloat(int ordinal) {
+      throw unsupported();
+    }
+
+    @Override
+    public double getDouble(int ordinal) {
+      throw unsupported();
+    }
+
+    @Override
+    public BigDecimal getDecimal(int ordinal, int precision, int scale) {
+      throw unsupported();
+    }
+
+    @Override
+    public String getString(int ordinal) {
+      throw unsupported();
+    }
+
+    @Override
+    public byte[] getBinary(int ordinal) {
+      throw unsupported();
+    }
+
+    @Override
+    public UUID getUuid(int ordinal) {
+      throw unsupported();
+    }
+
+    @Override
+    public ShreddingUtils.ShreddedRow getStruct(int ordinal, int numFields) {
+      throw unsupported();
+    }
+
+    @Override
+    public ShreddingUtils.ShreddedRow getArray(int ordinal) {
+      throw unsupported();
+    }
+
+    @Override
+    public int numElements() {
+      throw unsupported();
+    }
+
+    private static UnsupportedOperationException unsupported() {
+      return new UnsupportedOperationException("Accessor not valid for this shredded row context");
+    }
+  }
+
+  /**
+   * A shredded variant struct {@code {value, [metadata], typed_value}}. Maps the Spark
+   * {@link VariantSchema} ordinals (variantIdx / topLevelMetadataIdx / typedIdx) back to the named
+   * Avro fields, and reads {@code typed_value} for scalar/object/array reconstruction.
+   */
+  static final class AvroVariantRow extends BaseAvroShreddedRow {
+    private final GenericRecord record;
+    private final VariantSchema schema;
+
+    AvroVariantRow(GenericRecord record, VariantSchema schema) {
+      this.record = record;
+      this.schema = schema;
+    }
+
+    private String fieldNameFor(int ordinal) {
+      if (ordinal == schema.typedIdx) {
+        return TYPED_VALUE_FIELD;
+      }
+      if (ordinal == schema.variantIdx) {
+        return VALUE_FIELD;
+      }
+      if (ordinal == schema.topLevelMetadataIdx) {
+        return METADATA_FIELD;
+      }
+      throw new IllegalArgumentException("Unexpected shredded ordinal: " + ordinal);
+    }
+
+    @Override public boolean isNullAt(int ordinal) {
+      return record.get(fieldNameFor(ordinal)) == null;
+    }
+
+    @Override public byte[] getBinary(int ordinal) {
+      return toByteArray((ByteBuffer) record.get(fieldNameFor(ordinal)));
+    }
+
+    @Override public boolean getBoolean(int ordinal) {
+      return (Boolean) record.get(TYPED_VALUE_FIELD);
+    }
+
+    @Override public byte getByte(int ordinal) {
+      return ((Number) record.get(TYPED_VALUE_FIELD)).byteValue();
+    }
+
+    @Override public short getShort(int ordinal) {
+      return ((Number) record.get(TYPED_VALUE_FIELD)).shortValue();
+    }
+
+    @Override public int getInt(int ordinal) {
+      return ((Number) record.get(TYPED_VALUE_FIELD)).intValue();
+    }
+
+    @Override public long getLong(int ordinal) {
+      return ((Number) record.get(TYPED_VALUE_FIELD)).longValue();
+    }
+
+    @Override public float getFloat(int ordinal) {
+      return ((Number) record.get(TYPED_VALUE_FIELD)).floatValue();
+    }
+
+    @Override public double getDouble(int ordinal) {
+      return ((Number) record.get(TYPED_VALUE_FIELD)).doubleValue();
+    }
+
+    @Override public String getString(int ordinal) {
+      return record.get(TYPED_VALUE_FIELD).toString();
+    }
+
+    @Override public UUID getUuid(int ordinal) {
+      return UUID.fromString(record.get(TYPED_VALUE_FIELD).toString());
+    }
+
+    @Override public BigDecimal getDecimal(int ordinal, int precision, int scale) {
+      Object value = record.get(TYPED_VALUE_FIELD);
+      if (value instanceof BigDecimal) {
+        return (BigDecimal) value;
+      }
+      Schema tvSchema = unwrapNullable(record.getSchema().getField(TYPED_VALUE_FIELD).schema());
+      Conversions.DecimalConversion conversion = new Conversions.DecimalConversion();
+      if (value instanceof ByteBuffer) {
+        return conversion.fromBytes((ByteBuffer) value, tvSchema, tvSchema.getLogicalType());
+      }
+      if (value instanceof GenericFixed) {
+        return conversion.fromFixed((GenericFixed) value, tvSchema, tvSchema.getLogicalType());
+      }
+      throw new IllegalStateException("Unexpected decimal representation: " + value);
+    }
+
+    @Override public ShreddingUtils.ShreddedRow getStruct(int ordinal, int numFields) {
+      // Object shredding: typed_value is a record whose fields are the shredded object fields.
+      return new AvroObjectRow((GenericRecord) record.get(TYPED_VALUE_FIELD), schema);
+    }
+
+    @Override public ShreddingUtils.ShreddedRow getArray(int ordinal) {
+      return new AvroArrayRow((List<?>) record.get(TYPED_VALUE_FIELD), schema.arraySchema);
+    }
+  }
+
+  /**
+   * The {@code typed_value} record of an object-shredded variant: ordinal {@code i} addresses the
+   * i-th shredded object field (a nested {@code {value, typed_value}} struct).
+   */
+  static final class AvroObjectRow extends BaseAvroShreddedRow {
+    private final GenericRecord typedValueRecord;
+    private final VariantSchema parentSchema;
+
+    AvroObjectRow(GenericRecord typedValueRecord, VariantSchema parentSchema) {
+      this.typedValueRecord = typedValueRecord;
+      this.parentSchema = parentSchema;
+    }
+
+    @Override public boolean isNullAt(int ordinal) {
+      return typedValueRecord.get(parentSchema.objectSchema[ordinal].fieldName) == null;
+    }
+
+    @Override public ShreddingUtils.ShreddedRow getStruct(int ordinal, int numFields) {
+      VariantSchema.ObjectField field = parentSchema.objectSchema[ordinal];
+      return new AvroVariantRow((GenericRecord) typedValueRecord.get(field.fieldName), field.schema);
+    }
+  }
+
+  /**
+   * The {@code typed_value} array of an array-shredded variant: each element is a shredded variant
+   * struct following {@code elementSchema}.
+   */
+  static final class AvroArrayRow extends BaseAvroShreddedRow {
+    private final List<?> elements;
+    private final VariantSchema elementSchema;
+
+    AvroArrayRow(List<?> elements, VariantSchema elementSchema) {
+      this.elements = elements;
+      this.elementSchema = elementSchema;
+    }
+
+    @Override public int numElements() {
+      return elements.size();
+    }
+
+    @Override public boolean isNullAt(int ordinal) {
+      return elements.get(ordinal) == null;
+    }
+
+    @Override public ShreddingUtils.ShreddedRow getStruct(int ordinal, int numFields) {
+      return new AvroVariantRow((GenericRecord) elements.get(ordinal), elementSchema);
     }
   }
 }
