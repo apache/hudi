@@ -23,7 +23,7 @@ This project provides a ready-to-use Docker Compose environment for running Apac
 
 ## 🛠️ Services
 
-- **spark-hudi**: Spark 3 with Hudi and JupyterLab
+- **spark-hudi**: Spark 3 (Java 11 + Scala 2.12) with Hudi and JupyterLab
 - **spark4-hudi**: Spark 4 (Java 17 + Scala 2.13) with Hudi and JupyterLab
 - **hive-metastore**: Hive Metastore (backed by Derby)
 - **minio**: S3-compatible object storage
