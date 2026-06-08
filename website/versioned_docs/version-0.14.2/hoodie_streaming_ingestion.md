@@ -177,7 +177,7 @@ In some cases, you may want to migrate your existing table into Hudi beforehand.
 From 0.11.0 release, we start to provide a new `hudi-utilities-slim-bundle` which aims to exclude dependencies that can
 cause conflicts and compatibility issues with different versions of Spark.  The `hudi-utilities-slim-bundle` should be
 used along with a Hudi Spark bundle corresponding the Spark version used to make utilities work with Spark, e.g.,
-`--packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:0.13.0,org.apache.hudi:hudi-spark3.1-bundle_2.12:0.13.0`,
+`--packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:0.14.2,org.apache.hudi:hudi-spark3.4-bundle_2.12:0.14.2`,
 if using `hudi-utilities-bundle` solely to run `HoodieStreamer` in Spark encounters compatibility issues.
 
 #### MultiTableStreamer
@@ -748,4 +748,3 @@ There are many use cases that user put the full history data set onto the messag
 If you want to perform streaming ingestion into Hudi format similar to `HoodieStreamer`, but you don't want to depend on Spark,
 try out the new experimental release of Hudi Kafka Connect Sink. Read the [ReadMe](https://github.com/apache/hudi/tree/master/hudi-kafka-connect) 
 for full documentation.
-

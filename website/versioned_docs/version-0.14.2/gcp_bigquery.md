@@ -63,9 +63,9 @@ Below shows an example for running `BigQuerySyncTool` with `HoodieStreamer`.
 ```shell
 spark-submit --master yarn \
 --packages com.google.cloud:google-cloud-bigquery:2.10.4 \
---jars /opt/hudi-gcp-bundle-0.13.0.jar \
+--jars /opt/hudi-gcp-bundle-0.14.2.jar \
 --class org.apache.hudi.utilities.streamer.HoodieStreamer \
-/opt/hudi-utilities-bundle_2.12-0.13.0.jar \
+/opt/hudi-utilities-bundle_2.12-0.14.2.jar \
 --target-base-path gs://my-hoodie-table/path \
 --target-table mytable \
 --table-type COPY_ON_WRITE \

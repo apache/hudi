@@ -2,7 +2,7 @@
 title: Bootstrapping
 keywords: [ hudi, migration, use case]
 summary: In this page, we will discuss some available tools for migrating your existing table into a Hudi table
-last_modified_at: 2019-12-30T15:59:57-04:00
+last_modified_at: 2026-06-08T15:16:31+08:00
 toc: true
 toc_min_heading_level: 2
 toc_max_heading_level: 4
@@ -63,7 +63,7 @@ spark-submit --master local \
 --hoodie-conf hoodie.bootstrap.base.path=/tmp/source_table \
 --hoodie-conf hoodie.datasource.write.recordkey.field=${KEY_FIELD} \
 --hoodie-conf hoodie.datasource.write.partitionpath.field=${PARTITION_FIELD} \
---hoodie-conf hoodie.datasource.write.precombine.field=${PRECOMBINE_FILED} \
+--hoodie-conf hoodie.datasource.write.precombine.field=${PRECOMBINE_FIELD} \
 --hoodie-conf hoodie.bootstrap.keygen.class=org.apache.hudi.keygen.SimpleKeyGenerator \
 --hoodie-conf hoodie.bootstrap.mode.selector=org.apache.hudi.client.bootstrap.selector.BootstrapRegexModeSelector \
 --hoodie-conf hoodie.bootstrap.mode.selector.regex='.*' \
@@ -114,4 +114,3 @@ By default, with only `hoodie.bootstrap.base.path` being provided METADATA_ONLY 
 <h3>Videos</h3>
 
 * [Bootstrapping in Apache Hudi on EMR Serverless with Lab](https://www.youtube.com/watch?v=iTNLqbW3YYA)
-  

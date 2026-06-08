@@ -1,7 +1,7 @@
 ---
 title: "Flink Guide"
 toc: true
-last_modified_at: 2026-06-06T17:20:53+08:00
+last_modified_at: 2026-06-08T15:16:31+08:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -296,7 +296,7 @@ values={[
 
 <TabItem value="flinksql">
 
-Hudi tables can be updated by either inserting reocrds with same primary key or using a standard UPDATE statement shown as below.
+Hudi tables can be updated by either inserting records with the same primary key or using a standard UPDATE statement shown as below.
 
 ```sql
 -- Update Queries only works with batch execution mode
@@ -347,10 +347,10 @@ of RDBMS.
 ### Batch Delete
 
 ```sql
--- delete all the records with age greater than 23
+-- delete all the records with fare greater than 23
 -- NOTE: only works for batch sql queries
 SET 'execution.runtime-mode' = 'batch';
-DELETE FROM t1 WHERE age > 23;
+DELETE FROM hudi_table WHERE fare > 23;
 ```
 
 :::note

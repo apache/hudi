@@ -2,7 +2,7 @@
 title: Performance
 keywords: [ hudi, index, storage, compaction, cleaning, implementation]
 toc: false
-last_modified_at: 2019-12-30T15:59:57-04:00
+last_modified_at: 2026-06-08T15:16:31+08:00
 ---
 
 ## Optimized DFS Access
@@ -119,8 +119,8 @@ For very large tables (1Tb+, 10s of 1000s of files), Data skipping could
 
 To unlock the power of Data Skipping you will need to
 
-1. Enable Metadata Table along with Column Stats Index on the _write path_ (See [Metadata Indexing](metadata_indexing.md)), using `hoodie.metadata.enable=true` (to enable Metadata Table on the write path, enabled by default)
-2. Enable Data Skipping in your queries, using `hoodie.metadata.index.column.stats.enable=true` (to enable Column Stats Index being populated on the write path, disabled by default)
+1. Enable Metadata Table along with Column Stats Index on the _write path_ (See [Metadata Indexing](metadata_indexing.md)), using `hoodie.metadata.enable=true` (to enable Metadata Table on the write path, enabled by default) and `hoodie.metadata.index.column.stats.enable=true` (to enable Column Stats Index population on the write path, disabled by default)
+2. Enable Data Skipping in your queries by setting the read-path options below.
 
 :::note
 If you're planning on enabling Column Stats Index for already existing table, please check out the [Metadata Indexing](metadata_indexing.md) guide on how to build Metadata Table Indices (such as Column Stats Index) for existing tables.

@@ -402,10 +402,11 @@ The raw release notes are available [here](https://issues.apache.org/jira/secure
 
 ### Bundle Updates
 
-#### New Flink Bundle
+#### Additional Flink Bundle
 
 This release adds support for Flink 1.18 through the
 [hudi-flink1.18-bundle](https://mvnrepository.com/artifact/org.apache.hudi/hudi-flink1.18-bundle).
+The existing Flink 1.13 through 1.17 bundles remain supported in the 0.14.x line.
 
 ### Bug fixes and improvements
 
@@ -418,7 +419,7 @@ This release adds support for Flink 1.18 through the
 * Meta sync stability, including table recreation handling on selected sync failures.
 * Spark write path stability, including clustering row-writer fixes.
 
-## Known Regressions
+## ComplexKeyGenerator Upgrade Notes
 
 0.14.2 fixes the ComplexKeyGenerator regression reported in 0.14.1 for tables using a single record key field with
 multiple partition fields. The fix restores the old key encoding by default and adds validation to guard against affected

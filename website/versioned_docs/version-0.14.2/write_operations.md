@@ -2,7 +2,7 @@
 title: Write Operations
 summary: "In this page, we describe the different write operations in Hudi."
 toc: true
-last_modified_at:
+last_modified_at: 2026-06-08T15:16:31+08:00
 ---
 
 It may be helpful to understand the different write operations of Hudi and how best to leverage them. These operations
@@ -39,7 +39,7 @@ Hudi supports migrating your existing large tables into a Hudi table using the `
 [bootstrapping page](https://hudi.apache.org/docs/migration_guide) for more details. 
 
 ### INSERT_OVERWRITE
-This operation is used to rerwrite the all the partitions that are present in the input. This operation can be faster 
+This operation is used to rewrite all the partitions that are present in the input. This operation can be faster
 than `upsert` for batch ETL jobs, that are recomputing entire target partitions at once (as opposed to incrementally 
 updating the target tables). This is because, we are able to bypass indexing, precombining and other repartitioning 
 steps in the upsert write path completely. This comes in handy if you are doing any backfill or any such type of use-cases.
@@ -56,7 +56,7 @@ Deletion of specific partitions can be done using the config
 
 
 ## Configs
-Here are the basic configs relevant to the write operations types mentioned above. Please refer to [Write Options](https://hudi.apache.org/docs/configurations#Write-Options) for more Spark based configs and [Flink options](https://hudi.apache.org/docs/next/configurations#Flink-Options) for Flink based configs.
+Here are the basic configs relevant to the write operations types mentioned above. Please refer to [Write Options](configurations.md#Write-Options) for more Spark based configs and [Flink options](configurations.md#Flink-Options) for Flink based configs.
 
 **Spark based configs:**
 

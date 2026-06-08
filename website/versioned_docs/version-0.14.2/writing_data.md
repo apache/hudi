@@ -3,7 +3,7 @@ title: Writing Data
 keywords: [hudi, incremental, batch, stream, processing, Hive, ETL, Spark SQL]
 summary: In this page, we will discuss some available tools for incrementally ingesting & storing data.
 toc: true
-last_modified_at: 2019-12-30T15:59:57-04:00
+last_modified_at: 2026-06-08T15:16:31+08:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -124,10 +124,10 @@ hudi_options = {
     'hoodie.insert.shuffle.parallelism': 2
 }
 
-df.write.format("hudi").
-    options(**hudi_options).
-    mode("overwrite").
-    save(basePath)
+(df.write.format("hudi")
+    .options(**hudi_options)
+    .mode("overwrite")
+    .save(basePath))
 ```
 :::info
 `mode(Overwrite)` overwrites and recreates the table if it already exists.
@@ -389,7 +389,7 @@ Let's say the original schema is:
   "name":"example_tbl",
   "fields":[{
      "name": "uuid",
-     "type": "String"
+     "type": "string"
   }, {
      "name": "ts",
      "type": "string"
@@ -409,7 +409,7 @@ Make sure you add `_hoodie_is_deleted` column:
   "name":"example_tbl",
   "fields":[{
      "name": "uuid",
-     "type": "String"
+     "type": "string"
   }, {
      "name": "ts",
      "type": "string"
@@ -429,7 +429,7 @@ Make sure you add `_hoodie_is_deleted` column:
 
 Then any record you want to delete you can mark `_hoodie_is_deleted` as true:
 ```json
-{"ts": 0.0, "uuid": "19tdb048-c93e-4532-adf9-f61ce6afe10", "rank": 1045, "partitionpath": "americas/brazil/sao_paulo", "_hoodie_is_deleted" : true}
+{"ts": 0.0, "uuid": "19abc048-c93e-4532-adf9-f61ce6afe100", "rank": 1045, "partitionpath": "americas/brazil/sao_paulo", "_hoodie_is_deleted" : true}
 ```
 
 ### Concurrency Control
@@ -493,7 +493,7 @@ You can push a commit notification to a Pulsar topic so it can be used by other 
 | hoodie.write.commit.callback.pulsar.topic | Pulsar topic name to publish timeline activity into | required | N/A    |
 | hoodie.write.commit.callback.pulsar.producer.route-mode | Message routing logic for producers on partitioned topics.  | optional |   RoundRobinPartition     |
 | hoodie.write.commit.callback.pulsar.producer.pending-queue-size | The maximum size of a queue holding pending messages.               | optional | 1000   |
-| hoodie.write.commit.callback.pulsar.producer.pending-total-size | The maximum number of pending messages across partitions. | required | 50000  |
+| hoodie.write.commit.callback.pulsar.producer.pending-total-size | The maximum number of pending messages across partitions. | optional | 50000  |
 | hoodie.write.commit.callback.pulsar.producer.block-if-queue-full | When the queue is full, the method is blocked instead of an exception is thrown. | optional | true   |
 | hoodie.write.commit.callback.pulsar.producer.send-timeout | The timeout in each sending to pulsar.     | optional | 30s    |
 | hoodie.write.commit.callback.pulsar.operation-timeout | Duration of waiting for completing an operation.     | optional | 30s    |
@@ -622,4 +622,3 @@ This is done to ensure that the compaction and cleaning services are not execute
 
 ## Java Writer
 We can use plain java to write to hudi tables. To use Java client we can refere [here](https://github.com/apache/hudi/blob/master/hudi-examples/hudi-examples-java/src/main/java/org/apache/hudi/examples/java/HoodieJavaWriteClientExample.java)
-

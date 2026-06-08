@@ -2,7 +2,7 @@
 title: "Spark Guide"
 sidebar_position: 2
 toc: true
-last_modified_at: 2026-06-06T17:20:53+08:00
+last_modified_at: 2026-06-08T15:16:31+08:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -308,7 +308,7 @@ inserts.write.format("hudi").
 :::info Mapping to Hudi write operations
 Hudi provides a wide range of [write operations](write_operations.md) - both batch and incremental - to write data into Hudi tables,
 with different semantics and performance. When record keys are not configured (see [keys](#keys) below), `bulk_insert` will be chosen as 
-the write operation, matching the out-of-behavior of Spark's Parquet Datasource. 
+the write operation, matching the out-of-the-box behavior of Spark's Parquet Datasource.
 :::
 
 </TabItem>
@@ -341,7 +341,7 @@ inserts.write.format("hudi"). \
 :::info Mapping to Hudi write operations
 Hudi provides a wide range of [write operations](write_operations.md) - both batch and incremental - to write data into Hudi tables,
 with different semantics and performance. When record keys are not configured (see [keys](#keys) below), `bulk_insert` will be chosen as
-the write operation, matching the out-of-behavior of Spark's Parquet Datasource.
+the write operation, matching the out-of-the-box behavior of Spark's Parquet Datasource.
 :::
 
 </TabItem>
@@ -460,7 +460,7 @@ Notice that the save mode is now `Append`. In general, always use append mode un
 </TabItem>
 <TabItem value="sparksql">
 
-Hudi table can be update using a regular UPDATE statement. See [Update](sql_dml.md#update) for more advanced options.
+Hudi tables can be updated using a regular UPDATE statement. See [Update](sql_dml.md#update) for more advanced options.
 
 ```sql
 UPDATE hudi_table SET fare = 25.0 WHERE rider = 'rider-D';

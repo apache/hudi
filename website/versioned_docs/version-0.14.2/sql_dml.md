@@ -2,7 +2,7 @@
 title: SQL DML
 summary: "In this page, we go will cover details on how to use DML statements on Hudi tables."
 toc: true
-last_modified_at: 
+last_modified_at: 2026-06-08T15:16:31+08:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -236,7 +236,7 @@ UPDATE hudi_table SET price = price * 2, ts = 1111 WHERE id = 1;
 ```
 
 :::note Key requirements
-Update query only work with batch excution mode.
+Update query only works with batch execution mode.
 :::
 
 ### Delete From
@@ -250,13 +250,8 @@ DELETE FROM tableIdentifier [ WHERE boolExpression ]
 DELETE FROM hudi_table WHERE price < 100;
 ```
 
-
-```sql
-DELETE FROM hudi_table WHERE price < 100;
-```
-
 :::note Key requirements
-Delete query only work with batch excution mode.
+Delete query only works with batch execution mode.
 :::
 
 ### Setting Writer/Reader Configs
