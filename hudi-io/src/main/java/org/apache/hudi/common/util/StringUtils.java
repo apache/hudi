@@ -21,10 +21,12 @@ package org.apache.hudi.common.util;
 
 import javax.annotation.Nullable;
 
+import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -118,6 +120,31 @@ public class StringUtils {
 
   public static byte[] getUTF8Bytes(String str) {
     return str.getBytes(StandardCharsets.UTF_8);
+  }
+
+  /**
+   * Serializable comparator ordering strings by their unsigned UTF-8 byte representation, matching
+   * the ordering HFiles enforce (HBase's {@code CellComparatorImpl}). Unlike
+   * {@link String#compareTo(String)} (UTF-16), this stays consistent with HFile ordering for
+   * non-ASCII / binary keys.
+   */
+  public static final Comparator<String> UTF8_LEXICOGRAPHIC_COMPARATOR =
+      (Comparator<String> & Serializable) StringUtils::compareUtf8Bytes;
+
+  /**
+   * Compares two strings by their unsigned UTF-8 byte order. See {@link #UTF8_LEXICOGRAPHIC_COMPARATOR}.
+   */
+  public static int compareUtf8Bytes(String s1, String s2) {
+    byte[] b1 = getUTF8Bytes(s1);
+    byte[] b2 = getUTF8Bytes(s2);
+    int len = Math.min(b1.length, b2.length);
+    for (int i = 0; i < len; i++) {
+      int cmp = (b1[i] & 0xFF) - (b2[i] & 0xFF);
+      if (cmp != 0) {
+        return cmp;
+      }
+    }
+    return b1.length - b2.length;
   }
 
   public static String fromUTF8Bytes(byte[] bytes) {

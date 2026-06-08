@@ -19,9 +19,9 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
-import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -39,7 +39,7 @@ public class JavaHoodieMetadataBulkInsertPartitioner<T>
     if (records.isEmpty()) {
       return records;
     }
-    records.sort(Comparator.comparing(record -> record.getKey().getRecordKey()));
+    records.sort((r1, r2) -> StringUtils.compareUtf8Bytes(r1.getKey().getRecordKey(), r2.getKey().getRecordKey()));
     fileId = HoodieTableMetadataUtil.getFileGroupPrefix(records.get(0).getCurrentLocation().getFileId());
     return records;
   }

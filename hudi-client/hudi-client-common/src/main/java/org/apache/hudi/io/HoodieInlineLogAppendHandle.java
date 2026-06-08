@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
@@ -331,7 +332,9 @@ public class HoodieInlineLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
       case HFILE_DATA_BLOCK:
         // Not supporting positions in HFile data blocks
         header.remove(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
-        records.sort(Comparator.comparing(HoodieRecord::getRecordKey));
+        // HFile orders keys by their raw UTF-8 bytes, so sort by UTF-8 bytes rather than
+        // String (UTF-16) order to keep non-ASCII / binary keys consistent with the writer.
+        records.sort(Comparator.comparing(HoodieRecord::getRecordKey, StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR));
         Map<String, String> hfileParams = new HashMap<>();
         hfileParams.put(HFILE_COMPRESSION_ALGORITHM_NAME.key(), writeConfig.getHFileCompressionAlgorithm());
         hfileParams.put(HFILE_WITH_BLOOM_FILTER_ENABLED.key(), Boolean.toString(writeConfig.hfileBloomFilterEnabled()));
