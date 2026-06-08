@@ -115,6 +115,8 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       case st: StructType => sparkAdapter.isVariantProjectionStruct(st)
       case _ => false
     }))
+    // getRecordMerger() is a Lombok getter over a field initialized to null (not Option.empty());
+    // it stays null until setRecordMerger() runs during reader init, so the null guard is required.
     val merger = getRecordMerger()
     val isPayloadBased = merger != null && merger.isPresent && merger.get.getMergingStrategy == PAYLOAD_BASED_MERGE_STRATEGY_UUID
     hasVariantProjection && !isPayloadBased
