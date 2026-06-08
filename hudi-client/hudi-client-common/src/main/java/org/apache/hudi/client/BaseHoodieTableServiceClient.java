@@ -633,7 +633,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     if (clusteringTimer != null) {
       long durationInMs = metrics.getDurationInMs(clusteringTimer.stop());
       TimelineUtils.parseDateFromInstantTimeSafely(clusteringCommitTime).ifPresent(parsedInstant ->
-          metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, replaceCommitMetadata, HoodieActiveTimeline.CLUSTERING_ACTION)
+          metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, replaceCommitMetadata, clusteringInstant.getAction())
       );
     }
     if (config.isExpirationOfClusteringEnabled()) {
