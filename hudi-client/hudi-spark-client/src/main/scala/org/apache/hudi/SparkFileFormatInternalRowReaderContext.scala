@@ -115,10 +115,9 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       case st: StructType => sparkAdapter.isVariantProjectionStruct(st)
       case _ => false
     }))
-    hasVariantProjection && {
-      val merger = getRecordMerger()
-      !(merger != null && merger.isPresent && merger.get.getMergingStrategy == PAYLOAD_BASED_MERGE_STRATEGY_UUID)
-    }
+    val merger = getRecordMerger()
+    val isPayloadBased = merger != null && merger.isPresent && merger.get.getMergingStrategy == PAYLOAD_BASED_MERGE_STRATEGY_UUID
+    hasVariantProjection && !isPayloadBased
   }
 
   // Aligns avro log-block records with the PushVariantIntoScan-projected variant shape before
