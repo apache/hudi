@@ -83,22 +83,10 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
   private final Schema effectiveAvroSchema;
 
   /**
-   * Indices of top-level variant fields that need shredding transformation.
-   * Empty array if no shredding is needed.
+   * Variant fields that need shredding, keyed by their index in the effective schema.
+   * Empty if no shredding is needed.
    */
-  private final int[] shreddedVariantFieldIndices;
-
-  /**
-   * The shredded Avro sub-schema for each variant field at the corresponding index.
-   * Indexed by position in {@link #shreddedVariantFieldIndices}.
-   */
-  private final Schema[] shreddedVariantAvroSchemas;
-
-  /**
-   * The HoodieSchema.Variant for each variant field at the corresponding index.
-   * Indexed by position in {@link #shreddedVariantFieldIndices}.
-   */
-  private final HoodieSchema.Variant[] shreddedVariantHoodieSchemas;
+  private final Map<Integer, ShreddedVariantField> shreddedVariantFields;
 
   /**
    * Provider for variant shredding (loaded via reflection). Null if no shredding is needed.
@@ -134,9 +122,7 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
             String.valueOf(PARQUET_VARIANT_WRITE_SHREDDING_ENABLED.defaultValue())));
 
     // Identify variant fields that need shredding
-    List<Integer> variantIndices = new ArrayList<>();
-    List<Schema> variantAvroSchemas = new ArrayList<>();
-    List<HoodieSchema.Variant> variantHoodieSchemas = new ArrayList<>();
+    Map<Integer, ShreddedVariantField> shreddedFields = new LinkedHashMap<>();
 
     if (variantWriteShreddingEnabled && effectiveSchema.getType() == HoodieSchemaType.RECORD) {
       List<HoodieSchemaField> fields = effectiveSchema.getFields();
@@ -150,23 +136,19 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
         if (fieldSchema.getType() == HoodieSchemaType.VARIANT) {
           HoodieSchema.Variant variant = (HoodieSchema.Variant) fieldSchema;
           if (variant.isShredded() && variant.getTypedValueField().isPresent()) {
-            variantIndices.add(i);
             // Get the Avro sub-schema for this variant field from the effective schema
             Schema fieldAvroSchema = effectiveAvroSchema.getFields().get(i).schema();
             // Unwrap nullable union
             if (fieldAvroSchema.getType() == Schema.Type.UNION) {
               fieldAvroSchema = getNonNullFromUnion(fieldAvroSchema);
             }
-            variantAvroSchemas.add(fieldAvroSchema);
-            variantHoodieSchemas.add(variant);
+            shreddedFields.put(i, new ShreddedVariantField(fieldAvroSchema, variant));
           }
         }
       }
     }
 
-    this.shreddedVariantFieldIndices = variantIndices.stream().mapToInt(Integer::intValue).toArray();
-    this.shreddedVariantAvroSchemas = variantAvroSchemas.toArray(new Schema[0]);
-    this.shreddedVariantHoodieSchemas = variantHoodieSchemas.toArray(new HoodieSchema.Variant[0]);
+    this.shreddedVariantFields = shreddedFields;
 
     // Collect every variant-typed field name (independent of shredding) for the read-then-reshred guard.
     List<String> variantNames = new ArrayList<>();
@@ -184,7 +166,7 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
     this.variantFieldNames = variantNames.toArray(new String[0]);
 
     // Load shredding provider via reflection if needed
-    if (shreddedVariantFieldIndices.length > 0) {
+    if (!shreddedVariantFields.isEmpty()) {
       String providerClass = properties.getProperty(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key());
       if (providerClass == null || providerClass.isEmpty()) {
         throw new HoodieException("Variant write shredding is enabled and the write schema requires shredding "
@@ -254,7 +236,7 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
     if (variantFieldNames.length > 0) {
       assertInputNotAlreadyShredded((IndexedRecord) record);
     }
-    if (shreddedVariantFieldIndices.length > 0 && shreddingProvider != null) {
+    if (!shreddedVariantFields.isEmpty() && shreddingProvider != null) {
       IndexedRecord inputRecord = (IndexedRecord) record;
       GenericRecord shreddedRecord = new GenericData.Record(effectiveAvroSchema);
 
@@ -270,16 +252,16 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
           continue;
         }
 
-        int variantIdx = findVariantIndex(i);
-        if (variantIdx >= 0) {
+        ShreddedVariantField shreddedField = shreddedVariantFields.get(i);
+        if (shreddedField != null) {
           // This is a shredded variant field - transform it
           Object fieldValue = inputRecord.get(inputField.pos());
           if (fieldValue instanceof GenericRecord) {
             GenericRecord variantRecord = (GenericRecord) fieldValue;
             GenericRecord shreddedVariant = shreddingProvider.shredVariantRecord(
                 variantRecord,
-                shreddedVariantAvroSchemas[variantIdx],
-                shreddedVariantHoodieSchemas[variantIdx]);
+                shreddedField.avroSchema,
+                shreddedField.hoodieSchema);
             shreddedRecord.put(i, shreddedVariant);
           } else {
             // Null or unexpected type - copy as-is
@@ -344,16 +326,17 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
   }
 
   /**
-   * Finds the position in {@link #shreddedVariantFieldIndices} for the given effective field index,
-   * or -1 if this field is not a variant field that needs shredding.
+   * Bundles the Avro sub-schema and {@link HoodieSchema.Variant} for a shredded variant field,
+   * keyed by effective-schema field index in {@link #shreddedVariantFields}.
    */
-  private int findVariantIndex(int effectiveFieldIndex) {
-    for (int i = 0; i < shreddedVariantFieldIndices.length; i++) {
-      if (shreddedVariantFieldIndices[i] == effectiveFieldIndex) {
-        return i;
-      }
+  private static final class ShreddedVariantField {
+    private final Schema avroSchema;
+    private final HoodieSchema.Variant hoodieSchema;
+
+    ShreddedVariantField(Schema avroSchema, HoodieSchema.Variant hoodieSchema) {
+      this.avroSchema = avroSchema;
+      this.hoodieSchema = hoodieSchema;
     }
-    return -1;
   }
 
   private static final Pattern DECIMAL_PATTERN = Pattern.compile(
