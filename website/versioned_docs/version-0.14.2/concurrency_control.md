@@ -4,19 +4,11 @@ summary: In this page, we will discuss how to perform concurrent writes to Hudi 
 toc: true
 toc_min_heading_level: 2
 toc_max_heading_level: 4
-last_modified_at: 2021-03-19T15:59:57-04:00
+last_modified_at: 2026-06-08T16:38:53+08:00
 ---
 Concurrency control defines how different writers/readers coordinate access to the table. Hudi ensures atomic writes, by way of publishing commits atomically to the timeline, stamped with an instant time that denotes the time at which the action is deemed to have occurred. Unlike general purpose file version control, Hudi draws clear distinction between writer processes (that issue user’s upserts/deletes), table services (that write data/metadata to optimize/perform bookkeeping) and readers (that execute queries and read data). Hudi provides snapshot isolation between all three types of processes, meaning they all operate on a consistent snapshot of the table. Hudi provides optimistic concurrency control (OCC) between writers, while providing lock-free, non-blocking Multiversion Concurrency Control (MVCC) based concurrency control between writers and table-services and between different table services.
 
 In this section, we will discuss the different concurrency controls supported by Hudi and how they are leveraged to provide flexible deployment models; we will cover multi-writing, a  popular deployment model; finally, we’ll describe ways to ingest data into a Hudi Table from multiple writers using different writers, like  Hudi Streamer, Hudi datasource, Spark Structured Streaming and Spark SQL.
-
-:::note
-Hudi has introduced a new concurrency mode `NON_BLOCKING_CONCURRENCY_CONTROL`, where unlike OCC, multiple writers can
-operate on the table with non-blocking conflict resolution. The writers can write into the same file group with the
-conflicts resolved automatically by the query reader and the compactor. The new concurrency mode is currently
-available for preview in version 1.0.0-beta only. You can read more about it under section [Model C: Multi-writer](concurrency_control.md#model-c-multi-writer).
-:::
-
 
 ## Deployment models with supported concurrency controls
 
@@ -68,17 +60,6 @@ With multiple writers using OCC, these are the write guarantees to expect:
 - *INCREMENTAL PULL Guarantee*: Data consumption and checkpoints are NEVER out of order. If there are inflight commits 
   (due to multi-writing), incremental queries will not expose the completed commits following the inflight commits. 
 
-#### Non-Blocking Concurrency Control Mode (Experimental)
-
-`NON_BLOCKING_CONCURRENCY_CONTROL`, offers the same set of guarantees as mentioned in the case of OCC but without
-explicit locks for serializing the writes. Lock is only needed for writing the commit metadata to the Hudi timeline. The
-completion time for the commits reflects the serialization order and file slicing is done based on completion time.
-Multiple writers can operate on the table with non-blocking conflict resolution. The writers can write into the same
-file group with the conflicts resolved automatically by the query reader and the compactor. The new concurrency mode is
-currently available for preview in version 1.0.0-beta only with the caveat that conflict resolution is not supported yet
-between clustering and ingestion. It works for compaction and ingestion, and we can see an example of that with Flink
-writers [here](writing_data.md#non-blocking-concurrency-control-experimental).
-
 ## Enabling Multi Writing
 
 The following properties are needed to be set appropriately to turn on optimistic concurrency control to achieve multi writing.
@@ -91,7 +72,7 @@ hoodie.cleaner.policy.failed.writes=LAZY
 
 | Config Name                         | Default                                                                       | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 |-------------------------------------|-------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| hoodie.write.concurrency.mode       | SINGLE_WRITER (Optional)                                                      | <u>[Concurrency modes](https://github.com/apache/hudi/blob/00ece7bce0a4a8d0019721a28049723821e01842/hudi-common/src/main/java/org/apache/hudi/common/model/WriteConcurrencyMode.java)</u> for write operations.<br />Possible values:<br /><ul><li>`SINGLE_WRITER`: Only one active writer to the table. Maximizes throughput.</li><li>`OPTIMISTIC_CONCURRENCY_CONTROL`: Multiple writers can operate on the table with lazy conflict resolution using locks. This means that only one writer succeeds if multiple writers write to the same file group.</li><li>`NON_BLOCKING_CONCURRENCY_CONTROL`: Multiple writers can operate on the table with non-blocking conflict resolution. The writers can write into the same file group with the conflicts resolved automatically by the query reader and the compactor.</li></ul><br />`Config Param: WRITE_CONCURRENCY_MODE` |
+| hoodie.write.concurrency.mode       | SINGLE_WRITER (Optional)                                                      | <u>[Concurrency modes](https://github.com/apache/hudi/blob/00ece7bce0a4a8d0019721a28049723821e01842/hudi-common/src/main/java/org/apache/hudi/common/model/WriteConcurrencyMode.java)</u> for write operations.<br />Possible values:<br /><ul><li>`SINGLE_WRITER`: Only one active writer to the table. Maximizes throughput.</li><li>`OPTIMISTIC_CONCURRENCY_CONTROL`: Multiple writers can operate on the table with lazy conflict resolution using locks. This means that only one writer succeeds if multiple writers write to the same file group.</li></ul><br />`Config Param: WRITE_CONCURRENCY_MODE` |
 | hoodie.write.lock.provider          | org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider (Optional) | Lock provider class name, user can provide their own implementation of LockProvider which should be subclass of org.apache.hudi.common.lock.LockProvider<br /><br />`Config Param: LOCK_PROVIDER_CLASS_NAME`<br />`Since Version: 0.8.0`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | hoodie.cleaner.policy.failed.writes | EAGER (Optional)                                                              | org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy: Policy that controls how to clean up failed writes. Hudi will delete any files written by failed writes to re-claim space.     EAGER(default): Clean failed writes inline after every write operation.     LAZY: Clean failed writes lazily after heartbeat timeout when the cleaning service runs. This policy is required when multi-writers are enabled.     NEVER: Never clean failed writes.<br /><br />`Config Param: FAILED_WRITES_CLEANER_POLICY`                                                                                                                                                                                                                                                                                                                                                    |
 

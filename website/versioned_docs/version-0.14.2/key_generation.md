@@ -2,7 +2,7 @@
 title: Key Generation
 summary: "In this page, we describe key generation in Hudi."
 toc: true
-last_modified_at:
+last_modified_at: 2026-06-08T16:38:53+08:00
 ---
 Every record in Hudi is uniquely identified by a primary key, which is a pair of record key and partition path where the record belongs to.
 Using primary keys, Hudi can impose a) partition level uniqueness integrity constraint b) enable fast updates and deletes on records. 
@@ -113,9 +113,9 @@ Let's go over some example values for TimestampBasedKeyGenerator.
 
 | Config Name                                              | Value |
 |----------------------------------------------------------| -------------|
-| ```hoodie.streamer.keygen.timebased.timestamp.type```    | "EPOCHMILLISECONDS"|
-| ```hoodie.streamer.keygen.timebased.output.dateformat``` | "yyyy-MM-dd hh" |
-| ```hoodie.streamer.keygen.timebased.timezone```          | "GMT+8:00" |
+| ```hoodie.keygen.timebased.timestamp.type```    | "EPOCHMILLISECONDS"|
+| ```hoodie.keygen.timebased.output.dateformat``` | "yyyy-MM-dd hh" |
+| ```hoodie.keygen.timebased.timezone```          | "GMT+8:00" |
 
 Input Field value: “1578283932000L” <br/>
 Partition path generated from key generator: “2020-01-06 12”
@@ -127,10 +127,10 @@ Partition path generated from key generator: “1970-01-01 08”
 
 | Config Name                                              | Value |
 |----------------------------------------------------------| -------------|
-| ```hoodie.streamer.keygen.timebased.timestamp.type```    |  "DATE_STRING"  |
-| ```hoodie.streamer.keygen.timebased.output.dateformat``` |  "yyyy-MM-dd hh" | 
-| ```hoodie.streamer.keygen.timebased.timezone```          |  "GMT+8:00" |
-| ```hoodie.streamer.keygen.timebased.input.dateformat```  |  "yyyy-MM-dd hh:mm:ss" |
+| ```hoodie.keygen.timebased.timestamp.type```    |  "DATE_STRING"  |
+| ```hoodie.keygen.timebased.output.dateformat``` |  "yyyy-MM-dd hh" |
+| ```hoodie.keygen.timebased.timezone```          |  "GMT+8:00" |
+| ```hoodie.keygen.timebased.input.dateformat```  |  "yyyy-MM-dd hh:mm:ss" |
 
 Input field value: “2020-01-06 12:12:12” <br/>
 Partition path generated from key generator: “2020-01-06 12”
@@ -143,10 +143,10 @@ Partition path generated from key generator: “1970-01-01 12:00:00”
 
 | Config Name                                                       | Value |
 |-------------------------------------------------------------------| -------------|
-| ```hoodie.streamer.keygen.timebased.timestamp.type```             | "SCALAR"|
-| ```hoodie.streamer.keygen.timebased.output.dateformat```          | "yyyy-MM-dd hh" |
-| ```hoodie.streamer.keygen.timebased.timezone```                   | "GMT" |
-| ```hoodie.streamer.keygen.timebased.timestamp.scalar.time.unit``` | "days" |
+| ```hoodie.keygen.timebased.timestamp.type```             | "SCALAR"|
+| ```hoodie.keygen.timebased.output.dateformat```          | "yyyy-MM-dd hh" |
+| ```hoodie.keygen.timebased.timezone```                   | "GMT" |
+| ```hoodie.keygen.timebased.timestamp.scalar.time.unit``` | "days" |
 
 Input field value: “20000L” <br/>
 Partition path generated from key generator: “2024-10-04 12”
@@ -158,12 +158,12 @@ Partition path generated from key generator: “1970-01-02 12”
 
 | Config Name                                                                  | Value |
 |------------------------------------------------------------------------------| -------------|
-| ```hoodie.streamer.keygen.timebased.timestamp.type```                        | "DATE_STRING"|
-| ```hoodie.streamer.keygen.timebased.input.dateformat```                      | "yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
-| ```hoodie.streamer.keygen.timebased.input.dateformat.list.delimiter.regex``` | "" |
-| ```hoodie.streamer.keygen.timebased.input.timezone```                        | "" |
-| ```hoodie.streamer.keygen.timebased.output.dateformat```                     | "yyyyMMddHH" |
-| ```hoodie.streamer.keygen.timebased.output.timezone```                       | "GMT" |
+| ```hoodie.keygen.timebased.timestamp.type```                        | "DATE_STRING"|
+| ```hoodie.keygen.timebased.input.dateformat```                      | "yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
+| ```hoodie.keygen.timebased.input.dateformat.list.delimiter.regex``` | "" |
+| ```hoodie.keygen.timebased.input.timezone```                        | "" |
+| ```hoodie.keygen.timebased.output.dateformat```                     | "yyyyMMddHH" |
+| ```hoodie.keygen.timebased.output.timezone```                       | "GMT" |
 
 Input field value: "2020-04-01T13:01:33.428Z" <br/>
 Partition path generated from key generator: "2020040113"
@@ -172,12 +172,12 @@ Partition path generated from key generator: "2020040113"
 
 | Config Name                                                                  | Value |
 |------------------------------------------------------------------------------| -------------|
-| ```hoodie.streamer.keygen.timebased.timestamp.type```                        | "DATE_STRING"|
-| ```hoodie.streamer.keygen.timebased.input.dateformat```                      | "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
-| ```hoodie.streamer.keygen.timebased.input.dateformat.list.delimiter.regex``` | "" |
-| ```hoodie.streamer.keygen.timebased.input.timezone```                        | "" |
-| ```hoodie.streamer.keygen.timebased.output.dateformat```                     | "yyyyMMddHH" |
-| ```hoodie.streamer.keygen.timebased.output.timezone```                       | "UTC" |
+| ```hoodie.keygen.timebased.timestamp.type```                        | "DATE_STRING"|
+| ```hoodie.keygen.timebased.input.dateformat```                      | "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
+| ```hoodie.keygen.timebased.input.dateformat.list.delimiter.regex``` | "" |
+| ```hoodie.keygen.timebased.input.timezone```                        | "" |
+| ```hoodie.keygen.timebased.output.dateformat```                     | "yyyyMMddHH" |
+| ```hoodie.keygen.timebased.output.timezone```                       | "UTC" |
 
 Input field value: "2020-04-01T13:01:33.428Z" <br/>
 Partition path generated from key generator: "2020040113"
@@ -186,12 +186,12 @@ Partition path generated from key generator: "2020040113"
 
 | Config Name                                                                  | Value |
 |------------------------------------------------------------------------------| -------------|
-| ```hoodie.streamer.keygen.timebased.timestamp.type```                        | "DATE_STRING"|
-| ```hoodie.streamer.keygen.timebased.input.dateformat```                      | "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
-| ```hoodie.streamer.keygen.timebased.input.dateformat.list.delimiter.regex``` | "" |
-| ```hoodie.streamer.keygen.timebased.input.timezone```                        | "" |
-| ```hoodie.streamer.keygen.timebased.output.dateformat```                     | "yyyyMMddHH" |
-| ```hoodie.streamer.keygen.timebased.output.timezone```                       | "UTC" |
+| ```hoodie.keygen.timebased.timestamp.type```                        | "DATE_STRING"|
+| ```hoodie.keygen.timebased.input.dateformat```                      | "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
+| ```hoodie.keygen.timebased.input.dateformat.list.delimiter.regex``` | "" |
+| ```hoodie.keygen.timebased.input.timezone```                        | "" |
+| ```hoodie.keygen.timebased.output.dateformat```                     | "yyyyMMddHH" |
+| ```hoodie.keygen.timebased.output.timezone```                       | "UTC" |
 
 Input field value: "2020-04-01T13:01:33-**05:00**" <br/>
 Partition path generated from key generator: "2020040118"
@@ -200,13 +200,12 @@ Partition path generated from key generator: "2020040118"
 
 | Config Name                                                                  | Value |
 |------------------------------------------------------------------------------| -------------|
-| ```hoodie.streamer.keygen.timebased.timestamp.type```                        | "DATE_STRING"|
-| ```hoodie.streamer.keygen.timebased.input.dateformat```                      | "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ,yyyyMMdd" |
-| ```hoodie.streamer.keygen.timebased.input.dateformat.list.delimiter.regex``` | "" |
-| ```hoodie.streamer.keygen.timebased.input.timezone```                        | "UTC" |
-| ```hoodie.streamer.keygen.timebased.output.dateformat```                     | "MM/dd/yyyy" |
-| ```hoodie.streamer.keygen.timebased.output.timezone```                       | "UTC" |
+| ```hoodie.keygen.timebased.timestamp.type```                        | "DATE_STRING"|
+| ```hoodie.keygen.timebased.input.dateformat```                      | "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ,yyyyMMdd" |
+| ```hoodie.keygen.timebased.input.dateformat.list.delimiter.regex``` | "" |
+| ```hoodie.keygen.timebased.input.timezone```                        | "UTC" |
+| ```hoodie.keygen.timebased.output.dateformat```                     | "MM/dd/yyyy" |
+| ```hoodie.keygen.timebased.output.timezone```                       | "UTC" |
 
 Input field value: "20200401" <br/>
 Partition path generated from key generator: "04/01/2020"
-

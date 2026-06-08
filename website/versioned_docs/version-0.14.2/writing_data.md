@@ -3,7 +3,7 @@ title: Writing Data
 keywords: [hudi, incremental, batch, stream, processing, Hive, ETL, Spark SQL]
 summary: In this page, we will discuss some available tools for incrementally ingesting & storing data.
 toc: true
-last_modified_at: 2026-06-08T15:16:31+08:00
+last_modified_at: 2026-06-08T16:38:53+08:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -465,11 +465,11 @@ You can push a commit notification to an HTTP URL and can specify custom values 
 
 |  Config  | Description | Required | Default |
 |  -----------  | -------  | ------- | ------ |
-| TURN_CALLBACK_ON | Turn commit callback on/off | optional | false (*callbacks off*) |
-| CALLBACK_HTTP_URL | Callback host to be sent along with callback messages | required | N/A |
-| CALLBACK_HTTP_TIMEOUT_IN_SECONDS | Callback timeout in seconds | optional | 3 |
-| CALLBACK_CLASS_NAME | Full path of callback class and must be a subclass of HoodieWriteCommitCallback class, org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default | optional | org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback |
-| CALLBACK_HTTP_API_KEY_VALUE | Http callback API key | optional | hudi_write_commit_http_callback |
+| hoodie.write.commit.callback.on | Turn commit callback on/off | optional | false (*callbacks off*) |
+| hoodie.write.commit.callback.http.url | Callback host to be sent along with callback messages | required | N/A |
+| hoodie.write.commit.callback.http.timeout.seconds | Callback timeout in seconds | optional | 3 |
+| hoodie.write.commit.callback.class | Full path of callback class and must be a subclass of HoodieWriteCommitCallback class, org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default | optional | org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback |
+| hoodie.write.commit.callback.http.api.key | Http callback API key | optional | hudi_write_commit_http_callback |
 | | | | |
 
 #### Kafka Endpoints
@@ -477,11 +477,11 @@ You can push a commit notification to a Kafka topic so it can be used by other r
 
 |  Config  | Description | Required | Default |
 |  -----------  | -------  | ------- | ------ |
-| TOPIC | Kafka topic name to publish timeline activity into. | required | N/A |
-| PARTITION | It may be desirable to serialize all changes into a single Kafka partition for providing strict ordering. By default, Kafka messages are keyed by table name, which guarantees ordering at the table level, but not globally (or when new partitions are added) | required | N/A |
-| RETRIES | Times to retry the produce | optional | 3 |
-| ACKS | kafka acks level, all by default to ensure strong durability | optional | all |
-| BOOTSTRAP_SERVERS | Bootstrap servers of kafka cluster, to be used for publishing commit metadata | required | N/A |
+| hoodie.write.commit.callback.kafka.topic | Kafka topic name to publish timeline activity into. | required | N/A |
+| hoodie.write.commit.callback.kafka.partition | It may be desirable to serialize all changes into a single Kafka partition for providing strict ordering. By default, Kafka messages are keyed by table name, which guarantees ordering at the table level, but not globally (or when new partitions are added) | required | N/A |
+| hoodie.write.commit.callback.kafka.retries | Times to retry the produce | optional | 3 |
+| hoodie.write.commit.callback.kafka.acks | kafka acks level, all by default to ensure strong durability | optional | all |
+| hoodie.write.commit.callback.kafka.bootstrap.servers | Bootstrap servers of kafka cluster, to be used for publishing commit metadata | required | N/A |
 | | | | |
 
 #### Pulsar Endpoints
@@ -542,82 +542,6 @@ INSERT INTO hudi_table select ... from ...;
 
 **Note**: INSERT OVERWRITE is not supported yet but already on the roadmap.
 
-
-### Non-Blocking Concurrency Control (Experimental)
-
-Hudi Flink supports a new non-blocking concurrency control mode, where multiple writer tasks can be executed
-concurrently without blocking each other. One can read more about this mode in
-the [concurrency control](concurrency_control.md#model-c-multi-writer) docs. Let us see it in action here.
-
-In the below example, we have two streaming ingestion pipelines that concurrently update the same table. One of the
-pipeline is responsible for the compaction and cleaning table services, while the other pipeline is just for data
-ingestion.
-
-```sql
--- set the interval as 30 seconds
-execution.checkpointing.interval: 30000
-state.backend: rocksdb
-
--- This is a datagen source that can generates records continuously
-CREATE TABLE sourceT (
-    uuid varchar(20),
-    name varchar(10),
-    age int,
-    ts timestamp(3),
-    `partition` as 'par1'
-) WITH (
-    'connector' = 'datagen',
-    'rows-per-second' = '200'
-);
-
--- pipeline1: by default enable the compaction and cleaning services
-CREATE TABLE t1(
-    uuid varchar(20),
-    name varchar(10),
-    age int,
-    ts timestamp(3),
-    `partition` varchar(20)
-) WITH (
-    'connector' = 'hudi',
-    'path' = '/Users/chenyuzhao/workspace/hudi-demo/t1',
-    'table.type' = 'MERGE_ON_READ',
-    'index.type' = 'BUCKET',
-    'hoodie.write.concurrency.mode' = 'NON_BLOCKING_CONCURRENCY_CONTROL',
-    'write.tasks' = '2'
-);
-
--- pipeline2: disable the compaction and cleaning services manually
-CREATE TABLE t1_2(
-    uuid varchar(20),
-    name varchar(10),
-    age int,
-    ts timestamp(3),
-    `partition` varchar(20)
-) WITH (
-    'connector' = 'hudi',
-    'path' = '/Users/chenyuzhao/workspace/hudi-demo/t1',
-    'table.type' = 'MERGE_ON_READ',
-    'index.type' = 'BUCKET',
-    'hoodie.write.concurrency.mode' = 'NON_BLOCKING_CONCURRENCY_CONTROL',
-    'write.tasks' = '2',
-    'compaction.schedule.enabled' = 'false',
-    'compaction.async.enabled' = 'false',
-    'clean.async.enabled' = 'false'
-);
-
--- submit the pipelines
-insert into t1 select * from sourceT;
-insert into t1_2 select * from sourceT;
-
-select * from t1 limit 20;
-```
-
-As you can see from the above example, we have two pipelines with multiple tasks that concurrently write to the
-same table. To use the new concurrency mode, all you need to do is set the `hoodie.write.concurrency.mode`
-to `NON_BLOCKING_CONCURRENCY_CONTROL`. The `write.tasks` option is used to specify the number of write tasks that will
-be used for writing to the table. The `compaction.schedule.enabled`, `compaction.async.enabled`
-and `clean.async.enabled` options are used to disable the compaction and cleaning services for the second pipeline.
-This is done to ensure that the compaction and cleaning services are not executed twice for the same table.
 
 
 ## Java Writer

@@ -2,7 +2,7 @@
 title: "Spark Guide"
 sidebar_position: 2
 toc: true
-last_modified_at: 2026-06-08T15:16:31+08:00
+last_modified_at: 2026-06-08T16:38:53+08:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -712,10 +712,10 @@ spark.read.format("hudi"). \
 ```sql
 
 -- time travel based on commit time, for eg: `20220307091628793`
-SELECT * FROM hudi_table TIMESTAMP AS OF '20220307091628793' WHERE id = 1;
+SELECT * FROM hudi_table TIMESTAMP AS OF '20220307091628793' WHERE uuid = '334e26e9-8355-45cc-97c6-c31daf0df330';
 -- time travel based on different timestamp formats
-SELECT * FROM hudi_table TIMESTAMP AS OF '2022-03-07 09:16:28.100' WHERE id = 1;
-SELECT * FROM hudi_table TIMESTAMP AS OF '2022-03-08' WHERE id = 1;
+SELECT * FROM hudi_table TIMESTAMP AS OF '2022-03-07 09:16:28.100' WHERE uuid = '334e26e9-8355-45cc-97c6-c31daf0df330';
+SELECT * FROM hudi_table TIMESTAMP AS OF '2022-03-08' WHERE uuid = '334e26e9-8355-45cc-97c6-c31daf0df330';
 ```
 :::note
 Requires Spark 3.2+
@@ -1117,10 +1117,10 @@ hudi_options = {
 'hoodie.datasource.write.precombine.field': 'ts'
 }
 
-upsert.write.format("hudi").
-    options(**hudi_options).
-    mode("append").
-    save(basePath)
+(updatesDf.write.format("hudi")
+    .options(**hudi_options)
+    .mode("append")
+    .save(basePath))
 ```
 
 

@@ -36,9 +36,9 @@ the classpath.
 
 ```shell
 spark-submit --master yarn \
---jars /opt/hudi-datahub-sync-bundle-0.13.0.jar \
+--jars /opt/hudi-datahub-sync-bundle-0.14.2.jar \
 --class org.apache.hudi.utilities.streamer.HoodieStreamer \
-/opt/hudi-utilities-bundle_2.12-0.13.0.jar \
+/opt/hudi-utilities-bundle_2.12-0.14.2.jar \
 --target-table mytable \
 # ... other HoodieStreamer's configs
 --enable-sync \

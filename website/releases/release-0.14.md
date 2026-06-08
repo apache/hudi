@@ -391,7 +391,7 @@ The raw release notes are available [here](https://issues.apache.org/jira/secure
 
 ## [Release 0.14.2](https://github.com/apache/hudi/releases/tag/release-0.14.2) {#release-0142}
 
-## Migration Guide
+### Migration Guide
 
 * This release (0.14.2) does not introduce any new table version, thus no migration is needed if you are on 0.14.0 or 0.14.1.
 * If migrating from an older release, please check the migration guide from the previous release notes, specifically
@@ -419,7 +419,7 @@ The existing Flink 1.13 through 1.17 bundles remain supported in the 0.14.x line
 * Meta sync stability, including table recreation handling on selected sync failures.
 * Spark write path stability, including clustering row-writer fixes.
 
-## ComplexKeyGenerator Upgrade Notes
+### ComplexKeyGenerator Upgrade Notes
 
 0.14.2 fixes the ComplexKeyGenerator regression reported in 0.14.1 for tables using a single record key field with
 multiple partition fields. The fix restores the old key encoding by default and adds validation to guard against affected
@@ -431,8 +431,9 @@ tables before upgrading. If duplicate records were already written while running
 resuming normal writes.
 :::
 
-## Raw Release Notes
+### Raw Release Notes
 
+The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12355248).
 The incremental code changes from 0.14.1 are available in the
 [0.14.1 to 0.14.2 compare view](https://github.com/apache/hudi/compare/release-0.14.1...release-0.14.2).
 

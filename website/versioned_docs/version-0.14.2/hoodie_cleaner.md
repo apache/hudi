@@ -35,7 +35,7 @@ Hudi cleaner currently supports the below cleaning policies to keep a certain nu
   retain atleast the last 10 commits. With such a configuration, we ensure that the oldest version of a file is kept on
   disk for at least 5 hours, thereby preventing the longest running query from failing at any point in time. Incremental
   cleaning is also possible using this policy.
-  Number of commits to retain can be configured by [`hoodie.cleaner.commits.retained`](https://analytics.google.com/analytics/web/#/p300324801/reports/intelligenthome). 
+  Number of commits to retain can be configured by [`hoodie.cleaner.commits.retained`](https://hudi.apache.org/docs/configurations#hoodiecleanercommitsretained).
   The corresponding Flink related config is [`clean.retain_commits`](https://hudi.apache.org/docs/configurations/#cleanretain_commits). 
 
 - **KEEP_LATEST_FILE_VERSIONS**: This policy has the effect of keeping N number of file versions irrespective of time.

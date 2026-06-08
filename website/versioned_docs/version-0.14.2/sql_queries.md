@@ -2,7 +2,7 @@
 title: SQL Queries
 summary: "In this page, we go over querying Hudi tables using SQL"
 toc: true
-last_modified_at: 
+last_modified_at: 2026-06-08T16:38:53+08:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -223,7 +223,7 @@ separated) and calls InputFormat.listStatus() only once with all those partition
 It supports [querying Hudi tables](https://docs.aws.amazon.com/athena/latest/ug/querying-hudi.html) using the Hive connector.
 Currently, it supports snapshot queries on COPY_ON_WRITE tables, and snapshot and read optimized queries on MERGE_ON_READ Hudi tables.
 
-:::note The most recent release of Athena that supports querying Hudi 0.14.0 tables has a bug that causes `_ro` query to return 0 records, and occasionally `_rt` the query to fail with class cast exception. This is expected to be fixed in 0.15.0.
+:::note Athena support for querying Hudi 0.14.x tables has a known bug that can cause `_ro` queries to return 0 records, and occasionally `_rt` queries to fail with a class cast exception.
 :::
 
 ## Presto
@@ -401,5 +401,4 @@ Following tables show whether a given query is supported on specific query engin
 | **Doris**           | N                |N| N                      |
 | **StarRocks**       | Y                |N| Y                      |
 | **ClickHouse**      | N                |N| N                      |
-
 
