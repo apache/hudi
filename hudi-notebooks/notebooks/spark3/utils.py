@@ -14,7 +14,11 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Spark 3 notebook helpers. Copied into the notebook home as utils.py when
+# building the apachehudi/spark-hudi (Spark 3) image.
+
 import os
+import urllib.request
 
 from pyspark.sql import SparkSession
 from IPython.display import HTML, display as display_html
@@ -59,15 +63,20 @@ _DISPLAY_TABLE_CSS = """
 def get_spark_session(
     app_name="Hudi-Notebooks",
     log_level="WARN",
-    hudi_version="1.0.2",
+    hudi_version=None,
 ):
     """
     Initialize a SparkSession (singleton).
 
+    Connects to the in-container Spark standalone master started by entrypoint.sh.
+    The master URL, driver memory (4g) and executor memory (4g) are configured in
+    $SPARK_HOME/conf/spark-defaults.conf.
+
     Parameters:
     - app_name (str): Optional name for the Spark application.
     - log_level (str): Log level for Spark (DEBUG, INFO, WARN, ERROR). Defaults to WARN.
-    - hudi_version (str): Hudi bundle version. Defaults to 1.0.2.
+    - hudi_version (str): Hudi bundle version. Defaults to the HUDI_VERSION baked into
+      the image (1.0.2 on the Spark 3 image).
 
     Returns:
     - SparkSession object
@@ -77,20 +86,32 @@ def get_spark_session(
     if _spark is not None:
         return _spark
 
-    hudi_home = os.getenv("HUDI_HOME")
-    spark_version = os.getenv("SPARK_VERSION", "3.5.7")
+    if hudi_version is None:
+        hudi_version = os.getenv("HUDI_VERSION", "1.0.2")
+
+    hudi_home = os.getenv("HUDI_HOME", "/opt/hudi")
+    spark_version = os.getenv("SPARK_VERSION", "3.4.4")
     spark_minor_version = ".".join(spark_version.split(".")[:2])
     scala_version = os.getenv("SCALA_VERSION", "2.12")
-    hudi_jar_path = f"hudi-spark{spark_minor_version}-bundle_{scala_version}-{hudi_version}.jar"
-    hudi_packages = f"org.apache.hudi:hudi-spark{spark_minor_version}-bundle_{scala_version}:{hudi_version}"
-    hudi_jars = os.path.join(hudi_home, hudi_version, hudi_jar_path)
-    use_jars = os.path.exists(hudi_jars)
-    conf_param = "spark.jars" if use_jars else "spark.jars.packages"
-    conf_value = hudi_jars if use_jars else hudi_packages
+    bundle_name = f"hudi-spark{spark_minor_version}-bundle_{scala_version}"
+    bundle_jar = f"{bundle_name}-{hudi_version}.jar"
+
+    # Resolve the Hudi bundle to a local path. The image pre-downloads it under
+    # $HUDI_HOME; if it is missing, fetch it from Maven Central now.
+    local_jar = os.path.join(hudi_home, hudi_version, bundle_jar)
+    if not os.path.exists(local_jar):
+        os.makedirs(os.path.dirname(local_jar), exist_ok=True)
+        jar_url = (
+            f"https://repo1.maven.org/maven2/org/apache/hudi/"
+            f"{bundle_name}/{hudi_version}/{bundle_jar}"
+        )
+        print(f"Hudi bundle not found at {local_jar}; downloading {jar_url} ...")
+        urllib.request.urlretrieve(jar_url, local_jar)
 
     _spark = (
         SparkSession.builder.appName(app_name)
-        .config(conf_param, conf_value)
+        .config("spark.driver.extraClassPath", local_jar)
+        .config("spark.executor.extraClassPath", local_jar)
         .config("spark.hadoop.fs.defaultFS", "s3a://warehouse")
         .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
         .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
@@ -101,7 +122,10 @@ def get_spark_session(
     )
 
     _spark.sparkContext.setLogLevel(log_level)
-    print(f"SparkSession started with app name: {app_name}, log level: {log_level}")
+    print(
+        f"SparkSession started with app name: {app_name}, "
+        f"Spark version: {spark_version}, Hudi version: {hudi_version}"
+    )
 
     return _spark
 
