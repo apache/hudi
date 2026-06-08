@@ -186,6 +186,7 @@ module.exports = {
           },
           {
             from: [
+              "/releases/release-0.14.2",
               "/releases/release-0.14.1",
               "/releases/release-0.14.0",
             ],
