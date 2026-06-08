@@ -25,7 +25,9 @@ History shows that restricting a data platform to a single data paradigm leads t
 
 Today, Lakehouses are positioned to natively embrace semi-structured and unstructured data within the storage engine, unlocking a unified data foundation for modern AI.
 
-![The history of data platforms is a story of expansion. Rows and columns evolved into structured and semi-structured analytics, and lakehouses are now evolving to manage embeddings, binary assets, and data for AI as first-class citizens.](/assets/images/blog/2026-06-07-apache-hudi-release-1-2-announcement/1-evolution-data-platforms.png)
+<div style={{ textAlign: 'center' }}>
+  <img src="/assets/images/blog/2026-06-07-apache-hudi-release-1-2-announcement/1-evolution-data-platforms.png" alt="The history of data platforms is a story of expansion. Rows and columns evolved into structured and semi-structured analytics, and lakehouses are now evolving to manage embeddings, binary assets, and data for AI as first-class citizens." width="800"/>
+</div>
 
 **The Fragmented Modern Reality and the Sync Dilemma**: For the first time, AI and large language models (LLMs) can reason directly over natural, unstructured data: text, documents, web pages, voice, images, and video.
 
@@ -37,7 +39,9 @@ Driven by use cases like RAG, multimodal applications, and semantic search, mode
 
 This shift is creating a new operational challenge. A single core asset may now exist simultaneously as structured metadata in a lakehouse, embeddings in a vector database, documents and images in object storage, and semi-structured data in a document store. While these architectures unlock powerful new capabilities, they also create a fragmented data landscape where multiple representations of the same entity must be continuously synchronized. As data volumes grow and update frequencies increase, maintaining consistency across these systems becomes increasingly difficult. There is now a growing sync dilemma around data management for AI applications.
 
-![Modern AI architectures often distribute structured data, embeddings, binary assets, and semi-structured payloads across multiple systems, creating duplication, synchronization challenges, governance gaps, and operational complexity.](/assets/images/blog/2026-06-07-apache-hudi-release-1-2-announcement/2-sync-dilemma.png)
+<div style={{ textAlign: 'center' }}>
+  <img src="/assets/images/blog/2026-06-07-apache-hudi-release-1-2-announcement/2-sync-dilemma.png" alt="Modern AI architectures often distribute structured data, embeddings, binary assets, and semi-structured payloads across multiple systems, creating duplication, synchronization challenges, governance gaps, and operational complexity." width="800"/>
+</div>
 
 **Managing Multimodal and AI Data directly on Apache Hudi**: We believe organizations should not need separate databases, warehouses, or even another specialized "AI lakehouse": structured records, documents, images, and embeddings all drive the same business workflows. Isolating semi-structured and unstructured data into specialized databases, warehouses, or Lakehouses introduces data silo, complex synchronization, and operational overhead. AI as a technology impacts all aspects of the business and thus should be natively supported on the mainstream lakehouse or data lake directly, alongside existing data.
 
@@ -49,7 +53,9 @@ The solution is to naturally evolve the existing lakehouse to support the data t
 - [Multi-Writer Concurrency Control](https://hudi.apache.org/docs/concurrency_control): secures transactional integrity across high-throughput streaming and concurrent AI workloads.
 - Open Lakehouse Ecosystem: exposes multimodal assets natively to the existing analytical stack, spanning Spark, Flink, Trino, Athena, and cloud object storage.
 
-![Multimodal and AI data participate in the same transactions, timeline, incremental processing model, and operational framework that power large-scale Hudi deployments today.](/assets/images/blog/2026-06-07-apache-hudi-release-1-2-announcement/3-hudi-foundation-multimodal-data.png)
+<div style={{ textAlign: 'center' }}>
+  <img src="/assets/images/blog/2026-06-07-apache-hudi-release-1-2-announcement/3-hudi-foundation-multimodal-data.png" alt="Multimodal and AI data participate in the same transactions, timeline, incremental processing model, and operational framework that power large-scale Hudi deployments today." width="800"/>
+</div>
 
 ## Release Highlights
 
@@ -112,7 +118,9 @@ While VECTOR, BLOB, and VARIANT establish the logical foundation for multimodal 
 
 To address these needs, Hudi 1.2 adds support for the [Lance file format](https://hudi.apache.org/docs/storage_layouts#lance-base-file-format) alongside Parquet, ORC, and HFile. Rather than forcing users to choose between analytical and AI-optimized storage systems, Hudi allows multiple storage formats to participate in the same table abstraction. Users can choose the format that best matches their workload while preserving the same transactional guarantees, indexing infrastructure, table services, and ecosystem integrations.
 
-![Hudi decouples table semantics from storage format, allowing users to choose the format best suited for their workload while preserving the same transactional guarantees and operational framework.](/assets/images/blog/2026-06-07-apache-hudi-release-1-2-announcement/4-storage-formats.png)
+<div style={{ textAlign: 'center' }}>
+  <img src="/assets/images/blog/2026-06-07-apache-hudi-release-1-2-announcement/4-storage-formats.png" alt="Hudi decouples table semantics from storage format, allowing users to choose the format best suited for their workload while preserving the same transactional guarantees and operational framework." width="800"/>
+</div>
 
 ### Scaling Real-Time AI and Streaming Workloads
 
@@ -120,7 +128,9 @@ AI systems are only as useful as the freshness of the data they operate on. Reco
 
 Hudi 1.2 includes significant investments across Flink ingestion, indexing, and streaming reads. [Record Level Index (RLI)](https://github.com/apache/hudi/discussions/17452), one of Hudi's signature indexing technologies for large-scale upsert workloads, is now available for Flink, bringing efficient record routing, global indexing, and dynamic bucket scaling to streaming deployments.
 
-![Record Level Index (RLI) support on Flink](/assets/images/blog/2026-06-07-apache-hudi-release-1-2-announcement/5-flink-rli.png)
+<div style={{ textAlign: 'center' }}>
+  <img src="/assets/images/blog/2026-06-07-apache-hudi-release-1-2-announcement/5-flink-rli.png" alt="Record Level Index (RLI) support on Flink" width="800"/>
+</div>
 
 The release also introduces a new FLIP-27 based [Flink Source V2](https://hudi.apache.org/docs/ingestion_flink#flink-source-v2) with resumable split assignment, improved fault tolerance, and stronger pushdown capabilities. Together, these improvements strengthen Hudi's ability to power large-scale real-time AI and streaming workloads.
 
