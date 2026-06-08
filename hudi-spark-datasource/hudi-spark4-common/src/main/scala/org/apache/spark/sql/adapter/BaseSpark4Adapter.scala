@@ -263,7 +263,7 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     applyVariantLogicalType(builder).named(fieldName)
   }
 
-  // TODO(HUDI-XXXX) drop-spark4.0: when all remaining 4.x adapters are parquet 1.16+, apply variantType() in this base and delete the no-op default plus the Spark4_1Adapter override.
+  // TODO(#18935) drop-spark4.0: when all remaining 4.x adapters are parquet 1.16+, apply variantType() in this base and delete the no-op default plus the Spark4_1Adapter override.
   protected def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = builder
 
   override def isVariantShreddingStruct(structType: StructType): Boolean = {

@@ -105,6 +105,13 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
    */
   private final VariantShreddingProvider shreddingProvider;
 
+  /**
+   * Names of all variant-typed top-level fields, regardless of shredding. Used to fail fast on the
+   * not-yet-supported read-then-reshred path (compaction/clustering over an already-shredded base
+   * file). See https://github.com/apache/hudi/issues/18931.
+   */
+  private final String[] variantFieldNames;
+
   public HoodieAvroWriteSupport(MessageType schema, HoodieSchema hoodieSchema, Option<BloomFilter> bloomFilterOpt,
                                 Properties properties) {
     this(schema, hoodieSchema, generateEffectiveSchema(hoodieSchema, properties), bloomFilterOpt, properties);
@@ -161,6 +168,21 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
     this.shreddedVariantAvroSchemas = variantAvroSchemas.toArray(new Schema[0]);
     this.shreddedVariantHoodieSchemas = variantHoodieSchemas.toArray(new HoodieSchema.Variant[0]);
 
+    // Collect every variant-typed field name (independent of shredding) for the read-then-reshred guard.
+    List<String> variantNames = new ArrayList<>();
+    if (effectiveSchema.getType() == HoodieSchemaType.RECORD) {
+      for (HoodieSchemaField field : effectiveSchema.getFields()) {
+        HoodieSchema fieldSchema = field.schema();
+        if (fieldSchema.isNullable()) {
+          fieldSchema = fieldSchema.getNonNullType();
+        }
+        if (fieldSchema.getType() == HoodieSchemaType.VARIANT) {
+          variantNames.add(field.name());
+        }
+      }
+    }
+    this.variantFieldNames = variantNames.toArray(new String[0]);
+
     // Load shredding provider via reflection if needed
     if (shreddedVariantFieldIndices.length > 0) {
       String providerClass = properties.getProperty(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key());
@@ -204,7 +226,7 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
       // Schemas from clustering/compaction may still be shredded (read from on-disk Parquet files
       // written with shredding enabled), so we need to strip typed_value when shredding
       // is disabled.
-      return unshreddVariantFields(hoodieSchema);
+      return stripVariantShredding(hoodieSchema);
     }
 
     // Check if a forced shredding schema is configured
@@ -229,6 +251,9 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
   @SuppressWarnings("unchecked")
   @Override
   public void write(T record) {
+    if (variantFieldNames.length > 0) {
+      assertInputNotAlreadyShredded((IndexedRecord) record);
+    }
     if (shreddedVariantFieldIndices.length > 0 && shreddingProvider != null) {
       IndexedRecord inputRecord = (IndexedRecord) record;
       GenericRecord shreddedRecord = new GenericData.Record(effectiveAvroSchema);
@@ -269,6 +294,32 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
       super.write((T) shreddedRecord);
     } else {
       super.write(record);
+    }
+  }
+
+  /**
+   * Fails fast on the not-yet-supported read-then-reshred path. Records read from an already-shredded
+   * base file (compaction/clustering) arrive with a populated {@code typed_value} and a possibly-null
+   * {@code value}. The writer has no logic to reconstruct the unshredded variant, so shredding would
+   * silently drop the payload (shredding enabled) and the parquet writer would reject the null at the
+   * REQUIRED {@code value} field (shredding disabled). Reconstruction is tracked in
+   * https://github.com/apache/hudi/issues/18931.
+   */
+  private void assertInputNotAlreadyShredded(IndexedRecord inputRecord) {
+    Schema inputSchema = inputRecord.getSchema();
+    for (String fieldName : variantFieldNames) {
+      Schema.Field field = inputSchema.getField(fieldName);
+      if (field == null) {
+        continue;
+      }
+      Object value = inputRecord.get(field.pos());
+      if (value instanceof GenericRecord
+          && ((GenericRecord) value).getSchema().getField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD) != null) {
+        throw new HoodieException("Writing an already-shredded variant field '" + fieldName
+            + "' is not supported yet. Compaction/clustering read a base file written with variant "
+            + "shredding and re-wrote it through the Avro path; the reader does not yet reconstruct "
+            + "the unshredded variant. Tracked in https://github.com/apache/hudi/issues/18931.");
+      }
     }
   }
 
@@ -413,7 +464,7 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
    * Strips shredding from variant fields in the schema.
    * Replaces shredded variant fields with unshredded variants (removing typed_value).
    */
-  private static HoodieSchema unshreddVariantFields(HoodieSchema schema) {
+  private static HoodieSchema stripVariantShredding(HoodieSchema schema) {
     if (schema.getType() != HoodieSchemaType.RECORD) {
       return schema;
     }
