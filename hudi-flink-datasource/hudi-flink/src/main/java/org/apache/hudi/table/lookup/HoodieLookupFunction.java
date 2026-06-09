@@ -132,13 +132,16 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
     }
 
     HoodieActiveTimeline latestCommit = metaClient.reloadActiveTimeline();
-    Option<HoodieInstant> latestCommitInstant = latestCommit.getCommitsTimeline().lastInstant();
-    if (latestCommit.empty()) {
+    Option<HoodieInstant> latestCommitInstant =
+        latestCommit.getCommitsTimeline().filterCompletedInstants().lastInstant();
+    if (!latestCommitInstant.isPresent()) {
+      scheduleNextLoad();
       LOG.info("No commit instant found currently.");
       return;
     }
     // Determine whether to reload data by comparing instant
     if (latestCommitInstant.get().equals(currentCommit)) {
+      scheduleNextLoad();
       LOG.info("Ignore loading data because the commit instant " + currentCommit + " has not changed.");
       return;
     }
@@ -159,7 +162,8 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
           rows.add(rowData);
         }
         partitionReader.close();
-        nextLoadTime = System.currentTimeMillis() + reloadInterval.toMillis();
+        currentCommit = latestCommitInstant.get();
+        scheduleNextLoad();
         LOG.info("Loaded {} row(s) into lookup join cache", count);
         return;
       } catch (Exception e) {
@@ -180,6 +184,10 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
         }
       }
     }
+  }
+
+  private void scheduleNextLoad() {
+    nextLoadTime = System.currentTimeMillis() + reloadInterval.toMillis();
   }
 
   private RowData extractLookupKey(RowData row) {
