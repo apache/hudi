@@ -22,7 +22,9 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
@@ -48,6 +50,8 @@ import org.apache.flink.table.factories.DynamicTableFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -58,6 +62,7 @@ import java.util.Objects;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -276,6 +281,32 @@ public class TestHoodieTableFactory {
     this.conf.setString(HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key(), "true");
     final MockContext sourceContext6 = MockContext.getInstance(this.conf, schema, "f2");
     assertThrows(IllegalArgumentException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext6));
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieIndex.IndexType.class, names = {"GLOBAL_RECORD_LEVEL_INDEX", "RECORD_LEVEL_INDEX"})
+  void testRecordLevelIndexDoesNotSupportMultipleWriters(HoodieIndex.IndexType indexType) {
+    ResolvedSchema schema = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("ts", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0")
+        .build();
+
+    Configuration rliConf = new Configuration(this.conf);
+    rliConf.set(FlinkOptions.INDEX_TYPE, indexType.name());
+    rliConf.set(FlinkOptions.OPERATION, "upsert");
+    rliConf.set(FlinkOptions.METADATA_ENABLED, true);
+    rliConf.set(FlinkOptions.INDEX_GLOBAL_ENABLED,
+        indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX);
+    rliConf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
+        WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+
+    IllegalArgumentException exception = assertThrows(
+        IllegalArgumentException.class,
+        () -> new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(rliConf, schema, "")));
+    assertThat(exception.getMessage(),
+        containsString("record level index does not support multiple writers"));
   }
 
   @Test
