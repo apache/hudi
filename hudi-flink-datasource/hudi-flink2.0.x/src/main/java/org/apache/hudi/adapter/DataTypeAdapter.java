@@ -20,6 +20,7 @@ package org.apache.hudi.adapter;
 
 import org.apache.hudi.common.util.Option;
 
+import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
@@ -39,6 +40,10 @@ public class DataTypeAdapter {
   }
 
   public static Variant getVariant(RowData rowData, int pos) {
+    throw new UnsupportedOperationException(VARIANT_UNSUPPORTED_MSG);
+  }
+
+  public static Variant getVariant(ArrayData arrayData, int pos) {
     throw new UnsupportedOperationException(VARIANT_UNSUPPORTED_MSG);
   }
 
