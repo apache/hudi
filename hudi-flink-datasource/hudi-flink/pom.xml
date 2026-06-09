@@ -210,6 +210,13 @@
             <artifactId>${flink.hadoop.compatibility.artifactId}</artifactId>
             <version>${flink.version}</version>
         </dependency>
+        <!-- Hadoop: pin to ${flink.hadoop.version} so parquet 1.16.0's FileSystem.openFile() resolves. -->
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-common</artifactId>
+            <version>${flink.hadoop.version}</version>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>${flink.parquet.artifactId}</artifactId>
