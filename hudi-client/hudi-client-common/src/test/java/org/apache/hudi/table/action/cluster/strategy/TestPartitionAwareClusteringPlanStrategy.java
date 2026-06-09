@@ -93,11 +93,8 @@ public class TestPartitionAwareClusteringPlanStrategy {
     DummyPartitionAwareClusteringPlanStrategy incrementalStrategy =
         new DummyPartitionAwareClusteringPlanStrategy(table, context, incrementalConfig);
 
-    assertEquals(Arrays.asList("p3", "p4"),
-        incrementalStrategy.resolveMissingPartitionsForSelectedPartitions(
-            Arrays.asList("p1", "p2"), Arrays.asList("p1", "p3", "p4")));
     assertEquals(Arrays.asList("p2", "p4"),
-        incrementalStrategy.resolveMissingPartitionsForRegexFilteredPartitions(
+        incrementalStrategy.resolveMissingPartitionsFromCurrentWindow(
             Arrays.asList("p1", "p3"), Arrays.asList("p1", "p2", "p3", "p4")));
 
     HoodieWriteConfig nonIncrementalConfig = mock(HoodieWriteConfig.class);
@@ -105,9 +102,7 @@ public class TestPartitionAwareClusteringPlanStrategy {
     DummyPartitionAwareClusteringPlanStrategy nonIncrementalStrategy =
         new DummyPartitionAwareClusteringPlanStrategy(table, context, nonIncrementalConfig);
 
-    assertTrue(nonIncrementalStrategy.resolveMissingPartitionsForSelectedPartitions(
-        Arrays.asList("p1", "p2"), Arrays.asList("p1", "p3", "p4")).isEmpty());
-    assertTrue(nonIncrementalStrategy.resolveMissingPartitionsForRegexFilteredPartitions(
+    assertTrue(nonIncrementalStrategy.resolveMissingPartitionsFromCurrentWindow(
         Arrays.asList("p1", "p3"), Arrays.asList("p1", "p2", "p3", "p4")).isEmpty());
   }
 
@@ -155,14 +150,9 @@ public class TestPartitionAwareClusteringPlanStrategy {
       super(table, engineContext, writeConfig);
     }
 
-    List<String> resolveMissingPartitionsForSelectedPartitions(List<String> selectedPartitions,
-                                                               List<String> partitionsInCurrentWindow) {
-      return getMissingPartitionsForSelectedPartitions(selectedPartitions, partitionsInCurrentWindow);
-    }
-
-    List<String> resolveMissingPartitionsForRegexFilteredPartitions(List<String> matchedPartitions,
-                                                                    List<String> partitionsInCurrentWindow) {
-      return getMissingPartitionsForRegexFilteredPartitions(matchedPartitions, partitionsInCurrentWindow);
+    List<String> resolveMissingPartitionsFromCurrentWindow(List<String> partitionsToSchedule,
+                                                           List<String> partitionsInCurrentWindow) {
+      return getMissingPartitionsFromCurrentWindow(partitionsToSchedule, partitionsInCurrentWindow);
     }
 
     @Override

@@ -141,27 +141,16 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
   protected abstract Map<String, String> getStrategyParams();
 
   /**
-   * When users manually select partitions for clustering, keep the rest of the current scheduling window
-   * in missing partitions so those partitions are picked up by later schedules, while removing the selected
-   * partitions since this plan is explicitly handling them now.
+   * Keep partitions from the current scheduling window that are not scheduled in this plan as missing
+   * partitions so that they can be picked up by later incremental clustering schedules.
    */
-  protected List<String> getMissingPartitionsForSelectedPartitions(List<String> selectedPartitions,
-                                                                   List<String> partitionsInCurrentWindow) {
+  protected List<String> getMissingPartitionsFromCurrentWindow(List<String> partitionsToSchedule,
+                                                               List<String> partitionsInCurrentWindow) {
     if (!getWriteConfig().isIncrementalTableServiceEnabled()) {
       return Collections.emptyList();
     }
     Set<String> missingPartitions = new LinkedHashSet<>(partitionsInCurrentWindow);
-    missingPartitions.removeAll(new HashSet<>(selectedPartitions));
-    return new ArrayList<>(missingPartitions);
-  }
-
-  protected List<String> getMissingPartitionsForRegexFilteredPartitions(List<String> matchedPartitions,
-                                                                        List<String> partitionsInCurrentWindow) {
-    if (!getWriteConfig().isIncrementalTableServiceEnabled()) {
-      return Collections.emptyList();
-    }
-    Set<String> missingPartitions = new LinkedHashSet<>(partitionsInCurrentWindow);
-    missingPartitions.removeAll(new HashSet<>(matchedPartitions));
+    missingPartitions.removeAll(new HashSet<>(partitionsToSchedule));
     return new ArrayList<>(missingPartitions);
   }
 

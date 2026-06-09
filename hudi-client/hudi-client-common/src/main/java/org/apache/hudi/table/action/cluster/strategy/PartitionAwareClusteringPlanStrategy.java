@@ -172,11 +172,11 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
       // partitionsInCurrentWindow = incremental partitions + missing partitions in last plan
       List<String> partitionsInCurrentWindow = partitions.get();
       partitionPaths = getRegexPatternMatchedPartitions(config, partitionsInCurrentWindow);
-      missingPartitions = getMissingPartitionsForRegexFilteredPartitions(partitionPaths, partitionsInCurrentWindow);
+      missingPartitions = getMissingPartitionsFromCurrentWindow(partitionPaths, partitionsInCurrentWindow);
       // filter the partition paths if needed to reduce list status
     } else {
       partitionPaths = Arrays.asList(partitionSelected.split(","));
-      missingPartitions = getMissingPartitionsForSelectedPartitions(partitionPaths,
+      missingPartitions = getMissingPartitionsFromCurrentWindow(partitionPaths,
           config.isIncrementalTableServiceEnabled() ? partitions.get() : Collections.emptyList());
     }
 
