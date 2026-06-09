@@ -49,6 +49,7 @@ import static org.apache.hudi.metrics.HoodieMetrics.COUNTER_METRIC_EXTENSION;
 import static org.apache.hudi.metrics.HoodieMetrics.FAILURE_COUNTER;
 import static org.apache.hudi.metrics.HoodieMetrics.SOURCE_READ_AND_INDEX_ACTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -320,6 +321,41 @@ public class TestHoodieMetrics {
       super();
       this.setInstants(Arrays.asList(instants));
     }
+  }
+
+  @Test
+  public void testClusteringCommitMetricsUsesVersionAwareAction() {
+    Random rand = new Random();
+    long randomValue = 1 + rand.nextInt();
+
+    HoodieCommitMetadata metadata = mock(HoodieCommitMetadata.class);
+    when(metadata.fetchTotalPartitionsWritten()).thenReturn(randomValue + 1);
+    when(metadata.fetchTotalFilesInsert()).thenReturn(randomValue + 2);
+    when(metadata.fetchTotalFilesUpdated()).thenReturn(randomValue + 3);
+    when(metadata.fetchTotalRecordsWritten()).thenReturn(randomValue + 4);
+    when(metadata.fetchTotalUpdateRecordsWritten()).thenReturn(randomValue + 5);
+    when(metadata.fetchTotalInsertRecordsWritten()).thenReturn(randomValue + 6);
+    when(metadata.fetchTotalBytesWritten()).thenReturn(randomValue + 7);
+    when(metadata.getTotalScanTime()).thenReturn(randomValue + 8);
+    when(metadata.getTotalCreateTime()).thenReturn(randomValue + 9);
+    when(metadata.getTotalUpsertTime()).thenReturn(randomValue + 10);
+    when(metadata.getTotalCompactedRecordsUpdated()).thenReturn(randomValue + 11);
+    when(metadata.getTotalLogFilesCompacted()).thenReturn(randomValue + 12);
+    when(metadata.getTotalLogFilesSize()).thenReturn(randomValue + 13);
+    when(metadata.getTotalRecordsDeleted()).thenReturn(randomValue + 14);
+    when(metadata.getMinAndMaxEventTime()).thenReturn(Pair.of(Option.empty(), Option.empty()));
+
+    // 1.x tables: clustering instants carry CLUSTERING_ACTION — metrics must land under "clustering.*"
+    hoodieMetrics.updateCommitMetrics(randomValue + 17, 100L, metadata, HoodieTimeline.CLUSTERING_ACTION);
+    String clusteringMetric = hoodieMetrics.getMetricsName(HoodieTimeline.CLUSTERING_ACTION, HoodieMetrics.TOTAL_PARTITIONS_WRITTEN_STR);
+    assertEquals(metadata.fetchTotalPartitionsWritten(), (long) metrics.getRegistry().getGauges().get(clusteringMetric).getValue());
+    // No metric should have leaked into the replacecommit namespace yet
+    String replaceCommitMetric = hoodieMetrics.getMetricsName(HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieMetrics.TOTAL_PARTITIONS_WRITTEN_STR);
+    assertNull(metrics.getRegistry().getGauges().get(replaceCommitMetric));
+
+    // 0.x tables: clustering instants carry REPLACE_COMMIT_ACTION — metrics must land under "replacecommit.*"
+    hoodieMetrics.updateCommitMetrics(randomValue + 17, 100L, metadata, HoodieTimeline.REPLACE_COMMIT_ACTION);
+    assertEquals(metadata.fetchTotalPartitionsWritten(), (long) metrics.getRegistry().getGauges().get(replaceCommitMetric).getValue());
   }
 
   @Test
