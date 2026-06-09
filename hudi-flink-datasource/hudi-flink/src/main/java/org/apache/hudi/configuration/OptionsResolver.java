@@ -604,6 +604,16 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether this is optimistic concurrency control.
+   */
+  public static boolean isOptimisticConcurrencyControl(Configuration config) {
+    return WriteConcurrencyMode.valueOf(config.getString(
+        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
+        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()).toUpperCase(Locale.ROOT))
+        .isOptimisticConcurrencyControl();
+  }
+
+  /**
    * Returns whether the cleaning for failed writes is enabled as lazy.
    */
   public static boolean isLazyFailedWritesCleaning(Configuration conf) {
