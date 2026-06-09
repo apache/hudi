@@ -278,17 +278,17 @@
         </dependency>
 
         <dependency>
+            <groupId>org.jetbrains</groupId>
+            <artifactId>annotations</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
             <!-- Required at runtime by Hudi (HoodieAvroUtils uses GraphLayout).
                  Was provided by Trino 472 but removed from Trino 480's classpath. -->
             <groupId>org.openjdk.jol</groupId>
             <artifactId>jol-core</artifactId>
             <version>0.17</version>
-            <scope>runtime</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.jetbrains</groupId>
-            <artifactId>annotations</artifactId>
             <scope>runtime</scope>
         </dependency>
 

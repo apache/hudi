@@ -44,6 +44,7 @@ public class HudiSessionProperties
         implements SessionPropertiesProvider
 {
     private static final String COLUMNS_TO_HIDE = "columns_to_hide";
+    private static final String RECORD_MERGER_IMPLS = "record_merger_impls";
     static final String TABLE_STATISTICS_ENABLED = "table_statistics_enabled";
     static final String METADATA_TABLE_ENABLED = "metadata_enabled";
     private static final String USE_PARQUET_COLUMN_NAMES = "use_parquet_column_names";
@@ -93,6 +94,18 @@ public class HudiSessionProperties
                         false,
                         value -> ((Collection<?>) value).stream()
                                 .map(name -> ((String) name).toLowerCase(ENGLISH))
+                                .collect(toImmutableList()),
+                        value -> value),
+                new PropertyMetadata<>(
+                        RECORD_MERGER_IMPLS,
+                        "Fully qualified HoodieRecordMerger implementation class names used to resolve a custom record " +
+                                "merger for Merge-On-Read tables whose record merge mode is CUSTOM",
+                        new ArrayType(VARCHAR),
+                        List.class,
+                        hudiConfig.getRecordMergerImpls(),
+                        false,
+                        value -> ((Collection<?>) value).stream()
+                                .map(String.class::cast)
                                 .collect(toImmutableList()),
                         value -> value),
                 booleanProperty(
@@ -275,6 +288,12 @@ public class HudiSessionProperties
     public static List<String> getColumnsToHide(ConnectorSession session)
     {
         return (List<String>) session.getProperty(COLUMNS_TO_HIDE, List.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static List<String> getRecordMergerImpls(ConnectorSession session)
+    {
+        return (List<String>) session.getProperty(RECORD_MERGER_IMPLS, List.class);
     }
 
     public static boolean isTableStatisticsEnabled(ConnectorSession session)

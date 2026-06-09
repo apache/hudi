@@ -38,6 +38,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 public class HudiConfig
 {
     private List<String> columnsToHide = ImmutableList.of();
+    private List<String> recordMergerImpls = ImmutableList.of();
     private boolean tableStatisticsEnabled = true;
     private int tableStatisticsExecutorParallelism = 4;
     private boolean metadataEnabled = true;
@@ -83,6 +84,21 @@ public class HudiConfig
         this.columnsToHide = columnsToHide.stream()
                 .map(s -> s.toLowerCase(ENGLISH))
                 .collect(toImmutableList());
+        return this;
+    }
+
+    public List<String> getRecordMergerImpls()
+    {
+        return recordMergerImpls;
+    }
+
+    @Config("hudi.record-merger-impls")
+    @ConfigDescription("Comma-separated list of fully qualified HoodieRecordMerger implementation class names used to " +
+            "resolve a custom record merger for Merge-On-Read tables whose record merge mode is CUSTOM. " +
+            "The merger must produce Avro records (HoodieRecordType.AVRO). By default, no custom mergers are registered.")
+    public HudiConfig setRecordMergerImpls(List<String> recordMergerImpls)
+    {
+        this.recordMergerImpls = ImmutableList.copyOf(recordMergerImpls);
         return this;
     }
 

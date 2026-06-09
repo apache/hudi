@@ -22,10 +22,13 @@ import io.trino.spi.connector.SourcePage;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.OverwriteWithLatestMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -148,7 +151,19 @@ public class HudiTrinoReaderContext
     @Override
     public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses)
     {
-        return Option.of(new HoodiePreCombineAvroRecordMerger());
+        switch (mergeMode) {
+            case COMMIT_TIME_ORDERING:
+                return Option.of(new OverwriteWithLatestMerger());
+            case EVENT_TIME_ORDERING:
+                return Option.of(new HoodiePreCombineAvroRecordMerger());
+            case CUSTOM:
+            default:
+                // Trino reads records as Avro IndexedRecords, so the merger must be AVRO-typed (EngineType.JAVA).
+                Option<HoodieRecordMerger> recordMerger =
+                        HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergeImplClasses, mergeStrategyId);
+                // Fall back to pre-combine behavior when no custom merger matches the configured strategy.
+                return recordMerger.isPresent() ? recordMerger : Option.of(new HoodiePreCombineAvroRecordMerger());
+        }
     }
 
     @Override

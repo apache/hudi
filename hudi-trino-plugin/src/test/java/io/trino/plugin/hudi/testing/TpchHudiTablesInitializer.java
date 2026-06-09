@@ -54,7 +54,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -64,12 +63,10 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.intellij.lang.annotations.Language;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -82,6 +79,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Verify.verify;
 import static com.google.common.io.MoreFiles.deleteRecursively;
 import static com.google.common.io.RecursiveDeleteOption.ALLOW_INSECURE;
+import static io.trino.hdfs.HdfsTestUtils.HDFS_ENVIRONMENT;
 import static io.trino.hive.formats.HiveClassNames.HUDI_PARQUET_INPUT_FORMAT;
 import static io.trino.hive.formats.HiveClassNames.MAPRED_PARQUET_OUTPUT_FORMAT_CLASS;
 import static io.trino.hive.formats.HiveClassNames.PARQUET_HIVE_SERDE_CLASS;
@@ -90,7 +88,6 @@ import static io.trino.metastore.HiveType.HIVE_DOUBLE;
 import static io.trino.metastore.HiveType.HIVE_INT;
 import static io.trino.metastore.HiveType.HIVE_LONG;
 import static io.trino.metastore.HiveType.HIVE_STRING;
-import static io.trino.plugin.hive.HiveTestUtils.HDFS_ENVIRONMENT;
 import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
 import static io.trino.testing.TestingConnectorSession.SESSION;
 import static java.lang.String.format;
@@ -168,8 +165,7 @@ public class TpchHudiTablesInitializer
                     .map(MaterializedRow::getFields)
                     .map(recordConverter::toRecord)
                     .collect(Collectors.toList());
-            String timestamp = HoodieInstantTimeGenerator.formatDate(Date.from(Instant.now()));
-            writeClient.startCommitWithTime(timestamp);
+            String timestamp = writeClient.startCommit();
             writeClient.insert(records, timestamp);
         }
     }
