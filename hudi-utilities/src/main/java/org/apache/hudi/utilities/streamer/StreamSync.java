@@ -589,6 +589,10 @@ public class StreamSync implements Serializable, Closeable {
     }
   }
 
+  public void reportSuccessMetrics() {
+    metrics.emitStreamerJobSuccessMetrics();
+  }
+
   public void reportFailureMetrics() {
     metrics.emitStreamerJobFailedMetrics();
   }
