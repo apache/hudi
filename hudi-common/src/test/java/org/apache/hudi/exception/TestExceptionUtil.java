@@ -23,8 +23,11 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
+import static org.apache.hudi.exception.ExceptionUtil.throwAsIOExceptionOrRuntimeException;
 import static org.apache.hudi.exception.ExceptionUtil.validateErrorMsg;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestExceptionUtil {
@@ -53,5 +56,22 @@ class TestExceptionUtil {
     RuntimeException exceptionWithoutMessage = new RuntimeException();
     // Empty string should not be found in any message (including null)
     assertFalse(validateErrorMsg(exceptionWithoutMessage, ""));
+  }
+
+  @Test
+  void testThrowAsIOExceptionOrRuntimeException() {
+    IOException ioException = new IOException("io");
+    IOException thrownIOException = assertThrows(IOException.class, () -> throwAsIOExceptionOrRuntimeException(ioException));
+    assertSame(ioException, thrownIOException);
+
+    RuntimeException runtimeException = new RuntimeException("runtime");
+    RuntimeException thrownRuntimeException =
+        assertThrows(RuntimeException.class, () -> throwAsIOExceptionOrRuntimeException(runtimeException));
+    assertSame(runtimeException, thrownRuntimeException);
+
+    Exception checkedException = new Exception("checked");
+    IOException wrappedException =
+        assertThrows(IOException.class, () -> throwAsIOExceptionOrRuntimeException(checkedException));
+    assertSame(checkedException, wrappedException.getCause());
   }
 }

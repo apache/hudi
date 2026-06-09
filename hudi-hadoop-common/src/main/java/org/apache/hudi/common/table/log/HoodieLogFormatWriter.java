@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -125,68 +126,73 @@ public class HoodieLogFormatWriter extends HoodieLogFormat.Writer {
 
   @Override
   public AppendResult appendBlocks(List<HoodieLogBlock> blocks) throws IOException {
-    // Find current version
-    HoodieLogFormat.LogFormatVersion currentLogFormatVersion =
-        new HoodieLogFormatVersion(HoodieLogFormat.CURRENT_VERSION);
+    try {
+      // Find current version
+      HoodieLogFormat.LogFormatVersion currentLogFormatVersion =
+          new HoodieLogFormatVersion(HoodieLogFormat.CURRENT_VERSION);
 
-    FSDataOutputStream originalOutputStream = getOutputStream();
-    long startPos = originalOutputStream.getPos();
-    long sizeWritten = 0;
-    // HUDI-2655. here we wrap originalOutputStream to ensure huge blocks can be correctly written
-    FSDataOutputStream outputStream = new FSDataOutputStream(originalOutputStream, new FileSystem.Statistics(storage.getScheme()), startPos);
-    for (HoodieLogBlock block: blocks) {
-      long startSize = outputStream.size();
+      FSDataOutputStream originalOutputStream = getOutputStream();
+      long startPos = originalOutputStream.getPos();
+      long sizeWritten = 0;
+      // HUDI-2655. here we wrap originalOutputStream to ensure huge blocks can be correctly written
+      FSDataOutputStream outputStream = new FSDataOutputStream(originalOutputStream, new FileSystem.Statistics(storage.getScheme()), startPos);
+      for (HoodieLogBlock block: blocks) {
+        long startSize = outputStream.size();
 
-      // 1. Write the magic header for the start of the block
-      outputStream.write(HoodieLogFormat.MAGIC);
+        // 1. Write the magic header for the start of the block
+        outputStream.write(HoodieLogFormat.MAGIC);
 
-      // bytes for header
-      byte[] headerBytes = HoodieLogBlock.getHeaderMetadataBytes(block.getLogBlockHeader());
-      // content bytes
-      ByteArrayOutputStream content = block.getContentBytes(storage);
-      // bytes for footer
-      byte[] footerBytes = HoodieLogBlock.getFooterMetadataBytes(block.getLogBlockFooter());
+        // bytes for header
+        byte[] headerBytes = HoodieLogBlock.getHeaderMetadataBytes(block.getLogBlockHeader());
+        // content bytes
+        ByteArrayOutputStream content = block.getContentBytes(storage);
+        // bytes for footer
+        byte[] footerBytes = HoodieLogBlock.getFooterMetadataBytes(block.getLogBlockFooter());
 
-      // 2. Write the total size of the block (excluding Magic)
-      outputStream.writeLong(getLogBlockLength(content.size(), headerBytes.length, footerBytes.length));
+        // 2. Write the total size of the block (excluding Magic)
+        outputStream.writeLong(getLogBlockLength(content.size(), headerBytes.length, footerBytes.length));
 
-      // 3. Write the version of this log block
-      outputStream.writeInt(currentLogFormatVersion.getVersion());
-      // 4. Write the block type
-      outputStream.writeInt(block.getBlockType().ordinal());
+        // 3. Write the version of this log block
+        outputStream.writeInt(currentLogFormatVersion.getVersion());
+        // 4. Write the block type
+        outputStream.writeInt(block.getBlockType().ordinal());
 
-      // 5. Write the headers for the log block
-      outputStream.write(headerBytes);
-      // 6. Write the size of the content block
-      outputStream.writeLong(content.size());
-      // 7. Write the contents of the data block
-      content.writeTo(outputStream);
-      // 8. Write the footers for the log block
-      outputStream.write(footerBytes);
-      // 9. Write the total size of the log block (including magic) which is everything written
-      // until now (for reverse pointer)
-      // Update: this information is now used in determining if a block is corrupt by comparing to the
-      //   block size in header. This change assumes that the block size will be the last data written
-      //   to a block. Read will break if any data is written past this point for a block.
-      outputStream.writeLong(outputStream.size() - startSize);
+        // 5. Write the headers for the log block
+        outputStream.write(headerBytes);
+        // 6. Write the size of the content block
+        outputStream.writeLong(content.size());
+        // 7. Write the contents of the data block
+        content.writeTo(outputStream);
+        // 8. Write the footers for the log block
+        outputStream.write(footerBytes);
+        // 9. Write the total size of the log block (including magic) which is everything written
+        // until now (for reverse pointer)
+        // Update: this information is now used in determining if a block is corrupt by comparing to the
+        //   block size in header. This change assumes that the block size will be the last data written
+        //   to a block. Read will break if any data is written past this point for a block.
+        outputStream.writeLong(outputStream.size() - startSize);
 
-      // Fetch the size again, so it accounts also (9).
+        // Fetch the size again, so it accounts also (9).
 
-      // HUDI-2655. Check the size written to avoid log blocks whose size overflow.
-      if (outputStream.size() == Integer.MAX_VALUE) {
-        throw new HoodieIOException("Blocks appended may overflow. Please decrease log block size or log block amount");
+        // HUDI-2655. Check the size written to avoid log blocks whose size overflow.
+        if (outputStream.size() == Integer.MAX_VALUE) {
+          throw new HoodieIOException("Blocks appended may overflow. Please decrease log block size or log block amount");
+        }
+        sizeWritten +=  outputStream.size() - startSize;
       }
-      sizeWritten +=  outputStream.size() - startSize;
-    }
-    // No flush/hsync here: append-time visibility is not part of the contract.
-    // Downstream readers only need commit-level visibility, which is provided
-    // when the writer is closed (see closeStream) or when callers explicitly
-    // invoke sync().
+      // No flush/hsync here: append-time visibility is not part of the contract.
+      // Downstream readers only need commit-level visibility, which is provided
+      // when the writer is closed (see closeStream) or when callers explicitly
+      // invoke sync().
 
-    AppendResult result = new AppendResult(logFile, startPos, sizeWritten);
-    // roll over if size is past the threshold
-    rolloverIfNeeded();
-    return result;
+      AppendResult result = new AppendResult(logFile, startPos, sizeWritten);
+      // roll over if size is past the threshold
+      rolloverIfNeeded();
+      return result;
+    } catch (IOException | RuntimeException e) {
+      closeOutputStreamOnAppendFailure(e);
+      throw e;
+    }
   }
 
   /**
@@ -237,21 +243,63 @@ public class HoodieLogFormatWriter extends HoodieLogFormat.Writer {
 
   @Override
   public void close() throws IOException {
-    closeStream();
-    // remove the shutdown hook after closing the stream to avoid memory leaks
-    if (null != shutdownThread) {
-      Runtime.getRuntime().removeShutdownHook(shutdownThread);
+    try {
+      closeStream();
+    } finally {
+      // remove the shutdown hook after closing the stream to avoid memory leaks
+      if (null != shutdownThread) {
+        Runtime.getRuntime().removeShutdownHook(shutdownThread);
+        shutdownThread = null;
+      }
     }
   }
 
   private void closeStream() throws IOException {
-    if (outputStream != null) {
+    if (outputStream == null) {
+      return;
+    }
+
+    Throwable failure = null;
+    try {
       // Persist all buffered data to DataNodes before closing so downstream
       // readers can observe a fully-written log file at commit-level visibility.
       sync();
-      outputStream.close();
-      outputStream = null;
-      closed = true;
+    } catch (IOException | RuntimeException e) {
+      failure = e;
+    }
+
+    try {
+      closeOutputStream();
+    } catch (IOException | RuntimeException closeException) {
+      if (failure != null) {
+        failure.addSuppressed(closeException);
+      } else {
+        failure = closeException;
+      }
+    }
+
+    if (failure != null) {
+      ExceptionUtil.throwAsIOExceptionOrRuntimeException(failure);
+    }
+  }
+
+  private void closeOutputStreamOnAppendFailure(Throwable failure) {
+    try {
+      closeOutputStream();
+    } catch (IOException | RuntimeException closeException) {
+      failure.addSuppressed(closeException);
+      log.warn("Failed to close output stream after append failure for log file {}", logFile, closeException);
+    }
+  }
+
+  private void closeOutputStream() throws IOException {
+    if (outputStream != null) {
+      try {
+        outputStream.close();
+      } finally {
+        outputStream = null;
+        closed = true;
+      }
     }
   }
 
