@@ -959,4 +959,59 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     }
     assertTrue(newRecordFound, "Should have found the new record with complex data types in CDC")
   }
+
+  /**
+   * Regression test for HUDI-14363: the CDC incremental query must produce before/after images
+   * that contain only business columns, never the _hoodie_* meta columns. Before the fix, images
+   * inferred directly from base/log data files (e.g. the BASE_FILE_INSERT case, which is hit by an
+   * insert-only commit that writes no CDC log file) leaked the meta columns, while images served
+   * from the supplemental CDC log did not - producing an inconsistent, alternating-per-commit
+   * schema. This reproduces the reporter's scenario (MOR + inline compaction every delta commit +
+   * upsert inserts) and asserts no image carries meta fields for any supplemental logging mode.
+   */
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
+  def testCDCImagesExcludeHoodieMetaFields(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
+    val options = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key() -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> loggingMode.name(),
+      "hoodie.compact.inline" -> "true",
+      "hoodie.compact.inline.max.delta.commits" -> "1"
+    )
+
+    // 1. Insert - this commit writes no CDC log file, so its change data is inferred from the base
+    // file via the BASE_FILE_INSERT case (the path that previously leaked _hoodie_* meta columns).
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
+    spark.read.json(spark.sparkContext.parallelize(records1, 2))
+      .write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    metaClient = createMetaClient(spark, basePath)
+    val instant1 = metaClient.reloadActiveTimeline.lastInstant().get()
+    assertFalse(hasCDCLogFile(instant1))
+    val commitTime1 = instant1.requestedTime
+
+    // 2. Upsert (updates + new inserts) - exercises the supplemental CDC log (AS_IS) path too.
+    val updates = recordsToStrings(dataGen.generateUniqueUpdates("001", 30)).asScala.toList
+    val inserts = recordsToStrings(dataGen.generateInserts("001", 20)).asScala.toList
+    spark.read.json(spark.sparkContext.parallelize(updates ++ inserts, 2))
+      .write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Read all change data and assert no before/after image contains a _hoodie_* meta column.
+    val allCDCData = cdcDataFrame((commitTime1.toLong - 1).toString).collect()
+    assertTrue(allCDCData.nonEmpty, "Expected some CDC rows")
+    allCDCData.foreach { row =>
+      Seq("before", "after").foreach { col =>
+        val json = row.getAs[String](col)
+        if (json != null) {
+          assertFalse(json.contains("_hoodie_"),
+            s"$col image should not contain _hoodie_* meta columns, but was: $json")
+        }
+      }
+    }
+  }
 }

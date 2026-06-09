@@ -48,6 +48,24 @@ class TestInternalRowToJsonStringConverter {
   }
 
   @Test
+  def stripsHoodieMetaColumns(): Unit = {
+    // Records read from base/log files carry the _hoodie_* meta columns. CDC before/after images
+    // must contain only business columns (consistent with the supplemental CDC log), so the meta
+    // columns are expected to be dropped. Regression test for HUDI-14363.
+    val converter = new InternalRowToJsonStringConverter(metaColumnSchema.structTypeSchema)
+    val row = InternalRow.fromSeq(Seq(
+      UTF8String.fromString("20251125122540173"),
+      UTF8String.fromString("20251125122540173_0_0"),
+      UTF8String.fromString("1"),
+      UTF8String.fromString(""),
+      UTF8String.fromString("file-0_0-26-22_20251125122540173.parquet"),
+      1,
+      UTF8String.fromString("PENDING")))
+    val converted = converter.convert(row)
+    assertEquals("""{"order_id":1,"order_status":"PENDING"}""", converted.toString)
+  }
+
+  @Test
   def emptyString(): Unit = {
     val row = InternalRow.fromSeq(Seq(1, UTF8String.EMPTY_UTF8))
     val converted = converter.convert(row)
@@ -195,6 +213,28 @@ class TestInternalRowToJsonStringConverter {
         |{"name": "id", "type": "int"},
         |{"name": "name", "type": "string"},
         |{"name": "numbers", "type": {"type": "array", "items": "int"}}
+        |]}""".stripMargin
+    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
+  }
+
+  private def metaColumnSchema: HoodieTableSchema = {
+    val structTypeSchema = new StructType(Array[StructField](
+      StructField("_hoodie_commit_time", DataTypes.StringType, nullable = true, Metadata.empty),
+      StructField("_hoodie_commit_seqno", DataTypes.StringType, nullable = true, Metadata.empty),
+      StructField("_hoodie_record_key", DataTypes.StringType, nullable = true, Metadata.empty),
+      StructField("_hoodie_partition_path", DataTypes.StringType, nullable = true, Metadata.empty),
+      StructField("_hoodie_file_name", DataTypes.StringType, nullable = true, Metadata.empty),
+      StructField("order_id", DataTypes.IntegerType, nullable = false, Metadata.empty),
+      StructField("order_status", DataTypes.StringType, nullable = true, Metadata.empty)))
+    val avroSchemaStr: String =
+      """{"type": "record", "name": "test", "fields": [
+        |{"name": "_hoodie_commit_time", "type": ["null", "string"], "default": null},
+        |{"name": "_hoodie_commit_seqno", "type": ["null", "string"], "default": null},
+        |{"name": "_hoodie_record_key", "type": ["null", "string"], "default": null},
+        |{"name": "_hoodie_partition_path", "type": ["null", "string"], "default": null},
+        |{"name": "_hoodie_file_name", "type": ["null", "string"], "default": null},
+        |{"name": "order_id", "type": "int"},
+        |{"name": "order_status", "type": ["null", "string"], "default": null}
         |]}""".stripMargin
     HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
   }
