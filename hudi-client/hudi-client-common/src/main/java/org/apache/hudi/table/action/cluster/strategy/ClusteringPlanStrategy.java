@@ -41,8 +41,11 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -136,6 +139,31 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
    * context from schedule to run step.
    */
   protected abstract Map<String, String> getStrategyParams();
+
+  /**
+   * When users manually select partitions for clustering, keep the rest of the current scheduling window
+   * in missing partitions so those partitions are picked up by later schedules, while removing the selected
+   * partitions since this plan is explicitly handling them now.
+   */
+  protected List<String> getMissingPartitionsForSelectedPartitions(List<String> selectedPartitions,
+                                                                   List<String> partitionsInCurrentWindow) {
+    if (!getWriteConfig().isIncrementalTableServiceEnabled()) {
+      return Collections.emptyList();
+    }
+    Set<String> missingPartitions = new LinkedHashSet<>(partitionsInCurrentWindow);
+    missingPartitions.removeAll(new HashSet<>(selectedPartitions));
+    return new ArrayList<>(missingPartitions);
+  }
+
+  protected List<String> getMissingPartitionsForRegexFilteredPartitions(List<String> matchedPartitions,
+                                                                        List<String> partitionsInCurrentWindow) {
+    if (!getWriteConfig().isIncrementalTableServiceEnabled()) {
+      return Collections.emptyList();
+    }
+    Set<String> missingPartitions = new LinkedHashSet<>(partitionsInCurrentWindow);
+    missingPartitions.removeAll(new HashSet<>(matchedPartitions));
+    return new ArrayList<>(missingPartitions);
+  }
 
   /**
    * Returns any specific parameters to be stored as part of clustering metadata.

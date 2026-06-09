@@ -31,6 +31,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -40,6 +41,8 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class TestPartitionAwareClusteringPlanStrategy {
 
@@ -84,6 +87,31 @@ public class TestPartitionAwareClusteringPlanStrategy {
   }
 
   @Test
+  public void testResolveMissingPartitionsFromCurrentWindow() {
+    HoodieWriteConfig incrementalConfig = mock(HoodieWriteConfig.class);
+    when(incrementalConfig.isIncrementalTableServiceEnabled()).thenReturn(true);
+    DummyPartitionAwareClusteringPlanStrategy incrementalStrategy =
+        new DummyPartitionAwareClusteringPlanStrategy(table, context, incrementalConfig);
+
+    assertEquals(Arrays.asList("p3", "p4"),
+        incrementalStrategy.resolveMissingPartitionsForSelectedPartitions(
+            Arrays.asList("p1", "p2"), Arrays.asList("p1", "p3", "p4")));
+    assertEquals(Arrays.asList("p2", "p4"),
+        incrementalStrategy.resolveMissingPartitionsForRegexFilteredPartitions(
+            Arrays.asList("p1", "p3"), Arrays.asList("p1", "p2", "p3", "p4")));
+
+    HoodieWriteConfig nonIncrementalConfig = mock(HoodieWriteConfig.class);
+    when(nonIncrementalConfig.isIncrementalTableServiceEnabled()).thenReturn(false);
+    DummyPartitionAwareClusteringPlanStrategy nonIncrementalStrategy =
+        new DummyPartitionAwareClusteringPlanStrategy(table, context, nonIncrementalConfig);
+
+    assertTrue(nonIncrementalStrategy.resolveMissingPartitionsForSelectedPartitions(
+        Arrays.asList("p1", "p2"), Arrays.asList("p1", "p3", "p4")).isEmpty());
+    assertTrue(nonIncrementalStrategy.resolveMissingPartitionsForRegexFilteredPartitions(
+        Arrays.asList("p1", "p3"), Arrays.asList("p1", "p2", "p3", "p4")).isEmpty());
+  }
+
+  @Test
   public void testResolveEngineContextUsesLocalWhenEnabled() {
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
@@ -125,6 +153,16 @@ public class TestPartitionAwareClusteringPlanStrategy {
 
     public DummyPartitionAwareClusteringPlanStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
       super(table, engineContext, writeConfig);
+    }
+
+    List<String> resolveMissingPartitionsForSelectedPartitions(List<String> selectedPartitions,
+                                                               List<String> partitionsInCurrentWindow) {
+      return getMissingPartitionsForSelectedPartitions(selectedPartitions, partitionsInCurrentWindow);
+    }
+
+    List<String> resolveMissingPartitionsForRegexFilteredPartitions(List<String> matchedPartitions,
+                                                                    List<String> partitionsInCurrentWindow) {
+      return getMissingPartitionsForRegexFilteredPartitions(matchedPartitions, partitionsInCurrentWindow);
     }
 
     @Override

@@ -24,7 +24,6 @@ import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -41,6 +40,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -169,13 +169,15 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
 
     if (StringUtils.isNullOrEmpty(partitionSelected)) {
       // get matched partitions if set
-      partitionPaths = getRegexPatternMatchedPartitions(config, partitions.get());
+      // partitionsInCurrentWindow = incremental partitions + missing partitions in last plan
+      List<String> partitionsInCurrentWindow = partitions.get();
+      partitionPaths = getRegexPatternMatchedPartitions(config, partitionsInCurrentWindow);
+      missingPartitions = getMissingPartitionsForRegexFilteredPartitions(partitionPaths, partitionsInCurrentWindow);
       // filter the partition paths if needed to reduce list status
     } else {
       partitionPaths = Arrays.asList(partitionSelected.split(","));
-      // Users may temporarily set specific partitions for clustering.
-      // Ensure the coherence of the missing partitions.
-      missingPartitions = (List<String>)executor.fetchMissingPartitions(TableServiceType.CLUSTER).getRight();
+      missingPartitions = getMissingPartitionsForSelectedPartitions(partitionPaths,
+          config.isIncrementalTableServiceEnabled() ? partitions.get() : Collections.emptyList());
     }
 
     Pair<List<String>, List<String>> partitionsPair = filterPartitionPaths(getWriteConfig(), partitionPaths);
