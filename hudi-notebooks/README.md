@@ -19,7 +19,7 @@
 
 This project provides a ready-to-use Docker Compose environment for running Apache Spark with Hudi, Hive Metastore, and MinIO (S3-compatible storage) for data lake development and testing. JupyterLab is included for interactive development.
 
-![](Spark_Hudi.png)
+![](Spark_Hudi.jpg)
 
 ## 🛠️ Services
 
