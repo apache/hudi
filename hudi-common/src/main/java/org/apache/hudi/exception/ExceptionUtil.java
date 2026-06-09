@@ -23,6 +23,8 @@ import org.apache.hudi.common.util.StringUtils;
 
 import javax.annotation.Nonnull;
 
+import java.io.IOException;
+
 /**
  * Util class for exception analysis.
  */
@@ -31,7 +33,7 @@ public final class ExceptionUtil {
   }
 
   /**
-   * Returns true if error message is contained in any nested exception of provided {@link Throwable}.
+   * Returns true if error message is contained in any nested exception to provided {@link Throwable}.
    */
   public static boolean validateErrorMsg(@Nonnull Throwable t, String errorMsg) {
     if (StringUtils.isNullOrEmpty(errorMsg)) {
@@ -47,5 +49,19 @@ public final class ExceptionUtil {
     }
 
     return false;
+  }
+
+  /**
+   * Throws the provided exception as-is when it is an {@link IOException} or
+   * {@link RuntimeException}, otherwise wraps it in an {@link IOException}.
+   */
+  public static void throwAsIOExceptionOrRuntimeException(Throwable exception) throws IOException {
+    if (exception instanceof IOException) {
+      throw (IOException) exception;
+    }
+    if (exception instanceof RuntimeException) {
+      throw (RuntimeException) exception;
+    }
+    throw new IOException(exception);
   }
 }
