@@ -125,7 +125,13 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
   }
 
   test("Test Query Log Only MOR Table With VARIANT column triggers compaction") {
-    assume(HoodieSparkUtils.gteqSpark4_0, "Variant type requires Spark 4.0 or higher")
+    // Gated on Spark >= 4.1. Compaction writes the base file via the AVRO shredding writer, which
+    // lays the variant group out as [metadata, value, typed_value]. Spark 4.0's read support
+    // (Spark40HoodieParquetReadSupport.reorderVariantFields) rebuilds that group as [value, metadata]
+    // and drops typed_value, so the subsequent native read fails with MALFORMED_VARIANT. Spark 4.1+
+    // reads variant fields by name (SPARK-54410) and reconstructs correctly.
+    // TODO(voon): drop this comment once Spark 4.0 is removed.
+    assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
 
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
