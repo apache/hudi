@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -242,10 +243,14 @@ public class HoodieLogFormatWriter extends HoodieLogFormat.Writer {
 
   @Override
   public void close() throws IOException {
-    closeStream();
-    // remove the shutdown hook after closing the stream to avoid memory leaks
-    if (null != shutdownThread) {
-      Runtime.getRuntime().removeShutdownHook(shutdownThread);
+    try {
+      closeStream();
+    } finally {
+      // remove the shutdown hook after closing the stream to avoid memory leaks
+      if (null != shutdownThread) {
+        Runtime.getRuntime().removeShutdownHook(shutdownThread);
+        shutdownThread = null;
+      }
     }
   }
 
@@ -254,27 +259,27 @@ public class HoodieLogFormatWriter extends HoodieLogFormat.Writer {
       return;
     }
 
-    Exception syncException = null;
+    Throwable failure = null;
     try {
       // Persist all buffered data to DataNodes before closing so downstream
       // readers can observe a fully-written log file at commit-level visibility.
       sync();
-    } catch (Exception e) {
-      syncException = e;
+    } catch (IOException | RuntimeException e) {
+      failure = e;
     }
 
     try {
       closeOutputStream();
     } catch (IOException | RuntimeException closeException) {
-      if (syncException != null) {
-        syncException.addSuppressed(closeException);
-        rethrow(syncException);
+      if (failure != null) {
+        failure.addSuppressed(closeException);
+      } else {
+        failure = closeException;
       }
-      rethrow(closeException);
     }
 
-    if (syncException != null) {
-      rethrow(syncException);
+    if (failure != null) {
+      ExceptionUtil.throwAsIOExceptionOrRuntimeException(failure);
     }
   }
 
@@ -296,16 +301,6 @@ public class HoodieLogFormatWriter extends HoodieLogFormat.Writer {
         closed = true;
       }
     }
-  }
-
-  private void rethrow(Exception exception) throws IOException {
-    if (exception instanceof IOException) {
-      throw (IOException) exception;
-    }
-    if (exception instanceof RuntimeException) {
-      throw (RuntimeException) exception;
-    }
-    throw new IOException(exception);
   }
 
   @Override

@@ -52,47 +52,56 @@ class TestHoodieLogFormatWriter {
   void testCloseOutputOnAppendWriteException() throws IOException {
     HoodieStorage storage = HoodieTestUtils.getStorage(tempDir.toString());
     HoodieLogFormatWriter writer = newWriter(storage);
-    CloseTrackingOutputStream outputStream = new CloseTrackingOutputStream(true, false);
-    writer.withOutputStream(newFSDataOutputStream(outputStream, storage));
+    try {
+      CloseTrackingOutputStream outputStream = new CloseTrackingOutputStream(true, false);
+      writer.withOutputStream(newFSDataOutputStream(outputStream, storage));
 
-    IOException exception = assertThrows(IOException.class, () -> writer.appendBlock(commandBlock()));
+      IOException exception = assertThrows(IOException.class, () -> writer.appendBlock(commandBlock()));
 
-    assertEquals(WRITE_FAIL, exception.getMessage());
-    assertTrue(outputStream.isClosed());
-    assertThrows(IllegalStateException.class, writer::getCurrentSize);
-    writer.close();
+      assertEquals(WRITE_FAIL, exception.getMessage());
+      assertTrue(outputStream.isClosed());
+      assertThrows(IllegalStateException.class, writer::getCurrentSize);
+    } finally {
+      writer.close();
+    }
   }
 
   @Test
   void testPreserveAppendExceptionWhenCloseFails() throws IOException {
     HoodieStorage storage = HoodieTestUtils.getStorage(tempDir.toString());
     HoodieLogFormatWriter writer = newWriter(storage);
-    CloseTrackingOutputStream outputStream = new CloseTrackingOutputStream(true, true);
-    writer.withOutputStream(newFSDataOutputStream(outputStream, storage));
+    try {
+      CloseTrackingOutputStream outputStream = new CloseTrackingOutputStream(true, true);
+      writer.withOutputStream(newFSDataOutputStream(outputStream, storage));
 
-    IOException exception = assertThrows(IOException.class, () -> writer.appendBlock(commandBlock()));
+      IOException exception = assertThrows(IOException.class, () -> writer.appendBlock(commandBlock()));
 
-    assertEquals(WRITE_FAIL, exception.getMessage());
-    assertTrue(outputStream.isClosed());
-    assertEquals(1, exception.getSuppressed().length);
-    assertEquals(CLOSE_FAIL, exception.getSuppressed()[0].getMessage());
-    assertThrows(IllegalStateException.class, writer::getCurrentSize);
-    writer.close();
+      assertEquals(WRITE_FAIL, exception.getMessage());
+      assertTrue(outputStream.isClosed());
+      assertEquals(1, exception.getSuppressed().length);
+      assertEquals(CLOSE_FAIL, exception.getSuppressed()[0].getMessage());
+      assertThrows(IllegalStateException.class, writer::getCurrentSize);
+    } finally {
+      writer.close();
+    }
   }
 
   @Test
   void testCloseOutputWhenSyncFailsOnClose() throws IOException {
     HoodieStorage storage = HoodieTestUtils.getStorage(tempDir.toString());
     HoodieLogFormatWriter writer = newWriter(storage);
-    CloseTrackingOutputStream outputStream = new CloseTrackingOutputStream(false, false);
-    writer.withOutputStream(new SyncFailingFSDataOutputStream(outputStream, storage));
+    try {
+      CloseTrackingOutputStream outputStream = new CloseTrackingOutputStream(false, false);
+      writer.withOutputStream(new SyncFailingFSDataOutputStream(outputStream, storage));
 
-    IOException exception = assertThrows(IOException.class, writer::close);
+      IOException exception = assertThrows(IOException.class, writer::close);
 
-    assertEquals(SYNC_FAIL, exception.getMessage());
-    assertTrue(outputStream.isClosed());
-    assertThrows(IllegalStateException.class, writer::getCurrentSize);
-    writer.close();
+      assertEquals(SYNC_FAIL, exception.getMessage());
+      assertTrue(outputStream.isClosed());
+      assertThrows(IllegalStateException.class, writer::getCurrentSize);
+    } finally {
+      writer.close();
+    }
   }
 
   private HoodieLogFormatWriter newWriter(HoodieStorage storage) throws IOException {
