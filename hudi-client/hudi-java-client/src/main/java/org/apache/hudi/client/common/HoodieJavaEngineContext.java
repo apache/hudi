@@ -193,7 +193,8 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
     // no operation for now
   }
 
-  // Allowlist of safe system properties to include in commit metadata
+  // Allowlist of safe system properties to include in commit metadata. Avoid wildcarding system
+  // properties since callers may pass credentials via -D flags (e.g. -Ddb.password=...).
   private static final String[] SAFE_SYSTEM_PROPERTIES = {
       "java.version",
       "java.vendor",
@@ -206,7 +207,7 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
 
   @Override
   public Map<String, String> getEngineProperties() {
-    final Map<String, String> info = new HashMap<String, String>();
+    Map<String, String> info = new HashMap<>();
     for (String property : SAFE_SYSTEM_PROPERTIES) {
       String value = System.getProperty(property);
       if (value != null) {

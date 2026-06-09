@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.HoodieVersion;
 import org.apache.hudi.common.HoodieTableFormat;
 import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
@@ -49,7 +50,6 @@ import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.BinaryUtil;
-import org.apache.hudi.HoodieVersion;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieTableConfigUtils;
 import org.apache.hudi.common.util.NetworkUtils;
@@ -76,6 +76,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -504,10 +505,10 @@ public class HoodieTableConfig extends HoodieConfig {
     final String checksum;
     if (isValidChecksum(props)) {
       checksum = props.getProperty(TABLE_CHECKSUM.key());
-      props.store(outputStream, getFileComment(props));
+      props.store(outputStream, getFileComment());
     } else {
       Properties propsWithChecksum = getOrderedPropertiesWithTableChecksum(props);
-      propsWithChecksum.store(outputStream, getFileComment(propsWithChecksum));
+      propsWithChecksum.store(outputStream, getFileComment());
       checksum = propsWithChecksum.getProperty(TABLE_CHECKSUM.key());
       props.setProperty(TABLE_CHECKSUM.key(), checksum);
     }
@@ -1409,10 +1410,9 @@ public class HoodieTableConfig extends HoodieConfig {
     return cachedHostname;
   }
 
-  public static String getFileComment(Properties props) {
-    final long ts = System.currentTimeMillis();
-    return String.format("Date=%s, ts=%d, host=%s, #properties=%d, hudi_version=%s",
-        new java.util.Date(ts), ts, getHostnameSafe(), props.size(), HoodieVersion.get());
+  public static String getFileComment() {
+    return String.format("Updated at %s, host=%s, hudi_version=%s",
+        Instant.now(), getHostnameSafe(), HoodieVersion.get());
   }
 
   /**

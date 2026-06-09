@@ -45,6 +45,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -119,9 +120,18 @@ public abstract class HoodieEngineContext {
 
   /**
    * Returns engine-specific properties to be included in commit metadata for debugging.
-   * Implementations should only include safe, non-sensitive properties.
+   * <p>Contract:
+   * <ul>
+   *   <li>Implementations must only return safe, non-sensitive values (no credentials, no PII).</li>
+   *   <li>This is invoked on the driver, on every commit. It must be cheap and free of side effects.</li>
+   *   <li>Must not reach into checkpoint / runtime state (e.g. for streaming engines like Flink,
+   *       per-checkpoint metadata is set up via the coordinator, not here).</li>
+   * </ul>
+   * Default returns an empty map so external subclasses are not forced to implement this.
    */
-  public abstract Map<String, String> getEngineProperties();
+  public Map<String, String> getEngineProperties() {
+    return Collections.emptyMap();
+  }
 
   /**
    * Returns the application id of the engine (e.g. Spark application id).
