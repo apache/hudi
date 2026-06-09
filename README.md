@@ -174,15 +174,11 @@ Refer to the table below for building with different Flink and Scala versions.
 | `-Dflink1.20`       | hudi-flink1.20-bundle          | For Flink 1.20 (same as default) |
 | `-Dflink1.19`       | hudi-flink1.19-bundle          | For Flink 1.19                   |
 | `-Dflink1.18`       | hudi-flink1.18-bundle          | For Flink 1.18                   |
-| `-Dflink1.17`       | hudi-flink1.17-bundle          | For Flink 1.17                   |
 
 For example,
 ```
 # Build against Flink 2.1.x
 mvn clean package -DskipTests -Dflink2.1
-
-# Build against Flink 1.17.x
-mvn clean package -DskipTests -Dflink1.17
 ```
 
 ## Running Tests

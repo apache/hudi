@@ -84,7 +84,7 @@ declare -a extensions=("-javadoc.jar" "-javadoc.jar.asc" "-javadoc.jar.md5" "-ja
 ".pom.md5" ".pom.sha1")
 
 declare -a bundles=("hudi-aws-bundle" "hudi-azure-bundle" "hudi-cli-bundle_2.12" "hudi-cli-bundle_2.13" "hudi-datahub-sync-bundle"
-"hudi-flink1.17-bundle" "hudi-flink1.18-bundle" "hudi-flink1.19-bundle" "hudi-flink1.20-bundle"
+"hudi-flink1.18-bundle" "hudi-flink1.19-bundle" "hudi-flink1.20-bundle"
 "hudi-flink2.0-bundle" "hudi-flink2.1-bundle" "hudi-gcp-bundle" "hudi-hadoop-mr-bundle" "hudi-hive-sync-bundle" "hudi-integ-test-bundle"
 "hudi-kafka-connect-bundle" "hudi-metaserver-server-bundle" "hudi-presto-bundle"
 "hudi-spark3.4-bundle_2.12" "hudi-spark3.5-bundle_2.12"

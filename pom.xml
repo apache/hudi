@@ -154,7 +154,6 @@
     <flink1.20.version>1.20.1</flink1.20.version>
     <flink1.19.version>1.19.2</flink1.19.version>
     <flink1.18.version>1.18.1</flink1.18.version>
-    <flink1.17.version>1.17.1</flink1.17.version>
     <flink.version>${flink2.1.version}</flink.version>
     <hudi.flink.module>hudi-flink2.1.x</hudi.flink.module>
     <flink.bundle.version>2.1</flink.bundle.version>
@@ -3020,27 +3019,6 @@
       <activation>
         <property>
           <name>flink1.18</name>
-        </property>
-      </activation>
-    </profile>
-    <profile>
-      <id>flink1.17</id>
-      <properties>
-        <flink.version>${flink1.17.version}</flink.version>
-        <hudi.flink.module>hudi-flink1.17.x</hudi.flink.module>
-        <flink.bundle.version>1.17</flink.bundle.version>
-        <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.4</flink.avro.version>
-        <flink.format.parquet.version>1.12.3</flink.format.parquet.version>
-        <flink.connector.kafka.version>${flink1.17.version}</flink.connector.kafka.version>
-        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
-      </properties>
-      <modules>
-        <module>hudi-flink-datasource/hudi-flink1.17.x</module>
-      </modules>
-      <activation>
-        <property>
-          <name>flink1.17</name>
         </property>
       </activation>
     </profile>
