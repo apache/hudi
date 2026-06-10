@@ -359,6 +359,11 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
    */
   @Test
   void testRealQueryRunnerResumesMidCommitPagination() throws IOException {
+    // Force the source meta-table to be at table version 6 so the V1 incremental relation
+    // (which interprets START_COMMIT as requested time and applies the start-exclusive
+    // findInstantsInRange filter) is the read path exercised.
+    metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), "6");
+
     // One source commit with 5 file events (100B each), followed by a later commit to
     // ensure the source timeline endInstant moves past the start commit.
     String startCommit = "1";
