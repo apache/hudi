@@ -89,17 +89,17 @@ public class QueryRunner {
   public Pair<QueryInfo, Dataset<Row>> runIncrementalQuery(QueryInfo queryInfo) {
     log.info("Running incremental query");
 
-    HoodieTableVersion tableVersion = HoodieTableMetaClient.builder().setConf(getStorageConf()).setBasePath(sourcePath).build().getTableConfig().getTableVersion();
-    // Use previousInstant so the start-exclusive incremental scan still includes the commit (startInstant),
-    // required to resume from checkpoint commit#fileKey for cloud event incremental source.
+    // S3/GCS event incremental sources operate with V1 checkpoint (commit#fileKey, requested-time based).
+    // Force INCREMENTAL_READ_TABLE_VERSION to 6 so the V1 incremental relation is always chosen, regardless
+    // of the source meta-table's actual version. Use previousInstant so the start-exclusive incremental scan
+    // still includes the commit (startInstant), required to resume from checkpoint commit#fileKey.
     return Pair.of(queryInfo, sparkSession.read().format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), queryInfo.getQueryType())
-        .option(INCREMENTAL_READ_TABLE_VERSION().key(), tableVersion.versionCode())
+        .option(INCREMENTAL_READ_TABLE_VERSION().key(), HoodieTableVersion.SIX.versionCode())
         .option(DataSourceReadOptions.START_COMMIT().key(), queryInfo.getPreviousInstant())
         .option(DataSourceReadOptions.END_COMMIT().key(), queryInfo.getEndInstant())
         .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
-            props.getString(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
-                tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue() : "false"))
+            props.getString(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(), "false"))
         .load(sourcePath));
   }
 
