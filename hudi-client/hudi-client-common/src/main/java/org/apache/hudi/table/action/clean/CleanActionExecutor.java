@@ -106,37 +106,38 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     }
   }
 
-  private static boolean deletePathAndGetResult(HoodieStorage storage, String deletePathStr) {
-    StoragePath deletePath = new StoragePath(deletePathStr);
-    log.debug("Working on delete path: {}", deletePath);
+  private static boolean deleteDirAndGetResult(HoodieStorage storage, String deleteDirStr) {
+    StoragePath deleteDir = new StoragePath(deleteDirStr);
+    log.debug("Working on deleting directory: {}", deleteDir);
     try {
-      boolean deleteResult = storage.getPathInfo(deletePath).isDirectory()
-          ? storage.deleteDirectory(deletePath)
-          : storage.deleteFile(deletePath);
+      // Only partition directories are handled here, so delete recursively without probing
+      // getPathInfo for the path type first.
+      boolean deleteResult = storage.deleteDirectory(deleteDir);
       if (deleteResult) {
-        log.debug("Cleaned path: {}", deletePath);
-      } else {
-        if (storage.exists(deletePath)) {
-          throw new HoodieIOException("Failed to delete path during clean execution " + deletePath);
-        } else {
-          log.debug("Already cleaned up path: {}", deletePath);
-        }
+        log.debug("Cleaned directory: {}", deleteDir);
+        return true;
       }
-      return deleteResult;
+      if (storage.exists(deleteDir)) {
+        throw new HoodieIOException("Failed to delete directory during clean execution " + deleteDir);
+      }
+      // Hadoop file systems report a missing path by returning false from delete instead of
+      // throwing FileNotFoundException, so this is the regular retried-clean case below.
+      log.debug("Already cleaned up directory: {}", deleteDir);
+      return true;
     } catch (FileNotFoundException fio) {
-      // With cleanPlan being used for retried cleaning operations, its possible to clean a path twice if a path to be
-      // deleted is not found, treat it as a success.
+      // With cleanPlan being used for retried cleaning operations, its possible to clean a directory twice if the
+      // directory to be deleted is not found, treat it as a success.
       return true;
     } catch (IOException e) {
       try {
-        if (storage.exists(deletePath)) {
-          log.error("Delete path failed: {} and path still exists", deletePath, e);
+        if (storage.exists(deleteDir)) {
+          log.error("Delete directory failed: {} and directory still exists", deleteDir, e);
           throw new HoodieIOException(e.getMessage(), e);
         }
-        log.warn("Delete path failed: {} but path does not exist", deletePath, e);
+        log.warn("Delete directory failed: {} but directory does not exist", deleteDir, e);
         return false;
       } catch (IOException ex) {
-        log.error("Delete path failed: {} with exception: {} and existence check also failed", deletePath, e, ex);
+        log.error("Delete directory failed: {} with exception: {} and existence check also failed", deleteDir, e, ex);
         throw new HoodieIOException(ex.getMessage(), ex);
       }
     }
@@ -198,7 +199,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
         : Collections.emptyList();
     partitionsToBeDeleted.forEach(entry -> {
       if (!isNullOrEmpty(entry)) {
-        deletePathAndGetResult(table.getStorage(), table.getMetaClient().getBasePath() + "/" + entry);
+        deleteDirAndGetResult(table.getStorage(), table.getMetaClient().getBasePath() + "/" + entry);
       }
     });
 
