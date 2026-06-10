@@ -27,7 +27,9 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
@@ -61,6 +63,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -83,9 +86,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -315,13 +319,20 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   }
 
   /**
-   * Resume from `commit#fileKey` must re-include the start commit; runs on v6 and v8 source
-   * meta-tables since cloud event sources always use V1/requested-time regardless of version.
+   * Resume from `commit#fileKey` must re-include the start commit; runs on v6 and v8, COW and MOR
+   * source meta-tables since cloud event sources always use V1/requested-time regardless of version.
    */
   @ParameterizedTest
-  @ValueSource(strings = {"6", "8"})
-  void testRealQueryRunnerResumesMidCommitPagination(String sourceTableVersion) throws IOException {
-    metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), sourceTableVersion);
+  @CsvSource({"6,COPY_ON_WRITE", "8,COPY_ON_WRITE", "6,MERGE_ON_READ", "8,MERGE_ON_READ"})
+  void testRealQueryRunnerResumesMidCommitPagination(String sourceTableVersion, HoodieTableType tableType) throws IOException {
+    Properties tableProps = new Properties();
+    tableProps.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(true));
+    tableProps.put("hoodie.datasource.write.recordkey.field", "_row_key");
+    tableProps.put("hoodie.datasource.write.partitionpath.field", "");
+    tableProps.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
+    tableProps.put(HoodieTableConfig.PARTITION_FIELDS.key(), "");
+    tableProps.put(WRITE_TABLE_VERSION.key(), sourceTableVersion);
+    metaClient = getHoodieMetaClient(storageConf(), basePath(), tableProps, tableType);
 
     String startCommit = "1";
     String laterCommit = "2";
@@ -332,6 +343,12 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
         Pair.of("name/file-04.json", 100L),
         Pair.of("name/file-05.json", 100L)));
     writeGcsMetadataRecords(laterCommit);
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      // the second commit's records must land in log files so the incremental read merges logs
+      boolean hasLogFiles = Arrays.stream(fs().listStatus(new Path(basePath())))
+          .anyMatch(f -> f.getPath().getName().contains(".log."));
+      Assertions.assertTrue(hasLogFiles, "Expected log files in the MOR source meta-table");
+    }
 
     TypedProperties props = setProps(READ_UPTO_LATEST_COMMIT);
     props.setProperty(CloudSourceConfig.ENABLE_EXISTS_CHECK.key(), "false");
@@ -447,7 +464,9 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   }
 
   private HoodieRecord getGcsMetadataRecord(String commitTime, String filename, String bucketName, String generation, long size) {
-    String partitionPath = bucketName;
+    // records must be written to a partition path consistent with the table config; otherwise
+    // the incremental read finds no partitions matching the commit metadata
+    String partitionPath = metaClient.getTableConfig().isTablePartitioned() ? bucketName : "";
 
     String id = "id:" + bucketName + "/" + filename + "/" + generation;
     String mediaLink = String.format("https://storage.googleapis.com/download/storage/v1/b/%s/o/%s"
@@ -503,7 +522,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
           getGcsMetadataRecord(commitTime, "data-file-4.json", "bucket-1", "1")
       );
       List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(gcsMetadataRecords, 1), commitTime).collect();
-      writeClient.commit(commitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      writeClient.commit(commitTime, jsc.parallelize(statusList), Option.empty(), metaClient.getCommitActionType(), Collections.emptyMap(), Option.empty());
       assertNoWriteErrors(statusList);
       return Pair.of(commitTime, gcsMetadataRecords);
     }
@@ -519,7 +538,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
           .map(p -> getGcsMetadataRecord(commitTime, p.getLeft(), "bucket-1", "1", p.getRight()))
           .collect(Collectors.toList());
       List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(gcsMetadataRecords, 1), commitTime).collect();
-      writeClient.commit(commitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      writeClient.commit(commitTime, jsc.parallelize(statusList), Option.empty(), metaClient.getCommitActionType(), Collections.emptyMap(), Option.empty());
       assertNoWriteErrors(statusList);
       return Pair.of(commitTime, gcsMetadataRecords);
     }

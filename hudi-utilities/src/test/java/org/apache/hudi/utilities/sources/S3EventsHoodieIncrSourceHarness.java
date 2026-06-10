@@ -79,7 +79,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.mockito.Mockito.when;
 
@@ -162,7 +161,9 @@ public class S3EventsHoodieIncrSourceHarness extends SparkClientFunctionalTestHa
   }
 
   protected HoodieRecord generateS3EventMetadata(String commitTime, String bucketName, String objectKey, Long objectSize) {
-    String partitionPath = bucketName;
+    // records must be written to a partition path consistent with the table config; otherwise
+    // the incremental read finds no partitions matching the commit metadata
+    String partitionPath = metaClient.getTableConfig().isTablePartitioned() ? bucketName : "";
     HoodieSchema schema = S3_METADATA_SCHEMA;
     GenericRecord rec = new GenericData.Record(schema.toAvroSchema());
     HoodieSchemaField s3Field = schema.getField("s3").get();
@@ -185,7 +186,6 @@ public class S3EventsHoodieIncrSourceHarness extends SparkClientFunctionalTestHa
     s3Record.put("bucket", s3BucketRec);
     s3Record.put("object", s3ObjectRec);
     rec.put("s3", s3Record);
-    rec.put("partition_path", bucketName);
     rec.put("_hoodie_commit_time", commitTime);
 
     HoodieAvroPayload payload = new HoodieAvroPayload(Option.of(rec));
@@ -235,7 +235,7 @@ public class S3EventsHoodieIncrSourceHarness extends SparkClientFunctionalTestHa
           .map(p -> generateS3EventMetadata(commitTime, "bucket-1", p.getLeft(), p.getRight()))
           .collect(Collectors.toList());
       List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(s3MetadataRecords, 1), commitTime).collect();
-      writeClient.commit(commitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      writeClient.commit(commitTime, jsc.parallelize(statusList), Option.empty(), metaClient.getCommitActionType(), Collections.emptyMap(), Option.empty());
       assertNoWriteErrors(statusList);
       return Pair.of(commitTime, s3MetadataRecords);
     }
