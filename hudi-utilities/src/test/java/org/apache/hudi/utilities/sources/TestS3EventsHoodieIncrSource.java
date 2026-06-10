@@ -361,8 +361,8 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
   void testRealQueryRunnerResumesMidCommitPagination() throws IOException {
     // One source commit with 5 file events (100B each), followed by a later commit to
     // ensure the source timeline endInstant moves past the start commit.
-    String startCommit = "10";
-    String laterCommit = "20";
+    String startCommit = "1";
+    String laterCommit = "2";
     writeS3MetadataRecords(startCommit, Arrays.asList(
         Pair.of("path/to/file-01.json", 100L),
         Pair.of("path/to/file-02.json", 100L),

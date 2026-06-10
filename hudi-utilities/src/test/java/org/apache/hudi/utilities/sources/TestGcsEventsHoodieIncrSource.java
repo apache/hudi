@@ -322,8 +322,8 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
    */
   @Test
   void testRealQueryRunnerResumesMidCommitPagination() throws IOException {
-    String startCommit = "10";
-    String laterCommit = "20";
+    String startCommit = "1";
+    String laterCommit = "2";
     writeGcsMetadataRecords(startCommit, Arrays.asList(
         Pair.of("name/file-01.json", 100L),
         Pair.of("name/file-02.json", 100L),
