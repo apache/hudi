@@ -352,24 +352,14 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
   }
 
   /**
-   * Resuming from a {@code commit#fileKey} checkpoint must re-include the start commit so
-   * files past the key are discovered. Uses a real {@link QueryRunner} against an on-disk
-   * meta-table; the mocked QueryRunner in other tests returns inputDs unfiltered and would
-   * hide a START_COMMIT-handling regression.
-   */
-  /**
-   * Verified across both v6 and v8 source meta-tables: cloud event incremental sources
-   * stick to V1 checkpoint (commit#fileKey, requested-time) regardless of source version,
-   * so QueryRunner forces INCREMENTAL_READ_TABLE_VERSION=6 to always route through the V1
-   * relation.
+   * Resume from `commit#fileKey` must re-include the start commit; runs on v6 and v8 source
+   * meta-tables since cloud event sources always use V1/requested-time regardless of version.
    */
   @ParameterizedTest
   @ValueSource(strings = {"6", "8"})
   void testRealQueryRunnerResumesMidCommitPagination(String sourceTableVersion) throws IOException {
     metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), sourceTableVersion);
 
-    // One source commit with 5 file events (100B each), followed by a later commit to
-    // ensure the source timeline endInstant moves past the start commit.
     String startCommit = "1";
     String laterCommit = "2";
     writeS3MetadataRecords(startCommit, Arrays.asList(
@@ -387,33 +377,23 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
         .thenReturn(Option.empty());
     Mockito.when(sourceProfileSupplier.getSourceProfile()).thenReturn(null);
 
-    // Real QueryRunner (not the harness's mock) so the actual Spark incremental read
-    // against the on-disk meta-table runs.
+    // Real QueryRunner so the actual Spark incremental read against the on-disk meta-table runs.
     S3EventsHoodieIncrSource incrSource = new S3EventsHoodieIncrSource(
         props, jsc(), spark(),
         new QueryRunner(spark(), props),
         new CloudDataFetcher(props, jsc(), spark(), metrics, mockCloudObjectsSelectorCommon),
         new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
 
-    // Resume from a mid-commit checkpoint: prior batch stopped at file-02 within
-    // commit 10. sourceLimit=250B means the next batch should consume file-03 plus
-    // file-04 (200B cumulative) and stop before file-05 (would exceed the limit).
+    // Resume mid-commit at file-02; sourceLimit=250B fits file-03+file-04, file-05 would exceed.
     Checkpoint resumeFrom = new StreamerCheckpointV1(startCommit + "#path/to/file-02.json");
     Pair<Option<Dataset<Row>>, Checkpoint> result = incrSource.fetchNextBatch(Option.of(resumeFrom), 250L);
 
     Assertions.assertEquals(
         new StreamerCheckpointV1(startCommit + "#path/to/file-04.json"),
         result.getRight(),
-        "After mid-commit pagination, next batch must continue within the start commit "
-            + "(file-03 + file-04 = 200B under the 250B sourceLimit), not skip past it to "
-            + "the next source commit as a bare instant.");
+        "Next batch must continue within the start commit, not advance to a bare instant.");
 
-    // Verify the (commit_time||object_key) > 'commit#fileKey' filter selected exactly
-    // file-03 and file-04: file-01 and file-02 are at or below the resume key, file-05
-    // exceeds the sourceLimit budget, and laterCommit's record must not be reached.
-    // Captures the metadata passed to downstream file loading. If the bug recurs (Spark
-    // scan excludes the start commit), this would capture only laterCommit's record or
-    // nothing at all.
+    // Filter must pass exactly file-03 and file-04 to downstream loading.
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<CloudObjectMetadata>> captor = ArgumentCaptor.forClass((Class) List.class);
     verify(mockCloudObjectsSelectorCommon).loadAsDataset(
@@ -422,12 +402,9 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
         .map(CloudObjectMetadata::getPath)
         .sorted()
         .collect(java.util.stream.Collectors.toList());
-    Assertions.assertEquals(2, selectedPaths.size(),
-        "Filter must select exactly 2 files (file-03 and file-04). Got: " + selectedPaths);
-    Assertions.assertTrue(selectedPaths.get(0).endsWith("/path/to/file-03.json"),
-        "First selected path should be file-03.json (after-key filter + ordering). Got: " + selectedPaths.get(0));
-    Assertions.assertTrue(selectedPaths.get(1).endsWith("/path/to/file-04.json"),
-        "Second selected path should be file-04.json (sourceLimit cut). Got: " + selectedPaths.get(1));
+    Assertions.assertEquals(2, selectedPaths.size(), "Expected file-03 and file-04, got: " + selectedPaths);
+    Assertions.assertTrue(selectedPaths.get(0).endsWith("/path/to/file-03.json"), selectedPaths.get(0));
+    Assertions.assertTrue(selectedPaths.get(1).endsWith("/path/to/file-04.json"), selectedPaths.get(1));
   }
 
   @Test

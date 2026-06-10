@@ -185,6 +185,7 @@ public class S3EventsHoodieIncrSourceHarness extends SparkClientFunctionalTestHa
     s3Record.put("bucket", s3BucketRec);
     s3Record.put("object", s3ObjectRec);
     rec.put("s3", s3Record);
+    rec.put("partition_path", bucketName);
     rec.put("_hoodie_commit_time", commitTime);
 
     HoodieAvroPayload payload = new HoodieAvroPayload(Option.of(rec));
