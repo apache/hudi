@@ -31,10 +31,10 @@ import org.apache.hudi.storage.HoodieStorage;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import java.io.ByteArrayOutputStream;
@@ -70,16 +70,16 @@ public abstract class HoodieLogBlock {
    */
   public static int version = 3;
   // Header for each log block
-  @NonNull
+  @Nonnull
   private final Map<HeaderMetadataType, String> logBlockHeader;
   // Footer for each log block
-  @NonNull
+  @Nonnull
   private final Map<FooterMetadataType, String> logBlockFooter;
   // Location of a log block on disk
-  @NonNull
+  @Nonnull
   private final Option<HoodieLogBlockContentLocation> blockContentLocation;
   // data for a specific block
-  @NonNull
+  @Nonnull
   private Option<byte[]> content;
   @Getter(AccessLevel.PROTECTED)
   @Nullable

@@ -554,7 +554,7 @@ public class HoodieTableConfig extends HoodieConfig {
         propsToDelete.forEach(propToDelete -> props.remove(propToDelete));
         checksum = storeProperties(props, out, cfgPath);
       }
-      log.warn(String.format("%s modified to: %s (at %s)", cfgPath.getName(), props, cfgPath.getParent()));
+      log.warn("{} modified to: {} (at {})", cfgPath.getName(), props, cfgPath.getParent());
 
       // 5. verify and remove backup.
       try (InputStream in = storage.open(cfgPath)) {

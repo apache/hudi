@@ -360,7 +360,7 @@ public class IncrementalQueryAnalyzer {
   /**
    * Represents the analyzed query context.
    */
-  @AllArgsConstructor
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
   @Getter
   public static class QueryContext {
 
