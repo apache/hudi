@@ -139,6 +139,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -940,8 +941,9 @@ public class HoodieTableMetadataUtil {
               Set<String> revivedKeys = revivedAndDeletedKeys.getLeft();
               Set<String> deletedKeys = revivedAndDeletedKeys.getRight();
               // Process revived keys to create updates
+              long instantTimeMillis = HoodieMetadataPayload.parseRecordIndexInstantTime(instantTime);
               List<HoodieRecord> revivedRecords = revivedKeys.stream()
-                  .map(recordKey -> HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partitionPath, fileId, instantTime, writesFileIdEncoding))
+                  .map(recordKey -> HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partitionPath, fileId, instantTimeMillis, writesFileIdEncoding))
                   .collect(Collectors.toList());
               // Process deleted keys to create deletes
               List<HoodieRecord> deletedRecords = deletedKeys.stream()
@@ -2499,8 +2501,39 @@ public class HoodieTableMetadataUtil {
       fileId = originalFileId;
     }
 
-    final java.util.Date instantDate = new java.util.Date(instantTime);
-    return new HoodieRecordGlobalLocation(partition, HoodieInstantTimeGenerator.formatDate(instantDate), fileId);
+    return new HoodieRecordGlobalLocation(partition, formatRecordIndexInstant(instantTime), fileId);
+  }
+
+  // The formatted instant of a record-index entry is a pure function of the entry's epoch millis
+  // and the JVM default time zone used by HoodieInstantTimeGenerator.formatDate, so cached strings
+  // are only valid for the zone they were formatted under. The cache is per thread because
+  // lookups run on concurrent executor task threads and decode per-record last-write instants,
+  // where a shared slot would just be eviction churn.
+  private static final int FORMATTED_INSTANT_CACHE_MAX_SIZE = 1024;
+  private static final ThreadLocal<FormattedInstantCache> FORMATTED_INSTANT_CACHE =
+      ThreadLocal.withInitial(FormattedInstantCache::new);
+
+  private static final class FormattedInstantCache {
+    private ZoneId zoneId;
+    private final Map<Long, String> formattedByMillis = new HashMap<>();
+  }
+
+  private static String formatRecordIndexInstant(long instantTimeMillis) {
+    FormattedInstantCache cache = FORMATTED_INSTANT_CACHE.get();
+    ZoneId currentZoneId = ZoneId.systemDefault();
+    if (!currentZoneId.equals(cache.zoneId)) {
+      cache.formattedByMillis.clear();
+      cache.zoneId = currentZoneId;
+    }
+    String formatted = cache.formattedByMillis.get(instantTimeMillis);
+    if (formatted == null) {
+      if (cache.formattedByMillis.size() >= FORMATTED_INSTANT_CACHE_MAX_SIZE) {
+        cache.formattedByMillis.clear();
+      }
+      formatted = HoodieInstantTimeGenerator.formatDate(new java.util.Date(instantTimeMillis));
+      cache.formattedByMillis.put(instantTimeMillis, formatted);
+    }
+    return formatted;
   }
 
   /**
@@ -2615,6 +2648,8 @@ public class HoodieTableMetadataUtil {
                                                                         String instantTime,
                                                                         boolean isPartitionedRLI
   ) {
+    // the delete iterator never reads the instant time, so only the update path pays the parse
+    final long instantTimeMillis = forDelete ? -1L : HoodieMetadataPayload.parseRecordIndexInstantTime(instantTime);
     return new ClosableIterator<HoodieRecord>() {
       @Override
       public void close() {
@@ -2630,7 +2665,7 @@ public class HoodieTableMetadataUtil {
       public HoodieRecord next() {
         return forDelete
             ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next(), partition, isPartitionedRLI)
-            : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTime, 0);
+            : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTimeMillis, 0);
       }
     };
   }
