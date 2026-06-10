@@ -114,8 +114,9 @@ object DataSourceReadOptions {
     .noDefaultValue()
     .sinceVersion("0.9.0")
     .withDocumentation("Required when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL + "`. "
-      + "Represents the completion time to start incrementally pulling data from (exclusive). The completion time here need not "
-      + "necessarily correspond to an instant on the timeline. New data written with completion_time > START_COMMIT are fetched out. "
+      + "Represents the start point (exclusive) to begin incrementally pulling data from. Interpreted as completion time for "
+      + "table version 8 and later, or as requested time (instant time) for earlier table versions. The value need not "
+      + "necessarily correspond to an instant on the timeline. New data written strictly after START_COMMIT are fetched out. "
       + "For e.g: ‘20170901080000’ will get all new data written strictly after Sep 1, 2017 08:00AM.")
 
   val END_COMMIT: ConfigProperty[String] = ConfigProperty
