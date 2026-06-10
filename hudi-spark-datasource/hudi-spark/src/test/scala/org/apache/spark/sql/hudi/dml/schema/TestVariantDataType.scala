@@ -674,6 +674,192 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
     })
   }
 
+  test("Test Auto-Inferred Variant Shredding on COW") {
+    // Inference reuses Spark 4.1's InferVariantShreddingSchema (SPARK-53659); on Spark 4.0 the
+    // inferrer is absent from the classpath and writes silently stay unshredded.
+    assume(HoodieSparkUtils.gteqSpark4_1, "Variant shredding schema inference requires Spark 4.1 or higher")
+
+    withRecordType()(withTempDir { tmp =>
+      // Earlier tests may leave the force-test DDL in the session; force wins over inference.
+      spark.conf.unset("hoodie.parquet.variant.force.shredding.schema.for.test")
+      spark.conf.unset("hoodie.parquet.variant.write.shredding.enabled")
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  v1 variant,
+           |  v2 variant,
+           |  v3 variant,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'cow',
+           |  preCombineField = 'ts',
+           |  hoodie.parquet.variant.shredding.schema.inference.enabled = 'true'
+           | )
+        """.stripMargin)
+
+      // v1: consistent objects incl. a nested object and an avro-illegal key (dropped from
+      // typed_value, falls back to the residual value column). v2: mixed root types (inference
+      // declines). v3: all null (inference declines).
+      spark.sql(
+        s"""
+           |insert into $tableName values
+           |  (1, parse_json('{"a": 1, "b": "x", "bad-key": true, "nested": {"c": 5}}'), parse_json('1'), null, 1000),
+           |  (2, parse_json('{"a": 2, "b": "y", "bad-key": false, "nested": {"c": 6}}'), parse_json('"s"'), null, 1000)
+        """.stripMargin)
+      checkAnswer(s"select id, cast(v1 as string), cast(v2 as string), cast(v3 as string), ts from $tableName order by id")(
+        Seq(1, "{\"a\":1,\"b\":\"x\",\"bad-key\":true,\"nested\":{\"c\":5}}", "1", null, 1000),
+        Seq(2, "{\"a\":2,\"b\":\"y\",\"bad-key\":false,\"nested\":{\"c\":6}}", "\"s\"", null, 1000)
+      )
+
+      def assertInferredFooters(): Unit = {
+        val parquetFiles = listDataParquetFiles(tmp.getCanonicalPath)
+        assert(parquetFiles.nonEmpty, "Should have at least one data parquet file")
+        parquetFiles.foreach { filePath =>
+          val schema = readParquetSchema(filePath)
+          val v1Group = getFieldAsGroup(schema, "v1")
+          assert(groupContainsField(v1Group, "typed_value"),
+            s"v1 should be shredded with an inferred typed_value. Schema:\n$v1Group")
+          val typedValue = getFieldAsGroup(v1Group, "typed_value")
+          assert(groupContainsField(typedValue, "a") && groupContainsField(typedValue, "b")
+            && groupContainsField(typedValue, "nested"),
+            s"Inferred typed_value should contain a, b, nested. Schema:\n$typedValue")
+          assert(!groupContainsField(typedValue, "bad-key"),
+            s"Avro-illegal keys must be dropped from typed_value. Schema:\n$typedValue")
+          assert(!groupContainsField(getFieldAsGroup(schema, "v2"), "typed_value"),
+            "v2 has mixed root types; inference should decline")
+          assert(!groupContainsField(getFieldAsGroup(schema, "v3"), "typed_value"),
+            "v3 is all null; inference should decline")
+        }
+      }
+      assertInferredFooters()
+
+      // The update reads the shredded base (reconstruction on the AVRO path, native on SPARK),
+      // re-infers and writes a new shredded base file.
+      spark.sql(s"update $tableName set " +
+        "v1 = parse_json('{\"a\": 9, \"b\": \"z\", \"bad-key\": true, \"nested\": {\"c\": 7}}'), ts = 1001 " +
+        "where id = 1")
+      checkAnswer(s"select id, cast(v1 as string), cast(v2 as string), ts from $tableName order by id")(
+        Seq(1, "{\"a\":9,\"b\":\"z\",\"bad-key\":true,\"nested\":{\"c\":7}}", "1", 1001),
+        Seq(2, "{\"a\":2,\"b\":\"y\",\"bad-key\":false,\"nested\":{\"c\":6}}", "\"s\"", 1000)
+      )
+      assertInferredFooters()
+    })
+  }
+
+  test("Test Auto-Inferred Variant Shredding via MOR Compaction") {
+    assume(HoodieSparkUtils.gteqSpark4_1, "Variant shredding schema inference requires Spark 4.1 or higher")
+
+    withRecordType()(withTempDir { tmp =>
+      spark.conf.unset("hoodie.parquet.variant.force.shredding.schema.for.test")
+      spark.conf.unset("hoodie.parquet.variant.write.shredding.enabled")
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      // Log files always stay unshredded (inference applies to base files only); the inferred
+      // shredding materializes when inline compaction writes the base file.
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  v variant,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'mor',
+           |  preCombineField = 'ts',
+           |  hoodie.parquet.variant.shredding.schema.inference.enabled = 'true',
+           |  hoodie.index.type = 'INMEMORY',
+           |  hoodie.compact.inline = 'true',
+           |  hoodie.compact.inline.max.delta.commits = '3'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values " + "(1, parse_json('{\"key\":\"value1\"}'), 1000)")
+      spark.sql(s"insert into $tableName values " + "(2, parse_json('{\"key\":\"value2\"}'), 1000)")
+      assertResult(true)(DataSourceTestUtils.isLogFileOnly(tablePath))
+
+      // 3rd commit triggers inline compaction; the base file is written with inferred shredding.
+      spark.sql(s"insert into $tableName values " + "(3, parse_json('{\"key\":\"value3\"}'), 1000)")
+      assertResult(false)(DataSourceTestUtils.isLogFileOnly(tablePath))
+
+      checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "{\"key\":\"value1\"}", 1000),
+        Seq(2, "{\"key\":\"value2\"}", 1000),
+        Seq(3, "{\"key\":\"value3\"}", 1000)
+      )
+
+      val parquetFiles = listDataParquetFiles(tablePath)
+      assert(parquetFiles.nonEmpty, "Compaction should have produced a base parquet file")
+      parquetFiles.foreach { filePath =>
+        val schema = readParquetSchema(filePath)
+        val variantGroup = getFieldAsGroup(schema, "v")
+        assert(groupContainsField(variantGroup, "typed_value"),
+          s"Compacted base file should carry the inferred typed_value. Schema:\n$variantGroup")
+        assert(groupContainsField(getFieldAsGroup(variantGroup, "typed_value"), "key"),
+          s"Inferred typed_value should contain the key field. Schema:\n$variantGroup")
+      }
+    })
+  }
+
+  test("Test Auto-Inferred Variant Shredding with Bulk Insert Row Writer") {
+    assume(HoodieSparkUtils.gteqSpark4_1, "Variant shredding schema inference requires Spark 4.1 or higher")
+
+    // The row-writer path (HoodieInternalRowFileWriterFactory) is record-type independent.
+    withTempDir { tmp =>
+      spark.conf.unset("hoodie.parquet.variant.force.shredding.schema.for.test")
+      spark.conf.unset("hoodie.parquet.variant.write.shredding.enabled")
+      val tableName = generateTableName
+      withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert") {
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  v variant,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}'
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  type = 'cow',
+             |  preCombineField = 'ts',
+             |  hoodie.parquet.variant.shredding.schema.inference.enabled = 'true',
+             |  hoodie.datasource.write.row.writer.enable = 'true'
+             | )
+          """.stripMargin)
+
+        spark.sql(
+          s"""
+             |insert into $tableName values
+             |  (1, parse_json('{"a": 1, "b": "x"}'), 1000),
+             |  (2, parse_json('{"a": 2, "b": "y"}'), 1000)
+          """.stripMargin)
+      }
+
+      checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "{\"a\":1,\"b\":\"x\"}", 1000),
+        Seq(2, "{\"a\":2,\"b\":\"y\"}", 1000)
+      )
+
+      val parquetFiles = listDataParquetFiles(tmp.getCanonicalPath)
+      assert(parquetFiles.nonEmpty, "Should have at least one data parquet file")
+      parquetFiles.foreach { filePath =>
+        val schema = readParquetSchema(filePath)
+        val variantGroup = getFieldAsGroup(schema, "v")
+        assert(groupContainsField(variantGroup, "typed_value"),
+          s"Row-writer base file should carry the inferred typed_value. Schema:\n$variantGroup")
+        val typedValue = getFieldAsGroup(variantGroup, "typed_value")
+        assert(groupContainsField(typedValue, "a") && groupContainsField(typedValue, "b"),
+          s"Inferred typed_value should contain a and b. Schema:\n$typedValue")
+      }
+    }
+  }
+
   /**
    * Lists data parquet files in the table directory, excluding Hudi metadata files.
    */

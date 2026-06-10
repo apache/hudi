@@ -18,6 +18,7 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieSchemaConversionUtils}
+import org.apache.hudi.avro.VariantShreddingSchemaInferrer
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
@@ -286,6 +287,16 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
       val variant = new Variant(variantVal.getValue, variantVal.getMetadata)
       val shreddedValues = SparkShreddingUtils.castShredded(variant, variantShreddingSchema)
       writeStruct.accept(shreddedValues)
+    }
+  }
+
+  override def extractVariantBinary(row: SpecializedGetters, ordinal: Int): VariantShreddingSchemaInferrer.VariantSample = {
+    if (row.isNullAt(ordinal)) {
+      null
+    } else {
+      val variantVal = row.getVariant(ordinal)
+      // Defensive copies: Spark iterators reuse row instances and VariantVal exposes its backing arrays.
+      new VariantShreddingSchemaInferrer.VariantSample(variantVal.getValue.clone(), variantVal.getMetadata.clone())
     }
   }
 }

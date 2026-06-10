@@ -3087,4 +3087,91 @@ public class TestHoodieSchema {
     HoodieSchema.Variant unshreddedVariant = HoodieSchema.createVariant();
     assertFalse(unshreddedVariant.getPlainTypedValueSchema().isPresent());
   }
+
+  /** A spec-form shredded-field wrapper: {value: nullable bytes, typed_value: nullable type}. */
+  private static HoodieSchema specWrapper(String name, HoodieSchema typedValue) {
+    return HoodieSchema.createRecord(name, null, null, Arrays.asList(
+        HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES)),
+        HoodieSchemaField.of("typed_value", HoodieSchema.createNullable(typedValue))));
+  }
+
+  @Test
+  public void testGetPlainTypedValueSchemaNestedObjectRecursion() {
+    // Depth-2 spec form: typed_value { a: wrapper{value, typed_value: { b: wrapper{value, typed_value: long} }} }
+    HoodieSchema innerObject = HoodieSchema.createRecord("inner_tv", null, null,
+        Collections.singletonList(HoodieSchemaField.of("b",
+            HoodieSchema.createNullable(specWrapper("b_wrapper", HoodieSchema.create(HoodieSchemaType.LONG))))));
+    HoodieSchema topTypedValue = HoodieSchema.createRecord("typed_value", null, null,
+        Collections.singletonList(HoodieSchemaField.of("a",
+            HoodieSchema.createNullable(specWrapper("a_wrapper", innerObject)))));
+    // Nullable typed_value, as produced by the inferred-shredding splice.
+    HoodieSchema.Variant variant = HoodieSchema.createVariantShredded(HoodieSchema.createNullable(topTypedValue));
+
+    Option<HoodieSchema> plainOpt = variant.getPlainTypedValueSchema();
+    assertTrue(plainOpt.isPresent());
+    HoodieSchema plain = plainOpt.get();
+    assertEquals(HoodieSchemaType.RECORD, plain.getType());
+    assertEquals(1, plain.getFields().size());
+
+    HoodieSchema aPlain = plain.getFields().get(0).schema();
+    aPlain = aPlain.isNullable() ? aPlain.getNonNullType() : aPlain;
+    assertEquals(HoodieSchemaType.RECORD, aPlain.getType());
+    assertEquals(1, aPlain.getFields().size());
+
+    HoodieSchema bPlain = aPlain.getFields().get(0).schema();
+    bPlain = bPlain.isNullable() ? bPlain.getNonNullType() : bPlain;
+    assertEquals(HoodieSchemaType.LONG, bPlain.getType());
+  }
+
+  @Test
+  public void testGetPlainTypedValueSchemaValueOnlyWrapper() {
+    // A field whose wrapper has no typed_value stays untyped: plain form is VARIANT.
+    HoodieSchema valueOnlyWrapper = HoodieSchema.createRecord("untyped_wrapper", null, null,
+        Collections.singletonList(
+            HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES))));
+    HoodieSchema topTypedValue = HoodieSchema.createRecord("typed_value", null, null, Arrays.asList(
+        HoodieSchemaField.of("a", HoodieSchema.createNullable(specWrapper("a_wrapper", HoodieSchema.create(HoodieSchemaType.INT)))),
+        HoodieSchemaField.of("u", HoodieSchema.createNullable(valueOnlyWrapper))));
+    HoodieSchema.Variant variant = HoodieSchema.createVariantShredded(topTypedValue);
+
+    HoodieSchema plain = variant.getPlainTypedValueSchema().get();
+    assertEquals(HoodieSchemaType.RECORD, plain.getType());
+    HoodieSchema aPlain = plain.getFields().get(0).schema();
+    aPlain = aPlain.isNullable() ? aPlain.getNonNullType() : aPlain;
+    assertEquals(HoodieSchemaType.INT, aPlain.getType());
+    HoodieSchema uPlain = plain.getFields().get(1).schema();
+    uPlain = uPlain.isNullable() ? uPlain.getNonNullType() : uPlain;
+    assertEquals(HoodieSchemaType.VARIANT, uPlain.getType());
+  }
+
+  @Test
+  public void testGetPlainTypedValueSchemaArrayTypedValue() {
+    // Spec form for arrays: typed_value = array<wrapper{value, typed_value: string}>
+    HoodieSchema arrayTypedValue = HoodieSchema.createArray(
+        specWrapper("element_wrapper", HoodieSchema.create(HoodieSchemaType.STRING)));
+    HoodieSchema.Variant variant = HoodieSchema.createVariantShredded(arrayTypedValue);
+
+    HoodieSchema plain = variant.getPlainTypedValueSchema().get();
+    assertEquals(HoodieSchemaType.ARRAY, plain.getType());
+    HoodieSchema element = plain.getElementType();
+    element = element.isNullable() ? element.getNonNullType() : element;
+    assertEquals(HoodieSchemaType.STRING, element.getType());
+  }
+
+  @Test
+  public void testGetPlainTypedValueSchemaArrayWithValueOnlyElements() {
+    // Spark emits a REQUIRED value for array-element value-only wrappers (mixed-type elements
+    // decline typing); the plain form of such an array is array<variant>.
+    HoodieSchema valueOnlyElement = HoodieSchema.createRecord("element_wrapper", null, null,
+        Collections.singletonList(
+            HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.BYTES))));
+    HoodieSchema.Variant variant = HoodieSchema.createVariantShredded(
+        HoodieSchema.createArray(valueOnlyElement));
+
+    HoodieSchema plain = variant.getPlainTypedValueSchema().get();
+    assertEquals(HoodieSchemaType.ARRAY, plain.getType());
+    HoodieSchema element = plain.getElementType();
+    element = element.isNullable() ? element.getNonNullType() : element;
+    assertEquals(HoodieSchemaType.VARIANT, element.getType());
+  }
 }

@@ -19,6 +19,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping}
+import org.apache.hudi.avro.VariantShreddingSchemaInferrer
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.schema.HoodieSchema
@@ -532,6 +533,14 @@ trait SparkAdapter extends Serializable {
     shreddedStructType: StructType,
     writeStruct: Consumer[InternalRow]
   ): BiConsumer[SpecializedGetters, Integer]
+
+  /**
+   * Extracts the raw binaries of a variant column value from a row, as defensive copies.
+   * Used to sample variant binaries for shredding-schema inference.
+   *
+   * Returns null when the value is null or the Spark version has no variant support (3.x).
+   */
+  def extractVariantBinary(row: SpecializedGetters, ordinal: Int): VariantShreddingSchemaInferrer.VariantSample = null
 
   /**
    * Creates a [[HoodieMemoryStream]] wrapper around Spark's MemoryStream.
