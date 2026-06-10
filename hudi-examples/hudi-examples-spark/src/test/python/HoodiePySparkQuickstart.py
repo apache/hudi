@@ -236,7 +236,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Examples of various operations to perform on Hudi with PySpark",formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-t", "--table", action="store", required=True, help="the name of the table to create")
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("-p", "--package", action="store", help="the name of the hudi-spark-bundle package\n eg. \"org.apache.hudi:hudi-spark3.5-bundle_2.12:0.12.0\"")
+    group.add_argument("-p", "--package", action="store", help="the name of the hudi-spark-bundle package\n eg. \"org.apache.hudi:hudi-spark3.3-bundle_2.12:0.12.0\"")
     group.add_argument("-j", "--jar", action="store", help="the full path to hudi-spark-bundle .jar file\n eg. \"[HUDI_BASE_PATH]/packaging/hudi-spark-bundle/target/hudi-spark-bundle[VERSION].jar\"")
     args = vars(parser.parse_args())
     package = args["package"]

@@ -115,6 +115,7 @@ import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.sources.SqlSource;
 import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.sources.TestParquetDFSSourceEmptyBatch;
+import org.apache.hudi.utilities.sources.helpers.TestMercifulJsonToRowConverterBase;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy;
 import org.apache.hudi.utilities.streamer.StreamSync;
@@ -757,9 +758,15 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       String tableBasePath = basePath + "/testTimestampMillis";
       defaultSchemaProviderClassName = TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.class.getName();
 
-      TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.sourceSchema = HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA;
-      TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.targetSchema = HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA;
-      AbstractBaseTestSource.schemaStr = HoodieTestDataGenerator.TRIP_LOGICAL_TYPES_SCHEMA;
+      if (HoodieSparkUtils.isSpark3_3()) {
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.sourceSchema = HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS;
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.targetSchema = HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS;
+        AbstractBaseTestSource.schemaStr = HoodieTestDataGenerator.TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS;
+      } else {
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.sourceSchema = HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA;
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.targetSchema = HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA;
+        AbstractBaseTestSource.schemaStr = HoodieTestDataGenerator.TRIP_LOGICAL_TYPES_SCHEMA;
+      }
 
       // Insert data produced with Schema A, pass Schema A
       HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, Collections.singletonList(TestIdentityTransformer.class.getName()),
@@ -840,11 +847,20 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     try {
       //use v6 schema because decimal parsing iso 8859-1 support not available currently
-      TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.sourceSchema =
-          HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_V6;
-      TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.targetSchema =
-          HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_V6;
-      String schemaStr = HoodieTestDataGenerator.TRIP_LOGICAL_TYPES_SCHEMA_V6;
+      String schemaStr;
+      if (HoodieSparkUtils.isSpark3_3()) {
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.sourceSchema =
+            HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6;
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.targetSchema =
+            HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6;
+        schemaStr = HoodieTestDataGenerator.TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6;
+      } else {
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.sourceSchema =
+            HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_V6;
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.targetSchema =
+            HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_V6;
+        schemaStr = HoodieTestDataGenerator.TRIP_LOGICAL_TYPES_SCHEMA_V6;
+      }
       defaultSchemaProviderClassName =
           TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.class.getName();
       String tableBasePath = basePath + "testTimestampMillis_" + orderingField + "_" + recordType + "_" + tableType.name();
@@ -923,37 +939,39 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @ParameterizedTest
   @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
   public void testBackwardsCompatibility(HoodieTableVersion version) throws Exception {
-    String dirName = "colstats-upgrade-test-v" + version.versionCode();
-    String dataPath = basePath + "/" + dirName;
-    java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
-    HoodieTestUtils.extractZipToDirectory("col-stats/" + dirName + ".zip", zipOutput, getClass());
-    String tableBasePath = zipOutput.resolve("trips_logical_types_json").toString();
+    TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
+      String dirName = "colstats-upgrade-test-v" + version.versionCode();
+      String dataPath = basePath + "/" + dirName;
+      java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
+      HoodieTestUtils.extractZipToDirectory("col-stats/" + dirName + ".zip", zipOutput, getClass());
+      String tableBasePath = zipOutput.resolve("trips_logical_types_json").toString();
 
-    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
-        HoodieTestUtils.createMetaClient(storage, tableBasePath));
-    HoodieSchema tableSchema = tableSchemaResolver.getTableSchema(false);
-    Map<String, String> hudiOpts = new HashMap<>();
-    hudiOpts.put("hoodie.datasource.write.recordkey.field", "id");
-    logicalAssertions(tableSchema, tableBasePath, hudiOpts, version.versionCode());
+      TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
+          HoodieTestUtils.createMetaClient(storage, tableBasePath));
+      HoodieSchema tableSchema = tableSchemaResolver.getTableSchema(false);
+      Map<String, String> hudiOpts = new HashMap<>();
+      hudiOpts.put("hoodie.datasource.write.recordkey.field", "id");
+      logicalAssertions(tableSchema, tableBasePath, hudiOpts, version.versionCode());
 
-    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.emptyList(),
-        "placeholder", false, true, false, null, HoodieTableType.MERGE_ON_READ.name());
-    cfg.propsFilePath = zipOutput + "/hudi.properties";
-    cfg.schemaProviderClassName = "org.apache.hudi.utilities.schema.FilebasedSchemaProvider";
-    cfg.sourceOrderingFields = "timestamp";
-    cfg.sourceClassName = "org.apache.hudi.utilities.sources.JsonDFSSource";
-    cfg.targetTableName = "trips_logical_types_json";
-    cfg.configs.add("hoodie.streamer.source.dfs.root=" + zipOutput + "/data/data_6/");
-    cfg.configs.add(String.format(("%s=%s"), HoodieWriteConfig.WRITE_TABLE_VERSION.key(), version.versionCode()));
-    cfg.configs.add(String.format(("%s=%s"), HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "100"));
-    String schemaPath = zipOutput + "/schema.avsc";
-    cfg.configs.add(String.format(("%s=%s"), "hoodie.streamer.schemaprovider.source.schema.file", schemaPath));
-    cfg.configs.add(String.format(("%s=%s"), "hoodie.streamer.schemaprovider.target.schema.file", schemaPath));
-    cfg.forceDisableCompaction = true;
-    cfg.sourceLimit = 100_000;
-    cfg.ignoreCheckpoint = "12345";
-    syncOnce(cfg);
-    logicalAssertions(tableSchema, tableBasePath, hudiOpts, version.versionCode());
+      HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.emptyList(),
+          "placeholder", false, true, false, null, HoodieTableType.MERGE_ON_READ.name());
+      cfg.propsFilePath = zipOutput + "/hudi.properties";
+      cfg.schemaProviderClassName = "org.apache.hudi.utilities.schema.FilebasedSchemaProvider";
+      cfg.sourceOrderingFields = "timestamp";
+      cfg.sourceClassName = "org.apache.hudi.utilities.sources.JsonDFSSource";
+      cfg.targetTableName = "trips_logical_types_json";
+      cfg.configs.add("hoodie.streamer.source.dfs.root=" + zipOutput + "/data/data_6/");
+      cfg.configs.add(String.format(("%s=%s"), HoodieWriteConfig.WRITE_TABLE_VERSION.key(), version.versionCode()));
+      cfg.configs.add(String.format(("%s=%s"), HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "100"));
+      String schemaPath = zipOutput + "/schema.avsc";
+      cfg.configs.add(String.format(("%s=%s"), "hoodie.streamer.schemaprovider.source.schema.file", schemaPath));
+      cfg.configs.add(String.format(("%s=%s"), "hoodie.streamer.schemaprovider.target.schema.file", schemaPath));
+      cfg.forceDisableCompaction = true;
+      cfg.sourceLimit = 100_000;
+      cfg.ignoreCheckpoint = "12345";
+      syncOnce(cfg);
+      logicalAssertions(tableSchema, tableBasePath, hudiOpts, version.versionCode());
+    });
   }
 
   private void logicalAssertions(HoodieSchema tableSchema, String tableBasePath, Map<String, String> hudiOpts, int tableVersion) {
@@ -971,7 +989,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(HoodieSchemaType.TIMESTAMP, tsMicrosFieldSchema.getType());
     assertEquals(TimePrecision.MICROS, tsMicrosFieldSchema.getPrecision());
     assertTrue(tsMicrosFieldSchema.isUtcAdjusted());
-    if (tableVersion > 8) {
+    if (tableVersion > 8 && !HoodieSparkUtils.isSpark3_3()) {
       Option<HoodieSchemaField> localTsMillisFieldOpt = tableSchema.getField("local_ts_millis");
       assertTrue(localTsMillisFieldOpt.isPresent());
       HoodieSchema.Timestamp localTsMillisFieldSchema = (HoodieSchema.Timestamp) localTsMillisFieldOpt.get().schema();
@@ -1043,7 +1061,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertBoundaryCounts(df, "ts_micros > timestamp('2020-06-01 12:00:00.000001Z')", "ts_micros <= timestamp('2020-06-01 12:00:00.000001Z')", totalCount);
     assertBoundaryCounts(df, "ts_micros < timestamp('2020-06-01 11:59:59.999999Z')", "ts_micros >= timestamp('2020-06-01 11:59:59.999999Z')", totalCount);
 
-    if (tableVersion > 8) {
+    if (tableVersion > 8 && !HoodieSparkUtils.isSpark3_3()) {
       assertHalfSplit(df, "local_ts_millis > CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)", expectedHalf, tolerance, "local_ts_millis > threshold");
       assertHalfSplit(df, "local_ts_millis < CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)", expectedHalf, tolerance, "local_ts_millis < threshold");
       assertBoundaryCounts(df, "local_ts_millis > CAST('2015-05-20 12:34:56.001' AS TIMESTAMP_NTZ)", "local_ts_millis <= CAST('2015-05-20 12:34:56.001' AS TIMESTAMP_NTZ)", totalCount);
@@ -1092,79 +1110,81 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @ParameterizedTest
   @CsvSource(value = {"SIX,AVRO,CLUSTER", "EIGHT,AVRO,CLUSTER", "CURRENT,AVRO,NONE", "CURRENT,AVRO,CLUSTER", "CURRENT,SPARK,NONE", "CURRENT,SPARK,CLUSTER"})
   void testCOWLogicalRepair(String tableVersion, String recordType, String operation) throws Exception {
-    String dirName = "trips_logical_types_json_cow_write";
-    String dataPath = basePath + "/" + dirName;
-    java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
-    HoodieTestUtils.extractZipToDirectory("logical-repair/" + dirName + ".zip", zipOutput, getClass());
-    String tableBasePath = zipOutput.toString();
+    TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
+      String dirName = "trips_logical_types_json_cow_write";
+      String dataPath = basePath + "/" + dirName;
+      java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
+      HoodieTestUtils.extractZipToDirectory("logical-repair/" + dirName + ".zip", zipOutput, getClass());
+      String tableBasePath = zipOutput.toString();
 
-    TypedProperties properties = new TypedProperties();
-    String schemaPath = getClass().getClassLoader().getResource("logical-repair/schema.avsc").toURI().toString();
-    properties.setProperty("hoodie.streamer.schemaprovider.source.schema.file", schemaPath);
-    properties.setProperty("hoodie.streamer.schemaprovider.target.schema.file", schemaPath);
-    String inputDataPath = getClass().getClassLoader().getResource("logical-repair/cow_write_updates/2").toURI().toString();
-    properties.setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
+      TypedProperties properties = new TypedProperties();
+      String schemaPath = getClass().getClassLoader().getResource("logical-repair/schema.avsc").toURI().toString();
+      properties.setProperty("hoodie.streamer.schemaprovider.source.schema.file", schemaPath);
+      properties.setProperty("hoodie.streamer.schemaprovider.target.schema.file", schemaPath);
+      String inputDataPath = getClass().getClassLoader().getResource("logical-repair/cow_write_updates/2").toURI().toString();
+      properties.setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
 
-    String mergerClass = getMergerClassForRecordType(recordType);
-    String tableVersionString = getTableVersionCode(tableVersion);
+      String mergerClass = getMergerClassForRecordType(recordType);
+      String tableVersionString = getTableVersionCode(tableVersion);
 
-    properties.setProperty(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), mergerClass);
-    properties.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    properties.setProperty("hoodie.datasource.write.precombine.field", "timestamp");
-    properties.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
-    properties.setProperty("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator");
-    properties.setProperty("hoodie.cleaner.policy", "KEEP_LATEST_COMMITS");
-    properties.setProperty("hoodie.compact.inline", "false");
-    properties.setProperty("hoodie.metatata.enable", "true");
-    properties.setProperty("hoodie.parquet.small.file.limit", "-1");
-    properties.setProperty("hoodie.cleaner.commits.retained", "10");
-    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
+      properties.setProperty(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), mergerClass);
+      properties.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
+      properties.setProperty("hoodie.datasource.write.precombine.field", "timestamp");
+      properties.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
+      properties.setProperty("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator");
+      properties.setProperty("hoodie.cleaner.policy", "KEEP_LATEST_COMMITS");
+      properties.setProperty("hoodie.compact.inline", "false");
+      properties.setProperty("hoodie.metatata.enable", "true");
+      properties.setProperty("hoodie.parquet.small.file.limit", "-1");
+      properties.setProperty("hoodie.cleaner.commits.retained", "10");
+      properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
 
-    Option<TypedProperties> propt = Option.of(properties);
+      Option<TypedProperties> propt = Option.of(properties);
 
-    syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "456"), propt);
+      syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "456"), propt);
 
-    inputDataPath = getClass().getClassLoader().getResource("logical-repair/cow_write_updates/3").toURI().toString();
-    propt.get().setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
-    if ("CLUSTER".equals(operation)) {
-      propt.get().setProperty("hoodie.clustering.inline", "true");
-      propt.get().setProperty("hoodie.clustering.inline.max.commits", "1");
-      propt.get().setProperty("hoodie.clustering.plan.strategy.single.group.clustering.enabled", "true");
-      propt.get().setProperty("hoodie.clustering.plan.strategy.sort.columns", "ts_millis,_row_key");
-    }
-    syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "789"), propt);
-
-    String prevTimezone = sparkSession.conf().get("spark.sql.session.timeZone");
-    try {
-      sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
-      Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath);
-
-      assertDataframe(df, 15, 15);
-
+      inputDataPath = getClass().getClassLoader().getResource("logical-repair/cow_write_updates/3").toURI().toString();
+      propt.get().setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
       if ("CLUSTER".equals(operation)) {
-        // after we cluster, the raw parquet should be correct
-
-        // Validate raw parquet files
-        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-            .setConf(storage.getConf())
-            .setBasePath(tableBasePath)
-            .build();
-
-        HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
-        Option<HoodieInstant> latestInstant = completedCommitsTimeline.lastInstant();
-        assertTrue(latestInstant.isPresent(), "No completed commits found");
-
-        List<String> baseFilePaths = collectLatestBaseFilePaths(metaClient);
-
-        assertEquals(4, baseFilePaths.size());
-
-        // Read raw parquet files
-        Dataset<Row> rawParquetDf = sparkSession.read().parquet(baseFilePaths.toArray(new String[0]));
-        assertDataframe(rawParquetDf, 15, 15);
+        propt.get().setProperty("hoodie.clustering.inline", "true");
+        propt.get().setProperty("hoodie.clustering.inline.max.commits", "1");
+        propt.get().setProperty("hoodie.clustering.plan.strategy.single.group.clustering.enabled", "true");
+        propt.get().setProperty("hoodie.clustering.plan.strategy.sort.columns", "ts_millis,_row_key");
       }
-    } finally {
-      sparkSession.conf().set("spark.sql.session.timeZone", prevTimezone);
-    }
+      syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "789"), propt);
+
+      String prevTimezone = sparkSession.conf().get("spark.sql.session.timeZone");
+      try {
+        sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
+        Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath);
+
+        assertDataframe(df, 15, 15);
+
+        if ("CLUSTER".equals(operation)) {
+          // after we cluster, the raw parquet should be correct
+
+          // Validate raw parquet files
+          HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+              .setConf(storage.getConf())
+              .setBasePath(tableBasePath)
+              .build();
+
+          HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+          Option<HoodieInstant> latestInstant = completedCommitsTimeline.lastInstant();
+          assertTrue(latestInstant.isPresent(), "No completed commits found");
+
+          List<String> baseFilePaths = collectLatestBaseFilePaths(metaClient);
+
+          assertEquals(4, baseFilePaths.size());
+
+          // Read raw parquet files
+          Dataset<Row> rawParquetDf = sparkSession.read().parquet(baseFilePaths.toArray(new String[0]));
+          assertDataframe(rawParquetDf, 15, 15);
+        }
+      } finally {
+        sparkSession.conf().set("spark.sql.session.timeZone", prevTimezone);
+      }
+    });
   }
 
   @ParameterizedTest
@@ -1173,130 +1193,132 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       "CURRENT,AVRO,NONE,PARQUET", "CURRENT,AVRO,CLUSTER,PARQUET", "CURRENT,AVRO,COMPACT,PARQUET",
       "CURRENT,SPARK,NONE,PARQUET", "CURRENT,SPARK,CLUSTER,PARQUET", "CURRENT,SPARK,COMPACT,PARQUET"})
   void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType) throws Exception {
-    String tableSuffix;
-    String logFormatValue;
-    if ("AVRO".equals(logBlockType)) {
-      logFormatValue = "avro";
-      tableSuffix = "avro_log";
-    } else {
-      logFormatValue = "parquet";
-      tableSuffix = "parquet_log";
-    }
-
-    String dirName = "trips_logical_types_json_mor_write_" + tableSuffix;
-    String dataPath = basePath + "/" + dirName;
-    java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
-    HoodieTestUtils.extractZipToDirectory("logical-repair/" + dirName + ".zip", zipOutput, getClass());
-    String tableBasePath = zipOutput.toString();
-
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(storage.getConf())
-        .setBasePath(tableBasePath)
-        .build();
-
-    // validate no compaction and clustering instants present in the timeline
-    HoodieTimeline completedTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
-    assertFalse(completedTimeline.getInstants().stream().anyMatch(i -> i.getAction().equals(HoodieTimeline.COMPACTION_ACTION)));
-    assertFalse(completedTimeline.getInstants().stream().anyMatch(i -> i.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)));
-
-    TypedProperties properties = new TypedProperties();
-    String schemaPath = getClass().getClassLoader().getResource("logical-repair/schema.avsc").toURI().toString();
-    properties.setProperty("hoodie.streamer.schemaprovider.source.schema.file", schemaPath);
-    properties.setProperty("hoodie.streamer.schemaprovider.target.schema.file", schemaPath);
-    String inputDataPath = getClass().getClassLoader().getResource("logical-repair/mor_write_updates/5").toURI().toString();
-    properties.setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
-    String mergerClass = getMergerClassForRecordType(recordType);
-    String tableVersionString = getTableVersionCode(tableVersion);
-
-    properties.setProperty(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), mergerClass);
-    properties.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    properties.setProperty("hoodie.datasource.write.precombine.field", "timestamp");
-    properties.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
-    properties.setProperty("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator");
-    properties.setProperty("hoodie.cleaner.policy", "KEEP_LATEST_COMMITS");
-    properties.setProperty("hoodie.metatata.enable", "true");
-    properties.setProperty("hoodie.parquet.small.file.limit", "-1");
-    properties.setProperty("hoodie.cleaner.commits.retained", "10");
-    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
-    properties.setProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logFormatValue);
-
-    boolean disableCompaction;
-    if ("COMPACT".equals(operation)) {
-      properties.setProperty("hoodie.compact.inline", "true");
-      properties.setProperty("hoodie.compact.inline.max.delta.commits", "1");
-      disableCompaction = false;
-      // validate that there are no completed compaction (commit) instants in timeline.
-    } else {
-      properties.setProperty("hoodie.compact.inline", "false");
-      disableCompaction = true;
-    }
-
-    if ("CLUSTER".equals(operation)) {
-      properties.setProperty("hoodie.clustering.inline", "true");
-      properties.setProperty("hoodie.clustering.inline.max.commits", "1");
-      properties.setProperty("hoodie.clustering.plan.strategy.single.group.clustering.enabled", "true");
-      properties.setProperty("hoodie.clustering.plan.strategy.sort.columns", "ts_millis,_row_key");
-    }
-
-    Option<TypedProperties> propt = Option.of(properties);
-
-    syncOnce(prepCfgForMorLogicalRepair(tableBasePath, dirName, "123", disableCompaction), propt);
-
-    String prevTimezone = sparkSession.conf().get("spark.sql.session.timeZone");
-    try {
-      if (!HoodieSparkUtils.gteqSpark3_5()) {
-        sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "false");
+    TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
+      String tableSuffix;
+      String logFormatValue;
+      if ("AVRO".equals(logBlockType)) {
+        logFormatValue = "avro";
+        tableSuffix = "avro_log";
+      } else {
+        logFormatValue = "parquet";
+        tableSuffix = "parquet_log";
       }
-      sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
-      Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath);
 
-      assertDataframe(df, 12, 14);
+      String dirName = "trips_logical_types_json_mor_write_" + tableSuffix;
+      String dataPath = basePath + "/" + dirName;
+      java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
+      HoodieTestUtils.extractZipToDirectory("logical-repair/" + dirName + ".zip", zipOutput, getClass());
+      String tableBasePath = zipOutput.toString();
 
-      metaClient = HoodieTableMetaClient.builder()
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
           .setConf(storage.getConf())
           .setBasePath(tableBasePath)
           .build();
 
+      // validate no compaction and clustering instants present in the timeline
+      HoodieTimeline completedTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
+      assertFalse(completedTimeline.getInstants().stream().anyMatch(i -> i.getAction().equals(HoodieTimeline.COMPACTION_ACTION)));
+      assertFalse(completedTimeline.getInstants().stream().anyMatch(i -> i.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)));
+
+      TypedProperties properties = new TypedProperties();
+      String schemaPath = getClass().getClassLoader().getResource("logical-repair/schema.avsc").toURI().toString();
+      properties.setProperty("hoodie.streamer.schemaprovider.source.schema.file", schemaPath);
+      properties.setProperty("hoodie.streamer.schemaprovider.target.schema.file", schemaPath);
+      String inputDataPath = getClass().getClassLoader().getResource("logical-repair/mor_write_updates/5").toURI().toString();
+      properties.setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
+      String mergerClass = getMergerClassForRecordType(recordType);
+      String tableVersionString = getTableVersionCode(tableVersion);
+
+      properties.setProperty(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), mergerClass);
+      properties.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
+      properties.setProperty("hoodie.datasource.write.precombine.field", "timestamp");
+      properties.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
+      properties.setProperty("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator");
+      properties.setProperty("hoodie.cleaner.policy", "KEEP_LATEST_COMMITS");
+      properties.setProperty("hoodie.metatata.enable", "true");
+      properties.setProperty("hoodie.parquet.small.file.limit", "-1");
+      properties.setProperty("hoodie.cleaner.commits.retained", "10");
+      properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
+      properties.setProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logFormatValue);
+
+      boolean disableCompaction;
+      if ("COMPACT".equals(operation)) {
+        properties.setProperty("hoodie.compact.inline", "true");
+        properties.setProperty("hoodie.compact.inline.max.delta.commits", "1");
+        disableCompaction = false;
+        // validate that there are no completed compaction (commit) instants in timeline.
+      } else {
+        properties.setProperty("hoodie.compact.inline", "false");
+        disableCompaction = true;
+      }
+
       if ("CLUSTER".equals(operation)) {
-        // after we cluster, the raw parquet should be correct
-
-        // Validate raw parquet files
-        HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
-        Option<HoodieInstant> latestInstant = completedCommitsTimeline.lastInstant();
-        assertTrue(latestInstant.isPresent(), "No completed commits found");
-
-        List<String> baseFilePaths = collectLatestBaseFilePaths(metaClient);
-
-        assertEquals(3, baseFilePaths.size());
-
-        // Read raw parquet files
-        Dataset<Row> rawParquetDf = sparkSession.read().parquet(baseFilePaths.toArray(new String[0]));
-        assertDataframe(rawParquetDf, 12, 14);
-      } else if ("COMPACT".equals(operation)) {
-        // after compaction some files should be ok
-
-        // Validate raw parquet files
-        HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
-        Option<HoodieInstant> latestInstant = completedCommitsTimeline.lastInstant();
-        assertTrue(latestInstant.isPresent(), "No completed commits found");
-
-        List<String> baseFilePaths = collectLatestBaseFilePaths(metaClient);
-
-        assertEquals(7, baseFilePaths.size());
-
-        // Read raw parquet files
-        Dataset<Row> rawParquetDf = sparkSession.read().parquet(baseFilePaths.stream()
-            // only read the compacted ones, the others are still incorrect
-            .filter(path -> path.contains(latestInstant.get().requestedTime()))
-            .toArray(String[]::new));
-        assertDataframe(rawParquetDf, 2, 3);
+        properties.setProperty("hoodie.clustering.inline", "true");
+        properties.setProperty("hoodie.clustering.inline.max.commits", "1");
+        properties.setProperty("hoodie.clustering.plan.strategy.single.group.clustering.enabled", "true");
+        properties.setProperty("hoodie.clustering.plan.strategy.sort.columns", "ts_millis,_row_key");
       }
-    } finally {
-      sparkSession.conf().set("spark.sql.session.timeZone", prevTimezone);
-      if (!HoodieSparkUtils.gteqSpark3_5()) {
-        sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "true");
+
+      Option<TypedProperties> propt = Option.of(properties);
+
+      syncOnce(prepCfgForMorLogicalRepair(tableBasePath, dirName, "123", disableCompaction), propt);
+
+      String prevTimezone = sparkSession.conf().get("spark.sql.session.timeZone");
+      try {
+        if (!HoodieSparkUtils.gteqSpark3_5()) {
+          sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "false");
+        }
+        sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
+        Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath);
+
+        assertDataframe(df, 12, 14);
+
+        metaClient = HoodieTableMetaClient.builder()
+            .setConf(storage.getConf())
+            .setBasePath(tableBasePath)
+            .build();
+
+        if ("CLUSTER".equals(operation)) {
+          // after we cluster, the raw parquet should be correct
+
+          // Validate raw parquet files
+          HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+          Option<HoodieInstant> latestInstant = completedCommitsTimeline.lastInstant();
+          assertTrue(latestInstant.isPresent(), "No completed commits found");
+
+          List<String> baseFilePaths = collectLatestBaseFilePaths(metaClient);
+
+          assertEquals(3, baseFilePaths.size());
+
+          // Read raw parquet files
+          Dataset<Row> rawParquetDf = sparkSession.read().parquet(baseFilePaths.toArray(new String[0]));
+          assertDataframe(rawParquetDf, 12, 14);
+        } else if ("COMPACT".equals(operation)) {
+          // after compaction some files should be ok
+
+          // Validate raw parquet files
+          HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+          Option<HoodieInstant> latestInstant = completedCommitsTimeline.lastInstant();
+          assertTrue(latestInstant.isPresent(), "No completed commits found");
+
+          List<String> baseFilePaths = collectLatestBaseFilePaths(metaClient);
+
+          assertEquals(7, baseFilePaths.size());
+
+          // Read raw parquet files
+          Dataset<Row> rawParquetDf = sparkSession.read().parquet(baseFilePaths.stream()
+              // only read the compacted ones, the others are still incorrect
+              .filter(path -> path.contains(latestInstant.get().requestedTime()))
+              .toArray(String[]::new));
+          assertDataframe(rawParquetDf, 2, 3);
+        }
+      } finally {
+        sparkSession.conf().set("spark.sql.session.timeZone", prevTimezone);
+        if (!HoodieSparkUtils.gteqSpark3_5()) {
+          sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "true");
+        }
       }
-    }
+    });
   }
 
   public static void assertDataframe(Dataset<Row> df, int above, int below) {

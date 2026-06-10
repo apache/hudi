@@ -54,7 +54,17 @@ elif [[ -n "$MAVEN_BASE_URL" ]]; then
 fi
 
 # choose versions based on build profiles
-if [[ ${SPARK_RUNTIME} == 'spark3.4.3' ]]; then
+if [[ ${SPARK_RUNTIME} == 'spark3.3.4' ]]; then
+  HADOOP_VERSION=2.7.7
+  HIVE_VERSION=3.1.3
+  DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.17.1
+  SPARK_VERSION=3.3.4
+  SPARK_HADOOP_VERSION=2
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1171hive313spark334
+elif [[ ${SPARK_RUNTIME} == 'spark3.4.3' ]]; then
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
@@ -106,17 +116,12 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.13' ]];
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.20.1
   SPARK_VERSION=3.5.1
   SPARK_HADOOP_VERSION=3
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  if [[ ${FLINK_PROFILE} == 'flink1.19' ]]; then
-    IMAGE_TAG=flink1190hive313spark351scala213
-    FLINK_VERSION=1.19.0
-  else
-    IMAGE_TAG=flink1200hive313spark351scala213
-    FLINK_VERSION=1.20.1
-  fi
+  IMAGE_TAG=flink1200hive313spark351scala213
 elif [[ ${SPARK_RUNTIME} == 'spark4.0.0' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
   HADOOP_VERSION=3.4.0
   HIVE_VERSION=3.1.3
@@ -174,7 +179,12 @@ else
   HUDI_KAFKA_CONNECT_BUNDLE_NAME=hudi-kafka-connect-bundle
   HUDI_METASERVER_SERVER_BUNDLE_NAME=hudi-metaserver-server-bundle
 
-  if [[ ${SPARK_PROFILE} == 'spark3.4' ]]; then
+  if [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
+    HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.12
+    HUDI_SPARK_BUNDLE_NAME=hudi-spark3.3-bundle_2.12
+    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
+    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
+  elif [[ ${SPARK_PROFILE} == 'spark3.4' ]]; then
     HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.12
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3.4-bundle_2.12
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12

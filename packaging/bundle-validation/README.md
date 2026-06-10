@@ -39,17 +39,17 @@ the folder. Here are the docker commands to build the image by specifying differ
 ```shell
 docker build \
  --build-arg HIVE_VERSION=3.1.3 \
- --build-arg FLINK_VERSION=1.18.1 \
- --build-arg SPARK_VERSION=3.4.3 \
- --build-arg SPARK_HADOOP_VERSION=3 \
- -t hudi-ci-bundle-validation-base:flink1181hive313spark343 .
-docker image tag hudi-ci-bundle-validation-base:flink1181hive313spark343 apachehudi/hudi-ci-bundle-validation-base:flink1181hive313spark343
+ --build-arg FLINK_VERSION=1.15.3 \
+ --build-arg SPARK_VERSION=3.3.1 \
+ --build-arg SPARK_HADOOP_VERSION=2.7 \
+ -t hudi-ci-bundle-validation-base:flink1153hive313spark331 .
+docker image tag hudi-ci-bundle-validation-base:flink1153hive313spark331 apachehudi/hudi-ci-bundle-validation-base:flink1153hive313spark331
 ```
 
 To upload the image with the tag:
 
 ```shell
-docker push apachehudi/hudi-ci-bundle-validation-base:flink1181hive313spark343
+docker push apachehudi/hudi-ci-bundle-validation-base:flink1153hive313spark331
 ```
 
 Note that for each library like Hive and Spark, the download and extraction happen under one `RUN` instruction so that
