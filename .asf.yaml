@@ -100,7 +100,7 @@ github:
           - build-spark-java17 (scala-2.12, spark3.4, hudi-spark-datasource/hudi-spark3.4.x)
           - build-spark-java17 (scala-2.12, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
           - build-flink-java17 (scala-2.12, flink2.1, 1.11.4, 1.15.2)
-          - validate-bundles (scala-2.12, flink1.17, 1.11.4, 1.12.3, spark3.3, spark3.3.4)
+          - validate-bundles (scala-2.12, flink1.18, 1.11.4, 1.13.1, spark3.3, spark3.3.4)
           - validate-bundles (scala-2.12, flink1.18, 1.11.4, 1.13.1, spark3.4, spark3.4.3)
           - validate-bundles (scala-2.13, flink1.19, 1.11.4, 1.13.1, spark3.5, spark3.5.1)
           - validate-bundles (scala-2.13, flink1.20, 1.11.4, 1.13.1, spark3.5, spark3.5.1)

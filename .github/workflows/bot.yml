@@ -1184,9 +1184,9 @@ jobs:
             sparkProfile: 'spark3.4'
             sparkRuntime: 'spark3.4.3'
           - scalaProfile: 'scala-2.12'
-            flinkProfile: 'flink1.17'
+            flinkProfile: 'flink1.18'
             flinkAvroVersion: '1.11.4'
-            flinkParquetVersion: '1.12.3'
+            flinkParquetVersion: '1.13.1'
             sparkProfile: 'spark3.3'
             sparkRuntime: 'spark3.3.4'
 
