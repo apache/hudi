@@ -20,6 +20,8 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -27,6 +29,8 @@ import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
+import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
+import org.apache.hudi.utilities.sources.helpers.QueryRunner;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 
@@ -345,6 +349,87 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
     }
     Assertions.assertEquals(numPartitions, argumentCaptor.getAllValues());
     Assertions.assertEquals(numPartitions, argumentCaptorForMetrics.getAllValues());
+  }
+
+  /**
+   * Regression test: when the persisted checkpoint is `commit#fileKey` (mid-commit
+   * pagination state, e.g., the previous batch hit sourceLimit before exhausting the
+   * start commit's files), the next batch must re-include the start commit in its
+   * Spark scan so the remaining files can be discovered.
+   *
+   * <p>Uses a real {@link QueryRunner} against an on-disk Hudi events meta-table so
+   * the actual Spark V1 incremental read path is exercised. The mocked {@link QueryRunner}
+   * used by other tests in this file returns its input dataset unfiltered for the
+   * incremental branch and therefore cannot catch a START_COMMIT-handling regression.
+   *
+   * <p>Without passing previousInstant to START_COMMIT in
+   * {@code QueryRunner.runIncrementalQuery}, the V1 relation's
+   * {@code findInstantsInRange} ({@code (start, end]}) excludes the start commit, all
+   * rows past the checkpoint key are dropped, and the persisted checkpoint advances
+   * past them as a bare instant (silent data loss).
+   */
+  @Test
+  void testRealQueryRunnerResumesMidCommitPagination() throws IOException {
+    // One source commit with 5 file events (100B each), followed by a later commit to
+    // ensure the source timeline endInstant moves past the start commit.
+    String startCommit = "10";
+    String laterCommit = "20";
+    writeS3MetadataRecords(startCommit, Arrays.asList(
+        Pair.of("path/to/file-01.json", 100L),
+        Pair.of("path/to/file-02.json", 100L),
+        Pair.of("path/to/file-03.json", 100L),
+        Pair.of("path/to/file-04.json", 100L),
+        Pair.of("path/to/file-05.json", 100L)));
+    writeS3MetadataRecords(laterCommit);
+
+    TypedProperties props = setProps(READ_UPTO_LATEST_COMMIT);
+    props.setProperty(CloudSourceConfig.ENABLE_EXISTS_CHECK.key(), "false");
+    Mockito.when(mockCloudObjectsSelectorCommon.loadAsDataset(
+            Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt()))
+        .thenReturn(Option.empty());
+    Mockito.when(sourceProfileSupplier.getSourceProfile()).thenReturn(null);
+
+    // Real QueryRunner (not the harness's mock) so the actual Spark incremental read
+    // against the on-disk meta-table runs.
+    S3EventsHoodieIncrSource incrSource = new S3EventsHoodieIncrSource(
+        props, jsc(), spark(),
+        new QueryRunner(spark(), props),
+        new CloudDataFetcher(props, jsc(), spark(), metrics, mockCloudObjectsSelectorCommon),
+        new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
+
+    // Resume from a mid-commit checkpoint: prior batch stopped at file-02 within
+    // commit 10. sourceLimit=250B means the next batch should consume file-03 plus
+    // file-04 (200B cumulative) and stop before file-05 (would exceed the limit).
+    Checkpoint resumeFrom = new StreamerCheckpointV1(startCommit + "#path/to/file-02.json");
+    Pair<Option<Dataset<Row>>, Checkpoint> result = incrSource.fetchNextBatch(Option.of(resumeFrom), 250L);
+
+    Assertions.assertEquals(
+        new StreamerCheckpointV1(startCommit + "#path/to/file-04.json"),
+        result.getRight(),
+        "After mid-commit pagination, next batch must continue within the start commit "
+            + "(file-03 + file-04 = 200B under the 250B sourceLimit), not skip past it to "
+            + "the next source commit as a bare instant.");
+
+    // Verify the (commit_time||object_key) > 'commit#fileKey' filter selected exactly
+    // file-03 and file-04: file-01 and file-02 are at or below the resume key, file-05
+    // exceeds the sourceLimit budget, and laterCommit's record must not be reached.
+    // Captures the metadata passed to downstream file loading. If the bug recurs (Spark
+    // scan excludes the start commit), this would capture only laterCommit's record or
+    // nothing at all.
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<CloudObjectMetadata>> captor = ArgumentCaptor.forClass((Class) List.class);
+    verify(mockCloudObjectsSelectorCommon).loadAsDataset(
+        Mockito.any(), captor.capture(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt());
+    List<String> selectedPaths = captor.getValue().stream()
+        .map(CloudObjectMetadata::getPath)
+        .sorted()
+        .collect(java.util.stream.Collectors.toList());
+    Assertions.assertEquals(2, selectedPaths.size(),
+        "Filter must select exactly 2 files (file-03 and file-04). Got: " + selectedPaths);
+    Assertions.assertTrue(selectedPaths.get(0).endsWith("/path/to/file-03.json"),
+        "First selected path should be file-03.json (after-key filter + ordering). Got: " + selectedPaths.get(0));
+    Assertions.assertTrue(selectedPaths.get(1).endsWith("/path/to/file-04.json"),
+        "Second selected path should be file-04.json (sourceLimit cut). Got: " + selectedPaths.get(1));
   }
 
   @Test

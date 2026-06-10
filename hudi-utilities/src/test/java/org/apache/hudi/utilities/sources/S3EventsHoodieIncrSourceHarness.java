@@ -222,13 +222,22 @@ public class S3EventsHoodieIncrSourceHarness extends SparkClientFunctionalTestHa
   }
 
   protected Pair<String, List<HoodieRecord>> writeS3MetadataRecords(String commitTime) throws IOException {
+    return writeS3MetadataRecords(commitTime, Collections.singletonList(Pair.of("data-file-1.json", 1L)));
+  }
+
+  /**
+   * Writes a single commit to the on-disk S3-events meta-table containing one record per
+   * (objectKey, objectSize) entry. Useful for tests that need a real source table whose
+   * single commit holds enough records to force mid-commit pagination under sourceLimit.
+   */
+  protected Pair<String, List<HoodieRecord>> writeS3MetadataRecords(String commitTime,
+                                                                    List<Pair<String, Long>> keysAndSizes) throws IOException {
     HoodieWriteConfig writeConfig = getWriteConfig();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
-
       WriteClientTestUtils.startCommitWithTime(writeClient, commitTime);
-      List<HoodieRecord> s3MetadataRecords = Arrays.asList(
-          generateS3EventMetadata(commitTime, "bucket-1", "data-file-1.json", 1L)
-      );
+      List<HoodieRecord> s3MetadataRecords = keysAndSizes.stream()
+          .map(p -> generateS3EventMetadata(commitTime, "bucket-1", p.getLeft(), p.getRight()))
+          .collect(Collectors.toList());
       List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(s3MetadataRecords, 1), commitTime).collect();
       writeClient.commit(commitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
       assertNoWriteErrors(statusList);
