@@ -342,8 +342,8 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     // read against the on-disk meta-table runs.
     GcsEventsHoodieIncrSource incrSource = new GcsEventsHoodieIncrSource(
         props, jsc(), spark(),
-        new QueryRunner(spark(), props),
         new CloudDataFetcher(props, jsc(), spark(), metrics, cloudObjectsSelectorCommon),
+        new QueryRunner(spark(), props),
         new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
 
     // Resume from a mid-commit checkpoint: prior batch stopped at file-02 in commit 10.
