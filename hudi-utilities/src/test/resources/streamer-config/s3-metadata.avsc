@@ -21,11 +21,6 @@
   "namespace": "hoodie.source",
   "fields": [
     {
-      "name": "partition_path",
-      "type": ["null", "string"],
-      "default": null
-    },
-    {
       "name": "awsRegion",
       "type": ["null", "string"],
       "default": null

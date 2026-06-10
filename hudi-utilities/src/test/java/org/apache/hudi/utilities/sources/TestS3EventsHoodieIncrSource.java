@@ -20,6 +20,8 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
@@ -34,6 +36,7 @@ import org.apache.hudi.utilities.sources.helpers.QueryRunner;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Assertions;
@@ -51,7 +54,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -352,13 +357,20 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
   }
 
   /**
-   * Resume from `commit#fileKey` must re-include the start commit; runs on v6 and v8 source
-   * meta-tables since cloud event sources always use V1/requested-time regardless of version.
+   * Resume from `commit#fileKey` must re-include the start commit; runs on v6 and v8, COW and MOR
+   * source meta-tables since cloud event sources always use V1/requested-time regardless of version.
    */
   @ParameterizedTest
-  @ValueSource(strings = {"6", "8"})
-  void testRealQueryRunnerResumesMidCommitPagination(String sourceTableVersion) throws IOException {
-    metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), sourceTableVersion);
+  @CsvSource({"6,COPY_ON_WRITE", "8,COPY_ON_WRITE", "6,MERGE_ON_READ", "8,MERGE_ON_READ"})
+  void testRealQueryRunnerResumesMidCommitPagination(String sourceTableVersion, HoodieTableType tableType) throws IOException {
+    Properties tableProps = new Properties();
+    tableProps.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(true));
+    tableProps.put("hoodie.datasource.write.recordkey.field", "_row_key");
+    tableProps.put("hoodie.datasource.write.partitionpath.field", "");
+    tableProps.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
+    tableProps.put(HoodieTableConfig.PARTITION_FIELDS.key(), "");
+    tableProps.put(WRITE_TABLE_VERSION.key(), sourceTableVersion);
+    metaClient = getHoodieMetaClient(storageConf(), basePath(), tableProps, tableType);
 
     String startCommit = "1";
     String laterCommit = "2";
@@ -369,6 +381,12 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
         Pair.of("path/to/file-04.json", 100L),
         Pair.of("path/to/file-05.json", 100L)));
     writeS3MetadataRecords(laterCommit);
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      // the second commit's record must land in a log file so the incremental read merges logs
+      boolean hasLogFiles = Arrays.stream(fs().listStatus(new Path(basePath())))
+          .anyMatch(f -> f.getPath().getName().contains(".log."));
+      Assertions.assertTrue(hasLogFiles, "Expected log files in the MOR source meta-table");
+    }
 
     TypedProperties props = setProps(READ_UPTO_LATEST_COMMIT);
     props.setProperty(CloudSourceConfig.ENABLE_EXISTS_CHECK.key(), "false");
