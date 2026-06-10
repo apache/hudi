@@ -114,20 +114,20 @@ object DataSourceReadOptions {
     .noDefaultValue()
     .sinceVersion("0.9.0")
     .withDocumentation("Required when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL + "`. "
-      + "Represents the start point (exclusive) to begin incrementally pulling data from. Interpreted as completion time for "
-      + "table version 8 and later, or as requested time (instant time) for earlier table versions. The value need not "
-      + "necessarily correspond to an instant on the timeline. New data written strictly after START_COMMIT are fetched out. "
-      + "For e.g: ‘20170901080000’ will get all new data written strictly after Sep 1, 2017 08:00AM.")
+      + "The start point (exclusive) to begin incrementally pulling data from. For source tables at version 8 or later this is "
+      + "a completion time; for earlier source table versions (e.g., version 6) it is a requested time (instant time). The "
+      + "value need not necessarily correspond to an instant on the timeline. New data written strictly after START_COMMIT are "
+      + "fetched out. For e.g. ‘20170901080000’ will get all new data written strictly after Sep 1, 2017 08:00AM.")
 
   val END_COMMIT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.end.instanttime")
     .noDefaultValue()
     .sinceVersion("0.9.0")
     .withDocumentation("Used when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL
-      + "`. Represents the completion time to limit incrementally fetched data to. When not specified latest commit "
-      + "completion time from timeline is assumed by default. When specified, new data written with "
-      + "completion_time <= END_COMMIT are fetched out. "
-      + "Point in time type queries make more sense with begin and end completion times specified.")
+      + "`. The end point (inclusive) to limit incrementally fetched data to. For source tables at version 8 or later this is "
+      + "a completion time; for earlier source table versions (e.g., version 6) it is a requested time (instant time). When "
+      + "not specified, the latest committed instant from the timeline is used. Point in time type queries make more sense "
+      + "with both begin and end specified.")
 
   val STREAMING_READ_TABLE_VERSION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.streaming.table.version")
