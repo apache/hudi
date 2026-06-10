@@ -20,7 +20,10 @@
 package org.apache.hudi.io.storage.hadoop;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.avro.VariantShreddingProvider;
+import org.apache.hudi.common.avro.AvroVariantSampleExtractor;
+import org.apache.hudi.common.avro.VariantSchemaUtils;
+import org.apache.hudi.common.avro.VariantShreddingRuntime;
+import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieParquetConfig;
@@ -40,6 +43,7 @@ import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.core.io.storage.HoodieHFileConfig;
 import org.apache.hudi.core.io.storage.HoodieOrcConfig;
+import org.apache.hudi.core.io.storage.VariantShreddingInferenceFileWriter;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.storage.HoodieStorage;
@@ -54,6 +58,7 @@ import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.List;
 import java.util.Properties;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_WRITER_TO_ALLOW_DUPLICATES;
@@ -68,6 +73,40 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
 
   @Override
   protected HoodieFileWriter newParquetFileWriter(
+      String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
+      TaskContextSupplier taskContextSupplier) throws IOException {
+    List<String> inferableColumns = VariantSchemaUtils.getInferableVariantColumns(config, schema);
+    if (!inferableColumns.isEmpty() && isShreddingProviderAvailable(config)) {
+      Option<VariantShreddingSchemaInferrer> inferrer = VariantShreddingRuntime.lookupInferrer();
+      if (inferrer.isPresent()) {
+        // The Avro write support derives its shredding from the schema argument, so the deferred
+        // creation below splices the inferred typed_value into it; the config stays untouched.
+        return new VariantShreddingInferenceFileWriter<>(
+            inferableColumns,
+            new AvroVariantSampleExtractor(inferableColumns),
+            inferrer.get(),
+            inferred -> createParquetFileWriter(instantTime, path, config,
+                VariantSchemaUtils.applyInferredShredding(schema, inferred), taskContextSupplier),
+            config.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE));
+      }
+    }
+    return createParquetFileWriter(instantTime, path, config, schema, taskContextSupplier);
+  }
+
+  /**
+   * Whether a {@link org.apache.hudi.common.avro.VariantShreddingProvider} will be available to the
+   * write support; the Avro path cannot shred without one, so inference must decline up front
+   * instead of failing at writer materialization (e.g. when the provider class is explicitly
+   * configured empty, which also disables auto-detection).
+   */
+  private static boolean isShreddingProviderAvailable(HoodieConfig config) {
+    if (config.contains(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key())) {
+      return !StringUtils.isNullOrEmpty(config.getString(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS));
+    }
+    return VariantShreddingRuntime.detectProviderClass().isPresent();
+  }
+
+  private HoodieFileWriter createParquetFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);
@@ -149,10 +188,8 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
     Properties props = TypedProperties.copy(config.getProps());
     // Auto-detect variant shredding provider from classpath if not explicitly configured
     if (!props.containsKey(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key())) {
-      String detectedClass = VariantShreddingProvider.detectProviderClassOnClasspath();
-      if (detectedClass != null) {
-        props.setProperty(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key(), detectedClass);
-      }
+      VariantShreddingRuntime.detectProviderClass().ifPresent(detected ->
+          props.setProperty(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key(), detected));
     }
     return (HoodieAvroWriteSupport) ReflectionUtils.loadClass(
         config.getStringOrDefault(HoodieStorageConfig.HOODIE_AVRO_WRITE_SUPPORT_CLASS),
@@ -163,5 +200,4 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         // typed_value, failing the write with "Null-value for required field: value".
         getAvroSchemaConverter((Configuration) storageConf.unwrapAs(Configuration.class)).convert(effectiveSchema), schema, filter, props);
   }
-
 }
