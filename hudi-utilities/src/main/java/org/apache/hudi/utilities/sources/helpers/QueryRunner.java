@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -42,7 +41,6 @@ import java.util.List;
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_TABLE_VERSION;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
-import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
 
 /**
  * This class is currently used only by s3 and gcs incr sources that supports size based batching
