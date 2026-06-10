@@ -352,21 +352,10 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
   }
 
   /**
-   * Regression test: when the persisted checkpoint is `commit#fileKey` (mid-commit
-   * pagination state, e.g., the previous batch hit sourceLimit before exhausting the
-   * start commit's files), the next batch must re-include the start commit in its
-   * Spark scan so the remaining files can be discovered.
-   *
-   * <p>Uses a real {@link QueryRunner} against an on-disk Hudi events meta-table so
-   * the actual Spark V1 incremental read path is exercised. The mocked {@link QueryRunner}
-   * used by other tests in this file returns its input dataset unfiltered for the
-   * incremental branch and therefore cannot catch a START_COMMIT-handling regression.
-   *
-   * <p>Without passing previousInstant to START_COMMIT in
-   * {@code QueryRunner.runIncrementalQuery}, the V1 relation's
-   * {@code findInstantsInRange} ({@code (start, end]}) excludes the start commit, all
-   * rows past the checkpoint key are dropped, and the persisted checkpoint advances
-   * past them as a bare instant (silent data loss).
+   * Resuming from a {@code commit#fileKey} checkpoint must re-include the start commit so
+   * files past the key are discovered. Uses a real {@link QueryRunner} against an on-disk
+   * meta-table; the mocked QueryRunner in other tests returns inputDs unfiltered and would
+   * hide a START_COMMIT-handling regression.
    */
   @Test
   void testRealQueryRunnerResumesMidCommitPagination() throws IOException {
