@@ -114,9 +114,9 @@ object DataSourceReadOptions {
     .noDefaultValue()
     .sinceVersion("0.9.0")
     .withDocumentation("Required when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL + "`. "
-      + "Represents the completion time to start incrementally pulling data from. The completion time here need not necessarily "
-      + "correspond to an instant on the timeline. New data written with completion_time >= START_COMMIT are fetched out. "
-      + "For e.g: ‘20170901080000’ will get all new data written on or after Sep 1, 2017 08:00AM.")
+      + "Represents the completion time to start incrementally pulling data from (exclusive). The completion time here need not "
+      + "necessarily correspond to an instant on the timeline. New data written with completion_time > START_COMMIT are fetched out. "
+      + "For e.g: ‘20170901080000’ will get all new data written strictly after Sep 1, 2017 08:00AM.")
 
   val END_COMMIT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.end.instanttime")
