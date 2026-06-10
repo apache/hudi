@@ -1152,10 +1152,15 @@ public class HoodieSchema implements Serializable {
     if (!hasFields()) {
       throw new IllegalStateException("Cannot get fields from schema type: " + type);
     }
-    if (fields == null) {
-      fields = Collections.unmodifiableList(avroSchema.getFields().stream().map(HoodieSchemaField::new).collect(Collectors.toList()));
+    // interned instances are shared across threads, so publish through an immutable wrapper
+    // (final-field freeze) and read/write the non-volatile cache field exactly once; a racy
+    // duplicate build is benign
+    List<HoodieSchemaField> localFields = fields;
+    if (localFields == null) {
+      localFields = Collections.unmodifiableList(avroSchema.getFields().stream().map(HoodieSchemaField::new).collect(Collectors.toList()));
+      fields = localFields;
     }
-    return fields;
+    return localFields;
   }
 
   /**
@@ -1195,11 +1200,16 @@ public class HoodieSchema implements Serializable {
   }
 
   private Map<String, HoodieSchemaField> getFieldMap() {
-    if (fieldMap == null) {
-      fieldMap = getFields().stream()
-          .collect(Collectors.toMap(HoodieSchemaField::name, field -> field));
+    // same publication pattern as getFields(): without the immutable wrapper, a thread racing on
+    // the plain HashMap could see a non-null map whose entries are not yet visible and miss a
+    // field that exists
+    Map<String, HoodieSchemaField> localFieldMap = fieldMap;
+    if (localFieldMap == null) {
+      localFieldMap = Collections.unmodifiableMap(getFields().stream()
+          .collect(Collectors.toMap(HoodieSchemaField::name, field -> field)));
+      fieldMap = localFieldMap;
     }
-    return fieldMap;
+    return localFieldMap;
   }
 
   /**

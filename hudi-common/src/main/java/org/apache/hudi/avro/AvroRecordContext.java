@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -70,8 +71,16 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   public static Object getFieldValueFromIndexedRecord(
       IndexedRecord record,
       String fieldName) {
-    HoodieSchema currentSchema = HoodieSchema.fromAvroSchema(record.getSchema());
+    // Interning returns the canonical wrapper for this schema, whose lazily built field list and
+    // field map survive across calls, so the per-record cost is a cache hit instead of an
+    // O(schema width) wrapper rebuild.
+    HoodieSchema currentSchema = HoodieSchemaCache.intern(HoodieSchema.fromAvroSchema(record.getSchema()));
     IndexedRecord currentRecord = record;
+    if (fieldName.indexOf('.') < 0) {
+      // single-segment field names are the overwhelmingly common case; skip the path split
+      Option<HoodieSchemaField> fieldOpt = currentSchema.getNonNullType().getField(fieldName);
+      return fieldOpt.isEmpty() ? null : currentRecord.get(fieldOpt.get().pos());
+    }
     String[] path = fieldName.split("\\.");
     for (int i = 0; i < path.length; i++) {
       currentSchema = currentSchema.getNonNullType();
