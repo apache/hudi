@@ -90,10 +90,12 @@ public class QueryRunner {
     log.info("Running incremental query");
 
     HoodieTableVersion tableVersion = HoodieTableMetaClient.builder().setConf(getStorageConf()).setBasePath(sourcePath).build().getTableConfig().getTableVersion();
+    // Use previousInstant so the start-exclusive incremental scan still includes the commit (startInstant),
+    // required to resume from checkpoint commit#fileKey for cloud event incremental source.
     return Pair.of(queryInfo, sparkSession.read().format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), queryInfo.getQueryType())
         .option(INCREMENTAL_READ_TABLE_VERSION().key(), tableVersion.versionCode())
-        .option(DataSourceReadOptions.START_COMMIT().key(), queryInfo.getStartInstant())
+        .option(DataSourceReadOptions.START_COMMIT().key(), queryInfo.getPreviousInstant())
         .option(DataSourceReadOptions.END_COMMIT().key(), queryInfo.getEndInstant())
         .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
             props.getString(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),

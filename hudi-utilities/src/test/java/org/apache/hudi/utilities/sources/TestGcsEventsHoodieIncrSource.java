@@ -48,6 +48,7 @@ import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.S3EventsHoodieIncrSourceHarness.TestSourceProfile;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
+import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
@@ -313,6 +314,84 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     Assertions.assertEquals(numPartitions, argumentCaptorForMetrics.getAllValues());
   }
 
+  /**
+   * Regression test: when the persisted checkpoint is `commit#fileKey` (mid-commit
+   * pagination state, e.g., the previous batch hit sourceLimit before exhausting the
+   * start commit's files), the next batch must re-include the start commit in its
+   * Spark scan so the remaining files can be discovered.
+   *
+   * <p>Uses a real {@link QueryRunner} against an on-disk Hudi events meta-table so
+   * the actual Spark V1 incremental read path is exercised. The mocked {@link QueryRunner}
+   * used by other tests in this file returns its input dataset unfiltered for the
+   * incremental branch and therefore cannot catch a START_COMMIT-handling regression.
+   *
+   * <p>Without passing previousInstant to START_COMMIT in
+   * {@code QueryRunner.runIncrementalQuery}, the V1 relation's
+   * {@code findInstantsInRange} ({@code (start, end]}) excludes the start commit, all
+   * rows past the checkpoint key are dropped, and the persisted checkpoint advances
+   * past them as a bare instant (silent data loss).
+   */
+  @Test
+  void testRealQueryRunnerResumesMidCommitPagination() throws IOException {
+    String startCommit = "10";
+    String laterCommit = "20";
+    writeGcsMetadataRecords(startCommit, Arrays.asList(
+        Pair.of("name/file-01.json", 100L),
+        Pair.of("name/file-02.json", 100L),
+        Pair.of("name/file-03.json", 100L),
+        Pair.of("name/file-04.json", 100L),
+        Pair.of("name/file-05.json", 100L)));
+    writeGcsMetadataRecords(laterCommit);
+
+    TypedProperties props = setProps(READ_UPTO_LATEST_COMMIT);
+    props.setProperty(CloudSourceConfig.ENABLE_EXISTS_CHECK.key(), "false");
+    when(cloudObjectsSelectorCommon.loadAsDataset(any(), any(), any(), eq(schemaProvider), org.mockito.Mockito.anyInt()))
+        .thenReturn(Option.empty());
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(null);
+
+    // Real QueryRunner (not the @Mock queryRunner) so the actual Spark incremental
+    // read against the on-disk meta-table runs.
+    GcsEventsHoodieIncrSource incrSource = new GcsEventsHoodieIncrSource(
+        props, jsc(), spark(),
+        new QueryRunner(spark(), props),
+        new CloudDataFetcher(props, jsc(), spark(), metrics, cloudObjectsSelectorCommon),
+        new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
+
+    // Resume from a mid-commit checkpoint: prior batch stopped at file-02 in commit 10.
+    // sourceLimit=250 means the next batch should consume file-03 plus file-04 (200B
+    // cumulative) and stop before file-05 (would exceed the limit).
+    Checkpoint resumeFrom = new StreamerCheckpointV1(startCommit + "#name/file-02.json");
+    Pair<Option<Dataset<Row>>, Checkpoint> result = incrSource.fetchNextBatch(Option.of(resumeFrom), 250L);
+
+    Assertions.assertEquals(
+        new StreamerCheckpointV1(startCommit + "#name/file-04.json"),
+        result.getRight(),
+        "After mid-commit pagination, next batch must continue within the start commit "
+            + "(file-03 + file-04 = 200B under the 250B sourceLimit), not skip past it to "
+            + "the next source commit as a bare instant.");
+
+    // Verify the (commit_time||object_key) > 'commit#fileKey' filter selected exactly
+    // file-03 and file-04: file-01 and file-02 are at or below the resume key, file-05
+    // exceeds the sourceLimit budget, and laterCommit's record must not be reached.
+    // Captures the metadata passed to downstream file loading. If the bug recurs (Spark
+    // scan excludes the start commit), this would capture only laterCommit's record or
+    // nothing at all.
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<CloudObjectMetadata>> captor = ArgumentCaptor.forClass((Class) List.class);
+    verify(cloudObjectsSelectorCommon).loadAsDataset(
+        any(), captor.capture(), any(), eq(schemaProvider), org.mockito.Mockito.anyInt());
+    List<String> selectedPaths = captor.getValue().stream()
+        .map(CloudObjectMetadata::getPath)
+        .sorted()
+        .collect(Collectors.toList());
+    Assertions.assertEquals(2, selectedPaths.size(),
+        "Filter must select exactly 2 files (file-03 and file-04). Got: " + selectedPaths);
+    Assertions.assertTrue(selectedPaths.get(0).endsWith("/name/file-03.json"),
+        "First selected path should be file-03.json (after-key filter + ordering). Got: " + selectedPaths.get(0));
+    Assertions.assertTrue(selectedPaths.get(1).endsWith("/name/file-04.json"),
+        "Second selected path should be file-04.json (sourceLimit cut). Got: " + selectedPaths.get(1));
+  }
+
   @Test
   public void testUnsupportedCheckpoint() {
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
@@ -387,6 +466,10 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   }
 
   private HoodieRecord getGcsMetadataRecord(String commitTime, String filename, String bucketName, String generation) {
+    return getGcsMetadataRecord(commitTime, filename, bucketName, generation, 370L);
+  }
+
+  private HoodieRecord getGcsMetadataRecord(String commitTime, String filename, String bucketName, String generation, long size) {
     String partitionPath = bucketName;
 
     String id = "id:" + bucketName + "/" + filename + "/" + generation;
@@ -412,7 +495,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     rec.put("metageneration", "1");
     rec.put("name", filename);
     rec.put("selfLink", selfLink);
-    rec.put("size", "370");
+    rec.put("size", Long.toString(size));
     rec.put("storageClass", "STANDARD");
     rec.put("timeCreated", "2022-08-29T05:52:55.869Z");
     rec.put("timeStorageClassUpdated", "2022-08-29T05:52:55.869Z");
@@ -442,6 +525,26 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
           getGcsMetadataRecord(commitTime, "data-file-3.json", "bucket-1", "1"),
           getGcsMetadataRecord(commitTime, "data-file-4.json", "bucket-1", "1")
       );
+      List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(gcsMetadataRecords, 1), commitTime).collect();
+      writeClient.commit(commitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
+      return Pair.of(commitTime, gcsMetadataRecords);
+    }
+  }
+
+  /**
+   * Writes a single commit containing one record per (objectKey, objectSize) entry. Used by
+   * tests that need a real on-disk source meta-table with multiple records in one commit to
+   * exercise mid-commit pagination under sourceLimit.
+   */
+  private Pair<String, List<HoodieRecord>> writeGcsMetadataRecords(String commitTime,
+                                                                   List<Pair<String, Long>> keysAndSizes) throws IOException {
+    HoodieWriteConfig writeConfig = getWriteConfig();
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
+      WriteClientTestUtils.startCommitWithTime(writeClient, commitTime);
+      List<HoodieRecord> gcsMetadataRecords = keysAndSizes.stream()
+          .map(p -> getGcsMetadataRecord(commitTime, p.getLeft(), "bucket-1", "1", p.getRight()))
+          .collect(Collectors.toList());
       List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(gcsMetadataRecords, 1), commitTime).collect();
       writeClient.commit(commitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
       assertNoWriteErrors(statusList);
