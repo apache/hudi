@@ -32,6 +32,7 @@ import org.mockito.MockitoAnnotations;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -102,8 +103,11 @@ public class TestPartitionAwareClusteringPlanStrategy {
     DummyPartitionAwareClusteringPlanStrategy nonIncrementalStrategy =
         new DummyPartitionAwareClusteringPlanStrategy(table, context, nonIncrementalConfig);
 
-    assertTrue(nonIncrementalStrategy.resolveMissingPartitionsFromCurrentWindow(
-        Arrays.asList("p1", "p3"), Arrays.asList("p1", "p2", "p3", "p4")).isEmpty());
+    List<String> nonIncrementalMissingPartitions = nonIncrementalStrategy.resolveMissingPartitionsFromCurrentWindow(
+        Arrays.asList("p1", "p3"), Arrays.asList("p1", "p2", "p3", "p4"));
+    assertTrue(nonIncrementalMissingPartitions.isEmpty());
+    nonIncrementalMissingPartitions.addAll(Collections.singletonList("p5"));
+    assertEquals(Collections.singletonList("p5"), nonIncrementalMissingPartitions);
   }
 
   @Test

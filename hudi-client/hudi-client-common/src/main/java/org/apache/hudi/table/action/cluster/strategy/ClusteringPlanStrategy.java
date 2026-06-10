@@ -147,7 +147,7 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
   protected List<String> getMissingPartitionsFromCurrentWindow(List<String> partitionsToSchedule,
                                                                List<String> partitionsInCurrentWindow) {
     if (!getWriteConfig().isIncrementalTableServiceEnabled()) {
-      return Collections.emptyList();
+      return new ArrayList<>();
     }
     Set<String> missingPartitions = new LinkedHashSet<>(partitionsInCurrentWindow);
     missingPartitions.removeAll(new HashSet<>(partitionsToSchedule));
