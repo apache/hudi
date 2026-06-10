@@ -224,11 +224,7 @@ public class S3EventsHoodieIncrSourceHarness extends SparkClientFunctionalTestHa
     return writeS3MetadataRecords(commitTime, Collections.singletonList(Pair.of("data-file-1.json", 1L)));
   }
 
-  /**
-   * Writes a single commit to the on-disk S3-events meta-table containing one record per
-   * (objectKey, objectSize) entry. Useful for tests that need a real source table whose
-   * single commit holds enough records to force mid-commit pagination under sourceLimit.
-   */
+  /** Writes one commit with one S3 event record per (objectKey, objectSize) entry. */
   protected Pair<String, List<HoodieRecord>> writeS3MetadataRecords(String commitTime,
                                                                     List<Pair<String, Long>> keysAndSizes) throws IOException {
     HoodieWriteConfig writeConfig = getWriteConfig();
