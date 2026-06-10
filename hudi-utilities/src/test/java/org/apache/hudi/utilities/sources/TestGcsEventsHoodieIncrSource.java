@@ -322,6 +322,11 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
    */
   @Test
   void testRealQueryRunnerResumesMidCommitPagination() throws IOException {
+    // Force the source meta-table to be at table version 6 so the V1 incremental relation
+    // (which interprets START_COMMIT as requested time and applies the start-exclusive
+    // findInstantsInRange filter) is the read path exercised.
+    metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), "6");
+
     String startCommit = "1";
     String laterCommit = "2";
     writeGcsMetadataRecords(startCommit, Arrays.asList(
