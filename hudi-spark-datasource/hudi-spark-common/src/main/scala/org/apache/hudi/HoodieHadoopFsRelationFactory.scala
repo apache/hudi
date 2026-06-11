@@ -227,22 +227,6 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
 
   protected lazy val fileStatusCache: FileStatusCache = FileStatusCache.getOrCreate(sparkSession)
 
-  /**
-   * Fields that must stay readable from the data files even when the query does not project
-   * them, passed to [[HoodieFileGroupReaderBasedFileFormat]]:
-   * <ul>
-   * <li>Partition fields listed here are read from the data files instead of being appended
-   * from the partition-path values, since the path encodes a transformed value (timestamp and
-   * custom key generators) or merging needs the original value (precombine as partition);</li>
-   * <li>Data fields listed here document a read dependency the query plan cannot see and must
-   * be backed by a filter from [[getRequiredFilters]]: the file format keeps filter-referenced
-   * columns readable when Spark's column pruning drops them and projects them away after
-   * filtering (e.g., the commit time meta field for the incremental span filters).</li>
-   * </ul>
-   * Fields needed only for log-file merging (record key, ordering fields) must NOT be declared
-   * here: the file group reader appends them to its read schema internally when a file slice
-   * actually requires merging.
-   */
   protected def getMandatoryFields: Seq[String] = partitionColumnsToRead
 
   protected def isMOR: Boolean
@@ -309,8 +293,6 @@ abstract class HoodieBaseMergeOnReadIncrementalHadoopFsRelationFactory(override 
                                                                        isBootstrap: Boolean)
   extends HoodieBaseHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
-  // the incremental span filters reference the commit time meta field, so it must stay
-  // readable even when the query does not project it
   override protected def getMandatoryFields: Seq[String] = Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++ partitionColumnsToRead
 
   override protected def isMOR: Boolean = true
@@ -371,10 +353,6 @@ class HoodieMergeOnReadCDCHadoopFsRelationFactory(override val sqlContext: SQLCo
 
   override def buildPartitionSchema(): StructType = StructType(Nil)
 
-  // CDC reads go through CDCFileGroupIterator with the CDC result schema, which does not
-  // contain the table fields, so no mandatory fields can or need to be declared
-  override protected def getMandatoryFields: Seq[String] = Seq.empty
-
   override protected def getRequiredFilters: Seq[Filter] = Seq.empty
 }
 
@@ -413,10 +391,8 @@ abstract class HoodieBaseCopyOnWriteIncrementalHadoopFsRelationFactory(override 
                                                                        isBootstrap: Boolean)
   extends HoodieBaseHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
-  // the incremental span filters reference the commit time meta field, so it must stay
-  // readable even when the query does not project it; record key and ordering fields are
-  // not declared since the relation factory path never merges at the relation level
-  override protected def getMandatoryFields: Seq[String] = Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++ partitionColumnsToRead
+  override protected def getMandatoryFields(): Seq[String] = Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++
+    orderingFields ++ partitionColumnsToRead
 
   override protected def isMOR: Boolean = false
 
@@ -477,9 +453,7 @@ class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLCo
 
   override def buildPartitionSchema(): StructType = StructType(Nil)
 
-  // CDC reads go through CDCFileGroupIterator with the CDC result schema, which does not
-  // contain the table fields, so no mandatory fields can or need to be declared
-  override protected def getMandatoryFields: Seq[String] = Seq.empty
-
   override protected def getRequiredFilters: Seq[Filter] = Seq.empty
 }
+
+
