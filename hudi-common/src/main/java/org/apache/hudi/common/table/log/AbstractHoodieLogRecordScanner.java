@@ -105,6 +105,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   private final String recordKeyField;
   private final Option<String> partitionPathFieldOpt;
   // Partition name override
+  @Getter
   private final Option<String> partitionNameOverrideOpt;
   // Stateless component for merging records
   protected final HoodieRecordMerger recordMerger;
@@ -552,10 +553,6 @@ public abstract class AbstractHoodieLogRecordScanner {
 
   public long getTotalLogBlocks() {
     return totalLogBlocks.get();
-  }
-
-  public Option<String> getPartitionNameOverride() {
-    return partitionNameOverrideOpt;
   }
 
   public long getTotalRollbacks() {

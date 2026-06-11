@@ -24,13 +24,13 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.OrderingValues;
 
 import lombok.AllArgsConstructor;
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
+import java.util.Objects;
 import java.util.function.UnaryOperator;
 
 /**
@@ -40,7 +40,6 @@ import java.util.function.UnaryOperator;
  */
 @AllArgsConstructor
 @Getter
-@EqualsAndHashCode
 public class BufferedRecord<T> implements Serializable {
 
   private String recordKey;
@@ -100,5 +99,25 @@ public class BufferedRecord<T> implements Serializable {
   public BufferedRecord<T> replaceRecordKey(String recordKey) {
     this.recordKey = recordKey;
     return this;
+  }
+
+  // Intentionally not using @EqualsAndHashCode: Lombok generates instanceof/canEqual based equality,
+  // while this class requires exact runtime-class equality via getClass()
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    BufferedRecord<?> that = (BufferedRecord<?>) o;
+    return Objects.equals(recordKey, that.recordKey) && Objects.equals(orderingValue, that.orderingValue)
+        && Objects.equals(record, that.record) && Objects.equals(schemaId, that.schemaId) && hoodieOperation == that.hoodieOperation;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(recordKey, orderingValue, record, schemaId, hoodieOperation);
   }
 }
