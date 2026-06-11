@@ -2427,6 +2427,36 @@ public class ITTestHoodieDataSource {
 
   @ParameterizedTest
   @ValueSource(strings = {"insert", "upsert", "bulk_insert"})
+  void testParquetDeeplyNestedRepeatedTypes(String operation) {
+    // Covers a ROW containing an ARRAY of ROW that itself contains a MAP, i.e.
+    // ROW<ARRAY<ROW<INT, MAP<STRING, INT>>>>, where the MAP is a repeated field
+    // nested inside another repeated field (repetition level >= 2).
+    // See HUDI-18491 for the original bug report on this schema shape.
+    TableEnvironment tableEnv = batchTableEnv;
+
+    String hoodieTableDDL = sql("t1")
+        .field("f_int int")
+        .field("f_row row(f_nested_array array<row(f_score int, f_map map<varchar(10), int>)>)")
+        .pkField("f_int")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, operation)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, TestSQL.DEEPLY_NESTED_REPEATED_TYPE_INSERT_T1);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    List<Row> expected = Arrays.asList(
+        row(1, row((Object) array(row(11, map("a", 1, "b", 2)), row(12, map("c", 3))))),
+        row(2, row((Object) array(row(21, map("d", 4))))),
+        row(3, row((Object) array(row(31, map("e", 5)), row(32, map("f", 6, "g", 7))))));
+    assertRowsEqualsUnordered(expected, result);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"insert", "upsert", "bulk_insert"})
   void testBuiltinFunctionWithCatalog(String operation) {
     TableEnvironment tableEnv = batchTableEnv;
 
