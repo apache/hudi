@@ -279,6 +279,15 @@ public abstract class HoodieReaderContext<T> {
   }
 
   /**
+   * Set the {@link InstantRange} filter. Used to bound the instants (base records and log blocks)
+   * that participate in the merge, e.g. an incremental query reads only up to its window end so that
+   * log blocks committed after the window are not merged in.
+   */
+  public void setInstantRange(Option<InstantRange> instantRange) {
+    this.instantRangeOpt = instantRange;
+  }
+
+  /**
    * Apply the {@link InstantRange} filter to the file record iterator.
    *
    * @param fileRecordIterator File record iterator.

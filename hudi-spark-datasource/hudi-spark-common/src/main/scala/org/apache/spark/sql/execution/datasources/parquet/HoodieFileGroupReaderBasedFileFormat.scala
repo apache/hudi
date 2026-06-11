@@ -23,13 +23,14 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieFileFormat
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.HoodieSchemaUtils
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, ParquetTableSchemaResolver}
+import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.util.{Option => HOption}
-import org.apache.hudi.common.util.collection.ClosableIterator
+import org.apache.hudi.common.util.collection.{ClosableIterator, CloseableFilterIterator}
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.exception.HoodieNotSupportedException
 import org.apache.hudi.internal.schema.InternalSchema
@@ -54,12 +55,13 @@ import org.apache.spark.sql.execution.datasources.orc.OrcUtils
 import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapColumnVector}
 import org.apache.spark.sql.hudi.MultipleColumnarFileFormatReader
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.sources.Filter
+import org.apache.spark.sql.sources.{Filter, In}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
+import java.util.function.{Predicate => JPredicate}
 
 import scala.collection.JavaConverters.mapAsJavaMapConverter
 
@@ -301,9 +303,38 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
             .getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
           fileSliceMapping.getSlice(fileGroupName) match {
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
+              // For incremental queries on a MOR file group that requires base/log merging, the
+              // commit-time span filter (`requiredFilters`) must NOT be pushed down into the file
+              // reads. Pushing it down drops the base-file row of a record whose latest base/log
+              // version is outside the incremental window, before the runtime merge runs. That breaks
+              // correctness whenever the merged result depends on data outside the window, e.g.
+              // event-time ordering (the existing higher-ordering version should win) and partial
+              // updates (unchanged columns must come from the base file) (HUDI #18943). Instead we
+              // read and merge the full file group, then filter the merged rows by commit time via
+              // `postMergeCommitTimeFilter`. We only switch to post-merge filtering when the filter
+              // can be built (commit-time field present); otherwise we keep the original pushdown.
+              val needsMerge = fileSlice.getLogFiles.findAny().isPresent
+              val postMergeCommitTimeFilter: Option[JPredicate[InternalRow]] =
+                if (isIncremental && needsMerge) {
+                  buildCommitTimeRowFilter(requiredFilters, requestedStructType)
+                } else {
+                  None
+                }
+              val readFilters = if (postMergeCommitTimeFilter.isDefined) Seq.empty[Filter] else requiredFilters
               val readerContext = new SparkFileFormatInternalRowReaderContext(
-                fileGroupBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig,
+                fileGroupBaseFileReader.value, filters, readFilters, storageConf, metaClient.getTableConfig,
                 sparkRequiredSchema = Some(requiredSchema))
+              // Bound the merge inputs to the incremental window end: read only base records and log
+              // blocks committed at or before the window's last commit, so a record updated again
+              // after the window is not merged with those later log blocks (HUDI #18943). The
+              // post-merge commit-time filter then selects the records changed within the window.
+              if (postMergeCommitTimeFilter.isDefined) {
+                incrementalWindowEnd(requiredFilters).foreach { windowEnd =>
+                  readerContext.setInstantRange(HOption.of(InstantRange.builder()
+                    .rangeType(InstantRange.RangeType.CLOSED_CLOSED).nullableBoundary(true)
+                    .endInstant(windowEnd).build()))
+                }
+              }
               readerContext.enableLogicalTimestampFieldRepair(storageConf.getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true))
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
@@ -328,9 +359,13 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                 .withLength(baseFileLength)
                 .withShouldUseRecordPosition(shouldUseRecordPosition)
                 .build()
+              val mergedIter: ClosableIterator[InternalRow] = postMergeCommitTimeFilter match {
+                case Some(predicate) => new CloseableFilterIterator[InternalRow](reader.getClosableIterator, predicate)
+                case None => reader.getClosableIterator
+              }
               // Append partition values to rows and project to output schema
               appendPartitionAndProject(
-                reader.getClosableIterator,
+                mergedIter,
                 requestedStructType,
                 remainingPartitionSchema,
                 outputSchema,
@@ -350,6 +385,48 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
             requiredSchema, partitionSchema, outputSchema, filters ++ requiredFilters, storageConf)
       }
       CloseableIteratorListener.addListener(iter)
+    }
+  }
+
+  /**
+   * The incremental window end (latest commit time in the window), extracted from the `In` filter on
+   * the commit-time metadata field in `requiredFilters`. Used to bound the merge inputs so that log
+   * blocks committed after the window are not merged. Returns None when no such filter is present.
+   */
+  private def incrementalWindowEnd(requiredFilters: Seq[Filter]): Option[String] = {
+    val commitTimes: Seq[String] = requiredFilters.collect {
+      case In(attr, values) if attr == HoodieRecord.COMMIT_TIME_METADATA_FIELD =>
+        values.filter(_ != null).map(_.toString).toSeq
+    }.flatten
+    if (commitTimes.isEmpty) None else Some(commitTimes.max)
+  }
+
+  /**
+   * Builds a predicate over merged rows that keeps only the records whose `_hoodie_commit_time`
+   * falls within the incremental query window encoded by `requiredFilters` (an `In` filter on the
+   * commit-time metadata field, produced by the incremental relations). Returns None when no such
+   * filter can be built (e.g. the commit-time field is not part of the read schema), in which case
+   * the caller keeps the original read-time filter pushdown.
+   */
+  private def buildCommitTimeRowFilter(requiredFilters: Seq[Filter],
+                                       readSchema: StructType): Option[JPredicate[InternalRow]] = {
+    if (requiredFilters.isEmpty) {
+      None
+    } else {
+      readSchema.getFieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD).flatMap { idx =>
+        val allowedCommitTimes: Set[String] = requiredFilters.collect {
+          case In(attr, values) if attr == HoodieRecord.COMMIT_TIME_METADATA_FIELD =>
+            values.filter(_ != null).map(_.toString).toSet
+        }.flatten.toSet
+        if (allowedCommitTimes.isEmpty) {
+          None
+        } else {
+          Some(new JPredicate[InternalRow] {
+            override def test(row: InternalRow): Boolean =
+              !row.isNullAt(idx) && allowedCommitTimes.contains(row.getUTF8String(idx).toString)
+          })
+        }
+      }
     }
   }
 
