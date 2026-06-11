@@ -2,11 +2,129 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2026-06-07T00:00:00.000Z</updated>
+    <updated>2026-06-10T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Stateless Global Upserts for Flink Streaming in Apache Hudi 1.2.0]]></title>
+        <id>https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0</id>
+        <link href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0"/>
+        <updated>2026-06-10T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Motivation]]></summary>
+        <content type="html"><![CDATA[<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="motivation">Motivation<a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#motivation" class="hash-link" aria-label="Direct link to Motivation" title="Direct link to Motivation" translate="no">​</a></h2>
+<p><a href="https://hudi.apache.org/releases/download#release-120" target="_blank" rel="noopener noreferrer" class="">Apache Hudi 1.2.0</a> introduces <a href="https://github.com/apache/hudi/pull/17610" target="_blank" rel="noopener noreferrer" class="">Record Level Index</a> (RLI) support for Flink writers, bringing scalable global upserts to streaming ingestion for the first time.</p>
+<p>Until now, Flink users had to choose between two indexing options. The <a href="https://hudi.apache.org/docs/ingestion_flink/#using-bucket-index" target="_blank" rel="noopener noreferrer" class="">bucket index</a> is fast and scalable, but only within a partition. The flink_state index can perform global lookups, but its index lives entirely inside Flink state, growing with table cardinality and becoming increasingly expensive to checkpoint, recover, and migrate.</p>
+<p>At large scale, the problem is not lookup correctness. It is operational sustainability. As tables grow to hundreds of millions or billions of records, index state can reach hundreds of gigabytes, turning savepoints, upgrades, and failover recovery into major operational events.</p>
+<p>Spark users have long addressed this problem with Hudi's Record Level Index (RLI), which stores record locations in the <a href="https://hudi.apache.org/docs/metadata/" target="_blank" rel="noopener noreferrer" class="">Metadata Table</a> (MDT). With Hudi 1.2.0, Flink gains the same capability: a global index that is part of the table itself rather than part of a single streaming job.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="a-concrete-example-the-orders-table">A concrete example: the orders table<a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#a-concrete-example-the-orders-table" class="hash-link" aria-label="Direct link to A concrete example: the orders table" title="Direct link to A concrete example: the orders table" translate="no">​</a></h3>
+<p>Take a typical e-commerce orders table:</p>
+<ul>
+<li class="">
+<p><strong>Partition column</strong>: datestr (order creation date)</p>
+</li>
+<li class="">
+<p><strong>Record key</strong>: order_id</p>
+<p>Inserts naturally land in the latest partition. But updates like status changes, fulfillment events, returns usually arrive <em>without</em> the original datestr. The upstream system knows the
+order_id changed; it doesn't always know which day's partition that order originally lived in.</p>
+<p>Without a global index, the writer has two bad choices:</p>
+<ol>
+<li class=""><strong>Bucket index</strong>: assume the update belongs to today's partition and write a duplicate. The original row in the older partition is now stale, and the table has two rows for the same order_id.</li>
+<li class=""><strong>flink_state index</strong>: works correctly, but every order_id the table has ever seen must live in Flink state. For a table with hundreds of millions of historical orders, this is a multi-hundred-GB state blob attached to the Flink job, and rebuilding it on recovery (or on migrating to a new pipeline) takes hours.</li>
+</ol>
+</li>
+</ul>
+<p>This is exactly the gap that Record Level Index (RLI) closes. Instead of storing record locations inside a single Flink job, RLI stores the global key-to-location mapping in Hudi's Metadata Table. Any writer can resolve an <code>order_id</code> to its current location regardless of partition, while keeping the index independent of Flink state.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="flink-rli">Flink RLI<a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#flink-rli" class="hash-link" aria-label="Direct link to Flink RLI" title="Direct link to Flink RLI" translate="no">​</a></h2>
+<p>RLI stores the key-to-file-group mapping in the Hudi metadata table (MDT), as a dedicated record_index partition. The mapping is:</p>
+<p>- Global: partition-agnostic; an update for any order_id resolves to the correct file group regardless of partition.
+- Engine-agnostic: Spark writes and reads RLI today; Flink now does too. A table indexed by Spark RLI can be picked up by a Flink streaming job, and vice versa, with no rebuild.
+- Decoupled from the writer's lifecycle: the index is part of the table, not part of the Flink job's keyed state. New pipelines can attach immediately; savepoints stay small; recovery
+doesn't replay the index.
+- Shardable: RLI is partitioned into N file groups (you choose), each holding a slice of the key space. Lookups and writes parallelize naturally.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="high-level-design">High level design<a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#high-level-design" class="hash-link" aria-label="Direct link to High level design" title="Direct link to High level design" translate="no">​</a></h3>
+<p>Incoming records are grouped by the same record-key layout the metadata table uses, so each Flink task only needs the relevant RLI shards. (A “shard” here is one RLI file group in the metadata table; the number of shards equals the configured RLI file-group count.) Flink then looks up record locations in mini-batches, uses a small local cache for records still in flight, and sends each record to the right write target (Figure 1).</p>
+<p>After routing, the data path and index path move together. The writer persists the data change and sends a compact record-location update to the metadata table. Hudi then commits the data and index results under the same <a href="https://hudi.apache.org/docs/timeline/" target="_blank" rel="noopener noreferrer" class="">instant</a>, so the table and its index advance as one consistent unit.</p>
+<div style="text-align:center"><img src="https://hudi.apache.org/assets/images/blog/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0/img1.png" alt="Figure 1. Index write flow." width="800"></div>
+<h1></h1>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="detailed-design">Detailed Design<a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#detailed-design" class="hash-link" aria-label="Direct link to Detailed Design" title="Direct link to Detailed Design" translate="no">​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="how-flink-finds-existing-records">How Flink Finds Existing Records<a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#how-flink-finds-existing-records" class="hash-link" aria-label="Direct link to How Flink Finds Existing Records" title="Direct link to How Flink Finds Existing Records" translate="no">​</a></h3>
+<p>When global RLI is enabled, Flink switches from a per-task state lookup to a mini-batched metadata-table lookup. Records are routed to the task responsible for the relevant record-index shard, so each task reads only the slice of the metadata table it needs. This keeps lookup work local and avoids asking every task to scan every shard (Figure 2).</p>
+<p>During streaming upserts and deletes, Flink buffers a small batch of records before consulting RLI. It first checks the local in-flight cache, then asks the metadata table for any missing record locations. Once each record’s previous location is known, the normal assignment logic can decide whether to update an existing file or write the record as a new insert.</p>
+<div style="text-align:center"><img src="https://hudi.apache.org/assets/images/blog/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0/img2.png" alt="Figure 2. RLI access pattern." width="800"></div>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="why-a-small-local-cache-still-exists">Why a Small Local Cache Still Exists<a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#why-a-small-local-cache-still-exists" class="hash-link" aria-label="Direct link to Why a Small Local Cache Still Exists" title="Direct link to Why a Small Local Cache Still Exists" translate="no">​</a></h3>
+<p>.Flink RLI is fundamentally table-backed, but a small checkpoint-scoped cache is still required to bridge the gap between in-flight updates and committed metadata. It remembers recent record-to-location changes that have already passed through the Flink pipeline but may not yet be visible in the committed metadata table. That matters when the same record appears more than once before the corresponding Hudi instant finishes committing; the later record still needs to route to the latest in-flight location (Figure 3).</p>
+<p>Each checkpoint produces a new <em>cache generation</em> — a snapshot of the record-to-location changes seen during that checkpoint. On checkpoint completion, Flink learns which commits are still in flight, keeps the cache generations that may still be needed, and refreshes its view of the metadata table. Older generations can then be cleaned up when memory pressure requires it. The result is a small correctness buffer for the commit gap plus a fresh table-backed read view after commits land.</p>
+<div style="text-align:center"><img src="https://hudi.apache.org/assets/images/blog/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0/img3.png" alt="Figure 3. Cache lookup and upsert." width="800"></div>
+<p>Cache eviction is intentionally lazy. A completed checkpoint does not immediately delete cache data. Instead, Flink asks the operator coordinator — Flink’s write coordinator on the JobManager, which drives Hudi commits — which Hudi instants are still in flight, and uses the earliest in-flight checkpoint as the retention boundary. Cache generations older than that boundary become evictable. They are actually closed and removed only when a memory check decides the cache needs space for a new checkpoint generation or for continued updates. This keeps recovery-safe entries around while still bounding memory usage (Figure 4).</p>
+<div style="text-align:center"><img src="https://hudi.apache.org/assets/images/blog/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0/img4.png" alt="Figure 4. Cache eviction workflow." width="800"></div>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="-1"><a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#-1" class="hash-link" aria-label="Direct link to -1" title="Direct link to -1" translate="no">​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="keeping-the-index-consistent-during-failures">Keeping the Index Consistent During Failures<a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#keeping-the-index-consistent-during-failures" class="hash-link" aria-label="Direct link to Keeping the Index Consistent During Failures" title="Direct link to Keeping the Index Consistent During Failures" translate="no">​</a></h3>
+<p>The tricky window is between a successful Flink checkpoint and a completed Hudi instant. A checkpoint can succeed while the asynchronous acknowledgment or commit step is delayed, lost, or interrupted by <a href="https://nightlies.apache.org/flink/flink-docs-stable/api/java/org/apache/flink/api/common/state/CheckpointListener.html" target="_blank" rel="noopener noreferrer" class="">task/job failover</a>. During that gap, data may be valid from Flink’s point of view, but the corresponding MDT index commit may still be in flight.</p>
+<p>The design handles this through checkpoint-aware recovery. Flink persists enough write metadata to retry commits that completed in Flink but did not finish in Hudi. After task failover or job restart, Hudi can recommit those pending instants and refresh the table state before new records continue reading from RLI.</p>
+<p>Flink also flushes pending mini-batches before checkpoint <a href="https://nightlies.apache.org/flink/flink-docs-master/docs/learn-flink/fault_tolerance/#how-does-state-snapshotting-work" target="_blank" rel="noopener noreferrer" class="">barriers</a>, so a data change and its matching index update stay within the same checkpoint boundary.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="how-index-updates-are-written">How Index Updates Are Written<a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#how-index-updates-are-written" class="hash-link" aria-label="Direct link to How Index Updates Are Written" title="Direct link to How Index Updates Are Written" translate="no">​</a></h3>
+<p>Index updates are written in batches rather than one record at a time. Before each checkpoint, or when the buffer is full, Flink deduplicates updates by record key so only the latest location is kept. It then writes those updates to the metadata table and reports the result to the same coordinator that commits the data files. This keeps the data commit and index commit aligned.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="routing-keeping-reads-and-writes-on-the-same-shard">Routing: Keeping Reads and Writes on the Same Shard<a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#routing-keeping-reads-and-writes-on-the-same-shard" class="hash-link" aria-label="Direct link to Routing: Keeping Reads and Writes on the Same Shard" title="Direct link to Routing: Keeping Reads and Writes on the Same Shard" translate="no">​</a></h3>
+<p>Global RLI uses the same record-key routing on both sides of the pipeline: first when records are looked up, and again when index updates are written. The task that owns a slice of the global record index also receives the matching updates for that slice.</p>
+<p>Every record key maps deterministically to an RLI shard:</p>
+<p><code>s = h(k) mod N_RLI</code></p>
+<p>The same shard assignment is reused for both lookups and index updates, ensuring that reads and writes for a given key are handled by the same slice of the index.</p>
+<p>In other words, the record key first chooses a stable RLI shard. That shard is then mapped to the bucket-assign task for lookup and to the index-writer task for metadata updates. This keeps the read side and write side aligned without requiring every task to touch every shard.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="compaction">Compaction<a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#compaction" class="hash-link" aria-label="Direct link to Compaction" title="Direct link to Compaction" translate="no">​</a></h2>
+<p>RLI adds write traffic to the metadata table, so metadata <a href="https://hudi.apache.org/docs/compaction" target="_blank" rel="noopener noreferrer" class="">compaction</a> becomes an important operational concern. (The benchmark uses a Merge-on-Read table, so both the data table and the always-MOR metadata table run compaction.) The <a href="https://github.com/apache/hudi/pull/17610" target="_blank" rel="noopener noreferrer" class="">RFC</a> keeps <a href="https://hudi.apache.org/docs/compaction/#metadata-table-compaction-trigger-strategy" target="_blank" rel="noopener noreferrer" class="">metadata compaction</a> asynchronous so ingestion can continue while metadata files are merged in the background. As the Perf and Benchmarking section below shows, data-table compaction stays moderate while metadata-table compaction produces the largest tail latency — the main metric to watch (Figure 5).</p>
+<div style="text-align:center"><img src="https://hudi.apache.org/assets/images/blog/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0/img5.png" alt="Figure 5. Index compaction flow." width="800"></div>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="performance-benchmarking">Performance Benchmarking<a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#performance-benchmarking" class="hash-link" aria-label="Direct link to Performance Benchmarking" title="Direct link to Performance Benchmarking" translate="no">​</a></h2>
+<p>Because RLI maintenance sits directly on the write path, the key question is whether a metadata-table-backed global index can sustain production streaming workloads without becoming a bottleneck.</p>
+<p>Our evaluation focused on three questions:</p>
+<ul>
+<li class="">Can Flink RLI sustain high-throughput ingestion against large existing tables?</li>
+<li class="">Can checkpoint completion remain comfortably within streaming SLAs?</li>
+<li class="">Does maintaining the metadata-table index materially impact write throughput or operational stability?</li>
+</ul>
+<p>The goal was not to compare RLI against bucket index. Bucket index is a partition-local solution and will always have lower lookup costs. Instead, the goal was to validate that global indexing on Flink is operationally viable at production scale.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="benchmark-environment">Benchmark Environment<a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#benchmark-environment" class="hash-link" aria-label="Direct link to Benchmark Environment" title="Direct link to Benchmark Environment" translate="no">​</a></h3>
+<p>Both benchmark runs used the same baseline environment:</p>
+<ul>
+<li class="">~1 billion existing records</li>
+<li class="">~1 TB table size on disk</li>
+<li class="">100 date partitions</li>
+<li class="">100 RLI shards</li>
+<li class="">Flink standalone cluster with 4 workers<!-- -->
+<ul>
+<li class="">64 vCPU / 256 GB RAM per worker</li>
+</ul>
+</li>
+</ul>
+<p>We evaluated two ingestion profiles:</p>
+<table><thead><tr><th style="text-align:left">Run</th><th style="text-align:left">Ingestion Rate</th><th style="text-align:left">Incremental Records</th><th style="text-align:left">Checkpoint Interval</th></tr></thead><tbody><tr><td style="text-align:left">Baseline</td><td style="text-align:left">20K records/sec</td><td style="text-align:left">50M</td><td style="text-align:left">5 minutes</td></tr><tr><td style="text-align:left">Aggressive</td><td style="text-align:left">50K records/sec</td><td style="text-align:left">100M</td><td style="text-align:left">3 minutes</td></tr></tbody></table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="results">Results<a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#results" class="hash-link" aria-label="Direct link to Results" title="Direct link to Results" translate="no">​</a></h3>
+<p>The aggressive workload successfully sustained 50,000 records per second against a table containing approximately 1 billion existing records while maintaining a 3-minute checkpoint SLA.</p>
+<p>Despite the increased ingestion pressure, checkpoints remained comfortably within budget, averaging 24.1 seconds end-to-end. The job completed the full 100 million-record workload without instability, source backpressure remained manageable, and ingestion throughput stayed near the target rate throughout the run.</p>
+<table><thead><tr><th>Metric</th><th>Average</th><th>P99</th></tr></thead><tbody><tr><td>Checkpoint SLA</td><td>180s</td><td>180s</td></tr><tr><td>Checkpoint E2E</td><td>24.1s</td><td>—</td></tr><tr><td>Minibatch Lookup Latency</td><td>3.35s</td><td>8.94s</td></tr><tr><td>Data Flush Latency</td><td>0.29s</td><td>1.43s</td></tr><tr><td>Index Flush Latency</td><td>2.33s</td><td>4.84s</td></tr></tbody></table>
+<p>Lookup latency increased relative to the baseline run due to higher minibatch fan-out and reduced cache locality. However, both data writes and index maintenance remained well below checkpoint deadlines, demonstrating that MDT-backed global indexing can operate within typical streaming SLAs at this scale.</p>
+<p>Note: The benchmark intentionally stresses the worst-case scenario. Many real-world CDC workloads exhibit strong temporal locality, causing repeated updates to a relatively small working set of keys. In those environments, cache hit rates and effective lookup latency are expected to improve further.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="takeaways-from-the-benchmarks">Takeaways from the benchmarks<a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#takeaways-from-the-benchmarks" class="hash-link" aria-label="Direct link to Takeaways from the benchmarks" title="Direct link to Takeaways from the benchmarks" translate="no">​</a></h3>
+<p>The benchmark demonstrates that MDT-backed global indexing is operationally viable for large-scale Flink ingestion. Even under the more aggressive workload, checkpoint completion remained comfortably within the configured SLA, while lookup and index maintenance costs stayed bounded.</p>
+<p>More importantly, index scalability is no longer tied to Flink state size. The global record index lives in the table itself, allowing new jobs to attach immediately, minimizing savepoint overhead, and enabling Spark and Flink writers to share the same index infrastructure.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="conclusion">Conclusion<a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#conclusion" class="hash-link" aria-label="Direct link to Conclusion" title="Direct link to Conclusion" translate="no">​</a></h2>
+<p>Flink RLI closes one of the longest-standing gaps between Spark and Flink in Hudi's indexing architecture. By moving the global record index into the Metadata Table, Hudi decouples index scalability from Flink state while preserving the correctness guarantees required for global upserts.</p>
+<p>For teams already using Spark RLI, Flink can now operate on the same indexed tables without rebuilding state. For teams relying on flink_state, RLI provides a path toward smaller savepoints, faster recovery, and a more operationally sustainable architecture.</p>
+<p>With Hudi 1.2.0, stateless global upserts are now a viable and robust capability for Flink streaming workloads.</p>]]></content>
+        <author>
+            <name>Danny Chan</name>
+            <uri>https://www.linkedin.com/in/danny-chan-682943225/</uri>
+        </author>
+        <category label="apache flink" term="apache flink"/>
+        <category label="indexing" term="indexing"/>
+        <category label="record level index" term="record level index"/>
+        <category label="rli" term="rli"/>
+        <category label="streaming" term="streaming"/>
+        <category label="metadata" term="metadata"/>
+        <category label="performance" term="performance"/>
+        <category label="release" term="release"/>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Apache Hudi 1.2: Expanding the Open Lakehouse for AI and Multimodal Data]]></title>
         <id>https://hudi.apache.org/blog/2026/06/07/apache-hudi-release-1-2-announcement</id>
@@ -1139,108 +1257,5 @@ where planning queries can take <a href="https://medium.com/the-data-therapy/how
         <category label="indexing" term="indexing"/>
         <category label="data lakehouse" term="data lakehouse"/>
         <category label="data skipping" term="data skipping"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[How FreeWheel Uses Apache Hudi to Power Its Data Lakehouse]]></title>
-        <id>https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse</id>
-        <link href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse"/>
-        <updated>2025-11-07T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Talk title slide]]></summary>
-        <content type="html"><![CDATA[<p><img decoding="async" loading="lazy" alt="Talk title slide" src="https://hudi.apache.org/assets/images/image1-352adf99bd976cab9ea093daab842339.png" width="1257" height="437" class="img_ev3q"></p>
-<p><em>This post summarizes a FreeWheel talk from the Apache Hudi Community Sync. Watch the recording on <a href="https://www.youtube.com/watch?v=hQNSf82o3Rk" target="_blank" rel="noopener noreferrer" class="">YouTube</a>.</em></p>
-<p><a href="https://www.freewheel.com/" target="_blank" rel="noopener noreferrer" class="">FreeWheel</a>, a division of Comcast, provides advanced video advertising solutions across TV and digital platforms. As the business scaled, FreeWheel faced growing challenges maintaining consistency, freshness, and operational efficiency in its data systems. To address these challenges, the team began transitioning from a legacy Lambda architecture to a modern, <a href="https://hudi.apache.org/" target="_blank" rel="noopener noreferrer" class="">Apache Hudi</a>-powered lakehouse approach.</p>
-<p>Their original stack, shown below, used multiple systems like <strong>Presto</strong>, <strong>ClickHouse</strong>, and <strong>Druid</strong> to serve analytical and real-time use cases. However, the architecture had some limitations:</p>
-<p><img decoding="async" loading="lazy" alt="Original multi-engine architecture" src="https://hudi.apache.org/assets/images/image2-b8e66c22453fcee2810fc23d8cb480d0.png" width="1999" height="848" class="img_ev3q"></p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="data-freshness-issues">Data freshness issues<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#data-freshness-issues" class="hash-link" aria-label="Direct link to Data freshness issues" title="Direct link to Data freshness issues" translate="no">​</a></h2>
-<ul>
-<li class="">Presto tables had a 3–4 hour delay, which was too slow for operational use cases.</li>
-<li class="">Only ClickHouse and Druid offered near‑real‑time access (~5 minutes) but added complexity.</li>
-</ul>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="complex-ingestion">Complex ingestion<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#complex-ingestion" class="hash-link" aria-label="Direct link to Complex ingestion" title="Direct link to Complex ingestion" translate="no">​</a></h2>
-<ul>
-<li class="">Data came from logs, CDC streams, files, and databases.</li>
-<li class="">Each system had its own ingestion pipeline and refresh logic.</li>
-</ul>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="query-performance-bottlenecks">Query performance bottlenecks<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#query-performance-bottlenecks" class="hash-link" aria-label="Direct link to Query performance bottlenecks" title="Direct link to Query performance bottlenecks" translate="no">​</a></h2>
-<ul>
-<li class="">With ~15 PB of data and 20M+ queries/day, scaling across three engines was costly and hard to operate.</li>
-</ul>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="use-case-1-lambda-architecture-and-its-drawbacks">Use Case 1: Lambda Architecture and Its Drawbacks<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#use-case-1-lambda-architecture-and-its-drawbacks" class="hash-link" aria-label="Direct link to Use Case 1: Lambda Architecture and Its Drawbacks" title="Direct link to Use Case 1: Lambda Architecture and Its Drawbacks" translate="no">​</a></h2>
-<p><img decoding="async" loading="lazy" alt="Lambda architecture overview" src="https://hudi.apache.org/assets/images/image3-ecdbeac000b14fa4bf639c7e0daf8654.png" width="1999" height="857" class="img_ev3q"></p>
-<p>FreeWheel initially followed a traditional Lambda architecture, which separated the processing of batch and real‑time data. This approach created several problems: it required duplicate pipelines for batch and real‑time processing (leading to inefficient engineering workflows), and it struggled to scale ClickHouse for large aggregates.</p>
-<p>By consolidating on Hudi as the table format for both streaming and historical data, FreeWheel unified the storage layer and eliminated duplicate pipelines. Hudi’s <a href="https://hudi.apache.org/docs/write_operations/#upsert" target="_blank" rel="noopener noreferrer" class="">upserts</a> by key and <a href="https://hudi.apache.org/docs/table_types/#incremental-queries" target="_blank" rel="noopener noreferrer" class="">incremental processing</a> make it possible to serve near–real‑time analytics. The result is simpler operations, consistent logic, and a platform that scales with data volume and query complexity.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="use-case-2-real-time-inventory-management">Use Case 2: Real-Time Inventory Management<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#use-case-2-real-time-inventory-management" class="hash-link" aria-label="Direct link to Use Case 2: Real-Time Inventory Management" title="Direct link to Use Case 2: Real-Time Inventory Management" translate="no">​</a></h2>
-<p><img decoding="async" loading="lazy" alt="Real-time inventory with Hudi" src="https://hudi.apache.org/assets/images/image4-d88e573a6dba93c4a1edd9e87a09fa5f.png" width="1999" height="1621" class="img_ev3q"></p>
-<p>Historically, daily ad inventory updates were a significant challenge. This method led to low forecasting accuracy and frequent delivery-performance mismatches.</p>
-<p>By modernizing the platform with Hudi, FreeWheel updates inventory within minutes. Order changes are applied as upserts to Hudi tables and become queryable shortly thereafter, dramatically improving forecast accuracy and reducing delivery‑vs‑forecast mismatches.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="use-case-3-scalable-audience-data-processing">Use Case 3: Scalable Audience Data Processing<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#use-case-3-scalable-audience-data-processing" class="hash-link" aria-label="Direct link to Use Case 3: Scalable Audience Data Processing" title="Direct link to Use Case 3: Scalable Audience Data Processing" translate="no">​</a></h2>
-<p><img decoding="async" loading="lazy" alt="Audience data architecture with Hudi snapshot" src="https://hudi.apache.org/assets/images/image5-61c7ba9d9a0b31e28ce22ae67eb12d08.png" width="941" height="746" class="img_ev3q"></p>
-<p>FreeWheel uses Aerospike to ingest audience segments for its online services, which involves handling high‑frequency, real‑time data. However, this setup brought a few key challenges—chiefly, the need for analytical insights on top of real‑time data and the need to efficiently manage bulk loads alongside frequent updates.</p>
-<p>To address these challenges, FreeWheel introduced Hudi into the data pipeline. Hudi maintains a snapshot table for all audience data, enabling more flexible and efficient data management. It supports <a href="https://hudi.apache.org/docs/write_operations/#bulk_insert" target="_blank" rel="noopener noreferrer" class="">bulk inserts</a>, <a href="https://hudi.apache.org/docs/write_operations/#upsert" target="_blank" rel="noopener noreferrer" class="">upserts</a>, and change data capture (CDC), enabling smoother handling of updates and large‑scale data loads. Using CDC, large batches of audience updates are applied incrementally to the snapshot. With Hudi in place, the back‑end analytics system became much stronger, while the responsiveness of the online systems was preserved. This setup also improved the stability of the online targeting system, as heavy analytical workloads were moved off the key‑value store, reducing pressure on Aerospike and enhancing overall performance.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="hudi-in-practice-1-billionscale-updates-for-audiencesegment-ingestion">Hudi in practice 1: Billion‑scale updates for audience‑segment ingestion<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#hudi-in-practice-1-billionscale-updates-for-audiencesegment-ingestion" class="hash-link" aria-label="Direct link to Hudi in practice 1: Billion‑scale updates for audience‑segment ingestion" title="Direct link to Hudi in practice 1: Billion‑scale updates for audience‑segment ingestion" translate="no">​</a></h2>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="use-case-overview">Use case overview<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#use-case-overview" class="hash-link" aria-label="Direct link to Use case overview" title="Direct link to Use case overview" translate="no">​</a></h3>
-<p>This implementation showcases how a large‑scale platform ingests and updates audience‑segmentation data at the billion‑record scale using Hudi tables.
-The architecture efficiently handles high‑frequency updates across more than 63,000 partitions and a table over 600 TB, with performance optimizations at both the data and infrastructure levels.</p>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="key-architecture-and-design-principles">Key architecture and design principles<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#key-architecture-and-design-principles" class="hash-link" aria-label="Direct link to Key architecture and design principles" title="Direct link to Key architecture and design principles" translate="no">​</a></h3>
-<p><img decoding="async" loading="lazy" alt="Audience ingestion architecture and scheduler" src="https://hudi.apache.org/assets/images/image6-c6d05709a20d20f096539322b86f933d.png" width="1333" height="1360" class="img_ev3q"></p>
-<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="partitioning-and-orchestration"><strong>Partitioning and orchestration</strong><a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#partitioning-and-orchestration" class="hash-link" aria-label="Direct link to partitioning-and-orchestration" title="Direct link to partitioning-and-orchestration" translate="no">​</a></h4>
-<p>FreeWheel uses the audience‑segment ID as the <a href="https://hudi.apache.org/docs/key_generation" target="_blank" rel="noopener noreferrer" class="">partition key</a>. Each partition can be processed independently, allowing many Spark jobs to run in parallel. Each job upserts data to the Hudi lakehouse table.</p>
-<p>A central scheduler allocates work based on input size, priority, and write concurrency limits. This enables dynamic scaling across more than 63,000 partitions, where per-partition input sizes range from 1 million to 100 billion records.</p>
-<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="decoupled-ingestion-pipeline"><strong>Decoupled ingestion pipeline</strong><a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#decoupled-ingestion-pipeline" class="hash-link" aria-label="Direct link to decoupled-ingestion-pipeline" title="Direct link to decoupled-ingestion-pipeline" translate="no">​</a></h4>
-<ul>
-<li class="">Scheduler: allocates resources based on input size and supports job priority, <a href="https://hudi.apache.org/docs/concurrency_control/" target="_blank" rel="noopener noreferrer" class="">multi-writer concurrency control</a>, and concurrency planning.</li>
-<li class="">Ingestion job: Spark jobs process data and write it to the Hudi segment table in the lakehouse.</li>
-</ul>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="challenges-of-input-data-at-scale">Challenges of input data at scale<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#challenges-of-input-data-at-scale" class="hash-link" aria-label="Direct link to Challenges of input data at scale" title="Direct link to Challenges of input data at scale" translate="no">​</a></h3>
-<ul>
-<li class="">Table size: over 600 TB.</li>
-<li class="">Partition count: 63,000 audience‑segment partitions.</li>
-<li class="">Data skew: massive variation in partition sizes, ranging from 1 million to 100 billion records.</li>
-</ul>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="metrics-and-performance-insights">Metrics and performance insights<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#metrics-and-performance-insights" class="hash-link" aria-label="Direct link to Metrics and performance insights" title="Direct link to Metrics and performance insights" translate="no">​</a></h3>
-<p><img decoding="async" loading="lazy" alt="Ingestion metrics and throughput" src="https://hudi.apache.org/assets/images/image7-a67a3aa2b20416cf15c3229553c626ce.png" width="1999" height="979" class="img_ev3q"></p>
-<ul>
-<li class="">Cost optimization<!-- -->
-<ul>
-<li class="">Unit cost on AWS: ~$0.10 per million records updated.</li>
-</ul>
-</li>
-<li class="">Throughput: the pipeline supports up to 12 million upserts per second.</li>
-</ul>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="operational-optimizations"><strong>Operational optimizations</strong><a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#operational-optimizations" class="hash-link" aria-label="Direct link to operational-optimizations" title="Direct link to operational-optimizations" translate="no">​</a></h3>
-<ul>
-<li class="">Handle S3 throttling by increasing partition parallelism. Hash partition prefixes and coordinate with AWS to raise per‑bucket request caps and remove I/O bottlenecks.</li>
-<li class="">Balance SLA and cost with adaptive resource provisioning through the scheduler; choose resources based on input size to keep jobs stable while controlling spend.</li>
-<li class="">Deduplicate before commit: group by record key, order by event timestamp, and write only the latest value to reduce churn and speed up writes.</li>
-</ul>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="hudi-in-practice-2-realtime-aggregated-ingestion-using-spark-streaming--clustering">Hudi in practice 2: Real‑time aggregated ingestion using Spark Streaming + clustering<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#hudi-in-practice-2-realtime-aggregated-ingestion-using-spark-streaming--clustering" class="hash-link" aria-label="Direct link to Hudi in practice 2: Real‑time aggregated ingestion using Spark Streaming + clustering" title="Direct link to Hudi in practice 2: Real‑time aggregated ingestion using Spark Streaming + clustering" translate="no">​</a></h2>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="pipeline-overview">Pipeline overview<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#pipeline-overview" class="hash-link" aria-label="Direct link to Pipeline overview" title="Direct link to Pipeline overview" translate="no">​</a></h3>
-<p>This implementation showcases an efficient pipeline where Spark Streaming ingests aggregated data into a Hudi lakehouse using the <a href="https://hudi.apache.org/docs/write_operations/#bulk_insert" target="_blank" rel="noopener noreferrer" class="">bulk_insert</a> operation, followed by <a href="https://hudi.apache.org/blog/2021/08/23/async-clustering/" target="_blank" rel="noopener noreferrer" class="">asynchronous clustering</a>.</p>
-<p><img decoding="async" loading="lazy" alt="Streaming ingestion and clustering flow" src="https://hudi.apache.org/assets/images/image8-20b16694604281c92df9a8a9079c22b5.png" width="1003" height="445" class="img_ev3q"></p>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="data-ingestion-flow">Data ingestion flow<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#data-ingestion-flow" class="hash-link" aria-label="Direct link to Data ingestion flow" title="Direct link to Data ingestion flow" translate="no">​</a></h3>
-<ul>
-<li class="">Kafka: raw events are streamed into Kafka.</li>
-<li class="">Spark SQL on Streaming: consumes Kafka messages and performs near‑real‑time aggregations.</li>
-<li class="">bulk_insert into Hudi lakehouse: aggregated data is appended using <a href="https://hudi.apache.org/docs/write_operations/#bulk_insert" target="_blank" rel="noopener noreferrer" class="">bulk_insert</a>.</li>
-<li class="">Clustering plan generation: clustering plans are created asynchronously.</li>
-<li class="">HoodieClusteringJob: a cron job runs hourly to execute <a href="https://hudi.apache.org/docs/clustering/" target="_blank" rel="noopener noreferrer" class="">clustering</a> and consolidate small files.</li>
-</ul>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="results-at-a-glance">Results at a glance<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#results-at-a-glance" class="hash-link" aria-label="Direct link to Results at a glance" title="Direct link to Results at a glance" translate="no">​</a></h3>
-<ul>
-<li class="">Massive file reduction: clustering reduced total file count by nearly 90%, minimizing small‑file pressure and improving metadata performance.</li>
-<li class="">Write throughput boost: increased by about 114% due to optimized file layout.</li>
-<li class="">Faster queries: Presto query performance improved significantly after clustering.</li>
-</ul>
-<p>However, Spark Streaming is a macro‑batch system, typically executing every one or two minutes. As a result, it does not trigger clustering jobs immediately but instead generates clustering plans for later execution. In production, clustering jobs are scheduled to run hourly and apply only to stable partitions, ensuring compaction and file optimization without impacting real‑time ingestion.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="conclusion">Conclusion<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#conclusion" class="hash-link" aria-label="Direct link to Conclusion" title="Direct link to Conclusion" translate="no">​</a></h2>
-<p>FreeWheel’s journey with Hudi transformed its data architecture—offering unified access, real‑time freshness, and scalable operations. The team credits Hudi’s community and feature set as key to its success.</p>
-<blockquote>
-<p>“We’re lucky to choose Hudi as our Lakehouse. Thanks to the powerful Hudi community!” – Bing Jiang</p>
-</blockquote>]]></content>
-        <author>
-            <name>The Hudi Community</name>
-        </author>
-        <category label="data lakehouse" term="data lakehouse"/>
-        <category label="freewheel" term="freewheel"/>
     </entry>
 </feed>
