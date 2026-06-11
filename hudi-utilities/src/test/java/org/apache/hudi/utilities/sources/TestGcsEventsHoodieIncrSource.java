@@ -354,7 +354,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
     TypedProperties props = setProps(READ_UPTO_LATEST_COMMIT);
     props.setProperty(CloudSourceConfig.ENABLE_EXISTS_CHECK.key(), "false");
-    when(cloudObjectsSelectorCommon.loadAsDataset(any(), any(), any(), eq(schemaProvider), org.mockito.anyInt()))
+    when(cloudObjectsSelectorCommon.loadAsDataset(any(), any(), any(), eq(schemaProvider), anyInt()))
         .thenReturn(Option.empty());
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(null);
 
@@ -378,7 +378,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<CloudObjectMetadata>> captor = ArgumentCaptor.forClass((Class) List.class);
     verify(cloudObjectsSelectorCommon).loadAsDataset(
-        any(), captor.capture(), any(), eq(schemaProvider), org.mockito.anyInt());
+        any(), captor.capture(), any(), eq(schemaProvider), anyInt());
     List<String> selectedPaths = captor.getValue().stream()
         .map(CloudObjectMetadata::getPath)
         .sorted()
