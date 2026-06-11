@@ -374,8 +374,10 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
     tableProps.put(WRITE_TABLE_VERSION.key(), sourceTableVersion);
     metaClient = getHoodieMetaClient(storageConf(), basePath(), tableProps, tableType);
 
-    String startCommit = "1";
-    String laterCommit = "2";
+    // timestamp-format instants: the incremental read normalizes START_COMMIT/END_COMMIT
+    // through HoodieSqlCommonUtils.formatIncrementalInstant, which rejects other formats
+    String startCommit = "20260601000001";
+    String laterCommit = "20260601000002";
     writeS3MetadataRecords(startCommit, Arrays.asList(
         Pair.of("path/to/file-01.json", 100L),
         Pair.of("path/to/file-02.json", 100L),
