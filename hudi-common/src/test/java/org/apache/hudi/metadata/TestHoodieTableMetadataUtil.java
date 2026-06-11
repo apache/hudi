@@ -386,7 +386,7 @@ class TestHoodieTableMetadataUtil {
     long instantMillis2 = HoodieMetadataPayload.parseRecordIndexInstantTime("20260610163045678");
     String expected1 = HoodieInstantTimeGenerator.formatDate(new Date(instantMillis1));
     String expected2 = HoodieInstantTimeGenerator.formatDate(new Date(instantMillis2));
-    // repeated and alternating instants exercise both the hit and miss paths of the format cache
+    // repeated and alternating instants must format consistently
     for (long instantMillis : new long[] {instantMillis1, instantMillis1, instantMillis2, instantMillis1}) {
       HoodieRecordGlobalLocation location = HoodieTableMetadataUtil.getLocationFromRecordIndexInfo(
           "p1", 1, -1L, -1L, -1, "some-raw-file-id", instantMillis);
@@ -395,8 +395,8 @@ class TestHoodieTableMetadataUtil {
       assertEquals("some-raw-file-id", location.getFileId());
     }
 
-    // formatDate follows the JVM default time zone, so cached entries must be invalidated when it
-    // changes; the two switches differ in offset, so at least one changes the formatted string
+    // formatDate follows the JVM default time zone, so the decoded location must track a zone
+    // change; the two switches differ in offset, so at least one changes the formatted string
     TimeZone originalTimeZone = TimeZone.getDefault();
     try {
       for (String zoneId : new String[] {"UTC", "Asia/Kolkata"}) {

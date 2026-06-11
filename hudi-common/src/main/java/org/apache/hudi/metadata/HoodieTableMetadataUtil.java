@@ -139,12 +139,12 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -2501,39 +2501,8 @@ public class HoodieTableMetadataUtil {
       fileId = originalFileId;
     }
 
-    return new HoodieRecordGlobalLocation(partition, formatRecordIndexInstant(instantTime), fileId);
-  }
-
-  // The formatted instant of a record-index entry is a pure function of the entry's epoch millis
-  // and the JVM default time zone used by HoodieInstantTimeGenerator.formatDate, so cached strings
-  // are only valid for the zone they were formatted under. The cache is per thread because
-  // lookups run on concurrent executor task threads and decode per-record last-write instants,
-  // where a shared slot would just be eviction churn.
-  private static final int FORMATTED_INSTANT_CACHE_MAX_SIZE = 1024;
-  private static final ThreadLocal<FormattedInstantCache> FORMATTED_INSTANT_CACHE =
-      ThreadLocal.withInitial(FormattedInstantCache::new);
-
-  private static final class FormattedInstantCache {
-    private ZoneId zoneId;
-    private final Map<Long, String> formattedByMillis = new HashMap<>();
-  }
-
-  private static String formatRecordIndexInstant(long instantTimeMillis) {
-    FormattedInstantCache cache = FORMATTED_INSTANT_CACHE.get();
-    ZoneId currentZoneId = ZoneId.systemDefault();
-    if (!currentZoneId.equals(cache.zoneId)) {
-      cache.formattedByMillis.clear();
-      cache.zoneId = currentZoneId;
-    }
-    String formatted = cache.formattedByMillis.get(instantTimeMillis);
-    if (formatted == null) {
-      if (cache.formattedByMillis.size() >= FORMATTED_INSTANT_CACHE_MAX_SIZE) {
-        cache.formattedByMillis.clear();
-      }
-      formatted = HoodieInstantTimeGenerator.formatDate(new java.util.Date(instantTimeMillis));
-      cache.formattedByMillis.put(instantTimeMillis, formatted);
-    }
-    return formatted;
+    final Date instantDate = new Date(instantTime);
+    return new HoodieRecordGlobalLocation(partition, HoodieInstantTimeGenerator.formatDate(instantDate), fileId);
   }
 
   /**
