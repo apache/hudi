@@ -484,6 +484,9 @@ case class HoodieFileIndex(spark: SparkSession,
   private def isDataSkippingEnabled: Boolean = getConfigValue(options, spark.sessionState.conf,
     DataSourceReadOptions.ENABLE_DATA_SKIPPING.key, DataSourceReadOptions.ENABLE_DATA_SKIPPING.defaultValue.toString).toBoolean
 
+  /** The metadata config used for file listing, with metadata disabled when the files partition is unavailable. */
+  def getMetadataConfig: HoodieMetadataConfig = metadataConfig
+
   private def isMetadataTableEnabled: Boolean = metadataConfig.isEnabled()
 
   private def isColumnStatsIndexEnabled: Boolean = metadataConfig.isColumnStatsIndexEnabled

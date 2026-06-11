@@ -401,7 +401,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val state = new HoodieFileGroupReadState(tableState, tableSchema, queryTimestamp, readerProps, cdcProps,
       dataSchema, requestedSchema, internalSchemaOpt, instantRangeOpt, shouldUseRecordPosition, isCount, filters,
       requiredFilters, requiredSchema, partitionSchema, remainingPartitionSchema, fixedPartitionIndexes, outputSchema,
-      projectionInputSchema, baseFileReadSchemas, evaluateRequiredFiltersPerRow)
+      projectionInputSchema, baseFileReadSchemas, evaluateRequiredFiltersPerRow, isIncremental)
     new HoodieFileGroupReaderFunction(baseFileReader, fileGroupBaseFileReader, broadcastedStorageConf,
       spark.sparkContext.broadcast(JavaSerializedValue(state)))
   }
