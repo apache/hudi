@@ -196,6 +196,15 @@
                   <pattern>com.codahale.metrics.</pattern>
                   <shadedPattern>org.apache.hudi.com.codahale.metrics.</shadedPattern>
                 </relocation>
+                <!-- Relocate the bundled flink-metrics-dropwizard bridge into the hudi namespace.
+                       It is recompiled against the relocated com.codahale.metrics above, so leaving it
+                       at the real Flink FQN shadows the genuine wrapper and breaks any consumer that
+                       also depends on flink-metrics-dropwizard with a NoSuchMethodError on
+                       DropwizardHistogramWrapper(com.codahale.metrics.Histogram). -->
+                <relocation>
+                  <pattern>org.apache.flink.dropwizard.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.flink.dropwizard.</shadedPattern>
+                </relocation>
                 <relocation>
                   <pattern>com.beust.jcommander.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}com.beust.jcommander.</shadedPattern>
