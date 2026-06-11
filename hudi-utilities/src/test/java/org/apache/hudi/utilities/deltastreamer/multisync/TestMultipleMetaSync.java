@@ -20,9 +20,9 @@ package org.apache.hudi.utilities.deltastreamer.multisync;
 
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.exception.HoodieMetaSyncException;
-import org.apache.hudi.utilities.ingestion.HoodieIngestionException;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerTestBase;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionException;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
