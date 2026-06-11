@@ -112,9 +112,13 @@ public class NestedColumnReader implements ColumnReader<WritableColumnVector> {
     for (int i = 0; i < children.size(); i++) {
       ParquetField child = children.get(i);
       if (child == null) {
-        // Hudi schema-evolution: the logical field is not present in the Parquet file. The slot
+        // Schema-evolution: the logical field is not present in the Parquet file. The slot
         // vector was pre-populated with nulls by ParquetSplitReaderUtil#createWritableColumnVector
-        // (ROW branch); keep it as is and skip contributing to the level stream.
+        // (ROW branch), but HeapRowColumnVector#reset() (invoked once per batch by
+        // ParquetColumnarRowSplitReader#nextBatch) cascades to the children and clears those null
+        // flags. Since an absent field is never re-read, re-apply the nulls here so the column stays
+        // NULL instead of reverting to the type's zero value. Skip contributing to the level stream.
+        childrenVectors[i].fillWithNulls();
         finalChildrenVectors[i] = childrenVectors[i];
         continue;
       }
