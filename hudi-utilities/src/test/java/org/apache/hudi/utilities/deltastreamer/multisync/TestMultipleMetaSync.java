@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.deltastreamer.multisync;
 
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.exception.HoodieMetaSyncException;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionException;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerTestBase;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
@@ -61,8 +62,9 @@ public class TestMultipleMetaSync extends HoodieDeltaStreamerTestBase {
     MockSyncTool1.syncSuccess = false;
     MockSyncTool2.syncSuccess = false;
     HoodieDeltaStreamer.Config cfg = getConfig(tableBasePath, syncClassNames);
-    Exception e = assertThrows(HoodieMetaSyncException.class, () -> syncOnce(new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf())));
-    assertTrue(e.getMessage().contains(MockSyncToolException1.class.getName()));
+    Exception e = assertThrows(HoodieIngestionException.class, () -> syncOnce(new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf())));
+    assertTrue(e.getCause() instanceof HoodieMetaSyncException);
+    assertTrue(e.getCause().getMessage().contains(MockSyncToolException1.class.getName()));
     assertTrue(MockSyncTool1.syncSuccess);
     assertTrue(MockSyncTool2.syncSuccess);
   }
@@ -73,9 +75,10 @@ public class TestMultipleMetaSync extends HoodieDeltaStreamerTestBase {
     MockSyncTool1.syncSuccess = false;
     MockSyncTool2.syncSuccess = false;
     HoodieDeltaStreamer.Config cfg = getConfig(tableBasePath, getSyncNames("MockSyncTool1", "MockSyncTool2", "MockSyncToolException1", "MockSyncToolException2"));
-    Exception e = assertThrows(HoodieMetaSyncException.class, () -> syncOnce(new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf())));
-    assertTrue(e.getMessage().contains(MockSyncToolException1.class.getName()));
-    assertTrue(e.getMessage().contains(MockSyncToolException2.class.getName()));
+    Exception e = assertThrows(HoodieIngestionException.class, () -> syncOnce(new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf())));
+    assertTrue(e.getCause() instanceof HoodieMetaSyncException);
+    assertTrue(e.getCause().getMessage().contains(MockSyncToolException1.class.getName()));
+    assertTrue(e.getCause().getMessage().contains(MockSyncToolException2.class.getName()));
     assertTrue(MockSyncTool1.syncSuccess);
     assertTrue(MockSyncTool2.syncSuccess);
   }

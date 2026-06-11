@@ -82,7 +82,7 @@ public class TestHoodieStreamerMetrics {
     MetricRegistry registry = metrics.getMetrics().getRegistry();
     assertEquals(1, registry.getGauges().size());
     assertEquals(".deltastreamer.success", registry.getGauges().firstKey());
-    assertEquals(1, registry.getGauges().get(".deltastreamer.success").getValue());
+    assertEquals(1L, registry.getGauges().get(".deltastreamer.success").getValue());
   }
 
   @Test
@@ -98,7 +98,7 @@ public class TestHoodieStreamerMetrics {
     MetricRegistry registry = metrics.getMetrics().getRegistry();
     assertEquals(1, registry.getGauges().size());
     assertEquals(".deltastreamer.failure", registry.getGauges().firstKey());
-    assertEquals(1, registry.getGauges().get(".deltastreamer.failure").getValue());
+    assertEquals(1L, registry.getGauges().get(".deltastreamer.failure").getValue());
   }
 
   @Test

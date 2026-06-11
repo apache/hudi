@@ -20,6 +20,7 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.testutils.JavaTestUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -437,7 +438,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
        * Need to perform getMessage().contains since the exception coming
        * from {@link org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.DeltaSyncService} gets wrapped many times into RuntimeExceptions.
        */
-      if (expectConflict && backfillFailed.get() && e.getCause().getMessage().contains(ConcurrentModificationException.class.getName())) {
+      if (expectConflict && backfillFailed.get() && JavaTestUtils.checkNestedExceptionContains(e, ConcurrentModificationException.class.getName())) {
         // expected ConcurrentModificationException since ingestion & backfill will have overlapping writes
         if (!continuousFailed.get()) {
           // if backfill job failed, shutdown the continuous job.
@@ -447,7 +448,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
           // both backfill and ingestion job cannot fail.
           throw new HoodieException("Both backfilling and ingestion job failed ", e);
         }
-      } else if (expectConflict && continuousFailed.get() && e.getCause().getMessage().contains("Ingestion service was shut down with exception")) {
+      } else if (expectConflict && continuousFailed.get() && JavaTestUtils.checkNestedExceptionContains(e, "Ingestion service was shut down with exception")) {
         // incase of regular ingestion job failing, ConcurrentModificationException is not throw all the way.
         if (!backfillFailed.get()) {
           log.warn("Calling shutdown on backfill job since the ingstion/continuous job has failed for {}", jobId);
