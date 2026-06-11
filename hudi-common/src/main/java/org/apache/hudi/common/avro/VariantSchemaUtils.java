@@ -277,8 +277,13 @@ public class VariantSchemaUtils {
         // typed_value must be nullable: rows whose variant value does not match the inferred
         // schema are written with a null typed_value and the full binary in the value column.
         HoodieSchema nullableTypedValue = typedValue.isNullable() ? typedValue : HoodieSchema.createNullable(typedValue);
+        // The shredded record needs a name unique to this column: variant columns commonly share
+        // one record type (named "variant"), which Avro serializes as name references after the
+        // first occurrence. Reusing the shared name would alias every other variant column to
+        // this column's shredded definition once the schema is serialized (the config-splice
+        // path), and two inferred columns could not coexist in one schema.
         HoodieSchema.Variant shredded = HoodieSchema.createVariantShredded(
-            unwrapped.getAvroSchema().getName(),
+            field.name() + "_variant",
             unwrapped.getAvroSchema().getNamespace(),
             unwrapped.getAvroSchema().getDoc(),
             nullableTypedValue);
