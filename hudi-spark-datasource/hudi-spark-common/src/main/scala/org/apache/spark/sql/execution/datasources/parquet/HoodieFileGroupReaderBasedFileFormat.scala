@@ -250,9 +250,12 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
-    // Required filters are enforced via parquet push-down, which evaluates predicates on columns
-    // absent from the read schema as all-null and would drop every row (e.g., count() prunes all
-    // columns), so filter-referenced columns must be read and projected away after filtering
+    // Spark planner only adds the user-provided predicates (from `WHERE` clause or `.filter()`)
+    // to `filters`; the `requiredFilters` from `HoodieBaseHadoopFsRelationFactory#getRequiredFilters`
+    // are not visible to the planner, thus the `requiredSchema` passed by Spark can miss the
+    // columns in `requiredFilters`.  This happens for incremental query where `requiredFilters`
+    // is present.  To allow correct projection and filtering, the columns from `requiredFilters`
+    // are added back to the `readRequiredSchema` for reading the file.
     val filterOnlyFields = requiredFilters.flatMap(_.references).distinct
       .filterNot(name => requiredSchema.fieldNames.contains(name) || partitionSchema.fieldNames.contains(name))
       .flatMap(name => dataStructType.fields.find(_.name == name))

@@ -18,14 +18,16 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{DataFrame, SaveMode}
-import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
@@ -42,7 +44,8 @@ class TestIncrementalReadWithFileGroupReader extends SparkClientFunctionalTestHa
   val columns: Seq[String] = Seq("ts", "key", "rider", "fare", "pt")
 
   // c1..c3 insert disjoint key pairs (one file group, base files only via small file handling);
-  // c4..c6 update those pairs (log files on MOR)
+  // c4..c6 are update commits (log files on MOR), each updating k1 with a different value so a
+  // range must surface only the targeted update of k1
   val batches: Seq[(Seq[(Int, String, String, Double, String)], String)] = Seq(
     (Seq((1, "k1", "rider-c1", 10.0, "pt1"), (1, "k2", "rider-c1", 10.0, "pt1")),
       DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL),
@@ -52,9 +55,9 @@ class TestIncrementalReadWithFileGroupReader extends SparkClientFunctionalTestHa
       DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL),
     (Seq((4, "k1", "rider-c4", 40.0, "pt1"), (4, "k2", "rider-c4", 40.0, "pt1")),
       DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL),
-    (Seq((5, "k3", "rider-c5", 50.0, "pt1"), (5, "k4", "rider-c5", 50.0, "pt1")),
+    (Seq((5, "k1", "rider-c5", 50.0, "pt1"), (5, "k3", "rider-c5", 50.0, "pt1"), (5, "k4", "rider-c5", 50.0, "pt1")),
       DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL),
-    (Seq((6, "k5", "rider-c6", 60.0, "pt1"), (6, "k6", "rider-c6", 60.0, "pt1")),
+    (Seq((6, "k1", "rider-c6", 60.0, "pt1"), (6, "k5", "rider-c6", 60.0, "pt1"), (6, "k6", "rider-c6", 60.0, "pt1")),
       DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL))
 
   @ParameterizedTest
@@ -73,39 +76,49 @@ class TestIncrementalReadWithFileGroupReader extends SparkClientFunctionalTestHa
       if (i == 2) {
         // small file handling must have kept a single file group with base files only
         val (baseFiles, logFiles) = listDataFiles()
-        Assertions.assertEquals(3, baseFiles.size, "Expected one base file per insert commit")
-        Assertions.assertEquals(1, baseFiles.map(fileId).distinct.size, "Expected a single file group")
-        Assertions.assertTrue(logFiles.isEmpty, "Expected no log files after insert-only commits")
+        assertEquals(3, baseFiles.size, "Expected one base file per insert commit")
+        assertEquals(1, baseFiles.map(FSUtils.getFileId).distinct.size, "Expected a single file group")
+        assertTrue(logFiles.isEmpty, "Expected no log files after insert-only commits")
       }
     }
 
     val metaClient = HoodieTableMetaClient.builder()
       .setConf(storageConf().newInstance()).setBasePath(basePath()).build()
-    Assertions.assertEquals(sourceVersion, metaClient.getTableConfig.getTableVersion.versionCode())
+    assertEquals(sourceVersion, metaClient.getTableConfig.getTableVersion.versionCode())
     val (baseFiles, logFiles) = listDataFiles()
-    Assertions.assertEquals(1, baseFiles.map(fileId).distinct.size, "Expected a single file group")
+    assertEquals(1, baseFiles.map(FSUtils.getFileId).distinct.size, "Expected a single file group")
     if (tableType == "MERGE_ON_READ") {
-      Assertions.assertEquals(3, baseFiles.size, "Update commits must not rewrite MOR base files")
-      Assertions.assertEquals(3, logFiles.size, "Expected one log file per update commit")
+      assertEquals(3, baseFiles.size, "Update commits must not rewrite MOR base files")
+      assertEquals(3, logFiles.size, "Expected one log file per update commit")
     } else {
-      Assertions.assertEquals(6, baseFiles.size, "Expected one base file per commit")
-      Assertions.assertTrue(logFiles.isEmpty, "Expected no log files on COW")
+      assertEquals(6, baseFiles.size, "Expected one base file per commit")
+      assertTrue(logFiles.isEmpty, "Expected no log files on COW")
     }
+    // records merged into the latest base file keep their original commit times
+    val latestBaseFile = baseFiles.maxBy(name => FSUtils.getCommitTime(name))
+    val commitTimesInBaseFile = spark.read.parquet(new Path(new Path(basePath, "pt1"), latestBaseFile).toString)
+      .select("_hoodie_commit_time").distinct().count()
+    assertTrue(commitTimesInBaseFile > 1,
+      s"Expected multiple commit times in the latest base file, got $commitTimesInBaseFile")
 
     // c1..c6 ordered by requested time
     val instants = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
       .getInstants.asScala.toList
-    Assertions.assertEquals(6, instants.size)
+    assertEquals(6, instants.size)
 
     // (000, c2]: base files only
     assertIncrementalRange(readVersion, instants, 0, 2,
       Set(("k1", 1), ("k2", 1), ("k3", 2), ("k4", 2)))
+    // (c1, c2]: single base file in range
+    assertIncrementalRange(readVersion, instants, 1, 2,
+      Set(("k3", 2), ("k4", 2)))
     // (c2, c4]: base file of c3 plus c4's log file on MOR; carried-over c1/c2 rows filtered out
     assertIncrementalRange(readVersion, instants, 2, 4,
       Set(("k5", 3), ("k6", 3), ("k1", 4), ("k2", 4)))
-    // (c3, c5]: log files of c4/c5 only on MOR
+    // (c3, c5]: log files of c4/c5 only on MOR; k1 updated in both c4 and c5 must surface once
+    // with the latest in-range value
     assertIncrementalRange(readVersion, instants, 3, 5,
-      Set(("k1", 4), ("k2", 4), ("k3", 5), ("k4", 5)))
+      Set(("k1", 5), ("k2", 4), ("k3", 5), ("k4", 5)))
     // (c6, c6]: empty range
     assertIncrementalRange(readVersion, instants, 6, 6, Set.empty)
   }
@@ -129,13 +142,13 @@ class TestIncrementalReadWithFileGroupReader extends SparkClientFunctionalTestHa
     // select *
     val rows = readIncremental(readVersion, start, end).collect()
       .map(r => (r.getAs[String]("key"), r.getAs[Int]("ts"))).toSet
-    Assertions.assertEquals(expected, rows)
+    assertEquals(expected, rows)
     // projection without _hoodie_commit_time
     val keys = readIncremental(readVersion, start, end).select("key").collect().map(_.getString(0)).toSet
-    Assertions.assertEquals(expected.map(_._1), keys)
+    assertEquals(expected.map(_._1), keys)
     // these query shapes prune `_hoodie_commit_time` out of the scan schema
-    Assertions.assertEquals(expected.size.toLong, readIncremental(readVersion, start, end).count())
-    Assertions.assertEquals(expected.isEmpty, readIncremental(readVersion, start, end).isEmpty)
+    assertEquals(expected.size.toLong, readIncremental(readVersion, start, end).count())
+    assertEquals(expected.isEmpty, readIncremental(readVersion, start, end).isEmpty)
   }
 
   private def write(data: Seq[(Int, String, String, Double, String)], tableType: String,
@@ -171,9 +184,6 @@ class TestIncrementalReadWithFileGroupReader extends SparkClientFunctionalTestHa
 
   private def listDataFiles(): (Seq[String], Seq[String]) = {
     val names = fs.listStatus(new Path(basePath, "pt1")).map(_.getPath.getName).toSeq
-    // log files are dot-prefixed: .{fileId}_{baseCommit}.log.{version}_{writeToken}
-    (names.filter(n => !n.startsWith(".") && n.endsWith(".parquet")), names.filter(_.contains(".log.")))
+    (names.filter(n => FSUtils.isBaseFile(new StoragePath(n))), names.filter(n => FSUtils.isLogFile(n)))
   }
-
-  private def fileId(baseFileName: String): String = baseFileName.substring(0, baseFileName.indexOf("_"))
 }
