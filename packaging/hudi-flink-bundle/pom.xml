@@ -203,7 +203,7 @@
                        DropwizardHistogramWrapper(com.codahale.metrics.Histogram). -->
                 <relocation>
                   <pattern>org.apache.flink.dropwizard.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.flink.dropwizard.</shadedPattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.flink.dropwizard.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.beust.jcommander.</pattern>
