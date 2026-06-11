@@ -32,19 +32,17 @@ import org.junit.jupiter.params.provider.CsvSource
 import scala.collection.JavaConverters._
 
 /**
- * Incremental query correctness with the file group reader across source table versions and
- * read versions, COW and MOR (file slices with and without log files), and query shapes that
- * prune `_hoodie_commit_time` out of the scan schema (count(), isEmpty(), narrow projections)
- * where the incremental span filters must stay effective. Runs on a session without
- * HoodieSparkSessionExtension, so the filters are not injected into the logical plan and the
- * file format alone must keep the filter columns readable.
+ * Incremental query correctness with the file group reader across COW/MOR, source table
+ * versions, read versions, and query shapes that prune `_hoodie_commit_time` from the scan
+ * schema (count(), isEmpty(), narrow projections). Runs without HoodieSparkSessionExtension,
+ * so the file format alone must keep the span-filter columns readable.
  */
 class TestIncrementalReadWithFileGroupReader extends SparkClientFunctionalTestHarness {
 
   val columns: Seq[String] = Seq("ts", "key", "rider", "fare", "pt")
 
-  // commits c1..c3 insert disjoint key pairs (small file handling keeps one file group with
-  // base files only); commits c4..c6 update those pairs (log files on MOR)
+  // c1..c3 insert disjoint key pairs (one file group, base files only via small file handling);
+  // c4..c6 update those pairs (log files on MOR)
   val batches: Seq[(Seq[(Int, String, String, Double, String)], String)] = Seq(
     (Seq((1, "k1", "rider-c1", 10.0, "pt1"), (1, "k2", "rider-c1", 10.0, "pt1")),
       DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL),
@@ -102,11 +100,10 @@ class TestIncrementalReadWithFileGroupReader extends SparkClientFunctionalTestHa
     // (000, c2]: base files only
     assertIncrementalRange(readVersion, instants, 0, 2,
       Set(("k1", 1), ("k2", 1), ("k3", 2), ("k4", 2)))
-    // (c2, c4]: base file commit c3 plus, on MOR, the log file of c4; rows carried over into
-    // the c3 base file from c1/c2 must be filtered out
+    // (c2, c4]: base file of c3 plus c4's log file on MOR; carried-over c1/c2 rows filtered out
     assertIncrementalRange(readVersion, instants, 2, 4,
       Set(("k5", 3), ("k6", 3), ("k1", 4), ("k2", 4)))
-    // (c3, c5]: on MOR only the log files of c4/c5 are in range
+    // (c3, c5]: log files of c4/c5 only on MOR
     assertIncrementalRange(readVersion, instants, 3, 5,
       Set(("k1", 4), ("k2", 4), ("k3", 5), ("k4", 5)))
     // (c6, c6]: empty range

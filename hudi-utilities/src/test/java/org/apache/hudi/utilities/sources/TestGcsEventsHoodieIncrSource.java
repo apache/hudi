@@ -342,8 +342,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
         Pair.of("name/file-03.json", 100L),
         Pair.of("name/file-04.json", 100L),
         Pair.of("name/file-05.json", 100L)));
-    // the second commit re-writes an existing object key (a re-uploaded object), which MOR
-    // routes to a log file so the incremental read merges logs
+    // the second commit re-writes an existing key (a re-uploaded object), landing in a log file on MOR
     writeGcsMetadataRecords(laterCommit, Arrays.asList(Pair.of("name/file-05.json", 100L)));
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       boolean hasLogFiles = Arrays.stream(fs().listStatus(new Path(basePath())))
@@ -465,8 +464,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   }
 
   private HoodieRecord getGcsMetadataRecord(String commitTime, String filename, String bucketName, String generation, long size) {
-    // records must be written to a partition path consistent with the table config; otherwise
-    // the incremental read finds no partitions matching the commit metadata
+    // partition path must match the table config, or the incremental read lists no partitions
     String partitionPath = metaClient.getTableConfig().isTablePartitioned() ? bucketName : "";
 
     String id = "id:" + bucketName + "/" + filename + "/" + generation;

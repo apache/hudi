@@ -161,8 +161,7 @@ public class S3EventsHoodieIncrSourceHarness extends SparkClientFunctionalTestHa
   }
 
   protected HoodieRecord generateS3EventMetadata(String commitTime, String bucketName, String objectKey, Long objectSize) {
-    // records must be written to a partition path consistent with the table config; otherwise
-    // the incremental read finds no partitions matching the commit metadata
+    // partition path must match the table config, or the incremental read lists no partitions
     String partitionPath = metaClient.getTableConfig().isTablePartitioned() ? bucketName : "";
     HoodieSchema schema = S3_METADATA_SCHEMA;
     GenericRecord rec = new GenericData.Record(schema.toAvroSchema());
