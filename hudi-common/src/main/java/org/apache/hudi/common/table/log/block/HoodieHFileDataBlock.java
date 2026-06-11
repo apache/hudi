@@ -57,7 +57,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * base file format.
  */
 public class HoodieHFileDataBlock extends HoodieDataBlock {
-  private final Option<String> compressionCodec;
+  private final Map<String, String> writerParams;
   // This path is used for constructing HFile reader context, which should not be
   // interpreted as the actual file path for the HFile data blocks
   private final StoragePath pathForReader;
@@ -73,7 +73,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               StoragePath pathForReader) {
     super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema,
         header, footer, HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME, enablePointLookups);
-    this.compressionCodec = Option.empty();
+    this.writerParams = Collections.emptyMap();
     this.pathForReader = pathForReader;
   }
 
@@ -81,8 +81,17 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               Map<HeaderMetadataType, String> header,
                               String compressionCodec,
                               StoragePath pathForReader) {
+    this(records, header, compressionCodec, Collections.emptyMap(), pathForReader);
+  }
+
+  public HoodieHFileDataBlock(List<HoodieRecord> records,
+                              Map<HeaderMetadataType, String> header,
+                              String compressionCodec,
+                              Map<String, String> paramsMap,
+                              StoragePath pathForReader) {
     super(records, header, new HashMap<>(), HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME);
-    this.compressionCodec = Option.of(compressionCodec);
+    this.writerParams = new HashMap<>(paramsMap);
+    this.writerParams.putIfAbsent(HFILE_COMPRESSION_ALGORITHM_NAME.key(), compressionCodec);
     this.pathForReader = pathForReader;
   }
 
@@ -98,7 +107,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     return HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(HoodieFileFormat.HFILE)
         .serializeRecordsToLogBlock(
             storage, records, writerSchema, getSchema(), getKeyFieldName(),
-            Collections.singletonMap(HFILE_COMPRESSION_ALGORITHM_NAME.key(), compressionCodec.get()));
+            writerParams);
   }
 
   @Override
@@ -178,7 +187,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected <T> ClosableIterator<T> lookupEngineRecords(List<String> sortedKeys, boolean fullKey) throws IOException {
+  protected <T> ClosableIterator<T> lookupEngineRecords(HoodieReaderContext<T> readerContext, List<String> sortedKeys, boolean fullKey) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
@@ -195,7 +204,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     try (final HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase) HoodieIOFactory
         .getIOFactory(inlineStorage)
         .getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER,
+        .getFileReader(readerContext.getHoodieReaderConfig(),
             storagePathInfo,
             HoodieFileFormat.HFILE,
             Option.of(getSchemaFromHeader()))) {

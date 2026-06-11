@@ -19,6 +19,8 @@
 package org.apache.hudi.utils;
 
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -26,6 +28,7 @@ import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -64,6 +67,27 @@ class TestStreamerUtil {
 
   @TempDir
   File tempFile;
+
+  @Test
+  void testMetadataConfigIncludesMetadataTableBloomFilterSettings() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.setString(HoodieMetadataConfig.BLOOM_FILTER_ENABLE.key(), "true");
+    conf.setString(HoodieMetadataConfig.BLOOM_FILTER_TYPE.key(), BloomFilterTypeCode.SIMPLE.name());
+    conf.setString(HoodieMetadataConfig.BLOOM_FILTER_NUM_ENTRIES.key(), "12345");
+    conf.setString(HoodieMetadataConfig.BLOOM_FILTER_FPP.key(), "0.005");
+    conf.setString(HoodieMetadataConfig.BLOOM_FILTER_DYNAMIC_MAX_ENTRIES.key(), "23456");
+    conf.setString(FileSystemViewStorageConfig.REMOTE_HOST_NAME.key(), "localhost");
+
+    HoodieMetadataConfig metadataConfig = StreamerUtil.metadataConfig(conf);
+
+    assertTrue(metadataConfig.isEnabled());
+    assertTrue(metadataConfig.enableBloomFilter());
+    assertEquals(BloomFilterTypeCode.SIMPLE.name(), metadataConfig.getBloomFilterType());
+    assertEquals(12345, metadataConfig.getBloomFilterNumEntries());
+    assertEquals(0.005, metadataConfig.getBloomFilterFpp());
+    assertEquals(23456, metadataConfig.getDynamicBloomFilterMaxNumEntries());
+  }
 
   @Test
   void testInferMergingBehavior() {

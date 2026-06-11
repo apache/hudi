@@ -84,6 +84,12 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_DYNAMIC_MAX_ENTRIES;
+import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_FPP_VALUE;
+import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE;
+import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_TYPE;
+import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
+import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_WITH_BLOOM_FILTER_ENABLED;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.collectColumnRangeMetadata;
 
@@ -726,8 +732,15 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         // Not supporting positions in HFile data blocks
         header.remove(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
         records.sort(Comparator.comparing(HoodieRecord::getRecordKey));
+        Map<String, String> hfileParams = new HashMap<>();
+        hfileParams.put(HFILE_COMPRESSION_ALGORITHM_NAME.key(), writeConfig.getHFileCompressionAlgorithm());
+        hfileParams.put(HFILE_WITH_BLOOM_FILTER_ENABLED.key(), Boolean.toString(writeConfig.hfileBloomFilterEnabled()));
+        hfileParams.put(BLOOM_FILTER_NUM_ENTRIES_VALUE.key(), Integer.toString(writeConfig.getBloomFilterNumEntries()));
+        hfileParams.put(BLOOM_FILTER_FPP_VALUE.key(), Double.toString(writeConfig.getBloomFilterFPP()));
+        hfileParams.put(BLOOM_FILTER_DYNAMIC_MAX_ENTRIES.key(), Integer.toString(writeConfig.getDynamicBloomFilterMaxNumEntries()));
+        hfileParams.put(BLOOM_FILTER_TYPE.key(), writeConfig.getBloomFilterType());
         return new HoodieHFileDataBlock(
-            records, header, writeConfig.getHFileCompressionAlgorithm(), new StoragePath(writeConfig.getBasePath()));
+            records, header, writeConfig.getHFileCompressionAlgorithm(), hfileParams, new StoragePath(writeConfig.getBasePath()));
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(
             records,

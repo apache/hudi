@@ -98,7 +98,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
@@ -733,12 +732,7 @@ public class StreamerUtil {
    * @return HoodieMetadataConfig constructed from flink configuration.
    */
   public static HoodieMetadataConfig metadataConfig(org.apache.flink.configuration.Configuration conf) {
-    Properties properties = new Properties();
-
-    // set up metadata.enabled=true in table DDL to enable metadata listing
-    properties.put(HoodieMetadataConfig.ENABLE.key(), conf.get(FlinkOptions.METADATA_ENABLED));
-
-    return HoodieMetadataConfig.newBuilder().fromProperties(properties).build();
+    return FlinkWriteClients.getMetadataConfig(conf);
   }
 
   /**
