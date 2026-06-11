@@ -150,24 +150,24 @@ public class TestHoodieLocalEngineContext {
         ImmutablePair.of("key1", 42),
         ImmutablePair.of("key2", 17)
     );
-    
+
     HoodiePairData<String, Integer> pairData = HoodieListPairData.lazy(singleValuePairs);
-    
+
     // Create a function that just returns the values
     SerializableFunction<Iterator<Integer>, Iterator<Integer>> func = iterator -> {
       List<Integer> values = new ArrayList<>();
       iterator.forEachRemaining(values::add);
       return values.iterator();
     };
-    
+
     List<String> shardIndices = Arrays.asList("key1", "key2");
     HoodieData<Integer> result = context.mapGroupsByKey(pairData, func, shardIndices, false);
-    
+
     List<Integer> resultList = result.collectAsList();
-    
+
     // Verify the results
     assertEquals(2, resultList.size());
     assertTrue(resultList.contains(42));
     assertTrue(resultList.contains(17));
   }
-} 
+}
