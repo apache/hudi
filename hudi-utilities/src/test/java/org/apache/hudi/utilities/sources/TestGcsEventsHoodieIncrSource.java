@@ -68,7 +68,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -93,8 +92,11 @@ import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.verify;
@@ -256,7 +258,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     List<Integer> numPartitions = Arrays.asList(12, 2, 1);
     ArgumentCaptor<Integer> argumentCaptor = ArgumentCaptor.forClass(Integer.class);
     verify(cloudObjectsSelectorCommon, atLeastOnce()).loadAsDataset(any(), any(), any(), eq(schemaProvider), argumentCaptor.capture());
-    Assertions.assertEquals(numPartitions, argumentCaptor.getAllValues());
+    assertEquals(numPartitions, argumentCaptor.getAllValues());
   }
 
   @ParameterizedTest
@@ -314,8 +316,8 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     } else {
       numPartitions = Arrays.asList(23, sourcePartitions);
     }
-    Assertions.assertEquals(numPartitions, argumentCaptor.getAllValues());
-    Assertions.assertEquals(numPartitions, argumentCaptorForMetrics.getAllValues());
+    assertEquals(numPartitions, argumentCaptor.getAllValues());
+    assertEquals(numPartitions, argumentCaptorForMetrics.getAllValues());
   }
 
   /**
@@ -347,12 +349,12 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       boolean hasLogFiles = Arrays.stream(fs().listStatus(new Path(basePath())))
           .anyMatch(f -> f.getPath().getName().contains(".log."));
-      Assertions.assertTrue(hasLogFiles, "Expected log files in the MOR source meta-table");
+      assertTrue(hasLogFiles, "Expected log files in the MOR source meta-table");
     }
 
     TypedProperties props = setProps(READ_UPTO_LATEST_COMMIT);
     props.setProperty(CloudSourceConfig.ENABLE_EXISTS_CHECK.key(), "false");
-    when(cloudObjectsSelectorCommon.loadAsDataset(any(), any(), any(), eq(schemaProvider), org.mockito.Mockito.anyInt()))
+    when(cloudObjectsSelectorCommon.loadAsDataset(any(), any(), any(), eq(schemaProvider), org.mockito.anyInt()))
         .thenReturn(Option.empty());
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(null);
 
@@ -367,7 +369,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     Checkpoint resumeFrom = new StreamerCheckpointV1(startCommit + "#name/file-02.json");
     Pair<Option<Dataset<Row>>, Checkpoint> result = incrSource.fetchNextBatch(Option.of(resumeFrom), 250L);
 
-    Assertions.assertEquals(
+    assertEquals(
         new StreamerCheckpointV1(startCommit + "#name/file-04.json"),
         result.getRight(),
         "Next batch must continue within the start commit, not advance to a bare instant.");
@@ -376,14 +378,14 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<CloudObjectMetadata>> captor = ArgumentCaptor.forClass((Class) List.class);
     verify(cloudObjectsSelectorCommon).loadAsDataset(
-        any(), captor.capture(), any(), eq(schemaProvider), org.mockito.Mockito.anyInt());
+        any(), captor.capture(), any(), eq(schemaProvider), org.mockito.anyInt());
     List<String> selectedPaths = captor.getValue().stream()
         .map(CloudObjectMetadata::getPath)
         .sorted()
         .collect(Collectors.toList());
-    Assertions.assertEquals(2, selectedPaths.size(), "Expected file-03 and file-04, got: " + selectedPaths);
-    Assertions.assertTrue(selectedPaths.get(0).endsWith("/name/file-03.json"), selectedPaths.get(0));
-    Assertions.assertTrue(selectedPaths.get(1).endsWith("/name/file-04.json"), selectedPaths.get(1));
+    assertEquals(2, selectedPaths.size(), "Expected file-03 and file-04, got: " + selectedPaths);
+    assertTrue(selectedPaths.get(0).endsWith("/name/file-03.json"), selectedPaths.get(0));
+    assertTrue(selectedPaths.get(1).endsWith("/name/file-04.json"), selectedPaths.get(1));
   }
 
   @Test
@@ -448,8 +450,8 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     Option<Dataset<Row>> datasetOpt = dataAndCheckpoint.getLeft();
     Checkpoint nextCheckPoint = dataAndCheckpoint.getRight();
 
-    Assertions.assertNotNull(nextCheckPoint);
-    Assertions.assertEquals(new StreamerCheckpointV1(expectedCheckpoint), nextCheckPoint);
+    assertNotNull(nextCheckPoint);
+    assertEquals(new StreamerCheckpointV1(expectedCheckpoint), nextCheckPoint);
   }
 
   private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy,
