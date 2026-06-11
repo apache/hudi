@@ -68,38 +68,45 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     this.txnManager = new TransactionManager(config, table.getStorage());
   }
 
-  private static boolean deleteFileAndGetResult(HoodieStorage storage, String deletePathStr) {
+  /**
+   * Deletes the given path and returns whether it is gone afterwards. Cleaner plan file entries
+   * are always base/log/bootstrap file paths and partition deletions are always directories, so
+   * the caller passes the path type explicitly and no getPathInfo probe is needed.
+   *
+   * @param isDirectory true for a partition directory (deleted recursively), false for a file
+   */
+  private static boolean deleteAndGetResult(HoodieStorage storage, String deletePathStr, boolean isDirectory) {
     StoragePath deletePath = new StoragePath(deletePathStr);
-    log.debug("Working on delete path: {}", deletePath);
+    String pathType = isDirectory ? "directory" : "file";
+    log.debug("Working on deleting {}: {}", pathType, deletePath);
     try {
-      boolean deleteResult = storage.getPathInfo(deletePath).isDirectory()
-          ? storage.deleteDirectory(deletePath)
-          : storage.deleteFile(deletePath);
+      boolean deleteResult = isDirectory ? storage.deleteDirectory(deletePath) : storage.deleteFile(deletePath);
       if (deleteResult) {
-        log.debug("Cleaned file at path: {}", deletePath);
-      } else {
-        if (storage.exists(deletePath)) {
-          throw new HoodieIOException("Failed to delete path during clean execution " + deletePath);
-        } else {
-          log.debug("Already cleaned up file at path: {}", deletePath);
-        }
+        log.debug("Cleaned {}: {}", pathType, deletePath);
+        return true;
       }
-      return deleteResult;
+      if (storage.exists(deletePath)) {
+        throw new HoodieIOException("Failed to delete " + pathType + " during clean execution " + deletePath);
+      }
+      // Hadoop file systems report a missing path by returning false from delete instead of
+      // throwing FileNotFoundException, so this is the regular retried-clean case below.
+      log.debug("Already cleaned up {}: {}", pathType, deletePath);
+      return true;
     } catch (FileNotFoundException fio) {
-      // With cleanPlan being used for retried cleaning operations, its possible to clean a file twice if a file to be
+      // With cleanPlan being used for retried cleaning operations, its possible to clean a path twice if a path to be
       // deleted is not found, treat it as a success.  In other words, there is nothing else to be cleaned up on the
       // FileSystem, except for updating the MDT.  By returning success, we would remove the entry from MDT.
       return true;
     } catch (IOException e) {
       try {
         if (storage.exists(deletePath)) {
-          log.error("Delete file failed: {} and file still exists", deletePath, e);
+          log.error("Delete {} failed: {} and it still exists", pathType, deletePath, e);
           throw new HoodieIOException(e.getMessage(), e);
         }
-        log.warn("Delete file failed: {} but file does not exist", deletePath, e);
+        log.warn("Delete {} failed: {} but it does not exist", pathType, deletePath, e);
         return false;
       } catch (IOException ex) {
-        log.error("Delete file failed: {} with exception: {} and existence check also failed", deletePath, e, ex);
+        log.error("Delete {} failed: {} with exception: {} and existence check also failed", pathType, deletePath, e, ex);
         throw new HoodieIOException(ex.getMessage(), ex);
       }
     }
@@ -113,7 +120,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       String partitionPath = partitionDelFileTuple.getLeft();
       StoragePath deletePath = new StoragePath(partitionDelFileTuple.getRight().getFilePath());
       String deletePathStr = deletePath.toString();
-      boolean deletedFileResult = deleteFileAndGetResult(storage, deletePathStr);
+      boolean deletedFileResult = deleteAndGetResult(storage, deletePathStr, false);
       final PartitionCleanStat partitionCleanStat =
           partitionCleanStatMap.computeIfAbsent(partitionPath, k -> new PartitionCleanStat(partitionPath));
       boolean isBootstrapBasePathFile = partitionDelFileTuple.getRight().isBootstrapBaseFile();
@@ -161,7 +168,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
         : Collections.emptyList();
     partitionsToBeDeleted.forEach(entry -> {
       if (!isNullOrEmpty(entry)) {
-        deleteFileAndGetResult(table.getStorage(), table.getMetaClient().getBasePath() + "/" + entry);
+        deleteAndGetResult(table.getStorage(), table.getMetaClient().getBasePath() + "/" + entry, true);
       }
     });
 
