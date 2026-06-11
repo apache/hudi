@@ -39,7 +39,10 @@ public final class VariantShreddingRuntime {
       "org.apache.hudi.variant.Spark4VariantShreddingProvider"
   };
 
-  /** Inferrer candidates. Inference exists only in Spark 4.1+ (SPARK-53659). */
+  /**
+   * Inferrer candidates, one per Spark version module that ships one (inference exists only in
+   * Spark 4.1+, SPARK-53659). A new Spark version module adds its implementation here.
+   */
   private static final String[] INFERRER_CANDIDATES = {
       "org.apache.hudi.variant.Spark41VariantShreddingSchemaInferrer"
   };
@@ -61,6 +64,8 @@ public final class VariantShreddingRuntime {
   /**
    * A shared {@link VariantShreddingSchemaInferrer} instance from the classpath, if any.
    * Implementations are stateless and thread-safe by contract, so one instance is shared.
+   * Tests also use this as the capability probe to filter inference tests to classpaths
+   * that ship an inferrer.
    */
   public static Option<VariantShreddingSchemaInferrer> lookupInferrer() {
     return INFERRER;

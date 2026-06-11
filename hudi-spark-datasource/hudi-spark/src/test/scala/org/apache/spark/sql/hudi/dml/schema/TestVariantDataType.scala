@@ -20,6 +20,7 @@
 package org.apache.spark.sql.hudi.dml.schema
 
 import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
+import org.apache.hudi.common.avro.VariantShreddingRuntime
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.HoodieSchema
@@ -1173,9 +1174,12 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
   }
 
   test("Test Auto-Inferred Variant Shredding on COW") {
-    // Inference reuses Spark 4.1's InferVariantShreddingSchema (SPARK-53659); on Spark 4.0 the
-    // inferrer is absent from the classpath and writes silently stay unshredded.
-    assume(HoodieSparkUtils.gteqSpark4_1, "Variant shredding schema inference requires Spark 4.1 or higher")
+    // Inference reuses Spark 4.1's InferVariantShreddingSchema (SPARK-53659); without an inferrer
+    // on the classpath, writes silently stay unshredded. Gate on the capability rather than the
+    // Spark version: each spark4.x profile only builds its own version module, so e.g. a Spark 4.2
+    // build satisfies gteqSpark4_1 but has no inferrer until that module ships one.
+    assume(VariantShreddingRuntime.lookupInferrer.isPresent,
+      "Variant shredding schema inference requires a VariantShreddingSchemaInferrer on the classpath")
 
     withRecordType()(withTempDir { tmp =>
       // Earlier tests may leave the force-test DDL in the session; force wins over inference.
@@ -1252,7 +1256,8 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
   }
 
   test("Test Auto-Inferred Variant Shredding via MOR Compaction") {
-    assume(HoodieSparkUtils.gteqSpark4_1, "Variant shredding schema inference requires Spark 4.1 or higher")
+    assume(VariantShreddingRuntime.lookupInferrer.isPresent,
+      "Variant shredding schema inference requires a VariantShreddingSchemaInferrer on the classpath")
 
     withRecordType()(withTempDir { tmp =>
       spark.conf.unset("hoodie.parquet.variant.force.shredding.schema.for.test")
@@ -1308,7 +1313,8 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
   }
 
   test("Test Auto-Inferred Variant Shredding with Bulk Insert Row Writer") {
-    assume(HoodieSparkUtils.gteqSpark4_1, "Variant shredding schema inference requires Spark 4.1 or higher")
+    assume(VariantShreddingRuntime.lookupInferrer.isPresent,
+      "Variant shredding schema inference requires a VariantShreddingSchemaInferrer on the classpath")
 
     // The row-writer path (HoodieInternalRowFileWriterFactory) is record-type independent.
     withTempDir { tmp =>
