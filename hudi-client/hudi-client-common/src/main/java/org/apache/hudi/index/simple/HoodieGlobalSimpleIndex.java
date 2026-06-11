@@ -68,13 +68,20 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
   protected <R> HoodieData<HoodieRecord<R>> tagLocationInternal(
       HoodieData<HoodieRecord<R>> inputRecords, HoodieEngineContext context,
       HoodieTable hoodieTable) {
+    if (config.getSimpleIndexUseCaching()) {
+      inputRecords.persist(config.getSimpleIndexInputStorageLevel());
+    }
     List<Pair<String, HoodieBaseFile>> latestBaseFiles = getAllBaseFilesInTable(context, hoodieTable);
     HoodiePairData<String, HoodieRecordGlobalLocation> allKeysAndLocations =
         fetchRecordGlobalLocations(context, hoodieTable, latestBaseFiles);
     boolean mayContainDuplicateLookup = hoodieTable.getMetaClient().getTableType() == MERGE_ON_READ;
     boolean shouldUpdatePartitionPath = config.getGlobalSimpleIndexUpdatePartitionPath() && hoodieTable.isPartitioned();
-    return tagGlobalLocationBackToRecords(inputRecords, allKeysAndLocations,
+    HoodieData<HoodieRecord<R>> taggedRecords = tagGlobalLocationBackToRecords(inputRecords, allKeysAndLocations,
         mayContainDuplicateLookup, shouldUpdatePartitionPath, config, hoodieTable);
+    if (config.getSimpleIndexUseCaching()) {
+      inputRecords.unpersist();
+    }
+    return taggedRecords;
   }
 
   private HoodiePairData<String, HoodieRecordGlobalLocation> fetchRecordGlobalLocations(
