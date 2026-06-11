@@ -279,14 +279,11 @@ public class HoodieSchemaConverter {
    * exact nullability match would silently demote a user's BLOB column to a generic record when the
    * column is declared through DDL. The canonical nullability is restored by {@link HoodieSchema#createBlob()}.
    *
-   * <p>TODO(#18711): This heuristic (field-name + base-type shape matching) is a workaround because
-   * Flink has no native logical type for Hudi BLOB and Parquet annotations cannot distinguish a BLOB
-   * group from a user-defined struct with the same field names. Similar to VECTOR, we should explore
-   * having the schema path treat the physical layout as a plain Flink {@code ROW} while threading
-   * {@link HoodieSchema} so Flink row data and Hudi/Avro conversion stay aligned without inferring BLOB
-   * from shape alone; see <a href="https://github.com/apache/hudi/issues/18711">apache/hudi#18711</a>.
+   * <p>TODO: This heuristic is a workaround for the lack of a native Flink/Parquet BLOB logical
+   * type. See <a href="https://github.com/apache/hudi/issues/18711">apache/hudi#18711</a> for
+   * the tracked work to remove this structural inference.
    */
-  private static boolean isBlobStructure(RowType rowType) {
+  static boolean isBlobStructure(RowType rowType) {
     // Validate: 3 fields with exact names
     if (rowType.getFieldCount() != HoodieSchema.Blob.getFieldCount()) {
       return false;
