@@ -34,7 +34,6 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -698,8 +697,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           fileIndex = Integer.parseInt(fileId.substring(index + 1));
         }
       } catch (Exception e) {
-        throw new HoodieMetadataException(String.format("Invalid UUID or index: fileID=%s, partition=%s, instantTime=%s",
-            fileId, partition, HoodieInstantTimeGenerator.formatDate(new java.util.Date(instantTimeMillis))), e);
+        throw new HoodieMetadataException(String.format("Invalid UUID or index: fileID=%s, partition=%s, instantTimeMillis=%d",
+            fileId, partition, instantTimeMillis), e);
       }
 
       HoodieMetadataPayload payload = new HoodieMetadataPayload(recordKey,
