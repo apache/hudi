@@ -380,9 +380,10 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
         Pair.of("path/to/file-03.json", 100L),
         Pair.of("path/to/file-04.json", 100L),
         Pair.of("path/to/file-05.json", 100L)));
-    writeS3MetadataRecords(laterCommit);
+    // the second commit re-writes an existing object key (an S3 re-upload event), which MOR
+    // routes to a log file so the incremental read merges logs
+    writeS3MetadataRecords(laterCommit, Arrays.asList(Pair.of("path/to/file-05.json", 100L)));
     if (tableType == HoodieTableType.MERGE_ON_READ) {
-      // the second commit's record must land in a log file so the incremental read merges logs
       boolean hasLogFiles = Arrays.stream(fs().listStatus(new Path(basePath())))
           .anyMatch(f -> f.getPath().getName().contains(".log."));
       Assertions.assertTrue(hasLogFiles, "Expected log files in the MOR source meta-table");
