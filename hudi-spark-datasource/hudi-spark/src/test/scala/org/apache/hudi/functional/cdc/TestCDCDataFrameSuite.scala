@@ -21,6 +21,7 @@ package org.apache.hudi.functional.cdc
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
@@ -1001,15 +1002,20 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .mode(SaveMode.Append)
       .save(basePath)
 
-    // Read all change data and assert no before/after image contains a _hoodie_* meta column.
+    // Read all change data and assert no before/after image contains a Hudi meta column. Note we
+    // check the actual meta-column names rather than the "_hoodie_" prefix: _hoodie_is_deleted is a
+    // business/payload field (the soft-delete marker carried in the record schema), not a meta
+    // column, so it is expected to remain in the image.
     val allCDCData = cdcDataFrame((commitTime1.toLong - 1).toString).collect()
     assertTrue(allCDCData.nonEmpty, "Expected some CDC rows")
     allCDCData.foreach { row =>
       Seq("before", "after").foreach { col =>
         val json = row.getAs[String](col)
         if (json != null) {
-          assertFalse(json.contains("_hoodie_"),
-            s"$col image should not contain _hoodie_* meta columns, but was: $json")
+          HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.asScala.foreach { metaCol =>
+            assertFalse(json.contains(metaCol),
+              s"$col image should not contain meta column $metaCol, but was: $json")
+          }
         }
       }
     }
