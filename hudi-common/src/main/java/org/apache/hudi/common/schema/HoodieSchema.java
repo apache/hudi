@@ -1154,17 +1154,14 @@ public class HoodieSchema implements Serializable {
     if (!hasFields()) {
       throw new IllegalStateException("Cannot get fields from schema type: " + type);
     }
-    List<HoodieSchemaField> localFields = fields;
-    if (localFields == null) {
+    if (fields == null) {
       synchronized (this) {
-        localFields = fields;
-        if (localFields == null) {
-          localFields = Collections.unmodifiableList(avroSchema.getFields().stream().map(HoodieSchemaField::new).collect(Collectors.toList()));
-          fields = localFields;
+        if (fields == null) {
+          fields = Collections.unmodifiableList(avroSchema.getFields().stream().map(HoodieSchemaField::new).collect(Collectors.toList()));
         }
       }
     }
-    return localFields;
+    return fields;
   }
 
   /**
@@ -1204,18 +1201,15 @@ public class HoodieSchema implements Serializable {
   }
 
   private Map<String, HoodieSchemaField> getFieldMap() {
-    Map<String, HoodieSchemaField> localFieldMap = fieldMap;
-    if (localFieldMap == null) {
+    if (fieldMap == null) {
       synchronized (this) {
-        localFieldMap = fieldMap;
-        if (localFieldMap == null) {
-          localFieldMap = Collections.unmodifiableMap(getFields().stream()
+        if (fieldMap == null) {
+          fieldMap = Collections.unmodifiableMap(getFields().stream()
               .collect(Collectors.toMap(HoodieSchemaField::name, field -> field)));
-          fieldMap = localFieldMap;
         }
       }
     }
-    return localFieldMap;
+    return fieldMap;
   }
 
   /**
