@@ -76,11 +76,6 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     // O(schema width) wrapper rebuild.
     HoodieSchema currentSchema = HoodieSchemaCache.intern(HoodieSchema.fromAvroSchema(record.getSchema()));
     IndexedRecord currentRecord = record;
-    if (fieldName.indexOf('.') < 0) {
-      // single-segment field names are the overwhelmingly common case; skip the path split
-      Option<HoodieSchemaField> fieldOpt = currentSchema.getNonNullType().getField(fieldName);
-      return fieldOpt.isEmpty() ? null : currentRecord.get(fieldOpt.get().pos());
-    }
     String[] path = fieldName.split("\\.");
     for (int i = 0; i < path.length; i++) {
       currentSchema = currentSchema.getNonNullType();
