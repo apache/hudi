@@ -86,7 +86,11 @@ public class HoodieInternalRowFileWriterFactory {
                                                                              Option<BloomFilter> bloomFilterOpt
   )
       throws IOException {
-    HoodieSchema configSchema = resolveConfigSchema(writeConfig);
+    // resolveConfigSchema parses the avro schema string, so gate it behind the flag instead
+    // of paying that on every file creation when inference is disabled.
+    HoodieSchema configSchema =
+        writeConfig.getBooleanOrDefault(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED)
+            ? resolveConfigSchema(writeConfig) : null;
     if (configSchema != null) {
       List<String> inferableColumns = VariantSchemaUtils.getInferableVariantColumns(writeConfig, configSchema);
       if (!inferableColumns.isEmpty()) {
