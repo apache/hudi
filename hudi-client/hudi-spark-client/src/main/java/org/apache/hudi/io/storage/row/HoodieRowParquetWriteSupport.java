@@ -238,10 +238,16 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
           .flatMap(s -> s.hasFields() ? s.getField(field.name()) : Option.empty())
           .map(HoodieSchemaField::schema)
           .orElse(null);
+      // Unwrap the field's own nullable union too (e.g. ["null", variant] -> variant), like
+      // processNestedDataType does; otherwise nullable variant columns fail the VARIANT check
+      // below and emit a false schema-mismatch warning (shredding still happens via the
+      // processNestedDataType fallthrough, so this only affects which branch handles it).
+      HoodieSchema resolvedFieldSchema = fieldHoodieSchema != null && fieldHoodieSchema.isNullable()
+          ? fieldHoodieSchema.getNonNullType() : fieldHoodieSchema;
 
       if (SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantType(dataType)) {
-        if (fieldHoodieSchema != null && fieldHoodieSchema.getType() == HoodieSchemaType.VARIANT) {
-          HoodieSchema.Variant variantSchema = (HoodieSchema.Variant) fieldHoodieSchema;
+        if (resolvedFieldSchema != null && resolvedFieldSchema.getType() == HoodieSchemaType.VARIANT) {
+          HoodieSchema.Variant variantSchema = (HoodieSchema.Variant) resolvedFieldSchema;
           // If typed_value field exists, the variant is shredded
           if (variantSchema.getTypedValueField().isPresent()) {
             // Use plain types for SparkShreddingUtils (unwraps nested {value, typed_value} structs if present)

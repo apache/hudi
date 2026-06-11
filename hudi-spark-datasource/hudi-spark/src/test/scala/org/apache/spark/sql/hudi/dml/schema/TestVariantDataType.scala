@@ -703,17 +703,19 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
         """.stripMargin)
 
       // v1: consistent objects incl. a nested object and an avro-illegal key (dropped from
-      // typed_value, falls back to the residual value column). v2: mixed root types (inference
-      // declines). v3: all null (inference declines).
+      // typed_value, falls back to the residual value column). v2: empty objects (inference
+      // declines empty structs). v3: all null (inference declines). The declines must hold per
+      // ROW, not just across rows: inference is per file and a multi-row insert can fan out to
+      // one file per row, so a cross-row type conflict would not reach a single inference call.
       spark.sql(
         s"""
            |insert into $tableName values
-           |  (1, parse_json('{"a": 1, "b": "x", "bad-key": true, "nested": {"c": 5}}'), parse_json('1'), null, 1000),
-           |  (2, parse_json('{"a": 2, "b": "y", "bad-key": false, "nested": {"c": 6}}'), parse_json('"s"'), null, 1000)
+           |  (1, parse_json('{"a": 1, "b": "x", "bad-key": true, "nested": {"c": 5}}'), parse_json('{}'), null, 1000),
+           |  (2, parse_json('{"a": 2, "b": "y", "bad-key": false, "nested": {"c": 6}}'), parse_json('{}'), null, 1000)
         """.stripMargin)
       checkAnswer(s"select id, cast(v1 as string), cast(v2 as string), cast(v3 as string), ts from $tableName order by id")(
-        Seq(1, "{\"a\":1,\"b\":\"x\",\"bad-key\":true,\"nested\":{\"c\":5}}", "1", null, 1000),
-        Seq(2, "{\"a\":2,\"b\":\"y\",\"bad-key\":false,\"nested\":{\"c\":6}}", "\"s\"", null, 1000)
+        Seq(1, "{\"a\":1,\"b\":\"x\",\"bad-key\":true,\"nested\":{\"c\":5}}", "{}", null, 1000),
+        Seq(2, "{\"a\":2,\"b\":\"y\",\"bad-key\":false,\"nested\":{\"c\":6}}", "{}", null, 1000)
       )
 
       def assertInferredFooters(): Unit = {
@@ -731,9 +733,9 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
           assert(!groupContainsField(typedValue, "bad-key"),
             s"Avro-illegal keys must be dropped from typed_value. Schema:\n$typedValue")
           assert(!groupContainsField(getFieldAsGroup(schema, "v2"), "typed_value"),
-            "v2 has mixed root types; inference should decline")
+            s"v2 holds empty objects; inference should decline. File: $filePath Schema:\n$schema")
           assert(!groupContainsField(getFieldAsGroup(schema, "v3"), "typed_value"),
-            "v3 is all null; inference should decline")
+            s"v3 is all null; inference should decline. File: $filePath Schema:\n$schema")
         }
       }
       assertInferredFooters()
@@ -744,8 +746,8 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
         "v1 = parse_json('{\"a\": 9, \"b\": \"z\", \"bad-key\": true, \"nested\": {\"c\": 7}}'), ts = 1001 " +
         "where id = 1")
       checkAnswer(s"select id, cast(v1 as string), cast(v2 as string), ts from $tableName order by id")(
-        Seq(1, "{\"a\":9,\"b\":\"z\",\"bad-key\":true,\"nested\":{\"c\":7}}", "1", 1001),
-        Seq(2, "{\"a\":2,\"b\":\"y\",\"bad-key\":false,\"nested\":{\"c\":6}}", "\"s\"", 1000)
+        Seq(1, "{\"a\":9,\"b\":\"z\",\"bad-key\":true,\"nested\":{\"c\":7}}", "{}", 1001),
+        Seq(2, "{\"a\":2,\"b\":\"y\",\"bad-key\":false,\"nested\":{\"c\":6}}", "{}", 1000)
       )
       assertInferredFooters()
     })

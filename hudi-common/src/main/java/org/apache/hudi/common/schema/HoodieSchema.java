@@ -2645,14 +2645,19 @@ public class HoodieSchema implements Serializable {
       if (!typedValueSchema.isPresent()) {
         return Option.empty();
       }
-      return Option.of(plainTypedValueOf(typedValueSchema.get()));
+      return Option.of(plainTypedValueOf(typedValueSchema.get(), VARIANT_TYPED_VALUE_FIELD));
     }
 
     /**
      * Recursively converts a typed_value schema from the nested shredding-spec form to the
      * plain form; schemas not in the spec form pass through unchanged (already plain).
+     *
+     * <p>{@code namePath} chains the field path into the generated record names: every nesting
+     * level of a spec-form schema is named {@code typed_value}, so reusing the source names
+     * (with a null namespace) would make a nested plain record an Avro self-reference of its
+     * ancestor, which Spark's schema converter rejects as recursion.</p>
      */
-    private static HoodieSchema plainTypedValueOf(HoodieSchema schema) {
+    private static HoodieSchema plainTypedValueOf(HoodieSchema schema, String namePath) {
       HoodieSchema unwrapped = schema.isNullable() ? schema.getNonNullType() : schema;
 
       if (unwrapped.getType() == HoodieSchemaType.RECORD) {
@@ -2674,17 +2679,17 @@ public class HoodieSchema implements Serializable {
           if (fieldSchema.isNullable()) {
             fieldSchema = fieldSchema.getNonNullType();
           }
-          plainFields.add(HoodieSchemaField.of(field.name(), unwrapFieldWrapper(fieldSchema, field.name())));
+          plainFields.add(HoodieSchemaField.of(field.name(),
+              unwrapFieldWrapper(fieldSchema, namePath + "_" + field.name())));
         }
-        return HoodieSchema.createRecord(
-            unwrapped.getAvroSchema().getName() + "_plain", null, null, plainFields);
+        return HoodieSchema.createRecord(namePath + "_plain", null, null, plainFields);
       }
 
       if (unwrapped.getType() == HoodieSchemaType.ARRAY) {
         HoodieSchema element = unwrapped.getElementType();
         HoodieSchema elementUnwrapped = element.isNullable() ? element.getNonNullType() : element;
         if (isShreddedFieldWrapper(elementUnwrapped)) {
-          return HoodieSchema.createArray(unwrapFieldWrapper(elementUnwrapped, unwrapped.getAvroSchema().getName()));
+          return HoodieSchema.createArray(unwrapFieldWrapper(elementUnwrapped, namePath + "_element"));
         }
         return schema;
       }
@@ -2726,14 +2731,14 @@ public class HoodieSchema implements Serializable {
      * Extracts the plain type of a spec-form shredded-field wrapper: its inner typed_value,
      * recursively unwrapped; or an unshredded VARIANT when the wrapper is value-only.
      */
-    private static HoodieSchema unwrapFieldWrapper(HoodieSchema wrapper, String memberName) {
+    private static HoodieSchema unwrapFieldWrapper(HoodieSchema wrapper, String namePath) {
       Option<HoodieSchemaField> innerTypedValue = wrapper.getField(VARIANT_TYPED_VALUE_FIELD);
       if (!innerTypedValue.isPresent()) {
         // Value-only wrapper: the member stays untyped. Unique name per member to avoid
         // same-name record clashes within one schema tree.
-        return HoodieSchema.createVariant(memberName + "_variant", null, null);
+        return HoodieSchema.createVariant(namePath + "_variant", null, null);
       }
-      return plainTypedValueOf(innerTypedValue.get().schema());
+      return plainTypedValueOf(innerTypedValue.get().schema(), namePath);
     }
 
     @Override

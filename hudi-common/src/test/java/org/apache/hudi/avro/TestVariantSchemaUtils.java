@@ -150,9 +150,13 @@ public class TestVariantSchemaUtils {
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
         HoodieSchemaField.of("v", HoodieSchema.createNullable(footerVariant))));
 
+    assertTrue(VariantSchemaUtils.isShreddedVariantShape(footerVariant));
+
     HoodieSchema stripped = VariantSchemaUtils.stripVariantShreddingByShape(schema);
     HoodieSchema v = stripped.getField("v").get().schema().getNonNullType();
     assertEquals(2, v.getFields().size());
+    // The stripped (unshredded-shaped) record no longer matches the shredded shape.
+    assertFalse(VariantSchemaUtils.isShreddedVariantShape(v));
     assertFalse(v.getField("typed_value").isPresent());
     assertTrue(v.getField("metadata").isPresent());
     assertTrue(v.getField("value").isPresent());

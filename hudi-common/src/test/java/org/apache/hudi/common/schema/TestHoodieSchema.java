@@ -3097,11 +3097,12 @@ public class TestHoodieSchema {
 
   @Test
   public void testGetPlainTypedValueSchemaNestedObjectRecursion() {
-    // Depth-2 spec form: typed_value { a: wrapper{value, typed_value: { b: wrapper{value, typed_value: long} }} }
-    HoodieSchema innerObject = HoodieSchema.createRecord("inner_tv", null, null,
+    // Depth-2 spec form: typed_value { a: wrapper{value, typed_value: { b: wrapper{value, typed_value: long} }} }.
+    // Both record levels are named "typed_value", as the schema converters produce them.
+    HoodieSchema innerObject = HoodieSchema.createRecord("typed_value", "inner.ns", null,
         Collections.singletonList(HoodieSchemaField.of("b",
             HoodieSchema.createNullable(specWrapper("b_wrapper", HoodieSchema.create(HoodieSchemaType.LONG))))));
-    HoodieSchema topTypedValue = HoodieSchema.createRecord("typed_value", null, null,
+    HoodieSchema topTypedValue = HoodieSchema.createRecord("typed_value", "outer.ns", null,
         Collections.singletonList(HoodieSchemaField.of("a",
             HoodieSchema.createNullable(specWrapper("a_wrapper", innerObject)))));
     // Nullable typed_value, as produced by the inferred-shredding splice.
@@ -3121,6 +3122,10 @@ public class TestHoodieSchema {
     HoodieSchema bPlain = aPlain.getFields().get(0).schema();
     bPlain = bPlain.isNullable() ? bPlain.getNonNullType() : bPlain;
     assertEquals(HoodieSchemaType.LONG, bPlain.getType());
+
+    // Generated plain record names must be unique per nesting level: a nested record carrying
+    // its ancestor's fullname is an Avro self-reference, which Spark rejects as recursion.
+    assertNotEquals(plain.getFullName(), aPlain.getFullName());
   }
 
   @Test

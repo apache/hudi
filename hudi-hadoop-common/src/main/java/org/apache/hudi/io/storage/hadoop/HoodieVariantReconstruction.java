@@ -100,7 +100,7 @@ final class HoodieVariantReconstruction {
     for (int i = 0; i < requestedFields.size(); i++) {
       HoodieSchemaField requestedField = requestedFields.get(i);
       Option<HoodieSchemaField> fileField = fileSchema.getField(requestedField.name());
-      if (fileField.isPresent() && isShreddedVariant(fileField.get().schema())) {
+      if (fileField.isPresent() && isShreddedVariantTarget(requestedField.schema(), fileField.get().schema())) {
         isTarget[i] = true;
         anyTarget = true;
         // Read this column in its on-disk shredded shape. createNewSchemaField: the requested
@@ -173,10 +173,21 @@ final class HoodieVariantReconstruction {
     return out;
   }
 
-  private static boolean isShreddedVariant(HoodieSchema schema) {
-    HoodieSchema unwrapped = unwrapNullable(schema);
-    return unwrapped.getType() == HoodieSchemaType.VARIANT
-        && ((HoodieSchema.Variant) unwrapped).isShredded();
+  /**
+   * Whether this column must be read in its on-disk shredded shape and reconstructed. The file
+   * schema comes from converting the parquet footer MessageType, which loses the variant
+   * logical type (variant groups come back as plain records), so the on-disk side is detected
+   * by SHAPE, anchored by the requested side: the requested column (from the table schema,
+   * logical type intact) must be a variant for the shape match to count.
+   */
+  private static boolean isShreddedVariantTarget(HoodieSchema requestedFieldSchema, HoodieSchema fileFieldSchema) {
+    HoodieSchema file = unwrapNullable(fileFieldSchema);
+    if (file.getType() == HoodieSchemaType.VARIANT && ((HoodieSchema.Variant) file).isShredded()) {
+      return true;
+    }
+    HoodieSchema requested = unwrapNullable(requestedFieldSchema);
+    return requested.getType() == HoodieSchemaType.VARIANT
+        && VariantSchemaUtils.isShreddedVariantShape(file);
   }
 
   private static HoodieSchema unwrapNullable(HoodieSchema schema) {
