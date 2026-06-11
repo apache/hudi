@@ -148,6 +148,12 @@ public class RowDataToAvroConverters {
 
               @Override
               public Object convert(HoodieSchema schema, Object object) {
+                // Hudi custom logical types such as BLOB carry an Avro ENUM child (e.g. the BLOB
+                // `type` discriminator). Flink models enums as STRING, so materialize a proper
+                // EnumSymbol when the target schema is an enum; otherwise emit a plain Utf8.
+                if (schema.getType() == HoodieSchemaType.ENUM) {
+                  return new GenericData.EnumSymbol(schema.toAvroSchema(), object.toString());
+                }
                 return new Utf8(((BinaryStringData) object).toBytes());
               }
             };
@@ -232,10 +238,7 @@ public class RowDataToAvroConverters {
         converter = createArrayConverter((ArrayType) type, utcTimezone);
         break;
       case ROW:
-        RowType rowType = (RowType) type;
-        converter = HoodieSchemaConverter.isBlobStructure(rowType)
-            ? createBlobConverter(rowType, utcTimezone)
-            : createRowConverter(rowType, utcTimezone);
+        converter = createRowConverter((RowType) type, utcTimezone);
         break;
       case MAP:
       case MULTISET:
@@ -277,47 +280,6 @@ public class RowDataToAvroConverters {
           actualSchema = schema;
         }
         return converter.convert(actualSchema, object);
-      }
-    };
-  }
-
-  /**
-   * Creates a converter for a Flink {@link RowType} that matches the Hudi BLOB structure
-   * ({@link org.apache.hudi.common.schema.HoodieSchema.Blob}).
-   *
-   * <p>The BLOB {@code type} discriminator (field[0]) is an Avro {@code ENUM} even though Flink
-   * models it as a {@code STRING}. This converter hard-wires the {@link GenericData.EnumSymbol}
-   * construction for that field so the generic VARCHAR converter does not need BLOB awareness.
-   * Fields[1] (inline data) and [2] (reference ROW) use the standard converters.
-   */
-  private static RowDataToAvroConverter createBlobConverter(RowType rowType, boolean utcTimezone) {
-    final RowDataToAvroConverter dataConverter = createConverter(rowType.getTypeAt(1), utcTimezone);
-    final RowDataToAvroConverter referenceConverter = createConverter(rowType.getTypeAt(2), utcTimezone);
-    final RowData.FieldGetter typeGetter = RowData.createFieldGetter(rowType.getTypeAt(0), 0);
-    final RowData.FieldGetter dataGetter = RowData.createFieldGetter(rowType.getTypeAt(1), 1);
-    final RowData.FieldGetter refGetter = RowData.createFieldGetter(rowType.getTypeAt(2), 2);
-
-    return new RowDataToAvroConverter() {
-      private static final long serialVersionUID = 1L;
-
-      @Override
-      public Object convert(HoodieSchema schema, Object object) {
-        final RowData row = (RowData) object;
-        final List<HoodieSchemaField> fields = schema.getFields();
-        final GenericRecord record = new GenericData.Record(schema.toAvroSchema());
-
-        // field[0]: BLOB type discriminator — Avro ENUM, Flink delivers BinaryStringData.
-        Object rawType = typeGetter.getFieldOrNull(row);
-        record.put(0, rawType == null ? null
-            : new GenericData.EnumSymbol(fields.get(0).schema().toAvroSchema(), rawType.toString()));
-
-        // field[1]: nullable inline data bytes.
-        record.put(1, dataConverter.convert(fields.get(1).schema(), dataGetter.getFieldOrNull(row)));
-
-        // field[2]: external reference — a plain nested ROW.
-        record.put(2, referenceConverter.convert(fields.get(2).schema(), refGetter.getFieldOrNull(row)));
-
-        return record;
       }
     };
   }

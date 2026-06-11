@@ -281,13 +281,12 @@ public class HoodieSchemaConverter {
    *
    * <p>TODO(#18711): This heuristic (field-name + base-type shape matching) is a workaround because
    * Flink has no native logical type for Hudi BLOB and Parquet annotations cannot distinguish a BLOB
-   * group from a user-defined struct with the same field names. The tracked work at
-   * <a href="https://github.com/apache/hudi/issues/18711">apache/hudi#18711</a> proposes threading
-   * {@code HoodieSchema} through Flink's Parquet-to-type conversion (Option A) and/or writing
-   * {@code hoodie.blob.columns} footer metadata (Option B) so callers can identify BLOB columns
-   * unambiguously without relying on structural heuristics.
+   * group from a user-defined struct with the same field names. Similar to VECTOR, we should explore
+   * having the schema path treat the physical layout as a plain Flink {@code ROW} while threading
+   * {@link HoodieSchema} so Flink row data and Hudi/Avro conversion stay aligned without inferring BLOB
+   * from shape alone; see <a href="https://github.com/apache/hudi/issues/18711">apache/hudi#18711</a>.
    */
-  static boolean isBlobStructure(RowType rowType) {
+  private static boolean isBlobStructure(RowType rowType) {
     // Validate: 3 fields with exact names
     if (rowType.getFieldCount() != HoodieSchema.Blob.getFieldCount()) {
       return false;
