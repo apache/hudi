@@ -29,6 +29,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -246,17 +248,11 @@ public interface HoodieLogFormat {
    * A set of feature flags associated with a log format. Versions are changed when the log format changes. TODO(na) -
    * Implement policies around major/minor versions
    */
+  @AllArgsConstructor(access = AccessLevel.PACKAGE)
+  @Getter
   abstract class LogFormatVersion {
 
     private final int version;
-
-    LogFormatVersion(int version) {
-      this.version = version;
-    }
-
-    public int getVersion() {
-      return version;
-    }
 
     public abstract boolean hasMagicHeader();
 

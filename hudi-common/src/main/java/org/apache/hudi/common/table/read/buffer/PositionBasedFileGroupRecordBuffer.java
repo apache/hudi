@@ -41,9 +41,8 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieKeyException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -61,8 +60,8 @@ import java.util.function.Function;
  * Here the position means that record position in the base file. The records from the base file is accessed from an iterator object. These records are merged when the
  * {@link #hasNext} method is called.
  */
+@Slf4j
 public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuffer<T> {
-  private static final Logger LOG = LoggerFactory.getLogger(PositionBasedFileGroupRecordBuffer.class);
 
   private static final String ROW_INDEX_COLUMN_NAME = "row_index";
   public static final String ROW_INDEX_TEMPORARY_COLUMN_NAME = "_tmp_metadata_" + ROW_INDEX_COLUMN_NAME;
@@ -96,7 +95,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     // Extract positions from data block.
     List<Long> recordPositions = extractRecordPositions(dataBlock, baseFileInstantTime);
     if (recordPositions == null) {
-      LOG.debug("Falling back to key based merge for data block");
+      log.debug("Falling back to key based merge for data block");
       fallbackToKeyBasedBuffer();
       super.processDataBlock(dataBlock, keySpecOpt);
       return;
@@ -181,7 +180,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
     List<Long> recordPositions = extractRecordPositions(deleteBlock, baseFileInstantTime);
     if (recordPositions == null) {
-      LOG.debug("Falling back to key based merging for delete block");
+      log.debug("Falling back to key based merging for delete block");
       fallbackToKeyBasedBuffer();
       super.processDeleteBlock(deleteBlock);
       return;
@@ -291,7 +290,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
     String blockBaseFileInstantTime = logBlock.getBaseFileInstantTimeOfPositions();
     if (StringUtils.isNullOrEmpty(blockBaseFileInstantTime) || !baseFileInstantTime.equals(blockBaseFileInstantTime)) {
-      LOG.debug("The record positions cannot be used because the base file instant time "
+      log.debug("The record positions cannot be used because the base file instant time "
               + "is either missing or different from the base file to merge. "
               + "Instant time in the header: {}, base file instant time of the file group: {}.",
           blockBaseFileInstantTime, baseFileInstantTime);
@@ -299,7 +298,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     }
     Roaring64NavigableMap positions = logBlock.getRecordPositions();
     if (positions == null || positions.isEmpty()) {
-      LOG.info("No record position info is found when attempting to do position based merge.");
+      log.info("No record position info is found when attempting to do position based merge.");
       return null;
     }
 
@@ -309,7 +308,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     }
 
     if (blockPositions.isEmpty()) {
-      LOG.info("No positions are extracted.");
+      log.info("No positions are extracted.");
       return null;
     }
 
