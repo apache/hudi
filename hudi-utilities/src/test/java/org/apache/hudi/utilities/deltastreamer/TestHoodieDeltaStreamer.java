@@ -103,6 +103,7 @@ import org.apache.hudi.utilities.HoodieMetadataTableValidator;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.SourceTestConfig;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionException;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -2586,11 +2587,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT,
         Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, true,
         false, false, null, null);
-    Exception e = assertThrows(HoodieException.class, () -> {
+    Exception e = assertThrows(HoodieIngestionException.class, () -> {
       syncOnce(new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()));
     }, "Should error out when schema provider is not provided");
     log.debug("Expected error during reading data from source ", e);
-    assertTrue(e.getMessage().contains("Schema provider is required for this operation and for the source of interest. "
+    String errorMsg = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
+    assertTrue(errorMsg.contains("Schema provider is required for this operation and for the source of interest. "
         + "Please set '--schemaprovider-class' in the top level HoodieStreamer config for the source of interest. "
         + "Based on the schema provider class chosen, additional configs might be required. "
         + "For eg, if you choose 'org.apache.hudi.utilities.schema.SchemaRegistryProvider', "
@@ -3510,16 +3512,18 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Target schema is determined based on the Dataframe after transformation
     // No CSV header and no schema provider at the same time are not recommended,
     // as the transformer behavior may be unexpected
-    Exception e = assertThrows(AnalysisException.class, () -> {
+    Exception e = assertThrows(HoodieIngestionException.class, () -> {
       testCsvDFSSource(false, '\t', false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
     }, "Should error out when doing the transformation.");
     log.debug("Expected error during transformation", e);
+    Throwable cause = e.getCause();
+    assertTrue(cause instanceof AnalysisException, "Expected cause to be AnalysisException but was: " + cause.getClass());
     // First message for Spark 3.4 and above, second message for Spark 3.3, third message for Spark 3.2 and below
     assertTrue(
-        e.getMessage().contains("[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter "
+        cause.getMessage().contains("[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter "
             + "with name `begin_lat` cannot be resolved. Did you mean one of the following?")
-            || e.getMessage().contains("Column 'begin_lat' does not exist. Did you mean one of the following?")
-            || e.getMessage().contains("cannot resolve 'begin_lat' given input columns:"));
+            || cause.getMessage().contains("Column 'begin_lat' does not exist. Did you mean one of the following?")
+            || cause.getMessage().contains("cannot resolve 'begin_lat' given input columns:"));
   }
 
   @Test
