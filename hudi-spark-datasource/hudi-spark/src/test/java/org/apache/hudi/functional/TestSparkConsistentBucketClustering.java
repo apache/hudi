@@ -143,16 +143,21 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
   }
 
   /**
-   * Test resizing with bucket number upper bound and lower bound
+   * Test resizing with bucket number upper bound and lower bound, on both partitioned and non-partitioned tables.
+   *
+   * <p>Non-partitioned coverage guards GitHub issue #18161: consistent hashing clustering used to fail on
+   * non-partitioned tables because the empty partition path was rejected by the execution strategy. For a
+   * non-partitioned table {@code dataGen.getPartitionPaths()} returns the single empty partition path, so the
+   * assertions below cover both cases without branching.
    *
    * @throws IOException
    */
   @ParameterizedTest
-  @MethodSource("configParams")
-  public void testResizing(boolean isSplit, boolean rowWriterEnable, boolean single) throws IOException {
+  @MethodSource("resizingConfigParams")
+  public void testResizing(boolean isSplit, boolean rowWriterEnable, boolean single, boolean nonPartitioned) throws IOException {
     final int maxFileSize = isSplit ? 5120 : 128 * 1024 * 1024;
     final int targetBucketNum = isSplit ? 14 : 4;
-    setup(maxFileSize, Collections.emptyMap(), single);
+    setup(maxFileSize, Collections.emptyMap(), single, nonPartitioned);
     config.setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
     config.setValue("hoodie.metadata.enable", "false");
     writeData(2000, true);
@@ -172,41 +177,6 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
         Assertions.assertTrue(fs.getBaseFile().isPresent());
         Assertions.assertTrue(fs.getLogFiles().count() == 0);
       });
-    });
-  }
-
-  /**
-   * Test bucket resizing (split / merge) on a non-partitioned table, covering both the single-job and
-   * multi-job execution strategies. See HUDI-18161 / issue #18161: consistent hashing clustering used to
-   * fail on non-partitioned tables because the empty partition path was rejected by the execution strategy.
-   *
-   * @throws IOException
-   */
-  @ParameterizedTest
-  @MethodSource("configParams")
-  public void testResizingNonPartitioned(boolean isSplit, boolean rowWriterEnable, boolean single) throws IOException {
-    final int maxFileSize = isSplit ? 5120 : 128 * 1024 * 1024;
-    final int targetBucketNum = isSplit ? 14 : 4;
-    setup(maxFileSize, Collections.emptyMap(), single, true);
-    config.setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
-    config.setValue("hoodie.metadata.enable", "false");
-    writeData(2000, true);
-    String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
-    writeClient.cluster(clusteringTime, true);
-
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    final HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
-    Assertions.assertEquals(2000, readRecords().size());
-
-    // Non-partitioned table has a single empty partition path.
-    String partition = HoodieTestDataGenerator.NO_PARTITION_PATH;
-    HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadMetadata(table, partition).get();
-    Assertions.assertEquals(targetBucketNum, metadata.getNodes().size());
-
-    // The file slice has no log files after clustering.
-    table.getSliceView().getLatestFileSlices(partition).forEach(fs -> {
-      Assertions.assertTrue(fs.getBaseFile().isPresent());
-      Assertions.assertEquals(0, fs.getLogFiles().count());
     });
   }
 
@@ -430,6 +400,16 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
         Arguments.of(true, true, false),
         Arguments.of(false, true, false)
     );
+  }
+
+  // configParams crossed with the partitioned / non-partitioned dimension (isSplit, rowWriterEnable, single, nonPartitioned).
+  private static Stream<Arguments> resizingConfigParams() {
+    return configParams().flatMap(args -> {
+      Object[] a = args.get();
+      return Stream.of(
+          Arguments.of(a[0], a[1], a[2], false),
+          Arguments.of(a[0], a[1], a[2], true));
+    });
   }
 
   private static Stream<Arguments> configParamsForSorting() {
