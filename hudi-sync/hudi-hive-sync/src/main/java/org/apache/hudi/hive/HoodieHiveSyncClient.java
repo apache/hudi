@@ -40,6 +40,7 @@ import org.apache.hudi.hive.ddl.JDBCExecutor;
 import org.apache.hudi.hive.util.HiveDriverPool;
 import org.apache.hudi.hive.util.IMetaStoreClientPool;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
+import org.apache.hudi.hive.util.JDBCConnectionPool;
 import org.apache.hudi.hive.util.PartitionFilterGenerator;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
@@ -98,6 +99,10 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   // or legacy default). Owned by HiveQueryDDLExecutor; this field is kept for
   // reference only — close() is delegated through ddlExecutor.close().
   private HiveDriverPool partitionDriverPool;
+  // Non-null only when HIVE_SYNC_BATCHING_ENABLED and sync mode is JDBC (explicit
+  // or legacy default with HIVE_USE_JDBC=true). Owned by JDBCExecutor; this field
+  // is kept for reference only — close() is delegated through ddlExecutor.close().
+  private JDBCConnectionPool partitionJdbcPool;
 
   /**
    * JDBC-based metadata operator, lazily initialized on first Thrift
@@ -141,7 +146,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
             ddlExecutor = new HiveQueryDDLExecutor(config, this.client, this.partitionDriverPool);
             break;
           case JDBC:
-            JDBCExecutor jdbcExecutor = new JDBCExecutor(config);
+            this.partitionJdbcPool = maybeBuildJDBCConnectionPool(config);
+            JDBCExecutor jdbcExecutor = new JDBCExecutor(config, this.partitionJdbcPool);
             ddlExecutor = jdbcExecutor;
             jdbcMetadataOperator = new JDBCBasedMetadataOperator(
                 jdbcExecutor.getConnection(), databaseName);
@@ -151,7 +157,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
         }
       } else {
         if (config.getBoolean(HIVE_USE_JDBC)) {
-          JDBCExecutor jdbcExecutor = new JDBCExecutor(config);
+          this.partitionJdbcPool = maybeBuildJDBCConnectionPool(config);
+          JDBCExecutor jdbcExecutor = new JDBCExecutor(config, this.partitionJdbcPool);
           ddlExecutor = jdbcExecutor;
           jdbcMetadataOperator = new JDBCBasedMetadataOperator(
               jdbcExecutor.getConnection(), databaseName);
@@ -238,6 +245,14 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     }
     int size = config.getIntOrDefault(HIVE_SYNC_BATCHING_THREADS);
     return new HiveDriverPool(config, size);
+  }
+
+  private JDBCConnectionPool maybeBuildJDBCConnectionPool(HiveSyncConfig config) {
+    if (!config.getBooleanOrDefault(HIVE_SYNC_BATCHING_ENABLED)) {
+      return null;
+    }
+    int size = config.getIntOrDefault(HIVE_SYNC_BATCHING_THREADS);
+    return new JDBCConnectionPool(config, size);
   }
 
   private Table getInitialTable(String table) {

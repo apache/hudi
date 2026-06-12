@@ -401,6 +401,39 @@ public class TestHiveSyncTool {
   }
 
   /**
+   * Exercises JDBC sync with parallel partition batching enabled. JDBC's pool
+   * holds N pre-opened HiveServer2 connections, each with `USE database` pinned
+   * at bootstrap. The SQL list's leading `USE` is stripped at dispatch time.
+   */
+  @Test
+  public void testJDBCSyncWithBatchingEnabled() throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), HiveSyncMode.JDBC.name());
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_ENABLED.key(), "true");
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_THREADS.key(), "3");
+    hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "3");
+
+    int partitionCount = 10;
+    HiveTestUtil.createCOWTable("100", partitionCount, true);
+
+    reInitHiveSyncClient();
+    assertFalse(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
+        "Table should not exist before initial sync");
+    reSyncHiveTable();
+    assertEquals(partitionCount, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+        "All partitions should be added under parallel JDBC batching");
+
+    // Add more partitions, then sync again to exercise the parallel update path.
+    HiveTestUtil.addCOWPartition("2050/01/01", true, true, "101");
+    HiveTestUtil.addCOWPartition("2050/01/02", true, true, "102");
+    HiveTestUtil.addCOWPartition("2050/01/03", true, true, "103");
+    HiveTestUtil.addCOWPartition("2050/01/04", true, true, "104");
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(partitionCount + 4, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+        "Incremental add via parallel JDBC batching should sync the new partitions");
+  }
+
+  /**
    * Exercises the TOUCH path in HiveQL mode with batching on. Verifies that
    * splitting one giant ALTER TABLE TOUCH PARTITION(...)... into multiple smaller
    * statements does not break partition visibility downstream.

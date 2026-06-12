@@ -20,6 +20,7 @@ package org.apache.hudi.hive.ddl;
 
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
+import org.apache.hudi.hive.util.JDBCConnectionPool;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -34,6 +35,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Future;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
@@ -48,6 +50,12 @@ import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
 public class JDBCExecutor extends QueryBasedDDLExecutor {
 
   private Connection connection;
+  // Optional. When non-null, partition-phase SQL lists fan out across this pool;
+  // table-level SQL (createTable, schema evolution, single-statement runSQL callers)
+  // always uses the session `connection` above. The connection passed to
+  // JDBCBasedMetadataOperator (via getConnection()) is also the session connection.
+  // See JDBCConnectionPool javadoc.
+  private final JDBCConnectionPool connectionPool;
 
   /**
    * Returns the underlying JDBC connection for use by
@@ -59,18 +67,27 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
   }
 
   public JDBCExecutor(HiveSyncConfig config) {
+    this(config, null);
+  }
+
+  public JDBCExecutor(HiveSyncConfig config, JDBCConnectionPool connectionPool) {
     super(config);
     Objects.requireNonNull(config.getStringOrDefault(HIVE_URL), "--jdbc-url option is required for jdbc sync mode");
     Objects.requireNonNull(config.getStringOrDefault(HIVE_USER), "--user option is required for jdbc sync mode");
     Objects.requireNonNull(config.getStringOrDefault(HIVE_PASS), "--pass option is required for jdbc sync mode");
     createHiveConnection(config.getStringOrDefault(HIVE_URL), config.getStringOrDefault(HIVE_USER), config.getStringOrDefault(HIVE_PASS));
+    this.connectionPool = connectionPool;
   }
 
   @Override
   public void runSQL(String s) {
+    runOnConnection(connection, s);
+  }
+
+  private void runOnConnection(Connection conn, String s) {
     Statement stmt = null;
     try {
-      stmt = connection.createStatement();
+      stmt = conn.createStatement();
       log.info("Executing SQL {}", s);
       stmt.execute(s);
     } catch (SQLException e) {
@@ -78,6 +95,75 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
     } finally {
       closeQuietly(null, stmt);
     }
+  }
+
+  /**
+   * Partition-phase SQL fan-out. When the connection pool is present, any leading
+   * {@code USE database} statements are broadcast to every pooled connection (Hive
+   * 2.x's ALTER PARTITION SET LOCATION ignores db.table qualifiers and uses the
+   * connection's current database, so each pooled connection needs to USE the
+   * right db before any partition ALTER). The remaining statements are then
+   * dispatched round-robin across the pool. Falls through to the sequential path
+   * on the session connection when no pool is configured.
+   */
+  @Override
+  protected void runSQLs(List<String> sqls) {
+    if (connectionPool == null || sqls.isEmpty()) {
+      super.runSQLs(sqls);
+      return;
+    }
+    int firstNonUse = 0;
+    while (firstNonUse < sqls.size() && isUseStatement(sqls.get(firstNonUse))) {
+      firstNonUse++;
+    }
+    if (firstNonUse > 0) {
+      List<String> setupStatements = sqls.subList(0, firstNonUse);
+      try {
+        connectionPool.runOnEachConnection(setupStatements);
+      } catch (Exception e) {
+        throw new HoodieHiveSyncException("Failed running per-connection setup SQL", e);
+      }
+    }
+    List<String> partitionStatements = sqls.subList(firstNonUse, sqls.size());
+    if (partitionStatements.isEmpty()) {
+      return;
+    }
+    List<Future<?>> futures = new ArrayList<>(partitionStatements.size());
+    for (String sql : partitionStatements) {
+      futures.add(connectionPool.executor().submit(() ->
+          connectionPool.run(conn -> {
+            runOnConnection(conn, sql);
+            return null;
+          })
+      ));
+    }
+    HoodieHiveSyncException firstError = null;
+    for (Future<?> f : futures) {
+      try {
+        f.get();
+      } catch (InterruptedException ie) {
+        Thread.currentThread().interrupt();
+        if (firstError == null) {
+          firstError = new HoodieHiveSyncException("Interrupted while running partition SQL", ie);
+        }
+      } catch (java.util.concurrent.ExecutionException ee) {
+        Throwable cause = ee.getCause();
+        if (firstError == null) {
+          firstError = (cause instanceof HoodieHiveSyncException)
+              ? (HoodieHiveSyncException) cause
+              : new HoodieHiveSyncException("Failed in executing SQL", cause);
+        } else {
+          log.warn("Additional JDBC partition SQL failed (suppressed in favor of first error)", cause);
+        }
+      }
+    }
+    if (firstError != null) {
+      throw firstError;
+    }
+  }
+
+  private static boolean isUseStatement(String sql) {
+    return sql != null && sql.regionMatches(true, 0, "USE ", 0, 4);
   }
 
   private void closeQuietly(ResultSet resultSet, Statement stmt) {
@@ -202,6 +288,15 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
 
   @Override
   public void close() {
+    // Close the pool first so worker threads stop dispatching against their
+    // connections before we tear down anything else.
+    if (connectionPool != null) {
+      try {
+        connectionPool.close();
+      } catch (Exception e) {
+        log.warn("Error closing JDBCConnectionPool", e);
+      }
+    }
     try {
       if (connection != null) {
         connection.close();
