@@ -20,12 +20,17 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.callback.HoodieClientInitCallback;
+import org.apache.hudi.callback.HoodieWriteCommitCallback;
+import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
+import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage.PrevFilePaths;
+import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -34,6 +39,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -86,6 +92,14 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected final HoodieHeartbeatClient heartbeatClient;
   protected final TransactionManager txnManager;
   protected final TimeGenerator timeGenerator;
+
+  /**
+   * Lazily-initialized commit callback (HoodieWriteCommitCallback). Lifted from
+   * {@link BaseHoodieWriteClient} so that {@link BaseHoodieTableServiceClient} can also
+   * fire callbacks for compaction and clustering completions. Transient is fine
+   * because the callback is only ever invoked from the driver after a commit.
+   */
+  protected transient HoodieWriteCommitCallback commitCallback;
 
   /**
    * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
@@ -461,5 +475,79 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
 
   protected Option<Map<String, String>> updateExtraMetadata(Option<Map<String, String>> extraMetadata) {
     return CommitMetadataProperties.enrich(extraMetadata, config, context);
+  }
+
+  /**
+   * Fire {@link HoodieWriteCommitCallback} for a commit, if enabled. Shared by
+   * {@link BaseHoodieWriteClient#postCommit} (regular auto- and explicit-commit paths)
+   * and {@link BaseHoodieTableServiceClient} (compaction and clustering completions).
+   * Lazily constructs the callback instance from {@code hoodie.write.commit.callback.class}.
+   *
+   * <p>Best-effort: catches and logs any exception from the user-supplied callback so a
+   * misbehaving observer cannot fail the commit.
+   */
+  protected void fireCommitCallback(String commitTime,
+                                    String commitActionType,
+                                    List<HoodieWriteStat> stats,
+                                    BaseFileOnlyView fsView,
+                                    Option<Map<String, String>> extraMetadata) {
+    if (!config.writeCommitCallbackOn()) {
+      return;
+    }
+    try {
+      if (commitCallback == null) {
+        commitCallback = HoodieCommitCallbackFactory.create(config);
+      }
+      commitCallback.call(new HoodieWriteCommitCallbackMessage(
+          commitTime, config.getTableName(), config.getBasePath(),
+          stats, Option.of(commitActionType), extraMetadata, resolvePrevFilePaths(stats, fsView),
+          Collections.emptyMap()));
+    } catch (Exception e) {
+      log.warn("HoodieWriteCommitCallback failed for commit {} ({}); ignoring",
+          commitTime, commitActionType, e);
+    }
+  }
+
+  /**
+   * Pre-resolve the previous base file (and bootstrap base file, if any) for every
+   * {@link HoodieWriteStat} that represents an update, using a populated
+   * {@link BaseFileOnlyView}. The lookup is O(1) per stat against the cached view, so
+   * this adds no I/O on top of what the writer already paid.
+   *
+   * <p>Used by {@link #fireCommitCallback} call sites so the callback message ships
+   * actual file paths rather than forcing each callback impl to rebuild a
+   * {@code FileSystemView}.
+   */
+  protected static Map<String, PrevFilePaths> resolvePrevFilePaths(List<HoodieWriteStat> stats,
+                                                                   BaseFileOnlyView fsView) {
+    Map<String, PrevFilePaths> out = new HashMap<>();
+    if (stats == null || fsView == null) {
+      return out;
+    }
+    for (HoodieWriteStat stat : stats) {
+      String prevCommit = stat.getPrevCommit();
+      if (StringUtils.isNullOrEmpty(prevCommit) || HoodieWriteStat.NULL_COMMIT.equals(prevCommit)) {
+        continue;
+      }
+      Option<HoodieBaseFile> prev;
+      try {
+        prev = fsView.getBaseFileOn(stat.getPartitionPath(), prevCommit, stat.getFileId());
+      } catch (Exception e) {
+        // Best-effort: a remote view 4xx/5xx, a stale view, or a replaced file group must not
+        // fail the commit. Drop the prev path for this stat and keep going.
+        log.warn("Could not resolve prev base file for fileId={} prevCommit={}; skipping",
+            stat.getFileId(), prevCommit, e);
+        continue;
+      }
+      if (!prev.isPresent()) {
+        continue;
+      }
+      String prevPath = prev.get().getPath();
+      String bootstrapPath = prev.get().getBootstrapBaseFile().isPresent()
+          ? prev.get().getBootstrapBaseFile().get().getPath()
+          : null;
+      out.put(stat.getFileId(), new PrevFilePaths(prevPath, bootstrapPath));
+    }
+    return out;
   }
 }
