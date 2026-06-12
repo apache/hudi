@@ -135,16 +135,9 @@ class TestRowDataToAvroConverters {
   }
 
   /**
-   * Regression for the {@code createBlobConverter} approach (old design): when a ROW has the same
-   * field-name shape as a BLOB but its {@link HoodieSchema} carries a plain {@code STRING} for
-   * {@code type} (not an {@code ENUM}), the converter must not crash and must write a plain
-   * {@link Utf8} — not a {@link GenericData.EnumSymbol}.
-   *
-   * <p>The old approach selected {@code createBlobConverter} at creation time via
-   * {@code isBlobStructure}, then called
-   * {@code new GenericData.EnumSymbol(stringAvroSchema, ...)} at runtime — which either threw or
-   * wrote the wrong representation.  With Option-1 the ENUM branch is gated on the runtime
-   * {@code HoodieSchema}, so this scenario falls through to a plain {@link Utf8}.
+   * A ROW whose field names match the BLOB structure but whose {@link HoodieSchema} carries a
+   * plain {@code STRING} (not {@code ENUM}) for the {@code type} field must write a plain
+   * {@link Utf8}, not a {@link GenericData.EnumSymbol}.
    */
   @Test
   void testBlobShapedRowWithPlainStringSchemaWritesUtf8() {
