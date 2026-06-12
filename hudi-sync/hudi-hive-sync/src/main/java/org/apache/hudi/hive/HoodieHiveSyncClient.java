@@ -37,6 +37,7 @@ import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.ddl.JDBCBasedMetadataOperator;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
+import org.apache.hudi.hive.util.HiveDriverPool;
 import org.apache.hudi.hive.util.IMetaStoreClientPool;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.hudi.hive.util.PartitionFilterGenerator;
@@ -93,6 +94,10 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   // class; closed in close() before Hive.closeCurrent(). Hands clients to HMSDDLExecutor
   // for partition-row work only — see IMetaStoreClientPool javadoc.
   private IMetaStoreClientPool partitionClientPool;
+  // Non-null only when HIVE_SYNC_BATCHING_ENABLED and sync mode is HIVEQL (explicit
+  // or legacy default). Owned by HiveQueryDDLExecutor; this field is kept for
+  // reference only — close() is delegated through ddlExecutor.close().
+  private HiveDriverPool partitionDriverPool;
 
   /**
    * JDBC-based metadata operator, lazily initialized on first Thrift
@@ -132,7 +137,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
             ddlExecutor = new HMSDDLExecutor(config, this.client, this.partitionClientPool);
             break;
           case HIVEQL:
-            ddlExecutor = new HiveQueryDDLExecutor(config, this.client);
+            this.partitionDriverPool = maybeBuildHiveDriverPool(config);
+            ddlExecutor = new HiveQueryDDLExecutor(config, this.client, this.partitionDriverPool);
             break;
           case JDBC:
             JDBCExecutor jdbcExecutor = new JDBCExecutor(config);
@@ -150,7 +156,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
           jdbcMetadataOperator = new JDBCBasedMetadataOperator(
               jdbcExecutor.getConnection(), databaseName);
         } else {
-          ddlExecutor = new HiveQueryDDLExecutor(config, this.client);
+          this.partitionDriverPool = maybeBuildHiveDriverPool(config);
+          ddlExecutor = new HiveQueryDDLExecutor(config, this.client, this.partitionDriverPool);
         }
       }
     } catch (Exception e) {
@@ -223,6 +230,14 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     }
     int size = config.getIntOrDefault(HIVE_SYNC_BATCHING_THREADS);
     return new IMetaStoreClientPool(config, size);
+  }
+
+  private HiveDriverPool maybeBuildHiveDriverPool(HiveSyncConfig config) {
+    if (!config.getBooleanOrDefault(HIVE_SYNC_BATCHING_ENABLED)) {
+      return null;
+    }
+    int size = config.getIntOrDefault(HIVE_SYNC_BATCHING_THREADS);
+    return new HiveDriverPool(config, size);
   }
 
   private Table getInitialTable(String table) {

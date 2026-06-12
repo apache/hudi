@@ -366,6 +366,67 @@ public class TestHiveSyncTool {
         "Incremental add via parallel batching should sync the new partitions");
   }
 
+  /**
+   * Exercises HiveQL sync with parallel partition batching enabled. Mirrors the
+   * HMS test but routes through the HiveDriverPool — each worker thread owns a
+   * Driver+SessionState pair, and the SQL list (qualified with `db`.`tbl`) is
+   * fanned out across them.
+   */
+  @Test
+  public void testHiveQLSyncWithBatchingEnabled() throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), HiveSyncMode.HIVEQL.name());
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_ENABLED.key(), "true");
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_THREADS.key(), "3");
+    hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "3");
+
+    int partitionCount = 10;
+    HiveTestUtil.createCOWTable("100", partitionCount, true);
+
+    reInitHiveSyncClient();
+    assertFalse(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
+        "Table should not exist before initial sync");
+    reSyncHiveTable();
+    assertEquals(partitionCount, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+        "All partitions should be added under parallel HiveQL batching");
+
+    // Add more partitions, then sync again to exercise the parallel update path.
+    HiveTestUtil.addCOWPartition("2050/01/01", true, true, "101");
+    HiveTestUtil.addCOWPartition("2050/01/02", true, true, "102");
+    HiveTestUtil.addCOWPartition("2050/01/03", true, true, "103");
+    HiveTestUtil.addCOWPartition("2050/01/04", true, true, "104");
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(partitionCount + 4, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+        "Incremental add via parallel HiveQL batching should sync the new partitions");
+  }
+
+  /**
+   * Exercises the TOUCH path in HiveQL mode with batching on. Verifies that
+   * splitting one giant ALTER TABLE TOUCH PARTITION(...)... into multiple smaller
+   * statements does not break partition visibility downstream.
+   */
+  @Test
+  public void testHiveQLTouchPartitionsWithBatching() throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), HiveSyncMode.HIVEQL.name());
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_ENABLED.key(), "true");
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_THREADS.key(), "2");
+    hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "2");
+    hiveSyncProps.setProperty(META_SYNC_TOUCH_PARTITIONS_ENABLED.key(), "true");
+
+    int partitionCount = 6;
+    HiveTestUtil.createCOWTable("100", partitionCount, true);
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(partitionCount, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size());
+
+    // Touch existing partitions (no new data) — should hit the batched TOUCH path
+    // without changing the partition count.
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(partitionCount, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+        "TOUCH batching must not change the partition set");
+  }
+
   @ParameterizedTest
   @MethodSource({"syncModeAndSchemaFromCommitMetadata"})
   public void testBasicSync(boolean useSchemaFromCommitMetadata, String syncMode, String enablePushDown) throws Exception {
