@@ -283,7 +283,7 @@ public class HoodieSchemaConverter {
    * type. See <a href="https://github.com/apache/hudi/issues/18711">apache/hudi#18711</a> for
    * the tracked work to remove this structural inference.
    */
-  static boolean isBlobStructure(RowType rowType) {
+  private static boolean isBlobStructure(RowType rowType) {
     // Validate: 3 fields with exact names
     if (rowType.getFieldCount() != HoodieSchema.Blob.getFieldCount()) {
       return false;
