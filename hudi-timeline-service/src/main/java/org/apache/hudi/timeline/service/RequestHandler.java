@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.timeline.dto.InstantDTO;
 import org.apache.hudi.common.table.timeline.dto.TimelineDTO;
+import org.apache.hudi.common.table.timeline.dto.v2.TimelineDTOV2;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -171,6 +172,18 @@ public class RequestHandler {
     return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MIN_INSTANT_PARAM, String.class).getOrDefault("");
   }
 
+  private static String getInstantParam(Context ctx) {
+    return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INSTANT_PARAM, String.class).getOrThrow(e -> new BadRequestResponse("INSTANT_PARAM is required"));
+  }
+
+  private static String getInstantActionParam(Context ctx) {
+    return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INSTANT_ACTION_PARAM, String.class).getOrThrow(e -> new BadRequestResponse("INSTANT_ACTION_PARAM is required"));
+  }
+
+  private static String getInstantStateParam(Context ctx) {
+    return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INSTANT_STATE_PARAM, String.class).getOrThrow(e -> new BadRequestResponse("INSTANT_STATE_PARAM is required"));
+  }
+
   private static String getMarkerDirParam(Context ctx) {
     return ctx.queryParamAsClass(MarkerOperation.MARKER_DIR_PATH_PARAM, String.class).getOrDefault("");
   }
@@ -185,6 +198,9 @@ public class RequestHandler {
     registerDataFilesAPI();
     registerFileSlicesAPI();
     registerTimelineAPI();
+    if (timelineServiceConfig.enableUi) {
+      registerTimelineV2API();
+    }
     if (markerHandler != null) {
       registerMarkerAPI();
     }
@@ -239,6 +255,43 @@ public class RequestHandler {
       metricsRegistry.add("TIMELINE", 1);
       TimelineDTO dto = instantHandler.getTimeline(getBasePathParam(ctx));
       writeValueAsString(ctx, dto);
+    }, false));
+  }
+
+  /**
+   * Register v2 Timeline API calls used by the Timeline UI. Gated behind --enable-ui.
+   */
+  private void registerTimelineV2API() {
+    app.get(RemoteHoodieTableFileSystemView.TIMELINE_V2_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("TIMELINE_V2", 1);
+      TimelineDTOV2 dto = instantHandler.getTimelineV2(getBasePathParam(ctx));
+      writeValueAsString(ctx, dto);
+    }, false));
+
+    app.get(RemoteHoodieTableFileSystemView.INSTANT_DETAILS_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("INSTANT_DETAILS", 1);
+      Object instantDetails = instantHandler.getInstantDetails(getBasePathParam(ctx),
+          getInstantParam(ctx), getInstantActionParam(ctx), getInstantStateParam(ctx));
+      writeValueAsString(ctx, instantDetails);
+    }, false));
+
+    app.get(RemoteHoodieTableFileSystemView.TABLE_CONFIG_V2_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("TABLE_CONFIG", 1);
+      writeValueAsString(ctx, instantHandler.getTableConfig(getBasePathParam(ctx)));
+    }, false));
+
+    app.get(RemoteHoodieTableFileSystemView.SCHEMA_HISTORY_V2_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("SCHEMA_HISTORY", 1);
+      int limit;
+      try {
+        limit = Integer.parseInt(ctx.queryParamAsClass("limit", String.class).getOrDefault("200"));
+      } catch (NumberFormatException e) {
+        throw new BadRequestResponse("limit must be an integer");
+      }
+      if (limit <= 0 || limit > 1000) {
+        throw new BadRequestResponse("limit must be between 1 and 1000");
+      }
+      writeValueAsString(ctx, instantHandler.getSchemaHistory(getBasePathParam(ctx), limit));
     }, false));
   }
 

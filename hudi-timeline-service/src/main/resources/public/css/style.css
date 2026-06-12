@@ -1,0 +1,234 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/* Hudi-specific overrides — Bootstrap 5 handles the rest */
+
+:root {
+  --hudi-accent: #0DB1F9;
+  --hudi-completed: #198754;
+  --hudi-inflight: #FFAA00;
+  --hudi-requested: #dc3545;
+}
+
+/* Navbar brand accent */
+.hudi-brand-icon {
+  color: var(--hudi-accent);
+}
+
+/* vis-timeline: card provides the border */
+#timeline {
+  height: 400px;
+}
+
+#timeline .vis-timeline {
+  border: none;
+  font-family: inherit;
+}
+
+/* vis-timeline: state colors */
+.vis-item.state-COMPLETED {
+  background-color: var(--hudi-completed);
+  border-color: #146c43;
+  color: #fff;
+}
+
+.vis-item.state-INFLIGHT {
+  background-color: var(--hudi-inflight);
+  border-color: #cc8800;
+  color: #000;
+}
+
+.vis-item.state-REQUESTED {
+  background-color: var(--hudi-requested);
+  border-color: #b02a37;
+  color: #fff;
+}
+
+/* vis-timeline: selected item override (fixes yellow highlight with unreadable white text) */
+.vis-item.vis-selected {
+  background-color: #004E7F !important;
+  border-color: #003767 !important;
+  color: #fff !important;
+}
+
+/* renderjson overrides */
+#detailBody .renderjson a {
+  text-decoration: none;
+  color: var(--hudi-accent);
+}
+
+#detailBody .renderjson .key {
+  color: #0d6efd;
+}
+
+#detailBody .renderjson .string {
+  color: #198754;
+}
+
+#detailBody .renderjson .number {
+  color: #6f42c1;
+}
+
+#detailBody .renderjson .boolean {
+  color: #d63384;
+}
+
+#detailBody .renderjson .null {
+  color: #6c757d;
+}
+
+/* Ensure timeline card header wraps controls gracefully on small screens */
+#stateLoaded .card-header {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Clean range highlight on timeline */
+.vis-item.clean-range-bg {
+  background-color: rgba(13, 177, 249, 0.15);
+  border: none;
+}
+
+.vis-item.clean-range-bg .vis-item-content {
+  color: #004E7F;
+  font-size: 0.75rem;
+  font-weight: 600;
+  opacity: 0.6;
+  padding: 2px 6px;
+}
+
+/* Navbar: Hudi navy instead of Bootstrap bg-dark */
+.navbar.bg-dark {
+  background-color: #082C54 !important;
+}
+
+/* Load Timeline button: Hudi blue */
+.btn-primary {
+  background-color: #228EDE;
+  border-color: #0A9FCA;
+}
+
+.btn-primary:hover {
+  background-color: #0A9FCA;
+  border-color: #004E7F;
+}
+
+/* Filter pill buttons */
+.filter-pill {
+  border: 1px solid #dee2e6;
+  background-color: #f8f9fa;
+  color: #6c757d;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 1rem;
+  transition: all 0.15s;
+  cursor: pointer;
+}
+
+.filter-pill.active {
+  background-color: #082C54;
+  border-color: #082C54;
+  color: #fff;
+}
+
+.filter-pill:hover {
+  opacity: 0.85;
+}
+
+.filter-pill[data-filter-state="COMPLETED"].active {
+  background-color: var(--hudi-completed);
+  border-color: var(--hudi-completed);
+}
+
+.filter-pill[data-filter-state="INFLIGHT"].active {
+  background-color: var(--hudi-inflight);
+  border-color: var(--hudi-inflight);
+  color: #000;
+}
+
+.filter-pill[data-filter-state="REQUESTED"].active {
+  background-color: var(--hudi-requested);
+  border-color: var(--hudi-requested);
+}
+
+/* Summary stat cards */
+#summaryStats .card {
+  border-color: #e9ecef;
+}
+
+/* Detail body scrollable */
+#detailBody {
+  max-height: 500px;
+  overflow-y: auto;
+  font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.875rem;
+}
+
+/* Nav tabs: Hudi accent active state */
+#mainTabs .nav-link.active {
+  color: #082C54;
+  border-bottom-color: var(--hudi-accent);
+  border-bottom-width: 2px;
+}
+
+#mainTabs .nav-link {
+  color: #6c757d;
+}
+
+#mainTabs .nav-link:hover:not(.active) {
+  color: #082C54;
+}
+
+/* Table Config: filter input sizing */
+.config-filter-input {
+  max-width: 300px;
+  margin-left: auto;
+}
+
+/* Table Config: monospace property names */
+#configTableBody td:first-child {
+  font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.85rem;
+  color: #082C54;
+}
+
+/* Schema diff colors */
+.schema-diff-added {
+  border-left: 3px solid var(--hudi-completed);
+  padding-left: 0.5rem;
+  background-color: rgba(25, 135, 84, 0.05);
+}
+
+.schema-diff-removed {
+  border-left: 3px solid var(--hudi-requested);
+  padding-left: 0.5rem;
+  background-color: rgba(220, 53, 69, 0.05);
+}
+
+.schema-diff-changed {
+  border-left: 3px solid #ffc107;
+  padding-left: 0.5rem;
+  background-color: rgba(255, 193, 7, 0.05);
+}
+
+/* Schema tree body scrollable */
+#currentSchemaTree {
+  max-height: 400px;
+  overflow-y: auto;
+  font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.875rem;
+}

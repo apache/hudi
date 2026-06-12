@@ -26,11 +26,14 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.timeline.service.ui.UiHandler;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
+import io.javalin.core.compression.CompressionStrategy;
 import io.javalin.core.util.JavalinBindException;
+import io.javalin.http.staticfiles.Location;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -60,6 +63,7 @@ public class TimelineService {
   private transient Javalin app = null;
   private transient FileSystemViewManager fsViewsManager;
   private transient RequestHandler requestHandler;
+  private transient UiHandler uiHandler;
 
   public TimelineService(StorageConfiguration<?> storageConf, Config timelineServerConf,
                          FileSystemViewManager globalFileSystemViewManager) {
@@ -121,6 +125,10 @@ public class TimelineService {
     @Builder.Default
     @Parameter(names = {"--enable-marker-requests", "-em"}, description = "Enable handling of marker-related requests")
     public boolean enableMarkerRequests = false;
+
+    @Builder.Default
+    @Parameter(names = {"--enable-ui"}, description = "Enable the Timeline UI (/ui) and its /v2/hoodie/view/ UI API endpoints")
+    public boolean enableUi = false;
 
     @Builder.Default
     @Parameter(names = {"--enable-remote-partitioner"}, description = "Enable remote partitioner")
@@ -232,15 +240,22 @@ public class TimelineService {
 
     app = Javalin.create(c -> {
       if (!timelineServerConf.compress) {
-        c.compressionStrategy(io.javalin.core.compression.CompressionStrategy.NONE);
+        c.compressionStrategy(CompressionStrategy.NONE);
       }
       c.server(() -> server);
+      if (timelineServerConf.enableUi) {
+        c.addStaticFiles("/public", Location.CLASSPATH);
+      }
     });
 
     requestHandler = new RequestHandler(
         app, storageConf, timelineServerConf, fsViewsManager);
     app.get("/", ctx -> ctx.result("Hello Hudi"));
     requestHandler.register();
+    if (timelineServerConf.enableUi) {
+      uiHandler = new UiHandler(app);
+      uiHandler.register();
+    }
   }
 
   public void run() throws IOException {
@@ -249,8 +264,10 @@ public class TimelineService {
 
   public static FileSystemViewManager buildFileSystemViewManager(Config config, StorageConfiguration<?> conf) {
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(conf);
-    // Just use defaults for now
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
+    // Disable the metadata table for the standalone timeline server (which backs the Timeline UI):
+    // it serves read-only timeline data for arbitrary basepaths, so it should not require each table
+    // to have a metadata table present/bootstrapped. File listings fall back to direct storage listing.
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(false).build();
     HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().build();
 
     switch (config.viewStorageType) {
@@ -310,5 +327,8 @@ public class TimelineService {
         cfg,
         viewManager);
     service.run();
+    // Block the main thread to keep the server alive (Javalin uses daemon threads).
+    Runtime.getRuntime().addShutdownHook(new Thread(service::close));
+    Thread.currentThread().join();
   }
 }
