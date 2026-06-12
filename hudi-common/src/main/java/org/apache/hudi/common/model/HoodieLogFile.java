@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -109,6 +110,17 @@ public class HoodieLogFile implements Serializable {
   }
 
   private void parseFieldsFromPath() {
+    Option<Matcher> nativeLogMatcherOpt = FSUtils.matchNativeLogFile(getPath().getName());
+    if (nativeLogMatcherOpt.isPresent()) {
+      Matcher matcher = nativeLogMatcherOpt.get();
+      this.fileId = matcher.group(1);
+      this.deltaCommitTime = matcher.group(6);
+      this.fileExtension = matcher.group(9);
+      this.logVersion = Integer.parseInt(matcher.group(7));
+      this.logWriteToken = matcher.group(2);
+      this.suffix = matcher.group(8) == null ? "" : matcher.group(8);
+      return;
+    }
     Matcher matcher = LOG_FILE_PATTERN.matcher(getPath().getName());
     if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path, "LogFile");

@@ -18,12 +18,15 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieLogFile {
   private final String pathStr = "file:///tmp/hoodie/2021/01/01/.136281f3-c24e-423b-a65a-95dbfbddce1d_100.log.2_1-0-1";
@@ -75,6 +78,48 @@ public class TestHoodieLogFile {
     String pathWithSuffix = pathStr + suffix;
     HoodieLogFile hoodieLogFile = new HoodieLogFile(pathWithSuffix);
     assertFileGetters(pathWithSuffix, null, hoodieLogFile, -1, suffix);
+  }
+
+  @Test
+  void createFromNativeParquetLogFile() {
+    String nativeLogPathStr = "file:///tmp/hoodie/2021/01/01/"
+        + "136281f3-c24e-423b-a65a-95dbfbddce1d_1-0-1_20250409161256974_2.parquet";
+    StoragePath nativeLogPath = new StoragePath(nativeLogPathStr);
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(nativeLogPath);
+
+    assertTrue(FSUtils.isLogFile(nativeLogPath));
+    assertFalse(FSUtils.isBaseFile(nativeLogPath));
+    assertEquals(fileId, hoodieLogFile.getFileId());
+    assertEquals("20250409161256974", hoodieLogFile.getDeltaCommitTime());
+    assertEquals(2, hoodieLogFile.getLogVersion());
+    assertEquals("1-0-1", hoodieLogFile.getLogWriteToken());
+    assertEquals("parquet", hoodieLogFile.getFileExtension());
+    assertEquals("", hoodieLogFile.getSuffix());
+    assertEquals("20250409161256974", FSUtils.getCommitTime(nativeLogPath.getName()));
+    assertEquals("20250409161256974", FSUtils.getDeltaCommitTimeFromLogPath(nativeLogPath));
+    assertEquals(2, FSUtils.getFileVersionFromLog(nativeLogPath));
+    assertEquals("1-0-1", FSUtils.getWriteTokenFromLogPath(nativeLogPath));
+    assertEquals(1, FSUtils.getTaskPartitionIdFromLogPath(nativeLogPath));
+    assertEquals(0, FSUtils.getStageIdFromLogPath(nativeLogPath));
+    assertEquals(1, FSUtils.getTaskAttemptIdFromLogPath(nativeLogPath));
+  }
+
+  @Test
+  void createFromNativeDeleteParquetLogFile() {
+    String nativeDeleteLogPathStr = "file:///tmp/hoodie/2021/01/01/"
+        + "136281f3-c24e-423b-a65a-95dbfbddce1d_1-0-1_20250409161256974_3.delete.parquet";
+    StoragePath nativeDeleteLogPath = new StoragePath(nativeDeleteLogPathStr);
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(nativeDeleteLogPath);
+
+    assertTrue(FSUtils.isLogFile(nativeDeleteLogPath));
+    assertTrue(FSUtils.isNativeDeleteLogFile(nativeDeleteLogPath.getName()));
+    assertFalse(FSUtils.isBaseFile(nativeDeleteLogPath));
+    assertEquals(fileId, hoodieLogFile.getFileId());
+    assertEquals("20250409161256974", hoodieLogFile.getDeltaCommitTime());
+    assertEquals(3, hoodieLogFile.getLogVersion());
+    assertEquals("1-0-1", hoodieLogFile.getLogWriteToken());
+    assertEquals("parquet", hoodieLogFile.getFileExtension());
+    assertEquals(".delete", hoodieLogFile.getSuffix());
   }
 
   private void assertFileGetters(StoragePathInfo pathInfo, HoodieLogFile hoodieLogFile,
