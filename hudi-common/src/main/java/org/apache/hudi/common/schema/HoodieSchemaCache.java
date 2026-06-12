@@ -20,6 +20,7 @@ package org.apache.hudi.common.schema;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
+import org.apache.avro.Schema;
 
 /**
  * A global cache for HoodieSchema instances to ensure that there is only one
@@ -36,6 +37,14 @@ public class HoodieSchemaCache {
   private static final LoadingCache<HoodieSchema, HoodieSchema> SCHEMA_CACHE =
       Caffeine.newBuilder().weakValues().maximumSize(1024).build(k -> k);
 
+  // Avro-schema-keyed view onto the cache above for per-record call sites: weakKeys gives
+  // identity-based lookups (records of one file share the same Schema instance), so the hot path
+  // is a single cache hit with no wrapper allocation or type dispatch. Misses convert and then
+  // value-intern, so equal but distinct Avro schema instances still converge on one canonical
+  // HoodieSchema.
+  private static final LoadingCache<Schema, HoodieSchema> AVRO_SCHEMA_CACHE =
+      Caffeine.newBuilder().weakKeys().maximumSize(1024).build(avroSchema -> intern(HoodieSchema.fromAvroSchema(avroSchema)));
+
   /**
    * Get schema variable from global cache. If not found, put it into the cache and then return it.
    *
@@ -44,5 +53,16 @@ public class HoodieSchemaCache {
    */
   public static HoodieSchema intern(HoodieSchema schema) {
     return SCHEMA_CACHE.get(schema);
+  }
+
+  /**
+   * Returns the canonical {@link HoodieSchema} wrapping the given Avro schema, converting and
+   * interning it on first use.
+   *
+   * @param avroSchema Avro schema to look up
+   * @return the canonical HoodieSchema for the given Avro schema
+   */
+  public static HoodieSchema intern(Schema avroSchema) {
+    return AVRO_SCHEMA_CACHE.get(avroSchema);
   }
 }

@@ -74,7 +74,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     // Interning returns the canonical wrapper for this schema, whose lazily built field list and
     // field map survive across calls, so the per-record cost is a cache hit instead of an
     // O(schema width) wrapper rebuild.
-    HoodieSchema currentSchema = HoodieSchemaCache.intern(HoodieSchema.fromAvroSchema(record.getSchema()));
+    HoodieSchema currentSchema = HoodieSchemaCache.intern(record.getSchema());
     IndexedRecord currentRecord = record;
     String[] path = fieldName.split("\\.");
     for (int i = 0; i < path.length; i++) {
