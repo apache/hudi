@@ -458,4 +458,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
 
     return foundRollingMetadata;
   }
+
+  protected Option<Map<String, String>> updateExtraMetadata(Option<Map<String, String>> extraMetadata) {
+    return CommitMetadataProperties.enrich(extraMetadata, config, context);
+  }
 }
