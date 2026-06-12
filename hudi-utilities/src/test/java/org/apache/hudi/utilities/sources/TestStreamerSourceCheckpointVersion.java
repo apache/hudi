@@ -168,7 +168,7 @@ class TestStreamerSourceCheckpointVersion {
     TypedProperties props = propsWith(writeTableVersion);
     props.setProperty("hoodie.streamer.source.sql.file", sqlFile.toString());
     props.setProperty("hoodie.streamer.source.sql.checkpoint.emit", "true");
-    SqlFileBasedSource source = new SqlFileBasedSource(props, jsc, spark, null);
+    SqlFileBasedSource source = new SqlFileBasedSource(props, jsc, spark, null, null);
     Pair<Option<Dataset<Row>>, Checkpoint> result =
         invokeRowSourceFetch(source, makeInputCheckpoint(inputKind, "k"));
     assertV1(result.getRight());
