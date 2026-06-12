@@ -50,6 +50,8 @@ import org.apache.spark.sql.execution.streaming.runtime.MemoryStream
 import org.apache.spark.sql.hudi.{HoodieMemoryStream, SparkAdapter}
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.hudi.blob.{BatchedBlobReaderStrategy, ScalarFunctions}
+import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
+import org.apache.spark.sql.hudi.v2.HoodieSparkV2Table
 import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark4_1ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, DataTypes, Metadata, MetadataBuilder, StructField, StructType}
@@ -72,6 +74,8 @@ class Spark4_1Adapter extends BaseSpark4Adapter {
         case plan if !plan.resolved => None
         // NOTE: When resolving Hudi table we allow [[Filter]]s and [[Project]]s be applied
         //       on top of it
+        case PhysicalOperation(_, _, DataSourceV2Relation(v2: HoodieSparkV2Table, _, _, _, _, _)) =>
+          v2.catalogTable
         case PhysicalOperation(_, _, DataSourceV2Relation(v2: V2TableWithV1Fallback, _, _, _, _, _)) if isHoodieTable(v2) =>
           Some(v2.v1Table)
         case ResolvedTable(_, _, V1Table(v1Table), _) if isHoodieTable(v1Table) =>
@@ -82,7 +86,7 @@ class Spark4_1Adapter extends BaseSpark4Adapter {
   }
 
   def isHoodieTable(v2Table: V2TableWithV1Fallback): Boolean = {
-    v2Table.getClass.getName.contains("HoodieInternalV2Table")
+    v2Table.isInstanceOf[HoodieInternalV2Table] || v2Table.isInstanceOf[HoodieSparkV2Table]
   }
 
   override def isColumnarBatchRow(r: InternalRow): Boolean = r.isInstanceOf[ColumnarBatchRow]

@@ -198,7 +198,10 @@ public class SpaceCurveSortingHelper {
   }
 
   private static Row appendToRow(Row row, Object value) {
-    Object[] currentValues = JavaScalaConverters.convertScalaListToJavaList(row.toSeq()).toArray();
+    // toList(): convertScalaListToJavaList takes scala.collection.immutable.Seq (Scala's `Seq`
+    // alias), while Row.toSeq returns the wider scala.collection.Seq. toList() narrows it to a
+    // scala.collection.immutable.List, which satisfies the bound.
+    Object[] currentValues = JavaScalaConverters.convertScalaListToJavaList(row.toSeq().toList()).toArray();
     return RowFactory.create(CollectionUtils.append(currentValues, value));
   }
 

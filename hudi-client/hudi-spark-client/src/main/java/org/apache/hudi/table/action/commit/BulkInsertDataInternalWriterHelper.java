@@ -135,8 +135,10 @@ public class BulkInsertDataInternalWriterHelper {
           partitionIdx.add(this.structType.fieldIndex(col));
         }
 
-        // Relies on InternalRow::toSeq(...) preserving the column ordering based on the supplied schema
-        List<Object> cols = JavaScalaConverters.convertScalaListToJavaList(row.toSeq(structType));
+        // Relies on InternalRow::toSeq(...) preserving the column ordering based on the supplied schema.
+        // toList(): convertScalaListToJavaList takes scala.collection.immutable.Seq (Scala's `Seq`
+        // alias); InternalRow.toSeq returns the wider scala.collection.Seq. toList() narrows it.
+        List<Object> cols = JavaScalaConverters.convertScalaListToJavaList(row.toSeq(structType).toList());
         int idx = 0;
         List<Object> newCols = new ArrayList<>();
         for (Object o : cols) {
@@ -145,7 +147,10 @@ public class BulkInsertDataInternalWriterHelper {
           }
           idx += 1;
         }
-        InternalRow newRow = InternalRow.fromSeq(JavaScalaConverters.convertJavaListToScalaSeq(newCols));
+        // convertJavaListToScalaList yields scala.collection.immutable.List, which satisfies
+        // the immutable.Seq bound on InternalRow.fromSeq; convertJavaListToScalaSeq returns
+        // the wider scala.collection.Seq.
+        InternalRow newRow = InternalRow.fromSeq(JavaScalaConverters.convertJavaListToScalaList(newCols));
         handle.write(newRow);
       } else {
         handle.write(row);

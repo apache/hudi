@@ -31,6 +31,7 @@ import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRela
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
+import org.apache.spark.sql.hudi.v2.HoodieSparkV2Table
 import org.apache.spark.sql.sources.InsertableRelation
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.PartitioningUtils.normalizePartitionSpec
@@ -57,6 +58,16 @@ case class HoodieSpark41DataSourceV2ToV1Fallback(sparkSession: SparkSession) ext
     case iis@InsertIntoStatement(rv2@DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _, _), _, _, _, _, _, _) =>
       iis.copy(table = convertToV1(rv2, v2Table))
 
+    // INSERT against HoodieSparkV2Table (use.v2=true) must also fall back to the V1 writer.
+    // HoodieSparkV2Table does not advertise OVERWRITE_BY_FILTER — without this interception
+    // Spark's V2 planner rejects INSERT OVERWRITE ... PARTITION. We only match
+    // InsertIntoStatement so that df.writeTo(tbl).overwrite(expr) (OverwriteByExpression)
+    // continues to be rejected, and we leave SELECT DataSourceV2Relations untouched so
+    // reads still flow through HoodieScanBuilder.
+    case iis@InsertIntoStatement(rv2@DataSourceV2Relation(v2Table: HoodieSparkV2Table, _, _, _, _, _), _, _, _, _, _, _)
+        if v2Table.hoodieCatalogTable.isDefined =>
+      iis.copy(table = convertToV1(rv2, v2Table))
+
     case _ =>
       plan.resolveOperatorsDown {
         case rv2@DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _, _) => convertToV1(rv2, v2Table)
@@ -70,6 +81,15 @@ case class HoodieSpark41DataSourceV2ToV1Fallback(sparkSession: SparkSession) ext
       buildHoodieConfig(v2Table.hoodieCatalogTable), v2Table.hoodieCatalogTable.tableSchema)
 
     LogicalRelation(relation, output, catalogTable, isStreaming = false, Option.empty)
+  }
+
+  private def convertToV1(rv2: DataSourceV2Relation, v2Table: HoodieSparkV2Table) = {
+    val hoodieCatalogTable = v2Table.hoodieCatalogTable.get
+    val catalogTable = v2Table.catalogTable.map(_ => v2Table.v1Table)
+    val relation = new DefaultSource().createRelation(sparkSession.sqlContext,
+      buildHoodieConfig(hoodieCatalogTable), hoodieCatalogTable.tableSchema)
+
+    LogicalRelation(relation, rv2.output, catalogTable, isStreaming = false, Option.empty)
   }
 }
 

@@ -311,6 +311,14 @@ object DataSourceReadOptions {
       " for parsing partition values from partition path. When this config is enabled, it uses" +
       " PartitionValueExtractor class value stored in the hoodie.properties file.")
 
+  val USE_V2_READ: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.use.v2")
+    .defaultValue("false")
+    .markAdvanced()
+    .sinceVersion("1.3.0")
+    .withDocumentation("When enabled, SQL/catalog queries use the DSv2 read path (HoodieSparkV2Table) " +
+      "instead of the default DSv1 path. The DataFrame API can also use format(\"hudi_v2\") directly.")
+
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
   val QUERY_TYPE_OPT_KEY = QUERY_TYPE.key()
