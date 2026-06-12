@@ -360,8 +360,8 @@ public class TestHoodieSourceSplit {
     );
 
     assertTrue(split.getInstantRange().isPresent());
-    assertEquals("20230101000000000", split.getInstantRange().get().getStartInstant().get());
-    assertEquals("20230131235959999", split.getInstantRange().get().getEndInstant().get());
+    assertEquals("20230101000000000", split.getInstantRange().get().getStartInstantOpt().get());
+    assertEquals("20230131235959999", split.getInstantRange().get().getEndInstantOpt().get());
   }
 
   @Test
@@ -402,9 +402,9 @@ public class TestHoodieSourceSplit {
     );
 
     assertTrue(split.getInstantRange().isPresent());
-    assertTrue(split.getInstantRange().get().getStartInstant().isPresent());
-    assertFalse(split.getInstantRange().get().getEndInstant().isPresent());
-    assertEquals("20230101000000000", split.getInstantRange().get().getStartInstant().get());
+    assertTrue(split.getInstantRange().get().getStartInstantOpt().isPresent());
+    assertFalse(split.getInstantRange().get().getEndInstantOpt().isPresent());
+    assertEquals("20230101000000000", split.getInstantRange().get().getStartInstantOpt().get());
   }
 
   @Test
@@ -476,7 +476,7 @@ public class TestHoodieSourceSplit {
     );
 
     assertTrue(split.getInstantRange().isPresent());
-    assertTrue(split.getInstantRange().get().getStartInstant().isPresent());
-    assertTrue(split.getInstantRange().get().getEndInstant().isPresent());
+    assertTrue(split.getInstantRange().get().getStartInstantOpt().isPresent());
+    assertTrue(split.getInstantRange().get().getEndInstantOpt().isPresent());
   }
 }

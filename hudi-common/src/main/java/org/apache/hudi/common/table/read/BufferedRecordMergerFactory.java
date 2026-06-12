@@ -33,15 +33,16 @@ import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 import java.io.IOException;
 
 /**
  * Factory to create a {@link BufferedRecordMerger}.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class BufferedRecordMergerFactory {
-
-  private BufferedRecordMergerFactory() {
-  }
 
   public static <T> BufferedRecordMerger<T> create(HoodieReaderContext<T> readerContext,
                                                    RecordMergeMode recordMergeMode,
