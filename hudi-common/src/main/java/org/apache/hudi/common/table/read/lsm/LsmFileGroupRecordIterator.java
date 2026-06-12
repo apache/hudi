@@ -54,7 +54,10 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.function.UnaryOperator;
 
+import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
+import static org.apache.hudi.common.config.HoodieReaderConfig.LSM_SORT_MERGE_SPILL_THRESHOLD;
 import static org.apache.hudi.common.schema.HoodieSchemaCompatibility.areSchemasProjectionEquivalent;
+import static org.apache.hudi.io.util.FileIOUtils.getDefaultSpillableMapBasePath;
 
 /**
  * Streaming sorted-merge reader for LSM file groups whose delta files are parquet files.
@@ -86,6 +89,8 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
   private final BufferedRecordMerger<T> bufferedRecordMerger;
   private final UpdateProcessor<T> updateProcessor;
   private final LoserTree<T> readers;
+  private final int spillThreshold;
+  private final String spillBasePath;
   private BufferedRecord<T> nextRecord;
 
   public LsmFileGroupRecordIterator(HoodieReaderContext<T> readerContext,
@@ -120,6 +125,8 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
         readerContext, readerContext.getMergeMode(), false, readerContext.getRecordMerger(),
         readerSchema, readerContext.getPayloadClasses(props), props, metaClient.getTableConfig().getPartialUpdateMode());
     this.updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.isEmitDeletes(), fileGroupUpdateCallback, props);
+    this.spillThreshold = props.getInteger(LSM_SORT_MERGE_SPILL_THRESHOLD.key(), LSM_SORT_MERGE_SPILL_THRESHOLD.defaultValue());
+    this.spillBasePath = props.getString(SPILLABLE_MAP_BASE_PATH.key(), getDefaultSpillableMapBasePath());
     this.readers = new LoserTree<>(initializeReaders());
   }
 
@@ -130,9 +137,19 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
       addReader(readerStates, mergeOrder++, createBaseFileIterator(inputSplit.getBaseFileOption().get()));
     }
     for (HoodieLogFile logFile : inputSplit.getLogFiles()) {
-      addReader(readerStates, mergeOrder++, createFileIterator(logFile.getPathInfo(), logFile.getPath(), logFile.getFileSize()));
+      ClosableIterator<BufferedRecord<T>> iterator = createFileIterator(logFile.getPathInfo(), logFile.getPath(), logFile.getFileSize());
+      addReader(readerStates, mergeOrder, maybeSpillIterator(mergeOrder, iterator));
+      mergeOrder++;
     }
     return readerStates;
+  }
+
+  private ClosableIterator<BufferedRecord<T>> maybeSpillIterator(int mergeOrder,
+                                                                 ClosableIterator<BufferedRecord<T>> iterator) {
+    if (mergeOrder < spillThreshold) {
+      return iterator;
+    }
+    return new SpillableLsmRecordIterator<>(iterator, readerContext.getRecordSerializer(), readerContext.getRecordContext(), spillBasePath);
   }
 
   private void addReader(List<ReaderState<T>> readerStates, int mergeOrder, ClosableIterator<BufferedRecord<T>> iterator) {
