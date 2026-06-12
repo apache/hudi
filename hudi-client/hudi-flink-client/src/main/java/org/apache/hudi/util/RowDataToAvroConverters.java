@@ -240,8 +240,7 @@ public class RowDataToAvroConverters {
         converter = createArrayConverter((ArrayType) type, utcTimezone);
         break;
       case ROW:
-        RowType rowType = (RowType) type;
-        converter = createRowConverter(rowType, utcTimezone);
+        converter = createRowConverter((RowType) type, utcTimezone);
         break;
       case MAP:
       case MULTISET:
