@@ -68,6 +68,7 @@ import static org.apache.hudi.common.schema.HoodieSchemaUtils.METADATA_FIELD_SCH
 import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -292,6 +293,178 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
         fileName, recordKeyField, minKey, maxKey, 0, totalCount);
     validateColumnRangeMetadata(columnRangeMetadataList.get(2),
         fileName, partitionPathField, partitionPath, partitionPath, 0, totalCount);
+  }
+
+  /**
+   * Tests that for a FLOAT/DOUBLE column containing any NaN, ParquetUtils reports
+   * null min/max — because parquet-mr clears its stats (hasNonNullValue=false) but
+   * leaves min/max at their default 0.0. Persisting 0.0/0.0 as if they were valid
+   * stats was the writer-side half of #18754; downstream data-skipping would then
+   * silently prune the file. The fix is gated on Statistics.hasNonNullValue().
+   */
+  @Test
+  public void testReadColumnStatsFromMetadata_nanTaintedDoubleColumn() throws Exception {
+    String recordKeyField = "id";
+    String partitionPathField = "partition";
+    String dataField = "data_double";
+    HoodieSchema schema = getSchemaWithDoubleData(recordKeyField, partitionPathField, dataField);
+
+    String fileName = "test_nan.parquet";
+    String filePath = new StoragePath(basePath, fileName).toString();
+    String partitionPath = "p";
+
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, BloomFilterTypeCode.SIMPLE.name());
+    HoodieAvroWriteSupport writeSupport =
+        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema.toAvroSchema()), schema, Option.of(filter), new Properties());
+    int totalCount = 11;
+    try (ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,
+        120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE)) {
+      for (int i = 0; i < 10; i++) {
+        GenericRecord rec = new GenericData.Record(schema.toAvroSchema());
+        rec.put(recordKeyField, UUID.randomUUID().toString());
+        rec.put(partitionPathField, partitionPath);
+        rec.put(dataField, 300.0 + i);
+        writer.write(rec);
+        writeSupport.add(rec.get(recordKeyField).toString());
+      }
+      // Trailing NaN row — poisons parquet's stats
+      GenericRecord nanRec = new GenericData.Record(schema.toAvroSchema());
+      nanRec.put(recordKeyField, UUID.randomUUID().toString());
+      nanRec.put(partitionPathField, partitionPath);
+      nanRec.put(dataField, Double.NaN);
+      writer.write(nanRec);
+      writeSupport.add(nanRec.get(recordKeyField).toString());
+    }
+
+    List<HoodieColumnRangeMetadata<Comparable>> rangeList = parquetUtils.readColumnStatsFromMetadata(
+            HoodieTestUtils.getStorage(filePath), new StoragePath(filePath),
+            Collections.singletonList(dataField), V1);
+    assertEquals(1, rangeList.size());
+    HoodieColumnRangeMetadata<Comparable> data = rangeList.get(0);
+    // The pre-fix behavior persisted min=0.0, max=0.0 here. With the fix, we recognize
+    // hasNonNullValue=false and report null min/max — the right signal for "stats
+    // unreliable, must scan file at query time".
+    assertNull(data.getMinValue(), "Expected null min for NaN-tainted FLOAT/DOUBLE column");
+    assertNull(data.getMaxValue(), "Expected null max for NaN-tainted FLOAT/DOUBLE column");
+    // NaN is counted as a non-null value (parquet treats it that way too).
+    assertEquals(0, data.getNullCount());
+    assertEquals(totalCount, data.getValueCount());
+  }
+
+  /**
+   * Tests that when a Parquet column omits stats entirely (one value exceeds
+   * parquet-mr's stats truncation threshold, ~1KB for binary/string), ParquetUtils
+   * reports nullCount=0 rather than nullCount=valueCount. The pre-fix behavior of
+   * "if isEmpty then valueCount else getNumNulls" was correct only for genuinely
+   * all-null columns; for truncated stats it incorrectly claimed all values were
+   * null, causing data-skipping to silently skip the file. #18755.
+   */
+  @Test
+  public void testReadColumnStatsFromMetadata_statsAbsentForLongValues() throws Exception {
+    String recordKeyField = "id";
+    String partitionPathField = "partition";
+    String dataField = "data";
+    HoodieSchema schema = getSchema(recordKeyField, partitionPathField, dataField);
+
+    String fileName = "test_truncation.parquet";
+    String filePath = new StoragePath(basePath, fileName).toString();
+    String partitionPath = "p";
+
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, BloomFilterTypeCode.SIMPLE.name());
+    HoodieAvroWriteSupport writeSupport =
+        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema.toAvroSchema()), schema, Option.of(filter), new Properties());
+    // Build a string longer than parquet's default stats truncation threshold (~1KB).
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < 4096; i++) {
+      sb.append('Y');
+    }
+    String longValue = sb.toString();
+
+    try (ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,
+        120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE)) {
+      GenericRecord shortRec = new GenericData.Record(schema.toAvroSchema());
+      shortRec.put(recordKeyField, UUID.randomUUID().toString());
+      shortRec.put(partitionPathField, partitionPath);
+      shortRec.put(dataField, "Y");
+      writer.write(shortRec);
+      writeSupport.add(shortRec.get(recordKeyField).toString());
+
+      GenericRecord longRec = new GenericData.Record(schema.toAvroSchema());
+      longRec.put(recordKeyField, UUID.randomUUID().toString());
+      longRec.put(partitionPathField, partitionPath);
+      longRec.put(dataField, longValue);
+      writer.write(longRec);
+      writeSupport.add(longRec.get(recordKeyField).toString());
+    }
+
+    List<HoodieColumnRangeMetadata<Comparable>> rangeList = parquetUtils.readColumnStatsFromMetadata(
+            HoodieTestUtils.getStorage(filePath), new StoragePath(filePath),
+            Collections.singletonList(dataField), V1);
+    assertEquals(1, rangeList.size());
+    HoodieColumnRangeMetadata<Comparable> data = rangeList.get(0);
+    // Stats are absent entirely — both min/max null AND nullCount must be 0,
+    // not the pre-fix valueCount which signaled "all rows are null".
+    assertNull(data.getMinValue(), "Expected null min when parquet stats are absent");
+    assertNull(data.getMaxValue(), "Expected null max when parquet stats are absent");
+    assertEquals(0, data.getNullCount(),
+        "Expected nullCount=0 (unknown) when stats are absent; valueCount would incorrectly imply all-null");
+    assertEquals(2, data.getValueCount());
+  }
+
+  /**
+   * Tests that a genuinely all-null column still produces nullCount=valueCount — the
+   * existing convention. This is the case the original "isEmpty ? valueCount" logic was
+   * trying to handle; the fix in #18755 distinguishes it from the stats-truly-absent
+   * case via Statistics.isNumNullsSet().
+   */
+  @Test
+  public void testReadColumnStatsFromMetadata_allNullColumnRetainsValueCountAsNullCount() throws Exception {
+    String recordKeyField = "id";
+    String partitionPathField = "partition";
+    String dataField = "data";
+    HoodieSchema schema = getSchema(recordKeyField, partitionPathField, dataField);
+
+    String fileName = "test_allnull.parquet";
+    String filePath = new StoragePath(basePath, fileName).toString();
+    String partitionPath = "p";
+    int totalCount = 10;
+
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, BloomFilterTypeCode.SIMPLE.name());
+    HoodieAvroWriteSupport writeSupport =
+        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema.toAvroSchema()), schema, Option.of(filter), new Properties());
+    try (ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,
+        120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE)) {
+      for (int i = 0; i < totalCount; i++) {
+        GenericRecord rec = new GenericData.Record(schema.toAvroSchema());
+        rec.put(recordKeyField, UUID.randomUUID().toString());
+        rec.put(partitionPathField, partitionPath);
+        rec.put(dataField, null);
+        writer.write(rec);
+        writeSupport.add(rec.get(recordKeyField).toString());
+      }
+    }
+
+    List<HoodieColumnRangeMetadata<Comparable>> rangeList = parquetUtils.readColumnStatsFromMetadata(
+            HoodieTestUtils.getStorage(filePath), new StoragePath(filePath),
+            Collections.singletonList(dataField), V1);
+    assertEquals(1, rangeList.size());
+    HoodieColumnRangeMetadata<Comparable> data = rangeList.get(0);
+    assertNull(data.getMinValue());
+    assertNull(data.getMaxValue());
+    // All values null → nullCount must equal valueCount (existing convention).
+    assertEquals(totalCount, data.getNullCount());
+    assertEquals(totalCount, data.getValueCount());
+  }
+
+  private HoodieSchema getSchemaWithDoubleData(String recordKeyField, String partitionPathField, String dataField) {
+    List<HoodieSchemaField> toBeAddedFields = new ArrayList<>(3);
+    toBeAddedFields.add(HoodieSchemaField.of(recordKeyField,
+        HoodieSchema.createNullable(HoodieSchemaType.STRING), "", HoodieSchema.NULL_VALUE));
+    toBeAddedFields.add(HoodieSchemaField.of(partitionPathField,
+        HoodieSchema.createNullable(HoodieSchemaType.STRING), "", HoodieSchema.NULL_VALUE));
+    toBeAddedFields.add(HoodieSchemaField.of(dataField,
+        HoodieSchema.createNullable(HoodieSchemaType.DOUBLE), "", HoodieSchema.NULL_VALUE));
+    return HoodieSchema.createRecord("HoodieRecord", "", "", false, toBeAddedFields);
   }
 
   private HoodieSchema getSchema(String recordKeyField, String partitionPathField, String dataField) {

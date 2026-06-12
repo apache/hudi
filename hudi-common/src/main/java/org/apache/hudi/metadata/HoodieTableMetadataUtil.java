@@ -253,6 +253,41 @@ public class HoodieTableMetadataUtil {
     }
   }
 
+  // Package-private for testing.
+  static boolean isFloatingPointNaN(Object value) {
+    if (value instanceof Double) {
+      return Double.isNaN((Double) value);
+    }
+    if (value instanceof Float) {
+      return Float.isNaN((Float) value);
+    }
+    return false;
+  }
+
+  /**
+   * Returns true if the given min/max value is null in a way that indicates stats are
+   * unreliable (rather than the column being legitimately all-null). When a column is
+   * truly all-null, nullCount == valueCount and a null min/max is the correct answer.
+   * When stats are unreliable (NaN poisoning, value-size truncation), nullCount is
+   * lower than valueCount but min/max are still null — that's the case partition-stats
+   * aggregation must NOT silently drop.
+   */
+  static boolean isStatsUnreliable(HoodieMetadataColumnStats stats, Comparable unwrappedValue) {
+    if (unwrappedValue != null) {
+      return false;
+    }
+    Long nullCount = stats.getNullCount();
+    Long valueCount = stats.getValueCount();
+    if (nullCount == null || valueCount == null) {
+      return true;
+    }
+    // Unreliable: min/max are null but the column is not all-null (nullCount < valueCount).
+    // NOTE: must use .equals() — these are boxed Long (from Avro ["null","long"]) and Long.valueOf
+    //       only caches values in [-128, 127], so `!=` is reference equality and would return true
+    //       for any realistic row count.
+    return !nullCount.equals(valueCount);
+  }
+
   /**
    * Collects {@link HoodieColumnRangeMetadata} for the provided collection of records, pretending
    * as if provided records have been persisted w/in given {@code filePath}
@@ -292,14 +327,21 @@ public class HoodieTableMetadataUtil {
 
         colStats.valueCount++;
         if (fieldValue != null) {
-          // Set the min value of the field
-          if (colStats.minValue == null
-              || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.minValue, fieldSchema.toAvroSchema()) < 0) {
-            colStats.minValue = fieldValue;
-          }
-          // Set the max value of the field
-          if (colStats.maxValue == null || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.maxValue, fieldSchema.toAvroSchema()) > 0) {
-            colStats.maxValue = fieldValue;
+          // Exclude NaN from min/max accumulation. IEEE-754 ordering treats NaN as the greatest
+          // double (Double.compare(NaN, x) = +1) so an unguarded comparison would let a single
+          // NaN poison the running max forever, and the persisted stats would be unusable for
+          // data-skipping. We still count NaN as a non-null value so valueCount/nullCount stay
+          // accurate. Mirrors parquet-mr's DoubleStatistics policy.
+          if (!isFloatingPointNaN(fieldValue)) {
+            // Set the min value of the field
+            if (colStats.minValue == null
+                || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.minValue, fieldSchema.toAvroSchema()) < 0) {
+              colStats.minValue = fieldValue;
+            }
+            // Set the max value of the field
+            if (colStats.maxValue == null || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.maxValue, fieldSchema.toAvroSchema()) > 0) {
+              colStats.maxValue = fieldValue;
+            }
           }
         } else {
           colStats.nullCount++;
@@ -2885,19 +2927,40 @@ public class HoodieTableMetadataUtil {
     ValueMetadata prevValueMetadata = getValueMetadata(prevColumnStats.getValueType());
     ValueMetadata newValueMetadata = getValueMetadata(newColumnStats.getValueType());
 
-    Comparable minValue = newValueMetadata.standardizeJavaTypeAndPromote(
-        (Comparable) Stream.of((Comparable) prevValueMetadata.unwrapValue(prevColumnStats.getMinValue()),
-            (Comparable) newValueMetadata.unwrapValue(newColumnStats.getMinValue()))
-            .filter(Objects::nonNull)
-            .min(Comparator.naturalOrder())
-            .orElse(null));
+    Comparable prevMinUnwrapped = (Comparable) prevValueMetadata.unwrapValue(prevColumnStats.getMinValue());
+    Comparable newMinUnwrapped = (Comparable) newValueMetadata.unwrapValue(newColumnStats.getMinValue());
+    Comparable prevMaxUnwrapped = (Comparable) prevValueMetadata.unwrapValue(prevColumnStats.getMaxValue());
+    Comparable newMaxUnwrapped = (Comparable) newValueMetadata.unwrapValue(newColumnStats.getMaxValue());
 
-    Comparable maxValue = newValueMetadata.standardizeJavaTypeAndPromote(
-        (Comparable) Stream.of(prevValueMetadata.unwrapValue(prevColumnStats.getMaxValue()),
-                (Comparable) newValueMetadata.unwrapValue(newColumnStats.getMaxValue()))
-            .filter(Objects::nonNull)
-            .max(Comparator.naturalOrder())
-            .orElse(null));
+    // Distinguish two flavors of "null min/max" when merging:
+    //   (a) all-null column: nullCount == valueCount AND valueCount > 0 — min/max are correctly
+    //       null because there are no non-null values to bound. Safe to drop from the merge.
+    //   (b) stats unreliable: nullCount < valueCount but min/max are still null (e.g. parquet-mr
+    //       cleared stats due to NaN, or stats omitted due to value-size truncation; see
+    //       ParquetUtils#readColumnStatsFromMetadata). Aggregating an unreliable file with a
+    //       reliable one must NOT just drop the null — that would let data-skipping prune the
+    //       partition based on a partial bound. Propagate null so the partition reflects the
+    //       worst-case unknown.
+    boolean prevMinUnreliable = isStatsUnreliable(prevColumnStats, prevMinUnwrapped);
+    boolean prevMaxUnreliable = isStatsUnreliable(prevColumnStats, prevMaxUnwrapped);
+    boolean newMinUnreliable = isStatsUnreliable(newColumnStats, newMinUnwrapped);
+    boolean newMaxUnreliable = isStatsUnreliable(newColumnStats, newMaxUnwrapped);
+
+    Comparable minValue = (prevMinUnreliable || newMinUnreliable)
+        ? null
+        : newValueMetadata.standardizeJavaTypeAndPromote(
+            (Comparable) Stream.of(prevMinUnwrapped, newMinUnwrapped)
+                .filter(Objects::nonNull)
+                .min(Comparator.naturalOrder())
+                .orElse(null));
+
+    Comparable maxValue = (prevMaxUnreliable || newMaxUnreliable)
+        ? null
+        : newValueMetadata.standardizeJavaTypeAndPromote(
+            (Comparable) Stream.of(prevMaxUnwrapped, newMaxUnwrapped)
+                .filter(Objects::nonNull)
+                .max(Comparator.naturalOrder())
+                .orElse(null));
 
     HoodieMetadataColumnStats.Builder columnStatsBuilder = HoodieMetadataColumnStats.newBuilder(HoodieMetadataPayload.METADATA_COLUMN_STATS_BUILDER_STUB.get())
         .setFileName(newColumnStats.getFileName())

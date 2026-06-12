@@ -41,7 +41,7 @@ import org.apache.hudi.util.{JavaConversions, JFunction}
 
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BitwiseOr, EqualNullSafe, EqualTo, Expression, GreaterThanOrEqual, IsNotNull, IsNull, LessThanOrEqual, Literal, Not, Or}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BitwiseOr, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, IsNotNull, IsNull, LessThanOrEqual, Literal, Not, Or}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.{Tag, Test}
@@ -664,8 +664,19 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
   }
 
   def generateColStatsExprForGreaterthanOrEquals(colName: String, colValue: String): Expression = {
-    val expectedExpr: Expression = GreaterThanOrEqual(UnresolvedAttribute(colName + "_maxValue"), literal(colValue))
-    And(LessThanOrEqual(UnresolvedAttribute(colName + "_minValue"), literal(colValue)), expectedExpr)
+    // Mirrors the helper in TestColumnStatsIndexWithSQL — keeps the two test files
+    // in sync around the null-safety OR-guard added by withUnreliableStatsGuard.
+    val innerExpr = And(
+      LessThanOrEqual(UnresolvedAttribute(colName + "_minValue"), literal(colValue)),
+      GreaterThanOrEqual(UnresolvedAttribute(colName + "_maxValue"), literal(colValue))
+    )
+    Or(
+      innerExpr,
+      And(
+        IsNull(UnresolvedAttribute(colName + "_minValue")),
+        GreaterThan(UnresolvedAttribute("valueCount"), UnresolvedAttribute(colName + "_nullCount"))
+      )
+    )
   }
 
   def verifyQueryPredicate(hudiOpts: Map[String, String]): Unit = {

@@ -143,6 +143,53 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
   }
 
 
+  /**
+   * Verifies that for every min/max-based predicate the data-skipping translator wraps with
+   * `OR colMin IS NULL`, so a file whose stats are marked unreliable (e.g. parquet-mr cleared
+   * them due to NaN, or omitted them due to value-size truncation) is always scanned rather
+   * than silently pruned by Spark's null-propagating WHERE semantics. Without the wrap, a
+   * predicate like `colA_maxValue > X` evaluates to `null` when `colA_maxValue` is null,
+   * which Spark treats as false — dropping the file from the candidate set even though it
+   * might contain matching rows. See #18754 / PR #18792.
+   *
+   * Each row in the input represents one file in the col-stats index. `file_unreliable` has
+   * null min/max with nullCount=0 (the unreliability signal: stats are absent but the file
+   * has non-null values). The expected output always includes that file regardless of
+   * predicate, because we can't bound its values.
+   */
+  @ParameterizedTest
+  @MethodSource(Array("testNullSafetyForUnreliableStatsSource"))
+  def testNullSafetyForUnreliableStats(sourceFilterExprStr: String, expectedOutput: Seq[String]): Unit = {
+    spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
+
+    // 3 files: two with bounded stats, one with null min/max (unreliable). The unreliable
+    // file must survive every predicate that touches column A.
+    val indexRows: java.util.List[Row] = java.util.Arrays.asList(
+      Row("file_in_range",      1L,    1L,    10L, java.lang.Long.valueOf(0),
+          null, null, null,
+          null, null, null),
+      Row("file_out_of_range",  1L, -100L,  -50L, java.lang.Long.valueOf(0),
+          null, null, null,
+          null, null, null),
+      // Null min/max with nullCount=0 => stats are unreliable. Must be scanned.
+      Row("file_unreliable",    5L,  null,  null,  java.lang.Long.valueOf(0),
+          null, null, null,
+          null, null, null)
+    )
+    val indexDf = spark.createDataFrame(indexRows, indexSchema)
+
+    val resolvedFilterExpr: Expression = resolveExpr(spark, sourceFilterExprStr, sourceTableSchema)
+    val lookupFilter = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(resolvedFilterExpr, indexedCols = indexedCols)
+
+    val rows: Seq[String] = indexDf.where(sparkAdapter.createColumnFromExpression(lookupFilter))
+      .select("fileName")
+      .collect()
+      .map(_.getString(0))
+      .toSeq
+
+    assertEquals(expectedOutput.sorted, rows.sorted)
+  }
+
   private def optimize(expr: Expression): Expression = {
     val rules: Seq[Rule[LogicalPlan]] =
       OptimizeIn ::
@@ -169,6 +216,30 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
 }
 
 object TestDataSkippingUtils {
+
+  /** Source for [[TestDataSkippingUtils.testNullSafetyForUnreliableStats]]. Each tuple
+   * specifies a predicate and the expected candidate files; the unreliable file
+   * (`file_unreliable`) must always be present regardless of predicate shape. */
+  def testNullSafetyForUnreliableStatsSource(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      // Range predicates on A — touch min or max
+      arguments("A > 5",                 Seq("file_in_range", "file_unreliable")),
+      arguments("A < 5",                 Seq("file_in_range", "file_out_of_range", "file_unreliable")),
+      arguments("A >= 5",                Seq("file_in_range", "file_unreliable")),
+      arguments("A <= 5",                Seq("file_in_range", "file_out_of_range", "file_unreliable")),
+      arguments("5 > A",                 Seq("file_in_range", "file_out_of_range", "file_unreliable")),
+      arguments("5 < A",                 Seq("file_in_range", "file_unreliable")),
+      arguments("5 >= A",                Seq("file_in_range", "file_out_of_range", "file_unreliable")),
+      arguments("5 <= A",                Seq("file_in_range", "file_unreliable")),
+      // Equality predicate — touches both min and max
+      arguments("A = 5",                 Seq("file_in_range", "file_unreliable")),
+      // IN predicate — uses min/max via genColumnValuesEqualToExpression
+      arguments("A IN (5, 7)",           Seq("file_in_range", "file_unreliable")),
+      // Range that all reliable files match — unreliable file still included
+      arguments("A > -200",              Seq("file_in_range", "file_out_of_range", "file_unreliable"))
+    )
+  }
+
   def testStringsLookupFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
       arguments(
