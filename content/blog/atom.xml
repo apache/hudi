@@ -116,6 +116,10 @@ doesn't replay the index.
             <name>Danny Chan</name>
             <uri>https://www.linkedin.com/in/danny-chan-682943225/</uri>
         </author>
+        <author>
+            <name>Shuo Cheng</name>
+            <uri>https://www.linkedin.com/in/shuo-cheng-317b82aa/</uri>
+        </author>
         <category label="apache flink" term="apache flink"/>
         <category label="indexing" term="indexing"/>
         <category label="record level index" term="record level index"/>
