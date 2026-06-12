@@ -33,23 +33,46 @@ public final class HoodieVersion {
 
   public static final String HOODIE_WRITER_VERSION = "hudi_writer_version";
 
+  // Cached result of reading version from the manifest. Null means "not loaded yet". An empty
+  // string means "manifest absent or unreadable" — fall back to HOODIE_DEFAULT_VERSION so tests
+  // that swap the default via setVersionOverride continue to work.
+  private static volatile String cachedManifestVersion = null;
+
   /**
    * Returns the complete version of HUDI code
    * Example: 0.12.2 or 0.12.3-snapshot
    */
   public static String get() {
-    String hudiPropertiesFilePath = "META-INF/maven/org.apache.hudi/hudi-common/pom.properties";
-    try (InputStream inputStream = HoodieVersion.class.getClassLoader().getResourceAsStream(hudiPropertiesFilePath)) {
-      Properties properties = new Properties();
-      if (inputStream != null) {
-        properties.load(inputStream);
-        // Access properties
-        return properties.getProperty("version");
-      }
-    } catch (Exception ignored) {
-      // Ignoring the exception as there is as fallback to default version
+    String fromManifest = loadManifestVersion();
+    return fromManifest.isEmpty() ? HOODIE_DEFAULT_VERSION : fromManifest;
+  }
+
+  private static String loadManifestVersion() {
+    String local = cachedManifestVersion;
+    if (local != null) {
+      return local;
     }
-    return HOODIE_DEFAULT_VERSION;
+    synchronized (HoodieVersion.class) {
+      if (cachedManifestVersion != null) {
+        return cachedManifestVersion;
+      }
+      String hudiPropertiesFilePath = "META-INF/maven/org.apache.hudi/hudi-common/pom.properties";
+      String resolved = "";
+      try (InputStream inputStream = HoodieVersion.class.getClassLoader().getResourceAsStream(hudiPropertiesFilePath)) {
+        if (inputStream != null) {
+          Properties properties = new Properties();
+          properties.load(inputStream);
+          String version = properties.getProperty("version");
+          if (version != null) {
+            resolved = version;
+          }
+        }
+      } catch (Exception ignored) {
+        // Ignoring the exception as there is a fallback to default version
+      }
+      cachedManifestVersion = resolved;
+      return resolved;
+    }
   }
 
   /**

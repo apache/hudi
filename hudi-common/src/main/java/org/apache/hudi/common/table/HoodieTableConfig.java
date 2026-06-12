@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.HoodieVersion;
 import org.apache.hudi.common.HoodieTableFormat;
 import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
@@ -51,6 +52,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieTableConfigUtils;
+import org.apache.hudi.common.util.NetworkUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -125,6 +127,9 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
         + " Configurations are loaded from hoodie.properties, these properties are usually set during"
         + " initializing a path as hoodie base path and never changes during the lifetime of a hoodie table.")
 public class HoodieTableConfig extends HoodieConfig {
+
+  // Cached hostname to avoid repeated synchronized network calls
+  private static volatile String cachedHostname = null;
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
@@ -500,10 +505,10 @@ public class HoodieTableConfig extends HoodieConfig {
     final String checksum;
     if (isValidChecksum(props)) {
       checksum = props.getProperty(TABLE_CHECKSUM.key());
-      props.store(outputStream, "Updated at " + Instant.now());
+      props.store(outputStream, getFileComment());
     } else {
       Properties propsWithChecksum = getOrderedPropertiesWithTableChecksum(props);
-      propsWithChecksum.store(outputStream, "Properties saved on " + Instant.now());
+      propsWithChecksum.store(outputStream, getFileComment());
       checksum = propsWithChecksum.getProperty(TABLE_CHECKSUM.key());
       props.setProperty(TABLE_CHECKSUM.key(), checksum);
     }
@@ -1383,6 +1388,31 @@ public class HoodieTableConfig extends HoodieConfig {
   public Map<String, String> propsMap() {
     return props.entrySet().stream()
         .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
+  }
+
+  /**
+   * Returns the cached hostname, fetching it lazily on first call.
+   * Falls back to "unknown" if network resolution fails.
+   */
+  private static String getHostnameSafe() {
+    if (cachedHostname == null) {
+      synchronized (HoodieTableConfig.class) {
+        if (cachedHostname == null) {
+          try {
+            cachedHostname = NetworkUtils.getHostname();
+          } catch (Exception e) {
+            log.warn("Failed to resolve hostname, using 'unknown'", e);
+            cachedHostname = "unknown";
+          }
+        }
+      }
+    }
+    return cachedHostname;
+  }
+
+  public static String getFileComment() {
+    return String.format("Updated at %s, host=%s, hudi_version=%s",
+        Instant.now(), getHostnameSafe(), HoodieVersion.get());
   }
 
   /**
