@@ -94,6 +94,9 @@ readers to convert the binaries to JSON.
 This RFC covers visualization of metadata available in Hudi tables. All features are **READ-ONLY** - there is no support
 for starting or spawning jobs that mutate a Hudi table.
 
+Alongside the timeline, the UI surfaces two additional read-only metadata views: the table's configuration
+(`hoodie.properties`) and its schema-change history.
+
 The following are **out of scope**:
 
 - **Archived timeline:** Only the active timeline is rendered. Loading instants from LSM-based archive files is left for
@@ -106,8 +109,8 @@ The following are **out of scope**:
   **Threat model:** The UI does not widen the timeline server's exposure surface. The `/v2/` endpoints read the same
   active-timeline and filesystem metadata that the existing `/v1/` REST APIs already serve, on the same network
   interface (the server binds to all interfaces on the driver/standalone host). The UI is also opt-in and off by default
-  (`--enable-ui` / `hoodie.embed.timeline.server.ui.enable=false`). Operators on untrusted networks should front the
-  server with a reverse proxy or restrict it to a private interface / localhost via network policy.
+  (`--enable-ui`). Operators on untrusted networks should front the server with a reverse proxy or restrict it to a
+  private interface / localhost via network policy.
 
 ## Implementation
 
@@ -115,16 +118,19 @@ Keeping the implementation lightweight is a priority - we should add as few depe
 the existing `hudi-timeline-service` module, which contains a Javalin web-application that caches filesystem metadata of
 a Hudi table for job executors during tagging/writing.
 
-To use the Hudi Timeline UI, users can either start the Timeline Server in **STANDALONE** mode (which is already
-supported) or enable the UI on the **EMBEDDED** timeline server that runs within a Spark application's driver process
-(see [Configuration](#configuration)).
+The first cut runs the UI on the Timeline Server in **STANDALONE** mode (see [Configuration](#configuration)) and is
+self-contained within `hudi-timeline-service`. Enabling the UI on the **EMBEDDED** timeline server inside a Spark
+driver, together with a Spark UI tab, requires cross-module wiring (`hudi-client-common`, `hudi-spark-client`); it is
+designed below but deferred to a follow-up to keep the initial PR small and focused. The standalone UI lands first; the
+embedded/Spark linking lands next.
 
 The Hudi Timeline UI has two parts: the frontend and backend.
 
 ### Architecture
 
 The timeline server can run standalone or embedded inside a Spark driver. In embedded mode, a tab in the Spark UI links
-directly to the Hudi Timeline UI.
+directly to the Hudi Timeline UI. The embedded mode and Spark UI tab (right side of the diagram below) are a planned
+follow-up; the first cut is standalone-only.
 
 ```mermaid
 graph LR
@@ -132,15 +138,15 @@ graph LR
 
     subgraph Driver["Standalone / Spark Driver"]
         subgraph TimelineServer["Javalin (Timeline Server)"]
-            Static["/ui/* - Static Files\n(HTML, JS, CSS)"]
-            API["/v2/timeline/* - UiHandler"]
+            Static["/ui + assets at root\n(HTML, JS, CSS)"]
+            API["/v2/hoodie/view/* - TimelineHandler"]
             FSVM["FileSystemViewManager"]
             Meta["HoodieTimeline / MetaClient"]
 
             API --> FSVM --> Meta
         end
 
-        subgraph SparkUI["Spark UI (:4040) - embedded mode only"]
+        subgraph SparkUI["Spark UI (:4040) - embedded mode (follow-up)"]
             direction TB
             SparkUIPad[ ] ~~~ Tabs["[Jobs] [Stages] ... [Hudi Timeline]"]
         end
@@ -157,10 +163,11 @@ graph LR
 
 There are two categories of requests:
 
-1. **Static file requests** (`/ui/*`) - Javalin serves HTML, JavaScript, and CSS files from the classpath
-   (`src/main/resources/public/`). No server-side rendering or template engine is needed.
-2. **REST API requests** (`/v2/timeline/*`) - A new `UiHandler` processes these requests, reading timeline data from the
-   `FileSystemViewManager` and `HoodieTableMetaClient`, then returning JSON responses.
+1. **Static file requests** - Javalin serves HTML, JavaScript, and CSS files from the classpath
+   (`src/main/resources/public/`) at the server root; `UiHandler` serves `index.html` at `/ui`. No server-side
+   rendering or template engine is needed.
+2. **REST API requests** (`/v2/hoodie/view/*`) - `TimelineHandler` processes these requests, reading timeline data from
+   the `FileSystemViewManager` (and a per-basepath `HoodieTableMetaClient` for table config/schema), returning JSON.
 
 ### Frontend
 
@@ -210,7 +217,7 @@ The timeline is configured with groups and items that map to Hudi's timeline mod
     - Yellow -> `INFLIGHT`
     - Red -> `REQUESTED`
 - **Tooltip:** On hover, shows the action type, requested time, completion time, and duration.
-- **Click handler:** Clicking an instant fetches its detail via `/v2/timeline/instant/details` and shows the
+- **Click handler:** Clicking an instant fetches its detail via `/v2/hoodie/view/timeline/instant` and shows the
   deserialized JSON in a detail panel below the timeline.
 
 ### Backend
@@ -222,56 +229,62 @@ We extend this module with `/v2/` APIs to serve the timeline metadata needed by 
 
 #### API Specification
 
-| Method | Path                           | Parameters                                                           | Response                | Description                                                                         |
-|--------|--------------------------------|----------------------------------------------------------------------|-------------------------|-------------------------------------------------------------------------------------|
-| GET    | `/v2/timeline/instants`        | `basepath` (required)                                                | `List<InstantDTO>` (v2) | Returns all active instants with requested time, completion time, action, and state |
-| GET    | `/v2/timeline/instant/details` | `basepath` (required), `instantTime` (required), `action` (required) | JSON string             | Returns the deserialized content of a specific instant's metadata (Avro -> JSON)    |
+| Method | Path                                    | Parameters                                                            | Response        | Description                                                                                  |
+|--------|-----------------------------------------|-----------------------------------------------------------------------|-----------------|----------------------------------------------------------------------------------------------|
+| GET    | `/v2/hoodie/view/timeline/instants/all` | `basepath` (required)                                                 | `TimelineDTOV2` | All active instants (each with requested time, completion time, action, state), wrapped in a timeline DTO |
+| GET    | `/v2/hoodie/view/timeline/instant`      | `basepath`, `instant`, `instantaction`, `instantstate` (all required) | JSON string     | Deserialized content of a specific instant's metadata (Avro -> JSON)                         |
+| GET    | `/v2/hoodie/view/table/config`          | `basepath` (required)                                                 | JSON object     | The table's `hoodie.properties` (sorted)                                                     |
+| GET    | `/v2/hoodie/view/table/schema/history`  | `basepath` (required), `limit` (optional, default 200, max 1000)      | JSON object     | Current table schema plus schema-change history from recent commits                          |
 
-Static files are served from the `/ui/` path, mapped to classpath resources under `src/main/resources/public/`.
+Static files (HTML, JS, CSS) are served from the classpath under `src/main/resources/public/` at the server root (e.g.,
+`/js/timeline.js`, `/lib/...`). `UiHandler` additionally registers `GET /ui`, which returns `index.html` to give the UI
+a stable entry URL.
 
-**On response size and pagination:** `GET /v2/timeline/instants` returns the full active timeline. The active
-timeline is bounded by archiving (the unbounded archived timeline is out of scope), so instant counts are typically
-modest. The first cut intentionally returns all active instants and relies on client-side zoom/scroll and filtering
-for navigation. If active-timeline sizes become a concern, the endpoint can be extended additively with optional
-`from`/`to` time-range query params (and/or a `limit`) without breaking the existing contract.
+**On response size and pagination:** `GET /v2/hoodie/view/timeline/instants/all` returns the full active timeline. The
+active timeline is bounded by archiving (the unbounded archived timeline is out of scope), so instant counts are
+typically modest. The first cut intentionally returns all active instants and relies on client-side zoom/scroll and
+filtering for navigation. If active-timeline sizes become a concern, the endpoint can be extended additively with
+optional `from`/`to` time-range query params (and/or a `limit`) without breaking the existing contract.
 
 #### DTO Design
 
-A new v2 `InstantDTO` is introduced in a `v2` package to avoid modifying the existing `/v1/` API contract. The existing
-`InstantDTO` (in `o.a.h.common.table.timeline.dto`) only exposes `action`, `timestamp` (requested time), and `state` -
-it lacks `completionTime`, which is needed for rendering range bars on the timeline.
+Two v2 DTOs are introduced in a `v2` package to avoid modifying the existing `/v1/` API contract:
 
-The v2 `InstantDTO` contains:
-
-- `requestedTime` - the instant's requested timestamp (`HoodieInstant.requestedTime()`)
-- `completionTime` - the instant's completion timestamp (`HoodieInstant.getCompletionTime()`), null for non-completed
-  instants
-- `action` - the action type (e.g., `commit`, `deltacommit`, `compaction`)
-- `state` - the instant state (`REQUESTED`, `INFLIGHT`, `COMPLETED`)
+- **`InstantDTO`** (`o.a.h.common.table.timeline.dto.v2`) - the v1 `InstantDTO` only exposes `action`, `timestamp`
+  (requested time), and `state`; it lacks completion time, needed for rendering range bars. The v2 `InstantDTO` has:
+    - `action` - the action type (e.g., `commit`, `deltacommit`, `compaction`)
+    - `requestedTime` (JSON `requestTs`) - requested timestamp (`HoodieInstant.requestedTime()`)
+    - `completionTime` (JSON `completionTs`) - completion timestamp (`HoodieInstant.getCompletionTime()`), null for
+      non-completed instants
+    - `state` - the instant state (`REQUESTED`, `INFLIGHT`, `COMPLETED`)
+- **`TimelineDTOV2`** - wraps a `List<InstantDTO>` (`instants`); this is what `/v2/hoodie/view/timeline/instants/all`
+  returns.
 
 #### Handler Design
 
-A new `UiHandler` class extends `Handler` (following the `InstantStateHandler` pattern) with two methods:
+The v2 endpoints are served by the existing `TimelineHandler` (which already serves the v1 timeline routes); a separate
+`UiHandler` serves only the UI entry page.
 
-1. `getActiveInstants(basePath)` - Retrieves the active timeline via
-   `viewManager.getFileSystemView(basePath).getTimeline()`, iterates over all instants, and maps each `HoodieInstant` to
-   a v2 `InstantDTO` including completion time.
+`TimelineHandler` methods:
 
-2. `getInstantDetails(basePath, instantTime, action)` - Reads the instant's Avro content via the active timeline's
-   `getInstantDetails()` and deserializes it to JSON for display in the UI. The `HoodieTableMetaClient` is not rebuilt
-   per request: `UiHandler` caches one `HoodieTableMetaClient` per basepath in a `ConcurrentHashMap` (the same
-   per-basepath caching pattern `InstantStateHandler` and `MarkerHandler` already use), constructed once on first
-   access and reused for subsequent clicks. Per-click cost is therefore just the targeted Avro read, not metaClient
-   construction.
+1. `getTimelineV2(basePath)` - maps `viewManager.getFileSystemView(basePath).getTimeline()` to a `TimelineDTOV2` (the
+   active timeline's instants, each including completion time).
+2. `getInstantDetails(basePath, instant, action, state)` - reads the instant's Avro content via the active timeline's
+   `getInstantDetails()` and deserializes it to JSON. The instant is created with the timeline's own layout-aware
+   `InstantGenerator`; a malformed `state`/`action` returns 400, a read failure is logged and returns 500.
+3. `getTableConfig(basePath)` / `getSchemaHistory(basePath, limit)` - serve the table-config and schema-history views.
+   Both reuse a `HoodieTableMetaClient` cached per basepath in a `ConcurrentHashMap` (built once on first access), so
+   repeated requests pay only the targeted read, not metaClient construction.
+
+`UiHandler` registers `GET /ui`, returning `/public/index.html` from the classpath as the UI entry page.
 
 #### Registration in RequestHandler
 
-The `UiHandler` is registered in `RequestHandler` following the existing pattern:
+The v2 routes are registered following the existing pattern:
 
-- A `UiHandler` field is added alongside the existing handler fields.
-- A `registerUiAPI()` method is added and called from `register()`.
-- Registration is gated behind an `--enable-ui` config flag, same as `enableMarkerRequests` and
-  `enableInstantStateRequests`.
+- The v1 timeline routes remain registered unconditionally in `registerTimelineAPI()`.
+- The v2 UI routes are registered in `registerTimelineV2API()`, called from `register()` only when `--enable-ui` is set.
+  `UiHandler` (serving `/ui`) and the static-file serving are gated by the same flag.
 
 #### Error Handling
 
@@ -281,7 +294,7 @@ The `UiHandler` is registered in `RequestHandler` following the existing pattern
 
 ### Feature
 
-The main feature for the first cut is timeline visualization for a Hudi table.
+The first cut presents three read-only tabs for a Hudi table: **Timeline**, **Table Config**, and **Schema History**.
 
 The permitted user actions are:
 
@@ -292,6 +305,8 @@ The permitted user actions are:
 5. User is able to zoom in and out of timeline
 6. User is able to hover over instant for more details
 7. User is able to click on a specific instant and the JSON string of the timeline details are rendered
+8. User is able to view the table's configuration (`hoodie.properties`) in the Table Config tab
+9. User is able to view the table's schema and schema-change history in the Schema History tab
 
 Each action type occupies its own horizontal row so concurrent actions are visually separated. Completed instants appear
 as horizontal bars whose width represents duration (requested -> completed). Inflight and requested instants appear as
@@ -323,13 +338,17 @@ java -cp hudi-timeline-server-bundle-*.jar \
   --enable-ui
 ```
 
-Once started, the UI is accessible at `http://localhost:26754/ui/`.
+Once started, the UI is accessible at `http://localhost:26754/ui`.
 
 The server port is configurable via the existing `--server-port` (or `-p`) flag (default: `26754`). The `--enable-ui`
-flag controls whether the UI static files and `/v2/timeline/` API endpoints are registered. When the flag is not set,
-the timeline server behaves exactly as it does today - no UI-related routes are added.
+flag controls whether the UI static files, the `/ui` page, and the `/v2/hoodie/view/` UI API endpoints are registered.
+When the flag is not set, the timeline server behaves exactly as it does today - no UI-related routes are added.
 
 ### Embedded Mode (Spark-Shell / Spark Driver)
+
+> **Status: deferred to a follow-up.** Embedded-mode UI enablement is intentionally split out of the initial PR to keep
+> it small: the standalone UI ships first, then the embedded server is wired to enable it. The design below is retained
+> for that follow-up.
 
 When running Hudi inside a Spark application, the `EmbeddedTimelineService` already starts a timeline server within the
 driver process. The UI can be enabled on this embedded server by setting a Spark configuration property:
@@ -350,7 +369,7 @@ spark-shell \
 ```
 
 Once a write operation initializes the `EmbeddedTimelineService`, the UI becomes available at
-`http://<driver-host>:<embedded-server-port>/ui/`. The embedded server port is logged at startup and can also be
+`http://<driver-host>:<embedded-server-port>/ui`. The embedded server port is logged at startup and can also be
 retrieved from the Spark configuration via the `hoodie.embed.timeline.server.port` property.
 
 #### Starting from a Spark application (driver)
@@ -371,6 +390,9 @@ stops when the client or `SparkContext` is closed.
 
 ## Spark UI Tab Integration
 
+> **Status: deferred to a follow-up.** The Spark UI tab depends on embedded-mode enablement and cross-module Spark APIs,
+> so it is split out of the initial PR for the same reason. The design below is retained for that follow-up.
+
 When the `EmbeddedTimelineService` starts with the UI enabled inside a Spark application, a "Hudi Timeline" tab is
 registered in the Spark web UI (typically at `http://localhost:4040`). This gives users a single place to discover and
 access the Hudi Timeline UI without needing to know the embedded server's port.
@@ -379,7 +401,7 @@ access the Hudi Timeline UI without needing to know the embedded server's port.
 
 A custom class extending Spark's `WebUITab` is added to the `hudi-spark-client` module. The tab contains a single
 `WebUIPage` that renders a link to the Hudi Timeline UI running on the embedded timeline server at
-`http://<driver-host>:<timeline-server-port>/ui/`.
+`http://<driver-host>:<timeline-server-port>/ui`.
 
 The link approach is chosen over embedding the UI in an iframe to avoid layout and scrolling issues within the Spark UI
 shell. Clicking the link opens the full Hudi Timeline UI in a new browser tab, providing the complete interactive
@@ -428,8 +450,8 @@ with a `HoodieSparkEngineContext`.
 - **Zero new Java compile-time dependencies.** The frontend uses Javalin's built-in static file serving; no template
   engine is added.
 - **vis-timeline JS/CSS:** ~300KB bundled as static resources under `src/main/resources/public/lib/vis-timeline/`.
-- **Spark UI tab:** Uses existing `spark-core` APIs (`WebUITab`, `WebUIPage`) which are already provided dependencies in
-  `hudi-spark-client`. No new JARs are added.
+- **Spark UI tab (planned follow-up):** Will use existing `spark-core` APIs (`WebUITab`, `WebUIPage`), already provided
+  in `hudi-spark-client`. No new JARs are added.
 - **No impact on Spark/Flink bundles.** `hudi-timeline-server-bundle` is a separate artifact; adding static resources
   does not affect engine-specific bundles.
 - **No frontend build pipeline.** No npm, webpack, or vite. The JS/CSS files are committed directly and served as-is.
@@ -479,7 +501,7 @@ Other features we can add later:
 ## Rollout/Adoption Plan
 
 - **Backward compatibility:** Additive change only. All existing `/v1/` endpoints remain unchanged. UI endpoints are
-  under `/v2/timeline/` and static files at `/ui/`. No existing behavior changes.
+  under `/v2/hoodie/view/` and the UI entry page at `/ui`. No existing behavior changes.
 - **Release target:** 1.2.x
 - **Documentation:** A new page on hudi.apache.org under the "Operations" section with screenshots, a startup guide, and
   a debugging walkthrough showing how to use the timeline UI to diagnose common issues (stuck compactions, long-running
@@ -491,12 +513,12 @@ Other features we can add later:
 
 ### Unit Tests
 
-- **`UiHandler.getActiveInstants()`**: Verify correct mapping from `HoodieInstant` to v2 `InstantDTO`, including:
+- **`TimelineHandler.getTimelineV2()`**: Verify correct mapping from `HoodieInstant` to v2 `InstantDTO`, including:
     - All action types in `HoodieTimeline.VALID_ACTIONS_IN_TIMELINE` are mapped correctly.
     - `completionTime` is populated for completed instants and null for requested/inflight instants.
     - Instants are returned in timeline order.
-- **`UiHandler.getInstantDetails()`**: Verify correct Avro deserialization to JSON for various action types (commit
-  metadata, compaction plan, clean plan, etc.).
+- **`TimelineHandler.getInstantDetails()`**: Verify correct Avro deserialization to JSON for various action types
+  (commit metadata, compaction plan, clean plan, etc.).
 - **Error cases**: Invalid basepath returns an appropriate error. Empty timeline returns an empty list.
 
 ### Integration Tests
@@ -505,9 +527,10 @@ Following the pattern established by `TestTimelineService.java`:
 
 - Start `TimelineService` with the UI enabled (`--enable-ui`).
 - Create synthetic instants via `HoodieTestUtils` covering multiple action types and states.
-- Verify `GET /v2/timeline/instants` returns the expected list of instants with correct fields.
-- Verify `GET /v2/timeline/instant/details` returns valid JSON for a completed instant.
-- Verify `GET /ui/` returns HTTP 200 with HTML content (static file serving works).
+- Verify `GET /v2/hoodie/view/timeline/instants/all` returns the expected list of instants with correct fields.
+- Verify `GET /v2/hoodie/view/timeline/instant` returns valid JSON for a completed instant.
+- Verify `GET /v2/hoodie/view/table/config` and `GET /v2/hoodie/view/table/schema/history` return valid JSON.
+- Verify `GET /ui` returns HTTP 200 with HTML content (static file serving works).
 
 ### Manual Testing Checklist
 
@@ -519,4 +542,4 @@ Following the pattern established by `TestTimelineService.java`:
 - Hover tooltip displays action, requested time, completion time, and duration.
 - Empty table basepath shows "No instants found" message gracefully.
 - Invalid basepath shows a user-friendly error message.
-- CDN fallback: UI loads correctly when the CDN is unreachable (using bundled vis-timeline).
+- No external calls: UI loads fully from bundled assets (vis-timeline, Bootstrap, renderjson) with no network access.
