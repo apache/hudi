@@ -26,13 +26,14 @@ import org.apache.hudi.common.engine.TaskContextSupplier
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.util.{OrderingValues, ReflectionUtils}
+import org.apache.hudi.common.util.{OrderingValues, PartitionPathEncodeUtils, ReflectionUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndexFactory}
 import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
-import org.apache.hudi.keygen.{AutoRecordGenWrapperKeyGenerator, BuiltinKeyGenerator, KeyGenUtils}
+import org.apache.hudi.keygen.{AutoRecordGenWrapperKeyGenerator, BuiltinKeyGenerator, KeyGenUtils, NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
 import org.apache.hudi.table.action.commit.{BucketBulkInsertDataInternalWriterHelper, BulkInsertDataInternalWriterHelper, ConsistentBucketBulkInsertDataInternalWriterHelper, ParallelismHelper}
@@ -42,6 +43,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Dataset, Row, functions}
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{NestedFieldPath, composeNestedFieldPath, getNestedInternalRowValue}
+import org.apache.spark.sql.api.java.UDF1
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.Project
@@ -96,7 +98,8 @@ object HoodieDatasetBulkInsertHelper
 
       if (autoGenerateRecordKeys) {
         // Auto-keygen needs per-task partitionId from TaskContext and is stateful (rowId++),
-        // so it can't live in a driver-side UDF closure. Keep the RDD path for this case only.
+        // so it can't be expressed as a driver-side UDF closure. Keep the RDD path here.
+        // TODO: a custom Catalyst Expression could let this path avoid the toRdd round-trip too.
         val prependedRdd: RDD[InternalRow] = {
           injectSQLConf(df.queryExecution.toRdd.mapPartitions { iter =>
             val typedProps = TypedProperties.copy(config.getProps)
@@ -128,38 +131,36 @@ object HoodieDatasetBulkInsertHelper
 
         sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(df.sparkSession, dedupedRdd, updatedSchema)
       } else {
-        // UDF-based key-gen path. Avoids the toRdd.mapPartitions round-trip on the hot path
-        // by registering record-key / partition-path UDFs against the DataFrame directly.
+        // Non auto-keygen path. Compute meta columns via Catalyst expressions where possible:
+        //  - Tier 1 (Nonpartitioned, single record-key field): col(rk).cast(String) + lit("")
+        //  - Tier 2 (Simple, default partition formatter flags): col(rk).cast(String) + col(pp).cast(String)
+        //  - Tier 3 (everything else): anonymous UDF invoking BuiltinKeyGenerator on Row
+        //
+        // Tier 1/2 are pure column projections, so Catalyst codegens them and we avoid the
+        // toRdd.mapPartitions round-trip. Tier 3 keeps a UDF over the DataFrame so the projection
+        // remains in Catalyst; the UDF is anonymous (not registered on the SparkSession) so
+        // nothing leaks across writes.
+        //
+        // Tier 1/2 do not reproduce the canonical keygen's null/empty record-key validation:
+        // a null record-key value passes through as SQL NULL instead of throwing HoodieKeyException.
+        // This matches the behaviour of the pre-existing fast paths in this helper prior to the
+        // RDD-based rewrite. Tier 3 retains the strict canonical behaviour.
         val typedProps = TypedProperties.copy(config.getProps)
         val keyGenerator = ReflectionUtils
           .loadClass(HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(keyGeneratorClassName), typedProps)
           .asInstanceOf[BuiltinKeyGenerator]
 
-        val tableName = config.getString(HoodieWriteConfig.TBL_NAME.key)
-        val recordKeyFn = s"hudi_recordkey_gen_${tableName}_$instantTime"
-        val partitionPathFn = s"hudi_partition_gen_${tableName}_$instantTime"
-
-        val spark = df.sparkSession
-        spark.udf.register(recordKeyFn, (r: Row) => keyGenerator.getRecordKey(r))
-        spark.udf.register(partitionPathFn, (r: Row) => keyGenerator.getPartitionPath(r))
-
-        val originalCols = df.schema.fieldNames.map(functions.col)
-        val rowStruct = functions.struct(originalCols: _*)
+        val (recordKeyCol, partitionPathCol) =
+          buildKeygenColumns(df, keyGeneratorClassName, typedProps, keyGenerator)
 
         val withMetaCols = df
-          .withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD,
-            functions.callUDF(recordKeyFn, rowStruct))
-          .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
-            functions.callUDF(partitionPathFn, rowStruct))
-          .withColumn(HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-            functions.lit("").cast(StringType))
-          .withColumn(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD,
-            functions.lit("").cast(StringType))
-          .withColumn(HoodieRecord.FILENAME_METADATA_FIELD,
-            functions.lit("").cast(StringType))
+          .withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKeyCol)
+          .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD, partitionPathCol)
+          .withColumn(HoodieRecord.COMMIT_TIME_METADATA_FIELD, functions.lit("").cast(StringType))
+          .withColumn(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, functions.lit("").cast(StringType))
+          .withColumn(HoodieRecord.FILENAME_METADATA_FIELD, functions.lit("").cast(StringType))
 
-        val orderedCols = updatedSchema.fieldNames.map(functions.col)
-        val orderedDF = withMetaCols.select(orderedCols: _*)
+        val orderedDF = withMetaCols.select(updatedSchema.fieldNames.map(functions.col): _*)
 
         if (config.shouldCombineBeforeInsert) {
           val dedupedRdd = dedupeRows(
@@ -168,7 +169,7 @@ object HoodieDatasetBulkInsertHelper
             tableConfig.getOrderingFields.asScala.toList,
             SparkHoodieIndexFactory.isGlobalIndex(config),
             targetParallelism)
-          sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(spark, dedupedRdd, updatedSchema)
+          sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(df.sparkSession, dedupedRdd, updatedSchema)
         } else {
           orderedDF
         }
@@ -185,6 +186,84 @@ object HoodieDatasetBulkInsertHelper
     }
 
     partitioner.repartitionRecords(updatedDF, targetParallelism)
+  }
+
+  /**
+   * Builds the record-key / partition-path projection columns for the non auto-keygen path,
+   * dispatching to a fast-path tier when the keygen is amenable to a pure Catalyst projection.
+   *
+   * Tier 1: NonpartitionedKeyGenerator with a single record-key field.
+   * Tier 2: SimpleKeyGenerator with a single record-key + single partition-path field, when the
+   *         partition formatter flags are reproducible as Catalyst expressions. Currently:
+   *         default flags, or hive-style partitioning. URL-encoded and slash-separated date
+   *         partitioning fall through to Tier 3 -- the URL escape table doesn't have an efficient
+   *         pure-Catalyst equivalent, and slash-separated dates were added in 1.2.0 and exercise
+   *         a separate formatter branch we'd rather not encode twice.
+   * Tier 3: Anonymous UDF that calls into the supplied [[BuiltinKeyGenerator]].
+   */
+  private def buildKeygenColumns(df: DataFrame,
+                                 keyGeneratorClassName: String,
+                                 typedProps: TypedProperties,
+                                 keyGenerator: BuiltinKeyGenerator): (org.apache.spark.sql.Column, org.apache.spark.sql.Column) = {
+    val recordKeyFields = keyGenerator.getRecordKeyFieldNames
+    val partitionPathFields = keyGenerator.getPartitionPathFields
+
+    val hiveStyle = typedProps.getBoolean(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key,
+      KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.defaultValue.toBoolean)
+    val urlEncode = typedProps.getBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.key,
+      KeyGeneratorOptions.URL_ENCODE_PARTITIONING.defaultValue.toBoolean)
+    val slashSep = typedProps.getBoolean(KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING.key,
+      KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING.defaultValue.toBoolean)
+
+    val tier1 = keyGeneratorClassName == classOf[NonpartitionedKeyGenerator].getName &&
+      recordKeyFields.size == 1
+
+    val tier2 = keyGeneratorClassName == classOf[SimpleKeyGenerator].getName &&
+      recordKeyFields.size == 1 && partitionPathFields.size == 1 &&
+      !urlEncode && !slashSep
+
+    if (tier1) {
+      (functions.col(recordKeyFields.get(0)).cast(StringType),
+        functions.lit("").cast(StringType))
+    } else if (tier2) {
+      val recordKeyCol = functions.col(recordKeyFields.get(0)).cast(StringType)
+      val partitionPathCol = buildSimpleKeygenPartitionPathColumn(partitionPathFields.get(0), hiveStyle)
+      (recordKeyCol, partitionPathCol)
+    } else {
+      val recordKeyUdf = functions.udf(
+        new UDF1[Row, String] { override def call(row: Row): String = keyGenerator.getRecordKey(row) },
+        StringType)
+      val partitionPathUdf = functions.udf(
+        new UDF1[Row, String] { override def call(row: Row): String = keyGenerator.getPartitionPath(row) },
+        StringType)
+      val rowStruct = functions.struct(df.schema.fieldNames.map(functions.col): _*)
+      (recordKeyUdf(rowStruct), partitionPathUdf(rowStruct))
+    }
+  }
+
+  /**
+   * Tier-2 SimpleKeyGenerator partition-path expression for a single field with default URL/slash
+   * formatter flags, mirroring [[PartitionPathFormatterBase#combine]]:
+   *
+   * <ul>
+   *   <li>!hiveStyle: handleEmpty(value) -- null/"" -> __HIVE_DEFAULT_PARTITION__</li>
+   *   <li>hiveStyle:  "<field>=" + handleEmpty(value)</li>
+   * </ul>
+   */
+  private def buildSimpleKeygenPartitionPathColumn(partitionField: String,
+                                                   hiveStyle: Boolean): org.apache.spark.sql.Column = {
+    val rawValue = functions.col(partitionField).cast(StringType)
+    val emptyHandled = functions.coalesce(
+      functions.when(functions.length(rawValue) === 0,
+        functions.lit(PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH))
+        .otherwise(rawValue),
+      functions.lit(PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH))
+
+    if (hiveStyle) {
+      functions.concat(functions.lit(partitionField + "="), emptyHandled)
+    } else {
+      emptyHandled
+    }
   }
 
   /**
