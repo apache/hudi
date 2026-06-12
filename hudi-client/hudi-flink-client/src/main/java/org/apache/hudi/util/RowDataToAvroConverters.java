@@ -154,7 +154,7 @@ public class RowDataToAvroConverters {
                 if (schema.getNonNullType().getType() == HoodieSchemaType.ENUM) {
                   HoodieSchema enumSchema = schema.getNonNullType();
                   return new GenericData.EnumSymbol(
-                      enumSchema.toAvroSchema(), ((BinaryStringData) object).toString());
+                      enumSchema.toAvroSchema(), object.toString());
                 }
                 return new Utf8(((BinaryStringData) object).toBytes());
               }
