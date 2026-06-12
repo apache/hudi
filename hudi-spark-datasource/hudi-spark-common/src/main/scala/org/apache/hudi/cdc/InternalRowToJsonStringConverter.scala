@@ -18,8 +18,6 @@
 
 package org.apache.hudi.cdc
 
-import org.apache.hudi.common.model.HoodieRecord
-
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
@@ -43,13 +41,7 @@ class InternalRowToJsonStringConverter(schema: StructType) {
     val map = scala.collection.mutable.LinkedHashMap.empty[String, Any]
     schema.zipWithIndex.foreach {
       case (field, idx) =>
-        // CDC before/after images must contain only business columns. Records read from base
-        // files or MOR log files carry the _hoodie_* meta columns, while images read from the
-        // supplemental CDC log already have them stripped at write time (HoodieCDCLogger). Skip
-        // the meta columns here so every inference case produces a schema-consistent image.
-        if (!HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(field.name)) {
-          map(field.name) = convertField(record.get(idx, field.dataType), field.dataType)
-        }
+        map(field.name) = convertField(record.get(idx, field.dataType), field.dataType)
     }
     UTF8String.fromString(mapper.writeValueAsString(map))
   }

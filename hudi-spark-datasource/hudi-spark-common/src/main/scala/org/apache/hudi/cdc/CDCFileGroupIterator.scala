@@ -62,6 +62,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.io.Closeable
 import java.util
 import java.util.{Collections, Locale}
+import java.util.function.UnaryOperator
 import java.util.stream.Collectors
 
 import scala.annotation.tailrec
@@ -228,7 +229,9 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()),
     getClass.getSimpleName)
 
-  private val internalRowToJsonStringConverterMap: mutable.Map[Integer, InternalRowToJsonStringConverter] = mutable.Map.empty
+  // Per-schema cache of the (image projection, json converter) used to build CDC before/after
+  // images. Keyed by the record's schema id so schema evolution is handled correctly.
+  private val cdcImageConverterMap: mutable.Map[Integer, (UnaryOperator[InternalRow], InternalRowToJsonStringConverter)] = mutable.Map.empty
 
   private def needLoadNextFile: Boolean = {
     !recordIter.hasNext &&
@@ -557,9 +560,20 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
    * Convert InternalRow to json string.
    */
   private def convertBufferedRecordToJsonString(record: BufferedRecord[InternalRow]): UTF8String = {
-    internalRowToJsonStringConverterMap.getOrElseUpdate(record.getSchemaId,
-      new InternalRowToJsonStringConverter(HoodieInternalRowUtils.getCachedSchema(readerContext.getRecordContext.decodeAvroSchema(record.getSchemaId))))
-      .convert(record.getRecord)
+    val (imageProjection, converter) = cdcImageConverterMap.getOrElseUpdate(record.getSchemaId, {
+      val recordSchema = readerContext.getRecordContext.decodeAvroSchema(record.getSchemaId)
+      // CDC before/after images must contain only business columns. Records read from base/log
+      // files carry the _hoodie_* meta columns (kept on the InternalRow because they are needed
+      // internally for record keying and merging), while images served from the supplemental CDC
+      // log already have them stripped at write time (HoodieCDCLogger). Project each record onto
+      // the meta-stripped image schema so every inference case produces a schema-consistent,
+      // business-columns-only image.
+      val imageSchema = HoodieSchemaUtils.removeMetadataFields(recordSchema)
+      val projection = readerContext.getRecordContext.projectRecord(recordSchema, imageSchema)
+      val converter = new InternalRowToJsonStringConverter(HoodieInternalRowUtils.getCachedSchema(imageSchema))
+      (projection, converter)
+    })
+    converter.convert(imageProjection.apply(record.getRecord))
   }
 
   /**
