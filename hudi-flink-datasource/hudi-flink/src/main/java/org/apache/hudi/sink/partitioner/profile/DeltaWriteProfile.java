@@ -86,6 +86,11 @@ public class DeltaWriteProfile extends WriteProfile {
     return smallFileLocations;
   }
 
+  @Override
+  protected double fileSizeParquetCompressionRatio() {
+    return config.getLogFileToParquetCompressionRatio();
+  }
+
   protected SyncableFileSystemView getFileSystemView() {
     return (SyncableFileSystemView) getTable().getSliceView();
   }
@@ -98,5 +103,4 @@ public class DeltaWriteProfile extends WriteProfile {
     long totalSize = getTotalFileSize(fileSlice);
     return totalSize < config.getParquetMaxFileSize();
   }
-
 }
