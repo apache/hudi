@@ -453,9 +453,4 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   public void close() {
     super.close();
   }
-
-  @Override
-  public boolean isClosed() {
-    return closed;
-  }
 }
