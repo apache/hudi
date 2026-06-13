@@ -424,8 +424,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         );
       }
       log.info("Compacted successfully on commit {}", compactionCommitTime);
-      fireCommitCallback(compactionCommitTime, HoodieTimeline.COMMIT_ACTION,
-          writeStats, table.getBaseFileOnlyView(), Option.empty());
+      fireCommitCallbackIfNecessary(compactionCommitTime, HoodieTimeline.COMMIT_ACTION,
+          writeStats, table::getBaseFileOnlyView, Option.empty());
     } finally {
       if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
         this.heartbeatClient.stop(compactionCommitTime);
@@ -642,8 +642,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       heartbeatClient.stop(clusteringCommitTime);
     }
     log.info("Clustering successfully on commit {} for table {}", clusteringCommitTime, table.getConfig().getBasePath());
-    fireCommitCallback(clusteringCommitTime, HoodieTimeline.REPLACE_COMMIT_ACTION,
-        writeStats, table.getBaseFileOnlyView(), Option.empty());
+    fireCommitCallbackIfNecessary(clusteringCommitTime, HoodieTimeline.REPLACE_COMMIT_ACTION,
+        writeStats, table::getBaseFileOnlyView, Option.empty());
   }
 
   protected void runTableServicesInline(HoodieTable table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
