@@ -26,7 +26,6 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
-import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.partitioner.BucketIndexRemotePartitioner;
 import org.apache.hudi.utils.RuntimeContextUtils;
@@ -106,7 +105,7 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
   @Override
   public void open(Configuration parameters) throws IOException {
     super.open(parameters);
-    this.indexKeyFieldList = KeyGenUtils.getIndexKeyFields(OptionsResolver.getIndexKeyField(config));
+    this.indexKeyFieldList = OptionsResolver.getIndexKeyFields(config);
     this.isNonBlockingConcurrencyControl = OptionsResolver.isNonBlockingConcurrencyControl(config);
     this.taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
     this.parallelism = RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext());
