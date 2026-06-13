@@ -1154,12 +1154,10 @@ public class HoodieSchema implements Serializable {
     if (!hasFields()) {
       throw new IllegalStateException("Cannot get fields from schema type: " + type);
     }
+    // Benign race: the result is an immutable, deterministic view of avroSchema's fields, so concurrent
+    // callers may each build it once but converge on equal lists; the volatile field makes publication safe.
     if (fields == null) {
-      synchronized (this) {
-        if (fields == null) {
-          fields = Collections.unmodifiableList(avroSchema.getFields().stream().map(HoodieSchemaField::new).collect(Collectors.toList()));
-        }
-      }
+      fields = Collections.unmodifiableList(avroSchema.getFields().stream().map(HoodieSchemaField::new).collect(Collectors.toList()));
     }
     return fields;
   }
@@ -1201,13 +1199,10 @@ public class HoodieSchema implements Serializable {
   }
 
   private Map<String, HoodieSchemaField> getFieldMap() {
+    // Benign race, same rationale as getFields(): deterministic immutable result, volatile for safe publication.
     if (fieldMap == null) {
-      synchronized (this) {
-        if (fieldMap == null) {
-          fieldMap = Collections.unmodifiableMap(getFields().stream()
-              .collect(Collectors.toMap(HoodieSchemaField::name, field -> field)));
-        }
-      }
+      fieldMap = Collections.unmodifiableMap(getFields().stream()
+          .collect(Collectors.toMap(HoodieSchemaField::name, field -> field)));
     }
     return fieldMap;
   }
