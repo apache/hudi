@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.exception.MemoryPagesExhaustedException;
@@ -174,11 +175,12 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
     HoodieWriteConfig writeConfig = writeClient.getConfig();
     // deduplicate the index records using commit time ordering.
     Map<String, HoodieRecord> keyAndRecordMap = new LinkedHashMap<>();
+    long currentInstantMillis = HoodieMetadataPayload.parseRecordIndexInstantTime(this.currentInstant);
     while (rowItr.hasNext()) {
       RowData indexRow = rowItr.next();
       keyAndRecordMap.put(
           dedupKeyExtractor.apply(indexRow),
-          IndexRowUtils.convertToHoodieRecord(this.currentInstant, indexRow, writeConfig));
+          IndexRowUtils.convertToHoodieRecord(currentInstantMillis, indexRow, writeConfig));
       dataPartitions.add(IndexRowUtils.getPartition(indexRow));
     }
     return Pair.of(new ArrayList<>(keyAndRecordMap.values()), dataPartitions);
