@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.BulkInsertWriteFunction;
@@ -214,9 +215,10 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private void setupMapFunction() {
     RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, rowType);
     String indexKeys = OptionsResolver.getIndexKeyField(conf);
+    List<String> indexKeyFieldList = KeyGenUtils.getIndexKeyFields(indexKeys);
     boolean needFixedFileIdSuffix = OptionsResolver.isNonBlockingConcurrencyControl(conf);
     this.bucketIdToFileId = new HashMap<>();
-    this.mapFunction = r -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, r, indexKeys, conf, needFixedFileIdSuffix);
+    this.mapFunction = r -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, r, indexKeyFieldList, conf, needFixedFileIdSuffix);
   }
 
   private void setupSortOperator() throws Exception {

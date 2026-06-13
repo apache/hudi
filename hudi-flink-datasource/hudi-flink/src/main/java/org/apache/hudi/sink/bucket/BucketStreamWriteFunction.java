@@ -26,6 +26,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.partitioner.BucketIndexRemotePartitioner;
 import org.apache.hudi.utils.RuntimeContextUtils;
@@ -41,6 +42,7 @@ import org.apache.flink.util.Collector;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -56,7 +58,9 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
 
   private int parallelism;
 
-  private String indexKeyFields;
+  // parsed once in open(); the per-record defineRecordLocation path uses the List overload of
+  // getBucketId so the comma-separated config string is not re-split per record
+  private List<String> indexKeyFieldList;
 
   private boolean isNonBlockingConcurrencyControl;
 
@@ -102,7 +106,7 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
   @Override
   public void open(Configuration parameters) throws IOException {
     super.open(parameters);
-    this.indexKeyFields = OptionsResolver.getIndexKeyField(config);
+    this.indexKeyFieldList = KeyGenUtils.getIndexKeyFields(OptionsResolver.getIndexKeyField(config));
     this.isNonBlockingConcurrencyControl = OptionsResolver.isNonBlockingConcurrencyControl(config);
     this.taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
     this.parallelism = RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext());
@@ -144,7 +148,7 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
       bootstrapIndexIfNeed(partition);
     }
     Map<Integer, String> bucketToFileId = bucketIndex.computeIfAbsent(partition, p -> new HashMap<>());
-    final int bucketNum = BucketIdentifier.getBucketId(record.getRecordKey(), indexKeyFields, numBucketsFunction.getNumBuckets(record.getPartitionPath()));
+    final int bucketNum = BucketIdentifier.getBucketId(record.getRecordKey(), indexKeyFieldList, numBucketsFunction.getNumBuckets(record.getPartitionPath()));
     final String bucketId = partition + "/" + bucketNum;
 
     if (incBucketIndex.contains(bucketId)) {

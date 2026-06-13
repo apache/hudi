@@ -24,9 +24,12 @@ import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
+import org.apache.hudi.keygen.KeyGenUtils;
 
 import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.configuration.Configuration;
+
+import java.util.List;
 
 /**
  * Bucket index input partitioner.
@@ -36,13 +39,15 @@ import org.apache.flink.configuration.Configuration;
  */
 public class BucketIndexPartitioner<T extends HoodieKey> implements Partitioner<T> {
 
-  private final String indexKeyFields;
+  // parsed once; the per-record partition() path uses the List overload of getBucketId so the
+  // comma-separated config string is not re-split per record
+  private final List<String> indexKeyFieldList;
   private final NumBucketsFunction numBucketsFunction;
 
   private Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc;
 
   public BucketIndexPartitioner(Configuration conf, String indexKeyFields) {
-    this.indexKeyFields = indexKeyFields;
+    this.indexKeyFieldList = KeyGenUtils.getIndexKeyFields(indexKeyFields);
     this.numBucketsFunction = new NumBucketsFunction(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
         conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
   }
@@ -53,7 +58,7 @@ public class BucketIndexPartitioner<T extends HoodieKey> implements Partitioner<
       this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(numPartitions);
     }
     int numBuckets = numBucketsFunction.getNumBuckets(key.getPartitionPath());
-    int curBucket = BucketIdentifier.getBucketId(key.getRecordKey(), indexKeyFields, numBuckets);
+    int curBucket = BucketIdentifier.getBucketId(key.getRecordKey(), indexKeyFieldList, numBuckets);
     return this.partitionIndexFunc.apply(numBuckets, key.getPartitionPath(), curBucket);
   }
 }
