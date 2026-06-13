@@ -664,10 +664,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       metrics.updateTableServiceInstantMetrics(table.getActiveTimeline());
       // Fire write commit callback if a callback class is registered. postCommit() is reached
       // by both auto-commit and explicit-commit paths; compaction and clustering have their own
-      // explicit fireCommitCallback call sites in BaseHoodieTableServiceClient.
+      // explicit fireCommitCallbackIfNecessary call sites in BaseHoodieTableServiceClient.
       List<HoodieWriteStat> stats = metadata.getWriteStats();
-      fireCommitCallback(instantTime, commitActionType, stats,
-          table.getBaseFileOnlyView(), extraMetadata);
+      fireCommitCallbackIfNecessary(instantTime, commitActionType, stats,
+          table::getBaseFileOnlyView, extraMetadata);
     } finally {
       this.heartbeatClient.stop(instantTime);
     }

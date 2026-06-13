@@ -69,6 +69,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieWriteConfig.APPLICATION_ID;
@@ -486,11 +487,11 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    * <p>Best-effort: catches and logs any exception from the user-supplied callback so a
    * misbehaving observer cannot fail the commit.
    */
-  protected void fireCommitCallback(String commitTime,
-                                    String commitActionType,
-                                    List<HoodieWriteStat> stats,
-                                    BaseFileOnlyView fsView,
-                                    Option<Map<String, String>> extraMetadata) {
+  protected void fireCommitCallbackIfNecessary(String commitTime,
+                                               String commitActionType,
+                                               List<HoodieWriteStat> stats,
+                                               Supplier<BaseFileOnlyView> fsViewSupplier,
+                                               Option<Map<String, String>> extraMetadata) {
     if (!config.writeCommitCallbackOn()) {
       return;
     }
@@ -500,7 +501,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
       }
       commitCallback.call(new HoodieWriteCommitCallbackMessage(
           commitTime, config.getTableName(), config.getBasePath(),
-          stats, Option.of(commitActionType), extraMetadata, resolvePrevFilePaths(stats, fsView),
+          stats, Option.of(commitActionType), extraMetadata,
+          resolvePrevFilePaths(stats, fsViewSupplier.get()),
           Collections.emptyMap()));
     } catch (Exception e) {
       log.warn("HoodieWriteCommitCallback failed for commit {} ({}); ignoring",
@@ -514,7 +516,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    * {@link BaseFileOnlyView}. The lookup is O(1) per stat against the cached view, so
    * this adds no I/O on top of what the writer already paid.
    *
-   * <p>Used by {@link #fireCommitCallback} call sites so the callback message ships
+   * <p>Used by {@link #fireCommitCallbackIfNecessary} call sites so the callback message ships
    * actual file paths rather than forcing each callback impl to rebuild a
    * {@code FileSystemView}.
    */
