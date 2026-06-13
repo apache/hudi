@@ -93,7 +93,8 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
     return new SortOperatorGen(rowType, new String[] {FILE_GROUP_META_FIELD});
   }
 
-  private static String getFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, List<String> indexKeyFields, NumBucketsFunction numBucketsFunction, boolean needFixedFileIdSuffix) {
+  private static String getFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, List<String> indexKeyFields,
+                                  NumBucketsFunction numBucketsFunction, boolean needFixedFileIdSuffix) {
     String recordKey = keyGen.getRecordKey(record);
     String partition = keyGen.getPartitionPath(record);
     final int numBuckets = numBucketsFunction.getNumBuckets(partition);
@@ -102,7 +103,8 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
     return bucketIdToFileId.computeIfAbsent(bucketId, k -> needFixedFileIdSuffix ? BucketIdentifier.newBucketFileIdForNBCC(bucketNum) : BucketIdentifier.newBucketFileIdPrefix(bucketNum));
   }
 
-  public static RowData rowWithFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, List<String> indexKeyFields, NumBucketsFunction numBucketsFunction, boolean needFixedFileIdSuffix) {
+  public static RowData rowWithFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, List<String> indexKeyFields,
+                                      NumBucketsFunction numBucketsFunction, boolean needFixedFileIdSuffix) {
     final String fileId = getFileId(bucketIdToFileId, keyGen, record, indexKeyFields, numBucketsFunction, needFixedFileIdSuffix);
     return GenericRowData.of(StringData.fromString(fileId), record);
   }
