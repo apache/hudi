@@ -56,6 +56,11 @@ public class TestHudiMemoryCacheFileOperations
                 .put("hudi.metadata-enabled", "true")
                 .put("hudi.metadata.cache.enabled", "true")
                 .put("fs.cache.enabled", "false")
+                // Disable async table-statistics refresh: it reads the metadata table on a
+                // background executor whose spans can outlive the query and leak into the next
+                // test's measurement (the symmetric off-by-N flake). Disabling it makes the
+                // file-operation counts deterministic right after the query returns.
+                .put("hudi.table-statistics-enabled", "false")
                 .buildOrThrow();
 
         return HudiQueryRunner.builder()
@@ -67,7 +72,6 @@ public class TestHudiMemoryCacheFileOperations
 
     @Test
     public void testSelectWithFilter()
-            throws InterruptedException
     {
         @Language("SQL") String query = "SELECT * FROM " + HUDI_MULTI_FG_PT_V8_MOR + " WHERE country='SG'";
         assertFileSystemAccesses(
@@ -101,7 +105,6 @@ public class TestHudiMemoryCacheFileOperations
 
     @Test
     public void testJoin()
-            throws InterruptedException
     {
         @Language("SQL") String query = "SELECT t1.id, t1.name, t1.price, t1.ts FROM " +
                 HUDI_MULTI_FG_PT_V8_MOR + " t1 " +
@@ -111,14 +114,14 @@ public class TestHudiMemoryCacheFileOperations
         assertFileSystemAccesses(query,
                 ImmutableMultiset.<FileOperation>builder()
                         .addCopies(new FileOperation("FileSystemCache.cacheInput", DATA), 6)
-                        .addCopies(new FileOperation("FileSystemCache.cacheLength", METADATA_TABLE), 39)
-                        .addCopies(new FileOperation("FileSystemCache.cacheStream", METADATA_TABLE), 54)
+                        .addCopies(new FileOperation("FileSystemCache.cacheLength", METADATA_TABLE), 29)
+                        .addCopies(new FileOperation("FileSystemCache.cacheStream", METADATA_TABLE), 40)
                         .addCopies(new FileOperation("FileSystemCache.cacheStream", TIMELINE), 4)
                         .addCopies(new FileOperation("FileSystemCache.cacheStream", LOG), 2)
-                        .addCopies(new FileOperation("InputFile.lastModified", METADATA_TABLE), 39)
-                        .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 5)
-                        .addCopies(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES), 3)
-                        .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 5)
+                        .addCopies(new FileOperation("InputFile.lastModified", METADATA_TABLE), 29)
+                        .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 4)
+                        .addCopies(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES), 2)
+                        .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 4)
                         .build());
 
         assertFileSystemAccesses(query,
@@ -136,37 +139,10 @@ public class TestHudiMemoryCacheFileOperations
     }
 
     private void assertFileSystemAccesses(@Language("SQL") String query, Multiset<FileOperation> expectedCacheAccesses)
-            throws InterruptedException
     {
         DistributedQueryRunner queryRunner = getDistributedQueryRunner();
         queryRunner.executeWithPlan(queryRunner.getDefaultSession(), query);
-        // Async table-stats computation can outlive the synchronous query and emit spans into
-        // the exporter after execute returns. A fixed Thread.sleep races with this — when
-        // stats from query N is still running while query N+1's measurement happens, spans
-        // leak across the boundary and counts get scrambled (the symmetric off-by-N failure
-        // across paired tests). Poll until the span set is stable for two consecutive reads.
-        Multiset<FileOperation> actual = waitForStableSpans(queryRunner);
-        assertMultisetsEqual(actual, expectedCacheAccesses);
-    }
-
-    /**
-     * Returns the file-operation span set once two consecutive reads (200ms apart) agree.
-     * Bounded by a 30-second ceiling so a runaway test fails loudly instead of hanging.
-     */
-    private static Multiset<FileOperation> waitForStableSpans(QueryRunner queryRunner)
-            throws InterruptedException
-    {
-        long deadlineMillis = System.currentTimeMillis() + 30_000L;
-        Multiset<FileOperation> previous = null;
-        while (System.currentTimeMillis() < deadlineMillis) {
-            Thread.sleep(200L);
-            Multiset<FileOperation> current = getFileOperations(queryRunner);
-            if (previous != null && current.equals(previous)) {
-                return current;
-            }
-            previous = current;
-        }
-        return previous != null ? previous : getFileOperations(queryRunner);
+        assertMultisetsEqual(getFileOperations(queryRunner), expectedCacheAccesses);
     }
 
     private static Multiset<FileOperation> getFileOperations(QueryRunner queryRunner)
