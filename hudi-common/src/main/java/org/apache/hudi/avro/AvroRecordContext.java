@@ -24,8 +24,8 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.AvroToHoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -74,7 +74,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     // Interning returns the canonical wrapper for this schema, whose lazily built field list and
     // field map survive across calls, so the per-record cost is a cache hit instead of an
     // O(schema width) wrapper rebuild.
-    HoodieSchema currentSchema = HoodieSchemaCache.intern(record.getSchema());
+    HoodieSchema currentSchema = AvroToHoodieSchemaCache.intern(record.getSchema());
     IndexedRecord currentRecord = record;
     String[] path = fieldName.split("\\.");
     for (int i = 0; i < path.length; i++) {
