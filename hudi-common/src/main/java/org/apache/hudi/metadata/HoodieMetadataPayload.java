@@ -60,6 +60,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -697,8 +698,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           fileIndex = Integer.parseInt(fileId.substring(index + 1));
         }
       } catch (Exception e) {
-        throw new HoodieMetadataException(String.format("Invalid UUID or index: fileID=%s, partition=%s, instantTimeMillis=%d",
-            fileId, partition, instantTimeMillis), e);
+        // reconstruct the instant time only on this cold error path; the hot per-record path keeps the pre-parsed millis
+        throw new HoodieMetadataException(String.format("Invalid UUID or index: fileID=%s, partition=%s, instantTime=%s",
+            fileId, partition, TimelineUtils.formatDate(new Date(instantTimeMillis))), e);
       }
 
       HoodieMetadataPayload payload = new HoodieMetadataPayload(recordKey,
