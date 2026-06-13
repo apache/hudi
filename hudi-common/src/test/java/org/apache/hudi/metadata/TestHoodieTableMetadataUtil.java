@@ -18,6 +18,8 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
@@ -33,6 +35,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.util.Option;
 
+import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -378,6 +381,25 @@ class TestHoodieTableMetadataUtil {
         "rk1", "p1", "some-raw-file-id", instantTimeMillis, 1);
     assertEquals(fromString.getKey(), fromMillis.getKey());
     assertEquals(fromString.getData(), fromMillis.getData());
+  }
+
+  @Test
+  void testRecordIndexPayloadRoundTripsThroughAvro() throws Exception {
+    // both fileId encodings populate the numeric RLI fields; they must survive the avro read path
+    // (constructMetadataPayload now reads the long/int fields directly instead of via toString+parse)
+    assertRecordIndexRoundTrips("49b8b3c8-9e5d-4731-9d51-a2d8e9b5c7f3-0", 0);
+    assertRecordIndexRoundTrips("some-raw-file-id", 1);
+  }
+
+  private static void assertRecordIndexRoundTrips(String fileId, int fileIdEncoding) throws Exception {
+    HoodieRecord<HoodieMetadataPayload> written =
+        HoodieMetadataPayload.createRecordIndexUpdate("rk1", "p1", fileId, "20260610153045678", fileIdEncoding);
+    // serialize to avro bytes and back so the read path sees a GenericRecord with boxed Long/Integer fields
+    byte[] bytes = HoodieAvroUtils.avroToBytes(written.getData().getInsertValue(null).get());
+    GenericRecord deserialized = HoodieAvroUtils.bytesToAvro(bytes, HoodieMetadataRecord.getClassSchema());
+    HoodieMetadataPayload readBack = new HoodieMetadataPayload(Option.of(deserialized));
+    assertEquals(written.getData().recordIndexMetadata, readBack.recordIndexMetadata,
+        "RLI metadata must survive the avro read path for fileId encoding " + fileIdEncoding);
   }
 
   @Test

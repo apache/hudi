@@ -176,14 +176,16 @@ public enum MetadataPartitionType {
       if (recordIndexRecord.hasField(RECORD_INDEX_FIELD_POSITION)) {
         recordIndexPosition = recordIndexRecord.get(RECORD_INDEX_FIELD_POSITION);
       }
+      // Numeric RLI fields are long/int per HoodieMetadata.avsc, so read them directly instead of
+      // round-tripping through String (toString + parse) for every materialized record.
       payload.recordIndexMetadata = new HoodieRecordIndexInfo(recordIndexRecord.get(RECORD_INDEX_FIELD_PARTITION).toString(),
-          Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_HIGH_BITS).toString()),
-          Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_LOW_BITS).toString()),
-          Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILE_INDEX).toString()),
+          ((Number) recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_HIGH_BITS)).longValue(),
+          ((Number) recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_LOW_BITS)).longValue(),
+          ((Number) recordIndexRecord.get(RECORD_INDEX_FIELD_FILE_INDEX)).intValue(),
           recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID).toString(),
-          Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_INSTANT_TIME).toString()),
-          Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_ENCODING).toString()),
-          recordIndexPosition != null ? Long.parseLong(recordIndexPosition.toString()) : null);
+          ((Number) recordIndexRecord.get(RECORD_INDEX_FIELD_INSTANT_TIME)).longValue(),
+          ((Number) recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_ENCODING)).intValue(),
+          recordIndexPosition != null ? ((Number) recordIndexPosition).longValue() : null);
     }
   },
   EXPRESSION_INDEX(PARTITION_NAME_EXPRESSION_INDEX_PREFIX, "expr-index-", -1) {
@@ -427,11 +429,15 @@ public enum MetadataPartitionType {
         && partitionType != COLUMN_STATS;
   }
 
+  // Cache values() once; it clones the constant array on every call, and get(int) runs once per
+  // record materialized from the metadata table (RLI/SI/col-stats lookups, MDT log merges).
+  private static final MetadataPartitionType[] ENUM_VALUES = values();
+
   /**
    * Get the metadata partition type for the given record type.
    */
   public static MetadataPartitionType get(int type) {
-    for (MetadataPartitionType partitionType : values()) {
+    for (MetadataPartitionType partitionType : ENUM_VALUES) {
       if (partitionType.getRecordType() == type) {
         return partitionType;
       }
