@@ -22,7 +22,7 @@ import org.apache.hudi.HoodieSchemaConversionUtils.{convertHoodieSchemaToDataTyp
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
-import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
+import org.apache.hudi.common.schema.{AvroToHoodieSchemaCache, HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, HoodieRecordUtils, Option => HOption, OrderingValues, StringUtils, ValidationUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig
@@ -116,7 +116,7 @@ class ExpressionPayload(@transient record: GenericRecord,
 
     // Get the Evaluator for each condition and update assignments.
     val updateConditionAndAssignments =
-      getEvaluator(updateConditionAndAssignmentsText.toString, HoodieSchema.fromAvroSchema(inputRecord.asAvro.getSchema))
+      getEvaluator(updateConditionAndAssignmentsText.toString, AvroToHoodieSchemaCache.intern(inputRecord.asAvro.getSchema))
 
     for ((conditionEvaluator, assignmentEvaluator) <- updateConditionAndAssignments
          if resultRecordOpt == null) {
@@ -145,7 +145,7 @@ class ExpressionPayload(@transient record: GenericRecord,
       // Process delete
       val deleteConditionText = properties.get(ExpressionPayload.PAYLOAD_DELETE_CONDITION)
       if (deleteConditionText != null) {
-        val (deleteConditionEvaluator, _) = getEvaluator(deleteConditionText.toString, HoodieSchema.fromAvroSchema(inputRecord.asAvro.getSchema)).head
+        val (deleteConditionEvaluator, _) = getEvaluator(deleteConditionText.toString, AvroToHoodieSchemaCache.intern(inputRecord.asAvro.getSchema)).head
         val deleteConditionEvalResult = deleteConditionEvaluator.apply(inputRecord.asRow)
           .get(0, BooleanType)
           .asInstanceOf[Boolean]
@@ -206,7 +206,7 @@ class ExpressionPayload(@transient record: GenericRecord,
    *       multiple times for different expression evaluation invocations
    */
   case class ConvertibleRecord(private val avro: GenericRecord) extends Logging {
-    private lazy val row: InternalRow = getAvroDeserializerFor(HoodieSchema.fromAvroSchema(avro.getSchema)).deserialize(avro) match {
+    private lazy val row: InternalRow = getAvroDeserializerFor(AvroToHoodieSchemaCache.intern(avro.getSchema)).deserialize(avro) match {
       case Some(row) => row.asInstanceOf[InternalRow]
       case None =>
         logError(s"Failed to deserialize Avro record `${avro.toString}` as Catalyst row")
@@ -231,7 +231,7 @@ class ExpressionPayload(@transient record: GenericRecord,
       properties.get(ExpressionPayload.PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS).toString
     // Get the evaluator for each condition and insert assignment.
     val insertConditionAndAssignments =
-      ExpressionPayload.getEvaluator(insertConditionAndAssignmentsText, HoodieSchema.fromAvroSchema(inputRecord.asAvro.getSchema))
+      ExpressionPayload.getEvaluator(insertConditionAndAssignmentsText, AvroToHoodieSchemaCache.intern(inputRecord.asAvro.getSchema))
     var resultRecordOpt: HOption[IndexedRecord] = null
     for ((conditionEvaluator, assignmentEvaluator) <- insertConditionAndAssignments
          if resultRecordOpt == null) {
@@ -243,7 +243,7 @@ class ExpressionPayload(@transient record: GenericRecord,
       if (conditionEvalResult) {
         val writerSchema = getWriterSchema(properties, false)
         val resultingRow = assignmentEvaluator.apply(inputRecord.asRow)
-        val resultingAvroRecord = getAvroSerializerFor(HoodieSchema.fromAvroSchema(writerSchema.getAvroSchema))
+        val resultingAvroRecord = getAvroSerializerFor(AvroToHoodieSchemaCache.intern(writerSchema.getAvroSchema))
           .serialize(resultingRow)
           .asInstanceOf[GenericRecord]
 
@@ -315,7 +315,7 @@ class ExpressionPayload(@transient record: GenericRecord,
    */
   private def joinRecord(sourceRecord: IndexedRecord, targetRecord: IndexedRecord, props: Properties): GenericRecord = {
     val leftSchema = sourceRecord.getSchema
-    val joinSchema = getMergedSchema(HoodieSchema.fromAvroSchema(leftSchema), HoodieSchema.fromAvroSchema(targetRecord.getSchema))
+    val joinSchema = getMergedSchema(AvroToHoodieSchemaCache.intern(leftSchema), AvroToHoodieSchemaCache.intern(targetRecord.getSchema))
 
     // TODO rebase onto JoinRecord
     val values = new Array[AnyRef](joinSchema.getFields.size())

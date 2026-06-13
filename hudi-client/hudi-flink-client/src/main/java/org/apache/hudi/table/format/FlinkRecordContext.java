@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.AvroToHoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -125,7 +126,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   @Override
   public RowData convertAvroRecord(IndexedRecord avroRecord) {
     Schema recordSchema = avroRecord.getSchema();
-    AvroToRowDataConverters.AvroToRowDataConverter converter = RowDataQueryContexts.fromSchema(HoodieSchema.fromAvroSchema(recordSchema), utcTimezone).getAvroToRowDataConverter();
+    AvroToRowDataConverters.AvroToRowDataConverter converter = RowDataQueryContexts.fromSchema(AvroToHoodieSchemaCache.intern(recordSchema), utcTimezone).getAvroToRowDataConverter();
     RowData rowData = (RowData) converter.convert(avroRecord);
     Schema.Field operationField = recordSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD);
     if (operationField != null) {

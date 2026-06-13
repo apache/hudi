@@ -507,9 +507,11 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       output.writeInt(records.size());
 
       // 3. Write the records
+      // schema is loop-invariant; wrap it once instead of rebuilding the HoodieSchema per record
+      HoodieSchema hoodieSchema = HoodieSchema.fromAvroSchema(schema);
       Iterator<HoodieRecord<?>> itr = records.iterator();
       while (itr.hasNext()) {
-        IndexedRecord s = itr.next().toIndexedRecord(HoodieSchema.fromAvroSchema(schema), new Properties()).get().getData();
+        IndexedRecord s = itr.next().toIndexedRecord(hoodieSchema, new Properties()).get().getData();
         ByteArrayOutputStream temp = new ByteArrayOutputStream();
         BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(temp, encoderCache.get());
         encoderCache.set(encoder);
