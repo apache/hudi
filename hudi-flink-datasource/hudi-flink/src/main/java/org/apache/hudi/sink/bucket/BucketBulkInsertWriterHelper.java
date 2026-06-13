@@ -19,7 +19,6 @@
 package org.apache.hudi.sink.bucket;
 
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.io.storage.row.HoodieRowDataCreateHandle;
@@ -94,20 +93,17 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
     return new SortOperatorGen(rowType, new String[] {FILE_GROUP_META_FIELD});
   }
 
-  private static String getFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, List<String> indexKeyFields, Configuration conf, boolean needFixedFileIdSuffix) {
+  private static String getFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, List<String> indexKeyFields, NumBucketsFunction numBucketsFunction, boolean needFixedFileIdSuffix) {
     String recordKey = keyGen.getRecordKey(record);
     String partition = keyGen.getPartitionPath(record);
-    NumBucketsFunction numBucketsFunction = new NumBucketsFunction(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS), conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE),
-        conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
-
     final int numBuckets = numBucketsFunction.getNumBuckets(partition);
     final int bucketNum = BucketIdentifier.getBucketId(recordKey, indexKeyFields, numBuckets);
     String bucketId = partition + bucketNum;
     return bucketIdToFileId.computeIfAbsent(bucketId, k -> needFixedFileIdSuffix ? BucketIdentifier.newBucketFileIdForNBCC(bucketNum) : BucketIdentifier.newBucketFileIdPrefix(bucketNum));
   }
 
-  public static RowData rowWithFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, List<String> indexKeyFields, Configuration conf, boolean needFixedFileIdSuffix) {
-    final String fileId = getFileId(bucketIdToFileId, keyGen, record, indexKeyFields, conf, needFixedFileIdSuffix);
+  public static RowData rowWithFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, List<String> indexKeyFields, NumBucketsFunction numBucketsFunction, boolean needFixedFileIdSuffix) {
+    final String fileId = getFileId(bucketIdToFileId, keyGen, record, indexKeyFields, numBucketsFunction, needFixedFileIdSuffix);
     return GenericRowData.of(StringData.fromString(fileId), record);
   }
 

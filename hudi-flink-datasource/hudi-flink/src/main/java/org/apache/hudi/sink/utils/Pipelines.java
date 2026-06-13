@@ -28,6 +28,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperator;
@@ -143,6 +144,10 @@ public class Pipelines {
       }
       String indexKeys = OptionsResolver.getIndexKeyField(conf);
       List<String> indexKeyFieldList = KeyGenUtils.getIndexKeyFields(indexKeys);
+      // built once and captured by the per-record map closure (NumBucketsFunction is Serializable),
+      // avoiding a per-record rebuild from conf inside BucketBulkInsertWriterHelper
+      NumBucketsFunction numBucketsFunction = new NumBucketsFunction(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
+          conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
       Partitioner<HoodieKey> partitioner = BucketIndexPartitionerFactory.create(conf, indexKeys);
       RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, rowType);
       RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
@@ -151,7 +156,7 @@ public class Pipelines {
 
       Map<String, String> bucketIdToFileId = new HashMap<>();
       dataStream = dataStream.partitionCustom(partitioner, keyGen::getHoodieKey)
-          .map(record -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, record, indexKeyFieldList, conf, needFixedFileIdSuffix), typeInfo)
+          .map(record -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, record, indexKeyFieldList, numBucketsFunction, needFixedFileIdSuffix), typeInfo)
           .setParallelism(PARALLELISM_VALUE);
       if (conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)) {
         SortOperatorGen sortOperatorGen = BucketBulkInsertWriterHelper.getFileIdSorterGen(rowTypeWithFileId);
