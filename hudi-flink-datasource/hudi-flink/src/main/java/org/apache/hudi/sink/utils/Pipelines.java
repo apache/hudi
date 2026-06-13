@@ -29,7 +29,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
-import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperator;
 import org.apache.hudi.sink.append.AppendWriteFunctions;
@@ -143,7 +142,7 @@ public class Pipelines {
             "Consistent hashing bucket index does not work with bulk insert using FLINK engine. Use simple bucket index or Spark engine.");
       }
       String indexKeys = OptionsResolver.getIndexKeyField(conf);
-      List<String> indexKeyFieldList = KeyGenUtils.getIndexKeyFields(indexKeys);
+      List<String> indexKeyFieldList = OptionsResolver.getIndexKeyFields(conf);
       // built once and captured by the per-record map closure (NumBucketsFunction is Serializable),
       // avoiding a per-record rebuild from conf inside BucketBulkInsertWriterHelper
       NumBucketsFunction numBucketsFunction = new NumBucketsFunction(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
