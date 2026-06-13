@@ -67,7 +67,8 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.TimelineUtils.getHoodieInstantWriterOption;
 
-@NoArgsConstructor
+// no-arg constructor is for serialization and de-serialization only; @Deprecated marks it as such
+@NoArgsConstructor(onConstructor_ = @Deprecated)
 @Slf4j
 public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTimeline {
 
