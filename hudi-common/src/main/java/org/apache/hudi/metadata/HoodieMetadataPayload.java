@@ -673,11 +673,18 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * <p>
    * Same as {@link #createRecordIndexUpdate(String, String, String, String, int)} but takes the
    * instant time already parsed to epoch millis, so per-commit callers parse it only once.
+   * <p>
+   * {@code instantTimeMillis} must be obtained from {@link #parseRecordIndexInstantTime(String)} (which
+   * delegates to {@link TimelineUtils#parseDateFromInstantTime(String)}); it should not be constructed by
+   * hand, so that the value stored here matches what the String overload would write. The instant-time
+   * string is interpreted in the JVM default time zone ({@link java.time.ZoneId#systemDefault()}) and the
+   * result is epoch milliseconds (since 1970-01-01T00:00:00Z).
    *
    * @param recordKey         Key of the record
    * @param partition         Name of the partition which contains the record
    * @param fileId            fileId which contains the record
-   * @param instantTimeMillis epoch millis of the instant when the record was added
+   * @param instantTimeMillis epoch millis of the instant when the record was added, as returned by
+   *                          {@link #parseRecordIndexInstantTime(String)}
    */
   public static HoodieRecord<HoodieMetadataPayload> createRecordIndexUpdate(String recordKey, String partition,
                                                                             String fileId, long instantTimeMillis, int fileIdEncoding) {
