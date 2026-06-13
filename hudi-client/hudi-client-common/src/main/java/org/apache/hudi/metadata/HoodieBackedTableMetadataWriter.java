@@ -1011,11 +1011,11 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           .withShouldUseRecordPosition(false)
           .withProps(metaClient.getTableConfig().getProps())
           .build();
-      String baseFileInstantTime = fileSlice.getBaseInstantTime();
+      long baseFileInstantTimeMillis = HoodieMetadataPayload.parseRecordIndexInstantTime(fileSlice.getBaseInstantTime());
       return new CloseableMappingIterator<>(fileGroupReader.getClosableIterator(), record -> {
         String recordKey = readerContext.getRecordContext().getRecordKey(record, requestedSchema);
         return HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partition, fileId,
-            baseFileInstantTime, 0);
+            baseFileInstantTimeMillis, 0);
       });
     });
   }

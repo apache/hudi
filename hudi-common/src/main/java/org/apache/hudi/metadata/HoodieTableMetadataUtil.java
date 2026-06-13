@@ -144,6 +144,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -940,8 +941,9 @@ public class HoodieTableMetadataUtil {
               Set<String> revivedKeys = revivedAndDeletedKeys.getLeft();
               Set<String> deletedKeys = revivedAndDeletedKeys.getRight();
               // Process revived keys to create updates
+              long instantTimeMillis = HoodieMetadataPayload.parseRecordIndexInstantTime(instantTime);
               List<HoodieRecord> revivedRecords = revivedKeys.stream()
-                  .map(recordKey -> HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partitionPath, fileId, instantTime, writesFileIdEncoding))
+                  .map(recordKey -> HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partitionPath, fileId, instantTimeMillis, writesFileIdEncoding))
                   .collect(Collectors.toList());
               // Process deleted keys to create deletes
               List<HoodieRecord> deletedRecords = deletedKeys.stream()
@@ -2499,7 +2501,7 @@ public class HoodieTableMetadataUtil {
       fileId = originalFileId;
     }
 
-    final java.util.Date instantDate = new java.util.Date(instantTime);
+    final Date instantDate = new Date(instantTime);
     return new HoodieRecordGlobalLocation(partition, HoodieInstantTimeGenerator.formatDate(instantDate), fileId);
   }
 
@@ -2615,6 +2617,8 @@ public class HoodieTableMetadataUtil {
                                                                         String instantTime,
                                                                         boolean isPartitionedRLI
   ) {
+    // the delete iterator never reads the instant time, so only the update path pays the parse
+    final long instantTimeMillis = forDelete ? -1L : HoodieMetadataPayload.parseRecordIndexInstantTime(instantTime);
     return new ClosableIterator<HoodieRecord>() {
       @Override
       public void close() {
@@ -2630,7 +2634,7 @@ public class HoodieTableMetadataUtil {
       public HoodieRecord next() {
         return forDelete
             ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next(), partition, isPartitionedRLI)
-            : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTime, 0);
+            : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTimeMillis, 0);
       }
     };
   }

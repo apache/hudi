@@ -21,22 +21,27 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
 
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS;
@@ -350,6 +355,59 @@ class TestHoodieTableMetadataUtil {
           "VECTOR must be excluded from V1 column stats for record type " + recordType);
       assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(stringSchema, rt, HoodieIndexVersion.V1),
           "STRING should remain supported for record type " + recordType);
+    }
+  }
+
+  @Test
+  void testCreateRecordIndexUpdateMillisOverloadMatchesStringOverload() {
+    String instantTime = "20260610153045678";
+    long instantTimeMillis = HoodieMetadataPayload.parseRecordIndexInstantTime(instantTime);
+
+    // uuid-encoded fileId (encoding 0)
+    HoodieRecord<HoodieMetadataPayload> fromString = HoodieMetadataPayload.createRecordIndexUpdate(
+        "rk1", "p1", "49b8b3c8-9e5d-4731-9d51-a2d8e9b5c7f3-0", instantTime, 0);
+    HoodieRecord<HoodieMetadataPayload> fromMillis = HoodieMetadataPayload.createRecordIndexUpdate(
+        "rk1", "p1", "49b8b3c8-9e5d-4731-9d51-a2d8e9b5c7f3-0", instantTimeMillis, 0);
+    assertEquals(fromString.getKey(), fromMillis.getKey());
+    assertEquals(fromString.getData(), fromMillis.getData());
+
+    // raw fileId (encoding 1)
+    fromString = HoodieMetadataPayload.createRecordIndexUpdate(
+        "rk1", "p1", "some-raw-file-id", instantTime, 1);
+    fromMillis = HoodieMetadataPayload.createRecordIndexUpdate(
+        "rk1", "p1", "some-raw-file-id", instantTimeMillis, 1);
+    assertEquals(fromString.getKey(), fromMillis.getKey());
+    assertEquals(fromString.getData(), fromMillis.getData());
+  }
+
+  @Test
+  void testGetLocationFromRecordIndexInfoFormatsInstantConsistently() {
+    long instantMillis1 = HoodieMetadataPayload.parseRecordIndexInstantTime("20260610153045678");
+    long instantMillis2 = HoodieMetadataPayload.parseRecordIndexInstantTime("20260610163045678");
+    String expected1 = HoodieInstantTimeGenerator.formatDate(new Date(instantMillis1));
+    String expected2 = HoodieInstantTimeGenerator.formatDate(new Date(instantMillis2));
+    // repeated and alternating instants must format consistently
+    for (long instantMillis : new long[] {instantMillis1, instantMillis1, instantMillis2, instantMillis1}) {
+      HoodieRecordGlobalLocation location = HoodieTableMetadataUtil.getLocationFromRecordIndexInfo(
+          "p1", 1, -1L, -1L, -1, "some-raw-file-id", instantMillis);
+      assertEquals(instantMillis == instantMillis1 ? expected1 : expected2, location.getInstantTime());
+      assertEquals("p1", location.getPartitionPath());
+      assertEquals("some-raw-file-id", location.getFileId());
+    }
+
+    // formatDate follows the JVM default time zone, so the decoded location must track a zone
+    // change; the two switches differ in offset, so at least one changes the formatted string
+    TimeZone originalTimeZone = TimeZone.getDefault();
+    try {
+      for (String zoneId : new String[] {"UTC", "Asia/Kolkata"}) {
+        TimeZone.setDefault(TimeZone.getTimeZone(zoneId));
+        String expectedInZone = HoodieInstantTimeGenerator.formatDate(new Date(instantMillis1));
+        HoodieRecordGlobalLocation location = HoodieTableMetadataUtil.getLocationFromRecordIndexInfo(
+            "p1", 1, -1L, -1L, -1, "some-raw-file-id", instantMillis1);
+        assertEquals(expectedInZone, location.getInstantTime());
+      }
+    } finally {
+      TimeZone.setDefault(originalTimeZone);
     }
   }
 }
