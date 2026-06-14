@@ -453,6 +453,37 @@ public class TestBucketAssigner {
         writeProfile.getRecordsPerBucket(), is(morWriteConfig.getParquetMaxFileSize() / expectedAvgSize));
   }
 
+  @Test
+  public void testDeltaWriteProfileRecordsPerBucketSkipsCompressionRatioForParquetLogBlocks() throws Exception {
+    File morPath = new File(tempFile, "mor_parquet_logs");
+    Configuration morConf = TestConfigurations.getDefaultConf(morPath.getAbsolutePath());
+    morConf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    morConf.set(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE, 1);
+    morConf.setString(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), "1024");
+    morConf.setString(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "1");
+    morConf.setString(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION.key(), "0.5");
+    morConf.setString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
+    StreamerUtil.initTableIfNotExists(morConf);
+    TestData.writeData(TestData.DATA_SET_INSERT, morConf);
+
+    HoodieWriteConfig morWriteConfig = FlinkWriteClients.getHoodieClientConfig(morConf);
+    HoodieFlinkEngineContext morContext = new HoodieFlinkEngineContext(
+        HadoopFSUtils.getStorageConf(HadoopConfigurations.getHadoopConf(morConf)),
+        new FlinkTaskContextSupplier(null));
+
+    DeltaWriteProfile writeProfile = new DeltaWriteProfile(morWriteConfig, morContext);
+    String latestInstant = getLastCompleteInstant(writeProfile);
+    HoodieCommitMetadata commitMetadata = writeProfile.getMetadataCache().get(latestInstant);
+    assertNotNull(commitMetadata);
+    long expectedAvgSize = (long) Math.ceil(
+        1.0 * commitMetadata.fetchTotalBytesWritten() / commitMetadata.fetchTotalRecordsWritten());
+
+    assertThat("Average record size from parquet log blocks should not be corrected again",
+        writeProfile.getAvgSize(), is(expectedAvgSize));
+    assertThat("Records per bucket should use the uncorrected parquet log block average record size",
+        writeProfile.getRecordsPerBucket(), is(morWriteConfig.getParquetMaxFileSize() / expectedAvgSize));
+  }
+
   private static String getLastCompleteInstant(WriteProfile profile) {
     return StreamerUtil.getLastCompletedInstant(profile.getMetaClient());
   }

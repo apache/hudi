@@ -166,8 +166,12 @@ public class ITTestDynamicBucketStreamWrite {
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
   void testBucketScalesUpWithContinuousWrites(HoodieTableType tableType) {
+    Map<String, String> smallBucketOptions = Map.of(
+        HoodieCompactionConfig.COPY_ON_WRITE_INSERT_SPLIT_SIZE.key(), "1",
+        FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE.key(), "1",
+        HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), String.valueOf(1024 * 1024));
     streamTableEnv.executeSql(getTableDDL(
-        "t1", tableType, Collections.singletonMap(HoodieCompactionConfig.COPY_ON_WRITE_INSERT_SPLIT_SIZE.key(), "1"), true));
+        "t1", tableType, smallBucketOptions, true));
 
     execInsertSql(streamTableEnv, "insert into t1 values\n"
         + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par_scale'),\n"

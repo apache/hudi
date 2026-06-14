@@ -154,7 +154,7 @@ public class WriteProfile {
         long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
         long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
         if (totalBytesWritten > fileSizeThreshold && totalRecordsWritten > 0) {
-          avgSize = (long) Math.ceil((fileSizeParquetCompressionRatio() * totalBytesWritten) / totalRecordsWritten);
+          avgSize = (long) Math.ceil((fileSizeCalibrationRatio() * totalBytesWritten) / totalRecordsWritten);
           break;
         }
       }
@@ -163,8 +163,8 @@ public class WriteProfile {
     return avgSize;
   }
 
-  protected double fileSizeParquetCompressionRatio() {
-    return 1;
+  protected double fileSizeCalibrationRatio() {
+    return 1D;
   }
 
   /**

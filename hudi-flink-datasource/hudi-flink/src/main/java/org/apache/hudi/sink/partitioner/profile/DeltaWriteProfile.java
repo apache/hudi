@@ -22,6 +22,7 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -87,8 +88,8 @@ public class DeltaWriteProfile extends WriteProfile {
   }
 
   @Override
-  protected double fileSizeParquetCompressionRatio() {
-    return config.getLogFileToParquetCompressionRatio();
+  protected double fileSizeCalibrationRatio() {
+    return logFileToParquetCompressionRatio();
   }
 
   protected SyncableFileSystemView getFileSystemView() {
@@ -96,11 +97,18 @@ public class DeltaWriteProfile extends WriteProfile {
   }
 
   private long getTotalFileSize(FileSlice fileSlice) {
-    return fileSlice.getTotalFileSizeAsParquetFormat(config.getLogFileToParquetCompressionRatio());
+    return fileSlice.getTotalFileSizeAsParquetFormat(logFileToParquetCompressionRatio());
   }
 
   private boolean isSmallFile(FileSlice fileSlice) {
     long totalSize = getTotalFileSize(fileSlice);
     return totalSize < config.getParquetMaxFileSize();
+  }
+
+  private double logFileToParquetCompressionRatio() {
+    return config.getLogDataBlockFormat()
+        .map(logBlockType -> logBlockType == HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK
+            ? 1D : config.getLogFileToParquetCompressionRatio())
+        .orElse(config.getLogFileToParquetCompressionRatio());
   }
 }
