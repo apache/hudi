@@ -431,13 +431,13 @@ public enum MetadataPartitionType {
 
   // Cache values() once; it clones the constant array on every call, and get(int) runs once per
   // record materialized from the metadata table (RLI/SI/col-stats lookups, MDT log merges).
-  private static final MetadataPartitionType[] ENUM_VALUES = values();
+  private static final MetadataPartitionType[] VALUES = values();
 
   /**
    * Get the metadata partition type for the given record type.
    */
   public static MetadataPartitionType get(int type) {
-    for (MetadataPartitionType partitionType : ENUM_VALUES) {
+    for (MetadataPartitionType partitionType : VALUES) {
       if (partitionType.getRecordType() == type) {
         return partitionType;
       }
