@@ -232,7 +232,7 @@ public class TestHoodieRealtimeRecordReader {
 
         HoodieLogFormat.Writer writer;
         if (action.equals(HoodieTimeline.ROLLBACK_ACTION)) {
-          writer = InputFormatTestUtil.writeRollback(partitionDir, storage, "fileid0", baseInstant,
+          writer = InputFormatTestUtil.writeRollback(partitionDir, storage, "fileid0", instantTime,
               instantTime,
               String.valueOf(baseInstantTs + logVersion - 1), logVersion);
         } else {
@@ -256,7 +256,7 @@ public class TestHoodieRealtimeRecordReader {
             new FileSplit(new Path(partitionDir + "/fileid0_1-0-1_" + baseInstant + ".parquet"), 0, 1, baseJobConf),
             basePath.toUri().toString(), fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
             .collect(Collectors.toList()),
-            latestInstant,
+            instantTime,
             false,
             Option.empty());
 
