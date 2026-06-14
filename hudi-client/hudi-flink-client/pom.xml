@@ -112,6 +112,14 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- Hadoop: pin to ${flink.hadoop.version} so parquet 1.16.0's FileSystem.openFile() resolves. -->
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-common</artifactId>
+            <version>${flink.hadoop.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- Parquet -->
         <dependency>
             <groupId>org.apache.parquet</groupId>
@@ -122,6 +130,13 @@
         <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-column</artifactId>
+            <version>${parquet.version}</version>
+        </dependency>
+
+        <!-- Pin parquet-hadoop to ${parquet.version} on the compile classpath. -->
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-hadoop</artifactId>
             <version>${parquet.version}</version>
         </dependency>
 
@@ -190,6 +205,35 @@
                 <exclusion>
                     <groupId>ch.qos.logback</groupId>
                     <artifactId>*</artifactId>
+                </exclusion>
+                <!-- hive-exec bundles parquet 1.8.x which shadows ${parquet.version} at test runtime; exclude it. -->
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-hadoop</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-hadoop-bundle</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-column</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-common</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-avro</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-encoding</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-format-structures</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>

@@ -21,6 +21,7 @@ package org.apache.hudi.adapter;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
@@ -68,6 +69,10 @@ public class DataTypeAdapter {
 
   public static Variant getVariant(RowData rowData, int pos) {
     return rowData.getVariant(pos);
+  }
+
+  public static Variant getVariant(ArrayData arrayData, int pos) {
+    return arrayData.getVariant(pos);
   }
 
   public static Object createVariant(byte[] value, byte[] metadata) {

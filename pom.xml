@@ -126,6 +126,8 @@
     <slf4j.version>1.7.36</slf4j.version>
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.10.2</hadoop.version>
+    <!-- Hadoop version for Flink modules only; defaults to the global version. -->
+    <flink.hadoop.version>${hadoop.version}</flink.hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.10</hive.version>
     <hive.parquet.version>1.10.1</hive.parquet.version>
@@ -2924,7 +2926,11 @@
         <flink.connector.kafka.version>4.0.1-2.0</flink.connector.kafka.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
-        <flink.format.parquet.version>1.15.2</flink.format.parquet.version>
+        <!-- VARIANT support needs parquet 1.16.0, which requires Hadoop 3.3.0+
+             (parquet-java dropped Hadoop-2 and uses FileSystem.openFile()).
+             Scoped to Flink modules so non-Flink modules keep the global versions. -->
+        <flink.format.parquet.version>1.16.0</flink.format.parquet.version>
+        <flink.hadoop.version>3.3.0</flink.hadoop.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility</flink.hadoop.compatibility.artifactId>
       </properties>
       <modules>

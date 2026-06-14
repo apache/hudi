@@ -18,6 +18,8 @@
 
 package org.apache.hudi.io.storage.row.parquet;
 
+import org.apache.hudi.adapter.DataTypeAdapter;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.flink.table.data.ArrayData;
@@ -160,6 +162,11 @@ public class ParquetRowDataWriter {
             .map(RowType.RowField::getName).toArray(String[]::new);
         return new RowWriter(fieldNames, fieldWriters);
       default:
+        // VARIANT (Flink 2.1+): no dedicated switch case because LogicalTypeRoot.VARIANT is absent
+        // on older Flink compile profiles; route via DataTypeAdapter.isVariantType(t) instead.
+        if (DataTypeAdapter.isVariantType(t)) {
+          return new VariantWriter();
+        }
         throw new UnsupportedOperationException("Unsupported type: " + t);
     }
   }
@@ -580,6 +587,39 @@ public class ParquetRowDataWriter {
         }
         recordConsumer.endField(repeatedGroup, 0);
       }
+      recordConsumer.endGroup();
+    }
+  }
+
+  /**
+   * Writes Flink native {@code VARIANT} logical type as the canonical unshredded Parquet
+   * group: required binary {@code metadata}, required binary {@code value}, matching
+   * {@link ParquetSchemaConverter#convertVariantToParquetType}.
+   */
+  private class VariantWriter implements FieldWriter {
+
+    @Override
+    public void write(RowData row, int ordinal) {
+      writeVariantGroup(DataTypeAdapter.getVariant(row, ordinal));
+    }
+
+    @Override
+    public void write(ArrayData array, int ordinal) {
+      writeVariantGroup(DataTypeAdapter.getVariant(array, ordinal));
+    }
+
+    private void writeVariantGroup(Object variant) {
+      byte[] metadata = DataTypeAdapter.getVariantMetadata(variant);
+      byte[] value = DataTypeAdapter.getVariantValue(variant);
+      String metaField = HoodieSchema.Variant.VARIANT_METADATA_FIELD;
+      String valueField = HoodieSchema.Variant.VARIANT_VALUE_FIELD;
+      recordConsumer.startGroup();
+      recordConsumer.startField(metaField, 0);
+      recordConsumer.addBinary(Binary.fromReusedByteArray(metadata));
+      recordConsumer.endField(metaField, 0);
+      recordConsumer.startField(valueField, 1);
+      recordConsumer.addBinary(Binary.fromReusedByteArray(value));
+      recordConsumer.endField(valueField, 1);
       recordConsumer.endGroup();
     }
   }
