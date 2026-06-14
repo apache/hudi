@@ -50,6 +50,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.testutils.Assertions.assertFileSizesEqual;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -128,6 +129,48 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
       assertNotNull(allLogFiles);
       assertTrue(allLogFiles.size() >= logFilesWithMaxCommit.size(),
           "Should have same or more log files when including third commit");
+    }
+  }
+
+  @Test
+  public void testLogFileWriteStatSizeMatchesOnDisk() throws Exception {
+    // HoodieAppendHandle records each log file's size by deriving it from AppendResult
+    // (logOffset + accumulated appended bytes) instead of a getPathInfo per file. Validate that the
+    // derived size in the write stat matches the actual on-disk log file length, across multiple
+    // appends to the same log file (two upsert commits with no compaction / small-file packing).
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, new Properties());
+
+    HoodieWriteConfig config = getConfigBuilder(true)
+        .withPath(basePath())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .compactionSmallFileSize(0)
+            .build())
+        .build();
+
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      // First commit - insert data (base files)
+      String firstCommit = "001";
+      WriteClientTestUtils.startCommitWithTime(client, firstCommit);
+      JavaRDD<WriteStatus> insertRdd = client.insert(jsc().parallelize(dataGen.generateInserts(firstCommit, 100), 1), firstCommit);
+      assertNoWriteErrors(insertRdd.collect());
+      client.commit(firstCommit, insertRdd);
+
+      // Upsert across two commits so each log file accumulates multiple appends through the handle
+      for (String commitTime : new String[] {"002", "003"}) {
+        WriteClientTestUtils.startCommitWithTime(client, commitTime);
+        JavaRDD<WriteStatus> upsertRdd = client.upsert(jsc().parallelize(dataGen.generateUpdates(commitTime, 50), 1), commitTime);
+        List<WriteStatus> statuses = upsertRdd.collect();
+        assertNoWriteErrors(statuses);
+        assertLogFilesProduced(statuses);
+        client.commit(commitTime, upsertRdd);
+        // Derived log file size (logOffset + appended bytes) must equal the actual on-disk length
+        assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(
+            metaClient.getStorage(),
+            new StoragePath(config.getBasePath(), status.getStat().getPath())));
+      }
     }
   }
 
