@@ -133,6 +133,10 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
         .withBulkInsertParallelism(PARALLELISM)
         .withFinalizeWriteParallelism(PARALLELISM)
         .withDeleteParallelism(PARALLELISM)
+        // #17714: enabling the consistency check makes this test slow on macOS local file://. The cleaner's
+        // getFileStatus calls the guard's waitTillFileAppears, which misses the translated path and burns the
+        // full ~25.2s backoff per deleted file. Does NOT reproduce on CI (Linux), where the path resolves and
+        // it stays fast, so this gotcha is only visible locally.
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .build();
     try (final SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
