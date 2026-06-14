@@ -31,7 +31,8 @@ The modules are organized in a layered architecture to maximize code reuse acros
 | `hudi-spark-common` | Core Spark integration code shared across all Spark versions. Contains DataSource V1/V2 implementations, file indexing, SQL writers, and incremental read support. |
 | `hudi-spark3-common` | Code shared across Spark 3.x versions. Contains Spark 3 adapter interface, DML commands, and partition mapping. |
 | `hudi-spark4-common` | Code shared across Spark 4.x versions. Contains Spark 4 adapter interface and 4.x-specific implementations. |
-| `hudi-spark3.4.x` | Spark 3.4.x-specific adapter implementation with version-specific SQL parser and file readers. |
+| `hudi-spark3.3.x` | Spark 3.3.x-specific adapter implementation with version-specific SQL parser and file readers. |
+| `hudi-spark3.4.x` | Spark 3.4.x-specific adapter implementation. |
 | `hudi-spark3.5.x` | Spark 3.5.x-specific adapter implementation (default). |
 | `hudi-spark4.0.x` | Spark 4.0.x-specific adapter implementation. |
 | `hudi-spark4.1.x` | Spark 4.1.x-specific adapter implementation. |
@@ -42,6 +43,7 @@ The modules are organized in a layered architecture to maximize code reuse acros
 
 | Spark Version | Module | Scala Version | Java Version | Build Profile |
 |---------------|--------|---------------|--------------|---------------|
+| 3.3.x | `hudi-spark3.3.x` | 2.12 | 11+ | `-Dspark3.3` |
 | 3.4.x | `hudi-spark3.4.x` | 2.12 | 11+ | `-Dspark3.4` |
 | 3.5.x (default) | `hudi-spark3.5.x` | 2.12, 2.13 | 11+ | `-Dspark3.5` |
 | 4.0.x | `hudi-spark4.0.x` | 2.13 | 17+ | `-Dspark4.0` |

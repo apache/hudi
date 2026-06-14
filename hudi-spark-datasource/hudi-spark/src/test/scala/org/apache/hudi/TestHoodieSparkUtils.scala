@@ -36,27 +36,51 @@ import scala.collection.JavaConverters
 class TestHoodieSparkUtils {
 
   @ParameterizedTest
-  @ValueSource(strings = Array("3.4.0", "3.5.0"))
+  @ValueSource(strings = Array("3.3.0", "3.3.2", "3.4.0", "3.5.0"))
   def testSparkVersionCheckers(sparkVersion: String): Unit = {
     val vsMock = new SparkVersionsSupport {
       override def getSparkVersion: String = sparkVersion
     }
 
     sparkVersion match {
+      case "3.3.0" =>
+        assertTrue(vsMock.isSpark3)
+        assertTrue(vsMock.isSpark3_3)
+
+        assertFalse(vsMock.isSpark3_4)
+        assertFalse(vsMock.isSpark3_5)
+        assertFalse(vsMock.gteqSpark3_3_2)
+        assertFalse(vsMock.gteqSpark3_4)
+        assertFalse(vsMock.gteqSpark3_5)
+
+      case "3.3.2" =>
+        assertTrue(vsMock.isSpark3)
+        assertTrue(vsMock.isSpark3_3)
+        assertTrue(vsMock.gteqSpark3_3_2)
+
+
+        assertFalse(vsMock.isSpark3_4)
+        assertFalse(vsMock.isSpark3_5)
+        assertFalse(vsMock.gteqSpark3_4)
+        assertFalse(vsMock.gteqSpark3_5)
+
       case "3.4.0" =>
         assertTrue(vsMock.isSpark3)
         assertTrue(vsMock.isSpark3_4)
+        assertTrue(vsMock.gteqSpark3_3_2)
         assertTrue(vsMock.gteqSpark3_4)
 
+        assertFalse(vsMock.isSpark3_3)
         assertFalse(vsMock.isSpark3_5)
-        assertFalse(vsMock.gteqSpark3_5)
 
       case "3.5.0" =>
         assertTrue(vsMock.isSpark3)
         assertTrue(vsMock.isSpark3_5)
+        assertTrue(vsMock.gteqSpark3_3_2)
         assertTrue(vsMock.gteqSpark3_4)
         assertTrue(vsMock.gteqSpark3_5)
 
+        assertFalse(vsMock.isSpark3_3)
         assertFalse(vsMock.isSpark3_4)
     }
   }
