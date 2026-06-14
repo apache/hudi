@@ -27,7 +27,6 @@ import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.ToString;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 
@@ -129,7 +128,6 @@ public class TimelineDiffHelper {
    */
   @AllArgsConstructor
   @Getter
-  @ToString
   public static class TimelineDiffResult {
 
     private final List<HoodieInstant> newlySeenInstants;
@@ -140,5 +138,15 @@ public class TimelineDiffHelper {
 
     public static final TimelineDiffResult UNSAFE_SYNC_RESULT =
         new TimelineDiffResult(null, null, null, false);
+
+    @Override
+    public String toString() {
+      return "TimelineDiffResult{"
+          + "newlySeenInstants=" + newlySeenInstants
+          + ", finishedCompactionInstants=" + finishedCompactionInstants
+          + ", finishedOrRemovedLogCompactionInstants=" + finishedOrRemovedLogCompactionInstants
+          + ", canSyncIncrementally=" + canSyncIncrementally
+          + '}';
+    }
   }
 }
