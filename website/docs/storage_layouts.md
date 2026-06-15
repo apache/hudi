@@ -34,7 +34,7 @@ base file formats.
 
 #### Lance base file format {#lance-base-file-format}
 
-[Lance](https://lancedb.github.io/lance/) is a pluggable base file format selected per table via
+[Lance](https://github.com/lance-format/lance) is a pluggable base file format selected per table via
 `hoodie.table.base.file.format = 'lance'`. Hudi manages the table layer
 (timeline, metadata, schema, file groups, table services); Lance is the on-disk file format for
 base files. Log files for MOR tables remain Avro; log compaction merges Avro logs into Lance base

@@ -150,10 +150,23 @@ module.exports = {
           },
           {
             from: ["/docs/releases", "/docs/next/releases"],
-            to: "/releases/release-1.1",
+            to: "/releases/release-1.2",
           },
           {
             from: ["/releases"],
+            to: "/releases/release-1.2",
+          },
+          {
+            from: [
+              "/releases/release-1.2.0",
+            ],
+            to: "/releases/release-1.2",
+          },
+          {
+            from: [
+              "/releases/release-1.1.1",
+              "/releases/release-1.1.0",
+            ],
             to: "/releases/release-1.1",
           },
           {
@@ -173,6 +186,7 @@ module.exports = {
           },
           {
             from: [
+              "/releases/release-0.14.2",
               "/releases/release-0.14.1",
               "/releases/release-0.14.0",
             ],

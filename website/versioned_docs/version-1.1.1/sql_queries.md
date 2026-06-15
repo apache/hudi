@@ -316,6 +316,10 @@ FROM hudi_table_changes(
 )
 ```
 
+:::note
+Incremental queries are currently not supported for Merge-On-Read (MOR) tables with partial updates.
+:::
+
 :::info Incremental vs CDC Queries
 Incremental queries offer even better query efficiency than even the CDC queries above, since they amortize the cost of compactions across your data lake.
 For e.g the table has received 10 million modifications across 1 million records over a time window, incremental queries can fetch the latest value for

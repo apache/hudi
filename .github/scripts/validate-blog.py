@@ -41,13 +41,14 @@ ALLOWED_TAGS = {
     'risingwave', 'record merger', 'ray', 'puppygraph', 'openai',
     'open architecture', 'mongodb', 'modern data architecture', 'mlops',
     'migration', 'markers', 'lsm tree', 'lock provider', 'late arriving data',
-    'lakefs', 'interoperability', 'hudi cli', 'guide', 'google scholar',
+    'lakefs', 'lance', 'interoperability', 'hudi cli', 'guide', 'google scholar',
+    'blob', 'variant', 'vector', 'multimodal',
     'forefathers', 'fastapi', 'dremio', 'deployment', 'deduplication', 'dbt',
     'database', 'data sharing', 'data processing', 'data platform', 'data mesh',
     'data governance', 'compression', 'code sample', 'caching',
     'bytearray', 'best practices', 'backfilling', 'architecture',
     'apicurio registry', 'apache zeppelin', 'apache orc', 'apache dolphinscheduler',
-    'apache avro', 'apache', 'access control', 'lakehouse', 'merge on read', 'penn interactive',
+    'apache avro', 'apache', 'access control', 'lakehouse', 'merge on read', 'record level index','rli', 'penn interactive',
 }
 
 # Tags that should not be used
