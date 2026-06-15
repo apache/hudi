@@ -22,6 +22,7 @@ import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.types.StructType;
 
@@ -45,5 +46,11 @@ public class RowBasedSchemaProvider extends SchemaProvider {
   @Override
   public HoodieSchema getSourceHoodieSchema() {
     return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(rowStruct, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE);
+  }
+
+  @Override
+  @Deprecated
+  public Schema getSourceSchema() {
+    return getSourceHoodieSchema().toAvroSchema();
   }
 }

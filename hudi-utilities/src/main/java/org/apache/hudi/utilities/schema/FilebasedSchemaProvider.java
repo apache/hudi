@@ -32,6 +32,7 @@ import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -80,12 +81,20 @@ public class FilebasedSchemaProvider extends SchemaProvider {
   }
 
   @Override
+  @Deprecated
+  public Schema getSourceSchema() {
+    return getSourceHoodieSchema().toAvroSchema();
+  }
+
+  @Override
   public HoodieSchema getTargetHoodieSchema() {
-    if (targetSchema != null) {
-      return targetSchema;
-    } else {
-      return super.getTargetHoodieSchema();
-    }
+    return targetSchema != null ? targetSchema : getSourceHoodieSchema();
+  }
+
+  @Override
+  @Deprecated
+  public Schema getTargetSchema() {
+    return getTargetHoodieSchema().toAvroSchema();
   }
 
   private static HoodieSchema readSchemaFromFile(String schemaPath, FileSystem fs, TypedProperties props) {

@@ -42,6 +42,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.avro.Schema;
 import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.ssl.SSLContexts;
@@ -318,6 +319,12 @@ public class SchemaRegistryProvider extends SchemaProvider {
           Config.SRC_SCHEMA_REGISTRY_URL_PROP,
           StringUtils.truncate(registryUrl, 10, 10)), e);
     }
+  }
+
+  @Override
+  @Deprecated
+  public Schema getSourceSchema() {
+    return getSourceHoodieSchema().toAvroSchema();
   }
 
   @Override

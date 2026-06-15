@@ -27,6 +27,7 @@ import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
 import org.apache.hudi.utilities.sources.helpers.ProtoConversionUtil;
 
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.util.Collections;
@@ -89,6 +90,12 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
       }
     }
     return schema;
+  }
+
+  @Override
+  @Deprecated
+  public Schema getSourceSchema() {
+    return getSourceHoodieSchema().toAvroSchema();
   }
 
   @Override
