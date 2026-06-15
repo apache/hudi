@@ -18,32 +18,20 @@
 
 package org.apache.hudi.utilities.schema;
 
-import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.types.StructType;
+import org.junit.jupiter.api.Test;
 
-public class RowBasedSchemaProvider extends SchemaProvider {
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-  // Used in GenericRecord conversions
-  public static final String HOODIE_RECORD_NAMESPACE = "hoodie.source";
-  public static final String HOODIE_RECORD_STRUCT_NAME = "hoodie_source";
+class TestSimpleSchemaProvider {
 
-  private StructType rowStruct;
+  @Test
+  void testGetSourceHoodieSchema() {
+    HoodieSchema sourceSchema = HoodieSchema.parse("{\"type\": \"record\", \"name\": \"example\", \"fields\": [{\"name\": \"id\", \"type\": \"string\"}]}");
+    SimpleSchemaProvider simpleSchemaProvider = new SimpleSchemaProvider(null, sourceSchema, new TypedProperties());
 
-  public RowBasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
-    super(props, jssc);
-  }
-
-  public RowBasedSchemaProvider(StructType rowStruct) {
-    super(null, null);
-    this.rowStruct = rowStruct;
-  }
-
-  @Override
-  public HoodieSchema getSourceHoodieSchema() {
-    return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(rowStruct, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE);
+    assertEquals(sourceSchema, simpleSchemaProvider.getSourceHoodieSchema());
   }
 }
