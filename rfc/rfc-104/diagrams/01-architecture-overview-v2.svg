@@ -166,17 +166,17 @@
         </g>
       </g>
 
-      <!-- Assignment Records -->
+      <!-- No Duplicate Assignment Rows -->
       <g transform="translate(0, 110)">
         <rect width="240" height="85" rx="6" fill="white" stroke="#86efac" stroke-width="1.5"/>
         <rect width="240" height="22" rx="6" fill="#22c55e"/>
         <rect y="16" width="240" height="6" fill="#22c55e"/>
-        <text x="120" y="15" text-anchor="middle" font-size="11" font-weight="600" fill="white">Assignment Rows (Maintenance)</text>
+        <text x="120" y="15" text-anchor="middle" font-size="11" font-weight="600" fill="white">No Assignment Rows</text>
 
         <g transform="translate(10, 32)" font-size="10">
-          <text fill="#166534" font-weight="600">A|record_key</text>
-          <text y="16" fill="#64748b">→ generation, cluster, shard</text>
-          <text y="32" fill="#64748b">→ file_group, partition_path</text>
+          <text fill="#166534" font-weight="600">No A|record_key family</text>
+          <text y="16" fill="#64748b">→ avoids duplicate N rows</text>
+          <text y="32" fill="#64748b">→ postings carry location</text>
         </g>
       </g>
 
@@ -188,7 +188,7 @@
         <text x="120" y="15" text-anchor="middle" font-size="11" font-weight="600" fill="white">Posting Rows (Query Hot Path)</text>
 
         <g transform="translate(10, 32)" font-size="10">
-          <text fill="#92400e" font-weight="600">P|gen|cluster|shard|key</text>
+          <text fill="#92400e" font-weight="600">P|gen|cluster|shard|record_key</text>
           <text y="16" fill="#78350f">→ binaryCode (RaBitQ bits)</text>
           <text y="32" fill="#78350f">→ scalar, fileGroupId, partition</text>
         </g>
@@ -199,18 +199,18 @@
         <rect width="490" height="70" rx="6" fill="white" stroke="#86efac" stroke-width="1.5"/>
         <rect width="490" height="22" rx="6" fill="#22c55e"/>
         <rect y="16" width="490" height="6" fill="#22c55e"/>
-        <text x="245" y="15" text-anchor="middle" font-size="11" font-weight="600" fill="white">File-Group Mapping (Spark Pruning)</text>
+        <text x="245" y="15" text-anchor="middle" font-size="11" font-weight="600" fill="white">Cluster / File-Group Summary (Spark Pruning)</text>
 
         <g transform="translate(10, 32)" font-size="10">
-          <text fill="#166534" font-weight="600">__fg__/cluster/partition_path</text>
-          <text x="175" fill="#64748b">→ [file_group_ids] for pruning base table reads</text>
+          <text fill="#166534" font-weight="600">C|gen|cluster</text>
+          <text x="90" fill="#64748b">→ [file_group_ids]; optional __fg__/... compatibility rows</text>
         </g>
       </g>
     </g>
 
     <!-- Storage note -->
     <g transform="translate(15, 345)">
-      <text font-size="10" fill="#166534" font-weight="600">Storage: O(K×D + N) — centroids + assignments + postings</text>
+      <text font-size="10" fill="#166534" font-weight="600">Storage: O(K×D + N) — centroids + one posting per vector</text>
       <text y="14" font-size="10" fill="#64748b">RaBitQ codes: ceil(D/8) bytes per vector (96 bytes for D=768)</text>
     </g>
   </g>
