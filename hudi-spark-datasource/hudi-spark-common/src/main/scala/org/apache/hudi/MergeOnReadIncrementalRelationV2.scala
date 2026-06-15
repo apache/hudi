@@ -105,8 +105,12 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
         listLatestFileSlices(partitionFilters, dataFilters)
       } else {
         val latestCommit = includedCommits.last.requestedTime
-        val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
-        collectIncrementalFileSlices(modifiedPartitions.asScala.toSeq, latestCommit)
+        val modifiedPartitions = getWritePartitionPaths(commitsMetadata).asScala.toSeq
+        if (hasMissingAffectedFiles) {
+          legacyAffectedFileSlices(modifiedPartitions, latestCommit)
+        } else {
+          collectIncrementalFileSlices(modifiedPartitions, latestCommit)
+        }
       }
 
       buildSplits(filterFileSlices(fileSlices, globPattern))
@@ -127,7 +131,11 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
         // every partition of the table.
         val partitionPaths = fileIndex.filterPartitionPaths(modifiedPartitions.asScala.toSeq,
           HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
-        collectIncrementalFileSlices(partitionPaths, latestCommit)
+        if (hasMissingAffectedFiles) {
+          legacyAffectedFileSlices(partitionPaths, latestCommit)
+        } else {
+          collectIncrementalFileSlices(partitionPaths, latestCommit)
+        }
       }
       filterFileSlices(fileSlices, globPattern)
     }
@@ -204,6 +212,29 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
   }
 
   /**
+   * Builds the incremental file slices directly from the files recorded in the window's commits
+   * (`affectedFilesInCommits`), as the read path did before HUDI #18943.
+   *
+   * This is used only when [[hasMissingAffectedFiles]] is true and the full-table-scan fallback is
+   * disabled: some files referenced by the window have been removed (e.g. by cleaning), so there is
+   * no correct incremental result to produce. Listing from the recorded files (which include the
+   * missing paths) preserves the prior fail-early contract - the scan surfaces a file-not-found
+   * error pointing the user at `hoodie.datasource.read.incr.fallback.fulltablescan.enable` - instead
+   * of silently returning an empty/partial result from a fresh listing that no longer sees those
+   * files.
+   */
+  private def legacyAffectedFileSlices(partitionPaths: Seq[String], latestCommit: String): Seq[FileSlice] = {
+    val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
+    try {
+      partitionPaths.flatMap { relativePartitionPath =>
+        fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
+      }
+    } finally {
+      fsView.close()
+    }
+  }
+
+  /**
    * File group ids touched within the incremental window. Used to scope the partition-listing based
    * view (which surfaces every file group in a modified partition) back to only the changed file
    * groups, so we do not read and discard untouched file groups.
@@ -239,6 +270,12 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
 
   protected def startInstantArchived: Boolean = !queryContext.getArchivedInstants.isEmpty
 
+  // Some files referenced by the commits in the incremental window no longer exist on storage
+  // (e.g. they were removed by cleaning). Such a window cannot be served from the incremental
+  // file listing alone.
+  protected lazy val hasMissingAffectedFiles: Boolean = HoodieBaseRelation.checkIfAnyFilesMissing(
+    sqlContext, metaClient, affectedFilesInCommits.asScala.map(_.getPath.toString))
+
   // Fallback to full table scan if any of the following conditions matches:
   //   1. the start commit is archived
   //   2. the end commit is archived
@@ -252,12 +289,10 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
     } else if (startInstantArchived) {
       true
     } else {
-      val missingFileFound = HoodieBaseRelation.checkIfAnyFilesMissing(
-        sqlContext, metaClient, affectedFilesInCommits.asScala.map(_.getPath.toString))
-      if (missingFileFound) {
+      if (hasMissingAffectedFiles) {
         logInfo("Falling back to full table scan as some files cannot be found.")
       }
-      missingFileFound
+      hasMissingAffectedFiles
     }
   }
 
