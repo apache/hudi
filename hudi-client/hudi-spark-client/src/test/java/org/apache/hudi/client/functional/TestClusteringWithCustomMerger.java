@@ -43,7 +43,8 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 import java.util.Properties;
@@ -58,9 +59,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code hoodie.write.record.merge.mode=CUSTOM} fails with
  * "No valid spark merger implementation set for `hoodie.write.record.merge.custom.implementation.classes`".
  *
- * <p>The failing path is the RDD-based clustering execution
- * ({@code MultipleSparkJobExecutionStrategy} -> {@code ClusteringExecutionStrategy.getFileGroupReader}),
- * so row writer is disabled to exercise it.
+ * <p>Both clustering execution paths in {@code MultipleSparkJobExecutionStrategy} read the source file
+ * groups through the same {@code ClusteringExecutionStrategy.getReaderProperties()}/{@code getFileGroupReader},
+ * so both reproduce the failure: the row-writer path ({@code readRecordsForGroupAsRow}) and the RDD path
+ * ({@code readRecordsForGroup}). Since {@code hoodie.datasource.write.row.writer.enable} defaults to
+ * {@code true}, the row-writer path is the one hit with default configs. The test is parameterized over that
+ * flag to exercise both.
  */
 @Tag("functional")
 class TestClusteringWithCustomMerger extends SparkClientFunctionalTestHarness {
@@ -72,9 +76,10 @@ class TestClusteringWithCustomMerger extends SparkClientFunctionalTestHarness {
     }
   }
 
-  @Test
-  void clusteringWithCustomMergerShouldSucceed() throws Exception {
-    HoodieWriteConfig cfg = getHoodieWriteConfig(false);
+  @ParameterizedTest(name = "rowWriterEnable={0}")
+  @ValueSource(booleans = {true, false})
+  void clusteringWithCustomMergerShouldSucceed(boolean rowWriterEnable) throws Exception {
+    HoodieWriteConfig cfg = getHoodieWriteConfig(false, rowWriterEnable);
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, cfg.getProps());
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 
@@ -96,7 +101,7 @@ class TestClusteringWithCustomMerger extends SparkClientFunctionalTestHarness {
       updateRecordsInMORTable(metaClient, dataGen.generateUpdates(commit3, 100), client, cfg, commit3, false);
     }
 
-    HoodieWriteConfig cfgClustering = getHoodieWriteConfig(true);
+    HoodieWriteConfig cfgClustering = getHoodieWriteConfig(true, rowWriterEnable);
     String clusteringCommitTime;
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfgClustering)) {
       clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
@@ -120,10 +125,12 @@ class TestClusteringWithCustomMerger extends SparkClientFunctionalTestHarness {
         "All records should be readable after clustering");
   }
 
-  private HoodieWriteConfig getHoodieWriteConfig(boolean enableInlineClustering) {
+  private HoodieWriteConfig getHoodieWriteConfig(boolean enableInlineClustering, boolean rowWriterEnable) {
     Properties props = new Properties();
-    // Force the RDD-based clustering execution path (the one that reproduces the bug).
-    props.setProperty("hoodie.datasource.write.row.writer.enable", "false");
+    // Selects the clustering execution path: row-writer (the default-true path the issue reporter hit)
+    // when true, RDD-based when false. Both paths reach the same getReaderProperties()/getFileGroupReader
+    // and reproduce the bug, so the test runs against both.
+    props.setProperty("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
     return HoodieWriteConfig.newBuilder()
         .forTable("test-custom-merger-clustering")
         .withPath(basePath())
