@@ -49,7 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -153,7 +153,7 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(basePath())
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)

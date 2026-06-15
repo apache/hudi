@@ -62,7 +62,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_FLATTENED_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -79,7 +79,7 @@ import static org.mockito.Mockito.spy;
 public class TestHoodieCreateHandle extends HoodieCommonTestHarness {
   private static final String TEST_INSTANT_TIME = "20231201120000";
   private static final String TEST_FILE_ID = "file-001";
-  private static final HoodieSchema TEST_SCHEMA = HoodieSchema.parse(TRIP_EXAMPLE_SCHEMA);
+  private static final HoodieSchema TEST_SCHEMA = HoodieSchema.parse(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
   private static final String TEST_PARTITION_PATH = DEFAULT_FIRST_PARTITION_PATH;
 
   private HoodieWriteConfig writeConfig;
@@ -94,7 +94,7 @@ public class TestHoodieCreateHandle extends HoodieCommonTestHarness {
 
     writeConfig = HoodieWriteConfig.newBuilder()
       .withPath(basePath)
-      .withSchema(TRIP_EXAMPLE_SCHEMA)
+      .withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
       .withMarkersType("DIRECT")
       .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
       .build();

@@ -808,7 +808,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       logicalAssertions(tableSchema, tableBasePath, hudiOpts, HoodieTableVersion.current().versionCode());
     } finally {
       defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
-      AbstractBaseTestSource.schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+      AbstractBaseTestSource.schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
     }
   }
 

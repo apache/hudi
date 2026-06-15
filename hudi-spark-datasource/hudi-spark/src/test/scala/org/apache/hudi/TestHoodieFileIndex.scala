@@ -211,7 +211,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     val writeConfig = HoodieWriteConfig.newBuilder()
       .withEngineType(EngineType.JAVA)
       .withPath(basePath)
-      .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+      .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
       .withProps(props.asJava)
       .build()
     val context = new HoodieJavaEngineContext(HoodieTestUtils.getDefaultStorageConf)

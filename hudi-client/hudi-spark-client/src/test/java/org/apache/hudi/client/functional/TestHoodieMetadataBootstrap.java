@@ -267,7 +267,7 @@ public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
 
   private HoodieWriteConfig getWriteConfig(int minArchivalCommits, int maxArchivalCommits) throws Exception {
     return HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED).withParallelism(2, 2)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .retainCommits(1).build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()

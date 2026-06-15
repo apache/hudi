@@ -88,7 +88,8 @@ public class TestSavepoint extends HoodieClientTestBase {
 
       String commitTime1 = "001";
       WriteClientTestUtils.startCommitWithTime(client, commitTime1);
-      List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
+      List<HoodieRecord> records1 = dataGen.generateInsertsAsPerSchema(commitTime1, 200,
+          HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
       JavaRDD<HoodieRecord> writeRecords1 = jsc.parallelize(records1, 1);
       List<WriteStatus> statusList = client.upsert(writeRecords1, commitTime1).collect();
       client.commit(commitTime1, jsc.parallelize(statusList), Option.empty(), tableType == HoodieTableType.COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION,
@@ -97,7 +98,8 @@ public class TestSavepoint extends HoodieClientTestBase {
 
       String commitTime2 = "002";
       WriteClientTestUtils.startCommitWithTime(client, commitTime2);
-      List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 200);
+      List<HoodieRecord> records2 = dataGen.generateInsertsAsPerSchema(commitTime2, 200,
+          HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
       JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(records2, 1);
       statusList = client.upsert(writeRecords2, commitTime2).collect();
       client.commit(commitTime2, jsc.parallelize(statusList), Option.empty(), tableType == HoodieTableType.COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION,

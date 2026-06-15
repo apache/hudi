@@ -41,7 +41,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Properties;
 
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 
 /**
  * Test cases for {@link HoodieCompactor}.
@@ -56,7 +56,7 @@ public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .forTable("asyncCompaction")
         .withPath(tableBasePath)
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withParallelism(2, 2)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()

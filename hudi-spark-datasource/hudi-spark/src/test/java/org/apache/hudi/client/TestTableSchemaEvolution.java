@@ -56,7 +56,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.FARE_NEST
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_IS_DELETED_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.MAP_TYPE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TIP_NESTED_SCHEMA;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA_PREFIX;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA_SUFFIX;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -80,45 +80,45 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   public static final String EXTRA_FIELD_NULLABLE_SCHEMA =
       ",{\"name\": \"new_nullable_field\", \"type\": [\"null\", \"boolean\"], \"default\": null} ]}";
 
-  // TRIP_EXAMPLE_SCHEMA with a new_field added
+  // TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED with a new_field added
   public static final String TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
       + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + EXTRA_FIELD_SCHEMA + TRIP_SCHEMA_SUFFIX;
 
-  // TRIP_EXAMPLE_SCHEMA with tip field removed
+  // TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED with tip field removed
   public static final String TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_DROPPED = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
       + FARE_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
 
   @Test
   public void testSchemaCompatibilityBasic() {
-    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA, false),
+    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, false),
         "Same schema is compatible");
 
     String reorderedSchema = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + TIP_NESTED_SCHEMA + FARE_NESTED_SCHEMA
         + MAP_TYPE_SCHEMA + TRIP_SCHEMA_SUFFIX;
-    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, reorderedSchema, false),
+    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, reorderedSchema, false),
         "Reordered fields are compatible");
-    assertTrue(isSchemaCompatible(reorderedSchema, TRIP_EXAMPLE_SCHEMA, false),
+    assertTrue(isSchemaCompatible(reorderedSchema, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, false),
         "Reordered fields are compatible");
 
-    String renamedSchema = TRIP_EXAMPLE_SCHEMA.replace("tip_history", "tip_future");
+    String renamedSchema = TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED.replace("tip_history", "tip_future");
 
-    assertFalse(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, renamedSchema, false),
+    assertFalse(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, renamedSchema, false),
         "Renaming fields is essentially: dropping old field, created a new one");
-    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, renamedSchema, true),
+    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, renamedSchema, true),
         "Renaming fields is essentially: dropping old field, created a new one");
 
-    String renamedRecordSchema = TRIP_EXAMPLE_SCHEMA.replace("triprec", "triprec_renamed");
-    assertFalse(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, renamedRecordSchema, false),
+    String renamedRecordSchema = TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED.replace("triprec", "triprec_renamed");
+    assertFalse(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, renamedRecordSchema, false),
         "Renamed record name is not compatible");
 
     String swappedFieldSchema = TRIP_SCHEMA_PREFIX + MAP_TYPE_SCHEMA.replace("city_to_state", "fare")
         + FARE_NESTED_SCHEMA.replace("fare", "city_to_state") + TIP_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
-    assertFalse(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, swappedFieldSchema, false),
+    assertFalse(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, swappedFieldSchema, false),
         "Swapped fields are not compatible");
 
     String typeChangeSchemaDisallowed = TRIP_SCHEMA_PREFIX + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
         + TIP_NESTED_SCHEMA.replace("string", "boolean") + TRIP_SCHEMA_SUFFIX;
-    assertFalse(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, typeChangeSchemaDisallowed, false),
+    assertFalse(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, typeChangeSchemaDisallowed, false),
         "Incompatible field type change is not allowed");
 
     // Array of allowed schema field type transitions
@@ -144,20 +144,20 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     assertFalse(isSchemaCompatible(toSchema, fromSchema, false), "Field names should match");
 
 
-    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED, false),
+    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED, false),
         "Added field with default is compatible (Evolved Schema)");
 
     String multipleAddedFieldSchema = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
         + TIP_NESTED_SCHEMA + EXTRA_FIELD_SCHEMA + EXTRA_FIELD_SCHEMA.replace("new_field", "new_new_field")
         + TRIP_SCHEMA_SUFFIX;
-    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, multipleAddedFieldSchema, false),
+    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, multipleAddedFieldSchema, false),
         "Multiple added fields with defaults are compatible");
 
-    assertFalse(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
+    assertFalse(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
             + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + EXTRA_FIELD_WITHOUT_DEFAULT_SCHEMA + TRIP_SCHEMA_SUFFIX, false),
         "Added field without default and not nullable is not compatible (Evolved Schema)");
 
-    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
+    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
             + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + HOODIE_IS_DELETED_SCHEMA + EXTRA_FIELD_NULLABLE_SCHEMA, false),
         "Added nullable field is compatible (Evolved Schema)");
   }
@@ -173,10 +173,10 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
         .setTableType(HoodieTableType.MERGE_ON_READ)
         .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
-    HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA, shouldAllowDroppedColumns);
+    HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, shouldAllowDroppedColumns);
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
-    // Initial inserts with TRIP_EXAMPLE_SCHEMA
+    // Initial inserts with TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED
     int numRecords = 10;
     insertFirstBatch(hoodieWriteConfig, client, "001", initCommitTime,
                      numRecords, SparkRDDWriteClient::insert, false, false, numRecords, INSTANT_GENERATOR);
@@ -208,7 +208,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     client = getHoodieWriteClient(hoodieDevolvedWriteConfig);
     final List<HoodieRecord> failedRecords = generateInsertsWithSchema("005", numRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_DROPPED);
     // We cannot use insertBatch directly here because we want to insert records
-    // with a evolved schema and insertBatch inserts records using the TRIP_EXAMPLE_SCHEMA.
+    // with a evolved schema and insertBatch inserts records using the TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED.
     try {
       writeBatch(client, "005", "004", Option.empty(), "003", numRecords,
           (String s, Integer a) -> failedRecords, SparkRDDWriteClient::insert, false, numRecords, 2 * numRecords, 5, INSTANT_GENERATOR);
@@ -227,7 +227,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     client = getHoodieWriteClient(hoodieEvolvedWriteConfig);
 
     // We cannot use insertBatch directly here because we want to insert records
-    // with an evolved schema and insertBatch inserts records using the TRIP_EXAMPLE_SCHEMA.
+    // with an evolved schema and insertBatch inserts records using the TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED.
     final List<HoodieRecord> evolvedRecords = generateInsertsWithSchema("007", numRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED);
     writeBatch(client, "007", "006", Option.empty(), initCommitTime, numRecords,
         (String s, Integer a) -> evolvedRecords, SparkRDDWriteClient::insert, false, numRecords, 3 * numRecords, 7, INSTANT_GENERATOR);
@@ -263,13 +263,13 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
         .fromMetaClient(metaClient)
         .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
-    HoodieWriteConfig hoodieWriteConfig = getWriteConfigBuilder(TRIP_EXAMPLE_SCHEMA)
+    HoodieWriteConfig hoodieWriteConfig = getWriteConfigBuilder(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withRollbackUsingMarkers(false)
         .withAllowAutoEvolutionColumnDrop(shouldAllowDroppedColumns)
         .build();
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
-    // Initial inserts with TRIP_EXAMPLE_SCHEMA
+    // Initial inserts with TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED
     int numRecords = 10;
     insertFirstBatch(hoodieWriteConfig, client, "001", initCommitTime,
         numRecords, SparkRDDWriteClient::insert, false, true, numRecords, INSTANT_GENERATOR);

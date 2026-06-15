@@ -76,7 +76,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 
@@ -286,7 +286,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a log file only
       List<HoodieRecord> initialRecords = dataGen.generateInserts("001", 100);
-      commitToTable(initialRecords, UPSERT.value(), true, writeConfigs, TRIP_EXAMPLE_SCHEMA);
+      commitToTable(initialRecords, UPSERT.value(), true, writeConfigs, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
       String[] orderingFields = recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING ? new String[0] : new String[] {ORDERING_FIELD_NAME};
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), false, 1, recordMergeMode,
@@ -295,7 +295,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       // Two commits; reading one file group containing two log files
       List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
       List<HoodieRecord> allRecords = mergeRecordLists(updates, initialRecords);
-      commitToTable(updates, UPSERT.value(), false, writeConfigs, TRIP_EXAMPLE_SCHEMA);
+      commitToTable(updates, UPSERT.value(), false, writeConfigs, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), false, 2, recordMergeMode,
           allRecords, CollectionUtils.combine(initialRecords, updates), orderingFields);
@@ -312,7 +312,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a log file only
       List<HoodieRecord> initialRecords = dataGen.generateInserts("001", 100);
-      commitToTable(initialRecords, firstCommitOperation.value(), true, writeConfigs, TRIP_EXAMPLE_SCHEMA);
+      commitToTable(initialRecords, firstCommitOperation.value(), true, writeConfigs, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), isFirstCommitInsert,
           isFirstCommitInsert ? 0 : 1, recordMergeMode, initialRecords, initialRecords, new String[] {ORDERING_FIELD_NAME});
@@ -323,7 +323,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
 
       // the base/log file of the first commit is filtered out by the instant range.
       List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
-      commitToTable(updates, UPSERT.value(), false, writeConfigs, TRIP_EXAMPLE_SCHEMA);
+      commitToTable(updates, UPSERT.value(), false, writeConfigs, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
       validateOutputFromFileGroupReader(getStorageConf(), getBasePath(),
           isFirstCommitInsert, isFirstCommitInsert ? 1 : 2, recordMergeMode, updates, updates, new String[] {ORDERING_FIELD_NAME});
       // reset instant range

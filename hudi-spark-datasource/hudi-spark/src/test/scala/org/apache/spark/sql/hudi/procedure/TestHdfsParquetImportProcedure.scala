@@ -55,7 +55,7 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
 
       // create schema file
       val schemaFileOS = storage.create(new StoragePath(schemaFile))
-      try schemaFileOS.write(getUTF8Bytes(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA))
+      try schemaFileOS.write(getUTF8Bytes(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED))
       finally if (schemaFileOS != null) schemaFileOS.close()
 
       val insertData: util.List[GenericRecord] = createInsertRecords(sourcePath)
@@ -89,7 +89,7 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
 
       // create schema file
       val schemaFileOS = storage.create(new StoragePath(schemaFile))
-      try schemaFileOS.write(getUTF8Bytes(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA))
+      try schemaFileOS.write(getUTF8Bytes(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED))
       finally if (schemaFileOS != null) schemaFileOS.close()
 
       val insertData: util.List[GenericRecord] = createUpsertRecords(sourcePath)

@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 
 public class TestRowCustomColumnsSortPartitioner {
 
@@ -37,7 +37,7 @@ public class TestRowCustomColumnsSortPartitioner {
     HoodieWriteConfig writeConfig = HoodieWriteConfig
         .newBuilder()
         .withPath("/")
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withProperties(properties)
         .build();
 

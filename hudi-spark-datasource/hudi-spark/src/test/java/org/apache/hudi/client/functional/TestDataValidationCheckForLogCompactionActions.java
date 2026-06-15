@@ -68,7 +68,7 @@ import static org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_METADATA_FIE
 import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.assertGenericRecords;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -331,7 +331,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
   private TestTableContents setupTestTable1() {
     Properties properties = new Properties();
     properties.setProperty("hoodie.parquet.small.file.limit", "0");
-    HoodieWriteConfig config = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.INMEMORY)
+    HoodieWriteConfig config = getConfigBuilder(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(true).build())
         .withProperties(properties)
         .build();
@@ -349,7 +349,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     HoodieTableMetaClient metaClient2 = HoodieTestUtils.init(storageConf, basePath2,
         HoodieTableType.MERGE_ON_READ, properties);
     HoodieWriteConfig config2 = getConfigBuilderForSecondTable(tableName2, basePath2,
-        TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.INMEMORY)
+        TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(true).build())
         .build();
 
