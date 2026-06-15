@@ -54,7 +54,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.TimelineUtils.getInputStreamOptionLegacy;
 
-@NoArgsConstructor
+// no-arg constructor is for serialization and de-serialization only
+@NoArgsConstructor(onConstructor_ = @Deprecated)
 public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchivedTimeline, HoodieInstantReader {
   private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX = "commits";
   private static final String ACTION_TYPE_KEY = "actionType";
