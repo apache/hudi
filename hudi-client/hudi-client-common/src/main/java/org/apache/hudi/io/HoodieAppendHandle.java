@@ -572,7 +572,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // object stores.
       for (WriteStatus status : statuses) {
         HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) status.getStat();
-        stat.setFileSizeInBytes(stat.getLogOffset() + stat.getFileSizeInBytes());
+        long appendedBytes = stat.getFileSizeInBytes();
+        stat.setFileSizeInBytes(stat.getLogOffset() + appendedBytes);
       }
 
       // generate Secondary index stats if streaming writes is enabled.
