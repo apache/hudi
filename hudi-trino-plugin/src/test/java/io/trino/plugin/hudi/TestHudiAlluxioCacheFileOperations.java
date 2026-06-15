@@ -17,6 +17,7 @@ import com.google.common.collect.HashMultiset;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultiset;
 import com.google.common.collect.Multiset;
+import io.airlift.units.Duration;
 import io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer;
 import io.trino.plugin.hudi.util.FileOperationUtils.FileOperation;
 import io.trino.testing.AbstractTestQueryFramework;
@@ -43,7 +44,9 @@ import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.METADATA_TAB
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.TABLE_PROPERTIES;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.TIMELINE;
 import static io.trino.testing.MultisetAssertions.assertMultisetsEqual;
+import static io.trino.testing.assertions.Assert.assertEventually;
 import static java.util.stream.Collectors.toCollection;
+import static org.assertj.core.api.Assertions.assertThat;
 
 @ResourceLock("HUDI_CACHE_SYSTEM")
 @Execution(ExecutionMode.SAME_THREAD)
@@ -130,6 +133,40 @@ public class TestHudiAlluxioCacheFileOperations
                         .addCopies(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES), 2)
                         .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 4)
                         .build());
+    }
+
+    @Test
+    public void testReadsServedFromAlluxioCache()
+    {
+        // The tests above intentionally do not assert exact Alluxio cache hit/miss counts: the cache
+        // write is asynchronous, so the per-query counts flake (a write from one query can still be in
+        // flight when the next query runs). This test instead gives count-independent coverage that the
+        // Alluxio cache is actually engaged: once the cache is warmed, at least one read is served from
+        // it (an "Alluxio.readCached" span). assertEventually re-runs the query until the asynchronous
+        // cache write has landed and a genuine hit is observed, and fails loudly at the deadline if the
+        // cache never serves a read.
+        @Language("SQL") String query = "SELECT * FROM " + HUDI_MULTI_FG_PT_V8_MOR;
+        DistributedQueryRunner queryRunner = getDistributedQueryRunner();
+
+        // Warm the cache; the page write into Alluxio happens on a background thread.
+        queryRunner.executeWithPlan(queryRunner.getDefaultSession(), query);
+
+        assertEventually(
+                Duration.valueOf("30s"),
+                Duration.valueOf("500ms"),
+                () -> {
+                    queryRunner.executeWithPlan(queryRunner.getDefaultSession(), query);
+                    assertThat(countCachedReads(queryRunner))
+                            .as("Alluxio.readCached spans (cache hits)")
+                            .isGreaterThanOrEqualTo(1);
+                });
+    }
+
+    private static long countCachedReads(QueryRunner queryRunner)
+    {
+        return getCacheOperationSpans(queryRunner).stream()
+                .filter(span -> span.getName().equals("Alluxio.readCached"))
+                .count();
     }
 
     private void assertFileSystemAccesses(@Language("SQL") String query, Multiset<FileOperation> expectedCacheAccesses)
