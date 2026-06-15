@@ -16,7 +16,9 @@
             },
             "tags": [
                 "data lakehouse",
-                "metica"
+                "metica",
+                "clustering",
+                "starrocks"
             ]
         },
         {

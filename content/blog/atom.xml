@@ -93,6 +93,8 @@
         </author>
         <category label="data lakehouse" term="data lakehouse"/>
         <category label="metica" term="metica"/>
+        <category label="clustering" term="clustering"/>
+        <category label="starrocks" term="starrocks"/>
     </entry>
     <entry>
         <title type="html"><![CDATA[From Concept to Reality: Apache Hudi at the Foundation of Penn Entertainment's Data Platform]]></title>

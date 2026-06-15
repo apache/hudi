@@ -91,6 +91,8 @@
 <p>Adopting Apache Hudi paid off in a few concrete ways for Metica. The biggest win was being able to scale from ~16 GB to billions of events without ever re-architecting, since every jump in data volume became a configuration change instead of a painful migration. On the performance side, turning on inline clustering cut their S3 object count from ~17K to ~3K (about a 6x storage reduction), and adding sort columns on predicate columns roughly halved query latency on StarRocks, dropping it from ~200 ms to ~90 ms on a 40M-row table. <a href="https://hudi.apache.org/" target="_blank" rel="noopener noreferrer" class="">Hudi</a> removed a lot of manual work. Snapshot isolation let writers and readers hit the same tables safely without custom plumbing, and built-in table services, the Hudi CLI, and the indexer, compactor, and clustering utilities let a small team keep a growing platform healthy without building that machinery themselves.</p>]]></content:encoded>
             <category>data lakehouse</category>
             <category>metica</category>
+            <category>clustering</category>
+            <category>starrocks</category>
         </item>
         <item>
             <title><![CDATA[From Concept to Reality: Apache Hudi at the Foundation of Penn Entertainment's Data Platform]]></title>
