@@ -45,7 +45,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -68,7 +68,7 @@ public class TestAppendHandle extends BaseTestHandle {
             .withSecondaryIndexForColumn("rider")
             .build())
         .build();
-    config.setSchema(TRIP_EXAMPLE_SCHEMA);
+    config.setSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
     HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
 
     // one round per partition

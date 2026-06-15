@@ -62,7 +62,7 @@ public class ClusteringTestUtils {
   private static final String COUNT_SQL_QUERY_FOR_VALIDATION = "select count(*) from <TABLE_NAME>";
 
   public static HoodieWriteConfig getClusteringConfig(String basePath) {
-    return getClusteringConfig(basePath, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    return getClusteringConfig(basePath, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED);
   }
 
   public static HoodieWriteConfig getClusteringConfig(String basePath, String schemaStr) {

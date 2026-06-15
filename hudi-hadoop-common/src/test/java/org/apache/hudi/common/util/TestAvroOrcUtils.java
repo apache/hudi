@@ -31,7 +31,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -40,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 public class TestAvroOrcUtils extends HoodieCommonTestHarness {
 
-  public static final TypeDescription ORC_SCHEMA = AvroOrcUtils.createOrcSchema(HoodieSchema.parse(TRIP_EXAMPLE_SCHEMA));
+  public static final TypeDescription ORC_SCHEMA = AvroOrcUtils.createOrcSchema(HoodieSchema.parse(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED));
   public static final TypeDescription ORC_TRIP_SCHEMA = AvroOrcUtils.createOrcSchema(HoodieSchema.parse(TRIP_SCHEMA));
 
   public static List<Arguments> testCreateOrcSchemaArgs() {

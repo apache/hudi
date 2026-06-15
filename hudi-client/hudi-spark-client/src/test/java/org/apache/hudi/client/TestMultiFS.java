@@ -97,7 +97,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
 
   protected HoodieWriteConfig getHoodieWriteConfig(String basePath) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withEmbeddedTimelineServerEnabled(true)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable(TABLE_NAME)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED).withParallelism(2, 2).forTable(TABLE_NAME)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
         .build();
   }

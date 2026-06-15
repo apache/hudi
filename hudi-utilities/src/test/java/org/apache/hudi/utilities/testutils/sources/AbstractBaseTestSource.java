@@ -50,7 +50,7 @@ import java.util.stream.Stream;
 @Slf4j
 public abstract class AbstractBaseTestSource extends AvroSource {
 
-  public static String schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+  public static String schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 
   public static final int DEFAULT_PARTITION_NUM = 0;
 

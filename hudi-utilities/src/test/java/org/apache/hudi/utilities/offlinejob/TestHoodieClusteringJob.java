@@ -48,7 +48,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.TIMELINEFOLDER_NAME;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.utilities.UtilHelpers.PURGE_PENDING_INSTANT;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
@@ -297,7 +297,7 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
     return HoodieWriteConfig.newBuilder()
         .forTable("asyncClustering")
         .withPath(tableBasePath)
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withParallelism(2, 2)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
@@ -319,7 +319,7 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
     return HoodieWriteConfig.newBuilder()
         .forTable("asyncClustering")
         .withPath(tableBasePath)
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withParallelism(2, 2)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()

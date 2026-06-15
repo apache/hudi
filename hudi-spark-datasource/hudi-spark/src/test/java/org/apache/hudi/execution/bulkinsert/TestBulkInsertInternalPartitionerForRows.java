@@ -46,7 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -109,7 +109,7 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieSparkClientT
     HoodieWriteConfig config = HoodieWriteConfig
         .newBuilder()
         .withPath("/")
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withBulkInsertSortMode(sortMode.name())
         .withPopulateMetaFields(populateMetaFields)
         .build();

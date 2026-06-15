@@ -183,7 +183,7 @@ public class ITTestTableCommand extends HoodieCLIIntegrationTestBase {
 
     // Create the write client to write some records in
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withParallelism(2, 2)
         .withDeleteParallelism(2)
         .forTable(tableName)

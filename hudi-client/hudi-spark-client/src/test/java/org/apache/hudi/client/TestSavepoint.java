@@ -138,7 +138,7 @@ public class TestSavepoint extends HoodieClientTestBase {
                                            FileSystemViewStorageType storageType) {
     return HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withParallelism(2, 2)
         .withBulkInsertParallelism(2)
         .withFinalizeWriteParallelism(2)

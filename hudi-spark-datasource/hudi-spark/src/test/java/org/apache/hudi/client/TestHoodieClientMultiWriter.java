@@ -119,7 +119,7 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_EVOLVED_1;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_EVOLVED_2;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -205,7 +205,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     Object[][] data =
         new Object[][] {
             // First element set to true means before testing anything, we make a commit
-            // with schema TRIP_EXAMPLE_SCHEMA.
+            // with schema TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED.
             // {<should create initial commit>, <table type>, <txn 1 writer schema>, <txn 2 writer schema>,
             // <should schema conflict>, <expected table schema after resolution>}
             // --------------|-----read write-----|validate & commit|------------------------- txn 1
@@ -213,22 +213,22 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
             // committed->|------------------------------------------------------------------- initial commit (optional)
 
             // No schema evolution, no conflict.
-            {true, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA, false, TRIP_EXAMPLE_SCHEMA},
-            {false, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA, false, TRIP_EXAMPLE_SCHEMA},
-            {false, true, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA, false, TRIP_EXAMPLE_SCHEMA},
+            {true, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, false, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED},
+            {false, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, false, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED},
+            {false, true, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, false, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED},
             // No concurrent schema evolution, no conflict.
-            {true, false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
-            {true, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
-            // If there is a initial commits defining table schema to TRIP_EXAMPLE_SCHEMA.
+            {true, false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {true, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            // If there is a initial commits defining table schema to TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED.
             // as long as txn 2 stick to that schema, backwards compatibility handles everything.
-            {true, false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
-            {true, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {true, false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {true, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
             // In case no initial commits, table schema is not really predefined.
             // It means are effectively having 2 concurrent txn trying to define table schema
             // differently in this case.
-            {false, true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
-            {false, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
-            {false, true, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {false, true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {false, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {false, true, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
             // Concurrent schema evolution into the same schema does not conflict.
             {true, false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
             {true, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
@@ -282,7 +282,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
     properties.setProperty(ENABLE_SCHEMA_CONFLICT_RESOLUTION.key(), "true");
 
-    HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder(TRIP_EXAMPLE_SCHEMA)
+    HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withHeartbeatIntervalInMs(60 * 1000)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withStorageType(FileSystemViewStorageType.MEMORY)

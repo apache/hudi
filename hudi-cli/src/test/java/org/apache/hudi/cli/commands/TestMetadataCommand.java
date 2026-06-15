@@ -49,7 +49,7 @@ import java.util.List;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -83,7 +83,7 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
         .initTable(HoodieCLI.conf.newInstance(), tablePath);
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath).withSchema(TRIP_EXAMPLE_SCHEMA).build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath).withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED).build();
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(context(), config)) {
       String newCommitTime = "001";
@@ -127,7 +127,7 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
         .withEnableGlobalRecordLevelIndex(true).build();
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(tablePath)
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withMetadataConfig(metadataConfig)
         .build();
 
@@ -178,7 +178,7 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
         .withEnableRecordLevelIndex(true).build();
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(tablePath)
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withMetadataConfig(metadataConfig)
         .build();
 

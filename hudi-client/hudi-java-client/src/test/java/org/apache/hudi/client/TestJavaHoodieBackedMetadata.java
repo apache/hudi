@@ -155,7 +155,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getNextCommitTime;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -1863,7 +1863,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     tableType = HoodieTableType.COPY_ON_WRITE;
     init(tableType);
     context = new HoodieJavaEngineContext(storageConf);
-    HoodieWriteConfig config = getSmallInsertWriteConfigForMDT(2000, TRIP_EXAMPLE_SCHEMA, 10, false);
+    HoodieWriteConfig config = getSmallInsertWriteConfigForMDT(2000, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, 10, false);
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
 
     // Write 1 (Bulk insert)
@@ -1892,7 +1892,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withClusteringExecutionStrategyClass(JavaSortAndSizeExecutionStrategy.class.getName())
         .build();
 
-    HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
+    HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
         .withClusteringConfig(clusteringConfig)
         .withRollbackUsingMarkers(false)
         .build();
@@ -1939,7 +1939,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     tableType = HoodieTableType.COPY_ON_WRITE;
     init(tableType);
     context = new HoodieJavaEngineContext(storageConf);
-    HoodieWriteConfig initialConfig = getSmallInsertWriteConfigForMDT(2000, TRIP_EXAMPLE_SCHEMA, 10, false);
+    HoodieWriteConfig initialConfig = getSmallInsertWriteConfigForMDT(2000, TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, 10, false);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withProperties(initialConfig.getProps())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(4).build()).build();
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
@@ -1968,7 +1968,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withClusteringExecutionStrategyClass(JavaSortAndSizeExecutionStrategy.class.getName())
         .build();
 
-    HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
+    HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
         .withClusteringConfig(clusteringConfig).build();
 
     // trigger clustering

@@ -70,7 +70,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createSimpleRecord;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
@@ -379,7 +379,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withStorageConfig(HoodieStorageConfig.newBuilder()
             .parquetMaxFileSize(1000 * 1024).hfileMaxFileSize(1000 * 1024).build())
         .build();

@@ -52,7 +52,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -138,7 +138,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
     HoodieWriteConfig.Builder cfgBuilder = HoodieWriteConfig.newBuilder()
         .forTable("test-trip-table")
         .withPath(basePath())
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withParallelism(2, 2)
         .withDeleteParallelism(2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
@@ -223,7 +223,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
     HoodieWriteConfig.Builder cfgBuilder = HoodieWriteConfig.newBuilder()
         .forTable("test-trip-table")
         .withPath(basePath())
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withSchema(TRIP_EXAMPLE_SCHEMA_NO_UNSTRUCTURED)
         .withParallelism(2, 2)
         .withDeleteParallelism(2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
