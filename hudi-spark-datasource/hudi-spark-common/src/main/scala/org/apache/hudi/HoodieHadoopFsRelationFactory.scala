@@ -21,7 +21,7 @@ package org.apache.hudi
 import org.apache.hudi.HoodieBaseRelation.{convertToHoodieSchema, isSchemaEvolutionEnabledOnRead}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.cdc.HoodieCDCFileIndex
-import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
@@ -56,41 +56,12 @@ trait HoodieHadoopFsRelationFactory {
   def buildOptions(): Map[String, String]
 }
 
-object HoodieBaseHadoopFsRelationFactory {
-  /**
-   * Resolves the variant allow-reading-shredded value using the precedence:
-   * table option > hoodie session conf > explicit Spark conf > Hudi default.
-   */
-  private[hudi] def resolveVariantAllowReadingShredded(tableOption: Option[String],
-                                                       hoodieSessionValue: Option[String],
-                                                       sparkConfValue: Option[String],
-                                                       hudiDefault: String): String =
-    tableOption.orElse(hoodieSessionValue).orElse(sparkConfValue).getOrElse(hudiDefault)
-}
-
 abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
                                                  val metaClient: HoodieTableMetaClient,
                                                  val options: Map[String, String],
                                                  val schemaSpec: Option[StructType],
                                                  val isBootstrap: Boolean
                                                 ) extends SparkAdapterSupport with HoodieHadoopFsRelationFactory with Logging {
-  // Propagate Hudi's variant allow-reading-shredded config to Spark's SQLConf.
-  // ParquetToSparkSchemaConverter reads this from SQLConf.get(), so it must be set
-  // before query execution starts here during table resolution
-  if (HoodieSparkUtils.gteqSpark4_0) {
-    val sqlConf = sqlContext.sparkSession.sessionState.conf
-    val hoodieConfKey = HoodieStorageConfig.PARQUET_VARIANT_ALLOW_READING_SHREDDED.key
-    // Literal, not SQLConf.VARIANT_ALLOW_READING_SHREDDED.key: that field is absent when this module compiles against Spark 3.x.
-    val sparkConfKey = "spark.sql.variant.allowReadingShredded"
-    // Precedence: table option > hoodie session key > explicit Spark conf > Hudi default.
-    val allowReadingShredded = HoodieBaseHadoopFsRelationFactory.resolveVariantAllowReadingShredded(
-      options.get(hoodieConfKey),
-      if (sqlConf.contains(hoodieConfKey)) Some(sqlConf.getConfString(hoodieConfKey)) else None,
-      if (sqlConf.contains(sparkConfKey)) Some(sqlConf.getConfString(sparkConfKey)) else None,
-      HoodieStorageConfig.PARQUET_VARIANT_ALLOW_READING_SHREDDED.defaultValue.toString)
-    sqlConf.setConfString(sparkConfKey, allowReadingShredded)
-  }
-
   protected lazy val sparkSession: SparkSession = sqlContext.sparkSession
   protected lazy val optParams: Map[String, String] = options
 
