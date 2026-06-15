@@ -48,7 +48,7 @@ ALLOWED_TAGS = {
     'data governance', 'compression', 'code sample', 'caching',
     'bytearray', 'best practices', 'backfilling', 'architecture',
     'apicurio registry', 'apache zeppelin', 'apache orc', 'apache dolphinscheduler',
-    'apache avro', 'apache', 'access control', 'lakehouse', 'merge on read', 'record level index','rli', 'penn interactive',
+    'apache avro', 'apache', 'access control', 'lakehouse', 'merge on read', 'record level index','rli', 'penn interactive', 'southwest airlines',
 }
 
 # Tags that should not be used
