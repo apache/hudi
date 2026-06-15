@@ -107,8 +107,12 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
         listLatestFileSlices(partitionFilters, dataFilters)
       } else {
         val latestCommit = includedCommits.last.requestedTime
-        val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
-        collectIncrementalFileSlices(modifiedPartitions.asScala.toSeq, latestCommit)
+        val modifiedPartitions = getWritePartitionPaths(commitsMetadata).asScala.toSeq
+        if (hasMissingAffectedFiles) {
+          legacyAffectedFileSlices(modifiedPartitions, latestCommit)
+        } else {
+          collectIncrementalFileSlices(modifiedPartitions, latestCommit)
+        }
       }
 
       buildSplits(filterFileSlices(fileSlices, globPattern))
@@ -126,7 +130,11 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
         val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
         val partitionPaths = fileIndex.listMatchingPartitionPaths(HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
           .map(p => p.getPath).filter(p => modifiedPartitions.contains(p))
-        collectIncrementalFileSlices(partitionPaths, latestCommit)
+        if (hasMissingAffectedFiles) {
+          legacyAffectedFileSlices(partitionPaths, latestCommit)
+        } else {
+          collectIncrementalFileSlices(partitionPaths, latestCommit)
+        }
       }
       filterFileSlices(fileSlices, globPattern)
     }
@@ -190,6 +198,29 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
   }
 
   /**
+   * Builds the incremental file slices directly from the files recorded in the window's commits
+   * (`affectedFilesInCommits`), as the read path did before HUDI #18943.
+   *
+   * This is used only when [[hasMissingAffectedFiles]] is true and the full-table-scan fallback is
+   * disabled: some files referenced by the window have been removed (e.g. by cleaning), so there is
+   * no correct incremental result to produce. Listing from the recorded files (which include the
+   * missing paths) preserves the prior fail-early contract - the scan surfaces a file-not-found
+   * error pointing the user at `hoodie.datasource.read.incr.fallback.fulltablescan.enable` - instead
+   * of silently returning an empty/partial result from a fresh listing that no longer sees those
+   * files.
+   */
+  private def legacyAffectedFileSlices(partitionPaths: Seq[String], latestCommit: String): Seq[FileSlice] = {
+    val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
+    try {
+      partitionPaths.flatMap { relativePartitionPath =>
+        fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
+      }
+    } finally {
+      fsView.close()
+    }
+  }
+
+  /**
    * File group ids touched within the incremental window. Used to scope the partition-listing based
    * view (which surfaces every file group in a modified partition) back to only the changed file
    * groups, so we do not read and discard untouched file groups.
@@ -225,6 +256,12 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
 
   protected def startInstantArchived: Boolean = !queryContext.getArchivedInstants.isEmpty
 
+  // Some files referenced by the commits in the incremental window no longer exist on storage
+  // (e.g. they were removed by cleaning). Such a window cannot be served from the incremental
+  // file listing alone.
+  protected lazy val hasMissingAffectedFiles: Boolean =
+    affectedFilesInCommits.asScala.exists(fileStatus => !metaClient.getStorage.exists(fileStatus.getPath))
+
   // Fallback to full table scan if any of the following conditions matches:
   //   1. the start commit is archived
   //   2. the end commit is archived
@@ -233,8 +270,7 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
     val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key,
       DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.defaultValue).toBoolean
 
-    fallbackToFullTableScan && (startInstantArchived
-      || affectedFilesInCommits.asScala.exists(fileStatus => !metaClient.getStorage.exists(fileStatus.getPath)))
+    fallbackToFullTableScan && (startInstantArchived || hasMissingAffectedFiles)
   }
 
   protected val rangeType: RangeType
