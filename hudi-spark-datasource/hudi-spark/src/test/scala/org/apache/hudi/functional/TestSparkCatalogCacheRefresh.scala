@@ -20,10 +20,9 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.HoodieSparkSqlWriterInternal
 
+import org.apache.commons.io.FileUtils
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-
-import org.apache.commons.io.FileUtils
 
 import java.io.File
 
