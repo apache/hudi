@@ -103,8 +103,6 @@ public class ITTestBlobWrite {
 
     ResolvedSchema resolved = tableEnv.from(probeTable).getResolvedSchema();
     RowType physical = (RowType) resolved.toPhysicalRowDataType().getLogicalType();
-    int blobIdx = physical.getFieldNames().indexOf(BLOB_COLUMN);
-    RowType blobPhysical = (RowType) physical.getTypeAt(blobIdx);
     // DDL uses NOT NULL on nested BLOB ROW fields where the canonical Hoodie BLOB shape is
     // stricter. Flink's physical RowType from ResolvedSchema#toPhysicalRowDataType() may or may
     // not preserve those flags across versions (see Flink table config / release notes linked in
