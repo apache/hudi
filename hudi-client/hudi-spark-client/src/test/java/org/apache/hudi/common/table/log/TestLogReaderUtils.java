@@ -43,6 +43,8 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.List;
@@ -132,16 +134,28 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
     }
   }
 
-  @Test
-  public void testLogFileWriteStatSizeMatchesOnDisk() throws Exception {
-    // HoodieAppendHandle records each log file's size by deriving it from AppendResult
+  @ParameterizedTest
+  @ValueSource(ints = {6, 9}) // SIX appends to the existing log file (logOffset > 0); NINE writes fresh files (logOffset == 0)
+  public void testLogFileWriteStatSizeMatchesOnDisk(int writeTableVersion) throws Exception {
+    // HoodieAppendHandle derives each log file's on-disk size from the AppendResult
     // (logOffset + accumulated appended bytes) instead of a getPathInfo per file. Validate that the
-    // derived size in the write stat matches the actual on-disk log file length, across multiple
-    // appends to the same log file (two upsert commits with no compaction / small-file packing).
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, new Properties());
+    // derived size in the write stat matches the actual on-disk log file length.
+    //
+    // The "logOffset +" term only contributes when a delta commit appends to a pre-existing log file:
+    //   - table version >= EIGHT (e.g. NINE): each delta commit writes a fresh instant-named log file
+    //     from offset 0, so logOffset is always 0;
+    //   - table version SIX: the second upsert appends to the first commit's log file, so logOffset
+    //     is > 0 and the derived sum is actually exercised.
+    // Running both covers the derivation with and without a non-zero offset.
+    Properties props = new Properties();
+    props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(writeTableVersion));
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(
+        storageConf(), basePath(), props, HoodieTableType.MERGE_ON_READ);
 
     HoodieWriteConfig config = getConfigBuilder(true)
         .withPath(basePath())
+        .withWriteTableVersion(writeTableVersion)
+        .withAutoUpgradeVersion(false)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)
             .compactionSmallFileSize(0)
@@ -158,7 +172,8 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
       assertNoWriteErrors(insertRdd.collect());
       client.commit(firstCommit, insertRdd);
 
-      // Upsert across two commits so each log file accumulates multiple appends through the handle
+      // Two upsert commits. Under version SIX the second commit appends to the first's log file
+      // (logOffset > 0); under version >= EIGHT each commit writes a fresh log file (logOffset == 0).
       for (String commitTime : new String[] {"002", "003"}) {
         WriteClientTestUtils.startCommitWithTime(client, commitTime);
         JavaRDD<WriteStatus> upsertRdd = client.upsert(jsc().parallelize(dataGen.generateUpdates(commitTime, 50), 1), commitTime);
