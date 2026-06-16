@@ -578,9 +578,14 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
            |insert into $tableName values
            |  (1, 'row1', parse_json('{"a": 1, "b": "hello"}'), 1000)
         """.stripMargin)
-      checkAnswer(s"select id, name, cast(v as string), ts from $tableName order by id")(
-        Seq(1, "row1", "{\"a\":1,\"b\":\"hello\"}", 1000)
-      )
+      // Reading shredded variants back needs Spark 4.1+ (spark.sql.variant.allowReadingShredded);
+      // Spark 4.0's reader rejects the 3-field shredded layout (4.0 read support is added later, see
+      // https://github.com/apache/hudi/issues/18931). The shredded write is still validated below.
+      if (HoodieSparkUtils.gteqSpark4_1) {
+        checkAnswer(s"select id, name, cast(v as string), ts from $tableName order by id")(
+          Seq(1, "row1", "{\"a\":1,\"b\":\"hello\"}", 1000)
+        )
+      }
 
       // Verify parquet schema has shredded structure with typed_value
       val parquetFiles = listDataParquetFiles(tmp.getCanonicalPath)
