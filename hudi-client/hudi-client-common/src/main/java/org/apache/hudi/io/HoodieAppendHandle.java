@@ -564,14 +564,16 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         writer = null;
       }
 
-      // update final size, once for all log files
-      // TODO we can actually deduce file size purely from AppendResult (based on offset and size
-      //      of the appended block)
+      // Set the final on-disk size of each log file. Appends within an append handle are contiguous,
+      // so a log file's length equals its start offset plus the total bytes appended to it. That is
+      // exactly what fs.getFileStatus().getLength() returns, and both values are already captured by
+      // the AppendResult stats (logOffset and the accumulated fileSizeInBytes). Deriving the size this
+      // way avoids a getPathInfo/HEAD per log file, which is a remote round trip per file group on
+      // object stores.
       for (WriteStatus status : statuses) {
-        long logFileSize = storage.getPathInfo(
-            new StoragePath(config.getBasePath(), status.getStat().getPath()))
-            .getLength();
-        status.getStat().setFileSizeInBytes(logFileSize);
+        HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) status.getStat();
+        long appendedBytes = stat.getFileSizeInBytes();
+        stat.setFileSizeInBytes(stat.getLogOffset() + appendedBytes);
       }
 
       // generate Secondary index stats if streaming writes is enabled.
