@@ -121,10 +121,12 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
         properties.getProperty(PARQUET_VARIANT_WRITE_SHREDDING_ENABLED.key(),
             String.valueOf(PARQUET_VARIANT_WRITE_SHREDDING_ENABLED.defaultValue())));
 
-    // Identify variant fields that need shredding
+    // Single pass over the effective schema fields: collect every variant-typed field name (for the
+    // read-then-reshred guard) and, when shredding is enabled, the subset that needs shredding.
     Map<Integer, ShreddedVariantField> shreddedFields = new LinkedHashMap<>();
+    List<String> variantNames = new ArrayList<>();
 
-    if (variantWriteShreddingEnabled && effectiveSchema.getType() == HoodieSchemaType.RECORD) {
+    if (effectiveSchema.getType() == HoodieSchemaType.RECORD) {
       List<HoodieSchemaField> fields = effectiveSchema.getFields();
       for (int i = 0; i < fields.size(); i++) {
         HoodieSchemaField field = fields.get(i);
@@ -133,7 +135,11 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
         if (fieldSchema.isNullable()) {
           fieldSchema = fieldSchema.getNonNullType();
         }
-        if (fieldSchema.getType() == HoodieSchemaType.VARIANT) {
+        if (fieldSchema.getType() != HoodieSchemaType.VARIANT) {
+          continue;
+        }
+        variantNames.add(field.name());
+        if (variantWriteShreddingEnabled) {
           HoodieSchema.Variant variant = (HoodieSchema.Variant) fieldSchema;
           if (variant.isShredded() && variant.getTypedValueField().isPresent()) {
             // Get the Avro sub-schema for this variant field from the effective schema
@@ -149,20 +155,6 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
     }
 
     this.shreddedVariantFields = shreddedFields;
-
-    // Collect every variant-typed field name (independent of shredding) for the read-then-reshred guard.
-    List<String> variantNames = new ArrayList<>();
-    if (effectiveSchema.getType() == HoodieSchemaType.RECORD) {
-      for (HoodieSchemaField field : effectiveSchema.getFields()) {
-        HoodieSchema fieldSchema = field.schema();
-        if (fieldSchema.isNullable()) {
-          fieldSchema = fieldSchema.getNonNullType();
-        }
-        if (fieldSchema.getType() == HoodieSchemaType.VARIANT) {
-          variantNames.add(field.name());
-        }
-      }
-    }
     this.variantFieldNames = variantNames.toArray(new String[0]);
 
     // Load shredding provider via reflection if needed
@@ -237,46 +229,54 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
       assertInputNotAlreadyShredded((IndexedRecord) record);
     }
     if (!shreddedVariantFields.isEmpty() && shreddingProvider != null) {
-      IndexedRecord inputRecord = (IndexedRecord) record;
-      GenericRecord shreddedRecord = new GenericData.Record(effectiveAvroSchema);
-
-      // Copy all fields, transforming variant fields that need shredding
-      List<Schema.Field> effectiveFields = effectiveAvroSchema.getFields();
-      Schema inputSchema = inputRecord.getSchema();
-
-      for (int i = 0; i < effectiveFields.size(); i++) {
-        Schema.Field effectiveField = effectiveFields.get(i);
-        String fieldName = effectiveField.name();
-        Schema.Field inputField = inputSchema.getField(fieldName);
-        if (inputField == null) {
-          continue;
-        }
-
-        ShreddedVariantField shreddedField = shreddedVariantFields.get(i);
-        if (shreddedField != null) {
-          // This is a shredded variant field - transform it
-          Object fieldValue = inputRecord.get(inputField.pos());
-          if (fieldValue instanceof GenericRecord) {
-            GenericRecord variantRecord = (GenericRecord) fieldValue;
-            GenericRecord shreddedVariant = shreddingProvider.shredVariantRecord(
-                variantRecord,
-                shreddedField.avroSchema,
-                shreddedField.hoodieSchema);
-            shreddedRecord.put(i, shreddedVariant);
-          } else {
-            // Null or unexpected type - copy as-is
-            shreddedRecord.put(i, fieldValue);
-          }
-        } else {
-          // Non-variant field - copy as-is
-          shreddedRecord.put(i, inputRecord.get(inputField.pos()));
-        }
-      }
-
-      super.write((T) shreddedRecord);
+      super.write((T) shredRecord((IndexedRecord) record));
     } else {
       super.write(record);
     }
+  }
+
+  /**
+   * Builds a shredded copy of {@code inputRecord}: variant fields configured for shredding are
+   * transformed via the {@link VariantShreddingProvider} to populate {@code typed_value}; all other
+   * fields are copied across as-is.
+   */
+  private GenericRecord shredRecord(IndexedRecord inputRecord) {
+    GenericRecord shreddedRecord = new GenericData.Record(effectiveAvroSchema);
+
+    // Copy all fields, transforming variant fields that need shredding
+    List<Schema.Field> effectiveFields = effectiveAvroSchema.getFields();
+    Schema inputSchema = inputRecord.getSchema();
+
+    for (int i = 0; i < effectiveFields.size(); i++) {
+      Schema.Field effectiveField = effectiveFields.get(i);
+      String fieldName = effectiveField.name();
+      Schema.Field inputField = inputSchema.getField(fieldName);
+      if (inputField == null) {
+        continue;
+      }
+
+      ShreddedVariantField shreddedField = shreddedVariantFields.get(i);
+      if (shreddedField != null) {
+        // This is a shredded variant field - transform it
+        Object fieldValue = inputRecord.get(inputField.pos());
+        if (fieldValue instanceof GenericRecord) {
+          GenericRecord variantRecord = (GenericRecord) fieldValue;
+          GenericRecord shreddedVariant = shreddingProvider.shredVariantRecord(
+              variantRecord,
+              shreddedField.avroSchema,
+              shreddedField.hoodieSchema);
+          shreddedRecord.put(i, shreddedVariant);
+        } else {
+          // Null or unexpected type - copy as-is
+          shreddedRecord.put(i, fieldValue);
+        }
+      } else {
+        // Non-variant field - copy as-is
+        shreddedRecord.put(i, inputRecord.get(inputField.pos()));
+      }
+    }
+
+    return shreddedRecord;
   }
 
   /**

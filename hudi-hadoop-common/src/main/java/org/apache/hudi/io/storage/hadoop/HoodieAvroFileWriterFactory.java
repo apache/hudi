@@ -162,22 +162,22 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         getAvroSchemaConverter((Configuration) storageConf.unwrapAs(Configuration.class)).convert(effectiveSchema), schema, filter, props);
   }
 
+  // Sole provider today: variant shredding currently requires Spark 4.0+. If more providers are
+  // added, restore a candidate list here and try each in turn.
+  private static final String SPARK4_VARIANT_SHREDDING_PROVIDER =
+      "org.apache.hudi.variant.Spark4VariantShreddingProvider";
+
   /**
    * Auto-detect a {@link org.apache.hudi.avro.VariantShreddingProvider} implementation
    * available on the classpath. Returns the fully-qualified class name if found, or null.
    */
   private static String detectShreddingProvider() {
-    String[] candidates = {
-        "org.apache.hudi.variant.Spark4VariantShreddingProvider"
-    };
-    for (String candidate : candidates) {
-      try {
-        Class.forName(candidate);
-        return candidate;
-      } catch (ClassNotFoundException e) {
-        // not on classpath, try next
-      }
+    try {
+      Class.forName(SPARK4_VARIANT_SHREDDING_PROVIDER);
+      return SPARK4_VARIANT_SHREDDING_PROVIDER;
+    } catch (ClassNotFoundException e) {
+      // not on classpath
+      return null;
     }
-    return null;
   }
 }

@@ -589,7 +589,7 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
       parquetFiles.foreach { filePath =>
         val schema = readParquetSchema(filePath)
         val variantGroup = getFieldAsGroup(schema, "v")
-        assert(groupContainsField(variantGroup, "typed_value"),
+        assert(variantGroup.containsField("typed_value"),
           s"Shredded variant should have typed_value field. Schema:\n$variantGroup")
         val valueField = variantGroup.getType(variantGroup.getFieldIndex("value"))
         assert(valueField.getRepetition == Type.Repetition.OPTIONAL,
@@ -641,7 +641,7 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
       parquetFiles.foreach { filePath =>
         val schema = readParquetSchema(filePath)
         val variantGroup = getFieldAsGroup(schema, "v")
-        assert(!groupContainsField(variantGroup, "typed_value"),
+        assert(!variantGroup.containsField("typed_value"),
           s"Non-shredded variant should NOT have typed_value field. Schema:\n$variantGroup")
         val valueField = variantGroup.getType(variantGroup.getFieldIndex("value"))
         assert(valueField.getRepetition == Type.Repetition.REQUIRED,
@@ -694,12 +694,5 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
   private def getFieldAsGroup(parent: GroupType, fieldName: String): GroupType = {
     val idx: Int = parent.getFieldIndex(fieldName)
     parent.getType(idx).asGroupType()
-  }
-
-  /**
-   * Checks whether a GroupType contains a field with the given name.
-   */
-  private def groupContainsField(group: GroupType, fieldName: String): Boolean = {
-    group.containsField(fieldName)
   }
 }
