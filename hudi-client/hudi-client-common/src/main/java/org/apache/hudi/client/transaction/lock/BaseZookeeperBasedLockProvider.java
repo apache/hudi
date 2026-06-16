@@ -68,6 +68,7 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
     this.lockConfiguration = lockConfiguration;
     zkBasePath = getZkBasePath(lockConfiguration);
     lockKey = getLockKey(lockConfiguration);
+    int connectionTimeoutMs = ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), ZK_CONNECTION_TIMEOUT_MS);
     this.curatorFrameworkClient = CuratorFrameworkFactory.builder()
         .connectString(ConfigUtils.getStringWithAltKeys(lockConfiguration.getConfig(), ZK_CONNECT_URL))
         .retryPolicy(new BoundedExponentialBackoffRetry(
@@ -75,19 +76,32 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
             ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS),
             ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), LOCK_ACQUIRE_NUM_RETRIES)))
         .sessionTimeoutMs(ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), ZK_SESSION_TIMEOUT_MS))
-        .connectionTimeoutMs(ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), ZK_CONNECTION_TIMEOUT_MS))
+        .connectionTimeoutMs(connectionTimeoutMs)
         .build();
     this.curatorFrameworkClient.start();
+    // Once started, the Curator client owns background threads. If anything below throws, the
+    // constructor never returns the instance, so the caller can never invoke close() - clean up here.
     try {
-      int connectionTimeoutMs = ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), ZK_CONNECTION_TIMEOUT_MS);
       if (!this.curatorFrameworkClient.blockUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)) {
         throw new HoodieLockException("Failed to connect to ZooKeeper within " + connectionTimeoutMs + " ms");
       }
+      createPathIfNotExists();
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+      closeQuietly();
       throw new HoodieLockException("Interrupted while waiting to connect to ZooKeeper", e);
+    } catch (RuntimeException e) {
+      closeQuietly();
+      throw e;
     }
-    createPathIfNotExists();
+  }
+
+  private void closeQuietly() {
+    try {
+      this.curatorFrameworkClient.close();
+    } catch (Exception ex) {
+      log.warn("Failed to close ZooKeeper client after failed initialization", ex);
+    }
   }
 
   protected abstract String getZkBasePath(LockConfiguration lockConfiguration);
