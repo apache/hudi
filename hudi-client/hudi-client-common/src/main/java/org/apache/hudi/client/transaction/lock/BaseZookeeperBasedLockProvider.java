@@ -78,6 +78,15 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
         .connectionTimeoutMs(ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), ZK_CONNECTION_TIMEOUT_MS))
         .build();
     this.curatorFrameworkClient.start();
+    try {
+      int connectionTimeoutMs = ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), ZK_CONNECTION_TIMEOUT_MS);
+      if (!this.curatorFrameworkClient.blockUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)) {
+        throw new HoodieLockException("Failed to connect to ZooKeeper within " + connectionTimeoutMs + " ms");
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new HoodieLockException("Interrupted while waiting to connect to ZooKeeper", e);
+    }
     createPathIfNotExists();
   }
 
