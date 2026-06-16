@@ -22,11 +22,14 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.action.commit.SmallFile;
+
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,7 +41,9 @@ import java.util.stream.Collectors;
  *
  * <p>Note: assumes the index can always index log files for Flink write.
  */
+@Slf4j
 public class DeltaWriteProfile extends WriteProfile {
+
   public DeltaWriteProfile(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
     super(config, context);
   }
@@ -86,12 +91,34 @@ public class DeltaWriteProfile extends WriteProfile {
     return smallFileLocations;
   }
 
+  @Override
+  protected long averageBytesPerRecord() {
+    long avgSize = config.getCopyOnWriteRecordSizeEstimate();
+    HoodieTimeline commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
+    if (!commitTimeline.empty()) {
+      long sizeFromCommitMetadata = calculateRecordSizeThroughCommitMetadata(commitTimeline, 1.0D);
+      if (sizeFromCommitMetadata > 0) {
+        avgSize = sizeFromCommitMetadata;
+      }
+    } else {
+      HoodieTimeline deltaCommitTimeline = metaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants();
+      if (!deltaCommitTimeline.empty()) {
+        long sizeFromCommitMetadata = calculateRecordSizeThroughCommitMetadata(deltaCommitTimeline, logFileToParquetCompressionRatio());
+        if (sizeFromCommitMetadata > 0) {
+          avgSize = sizeFromCommitMetadata;
+        }
+      }
+    }
+    log.info("Refresh average bytes per record => " + avgSize);
+    return avgSize;
+  }
+
   protected SyncableFileSystemView getFileSystemView() {
     return (SyncableFileSystemView) getTable().getSliceView();
   }
 
   private long getTotalFileSize(FileSlice fileSlice) {
-    return fileSlice.getTotalFileSizeAsParquetFormat(config.getLogFileToParquetCompressionRatio());
+    return fileSlice.getTotalFileSizeAsParquetFormat(logFileToParquetCompressionRatio());
   }
 
   private boolean isSmallFile(FileSlice fileSlice) {
@@ -99,4 +126,11 @@ public class DeltaWriteProfile extends WriteProfile {
     return totalSize < config.getParquetMaxFileSize();
   }
 
+  private double logFileToParquetCompressionRatio() {
+    if (config.getLogDataBlockFormat().isPresent()
+        && config.getLogDataBlockFormat().get() == HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK) {
+      return 1D;
+    }
+    return config.getLogFileToParquetCompressionRatio();
+  }
 }
