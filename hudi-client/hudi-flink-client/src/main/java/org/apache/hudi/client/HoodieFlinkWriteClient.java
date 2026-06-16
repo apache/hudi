@@ -398,6 +398,20 @@ public class HoodieFlinkWriteClient<T>
   }
 
   /**
+   * Initializes the transaction state for recommitting an inflight instant during recovery.
+   * Sets lastCompletedTxnAndMetadata to the last completed instant whose requested time
+   * and completion time are both before the given instant's requested time, ensuring
+   * OCC conflict resolution only checks against genuinely concurrent commits.
+   */
+  public void preTxnForRecommit(WriteOperationType operationType, HoodieTableMetaClient metaClient, String currentInstantTime) {
+    if (txnManager.isLockRequired() && config.needResolveWriteConflict(operationType, metaClient.isMetadataTable(), config, metaClient.getTableConfig())) {
+      this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient, currentInstantTime);
+      this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
+      this.pendingInflightAndRequestedInstants.remove(currentInstantTime);
+    }
+  }
+
+  /**
    * Initialized the metadata table on start up, should only be called once on driver.
    */
   public void initMetadataTable() {

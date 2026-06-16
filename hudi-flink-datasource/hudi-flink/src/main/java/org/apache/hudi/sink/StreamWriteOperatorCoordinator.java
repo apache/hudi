@@ -547,6 +547,11 @@ public class StreamWriteOperatorCoordinator
       if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()) {
         writeClient.getHeartbeatClient().start(instant);
       }
+      // Initialize the transaction state so that OCC conflict resolution uses the correct
+      // baseline: the last completed instant before this inflight instant was created.
+      // Without this, lastCompletedTxnAndMetadata is empty and conflict resolution checks
+      // against all completed instants on the timeline, causing false conflicts.
+      writeClient.preTxnForRecommit(tableState.operationType, this.metaClient, instant);
       return commitInstant(checkpointId, instant, bootstrapBuffer);
     } else {
       // clean the corresponding event buffer if the instant is already committed.

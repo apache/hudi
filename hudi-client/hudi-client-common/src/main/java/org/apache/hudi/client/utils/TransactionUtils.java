@@ -39,10 +39,14 @@ import org.apache.hudi.table.HoodieTable;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 import static org.apache.hudi.config.HoodieWriteConfig.ENABLE_SCHEMA_CONFLICT_RESOLUTION;
 
@@ -138,6 +142,28 @@ public class TransactionUtils {
       HoodieTableMetaClient metaClient) {
     Option<HoodieInstant> hoodieInstantOption = metaClient.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().lastInstant();
+    return getHoodieInstantAndMetaDataPair(metaClient, hoodieInstantOption);
+  }
+
+  /**
+   * Get the last completed transaction hoodie instant before the given instant time.
+   * The returned instant has both requested time and completion time less than the given instant time,
+   * ensuring it was fully completed before the given instant was created.
+   *
+   * @param metaClient table meta client
+   * @param currentInstantTime the requested time of the current inflight instant
+   * @return the last completed instant before the given instant, with its extra metadata
+   */
+  public static Option<Pair<HoodieInstant, Map<String, String>>> getLastCompletedTxnInstantAndMetadata(
+      HoodieTableMetaClient metaClient, String currentInstantTime) {
+    Option<HoodieInstant> hoodieInstantOption = Option.fromJavaOptional(
+        metaClient.getActiveTimeline().getCommitsTimeline()
+            .filterCompletedInstants()
+            .findInstantsBefore(currentInstantTime)
+            .getInstantsAsStream()
+            .filter(instant -> instant.getCompletionTime() != null
+                && compareTimestamps(instant.getCompletionTime(), LESSER_THAN, currentInstantTime))
+            .max(Comparator.comparing(HoodieInstant::getCompletionTime)));
     return getHoodieInstantAndMetaDataPair(metaClient, hoodieInstantOption);
   }
 
