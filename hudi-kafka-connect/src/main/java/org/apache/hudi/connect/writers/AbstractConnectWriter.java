@@ -53,6 +53,10 @@ public abstract class AbstractConnectWriter implements ConnectWriter<WriteStatus
   private final KeyGenerator keyGenerator;
   private final SchemaProvider schemaProvider;
   protected final KafkaConnectConfigs connectConfigs;
+  private final String kafkaValueConverter;
+  // Reused across all records of this writer (one writer is created per commit, single-threaded),
+  // instead of re-parsing the schema and rebuilding the converter on every record.
+  private AvroConvertor convertor;
 
   public AbstractConnectWriter(KafkaConnectConfigs connectConfigs,
                                KeyGenerator keyGenerator,
@@ -61,23 +65,26 @@ public abstract class AbstractConnectWriter implements ConnectWriter<WriteStatus
     this.keyGenerator = keyGenerator;
     this.schemaProvider = schemaProvider;
     this.instantTime = instantTime;
+    this.kafkaValueConverter = connectConfigs.getKafkaValueConverter();
   }
 
   @Override
   public void writeRecord(SinkRecord record) throws IOException {
-    AvroConvertor convertor = new AvroConvertor(schemaProvider.getSourceHoodieSchema());
     Option<GenericRecord> avroRecord;
-    switch (connectConfigs.getKafkaValueConverter()) {
+    switch (kafkaValueConverter) {
       case KAFKA_AVRO_CONVERTER:
         avroRecord = Option.of((GenericRecord) record.value());
         break;
       case KAFKA_STRING_CONVERTER:
+        if (convertor == null) {
+          convertor = new AvroConvertor(schemaProvider.getSourceHoodieSchema());
+        }
         avroRecord = Option.of(convertor.fromJson((String) record.value()));
         break;
       case KAFKA_JSON_CONVERTER:
         throw new UnsupportedEncodingException("Currently JSON objects are not supported");
       default:
-        throw new IOException("Unsupported Kafka Format type (" + connectConfigs.getKafkaValueConverter() + ")");
+        throw new IOException("Unsupported Kafka Format type (" + kafkaValueConverter + ")");
     }
 
     // Tag records with a file ID based on kafka partition and hudi partition.
