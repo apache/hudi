@@ -424,6 +424,27 @@ public class TestBucketAssigner {
   }
 
   @Test
+  public void testWriteProfileRecordsPerBucketUsesProfiledRecordSizeWithSmallEstimationThreshold() throws Exception {
+    conf.set(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE, 1);
+    conf.setString(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), String.valueOf(1024 * 1024));
+    conf.setString(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "1");
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    writeConfig = FlinkWriteClients.getHoodieClientConfig(conf);
+    WriteProfile writeProfile = new WriteProfile(writeConfig, context);
+    String latestInstant = getLastCompleteInstant(writeProfile);
+    HoodieCommitMetadata commitMetadata = writeProfile.getMetadataCache().get(latestInstant);
+    assertNotNull(commitMetadata);
+    long expectedAvgSize = (long) Math.ceil(
+        1.0 * commitMetadata.fetchTotalBytesWritten() / commitMetadata.fetchTotalRecordsWritten());
+
+    assertThat("Average record size should use commit metadata when it is large enough relative to small file limit",
+        writeProfile.getAvgSize(), is(expectedAvgSize));
+    assertThat("Records per bucket should use the profiled record size",
+        writeProfile.getRecordsPerBucket(), is(writeConfig.getParquetMaxFileSize() / expectedAvgSize));
+  }
+
+  @Test
   public void testDeltaWriteProfileRecordsPerBucketUsesCompressionRatio() throws Exception {
     File morPath = new File(tempFile, "mor");
     Configuration morConf = TestConfigurations.getDefaultConf(morPath.getAbsolutePath());

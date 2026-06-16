@@ -169,6 +169,7 @@ public class ITTestDynamicBucketStreamWrite {
     Map<String, String> smallBucketOptions = Map.of(
         HoodieCompactionConfig.COPY_ON_WRITE_INSERT_SPLIT_SIZE.key(), "1",
         FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE.key(), "1",
+        HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "1",
         HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), String.valueOf(1024 * 1024));
     streamTableEnv.executeSql(getTableDDL(
         "t1", tableType, smallBucketOptions, true));

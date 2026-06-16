@@ -117,7 +117,6 @@ public class WriteProfile {
     this.context = context;
     this.basePath = new Path(config.getBasePath());
     this.smallFilesMap = new HashMap<>();
-    this.recordsPerBucket = config.getCopyOnWriteInsertSplitSize();
     this.metaClient = StreamerUtil.createMetaClient(
         config.getBasePath(), context.getStorageConf().unwrapAs(Configuration.class));
     this.metadataCache = new HashMap<>();
@@ -134,37 +133,44 @@ public class WriteProfile {
    * Obtains the average record size based on records written during previous commits. Used for estimating how many
    * records pack into one file.
    */
-  private long averageBytesPerRecord() {
+  protected long averageBytesPerRecord() {
     long avgSize = config.getCopyOnWriteRecordSizeEstimate();
-    long fileSizeThreshold = (long) (config.getRecordSizeEstimationThreshold() * config.getParquetSmallFileLimit());
-    HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
     if (!commitTimeline.empty()) {
-      // Go over the reverse ordered commits to get a more recent estimate of average record size.
-      Iterator<HoodieInstant> instants = commitTimeline.getReverseOrderedInstants().iterator();
-      while (instants.hasNext()) {
-        HoodieInstant instant = instants.next();
-        final HoodieCommitMetadata commitMetadata =
-            this.metadataCache.computeIfAbsent(
-                instant.requestedTime(),
-                k -> WriteProfiles.getCommitMetadataSafely(config.getTableName(), basePath, instant, commitTimeline)
-                    .orElse(null));
-        if (commitMetadata == null) {
-          continue;
-        }
-        long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
-        long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
-        if (totalBytesWritten > fileSizeThreshold && totalRecordsWritten > 0) {
-          avgSize = (long) Math.ceil((fileSizeCalibrationRatio() * totalBytesWritten) / totalRecordsWritten);
-          break;
-        }
+      long sizeFromCommitMetadata = calculateRecordSizeThroughCommitMetadata(commitTimeline, 1.0D);
+      if (sizeFromCommitMetadata > 0) {
+        avgSize = sizeFromCommitMetadata;
       }
     }
     log.info("Refresh average bytes per record => " + avgSize);
     return avgSize;
   }
 
-  protected double fileSizeCalibrationRatio() {
-    return 1D;
+  protected long calculateRecordSizeThroughCommitMetadata(HoodieTimeline commitTimeline, double fileSizeCalibrationRatio) {
+    long fileSizeThreshold = recordSizeEstimationFileSizeThreshold();
+    // Go over the reverse ordered commits to get a more recent estimate of average record size.
+    Iterator<HoodieInstant> instants = commitTimeline.getReverseOrderedInstants().iterator();
+    while (instants.hasNext()) {
+      HoodieInstant instant = instants.next();
+      final HoodieCommitMetadata commitMetadata =
+          this.metadataCache.computeIfAbsent(
+              instant.requestedTime(),
+              k -> WriteProfiles.getCommitMetadataSafely(config.getTableName(), basePath, instant, commitTimeline)
+                  .orElse(null));
+      if (commitMetadata == null) {
+        continue;
+      }
+      long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
+      long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
+      if (totalBytesWritten > fileSizeThreshold && totalRecordsWritten > 0) {
+        return (long) Math.ceil((fileSizeCalibrationRatio * totalBytesWritten) / totalRecordsWritten);
+      }
+    }
+    return -1L;
+  }
+
+  private long recordSizeEstimationFileSizeThreshold() {
+    return (long) (0.1D * config.getParquetSmallFileLimit());
   }
 
   /**
