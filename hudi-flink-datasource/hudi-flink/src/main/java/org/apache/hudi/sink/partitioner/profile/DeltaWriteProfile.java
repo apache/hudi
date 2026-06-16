@@ -93,7 +93,7 @@ public class DeltaWriteProfile extends WriteProfile {
 
   @Override
   protected long averageBytesPerRecord() {
-    long avgSize = config.getCopyOnWriteRecordSizeEstimate();
+    long avgSize = getAvgSize() > 0 ? getAvgSize() : config.getCopyOnWriteRecordSizeEstimate();
     HoodieTimeline commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
     if (!commitTimeline.empty()) {
       long sizeFromCommitMetadata = calculateRecordSizeThroughCommitMetadata(commitTimeline, 1.0D);
@@ -109,7 +109,6 @@ public class DeltaWriteProfile extends WriteProfile {
         }
       }
     }
-    log.info("Refresh average bytes per record => " + avgSize);
     return avgSize;
   }
 
