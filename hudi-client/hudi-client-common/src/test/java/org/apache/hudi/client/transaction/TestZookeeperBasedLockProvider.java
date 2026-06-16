@@ -42,6 +42,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
@@ -193,5 +194,25 @@ public class TestZookeeperBasedLockProvider {
   public void testUnlockWithoutLock() {
     ZookeeperBasedLockProvider zookeeperBasedLockProvider = new ZookeeperBasedLockProvider(zkConfWithZkBasePathAndLockKeyLock, null);
     zookeeperBasedLockProvider.unlock();
+  }
+
+  @Test
+  public void testFailFastWhenZkUnreachable() {
+    Properties properties = new Properties();
+    // Nothing listens on 127.0.0.1:1, so the connect-wait must time out instead of hanging.
+    properties.setProperty(ZK_CONNECT_URL_PROP_KEY, "127.0.0.1:1");
+    properties.setProperty(ZK_BASE_PATH_PROP_KEY, basePath);
+    properties.setProperty(ZK_LOCK_KEY_PROP_KEY, key);
+    properties.setProperty(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "100");
+    properties.setProperty(LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY, "300");
+    properties.setProperty(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "1");
+    properties.setProperty(ZK_SESSION_TIMEOUT_MS_PROP_KEY, "1000");
+    properties.setProperty(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY, "1000");
+    LockConfiguration unreachable = new LockConfiguration(properties);
+    // Construction must fail fast (seconds, bounded by the connection timeout) with a
+    // HoodieLockException instead of being amplified into a multi-minute retry hang.
+    Assertions.assertTimeoutPreemptively(Duration.ofSeconds(15), () ->
+        Assertions.assertThrows(HoodieLockException.class,
+            () -> new ZookeeperBasedLockProvider(unreachable, null)));
   }
 }
