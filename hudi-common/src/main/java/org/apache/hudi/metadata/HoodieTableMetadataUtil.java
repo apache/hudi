@@ -276,15 +276,19 @@ public class HoodieTableMetadataUtil {
     final Properties properties = new Properties();
     properties.setProperty(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(),
         storageConfig.getString(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
+    // getNonNullType() rebuilds the union-member wrappers for nullable fields and depends only on the
+    // (fixed) target fields, so resolve it once per field instead of once per record per field.
+    List<Pair<String, HoodieSchema>> nonNullFieldSchemas = targetFields.stream()
+        .map(p -> Pair.of(p.getKey(), p.getValue().schema().getNonNullType()))
+        .collect(Collectors.toList());
     // Collect stats for all columns by iterating through records while accounting
     // corresponding stats
     records.forEachRemaining((record) -> {
       // For each column (field) we have to index update corresponding column stats
       // with the values from this record
-      targetFields.forEach(fieldNameFieldPair -> {
-        String fieldName = fieldNameFieldPair.getKey();
-        HoodieSchemaField field = fieldNameFieldPair.getValue();
-        HoodieSchema fieldSchema = field.schema().getNonNullType();
+      nonNullFieldSchemas.forEach(fieldNameSchemaPair -> {
+        String fieldName = fieldNameSchemaPair.getKey();
+        HoodieSchema fieldSchema = fieldNameSchemaPair.getValue();
         if (!isColumnTypeSupported(fieldSchema, Option.of(record.getRecordType()), indexVersion)) {
           return;
         }
