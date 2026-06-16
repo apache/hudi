@@ -379,6 +379,17 @@
         <configuration>
           <source>${java.version}</source>
           <target>${java.version}</target>
+          <!-- Declare the annotation processor path explicitly instead of relying on classpath
+               service discovery. Lombok is the only annotation processor in the build, and an
+               isolated processor path avoids the flaky "Provider lombok... could not be
+               instantiated" ServiceLoader race seen under parallel (-T) reactor builds. -->
+          <annotationProcessorPaths>
+            <path>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+              <version>${lombok.version}</version>
+            </path>
+          </annotationProcessorPaths>
         </configuration>
       </plugin>
       <plugin>
