@@ -34,10 +34,11 @@ import org.apache.hudi.common.util.Functions.Function3;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpResponseException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.List;
@@ -48,11 +49,11 @@ import java.util.stream.Stream;
  * A file system view which proxies request to a preferred File System View implementation. In case of error, flip all
  * subsequent calls to a backup file-system view implementation.
  */
+@Slf4j
 public class PriorityBasedFileSystemView implements SyncableFileSystemView, Serializable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(PriorityBasedFileSystemView.class);
-
   private final transient HoodieEngineContext engineContext;
+  @Getter(AccessLevel.PACKAGE)
   private final SyncableFileSystemView preferredView;
   private final SerializableFunctionUnchecked<HoodieEngineContext, SyncableFileSystemView> secondaryViewCreator;
   private SyncableFileSystemView secondaryView;
@@ -69,7 +70,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
 
   private <R> R execute(Function0<R> preferredFunction, Function0<R> secondaryFunction) {
     if (errorOnPreferredView) {
-      LOG.warn("Routing request to secondary file-system view");
+      log.warn("Routing request to secondary file-system view");
       return secondaryFunction.apply();
     } else {
       try {
@@ -84,7 +85,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
 
   private <T1, R> R execute(T1 val, Function1<T1, R> preferredFunction, Function1<T1, R> secondaryFunction) {
     if (errorOnPreferredView) {
-      LOG.warn("Routing request to secondary file-system view");
+      log.warn("Routing request to secondary file-system view");
       return secondaryFunction.apply(val);
     } else {
       try {
@@ -100,7 +101,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   private <T1, T2, R> R execute(T1 val, T2 val2, Function2<T1, T2, R> preferredFunction,
       Function2<T1, T2, R> secondaryFunction) {
     if (errorOnPreferredView) {
-      LOG.warn("Routing request to secondary file-system view");
+      log.warn("Routing request to secondary file-system view");
       return secondaryFunction.apply(val, val2);
     } else {
       try {
@@ -116,7 +117,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   private <T1, T2, T3, R> R execute(T1 val, T2 val2, T3 val3, Function3<T1, T2, T3, R> preferredFunction,
       Function3<T1, T2, T3, R> secondaryFunction) {
     if (errorOnPreferredView) {
-      LOG.warn("Routing request to secondary file-system view");
+      log.warn("Routing request to secondary file-system view");
       return secondaryFunction.apply(val, val2, val3);
     } else {
       try {
@@ -131,9 +132,9 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
 
   private void handleRuntimeException(RuntimeException re) {
     if (re.getCause() instanceof HttpResponseException && ((HttpResponseException)re.getCause()).getStatusCode() == HttpStatus.SC_BAD_REQUEST) {
-      LOG.warn("Got error running preferred function. Likely due to another concurrent writer in progress. Trying secondary");
+      log.warn("Got error running preferred function. Likely due to another concurrent writer in progress. Trying secondary");
     } else {
-      LOG.error("Got error running preferred function. Trying secondary", re);
+      log.error("Got error running preferred function. Trying secondary", re);
     }
   }
 
@@ -352,10 +353,6 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   @Override
   public Option<FileSlice> getLatestFileSlice(String partitionPath, String fileId) {
     return execute(partitionPath, fileId, preferredView::getLatestFileSlice, (path, fgId) -> getSecondaryView().getLatestFileSlice(path, fgId));
-  }
-
-  SyncableFileSystemView getPreferredView() {
-    return preferredView;
   }
 
   synchronized SyncableFileSystemView getSecondaryView() {
