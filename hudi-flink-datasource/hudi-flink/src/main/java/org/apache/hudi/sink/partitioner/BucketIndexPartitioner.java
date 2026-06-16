@@ -24,7 +24,6 @@ import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
-import org.apache.hudi.keygen.KeyGenUtils;
 
 import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.configuration.Configuration;
@@ -39,15 +38,15 @@ import java.util.List;
  */
 public class BucketIndexPartitioner<T extends HoodieKey> implements Partitioner<T> {
 
-  // parsed once; the per-record partition() path uses the List overload of getBucketId so the
-  // comma-separated config string is not re-split per record
+  // Index key fields, pre-parsed by the caller. The per-record partition() path uses the List
+  // overload of getBucketId so the comma-separated config string is never re-split per record.
   private final List<String> indexKeyFieldList;
   private final NumBucketsFunction numBucketsFunction;
 
   private Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc;
 
-  public BucketIndexPartitioner(Configuration conf, String indexKeyFields) {
-    this.indexKeyFieldList = KeyGenUtils.getIndexKeyFields(indexKeyFields);
+  public BucketIndexPartitioner(Configuration conf, List<String> indexKeyFieldList) {
+    this.indexKeyFieldList = indexKeyFieldList;
     this.numBucketsFunction = new NumBucketsFunction(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
         conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
   }

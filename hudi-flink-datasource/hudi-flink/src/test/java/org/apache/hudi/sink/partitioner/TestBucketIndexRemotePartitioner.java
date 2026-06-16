@@ -28,6 +28,8 @@ import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
@@ -91,7 +93,7 @@ class TestBucketIndexRemotePartitioner {
     when(remotePartitionHelper.getPartition(8, "", currentBucket, 16)).thenReturn(11);
 
     BucketIndexRemotePartitioner<HoodieKey> partitioner =
-        new BucketIndexRemotePartitioner<>(conf, "id", remotePartitionHelper);
+        new BucketIndexRemotePartitioner<>(conf, Collections.singletonList("id"), remotePartitionHelper);
 
     assertEquals(11, partitioner.partition(key, 16));
   }

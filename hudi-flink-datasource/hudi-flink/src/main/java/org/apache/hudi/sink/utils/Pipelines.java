@@ -141,13 +141,12 @@ public class Pipelines {
         throw new HoodieException(
             "Consistent hashing bucket index does not work with bulk insert using FLINK engine. Use simple bucket index or Spark engine.");
       }
-      String indexKeys = OptionsResolver.getIndexKeyField(conf);
       List<String> indexKeyFieldList = OptionsResolver.getIndexKeyFields(conf);
       // built once and captured by the per-record map closure (NumBucketsFunction is Serializable),
       // avoiding a per-record rebuild from conf inside BucketBulkInsertWriterHelper
       NumBucketsFunction numBucketsFunction = new NumBucketsFunction(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
           conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
-      Partitioner<HoodieKey> partitioner = BucketIndexPartitionerFactory.create(conf, indexKeys);
+      Partitioner<HoodieKey> partitioner = BucketIndexPartitionerFactory.create(conf, indexKeyFieldList);
       RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, rowType);
       RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
       InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(rowTypeWithFileId);
