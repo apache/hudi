@@ -64,14 +64,6 @@ public class AvroSchemaEvolutionUtils {
    *                                  nullable in the result. Otherwise, no updates will be made to those fields.
    * @return reconcile Schema
    */
-  public static InternalSchema reconcileSchema(Schema incomingSchema, InternalSchema oldTableSchema, boolean makeMissingFieldsNullable) {
-    return reconcileSchema(incomingSchema, oldTableSchema, makeMissingFieldsNullable, false);
-  }
-
-  /**
-   * Variant that allows opting in to timestamp-millis <-> timestamp-micros (and the local-timestamp
-   * variants) precision evolution, which is rejected by default.
-   */
   public static InternalSchema reconcileSchema(Schema incomingSchema, InternalSchema oldTableSchema,
                                                boolean makeMissingFieldsNullable, boolean allowTimestampPrecisionEvolution) {
     /* If incoming schema is null, we fall back on table schema. */
@@ -157,10 +149,6 @@ public class AvroSchemaEvolutionUtils {
       return oldTableSchema;
     }
     return evolvedSchema;
-  }
-
-  public static Schema reconcileSchema(Schema incomingSchema, Schema oldTableSchema, boolean makeMissingFieldsNullable) {
-    return reconcileSchema(incomingSchema, oldTableSchema, makeMissingFieldsNullable, false);
   }
 
   public static Schema reconcileSchema(Schema incomingSchema, Schema oldTableSchema, boolean makeMissingFieldsNullable,

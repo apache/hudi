@@ -49,10 +49,6 @@ public class TableChanges {
     private final Map<Integer, Types.Field> updates = new HashMap<>();
     private final boolean allowTimestampPrecisionEvolution;
 
-    private ColumnUpdateChange(InternalSchema schema) {
-      this(schema, false, false);
-    }
-
     private ColumnUpdateChange(InternalSchema schema, boolean caseSensitive, boolean allowTimestampPrecisionEvolution) {
       super(schema, caseSensitive);
       this.allowTimestampPrecisionEvolution = allowTimestampPrecisionEvolution;
@@ -234,7 +230,7 @@ public class TableChanges {
     }
 
     public static ColumnUpdateChange get(InternalSchema schema) {
-      return new ColumnUpdateChange(schema);
+      return new ColumnUpdateChange(schema, false, false);
     }
 
     public static ColumnUpdateChange get(InternalSchema schema, boolean caseSensitive, boolean allowTimestampPrecisionEvolution) {
