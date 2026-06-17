@@ -148,6 +148,14 @@ public class RowDataToAvroConverters {
 
               @Override
               public Object convert(HoodieSchema schema, Object object) {
+                // The BLOB `type` discriminator is a STRING in Flink but an ENUM in Avro.
+                // Detect that at call time from the HoodieSchema so the converter stays
+                // reusable across any row shape — not hard-wired by Flink row structure alone.
+                HoodieSchema nonNullSchema = schema.getNonNullType();
+                if (nonNullSchema.getType() == HoodieSchemaType.ENUM) {
+                  return new GenericData.EnumSymbol(
+                      nonNullSchema.toAvroSchema(), object.toString());
+                }
                 return new Utf8(((BinaryStringData) object).toBytes());
               }
             };
