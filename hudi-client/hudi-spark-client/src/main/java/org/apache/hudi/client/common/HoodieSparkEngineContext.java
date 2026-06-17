@@ -137,7 +137,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   @Override
   public <T> HoodieData<T> union(List<HoodieData<T>> dataList) {
-    List<JavaRDD<T>> javaRDDList = dataList.stream().map(hoodieData -> HoodieJavaRDD.getJavaRDD(hoodieData)).collect(Collectors.toList());
+    List<JavaRDD<T>> javaRDDList = dataList.stream().map(HoodieJavaRDD::getJavaRDD).collect(Collectors.toList());
     if (javaRDDList.isEmpty()) {
       return HoodieJavaRDD.of(javaSparkContext.emptyRDD());
     } else {

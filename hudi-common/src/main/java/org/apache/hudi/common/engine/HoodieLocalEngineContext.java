@@ -95,7 +95,7 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
   @Override
   public <T> HoodieData<T> union(List<HoodieData<T>> dataList) {
     List<T> allData = new ArrayList<>();
-    dataList.forEach(entry -> allData.addAll(entry.collectAsList()));
+    dataList.forEach(hoodieData -> allData.addAll(hoodieData.collectAsList()));
     return HoodieListData.eager(allData);
   }
 
