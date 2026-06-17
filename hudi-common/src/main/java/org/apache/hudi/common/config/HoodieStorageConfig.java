@@ -255,7 +255,7 @@ public class HoodieStorageConfig extends HoodieConfig {
       .key("hoodie.parquet.variant.shredding.provider.class")
       .noDefaultValue()
       .markAdvanced()
-      .sinceVersion("1.1.0")
+      .sinceVersion("1.3.0")
       .withDocumentation("Fully-qualified class name of the VariantShreddingProvider implementation "
           + "used to shred variant values at write time in the Avro record path. "
           + "The provider parses variant binary data and populates typed_value columns. "
