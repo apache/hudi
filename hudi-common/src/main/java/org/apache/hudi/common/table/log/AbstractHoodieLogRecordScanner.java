@@ -211,16 +211,25 @@ public abstract class AbstractHoodieLogRecordScanner {
       this.recordKeyField = keyFieldOverride.get();
       this.partitionPathFieldOpt = Option.empty();
     } else {
-      // _hoodie_record_key may be null in log blocks when the column is excluded via
-      // META_FIELDS_EXCLUDE_LIST (even with populate.meta.fields=true); in that case the
-      // reader must read the configured source record-key field instead. Partition path uses
-      // the analogous flag.
+      // _hoodie_record_key / _hoodie_partition_path may be null in log blocks when the
+      // column is excluded via META_FIELDS_EXCLUDE_LIST (even with populate.meta.fields=true);
+      // in that case the reader must read the configured source field instead.
+      //
+      // populateMetaFields here is the downstream switch (see processDataBlock) that lets
+      // wrapIntoHoodieRecordPayloadWithParams read record-key/partition-path from the meta
+      // columns. We must gate it on BOTH columns being populated - otherwise the alternate
+      // path (using recordKeyField + partitionPathField names) is needed to source the
+      // missing value from data columns.
+      // Defensive null-check on flags for tests that mock HoodieTableConfig without
+      // stubbing the flags getter; falls back to the coarse-grained populateMetaFields().
       HoodieMetaFieldFlags flags = tableConfig.getHoodieMetaFieldFlags();
-      this.populateMetaFields = flags.isRecordKeyPopulated();
-      this.recordKeyField = flags.isRecordKeyPopulated()
+      boolean recordKeyPopulated = flags != null ? flags.isRecordKeyPopulated() : tableConfig.populateMetaFields();
+      boolean partitionPathPopulated = flags != null ? flags.isPartitionPathPopulated() : tableConfig.populateMetaFields();
+      this.populateMetaFields = recordKeyPopulated && partitionPathPopulated;
+      this.recordKeyField = recordKeyPopulated
           ? HoodieRecord.RECORD_KEY_METADATA_FIELD
           : tableConfig.getRecordKeyFieldProp();
-      this.partitionPathFieldOpt = Option.of(flags.isPartitionPathPopulated()
+      this.partitionPathFieldOpt = Option.of(partitionPathPopulated
           ? HoodieRecord.PARTITION_PATH_METADATA_FIELD
           : tableConfig.getPartitionFieldProp());
     }
