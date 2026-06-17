@@ -34,7 +34,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests {@link HoodieMetadataConfig}.
  */
 class TestHoodieMetadataConfig {
-
   @Test
   void testGetRecordPreparationParallelism() {
     // Test default value
