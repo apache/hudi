@@ -100,19 +100,19 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
     Schema.Field metadataField = avroSchema.getField(HoodieSchema.Variant.VARIANT_METADATA_FIELD);
     Schema.Field typedValueField = avroSchema.getField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD);
 
-    int idx = 0;
-    int variantIdx = valueField != null ? idx++ : -1;
+    int fieldCount = 0;
+    int variantIdx = valueField != null ? fieldCount++ : -1;
     int topLevelMetadataIdx;
     if (metadataField != null && isTopLevel) {
-      topLevelMetadataIdx = idx++;
+      topLevelMetadataIdx = fieldCount++;
     } else {
       topLevelMetadataIdx = -1;
       if (metadataField != null) {
-        idx++;
+        fieldCount++;
       }
     }
-    int typedIdx = typedValueField != null ? idx++ : -1;
-    int numFields = idx;
+    int typedIdx = typedValueField != null ? fieldCount++ : -1;
+    int numFields = fieldCount;
 
     VariantSchema.ScalarType scalarSchema = null;
     VariantSchema.ObjectField[] objectSchema = null;
