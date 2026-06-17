@@ -395,15 +395,12 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
    */
   private static Map<String, HoodieSchema> parseShreddingDDL(String ddl) {
     Map<String, HoodieSchema> fields = new LinkedHashMap<>();
-    for (String fieldDef : ddl.split(",")) {
-      String trimmed = fieldDef.trim();
-      if (trimmed.isEmpty()) {
-        continue;
-      }
-      String[] parts = trimmed.split("\\s+", 2);
+    // Split on top-level commas only so parameterized types such as decimal(15, 1) survive intact.
+    for (String fieldDef : StringUtils.splitTopLevelCommas(ddl)) {
+      String[] parts = fieldDef.split("\\s+", 2);
       if (parts.length != 2) {
         throw new IllegalArgumentException(
-            "Invalid shredding DDL field definition (expected 'name type'): " + trimmed);
+            "Invalid shredding DDL field definition (expected 'name type'): " + fieldDef);
       }
       fields.put(parts[0].trim(), parseSimpleType(parts[1].trim()));
     }
