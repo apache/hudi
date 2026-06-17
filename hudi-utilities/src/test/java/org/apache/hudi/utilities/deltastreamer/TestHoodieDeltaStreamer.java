@@ -1165,8 +1165,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         // SchemaCompatibilityException on the first sync.
         SchemaCompatibilityException thrown = assertThrows(SchemaCompatibilityException.class,
             () -> syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "456"), propt));
-        assertTrue(thrown.getMessage().contains("incompatible type"),
-            "expected disallowed-type-change message, got: " + thrown.getMessage());
+        assertEquals("Cannot update column 'ts_millis' from type 'timestamp' to incompatible type 'timestamp-millis'.",
+            thrown.getMessage());
         return;
       }
 
@@ -1306,8 +1306,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         // SchemaCompatibilityException on the first sync.
         SchemaCompatibilityException thrown = assertThrows(SchemaCompatibilityException.class,
             () -> syncOnce(prepCfgForMorLogicalRepair(tableBasePath, dirName, "123", disableCompaction), propt));
-        assertTrue(thrown.getMessage().contains("incompatible type"),
-            "expected disallowed-type-change message, got: " + thrown.getMessage());
+        assertEquals("Cannot update column 'ts_millis' from type 'timestamp' to incompatible type 'timestamp-millis'.",
+            thrown.getMessage());
         return;
       }
 
