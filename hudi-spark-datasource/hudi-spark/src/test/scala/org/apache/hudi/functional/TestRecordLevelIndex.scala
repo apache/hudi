@@ -147,7 +147,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
   }
 
   def testRecordLevelIndex(tableType: HoodieTableType, streamingWriteEnabled: Boolean, holder: testRecordLevelIndexHolder,
-                           deferRLIInit: Boolean = false): Unit = {
+                           rliInitDeferred: Boolean = false): Unit = {
     val dataGen = new HoodieTestDataGenerator();
     val inserts = dataGen.generateInserts("001", 5)
     val latestBatchDf = toDataset(spark, inserts)
@@ -160,7 +160,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
       HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "false",
       HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "true",
       HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key() -> streamingWriteEnabled.toString,
-      HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key() -> deferRLIInit.toString,
+      HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key() -> rliInitDeferred.toString,
       HoodieCompactionConfig.INLINE_COMPACT.key() -> "false",
       HoodieIndexConfig.INDEX_TYPE.key() -> RECORD_LEVEL_INDEX.name())
     holder.options = options
@@ -169,7 +169,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
       .mode(SaveMode.Overwrite)
       .save(basePath)
     assertEquals(10, spark.read.format("hudi").load(basePath).count())
-    if (deferRLIInit) {
+    if (rliInitDeferred) {
       // With defer enabled, the first commit should NOT have initialized the RLI partition.
       metaClient = HoodieTableMetaClient.reload(metaClient)
       assertFalse(metaClient.getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath),
@@ -392,20 +392,20 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
       "RLI should be initialized as partitioned RLI")
 
     // Validate record key -> location mapping for both batches against the data.
-    val df = spark.read.format("hudi").load(basePath).collect()
+    val tableRows = spark.read.format("hudi").load(basePath).collect()
 
     val batch1Keys = inserts1.asScala.map(_.getRecordKey).asJava.stream().collect(Collectors.toList())
     val partition1Locations = readRecordIndex(metadata, batch1Keys, HOption.of("partition1"))
     assertEquals(5, partition1Locations.size)
-    validateDFWithLocations(df, partition1Locations, "partition1")
+    validateDFWithLocations(tableRows, partition1Locations, "partition1")
     val partition2Locations = readRecordIndex(metadata, batch1Keys, HOption.of("partition2"))
     assertEquals(5, partition2Locations.size)
-    validateDFWithLocations(df, partition2Locations, "partition2")
+    validateDFWithLocations(tableRows, partition2Locations, "partition2")
 
     val batch2Keys = inserts2.asScala.map(_.getRecordKey).asJava.stream().collect(Collectors.toList())
     val partition3Locations = readRecordIndex(metadata, batch2Keys, HOption.of("partition3"))
     assertEquals(5, partition3Locations.size)
-    validateDFWithLocations(df, partition3Locations, "partition3")
+    validateDFWithLocations(tableRows, partition3Locations, "partition3")
 
     // Cross-partition lookups for batch1 keys against partition3 (and vice versa) should be empty.
     assertEquals(0, readRecordIndex(metadata, batch1Keys, HOption.of("partition3")).size)
