@@ -77,7 +77,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
         hoodieConfig.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
     parquetConfig.getHadoopConf().addResource(writeSupport.getHadoopConf());
 
-    return new HoodieSparkParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields,
+    return new HoodieSparkParquetWriter(path, parquetConfig, instantTime, taskContextSupplier,
         tableConfig.getHoodieMetaFieldFlags());
   }
 

@@ -75,7 +75,6 @@ public class HoodieAvroHFileWriter
   private final long maxFileSize;
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
-  private final boolean populateMetaFields;
   private final HoodieMetaFieldFlags metaFieldFlags;
   private final Option<HoodieSchemaField> keyFieldSchema;
   private HFileWriter writer;
@@ -84,7 +83,7 @@ public class HoodieAvroHFileWriter
   private String prevRecordKey;
 
   public HoodieAvroHFileWriter(String instantTime, StoragePath file, HoodieHFileConfig hfileConfig, HoodieSchema schema,
-                               TaskContextSupplier taskContextSupplier, boolean populateMetaFields,
+                               TaskContextSupplier taskContextSupplier,
                                HoodieMetaFieldFlags metaFieldFlags) throws IOException {
     Configuration conf = HadoopFSUtils.registerFileSystem(file, (Configuration) hfileConfig.getStorageConf().unwrap());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
@@ -101,7 +100,6 @@ public class HoodieAvroHFileWriter
     this.maxFileSize = hfileConfig.getMaxFileSize();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
-    this.populateMetaFields = populateMetaFields;
     this.metaFieldFlags = Objects.requireNonNull(metaFieldFlags, "metaFieldFlags must not be null");
 
     HFileContext context = new HFileContext.Builder()
@@ -119,7 +117,7 @@ public class HoodieAvroHFileWriter
 
   @Override
   public void writeAvroWithMetadata(HoodieKey key, IndexedRecord avroRecord) throws IOException {
-    if (populateMetaFields) {
+    if (metaFieldFlags.isAnyPopulated()) {
       prepRecordWithMetadata(key, avroRecord, instantTime,
           taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX_COUNT.getAndIncrement(), file.getName(), metaFieldFlags);
     }

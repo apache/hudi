@@ -45,7 +45,6 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
   private final UTF8String fileName;
   private final UTF8String instantTime;
 
-  private final boolean populateMetaFields;
   private final HoodieMetaFieldFlags metaFieldFlags;
 
   private final HoodieRowParquetWriteSupport writeSupport;
@@ -56,13 +55,11 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                   HoodieRowParquetConfig parquetConfig,
                                   String instantTime,
                                   TaskContextSupplier taskContextSupplier,
-                                  boolean populateMetaFields,
                                   HoodieMetaFieldFlags metaFieldFlags) throws IOException {
     super(file, parquetConfig);
     this.writeSupport = parquetConfig.getWriteSupport();
     this.fileName = UTF8String.fromString(file.getName());
     this.instantTime = UTF8String.fromString(instantTime);
-    this.populateMetaFields = populateMetaFields;
     this.metaFieldFlags = Objects.requireNonNull(metaFieldFlags, "metaFieldFlags must not be null");
     this.seqIdGenerator = recordIndex -> {
       Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
@@ -72,7 +69,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
 
   @Override
   public void writeRowWithMetadata(HoodieKey key, InternalRow row) throws IOException {
-    if (populateMetaFields) {
+    if (metaFieldFlags.isAnyPopulated()) {
       UTF8String recordKey = UTF8String.fromString(key.getRecordKey());
       updateRecordMetadata(row, recordKey, key.getPartitionPath(), getWrittenRecordCount());
 
@@ -86,7 +83,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
   @Override
   public void writeRow(String recordKey, InternalRow row) throws IOException {
     super.write(row);
-    if (populateMetaFields) {
+    if (metaFieldFlags.isAnyPopulated()) {
       writeSupport.add(UTF8String.fromString(recordKey));
     }
   }

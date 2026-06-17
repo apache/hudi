@@ -86,7 +86,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         hoodieConfig.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
         storageConfiguration, hoodieConfig.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
         hoodieConfig.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
-    return new HoodieAvroParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields,
+    return new HoodieAvroParquetWriter(path, parquetConfig, instantTime, taskContextSupplier,
         tableConfig.getHoodieMetaFieldFlags());
   }
 
@@ -122,7 +122,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         filter,
         config.getBoolean(HFILE_WRITER_TO_ALLOW_DUPLICATES));
     return new HoodieAvroHFileWriter(instantTime, path, hfileConfig, schema, taskContextSupplier,
-        tableConfig.populateMetaFields(), tableConfig.getHoodieMetaFieldFlags());
+        tableConfig.getHoodieMetaFieldFlags());
   }
 
   protected HoodieFileWriter newOrcFileWriter(
