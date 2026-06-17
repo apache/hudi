@@ -56,18 +56,14 @@ import java.util.UUID;
  */
 public class Spark4VariantShreddingProvider implements VariantShreddingProvider {
 
-  private static final String VALUE_FIELD = "value";
-  private static final String METADATA_FIELD = "metadata";
-  private static final String TYPED_VALUE_FIELD = "typed_value";
-
   @Override
   public GenericRecord shredVariantRecord(
       GenericRecord unshreddedVariant,
       Schema shreddedSchema,
       HoodieSchema.Variant variantSchema) {
 
-    ByteBuffer valueBuf = (ByteBuffer) unshreddedVariant.get(VALUE_FIELD);
-    ByteBuffer metadataBuf = (ByteBuffer) unshreddedVariant.get(METADATA_FIELD);
+    ByteBuffer valueBuf = (ByteBuffer) unshreddedVariant.get(HoodieSchema.Variant.VARIANT_VALUE_FIELD);
+    ByteBuffer metadataBuf = (ByteBuffer) unshreddedVariant.get(HoodieSchema.Variant.VARIANT_METADATA_FIELD);
 
     if (valueBuf == null || metadataBuf == null) {
       return null;
@@ -100,9 +96,9 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
    */
   private VariantSchema buildVariantSchema(Schema avroSchema, boolean isTopLevel,
                                            AvroShreddedResultBuilder builder) {
-    Schema.Field valueField = avroSchema.getField(VALUE_FIELD);
-    Schema.Field metadataField = avroSchema.getField(METADATA_FIELD);
-    Schema.Field typedValueField = avroSchema.getField(TYPED_VALUE_FIELD);
+    Schema.Field valueField = avroSchema.getField(HoodieSchema.Variant.VARIANT_VALUE_FIELD);
+    Schema.Field metadataField = avroSchema.getField(HoodieSchema.Variant.VARIANT_METADATA_FIELD);
+    Schema.Field typedValueField = avroSchema.getField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD);
 
     int idx = 0;
     int variantIdx = valueField != null ? idx++ : -1;
@@ -295,28 +291,28 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
 
       // Metadata (only present at top level)
       if (metadata != null) {
-        record.put(METADATA_FIELD, ByteBuffer.wrap(metadata));
+        record.put(HoodieSchema.Variant.VARIANT_METADATA_FIELD, ByteBuffer.wrap(metadata));
       }
 
       // Value (variant binary for non-shredded or residual data)
-      Schema.Field valueField = avroSchema.getField(VALUE_FIELD);
+      Schema.Field valueField = avroSchema.getField(HoodieSchema.Variant.VARIANT_VALUE_FIELD);
       if (valueField != null) {
         if (variantValue != null) {
-          record.put(VALUE_FIELD, ByteBuffer.wrap(variantValue));
+          record.put(HoodieSchema.Variant.VARIANT_VALUE_FIELD, ByteBuffer.wrap(variantValue));
         } else {
-          record.put(VALUE_FIELD, null);
+          record.put(HoodieSchema.Variant.VARIANT_VALUE_FIELD, null);
         }
       }
 
       // Typed value
-      Schema.Field tvField = avroSchema.getField(TYPED_VALUE_FIELD);
+      Schema.Field tvField = avroSchema.getField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD);
       if (tvField == null) {
         return record;
       }
 
       if (scalarValue != null) {
         Schema tvSchema = unwrapNullable(tvField.schema());
-        record.put(TYPED_VALUE_FIELD, convertScalarToAvro(scalarValue, tvSchema));
+        record.put(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD, convertScalarToAvro(scalarValue, tvSchema));
       } else if (objectFields != null) {
         Schema tvSchema = unwrapNullable(tvField.schema());
         GenericRecord tvRecord = new GenericData.Record(tvSchema);
@@ -325,15 +321,15 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
           // Always create the sub-record even for missing fields (non-null struct with null fields)
           tvRecord.put(fieldName, objectFields[i].toGenericRecord());
         }
-        record.put(TYPED_VALUE_FIELD, tvRecord);
+        record.put(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD, tvRecord);
       } else if (arrayElements != null) {
         List<GenericRecord> list = new ArrayList<>(arrayElements.length);
         for (AvroShreddedResult element : arrayElements) {
           list.add(element.toGenericRecord());
         }
-        record.put(TYPED_VALUE_FIELD, list);
+        record.put(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD, list);
       } else {
-        record.put(TYPED_VALUE_FIELD, null);
+        record.put(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD, null);
       }
 
       return record;
