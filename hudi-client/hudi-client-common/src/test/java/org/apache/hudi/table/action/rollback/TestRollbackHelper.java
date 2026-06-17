@@ -63,6 +63,7 @@ import java.util.stream.IntStream;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -682,7 +683,7 @@ class TestRollbackHelper extends HoodieRollbackTestBase {
     assertEquals(HoodieLogFile.LOGFILE_BASE_VERSION, (int) result.get(missingKey).getLeft());
     // Sentinel entries (no real log file) carry a null write token so they cannot be confused
     // with a real log file that happens to use UNKNOWN_WRITE_TOKEN.
-    assertEquals(null, result.get(missingKey).getRight());
+    assertNull(result.get(missingKey).getRight());
   }
 
   @Test

@@ -524,8 +524,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
    *   <li>Verify exactly one new rollback log file per file group from second attempt</li>
    * </ol>
    *
-   * @param enableFileSliceOptimization tests both with and without file slice caching optimization
-   *                                    to ensure write tokens work correctly in both code paths
+   * @param enableMetadataTable runs the test both with and without metadata table enabled to
+   *                            ensure write-token generation is correct in both code paths
    */
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
@@ -630,10 +630,12 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     List<FileSlice> rollbackFileSlices = table.getSliceView()
         .getLatestFileSlices(DEFAULT_FIRST_PARTITION_PATH)
         .collect(Collectors.toList());
+    // FileSlice.getLogFiles() is sorted highest-version first (reverse comparator),
+    // so index 0 is the latest log file produced by the rollback.
     List<HoodieLogFile> rollbackLogFiles = rollbackFileSlices.stream()
         .flatMap(slice -> {
           List<HoodieLogFile> logFiles = slice.getLogFiles().collect(Collectors.toList());
-          return Collections.singleton(logFiles.get(logFiles.size() - 1)).stream();
+          return Collections.singleton(logFiles.get(0)).stream();
         })
         .collect(Collectors.toList());
 
