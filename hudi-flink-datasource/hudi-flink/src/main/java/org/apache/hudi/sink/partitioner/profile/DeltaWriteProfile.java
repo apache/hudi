@@ -29,8 +29,6 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.action.commit.SmallFile;
 
-import lombok.extern.slf4j.Slf4j;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -41,7 +39,6 @@ import java.util.stream.Collectors;
  *
  * <p>Note: assumes the index can always index log files for Flink write.
  */
-@Slf4j
 public class DeltaWriteProfile extends WriteProfile {
 
   public DeltaWriteProfile(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
@@ -93,7 +90,7 @@ public class DeltaWriteProfile extends WriteProfile {
 
   @Override
   protected long averageBytesPerRecord() {
-    long avgSize = config.getCopyOnWriteRecordSizeEstimate();
+    long avgSize = this.avgSize > 0 ? this.avgSize : config.getCopyOnWriteRecordSizeEstimate();
     HoodieTimeline commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
     if (!commitTimeline.empty()) {
       long sizeFromCommitMetadata = calculateRecordSizeThroughCommitMetadata(commitTimeline, 1.0D);
@@ -109,7 +106,6 @@ public class DeltaWriteProfile extends WriteProfile {
         }
       }
     }
-    log.info("Refresh average bytes per record => " + avgSize);
     return avgSize;
   }
 

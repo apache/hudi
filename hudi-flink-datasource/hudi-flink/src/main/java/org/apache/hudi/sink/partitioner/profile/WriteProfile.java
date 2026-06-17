@@ -78,7 +78,7 @@ public class WriteProfile {
    * The average record size.
    */
   @Getter
-  private long avgSize = -1L;
+  protected long avgSize = -1L;
 
   /**
    * Total records to write for each bucket based on
@@ -134,7 +134,7 @@ public class WriteProfile {
    * records pack into one file.
    */
   protected long averageBytesPerRecord() {
-    long avgSize = config.getCopyOnWriteRecordSizeEstimate();
+    long avgSize = this.avgSize > 0 ? this.avgSize : config.getCopyOnWriteRecordSizeEstimate();
     HoodieTimeline commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
     if (!commitTimeline.empty()) {
       long sizeFromCommitMetadata = calculateRecordSizeThroughCommitMetadata(commitTimeline, 1.0D);
@@ -142,7 +142,6 @@ public class WriteProfile {
         avgSize = sizeFromCommitMetadata;
       }
     }
-    log.info("Refresh average bytes per record => " + avgSize);
     return avgSize;
   }
 
@@ -238,8 +237,9 @@ public class WriteProfile {
 
   private void recordProfile() {
     this.avgSize = averageBytesPerRecord();
+    log.info("Refresh average bytes per record => {}", avgSize);
     this.recordsPerBucket = config.getParquetMaxFileSize() / avgSize;
-    log.info("Refresh insert records per bucket => " + recordsPerBucket);
+    log.info("Refresh insert records per bucket => {}", recordsPerBucket);
   }
 
   /**
