@@ -47,9 +47,8 @@ public class SparkRejectUpdateStrategy<T> extends BaseSparkUpdateStrategy<T> {
   @Override
   public Pair<HoodieData<HoodieRecord<T>>, Set<HoodieFileGroupId>> handleUpdate(HoodieData<HoodieRecord<T>> taggedRecordsRDD) {
     Set<HoodieFileGroupId> allAffectedFileGroups = getGroupIdsWithUpdate(taggedRecordsRDD);
-    // Combine file groups with updates and file groups to be replaced
+    // also treat replaced file groups as potential conflict targets
     allAffectedFileGroups.addAll(fileGroupsToBeReplaced);
-    // Check if any of the affected file groups are in pending clustering
     allAffectedFileGroups.forEach(affectedFileGroup -> {
       if (fileGroupsInPendingClustering.contains(affectedFileGroup)) {
         String msg = String.format("Not allowed to update the clustering file group %s. "

@@ -84,6 +84,14 @@ public class TestInsertOverwriteWithClustering extends HoodieClientTestBase {
     cleanupResources();
   }
 
+  private HoodieClusteringConfig.Builder baseClusteringConfigBuilder(boolean rollbackPendingClustering) {
+    return HoodieClusteringConfig.newBuilder()
+        .withClusteringPlanStrategyClass(SparkSingleFileSortPlanStrategy.class.getName())
+        .withClusteringExecutionStrategyClass(SparkSingleFileSortExecutionStrategy.class.getName())
+        .withClusteringMaxNumGroups(10)
+        .withRollbackPendingClustering(rollbackPendingClustering);
+  }
+
   private HoodieWriteConfig.Builder getConfigBuilder(boolean rollbackPendingClustering) {
     return HoodieWriteConfig.newBuilder()
         .withPath(basePath)
@@ -93,12 +101,7 @@ public class TestInsertOverwriteWithClustering extends HoodieClientTestBase {
         .withFinalizeWriteParallelism(2)
         .withDeleteParallelism(2)
         .withRollbackParallelism(2)
-        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
-            .withClusteringPlanStrategyClass(SparkSingleFileSortPlanStrategy.class.getName())
-            .withClusteringExecutionStrategyClass(SparkSingleFileSortExecutionStrategy.class.getName())
-            .withClusteringMaxNumGroups(10)
-            .withRollbackPendingClustering(rollbackPendingClustering)
-            .build());
+        .withClusteringConfig(baseClusteringConfigBuilder(rollbackPendingClustering).build());
   }
 
   private HoodieWriteConfig.Builder getConfigBuilderWithPartitionFilter(boolean rollbackPendingClustering, String partitionFilter) {
@@ -110,11 +113,7 @@ public class TestInsertOverwriteWithClustering extends HoodieClientTestBase {
         .withFinalizeWriteParallelism(2)
         .withDeleteParallelism(2)
         .withRollbackParallelism(2)
-        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
-            .withClusteringPlanStrategyClass(SparkSingleFileSortPlanStrategy.class.getName())
-            .withClusteringExecutionStrategyClass(SparkSingleFileSortExecutionStrategy.class.getName())
-            .withClusteringMaxNumGroups(10)
-            .withRollbackPendingClustering(rollbackPendingClustering)
+        .withClusteringConfig(baseClusteringConfigBuilder(rollbackPendingClustering)
             .withClusteringPartitionSelected(partitionFilter)
             .build());
   }

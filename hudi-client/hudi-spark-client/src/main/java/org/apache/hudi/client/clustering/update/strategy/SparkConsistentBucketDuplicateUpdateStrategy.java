@@ -57,6 +57,8 @@ public class SparkConsistentBucketDuplicateUpdateStrategy<T> extends UpdateStrat
 
   @Override
   public Pair<HoodieData<HoodieRecord<T>>, Set<HoodieFileGroupId>> handleUpdate(HoodieData<HoodieRecord<T>> taggedRecordsRDD) {
+    // TODO: also consider fileGroupsToBeReplaced so INSERT_OVERWRITE overlapping with pending
+    // clustering is handled here for the consistent-bucket duplicate-update strategy.
     if (fileGroupsInPendingClustering.isEmpty()) {
       return Pair.of(taggedRecordsRDD, Collections.emptySet());
     }

@@ -42,6 +42,8 @@ public class SparkAllowUpdateStrategy<T> extends BaseSparkUpdateStrategy<T> {
 
   @Override
   public Pair<HoodieData<HoodieRecord<T>>, Set<HoodieFileGroupId>> handleUpdate(HoodieData<HoodieRecord<T>> taggedRecordsRDD) {
+    // TODO: also consider fileGroupsToBeReplaced so INSERT_OVERWRITE overlapping with pending
+    // clustering can be rejected/handled here for users who set SparkAllowUpdateStrategy.
     Set<HoodieFileGroupId> fileGroupIdsWithRecordUpdate = getGroupIdsWithUpdate(taggedRecordsRDD);
     Set<HoodieFileGroupId> fileGroupIdsWithUpdatesAndPendingClustering = fileGroupIdsWithRecordUpdate.stream()
         .filter(fileGroupsInPendingClustering::contains)

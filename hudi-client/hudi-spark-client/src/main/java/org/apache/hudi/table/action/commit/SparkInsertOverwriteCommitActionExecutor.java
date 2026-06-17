@@ -118,9 +118,9 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
 
     // Get all file groups in the partitions to be overwritten
     return partitionPaths.stream()
-        .flatMap(partitionPath -> table.getSliceView().getLatestFileSlices(partitionPath)
-            .map(fileSlice -> new HoodieFileGroupId(partitionPath, fileSlice.getFileId()))
-        ).collect(Collectors.toSet());
+        .flatMap(partitionPath -> getAllExistingFileIds(partitionPath).stream()
+            .map(fileId -> new HoodieFileGroupId(partitionPath, fileId)))
+        .collect(Collectors.toSet());
   }
 
   @Override
