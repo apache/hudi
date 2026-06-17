@@ -60,6 +60,11 @@ import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSc
 
 public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
 
+  // Sole provider today: variant shredding currently requires Spark 4.0+. If more providers are
+  // added, restore a candidate list here and try each in turn.
+  private static final String SPARK4_VARIANT_SHREDDING_PROVIDER =
+      "org.apache.hudi.variant.Spark4VariantShreddingProvider";
+
   public HoodieAvroFileWriterFactory(HoodieStorage storage) {
     super(storage);
   }
@@ -161,11 +166,6 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         // typed_value, failing the write with "Null-value for required field: value".
         getAvroSchemaConverter((Configuration) storageConf.unwrapAs(Configuration.class)).convert(effectiveSchema), schema, filter, props);
   }
-
-  // Sole provider today: variant shredding currently requires Spark 4.0+. If more providers are
-  // added, restore a candidate list here and try each in turn.
-  private static final String SPARK4_VARIANT_SHREDDING_PROVIDER =
-      "org.apache.hudi.variant.Spark4VariantShreddingProvider";
 
   /**
    * Auto-detect a {@link org.apache.hudi.avro.VariantShreddingProvider} implementation
