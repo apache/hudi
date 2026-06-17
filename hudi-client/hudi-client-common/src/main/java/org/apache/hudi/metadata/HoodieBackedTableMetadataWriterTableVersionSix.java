@@ -318,7 +318,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
   protected void executeClean(BaseHoodieWriteClient writeClient, String instantTime) {
     String cleanInstant = createCleanTimestamp(instantTime);
     if (getMetadataMetaClient().getActiveTimeline().getCleanerTimeline().filterCompletedInstants().containsInstant(cleanInstant)) {
-      LOG.info(String.format("Clean with same %s time is already present in the timeline, hence skipping to clean", cleanInstant));
+      LOG.info("Clean with same {} time is already present in the timeline, hence skipping to clean", cleanInstant);
     } else {
       writeClient.clean(cleanInstant);
     }
@@ -349,12 +349,14 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
 
   @VisibleForTesting
   static String createCleanTimestamp(String timestamp) {
-    return timestamp + "002";
+    return timestamp + CLEAN_OPERATION_SUFFIX;
   }
 
   private String createRestoreTimestamp(String timestamp) {
     return timestamp + getRestoreOperationSuffix();
   }
+
+  private static final String CLEAN_OPERATION_SUFFIX = "002";
 
   private String getCompactionOperationSuffix() {
     return "001";
@@ -369,7 +371,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
   }
 
   private String getCleanOperationSuffix() {
-    return "002";
+    return CLEAN_OPERATION_SUFFIX;
   }
 
   private String getRestoreOperationSuffix() {
