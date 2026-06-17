@@ -78,7 +78,7 @@ public class WriteProfile {
    * The average record size.
    */
   @Getter
-  private long avgSize = -1L;
+  protected long avgSize = -1L;
 
   /**
    * Total records to write for each bucket based on
