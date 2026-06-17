@@ -73,12 +73,7 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
   private final boolean variantWriteShreddingEnabled;
 
   /**
-   * The effective (possibly shredded) HoodieSchema used for writing.
-   */
-  private final HoodieSchema effectiveHoodieSchema;
-
-  /**
-   * The effective Avro schema (derived from effectiveHoodieSchema).
+   * The effective (possibly shredded) Avro schema used for writing.
    */
   private final Schema effectiveAvroSchema;
 
@@ -115,7 +110,6 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
       footerMetadata.put(HoodieSchema.VECTOR_COLUMNS_METADATA_KEY, vectorMeta);
     }
 
-    this.effectiveHoodieSchema = effectiveSchema;
     this.effectiveAvroSchema = effectiveSchema.toAvroSchema();
     this.variantWriteShreddingEnabled = Boolean.parseBoolean(
         properties.getProperty(PARQUET_VARIANT_WRITE_SHREDDING_ENABLED.key(),
