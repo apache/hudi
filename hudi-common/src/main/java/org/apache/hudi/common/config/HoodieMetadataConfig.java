@@ -687,7 +687,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".enable.detailed.metrics")
       .defaultValue(false)
       .markAdvanced()
-      .sinceVersion("0.14.2")
+      .sinceVersion("1.3.0")
       .withDocumentation("Enables detailed metadata table metrics");
 
   public long getMaxLogFileSize() {

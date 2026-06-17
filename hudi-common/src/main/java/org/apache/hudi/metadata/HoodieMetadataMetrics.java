@@ -85,12 +85,12 @@ public class HoodieMetadataMetrics implements Serializable {
 
   private final transient MetricRegistry metricsRegistry;
   private final transient Metrics metrics;
-  private final boolean enabledDetailedMetadataMetrics;
+  private final boolean detailedMetricsEnabled;
 
-  public HoodieMetadataMetrics(HoodieMetricsConfig metricsConfig, HoodieStorage storage, boolean enabledDetailedMetadataMetrics) {
+  public HoodieMetadataMetrics(HoodieMetricsConfig metricsConfig, HoodieStorage storage, boolean detailedMetricsEnabled) {
     this.metrics = Metrics.getInstance(metricsConfig, storage);
     this.metricsRegistry = metrics.getRegistry();
-    this.enabledDetailedMetadataMetrics = enabledDetailedMetadataMetrics;
+    this.detailedMetricsEnabled = detailedMetricsEnabled;
   }
 
   public Map<String, String> getStats(boolean detailed, HoodieTableMetaClient metaClient, HoodieTableMetadata metadata, Set<String> metadataPartitions) {
@@ -103,8 +103,8 @@ public class HoodieMetadataMetrics implements Serializable {
     }
   }
 
-  public boolean shouldEnableDetailedMetadataMetrics() {
-    return enabledDetailedMetadataMetrics;
+  public boolean isDetailedMetricsEnabled() {
+    return detailedMetricsEnabled;
   }
 
   private Map<String, String> getStats(HoodieTableFileSystemView fsView, boolean detailed, HoodieTableMetadata tableMetadata, Set<String> metadataPartitions)
