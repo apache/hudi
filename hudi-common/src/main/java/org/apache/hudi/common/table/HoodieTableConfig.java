@@ -1301,13 +1301,6 @@ public class HoodieTableConfig extends HoodieConfig {
         .contains(metaFieldName);
   }
 
-  // Lazily-computed cache for HoodieMetaFieldFlags. The flags object itself is immutable;
-  // recomputing on every call is wasteful in the hot write path (every record write reads
-  // the per-field populated flags). Cached lazily to keep the no-arg constructor cheap.
-  // Volatile is sufficient because the flags object is a value object (final fields), so
-  // any thread that observes a non-null reference also observes a fully-initialized object.
-  private transient volatile HoodieMetaFieldFlags cachedMetaFieldFlags;
-
   /**
    * Returns the {@link HoodieMetaFieldFlags} reflecting POPULATE_META_FIELDS and
    * META_FIELDS_EXCLUDE_LIST as persisted on this table. This is the source of truth
@@ -1315,18 +1308,13 @@ public class HoodieTableConfig extends HoodieConfig {
    * from a writer-side config since the persisted table state is what determines on-disk
    * meta-field availability across commits.
    *
-   * <p>The result is memoized on first call. Callers that mutate POPULATE_META_FIELDS or
-   * META_FIELDS_EXCLUDE_LIST on an existing {@code HoodieTableConfig} instance after the
-   * first call will not see the change reflected in subsequent calls; in practice the
-   * meta-field props are set during table init / metaclient load and not mutated after.
+   * <p>Resolved on every call from the current properties so callers observe in-process
+   * mutations of POPULATE_META_FIELDS / META_FIELDS_EXCLUDE_LIST (e.g. tests that flip
+   * the prop, or {@link #update} mid-life). The parse is cheap - two property reads and a
+   * comma-split on a value that is empty in the OOB case.
    */
   public HoodieMetaFieldFlags getHoodieMetaFieldFlags() {
-    HoodieMetaFieldFlags flags = cachedMetaFieldFlags;
-    if (flags == null) {
-      flags = HoodieMetaFieldFlags.fromConfig(this);
-      cachedMetaFieldFlags = flags;
-    }
-    return flags;
+    return HoodieMetaFieldFlags.fromConfig(this);
   }
 
   /**

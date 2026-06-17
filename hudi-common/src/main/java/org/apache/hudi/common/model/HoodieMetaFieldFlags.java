@@ -60,12 +60,11 @@ public class HoodieMetaFieldFlags implements Serializable {
   /**
    * Returns an instance where all meta fields are populated.
    *
-   * <p>Package-private: instances should be sourced via
-   * {@link HoodieTableConfig#getHoodieMetaFieldFlags()}. This factory is exposed only for the
-   * internal {@link #fromConfig} path and same-package tests; external callers must go through
-   * the table config so the on-disk persisted state is the single source of truth.
+   * <p>Production code should obtain flags via {@link HoodieTableConfig#getHoodieMetaFieldFlags()}
+   * so the on-disk persisted state is the single source of truth. This factory exists for
+   * tests that mock {@code HoodieTableConfig} and need to stub the flags getter explicitly.
    */
-  static HoodieMetaFieldFlags allPopulated() {
+  public static HoodieMetaFieldFlags allPopulated() {
     return ALL_POPULATED;
   }
 

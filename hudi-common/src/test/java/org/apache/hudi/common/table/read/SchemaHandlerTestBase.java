@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -76,6 +77,10 @@ public abstract class SchemaHandlerTestBase {
   @BeforeEach
   void setup() {
     when(metaClient.getTableConfig()).thenReturn(hoodieTableConfig);
+    // Default stub: tests in this hierarchy all exercise the meta-fields-populated branch
+    // of RecordContext / FileGroupReaderSchemaHandler. Individual tests that need the
+    // opposite branch override populateMetaFields() and getHoodieMetaFieldFlags() locally.
+    when(hoodieTableConfig.getHoodieMetaFieldFlags()).thenReturn(HoodieMetaFieldFlags.allPopulated());
   }
 
   static Stream<Arguments> testMorParams(boolean supportsParquetRowIndex) {
