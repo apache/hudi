@@ -39,7 +39,7 @@ import scala.collection.JavaConverters._
 
 class SecondaryIndexSupport(spark: SparkSession,
                             metadataConfig: HoodieMetadataConfig,
-                            metaClient: HoodieTableMetaClient) extends RecordLevelIndexSupport(spark, metadataConfig, metaClient) {
+                            metaClient: HoodieTableMetaClient) extends GlobalRecordLevelIndexSupport(spark, metadataConfig, metaClient) {
   override def getIndexName: String = SecondaryIndexSupport.INDEX_NAME
 
   override def computeCandidateFileNames(fileIndex: HoodieFileIndex,

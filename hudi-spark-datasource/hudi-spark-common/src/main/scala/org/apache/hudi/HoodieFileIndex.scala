@@ -117,7 +117,7 @@ case class HoodieFileIndex(spark: SparkSession,
    * during `lookupCandidateFilesInMetadataTable`
    */
   @transient private lazy val indicesSupport: List[SparkBaseIndexSupport] = List(
-    new RecordLevelIndexSupport(spark, metadataConfig, metaClient),
+    RecordLevelIndexSupport.create(spark, metadataConfig, metaClient),
     if (PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(metaClient.getStorageConf, metaClient.getBasePath.toString)) {
       new PartitionBucketIndexSupport(spark, metadataConfig, metaClient,
         options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant))
