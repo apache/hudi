@@ -147,9 +147,9 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
     Properties props = TypedProperties.copy(config.getProps());
     // Auto-detect variant shredding provider from classpath if not explicitly configured
     if (!props.containsKey(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key())) {
-      String detected = detectShreddingProvider();
-      if (detected != null) {
-        props.setProperty(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key(), detected);
+      String detectedClass = detectShreddingProviderClass();
+      if (detectedClass != null) {
+        props.setProperty(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key(), detectedClass);
       }
     }
     return (HoodieAvroWriteSupport) ReflectionUtils.loadClass(
@@ -171,7 +171,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
    * Auto-detect a {@link org.apache.hudi.avro.VariantShreddingProvider} implementation
    * available on the classpath. Returns the fully-qualified class name if found, or null.
    */
-  private static String detectShreddingProvider() {
+  private static String detectShreddingProviderClass() {
     try {
       Class.forName(SPARK4_VARIANT_SHREDDING_PROVIDER);
       return SPARK4_VARIANT_SHREDDING_PROVIDER;
