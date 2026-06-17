@@ -342,4 +342,10 @@ public class SchemaRegistryProvider extends SchemaProvider {
           StringUtils.truncate(targetRegistryUrl, 10, 10)), e);
     }
   }
+
+  @Override
+  @Deprecated
+  public Schema getTargetSchema() {
+    return getTargetHoodieSchema().toAvroSchema();
+  }
 }
