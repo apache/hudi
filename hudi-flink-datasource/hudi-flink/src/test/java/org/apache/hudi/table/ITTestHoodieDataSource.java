@@ -82,7 +82,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * IT cases for Hoodie table source and sink.
+ * IT cases for Flink Hoodie table source and sink.
  */
 @ExtendWith(FlinkMiniCluster.class)
 public class ITTestHoodieDataSource {
