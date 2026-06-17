@@ -52,6 +52,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -3873,6 +3874,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       checkArgument(!(inlineCompact && inlineCompactSchedule), String.format("Either of inline compaction (%s) or "
               + "schedule inline compaction (%s) can be enabled. Both can't be set to true at the same time. %s, %s", HoodieCompactionConfig.INLINE_COMPACT.key(),
           HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT.key(), inlineCompact, inlineCompactSchedule));
+
+      // Parse-and-discard so a malformed 'field:type' entry fails at client build time rather
+      // than deep inside deduceWriterSchema on the first commit. Empty (default) is a no-op.
+      SchemaChangeUtils.parseTimestampLogicalTypeOverrides(
+          writeConfig.getStringOrDefault(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES));
 
       int lookbackCommits = writeConfig.getInt(ROLLING_METADATA_TIMELINE_LOOKBACK_COMMITS);
       checkArgument(lookbackCommits >= 0,

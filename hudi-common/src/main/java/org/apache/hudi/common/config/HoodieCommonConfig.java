@@ -83,6 +83,19 @@ public class HoodieCommonConfig extends HoodieConfig {
           + " operation will fail schema compatibility check. Set this option to true will make the missing "
           + " column be filled with null values to successfully complete the write operation.");
 
+  public static final ConfigProperty<String> TIMESTAMP_LOGICAL_TYPE_OVERRIDES = ConfigProperty
+      .key("hoodie.write.timestamp.logical.type.overrides")
+      .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Per-field authority for the timestamp logical type, taking precedence over the "
+          + "auto-inferred schema. Comma-separated 'field:type' pairs, where type is one of timestamp-micros, "
+          + "timestamp-millis, local-timestamp-micros, local-timestamp-millis (case-insensitive). A field with an "
+          + "entry is pinned to that logical type: an incoming value of a different precision is coerced to it, and "
+          + "the change from the table's current type is permitted. A timestamp precision change with no entry for "
+          + "the field is rejected with an error, so an unverified micros/millis flip can never happen silently. "
+          + "Derive the correct value with the timestamp inspection tool.");
+
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")
       .defaultValue(ExternalSpillableMap.DiskMapType.BITCASK)
