@@ -142,11 +142,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
   @Test
   public void testReplaceCommitSchemaHasNoMetaFields() throws Exception {
     setup(102400);
-    config.setValue("hoodie.datasource.write.row.writer.enable", "false");
-    config.setValue("hoodie.metadata.enable", "false");
-    config.setValue("hoodie.clustering.plan.strategy.daybased.lookback.partitions", "1");
-    config.setValue("hoodie.clustering.plan.strategy.target.file.max.bytes", String.valueOf(1024 * 1024));
-    config.setValue("hoodie.clustering.plan.strategy.max.bytes.per.group", String.valueOf(2 * 1024 * 1024));
+    setupClusteringConfig();
 
     writeData(1000, true, System.currentTimeMillis());
 
@@ -176,11 +172,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
   @Test
   public void testCommitSchemaCleanedEvenWhenConfigSchemaHasMetaFields() throws Exception {
     setup(102400);
-    config.setValue("hoodie.datasource.write.row.writer.enable", "false");
-    config.setValue("hoodie.metadata.enable", "false");
-    config.setValue("hoodie.clustering.plan.strategy.daybased.lookback.partitions", "1");
-    config.setValue("hoodie.clustering.plan.strategy.target.file.max.bytes", String.valueOf(1024 * 1024));
-    config.setValue("hoodie.clustering.plan.strategy.max.bytes.per.group", String.valueOf(2 * 1024 * 1024));
+    setupClusteringConfig();
 
     // Pre-pollute the write config schema with Hudi meta fields.
     HoodieSchema pollutedSchema = HoodieSchemaUtils.addMetadataFields(getSchema());
@@ -212,6 +204,14 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     HoodieReplaceCommitMetadata replaceMetadata =
         metaClient.getActiveTimeline().readReplaceCommitMetadata(replaceInstant);
     assertSchemaHasNoMetaFields(replaceMetadata, "replace (clustering) commit");
+  }
+
+  private void setupClusteringConfig() {
+    config.setValue("hoodie.datasource.write.row.writer.enable", "false");
+    config.setValue("hoodie.metadata.enable", "false");
+    config.setValue("hoodie.clustering.plan.strategy.daybased.lookback.partitions", "1");
+    config.setValue("hoodie.clustering.plan.strategy.target.file.max.bytes", String.valueOf(1024 * 1024));
+    config.setValue("hoodie.clustering.plan.strategy.max.bytes.per.group", String.valueOf(2 * 1024 * 1024));
   }
 
   private static void assertSchemaHasNoMetaFields(HoodieCommitMetadata commitMetadata, String label) {
