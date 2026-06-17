@@ -134,7 +134,7 @@ public class ITTestHoodieDataSource {
   // reaches its expected row count. A benign teardown race (see isAcceptableTerminalFailure) can instead
   // close the source stream mid-read and terminate the job before all rows are emitted, leaving an
   // incomplete result. Re-reading from the same (already committed) table is idempotent, so retry a few
-  // times before giving up. See fetchResultWithExpectedNum.
+  // times before giving up. See submitAndFetchWithRetry.
   private static final int MAX_STREAM_READ_ATTEMPTS = 3;
 
   private TableEnvironment streamTableEnv;
@@ -4070,6 +4070,6 @@ public class ITTestHoodieDataSource {
     while (root.getCause() != null) {
       root = root.getCause();
     }
-    return root.getClass().getName() + ": " + root.getMessage();
+    return root.getClass().getSimpleName() + ": " + root.getMessage();
   }
 }
