@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -46,11 +47,13 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -445,6 +448,26 @@ public class TestBucketAssigner {
   }
 
   @Test
+  public void testWriteProfileReusesPreviousAvgSizeWhenNoEligibleCommitOnReload() throws Exception {
+    conf.set(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE, 1);
+    conf.setString(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), "1024");
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    writeConfig = FlinkWriteClients.getHoodieClientConfig(conf);
+    setScriptedRecordSizes(512L, -1L);
+    WriteProfile writeProfile = new ScriptedRecordSizeWriteProfile(writeConfig, context);
+    assertThat("Average record size should use the profiled commit metadata",
+        writeProfile.getAvgSize(), is(512L));
+
+    writeProfile.reload(1);
+
+    assertThat("Average record size should reuse the previous estimate when no eligible commit metadata is found",
+        writeProfile.getAvgSize(), is(512L));
+    assertThat("Records per bucket should continue to use the previous estimate",
+        writeProfile.getRecordsPerBucket(), is(writeConfig.getParquetMaxFileSize() / 512L));
+  }
+
+  @Test
   public void testDeltaWriteProfileRecordsPerBucketUsesCompressionRatio() throws Exception {
     File morPath = new File(tempFile, "mor");
     Configuration morConf = TestConfigurations.getDefaultConf(morPath.getAbsolutePath());
@@ -505,6 +528,34 @@ public class TestBucketAssigner {
         writeProfile.getRecordsPerBucket(), is(morWriteConfig.getParquetMaxFileSize() / expectedAvgSize));
   }
 
+  @Test
+  public void testDeltaWriteProfileReusesPreviousAvgSizeWhenNoEligibleDeltaCommitOnReload() throws Exception {
+    File morPath = new File(tempFile, "mor_reuse_previous_avg");
+    Configuration morConf = TestConfigurations.getDefaultConf(morPath.getAbsolutePath());
+    morConf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    morConf.set(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE, 1);
+    morConf.setString(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), "1024");
+    StreamerUtil.initTableIfNotExists(morConf);
+    TestData.writeData(TestData.DATA_SET_INSERT, morConf);
+
+    HoodieWriteConfig morWriteConfig = FlinkWriteClients.getHoodieClientConfig(morConf);
+    HoodieFlinkEngineContext morContext = new HoodieFlinkEngineContext(
+        HadoopFSUtils.getStorageConf(HadoopConfigurations.getHadoopConf(morConf)),
+        new FlinkTaskContextSupplier(null));
+
+    setScriptedRecordSizes(256L, -1L);
+    DeltaWriteProfile writeProfile = new ScriptedRecordSizeDeltaWriteProfile(morWriteConfig, morContext);
+    assertThat("Average record size should use the profiled delta commit metadata",
+        writeProfile.getAvgSize(), is(256L));
+
+    writeProfile.reload(1);
+
+    assertThat("Average record size should reuse the previous estimate when no eligible delta commit metadata is found",
+        writeProfile.getAvgSize(), is(256L));
+    assertThat("Records per bucket should continue to use the previous estimate",
+        writeProfile.getRecordsPerBucket(), is(morWriteConfig.getParquetMaxFileSize() / 256L));
+  }
+
   private static String getLastCompleteInstant(WriteProfile profile) {
     return StreamerUtil.getLastCompletedInstant(profile.getMetaClient());
   }
@@ -524,6 +575,40 @@ public class TestBucketAssigner {
       BucketType bucketType) {
     assertThat(bucketInfo.getPartitionPath(), is(partition));
     assertThat(bucketInfo.getBucketType(), is(bucketType));
+  }
+
+  private static Queue<Long> scriptedRecordSizes = new ArrayDeque<>();
+
+  private static void setScriptedRecordSizes(Long... recordSizes) {
+    scriptedRecordSizes = new ArrayDeque<>(Arrays.asList(recordSizes));
+  }
+
+  /**
+   * WriteProfile with scripted record size estimates.
+   */
+  static class ScriptedRecordSizeWriteProfile extends WriteProfile {
+    ScriptedRecordSizeWriteProfile(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
+      super(config, context);
+    }
+
+    @Override
+    protected long calculateRecordSizeThroughCommitMetadata(HoodieTimeline commitTimeline, double fileSizeCalibrationRatio) {
+      return scriptedRecordSizes.remove();
+    }
+  }
+
+  /**
+   * DeltaWriteProfile with scripted record size estimates.
+   */
+  static class ScriptedRecordSizeDeltaWriteProfile extends DeltaWriteProfile {
+    ScriptedRecordSizeDeltaWriteProfile(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
+      super(config, context);
+    }
+
+    @Override
+    protected long calculateRecordSizeThroughCommitMetadata(HoodieTimeline commitTimeline, double fileSizeCalibrationRatio) {
+      return scriptedRecordSizes.remove();
+    }
   }
 
   /**
