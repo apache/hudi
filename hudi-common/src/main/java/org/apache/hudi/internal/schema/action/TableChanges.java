@@ -47,13 +47,19 @@ public class TableChanges {
 
     @Getter
     private final Map<Integer, Types.Field> updates = new HashMap<>();
+    private final boolean allowTimestampPrecisionEvolution;
 
     private ColumnUpdateChange(InternalSchema schema) {
-      super(schema, false);
+      this(schema, false, false);
     }
 
     private ColumnUpdateChange(InternalSchema schema, boolean caseSensitive) {
+      this(schema, caseSensitive, false);
+    }
+
+    private ColumnUpdateChange(InternalSchema schema, boolean caseSensitive, boolean allowTimestampPrecisionEvolution) {
       super(schema, caseSensitive);
+      this.allowTimestampPrecisionEvolution = allowTimestampPrecisionEvolution;
     }
 
     @Override
@@ -96,7 +102,7 @@ public class TableChanges {
         throw new SchemaCompatibilityException(String.format("Cannot update type for column '%s' because it does not exist in the schema", name));
       }
 
-      if (!SchemaChangeUtils.isTypeUpdateAllow(field.type(), newType)) {
+      if (!SchemaChangeUtils.isTypeUpdateAllow(field.type(), newType, allowTimestampPrecisionEvolution)) {
         throw new SchemaCompatibilityException(String.format(
             "Cannot update column '%s' from type '%s' to incompatible type '%s'.", name, field.type(), newType));
       }
@@ -237,6 +243,10 @@ public class TableChanges {
 
     public static ColumnUpdateChange get(InternalSchema schema, boolean caseSensitive) {
       return new ColumnUpdateChange(schema, caseSensitive);
+    }
+
+    public static ColumnUpdateChange get(InternalSchema schema, boolean caseSensitive, boolean allowTimestampPrecisionEvolution) {
+      return new ColumnUpdateChange(schema, caseSensitive, allowTimestampPrecisionEvolution);
     }
   }
 
