@@ -756,9 +756,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
     assertEquals(10, usdPartitionLocations.size)
 
     val df = spark.read.format("hudi").load(basePath).collect()
-    if (usdPartitionLocations.nonEmpty) {
-      validateDFWithLocations(df, usdPartitionLocations, "fare.currency=USD")
-    }
+    validateDFWithLocations(df, usdPartitionLocations, "fare.currency=USD")
 
     // Verify partitioned RLI is enabled
     metaClient = HoodieTableMetaClient.reload(metaClient)
