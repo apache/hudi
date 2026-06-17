@@ -719,7 +719,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   protected void flushToDiskIfRequired(HoodieRecord bufferedRecord, boolean appendDeleteBlocks) {
     if (bufferedRecord != null
         && (averageRecordSize == 0
-            || numberOfRecords >= (int) (maxBlockSize / Math.max(averageRecordSize, 1))
+            || numberOfRecords >= (int) (maxBlockSize / averageRecordSize)
             || numberOfRecords % NUMBER_OF_RECORDS_TO_ESTIMATE_RECORD_SIZE == 0)) {
       long sampled = sizeEstimator.sizeEstimate(bufferedRecord);
       averageRecordSize = averageRecordSize == 0
