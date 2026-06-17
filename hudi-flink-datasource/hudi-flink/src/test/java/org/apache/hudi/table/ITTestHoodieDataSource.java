@@ -3981,7 +3981,7 @@ public class ITTestHoodieDataSource {
       // null `reader` that ParquetColumnarRowSplitReader#close had just nulled out. Scoped to
       // that exact frame so genuine NPEs - and the legitimate IOException("expecting more
       // rows...") thrown from the same method - still fail the test.
-      if (isNullPointerException(cur) && readsNextRowGroup(cur)) {
+      if (isNullPointerException(cur) && containsReadNextRowGroupFrame(cur)) {
         return true;
       }
       cur = cur.getCause();
@@ -3996,14 +3996,14 @@ public class ITTestHoodieDataSource {
    */
   private static boolean isNullPointerException(Throwable t) {
     return t instanceof NullPointerException
-        || t.toString().startsWith("java.lang.NullPointerException");
+        || t.toString().startsWith(NullPointerException.class.getName());
   }
 
   /**
    * Whether {@code t}'s stack trace (preserved even through {@code SerializedThrowable})
    * contains a {@code ParquetColumnarRowSplitReader#readNextRowGroup} frame.
    */
-  private static boolean readsNextRowGroup(Throwable t) {
+  private static boolean containsReadNextRowGroupFrame(Throwable t) {
     for (StackTraceElement frame : t.getStackTrace()) {
       if (frame.getClassName().endsWith("ParquetColumnarRowSplitReader")
           && "readNextRowGroup".equals(frame.getMethodName())) {
