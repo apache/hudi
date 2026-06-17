@@ -898,7 +898,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     StorageConfiguration<?> storageConfBroadcast = storageConf;
     return engineContext.parallelize(partitionBaseFilePairs, parallelism)
         .map(partitionAndBaseFile -> {
-          HoodieBaseFile baseFile = partitionAndBaseFile.getValue();
+          HoodieBaseFile baseFile = partitionAndBaseFile.getRight();
           StoragePath path = baseFile.getStoragePath();
           try {
             HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConfBroadcast);
