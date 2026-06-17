@@ -18,13 +18,14 @@
 
 package org.apache.hudi.source.reader.function;
 
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.table.data.RowData;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.FlinkWriteClients;
+
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.data.RowData;
 
 import java.util.List;
 

@@ -149,7 +149,7 @@ public class BaseTestFileGroupRecordBuffer {
       when(inputSplit.hasNoRecordsToMerge()).thenReturn(false);
       when(inputSplit.getRecordIterator()).thenReturn(fileGroupRecordBufferItrOpt.get());
       ReaderParameters readerParameters = mock(ReaderParameters.class);
-      when(readerParameters.sortOutputs()).thenReturn(false);
+      when(readerParameters.isSortOutputs()).thenReturn(false);
       return (KeyBasedFileGroupRecordBuffer<IndexedRecord>) recordBufferLoader.getRecordBuffer(readerContext, mockMetaClient.getStorage(), inputSplit,
           orderingFieldNames, mockMetaClient, props, readerParameters, readStats, Option.empty()).getKey();
     }

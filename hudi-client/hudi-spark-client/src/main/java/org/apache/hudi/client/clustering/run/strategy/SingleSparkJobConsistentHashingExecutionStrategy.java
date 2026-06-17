@@ -20,7 +20,6 @@ package org.apache.hudi.client.clustering.run.strategy;
 
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.util.LazyConcatenatingIterator;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -44,9 +43,11 @@ import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.WriteHandleFactory;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucketClusteringPlanStrategy;
 import org.apache.hudi.util.ExecutorFactory;
+import org.apache.hudi.util.LazyConcatenatingIterator;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -69,13 +70,15 @@ import java.util.function.Supplier;
 @Slf4j
 public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleSparkJobExecutionStrategy<T> {
 
-  private final String indexKeyFields;
+  // parsed once; the per-record bucket lookup uses the List overload of getBucket so the
+  // comma-separated config string is not re-split per record
+  private final List<String> indexKeyFieldList;
   private final HoodieSchema readerSchema;
 
   public SingleSparkJobConsistentHashingExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext,
                                                           HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
-    this.indexKeyFields = table.getConfig().getBucketIndexHashField();
+    this.indexKeyFieldList = KeyGenUtils.getIndexKeyFields(table.getConfig().getBucketIndexHashField());
     this.readerSchema = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(writeConfig.getSchema()));
   }
 
@@ -205,7 +208,7 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
     ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata);
     ClusteringOperation operation = clusteringGroup.getOperations().get(0);
     ClosableIterator<HoodieRecord<T>> iterator = getRecordIterator(readerContextFactory, operation, instantTime, IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), writeConfig));
-    Function<HoodieRecord<T>, String> fileIdPrefixExtractor = record -> identifier.getBucket(record.getRecordKey(), this.indexKeyFields).getFileIdPrefix();
+    Function<HoodieRecord<T>, String> fileIdPrefixExtractor = record -> identifier.getBucket(record.getRecordKey(), this.indexKeyFieldList).getFileIdPrefix();
 
     HoodieConsumer<HoodieRecord<T>, List<WriteStatus>> insertHandler =
         new InsertHandler(writeConfig, instantTime, getHoodieTable(), taskContextSupplier, new FixedIdSuffixCreateHandleFactory(), false, fileIdPrefixExtractor, readerSchema);

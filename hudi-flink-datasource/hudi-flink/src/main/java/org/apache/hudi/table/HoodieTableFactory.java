@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -86,9 +87,9 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     StoragePath path = new StoragePath(conf.getOptional(FlinkOptions.PATH).orElseThrow(() ->
         new ValidationException("Option [path] should not be empty.")));
     setupTableOptions(conf.get(FlinkOptions.PATH), conf);
-    checkBaseFileFormat(conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
+    checkBaseFileFormatForRead(conf);
     return new HoodieTableSource(
         SerializableSchema.create(schema),
         path,
@@ -116,11 +117,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   private void setupTableOptions(String basePath, Configuration conf) {
     StreamerUtil.getTableConfig(basePath, HadoopConfigurations.getHadoopConf(conf))
         .ifPresent(tableConfig -> {
-          // Guard: reject Lance from existing table config (hoodie.properties); checkBaseFileFormat() handles user-supplied config separately
-          if (tableConfig.contains(HoodieTableConfig.BASE_FILE_FORMAT)
-              && HoodieFileFormat.LANCE.name().equalsIgnoreCase(tableConfig.getString(HoodieTableConfig.BASE_FILE_FORMAT))) {
-            throw new HoodieValidationException(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG);
-          }
           if (tableConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)
               && !conf.contains(FlinkOptions.RECORD_KEY_FIELD)) {
             conf.set(FlinkOptions.RECORD_KEY_FIELD, tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
@@ -177,8 +173,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    * @param schema The table schema
    */
   private void sanityCheck(Configuration conf, ResolvedSchema schema) {
-    checkBaseFileFormat(conf);
     checkTableType(conf);
+    checkBaseFileFormatForWrite(conf);
     checkIndexType(conf);
 
     if (!OptionsResolver.isAppendMode(conf)) {
@@ -202,6 +198,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
             String.format("Metadata table should be enabled when %s is %s.", FlinkOptions.INDEX_TYPE.key(), HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX));
         ValidationUtils.checkArgument(conf.get(FlinkOptions.INDEX_GLOBAL_ENABLED),
             String.format("Partition level index updating is not supported for GLOBAL_RECORD_LEVEL_INDEX, please set '%s' = 'true'.", FlinkOptions.INDEX_GLOBAL_ENABLED.key()));
+        ValidationUtils.checkArgument(!OptionsResolver.isMultiWriter(conf),
+            "Flink global record level index does not support multiple writers, set hoodie.write.concurrency.mode=SINGLE_WRITER instead.");
 
         boolean deferredRLI = Boolean.parseBoolean(conf.getString(
             HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key(), HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.defaultValue().toString()));
@@ -213,6 +211,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
             "Partitioned record level index supports only Flink streaming upsert and insert overwrite.");
         ValidationUtils.checkArgument(!OptionsResolver.isNonBlockingConcurrencyControl(conf),
             "Partitioned record level index does not support non-blocking concurrency control.");
+        ValidationUtils.checkArgument(!OptionsResolver.isMultiWriter(conf),
+            "Flink record level index does not support multiple writers, set hoodie.write.concurrency.mode=SINGLE_WRITER instead.");
         break;
       default:
         break;
@@ -220,13 +220,29 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   }
 
   /**
-   * Validate the base file format. Lance is only supported with the Spark engine.
+   * Validate the base file format.
    */
-  private void checkBaseFileFormat(Configuration conf) {
-    String baseFileFormat = conf.getString(HoodieTableConfig.BASE_FILE_FORMAT.key(), null);
-    if (baseFileFormat != null && HoodieFileFormat.LANCE.name().equalsIgnoreCase(baseFileFormat)) {
-      throw new HoodieValidationException(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG);
+  private void checkBaseFileFormatForRead(Configuration conf) {
+    checkLanceBaseFileFormat(conf);
+  }
+
+  private void checkBaseFileFormatForWrite(Configuration conf) {
+    checkLanceBaseFileFormat(conf);
+  }
+
+  private void checkLanceBaseFileFormat(Configuration conf) {
+    if (!isLanceBaseFileFormat(conf)) {
+      return;
     }
+    if (OptionsResolver.isSchemaEvolutionEnabled(conf)) {
+      throw new HoodieValidationException("Flink Lance base-file support does not support schema evolution. Set '"
+          + HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key() + "' = 'false'.");
+    }
+  }
+
+  private boolean isLanceBaseFileFormat(Configuration conf) {
+    String baseFileFormat = conf.getString(HoodieTableConfig.BASE_FILE_FORMAT.key(), null);
+    return baseFileFormat != null && HoodieFileFormat.LANCE.name().equalsIgnoreCase(baseFileFormat);
   }
 
   /**
@@ -453,10 +469,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
       conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, true);
       conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
-      // set index bootstrap as true if not specified by user explicitly.
-      if (!conf.contains(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
-        conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
-      }
       // generally size of index data is much smaller than data record, so set the buffer size of
       // the index writer as 1/4 of that for data writer if it's not set by user explicitly.
       if (!conf.contains(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE)) {

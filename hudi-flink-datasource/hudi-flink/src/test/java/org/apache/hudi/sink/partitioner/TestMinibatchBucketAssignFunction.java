@@ -239,6 +239,80 @@ public class TestMinibatchBucketAssignFunction {
   }
 
   @Test
+  public void testDuplicateKeyCrossPartitionUpdate() throws Exception {
+    HoodieFlinkInternalRow record1 = insertRecord("id1", "par2", 1);
+    HoodieFlinkInternalRow record2 = insertRecord("id1", "par3", 2);
+
+    testHarness.processElement(new StreamRecord<>(record1));
+    testHarness.processElement(new StreamRecord<>(record2));
+    testHarness.prepareSnapshotPreBarrier(1L);
+
+    List<HoodieFlinkInternalRow> output = testHarness.extractOutputValues();
+    assertEquals(4, output.size(), "Two cross-partition updates should each emit delete and insert records");
+
+    HoodieFlinkInternalRow deleteForOriginalPartition = output.get(0);
+    HoodieFlinkInternalRow insertForFirstUpdate = output.get(1);
+    HoodieFlinkInternalRow deleteForFirstUpdate = output.get(2);
+    HoodieFlinkInternalRow insertForSecondUpdate = output.get(3);
+
+    assertEquals("par1", deleteForOriginalPartition.getPartitionPath(),
+        "First update should delete the location prefetched from the metadata table");
+    assertEquals("-U", deleteForOriginalPartition.getOperationType());
+    assertEquals("U", deleteForOriginalPartition.getInstantTime());
+
+    assertEquals("par2", insertForFirstUpdate.getPartitionPath());
+    assertEquals("I", insertForFirstUpdate.getOperationType());
+    assertEquals("U", insertForFirstUpdate.getInstantTime());
+    assertTrue(insertForFirstUpdate.getFileId() != null && !insertForFirstUpdate.getFileId().isEmpty(),
+        "First update should be assigned to a data bucket");
+
+    assertEquals("par2", deleteForFirstUpdate.getPartitionPath(),
+        "Duplicate key should re-read the location updated by the preceding record in the same minibatch");
+    assertEquals(insertForFirstUpdate.getFileId(), deleteForFirstUpdate.getFileId(),
+        "The delete for the second update should target the bucket assigned to the first update");
+    assertEquals("-U", deleteForFirstUpdate.getOperationType());
+    assertEquals("U", deleteForFirstUpdate.getInstantTime());
+
+    assertEquals("par3", insertForSecondUpdate.getPartitionPath());
+    assertEquals("I", insertForSecondUpdate.getOperationType());
+    assertEquals("U", insertForSecondUpdate.getInstantTime());
+    assertTrue(insertForSecondUpdate.getFileId() != null && !insertForSecondUpdate.getFileId().isEmpty(),
+        "Second update should be assigned to a data bucket");
+  }
+
+  @Test
+  public void testDuplicateKeyInSameMinibatch() throws Exception {
+    HoodieFlinkInternalRow record1 = insertRecord("new_duplicate_key", "par_insert", 1);
+    HoodieFlinkInternalRow record2 = insertRecord("new_duplicate_key", "par_insert", 2);
+
+    testHarness.processElement(new StreamRecord<>(record1));
+    testHarness.processElement(new StreamRecord<>(record2));
+    testHarness.prepareSnapshotPreBarrier(1L);
+
+    List<HoodieFlinkInternalRow> output = testHarness.extractOutputValues();
+    assertEquals(2, output.size(), "Duplicate insert-miss records should both be emitted");
+
+    HoodieFlinkInternalRow insertRecord = output.get(0);
+    HoodieFlinkInternalRow duplicateRecord = output.get(1);
+
+    assertEquals("new_duplicate_key", insertRecord.getRecordKey());
+    assertEquals("par_insert", insertRecord.getPartitionPath());
+    assertEquals("I", insertRecord.getInstantTime(),
+        "The first record should be assigned as an insert because the prefetched location is missing");
+    assertEquals("I", insertRecord.getOperationType());
+    assertTrue(insertRecord.getFileId() != null && !insertRecord.getFileId().isEmpty(),
+        "First insert should be assigned to a data bucket");
+
+    assertEquals("new_duplicate_key", duplicateRecord.getRecordKey());
+    assertEquals("par_insert", duplicateRecord.getPartitionPath());
+    assertEquals(insertRecord.getFileId(), duplicateRecord.getFileId(),
+        "Duplicate key should re-read the location written by the first insert in the same minibatch");
+    assertEquals("U", duplicateRecord.getInstantTime(),
+        "The duplicate record should be assigned as an update to the first record's bucket");
+    assertEquals("I", duplicateRecord.getOperationType());
+  }
+
+  @Test
   public void testCloseFunction() throws Exception {
     // Test that close doesn't throw exceptions
     HoodieFlinkInternalRow record = new HoodieFlinkInternalRow("id1", "par1", "I",
@@ -367,5 +441,39 @@ public class TestMinibatchBucketAssignFunction {
     testHarness.prepareSnapshotPreBarrier(1L);
     assertEquals(1, function.getDelegateMetrics().getRecordBufferingCount(),
         "One buffering cycle should be recorded after a checkpoint flush");
+  }
+
+  @Test
+  public void testNumShardsAssignedMetricIsSet() throws Exception {
+    // With global RLI enabled the numShardsAssigned gauge must be a non-negative value after open().
+    // The test harness runs with parallelism 1, so this single task owns all shards.
+    FlinkBucketAssignMetrics metrics = function.getDelegateMetrics();
+    assertTrue(metrics.getNumShardsAssigned() >= 0,
+            "numShardsAssigned must be set when global RLI is active");
+  }
+
+  @Test
+  public void testNumShardsAssignedIsNegativeOneWhenBootstrapEnabled() throws Exception {
+    // During index bootstrap the metadata file-group count may be unavailable;
+    // numShardsAssigned must stay at its sentinel -1.
+    Configuration bootstrapConf = Configuration.fromMap(conf.toMap());
+    bootstrapConf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+
+    MinibatchBucketAssignFunction bootstrapFunction = new MinibatchBucketAssignFunction(bootstrapConf);
+    OneInputStreamOperatorTestHarness<HoodieFlinkInternalRow, HoodieFlinkInternalRow> bootstrapHarness =
+        new OneInputStreamOperatorTestHarness<>(new MiniBatchBucketAssignOperator(bootstrapFunction, new OperatorID()), 1, 1, 0);
+    bootstrapHarness.open();
+    try {
+      assertEquals(-1, bootstrapFunction.getDelegateMetrics().getNumShardsAssigned(),
+          "numShardsAssigned must remain -1 when INDEX_BOOTSTRAP_ENABLED is true");
+    } finally {
+      bootstrapHarness.close();
+    }
+  }
+
+  private static HoodieFlinkInternalRow insertRecord(String recordKey, String partitionPath, long ts) {
+    return new HoodieFlinkInternalRow(recordKey, partitionPath, "I",
+        insertRow(StringData.fromString(recordKey), StringData.fromString("Danny"), 23,
+            TimestampData.fromEpochMillis(ts), StringData.fromString(partitionPath)));
   }
 }

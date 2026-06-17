@@ -1101,6 +1101,9 @@ class HoodieSparkSqlWriterInternal {
         }
     }
     val mergedParams = mutable.Map.empty ++ HoodieWriterUtils.parametersWithWriteDefaults(translatedOptsWithMappedTableConfig.toMap)
+    if (!mergedParams.contains(HoodieTableConfig.TYPE.key) && mergedParams.contains(TABLE_TYPE.key)) {
+      mergedParams(HoodieTableConfig.TYPE.key) = mergedParams(TABLE_TYPE.key)
+    }
     if (mergedParams.contains(KEYGENERATOR_CLASS_NAME.key) && !mergedParams.contains(HoodieTableConfig.KEY_GENERATOR_TYPE.key)) {
       mergedParams(HoodieTableConfig.KEY_GENERATOR_TYPE.key) = KeyGeneratorType.fromClassName(mergedParams(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key)).name
     }

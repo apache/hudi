@@ -20,6 +20,7 @@ package org.apache.hudi.source.reader.function;
 
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -278,8 +279,13 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
     }
   }
 
-  /** Reads a parquet CDC base file returning required-schema records. */
+  /** Reads a CDC base file returning required-schema records. */
   private ClosableIterator<RowData> getBaseFileIterator(String path) throws IOException {
+    if (path.endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
+      return FormatUtils.getLanceRecordIterator(
+          path, tableState.getRowType().getFieldNames(), fieldTypes, tableState.getRequiredPositions(), getHadoopConf());
+    }
+
     String[] fieldNames = tableState.getRowType().getFieldNames().toArray(new String[0]);
     DataType[] fieldTypesArray = fieldTypes.toArray(new DataType[0]);
     LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(

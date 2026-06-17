@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.DisableDictionaryInjector;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -32,6 +33,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.GenericRowData;
@@ -112,6 +114,7 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
         basePath + "/partition/path/test_dictionary_" + instantTime + ".parquet");
 
     RowType rowType = getTestRowType();
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
 
     // Create config with the custom injector
     HoodieConfig config = new HoodieConfig();
@@ -170,6 +173,7 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
         basePath + "/partition/path/test_invalid_" + instantTime + ".parquet");
 
     RowType rowType = getTestRowType();
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
 
     // Create config with an invalid/non-existent injector class
     HoodieConfig config = new HoodieConfig();
@@ -190,6 +194,7 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
         basePath + "/partition/path/test_no_injector_" + instantTime + ".parquet");
 
     RowType rowType = getTestRowType();
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
 
     // Create config WITHOUT injector - should use default settings
     HoodieConfig config = new HoodieConfig();

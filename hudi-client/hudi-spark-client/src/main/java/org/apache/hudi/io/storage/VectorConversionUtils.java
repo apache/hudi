@@ -19,9 +19,11 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.util.HoodieVectorUtils;
 
+import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeArrayData;
 import org.apache.spark.sql.catalyst.util.ArrayData;
 import org.apache.spark.sql.catalyst.util.GenericArrayData;
@@ -34,17 +36,10 @@ import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.LanceArrowUtils;
 
-import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
-
-import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
-
-import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * Shared utility methods for vector column handling during Parquet read/write.
@@ -57,28 +52,6 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 public final class VectorConversionUtils {
 
   private VectorConversionUtils() {
-  }
-
-  /**
-   * Detects VECTOR columns in a HoodieSchema record and returns a map of field ordinal
-   * to the corresponding {@link HoodieSchema.Vector} schema.
-   *
-   * @param schema a HoodieSchema of type RECORD (or null)
-   * @return map from field index to Vector schema; empty map if schema is null or has no vectors
-   */
-  public static Map<Integer, HoodieSchema.Vector> detectVectorColumns(HoodieSchema schema) {
-    Map<Integer, HoodieSchema.Vector> vectorColumnInfo = new LinkedHashMap<>();
-    if (schema == null) {
-      return vectorColumnInfo;
-    }
-    List<HoodieSchemaField> fields = schema.getFields();
-    for (int i = 0; i < fields.size(); i++) {
-      HoodieSchema fieldSchema = fields.get(i).schema().getNonNullType();
-      if (fieldSchema.getType() == HoodieSchemaType.VECTOR) {
-        vectorColumnInfo.put(i, (HoodieSchema.Vector) fieldSchema);
-      }
-    }
-    return vectorColumnInfo;
   }
 
   /**
@@ -180,33 +153,12 @@ public final class VectorConversionUtils {
    */
   public static ArrayData convertBinaryToVectorArray(byte[] bytes, int dim,
                                                      HoodieSchema.Vector.VectorElementType elemType) {
-    int expectedSize = dim * elemType.getElementSize();
-    checkArgument(bytes.length == expectedSize,
-        "Vector byte array length mismatch: expected " + expectedSize + " but got " + bytes.length);
-    ByteBuffer buffer = ByteBuffer.wrap(bytes).order(HoodieSchema.VectorLogicalType.VECTOR_BYTE_ORDER);
-    switch (elemType) {
-      case FLOAT:
-        float[] floats = new float[dim];
-        for (int j = 0; j < dim; j++) {
-          floats[j] = buffer.getFloat();
-        }
-        return new GenericArrayData(floats);
-      case DOUBLE:
-        double[] doubles = new double[dim];
-        for (int j = 0; j < dim; j++) {
-          doubles[j] = buffer.getDouble();
-        }
-        return new GenericArrayData(doubles);
-      case INT8:
-        byte[] int8s = new byte[dim];
-        buffer.get(int8s);
-        // Use UnsafeArrayData to avoid boxing each byte into a Byte object.
-        // GenericArrayData(byte[]) would box every element into Object[].
-        return UnsafeArrayData.fromPrimitiveArray(int8s);
-      default:
-        throw new UnsupportedOperationException(
-            "Unsupported vector element type: " + elemType);
+    Object decoded = HoodieVectorUtils.decodeVectorBytes(bytes, dim, elemType);
+    if (decoded instanceof byte[]) {
+      // Use UnsafeArrayData to avoid boxing each byte into a Byte object.
+      return UnsafeArrayData.fromPrimitiveArray((byte[]) decoded);
     }
+    return new GenericArrayData(decoded);
   }
 
   /**

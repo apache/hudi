@@ -304,7 +304,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
               val readerContext = new SparkFileFormatInternalRowReaderContext(
                 fileGroupBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig,
                 sparkRequiredSchema = Some(requiredSchema))
-              readerContext.setEnableLogicalTimestampFieldRepair(storageConf.getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true))
+              readerContext.enableLogicalTimestampFieldRepair(storageConf.getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true))
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
               props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction))
@@ -313,14 +313,16 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
               } else {
                 0
               }
-              val reader = HoodieFileGroupReader.newBuilder()
+              val reader = HoodieFileGroupReader.builder()
                 .withReaderContext(readerContext)
                 .withHoodieTableMetaClient(metaClient)
                 .withLatestCommitTime(queryTimestamp)
-                .withFileSlice(fileSlice)
+                .withBaseFileOption(fileSlice.getBaseFile)
+                .withLogFiles(fileSlice.getLogFiles)
+                .withPartitionPath(fileSlice.getPartitionPath)
                 .withDataSchema(dataSchema)
                 .withRequestedSchema(requestedSchema)
-                .withInternalSchema(internalSchemaOpt)
+                .withInternalSchemaOpt(internalSchemaOpt)
                 .withProps(props)
                 .withStart(file.start)
                 .withLength(baseFileLength)

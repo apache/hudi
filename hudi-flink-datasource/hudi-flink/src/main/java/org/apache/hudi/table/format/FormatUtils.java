@@ -30,18 +30,25 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.source.ExpressionPredicates;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.FlinkClientUtil;
+import org.apache.hudi.util.HoodieSchemaConverter;
+import org.apache.hudi.util.StreamerUtil;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.types.DataType;
 import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
@@ -69,6 +76,27 @@ public class FormatUtils {
 
   private static Object getVal(IndexedRecord record, int pos) {
     return pos == -1 ? null : record.get(pos);
+  }
+
+  public static ClosableIterator<RowData> getLanceRecordIterator(
+      String path,
+      List<String> fieldNames,
+      List<DataType> fieldTypes,
+      int[] selectedFields,
+      Configuration hadoopConf) {
+    DataType selectedDataType = DataTypes.ROW(Arrays.stream(selectedFields)
+            .mapToObj(i -> DataTypes.FIELD(fieldNames.get(i), fieldTypes.get(i)))
+            .toArray(DataTypes.Field[]::new))
+        .bridgedTo(RowData.class);
+    HoodieSchema requestedSchema = HoodieSchemaConverter.convertToSchema(selectedDataType.getLogicalType());
+    HoodieRowDataLanceReader reader = new HoodieRowDataLanceReader(
+        new StoragePath(path), StreamerUtil.getLanceReadConfig(hadoopConf));
+    try {
+      return reader.getRowDataIterator(selectedDataType, requestedSchema);
+    } catch (RuntimeException e) {
+      reader.close();
+      throw new HoodieException("Failed to get iterator from Lance reader: " + path, e);
+    }
   }
 
   public static ExternalSpillableMap<String, byte[]> spillableMap(
@@ -132,14 +160,16 @@ public class FormatUtils {
     final TypedProperties typedProps = FlinkClientUtil.getReadProps(metaClient.getTableConfig(), writeConfig);
     typedProps.put(HoodieReaderConfig.MERGE_TYPE.key(), mergeType);
 
-    return HoodieFileGroupReader.<RowData>newBuilder()
+    return HoodieFileGroupReader.<RowData>builder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
         .withLatestCommitTime(latestInstant)
-        .withFileSlice(fileSlice)
+        .withBaseFileOption(fileSlice.getBaseFile())
+        .withLogFiles(fileSlice.getLogFiles())
+        .withPartitionPath(fileSlice.getPartitionPath())
         .withDataSchema(tableSchema)
         .withRequestedSchema(requiredSchema)
-        .withInternalSchema(Option.ofNullable(internalSchemaManager.getQuerySchema()))
+        .withInternalSchemaOpt(Option.ofNullable(internalSchemaManager.getQuerySchema()))
         .withProps(typedProps)
         .withShouldUseRecordPosition(false)
         .withEmitDelete(emitDelete)

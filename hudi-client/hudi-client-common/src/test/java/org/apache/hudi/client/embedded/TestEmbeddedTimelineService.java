@@ -21,6 +21,7 @@ package org.apache.hudi.client.embedded;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -30,7 +31,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -44,6 +47,25 @@ import static org.mockito.Mockito.when;
  * These tests are mainly focused on testing the creation and reuse of the embedded timeline server.
  */
 public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
+
+  @Test
+  public void timelineServiceIdentifierConsidersAllFieldsWhenHostIsNull() {
+    EmbeddedTimelineService.TimelineServiceIdentifier identifier =
+        new EmbeddedTimelineService.TimelineServiceIdentifier(null, MarkerType.DIRECT, true, false, false);
+    EmbeddedTimelineService.TimelineServiceIdentifier sameIdentifier =
+        new EmbeddedTimelineService.TimelineServiceIdentifier(null, MarkerType.DIRECT, true, false, false);
+
+    assertEquals(identifier, sameIdentifier);
+    assertEquals(identifier.hashCode(), sameIdentifier.hashCode());
+    assertNotEquals(identifier,
+        new EmbeddedTimelineService.TimelineServiceIdentifier(null, MarkerType.TIMELINE_SERVER_BASED, true, false, false));
+    assertNotEquals(identifier,
+        new EmbeddedTimelineService.TimelineServiceIdentifier(null, MarkerType.DIRECT, false, false, false));
+    assertNotEquals(identifier,
+        new EmbeddedTimelineService.TimelineServiceIdentifier(null, MarkerType.DIRECT, true, true, false));
+    assertNotEquals(identifier,
+        new EmbeddedTimelineService.TimelineServiceIdentifier(null, MarkerType.DIRECT, true, false, true));
+  }
 
   @Test
   public void embeddedTimelineServiceReused() throws Exception {

@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -40,12 +41,12 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -242,7 +243,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     if (tableVersion <= 8 && enableComplexKeyGeneratorValidation
         && (ComplexAvroKeyGenerator.class.getCanonicalName().equals(keyGeneratorClass)
         || "org.apache.hudi.keygen.ComplexKeyGenerator".equals(keyGeneratorClass))
-        && recordKeyFields.split(",").length == 1) {
+        && KeyGenUtils.getRecordKeyFields(recordKeyFields).size() == 1) {
       assertComplexKeyGeneratorValidationThrows(() -> writeClient.initTable(WriteOperationType.INSERT, Option.empty()), "ingestion");
     } else {
       writeClient.initTable(WriteOperationType.INSERT, Option.empty());

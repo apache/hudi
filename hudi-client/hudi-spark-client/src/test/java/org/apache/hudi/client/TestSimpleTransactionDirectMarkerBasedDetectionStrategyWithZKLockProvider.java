@@ -28,13 +28,13 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.marker.SimpleTransactionDirectMarkerBasedDetectionStrategy;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -51,9 +51,16 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Properties;
 
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_BASE_PATH_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECTION_TIMEOUT_MS_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_LOCK_KEY_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT_MS_PROP_KEY;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -82,6 +89,15 @@ public class TestSimpleTransactionDirectMarkerBasedDetectionStrategyWithZKLockPr
     properties.setProperty(ZK_CONNECT_URL_PROP_KEY, server.getConnectString());
     properties.setProperty(ZK_BASE_PATH_PROP_KEY, server.getTempDirectory().getAbsolutePath());
     properties.setProperty(ZK_LOCK_KEY_PROP_KEY, "key");
+    // Bound lock retries and ZK timeouts so a transient connection failure fails fast in seconds
+    // instead of being amplified by the production-default retry layers into a multi-minute hang.
+    properties.setProperty(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "1000");
+    properties.setProperty(LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY, "3000");
+    properties.setProperty(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "3");
+    properties.setProperty(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "3");
+    properties.setProperty(ZK_SESSION_TIMEOUT_MS_PROP_KEY, "10000");
+    properties.setProperty(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY, "10000");
+    properties.setProperty(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "1000");
 
     config = getConfigBuilder()
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
@@ -104,10 +120,15 @@ public class TestSimpleTransactionDirectMarkerBasedDetectionStrategyWithZKLockPr
 
   @AfterEach
   public void clean() throws IOException {
-    cleanupResources();
-    FileIOUtils.deleteDirectory(new File(basePath));
-    if (server != null) {
-      server.close();
+    try {
+      cleanupResources();
+      FileIOUtils.deleteDirectory(new File(basePath));
+    } finally {
+      // Always stop the embedded ZooKeeper server, even if resource cleanup or directory
+      // deletion above throws, so the server is not leaked across parameterized runs.
+      if (server != null) {
+        server.close();
+      }
     }
   }
 

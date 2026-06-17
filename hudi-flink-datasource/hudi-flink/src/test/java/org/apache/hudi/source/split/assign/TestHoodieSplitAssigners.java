@@ -18,10 +18,10 @@
 
 package org.apache.hudi.source.split.assign;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
 
+import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

@@ -18,10 +18,9 @@
 
 package org.apache.hudi.sink.partitioner.index;
 
-import org.apache.flink.metrics.MetricGroup;
-import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -29,7 +28,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metrics.FlinkIndexBackendMetrics;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.util.StreamerUtil;
@@ -37,9 +36,11 @@ import org.apache.hudi.util.StreamerUtil;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.MetricGroup;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,7 +59,7 @@ public class GlobalRecordLevelIndexBackend implements MinibatchIndexBackend {
   private final RecordIndexCache recordIndexCache;
   private final Configuration conf;
   private final HoodieTableMetaClient metaClient;
-  private HoodieTableMetadata metadataTable;
+  private HoodieBackedTableMetadata tableMetadata;
   private FlinkIndexBackendMetrics metrics;
 
   /**
@@ -71,7 +72,6 @@ public class GlobalRecordLevelIndexBackend implements MinibatchIndexBackend {
     this.metaClient = StreamerUtil.createMetaClient(conf);
     this.conf = conf;
     this.recordIndexCache = new RecordIndexCache(conf, initCheckpointId);
-    registerMetrics(new UnregisteredMetricsGroup());
     reloadMetadataTable();
   }
 
@@ -83,7 +83,9 @@ public class GlobalRecordLevelIndexBackend implements MinibatchIndexBackend {
 
   @Override
   public HoodieRecordGlobalLocation get(String recordKey) throws IOException {
-    throw new UnsupportedOperationException(this.getClass().getSimpleName() + " doesn't support lookup with a single key.");
+    // note: always fetch record location from the cache, since this backend is only used for minibatch mode,
+    // and the cache has been warmed up by calling `get(List<String> recordKeys)` previously.
+    return recordIndexCache.get(recordKey);
   }
 
   @Override
@@ -106,13 +108,14 @@ public class GlobalRecordLevelIndexBackend implements MinibatchIndexBackend {
       }
     }
 
+    int hitCount = recordKeys.size() - missedKeys.size();
     metrics.endLocalIndexLookup();
-    metrics.updateLocalLookupKeysCount(recordKeys.size() - missedKeys.size());
+    metrics.updateLocalLookupKeysCount(hitCount);
+    metrics.updateLookupCacheHitRatio(hitCount, missedKeys.size());
 
     if (!missedKeys.isEmpty()) {
       metrics.startRemoteIndexLookup();
-      HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
-          metadataTable.readRecordIndexLocationsWithKeys(HoodieListData.eager(missedKeys));
+      HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData = lookupLocationsForMissedKeys(missedKeys);
       recordIndexData.forEach(keyAndLocation -> {
         recordIndexCache.update(keyAndLocation.getKey(), keyAndLocation.getValue());
         keysAndLocations.put(keyAndLocation.getKey(), keyAndLocation.getValue());
@@ -122,6 +125,15 @@ public class GlobalRecordLevelIndexBackend implements MinibatchIndexBackend {
       metrics.updateRemoteLookupKeysCount(missedKeys.size());
     }
     return keysAndLocations;
+  }
+
+  private HoodiePairData<String, HoodieRecordGlobalLocation> lookupLocationsForMissedKeys(List<String> missedKeys) {
+    // For flink adaptive batch execution, writer coordinator is not started yet, so metadata table
+    // is not initialized for a new table.
+    if (!tableMetadata.enabled()) {
+      return HoodieListPairData.eager(Collections.emptyList());
+    }
+    return tableMetadata.readRecordIndexLocationsWithKeys(HoodieListData.eager(missedKeys));
   }
 
   @Override
@@ -162,21 +174,30 @@ public class GlobalRecordLevelIndexBackend implements MinibatchIndexBackend {
   }
 
   private void reloadMetadataTable() {
-    this.metadataTable = metaClient.getTableFormat().getMetadataFactory().create(
-        HoodieFlinkEngineContext.DEFAULT,
-        metaClient.getStorage(),
-        StreamerUtil.metadataConfig(conf),
-        conf.get(FlinkOptions.PATH));
+    if (this.tableMetadata != null) {
+      this.tableMetadata.close();
+    }
+    this.tableMetadata =
+        new HoodieBackedTableMetadata(
+            HoodieFlinkEngineContext.DEFAULT,
+            metaClient.getStorage(),
+            StreamerUtil.metadataConfig(conf),
+            conf.get(FlinkOptions.PATH));
+    if (!tableMetadata.enabled()) {
+      if (metaClient.getTableConfig().isMetadataTableAvailable()) {
+        throw new RuntimeException("Can not initialize the table metadata");
+      }
+    }
   }
 
   @Override
   public void close() throws IOException {
     this.recordIndexCache.close();
-    if (this.metadataTable == null) {
+    if (this.tableMetadata == null) {
       return;
     }
     try {
-      this.metadataTable.close();
+      this.tableMetadata.close();
     } catch (Exception e) {
       throw new HoodieException("Exception happened during close metadata table.", e);
     }

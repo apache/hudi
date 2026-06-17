@@ -22,16 +22,15 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.common.model.HoodieLSMTimelineManifest;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ArchivedInstantReadSchemas;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -103,8 +102,8 @@ import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
  * <p><h3>Instants TTL</h3></p>
  * The timeline reader only reads instants of last limited days. We will by default skip the instants from LSM timeline that are generated long time ago.
  */
+@Slf4j
 public class LSMTimeline {
-  private static final Logger LOG = LoggerFactory.getLogger(LSMTimeline.class);
 
   public static final int LSM_TIMELINE_INSTANT_VERSION_1 = 1;
 
@@ -158,7 +157,7 @@ public class LSMTimeline {
       }
     } catch (Exception e) {
       // fallback to manifest file listing.
-      LOG.warn("Error reading version file {}", versionFilePath, e);
+      log.warn("Error reading version file {}", versionFilePath, e);
     }
 
     return allSnapshotVersions(metaClient, archivePath).stream().max(Integer::compareTo).orElse(-1);
@@ -176,7 +175,7 @@ public class LSMTimeline {
           .map(LSMTimeline::getManifestVersion)
           .collect(Collectors.toList());
     } catch (FileNotFoundException ex) {
-      LOG.debug("Archive path {} does not exist", archivePath);
+      log.debug("Archive path {} does not exist", archivePath);
       return Collections.emptyList();
     }
   }
@@ -256,7 +255,7 @@ public class LSMTimeline {
       }
     } catch (NumberFormatException e) {
       // log and ignore any format warnings
-      LOG.warn("error getting file layout for archived file: {}", fileName, e);
+      log.warn("error getting file layout for archived file: {}", fileName, e);
     }
 
     // return default value in case of any errors

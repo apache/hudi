@@ -29,9 +29,8 @@ import org.apache.hudi.client.RunsTableService;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.data.HoodieListData;
-import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -39,6 +38,7 @@ import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -58,7 +58,9 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
@@ -170,7 +172,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   // Average size of a record saved within the record index.
   // Record index has a fixed size schema. This has been calculated based on experiments with default settings
   // for block size (1MB), compression (GZ) and disabling the hudi metadata fields.
-  private static final int RECORD_INDEX_AVERAGE_RECORD_SIZE = 48;
+  public static final int RECORD_INDEX_AVERAGE_RECORD_SIZE = 48;
   private transient BaseHoodieWriteClient<?, I, ?, O> writeClient;
 
   protected HoodieWriteConfig metadataWriteConfig;
@@ -935,6 +937,27 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   /**
+   * Resolves the data schema (with metadata fields added) for use during record index bootstrap.
+   * When the write config does not carry a schema (e.g. table-service operations such as clean),
+   * falls back to resolving the schema from the table's commit history / data files.
+   */
+  static HoodieSchema resolveDataSchemaForRLIBootstrap(HoodieTableMetaClient metaClient, HoodieWriteConfig dataWriteConfig) {
+    String writeSchemaStr = dataWriteConfig.getWriteSchema();
+    HoodieSchema rawSchema;
+    if (writeSchemaStr != null) {
+      rawSchema = HoodieSchema.parse(writeSchemaStr);
+    } else {
+      try {
+        rawSchema = new TableSchemaResolver(metaClient).getTableSchema(false);
+      } catch (Exception e) {
+        throw new HoodieException(
+            String.format("Could not resolve schema for table %s for record index bootstrap", metaClient.getBasePath()), e);
+      }
+    }
+    return HoodieSchemaCache.intern(HoodieSchemaUtils.addMetadataFields(rawSchema, dataWriteConfig.allowOperationMetadataField()));
+  }
+
+  /**
    * Fetch record locations from FileSlice snapshot.
    *
    * @param engineContext             context ot use.
@@ -971,7 +994,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       final FileSlice fileSlice = partitionAndFileSlice.getValue();
       final String fileId = fileSlice.getFileId();
       HoodieReaderContext<T> readerContext = readerContextFactory.getContext();
-      HoodieSchema dataSchema = HoodieSchemaCache.intern(HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(dataWriteConfig.getWriteSchema()), dataWriteConfig.allowOperationMetadataField()));
+      HoodieSchema dataSchema = resolveDataSchemaForRLIBootstrap(metaClient, dataWriteConfig);
       // Project _hoodie_record_key from the file only when it is actually populated on
       // disk. With selective exclusion (META_FIELDS_EXCLUDE_LIST), the column is null and
       // we must project the configured source record-key fields instead so the record-index
@@ -980,22 +1003,24 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           ? getRecordKeySchema()
           : HoodieSchemaUtils.projectSchema(dataSchema, Arrays.asList(metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0])));
       Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(dataWriteConfig.getInternalSchema());
-      HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
+      HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>builder()
           .withReaderContext(readerContext)
           .withHoodieTableMetaClient(metaClient)
-          .withFileSlice(fileSlice)
+          .withBaseFileOption(fileSlice.getBaseFile())
+          .withLogFiles(fileSlice.getLogFiles())
+          .withPartitionPath(fileSlice.getPartitionPath())
           .withLatestCommitTime(instantTime.get())
           .withDataSchema(dataSchema)
           .withRequestedSchema(requestedSchema)
-          .withInternalSchema(internalSchemaOption)
+          .withInternalSchemaOpt(internalSchemaOption)
           .withShouldUseRecordPosition(false)
           .withProps(metaClient.getTableConfig().getProps())
           .build();
-      String baseFileInstantTime = fileSlice.getBaseInstantTime();
+      long baseFileInstantTimeMillis = HoodieMetadataPayload.parseRecordIndexInstantTime(fileSlice.getBaseInstantTime());
       return new CloseableMappingIterator<>(fileGroupReader.getClosableIterator(), record -> {
         String recordKey = readerContext.getRecordContext().getRecordKey(record, requestedSchema);
         return HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partition, fileId,
-            baseFileInstantTime, 0);
+            baseFileInstantTimeMillis, 0);
       });
     });
   }
@@ -1178,9 +1203,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
         final HoodieDeleteBlock block = new HoodieDeleteBlock(Collections.emptyList(), blockHeader);
 
-        try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
-            .onParentPath(FSUtils.constructAbsolutePath(metadataWriteConfig.getBasePath(), relativePartitionPath))
-            .withFileId(fileGroupFileId)
+        try (HoodieLogFormat.Writer writer = HoodieLogFormatWriter.builder()
+            .withParentPath(FSUtils.constructAbsolutePath(metadataWriteConfig.getBasePath(), relativePartitionPath))
+            .withLogFileId(fileGroupFileId)
             .withInstantTime(instantTime)
             .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
             .withFileSize(0L)

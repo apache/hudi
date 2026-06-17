@@ -87,7 +87,6 @@ import java.text.ParseException;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Collections;
-
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -726,6 +725,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // so it is handled differently to avoid locking for planning.
       return scheduleCleaning(createTable(config, storageConf), providedInstantTime);
     }
+    // Only enrich metadata after early-return checks, when we're actually going to use it
+    extraMetadata = updateExtraMetadata(extraMetadata);
     Option<HoodieInstant> lastCompletedInstant = lastCompletedTxnAndMetadata.isPresent()
         ? Option.of(lastCompletedTxnAndMetadata.get().getLeft())
         : Option.empty();

@@ -18,16 +18,16 @@
 
 package org.apache.hudi.source.reader;
 
-import org.apache.flink.api.connector.source.SourceReaderContext;
-import org.apache.flink.connector.base.source.reader.RecordEmitter;
-import org.apache.flink.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
-
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.source.HoodieScanContext;
 import org.apache.hudi.source.reader.function.SplitReaderFunction;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.SerializableComparator;
 import org.apache.hudi.source.split.SplitRequestEvent;
+
+import org.apache.flink.api.connector.source.SourceReaderContext;
+import org.apache.flink.connector.base.source.reader.RecordEmitter;
+import org.apache.flink.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 
 import java.util.ArrayList;
 import java.util.Collection;

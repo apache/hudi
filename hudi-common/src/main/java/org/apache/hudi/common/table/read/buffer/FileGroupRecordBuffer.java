@@ -38,7 +38,6 @@ import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -49,6 +48,10 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
+import org.apache.hudi.io.util.FileIOUtils;
+
+import lombok.Getter;
+import lombok.Setter;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -77,8 +80,10 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   protected final Option<Pair<String, String>> payloadClasses;
   protected final TypedProperties props;
   protected final ExternalSpillableMap<Serializable, BufferedRecord<T>> records;
+  @Getter
   protected final DeleteContext deleteContext;
   protected final BufferedRecordConverter<T> bufferedRecordConverter;
+  @Setter
   protected ClosableIterator<T> baseFileIterator;
   protected UpdateProcessor<T> updateProcessor;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
@@ -87,6 +92,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   protected InternalSchema internalSchema;
   protected HoodieTableMetaClient hoodieTableMetaClient;
   protected BufferedRecordMerger<T> bufferedRecordMerger;
+  @Getter
   protected long totalLogRecords = 0;
 
   protected FileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
@@ -131,15 +137,6 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
         readerContext.getRecordSizeEstimator(), diskMapType, readerContext.getRecordSerializer(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName());
   }
 
-  @Override
-  public void setBaseFileIterator(ClosableIterator<T> baseFileIterator) {
-    this.baseFileIterator = baseFileIterator;
-  }
-
-  public DeleteContext getDeleteContext() {
-    return deleteContext;
-  }
-
   /**
    * This allows hasNext() to be called multiple times without incrementing the iterator by more than 1
    * record. It does come with the caveat that hasNext() must be called every time before next(). But
@@ -167,10 +164,6 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   @Override
   public int size() {
     return records.size();
-  }
-
-  public long getTotalLogRecords() {
-    return totalLogRecords;
   }
 
   @Override

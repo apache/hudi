@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.sources.helpers.KinesisOffsetGen.KinesisShardRange;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;

@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.HoodieRowData;
 import org.apache.hudi.client.model.HoodieRowDataCreation;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -29,18 +30,19 @@ import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.table.data.RowData;
@@ -315,8 +317,14 @@ public class HoodieRowDataCreateHandle implements Serializable {
       Path path, HoodieTable hoodieTable, HoodieWriteConfig config, RowType rowType, String instantTime)
       throws IOException {
     StoragePath storagePath = new StoragePath(path.toUri());
-    return (HoodieRowDataFileWriter) new HoodieRowDataFileWriterFactory(hoodieTable.getStorage())
-        .newParquetFileWriter(instantTime, storagePath, config, rowType, hoodieTable.getTaskContextSupplier(),
-            hoodieTable.getMetaClient().getTableConfig());
+    return (HoodieRowDataFileWriter) HoodieFileWriterFactory.getFileWriter(
+        instantTime,
+        storagePath,
+        hoodieTable.getStorage(),
+        config,
+        HoodieSchemaConverter.convertToSchema(rowType).getNonNullType(),
+        hoodieTable.getTaskContextSupplier(),
+        HoodieRecord.HoodieRecordType.FLINK,
+        hoodieTable.getMetaClient().getTableConfig());
   }
 }

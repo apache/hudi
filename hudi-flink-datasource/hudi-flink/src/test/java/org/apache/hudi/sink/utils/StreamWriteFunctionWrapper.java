@@ -30,8 +30,8 @@ import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bootstrap.AbstractBootstrapOperator;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
-import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.bootstrap.RLIBootstrapOperator;
+import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
@@ -368,10 +368,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public void coordinatorFails() throws Exception {
-    this.coordinator.close();
     resetCoordinatorToCheckpoint();
-    this.coordinator.start();
-    this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
   }
 
   public void restartCoordinator() throws Exception {

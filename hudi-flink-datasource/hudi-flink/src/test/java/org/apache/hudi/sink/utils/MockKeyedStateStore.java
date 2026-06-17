@@ -18,6 +18,12 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.adapter.KeyedStateStoreAdapter;
+import org.apache.hudi.sink.utils.keyedstate.MockKeyContext;
+import org.apache.hudi.sink.utils.keyedstate.MockKeyedListState;
+import org.apache.hudi.sink.utils.keyedstate.MockKeyedMapState;
+import org.apache.hudi.sink.utils.keyedstate.MockKeyedValueState;
+
 import org.apache.flink.api.common.state.AggregatingState;
 import org.apache.flink.api.common.state.AggregatingStateDescriptor;
 import org.apache.flink.api.common.state.ListState;
@@ -28,12 +34,6 @@ import org.apache.flink.api.common.state.ReducingState;
 import org.apache.flink.api.common.state.ReducingStateDescriptor;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
-
-import org.apache.hudi.adapter.KeyedStateStoreAdapter;
-import org.apache.hudi.sink.utils.keyedstate.MockKeyContext;
-import org.apache.hudi.sink.utils.keyedstate.MockKeyedListState;
-import org.apache.hudi.sink.utils.keyedstate.MockKeyedMapState;
-import org.apache.hudi.sink.utils.keyedstate.MockKeyedValueState;
 
 import java.util.Collections;
 import java.util.HashMap;

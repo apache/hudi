@@ -41,8 +41,11 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -136,6 +139,20 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
    * context from schedule to run step.
    */
   protected abstract Map<String, String> getStrategyParams();
+
+  /**
+   * Keep partitions from the current scheduling window that are not scheduled in this plan as missing
+   * partitions so that they can be picked up by later incremental clustering schedules.
+   */
+  protected List<String> getMissingPartitionsFromCurrentWindow(List<String> partitionsToSchedule,
+                                                               List<String> partitionsInCurrentWindow) {
+    if (!getWriteConfig().isIncrementalTableServiceEnabled()) {
+      return new ArrayList<>();
+    }
+    Set<String> missingPartitions = new LinkedHashSet<>(partitionsInCurrentWindow);
+    missingPartitions.removeAll(new HashSet<>(partitionsToSchedule));
+    return new ArrayList<>(missingPartitions);
+  }
 
   /**
    * Returns any specific parameters to be stored as part of clustering metadata.

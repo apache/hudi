@@ -22,11 +22,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.source.HoodieScanContext;
-import org.apache.hudi.source.split.assign.HoodieSplitNumberAssigner;
 import org.apache.hudi.source.split.DefaultHoodieSplitProvider;
 import org.apache.hudi.source.split.HoodieContinuousSplitBatch;
 import org.apache.hudi.source.split.HoodieContinuousSplitDiscover;
 import org.apache.hudi.source.split.HoodieSourceSplit;
+import org.apache.hudi.source.split.assign.HoodieSplitNumberAssigner;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utils.TestConfigurations;
 
@@ -445,8 +445,8 @@ public class TestHoodieContinuousSplitEnumerator {
   }
 
   /**
-   * Verify that when the metricGroup is null (Flink 1.17 path), discovering splits with
-   * non-empty results does not throw a NullPointerException.
+   * Verify that when the metricGroup is null, discovering splits with non-empty results
+   * does not throw a NullPointerException.
    */
   @Test
   public void testProcessDiscoveredSplitsWithNullMetricGroup() {

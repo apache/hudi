@@ -18,11 +18,13 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
-import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
@@ -48,6 +50,8 @@ import org.apache.flink.table.factories.DynamicTableFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -58,6 +62,7 @@ import java.util.Objects;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -276,6 +281,32 @@ public class TestHoodieTableFactory {
     this.conf.setString(HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key(), "true");
     final MockContext sourceContext6 = MockContext.getInstance(this.conf, schema, "f2");
     assertThrows(IllegalArgumentException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext6));
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieIndex.IndexType.class, names = {"GLOBAL_RECORD_LEVEL_INDEX", "RECORD_LEVEL_INDEX"})
+  void testRecordLevelIndexDoesNotSupportMultipleWriters(HoodieIndex.IndexType indexType) {
+    ResolvedSchema schema = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("ts", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0")
+        .build();
+
+    Configuration rliConf = new Configuration(this.conf);
+    rliConf.set(FlinkOptions.INDEX_TYPE, indexType.name());
+    rliConf.set(FlinkOptions.OPERATION, "upsert");
+    rliConf.set(FlinkOptions.METADATA_ENABLED, true);
+    rliConf.set(FlinkOptions.INDEX_GLOBAL_ENABLED,
+        indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX);
+    rliConf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
+        WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+
+    IllegalArgumentException exception = assertThrows(
+        IllegalArgumentException.class,
+        () -> new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(rliConf, schema, "")));
+    assertThat(exception.getMessage(),
+        containsString("record level index does not support multiple writers"));
   }
 
   @Test
@@ -785,31 +816,71 @@ public class TestHoodieTableFactory {
         (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf));
     Configuration conf2 = tableSink2.getConf();
     assertThat(conf2.get(FlinkOptions.PRE_COMBINE), is(false));
+
+    // Global RLI setup should not enable index bootstrap implicitly.
+    Configuration globalRLIConf = new Configuration(this.conf);
+    globalRLIConf.set(FlinkOptions.OPERATION, "upsert");
+    globalRLIConf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    globalRLIConf.set(FlinkOptions.METADATA_ENABLED, true);
+    globalRLIConf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, true);
+    HoodieTableSink globalRLISink =
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(globalRLIConf));
+    Configuration globalRLIResolvedConf = globalRLISink.getConf();
+    assertThat(globalRLIResolvedConf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED), is(false));
+
+    globalRLIConf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    HoodieTableSink globalRLIWithBootstrapSink =
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(globalRLIConf));
+    Configuration globalRLIWithBootstrapResolvedConf = globalRLIWithBootstrapSink.getConf();
+    assertThat(globalRLIWithBootstrapResolvedConf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED), is(true));
   }
 
   @Test
-  void testLanceFormatNotSupportedByFlink() {
-    // Lance base file format is only supported with the Spark engine.
-    // Both source and sink should reject it with a clear error message.
-    this.conf.setString("hoodie.table.base.file.format", "LANCE");
-    ResolvedSchema schema = SchemaBuilder.instance()
+  void testLanceFormatSupportedForFlinkTables() {
+    Configuration lanceConf = new Configuration();
+    lanceConf.set(FlinkOptions.PATH, new File(tempFile, "lance").getAbsolutePath());
+    lanceConf.set(FlinkOptions.TABLE_NAME, "lance_t1");
+    lanceConf.set(FlinkOptions.OPERATION, "insert");
+    lanceConf.setString("hoodie.table.base.file.format", "LANCE");
+    ResolvedSchema appendOnlySchema = SchemaBuilder.instance()
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
         .field("f2", DataTypes.TIMESTAMP(3))
         .field("ts", DataTypes.TIMESTAMP(3))
+        .build();
+    final MockContext appendOnlyContext = MockContext.getInstance(lanceConf, appendOnlySchema, "f2");
+
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(appendOnlyContext));
+
+    Configuration morConf = new Configuration(lanceConf);
+    morConf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    final MockContext morContext = MockContext.getInstance(morConf, appendOnlySchema, "f2");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(morContext));
+
+    Configuration schemaEvolutionConf = new Configuration(lanceConf);
+    schemaEvolutionConf.setString(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), "true");
+    final MockContext schemaEvolutionContext = MockContext.getInstance(schemaEvolutionConf, appendOnlySchema, "f2");
+    HoodieValidationException schemaEvolutionEx = assertThrows(HoodieValidationException.class,
+        () -> new HoodieTableFactory().createDynamicTableSink(schemaEvolutionContext));
+    assertThat(schemaEvolutionEx.getMessage(), is("Flink Lance base-file support does not support schema evolution. Set '"
+        + HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key() + "' = 'false'."));
+
+    ResolvedSchema primaryKeySchema = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
         .primaryKey("f0")
         .build();
-    final MockContext context = MockContext.getInstance(this.conf, schema, "f2");
+    final MockContext primaryKeyContext = MockContext.getInstance(lanceConf, primaryKeySchema, "f1");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(primaryKeyContext));
 
-    // Source path should throw
-    HoodieValidationException sourceEx = assertThrows(HoodieValidationException.class,
-        () -> new HoodieTableFactory().createDynamicTableSource(context));
-    assertThat(sourceEx.getMessage(), is(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG));
+    Configuration upsertConf = new Configuration(lanceConf);
+    upsertConf.set(FlinkOptions.OPERATION, "upsert");
+    final MockContext upsertContext = MockContext.getInstance(upsertConf, primaryKeySchema, "f1");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(upsertContext));
 
-    // Sink path should throw
-    HoodieValidationException sinkEx = assertThrows(HoodieValidationException.class,
-        () -> new HoodieTableFactory().createDynamicTableSink(context));
-    assertThat(sinkEx.getMessage(), is(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG));
+    lanceConf.set(FlinkOptions.RECORD_KEY_FIELD, "f0");
+    final MockContext keyedContext = MockContext.getInstance(lanceConf, appendOnlySchema, "f2");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(keyedContext));
   }
 
   // -------------------------------------------------------------------------

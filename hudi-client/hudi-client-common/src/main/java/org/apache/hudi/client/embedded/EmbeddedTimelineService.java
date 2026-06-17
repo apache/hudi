@@ -252,7 +252,7 @@ public class EmbeddedTimelineService {
 
   private static TimelineServiceIdentifier getTimelineServiceIdentifier(String hostAddr, HoodieWriteConfig writeConfig) {
     return new TimelineServiceIdentifier(hostAddr, writeConfig.getMarkersType(), writeConfig.isMetadataTableEnabled(),
-        writeConfig.isEarlyConflictDetectionEnable());
+        writeConfig.isEarlyConflictDetectionEnable(), writeConfig.isUsingRemotePartitioner());
   }
 
   static class TimelineServiceIdentifier {
@@ -260,15 +260,18 @@ public class EmbeddedTimelineService {
     private final MarkerType markerType;
     private final boolean isMetadataEnabled;
     private final boolean isEarlyConflictDetectionEnable;
+    private final boolean isRemotePartitionerEnabled;
 
     public TimelineServiceIdentifier(String hostAddr,
                                      MarkerType markerType,
                                      boolean isMetadataEnabled,
-                                     boolean isEarlyConflictDetectionEnable) {
+                                     boolean isEarlyConflictDetectionEnable,
+                                     boolean isRemotePartitionerEnabled) {
       this.hostAddr = hostAddr;
       this.markerType = markerType;
       this.isMetadataEnabled = isMetadataEnabled;
       this.isEarlyConflictDetectionEnable = isEarlyConflictDetectionEnable;
+      this.isRemotePartitionerEnabled = isRemotePartitionerEnabled;
     }
 
     @Override
@@ -280,17 +283,16 @@ public class EmbeddedTimelineService {
         return false;
       }
       TimelineServiceIdentifier that = (TimelineServiceIdentifier) o;
-      if (this.hostAddr != null && that.hostAddr != null) {
-        return isMetadataEnabled == that.isMetadataEnabled && isEarlyConflictDetectionEnable == that.isEarlyConflictDetectionEnable
-            && hostAddr.equals(that.hostAddr) && markerType == that.markerType;
-      } else {
-        return (hostAddr == null && that.hostAddr == null);
-      }
+      return isMetadataEnabled == that.isMetadataEnabled
+          && isEarlyConflictDetectionEnable == that.isEarlyConflictDetectionEnable
+          && isRemotePartitionerEnabled == that.isRemotePartitionerEnabled
+          && Objects.equals(hostAddr, that.hostAddr)
+          && markerType == that.markerType;
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(hostAddr, markerType, isMetadataEnabled, isEarlyConflictDetectionEnable);
+      return Objects.hash(hostAddr, markerType, isMetadataEnabled, isEarlyConflictDetectionEnable, isRemotePartitionerEnabled);
     }
   }
 }

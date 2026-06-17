@@ -188,6 +188,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(false) // keep sync with hoodie style
       .withDescription("If enabled, the checkpoint Id will also be written to hudi metadata.");
 
+  public static final ConfigOption<Boolean> TABLE_SERVICES_ENABLED = ConfigOptions
+      .key(HoodieWriteConfig.TABLE_SERVICES_ENABLED.key())
+      .booleanType()
+      .defaultValue(HoodieWriteConfig.TABLE_SERVICES_ENABLED.defaultValue())
+      .withDescription("Master control to disable all table services including archive, clean, compact, cluster, etc.");
+
   // ------------------------------------------------------------------------
   //  Changelog Capture Options
   // ------------------------------------------------------------------------
@@ -632,6 +638,7 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Users can use this parameter to specify expression and the corresponding bucket "
           + "numbers (separated by commas).Multiple rules are separated by semicolons like "
           + "hoodie.bucket.index.partition.expressions=expression1,bucket-number1;expression2,bucket-number2");
+
   public static final ConfigOption<String> PARTITION_PATH_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
       .stringType()

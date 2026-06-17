@@ -46,7 +46,9 @@ public class HoodiePreCommitValidatorConfig extends HoodieConfig {
       .withDocumentation("Comma separated list of class names that can be invoked to validate commit. "
           + "Available streaming offset validators: "
           + "org.apache.hudi.sink.validator.FlinkKafkaOffsetValidator (Flink Kafka), "
-          + "org.apache.hudi.utilities.streamer.validator.SparkKafkaOffsetValidator (Spark/HoodieStreamer Kafka)");
+          + "org.apache.hudi.utilities.streamer.validator.SparkKafkaOffsetValidator (Spark/HoodieStreamer Kafka). "
+          + "Available write-error validators: "
+          + "org.apache.hudi.utilities.streamer.validator.SparkWriteErrorValidator (Spark/HoodieStreamer write errors).");
   public static final String VALIDATOR_TABLE_VARIABLE = "<TABLE_NAME>";
 
   public static final ConfigProperty<String> EQUALITY_SQL_QUERIES = ConfigProperty

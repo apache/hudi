@@ -123,6 +123,12 @@ public class TestUtils {
         .orElse(null);
   }
 
+  public static boolean hasCompleteCompactionInstant(String basePath) {
+    final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())), basePath);
+    return metaClient.getActiveTimeline().filterCompletedInstants().getCommitTimeline().lastInstant().isPresent();
+  }
+
   @Nullable
   public static String getNthArchivedInstant(String basePath, int n) {
     final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(

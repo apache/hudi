@@ -27,12 +27,12 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.metadata.HoodieIndexVersion;
-import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.Path;

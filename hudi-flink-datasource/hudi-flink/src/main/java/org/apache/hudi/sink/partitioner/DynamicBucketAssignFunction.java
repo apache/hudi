@@ -29,8 +29,8 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.partitioner.index.DummyPartitionedIndexBackend;
-import org.apache.hudi.sink.partitioner.index.RecordLevelIndexBackend;
 import org.apache.hudi.sink.partitioner.index.PartitionedIndexBackend;
+import org.apache.hudi.sink.partitioner.index.RecordLevelIndexBackend;
 import org.apache.hudi.sink.partitioner.profile.WriteProfile;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.table.action.commit.BucketInfo;
@@ -109,6 +109,7 @@ public class DynamicBucketAssignFunction
     this.indexBackend = isInsertOverwrite
         ? new DummyPartitionedIndexBackend()
         : new RecordLevelIndexBackend(conf, (partitionPath, recordKey, fileId) -> isRecordKeyOfThisTask(recordKey));
+    this.indexBackend.registerMetrics(getRuntimeContext().getMetricGroup());
   }
 
   private boolean isRecordKeyOfThisTask(String recordKey) {

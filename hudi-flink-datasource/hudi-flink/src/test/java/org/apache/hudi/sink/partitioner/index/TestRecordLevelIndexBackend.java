@@ -25,6 +25,8 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.Histogram;
+import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -37,6 +39,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
@@ -152,6 +155,17 @@ public class TestRecordLevelIndexBackend {
     }
   }
 
+  @Test
+  public void testRegisterMetricsRegistersPartitionBootstrapHistograms() throws Exception {
+    CapturingMetricGroup metricGroup = new CapturingMetricGroup();
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.registerMetrics(metricGroup);
+
+      assertNotNull(metricGroup.getHistogram("partition_bootstrap_latency_millis"));
+      assertNotNull(metricGroup.getHistogram("partition_bootstrap_keys_loaded"));
+    }
+  }
+
   private RecordLevelIndexBackend createBackend() {
     return new RecordLevelIndexBackend(conf, (partitionPath, recordKey, fileId) -> true);
   }
@@ -185,6 +199,20 @@ public class TestRecordLevelIndexBackend {
     @Override
     public Map<Long, String> requestInflightInstants() {
       return inflightInstants;
+    }
+  }
+
+  private static class CapturingMetricGroup extends UnregisteredMetricsGroup {
+    private final Map<String, Histogram> histograms = new HashMap<>();
+
+    @Override
+    public <H extends Histogram> H histogram(String name, H histogram) {
+      histograms.put(name, histogram);
+      return histogram;
+    }
+
+    Histogram getHistogram(String name) {
+      return histograms.get(name);
     }
   }
 }

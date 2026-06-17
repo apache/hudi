@@ -24,6 +24,7 @@ import org.apache.hudi.client.transaction.lock.StorageBasedLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedImplicitBasePathLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -35,6 +36,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Properties;
 
@@ -46,6 +49,21 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMetadataWriteUtils {
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testCreateMetadataWriteConfigPropagatesHFileBloomFilterSetting(boolean hfileBloomFilterEnabled) {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/base_path/")
+        .withStorageConfig(HoodieStorageConfig.newBuilder()
+            .hfileBloomFilterEnable(hfileBloomFilterEnabled)
+            .build())
+        .build();
+
+    HoodieWriteConfig metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
+        writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.EIGHT);
+    assertEquals(hfileBloomFilterEnabled, metadataWriteConfig.hfileBloomFilterEnabled());
+  }
 
   @Test
   public void testCreateMetadataWriteConfigForCleaner() {

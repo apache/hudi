@@ -20,12 +20,12 @@
 package org.apache.hudi.io.storage.hadoop;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.util.HFileUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDuplicateKeyException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -50,8 +50,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -172,23 +172,7 @@ public class HoodieAvroHFileWriter
   @Override
   public void close() throws IOException {
     if (hfileConfig.useBloomFilter()) {
-      final BloomFilter bloomFilter = hfileConfig.getBloomFilter();
-      if (minRecordKey == null) {
-        minRecordKey = "";
-      }
-      if (maxRecordKey == null) {
-        maxRecordKey = "";
-      }
-      writer.appendFileInfo(
-          HoodieAvroHFileReaderImplBase.KEY_MIN_RECORD, getUTF8Bytes(minRecordKey));
-      writer.appendFileInfo(
-          HoodieAvroHFileReaderImplBase.KEY_MAX_RECORD, getUTF8Bytes(maxRecordKey));
-      writer.appendFileInfo(
-          HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_TYPE_CODE,
-          getUTF8Bytes(bloomFilter.getBloomFilterTypeCode().toString()));
-      writer.appendMetaInfo(
-          HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK,
-          getUTF8Bytes(bloomFilter.serializeToString()));
+      HFileUtils.appendBloomFilter(writer, minRecordKey, maxRecordKey, hfileConfig.getBloomFilter());
     }
     writer.close();
     writer = null;

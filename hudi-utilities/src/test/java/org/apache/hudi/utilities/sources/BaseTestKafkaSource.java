@@ -33,6 +33,9 @@ import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.testutils.KafkaTestUtils;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -323,27 +326,14 @@ public abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarne
     verify(metrics, times(2)).updateStreamerSourceBytesToBeIngestedInSyncRound(Long.MAX_VALUE);
   }
 
+  @AllArgsConstructor
+  @Getter
   static class TestSourceProfile implements SourceProfile<Long> {
 
     private final long maxSourceBytes;
     private final int sourcePartitions;
+    @Getter(AccessLevel.NONE)
     private final long numEvents;
-
-    public TestSourceProfile(long maxSourceBytes, int sourcePartitions, long numEvents) {
-      this.maxSourceBytes = maxSourceBytes;
-      this.sourcePartitions = sourcePartitions;
-      this.numEvents = numEvents;
-    }
-
-    @Override
-    public long getMaxSourceBytes() {
-      return maxSourceBytes;
-    }
-
-    @Override
-    public int getSourcePartitions() {
-      return sourcePartitions;
-    }
 
     @Override
     public Long getSourceSpecificContext() {

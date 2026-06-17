@@ -18,8 +18,9 @@
 
 package org.apache.hudi.source.split.assign;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.hudi.configuration.OptionsResolver;
+
+import org.apache.flink.configuration.Configuration;
 
 /**
  * Factory class for creating {@link HoodieSplitAssigner}.

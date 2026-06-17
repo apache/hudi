@@ -57,7 +57,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val adaptIngestionTargetLogicalRelations: RuleBuilder = session => AdaptIngestionTargetLogicalRelations(session)
 
     rules += adaptIngestionTargetLogicalRelations
-    val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark4_1) {
+    val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark4_2) {
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark42DataSourceV2ToV1Fallback"
+    } else if (HoodieSparkUtils.isSpark4_1) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark41DataSourceV2ToV1Fallback"
     } else if (HoodieSparkUtils.isSpark4_0) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark40DataSourceV2ToV1Fallback"
@@ -83,7 +85,10 @@ object HoodieAnalysis extends SparkAdapterSupport {
     // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
     rules ++= Seq(dataSourceV2ToV1Fallback, resolveReferences)
 
-    if (HoodieSparkUtils.isSpark4_1) {
+    if (HoodieSparkUtils.isSpark4_2) {
+      rules += (_ => instantiateKlass(
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark42ResolveColumnsForInsertInto"))
+    } else if (HoodieSparkUtils.isSpark4_1) {
       rules += (_ => instantiateKlass(
         "org.apache.spark.sql.hudi.analysis.HoodieSpark41ResolveColumnsForInsertInto"))
     } else if (HoodieSparkUtils.isSpark4_0) {
@@ -95,7 +100,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
     }
 
     val resolveAlterTableCommandsClass =
-      if (HoodieSparkUtils.isSpark4_1) {
+      if (HoodieSparkUtils.isSpark4_2) {
+        "org.apache.spark.sql.hudi.Spark42ResolveHudiAlterTableCommand"
+      } else if (HoodieSparkUtils.isSpark4_1) {
         "org.apache.spark.sql.hudi.Spark41ResolveHudiAlterTableCommand"
       } else if (HoodieSparkUtils.isSpark4_0) {
         "org.apache.spark.sql.hudi.Spark40ResolveHudiAlterTableCommand"
@@ -144,7 +151,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
     )
 
     val nestedSchemaPruningClass =
-      if (HoodieSparkUtils.isSpark4_1) {
+      if (HoodieSparkUtils.isSpark4_2) {
+        "org.apache.spark.sql.execution.datasources.Spark42NestedSchemaPruning"
+      } else if (HoodieSparkUtils.isSpark4_1) {
         "org.apache.spark.sql.execution.datasources.Spark41NestedSchemaPruning"
       } else if (HoodieSparkUtils.isSpark4_0) {
         "org.apache.spark.sql.execution.datasources.Spark40NestedSchemaPruning"
@@ -423,7 +432,8 @@ case class ResolveImplementationsEarly(spark: SparkSession) extends Rule[Logical
       // Convert to CreateHoodieTableAsSelectCommand
       case ct @ CreateTable(table, mode, Some(query))
         if sparkAdapter.isHoodieTable(table) && ct.query.forall(_.resolved) =>
-        val alignedQuery = stripMetaFieldAttributes(query)
+        val alignedQuery = alignCtasQueryByPartitionOrder(
+          stripMetaFieldAttributes(query), table.partitionColumnNames)
         CreateHoodieTableAsSelectCommand(table, mode, alignedQuery)
 
       case ct: CreateTable =>
@@ -443,6 +453,37 @@ case class ResolveImplementationsEarly(spark: SparkSession) extends Rule[Logical
         plan
 
       case _ => plan
+    }
+  }
+
+  private def alignCtasQueryByPartitionOrder(query: LogicalPlan, partitionColumns: Seq[String]): LogicalPlan = {
+    if (partitionColumns.isEmpty) {
+      query
+    } else {
+      val resolver = spark.sessionState.conf.resolver
+      val (dataAttrs, partitionAttrs) = query.output.partition { attr =>
+        !partitionColumns.exists(partition => resolver(partition, attr.name))
+      }
+
+      if (partitionAttrs.size != partitionColumns.size) {
+        throw new HoodieAnalysisException(s"Partition columns ${partitionColumns.mkString("[", ", ", "]")} " +
+          s"do not match query output ${query.output.map(_.name).mkString("[", ", ", "]")}")
+      }
+
+      val alreadyAligned = partitionColumns.zip(partitionAttrs).forall {
+        case (partition, attr) => resolver(partition, attr.name)
+      }
+      // Avoid adding a redundant Project when partition columns are already in the table-defined order.
+      if (alreadyAligned) {
+        query
+      } else {
+        val orderedPartitionAttrs = partitionColumns.map { partition =>
+          partitionAttrs.find(attr => resolver(partition, attr.name)).getOrElse {
+            throw new HoodieAnalysisException(s"Cannot resolve partition column $partition in CTAS query output")
+          }
+        }
+        Project(dataAttrs ++ orderedPartitionAttrs, query)
+      }
     }
   }
 }

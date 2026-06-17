@@ -22,9 +22,9 @@ import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.FailOnFirstErrorWriteStatus;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.HoodieTableServiceManagerConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.HoodieTableServiceManagerConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
@@ -259,11 +259,12 @@ public class HoodieMetadataWriteUtils {
             // Keeping the log blocks as large as the log files themselves reduces the number of HFile blocks to be checked for
             // presence of keys
             .logFileDataBlockMaxSize(maxLogFileSizeBytes)
-                               .withBloomFilterType(writeConfig.getMetadataConfig().getBloomFilterType())
-                               .withBloomFilterNumEntries(writeConfig.getMetadataConfig().getBloomFilterNumEntries())
-                               .withBloomFilterFpp(writeConfig.getMetadataConfig().getBloomFilterFpp())
-                               .withBloomFilterDynamicMaxEntries(writeConfig.getMetadataConfig().getDynamicBloomFilterMaxNumEntries())
-                               .build())
+            .hfileBloomFilterEnable(writeConfig.hfileBloomFilterEnabled())
+            .withBloomFilterType(writeConfig.getMetadataConfig().getBloomFilterType())
+            .withBloomFilterNumEntries(writeConfig.getMetadataConfig().getBloomFilterNumEntries())
+            .withBloomFilterFpp(writeConfig.getMetadataConfig().getBloomFilterFpp())
+            .withBloomFilterDynamicMaxEntries(writeConfig.getMetadataConfig().getDynamicBloomFilterMaxNumEntries())
+            .build())
         .withRollbackParallelism(MDT_DEFAULT_PARALLELISM)
         .withFinalizeWriteParallelism(MDT_DEFAULT_PARALLELISM)
         .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())

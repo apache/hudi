@@ -18,19 +18,20 @@
 
 package org.apache.hudi.source.reader.function;
 
-import org.apache.flink.table.types.AtomicDataType;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.source.ExpressionPredicates;
+import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.utils.TestConfigurations;
+
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
+import org.apache.flink.table.types.AtomicDataType;
 import org.apache.flink.table.types.logical.VarCharType;
-import org.apache.hudi.table.format.InternalSchemaManager;
-import org.apache.hudi.utils.TestConfigurations;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

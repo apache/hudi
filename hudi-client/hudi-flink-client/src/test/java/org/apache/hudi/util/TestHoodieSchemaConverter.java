@@ -34,8 +34,8 @@ import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.table.types.logical.MapType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
-import org.apache.flink.table.types.logical.VarCharType;
 import org.apache.flink.table.types.logical.VarBinaryType;
+import org.apache.flink.table.types.logical.VarCharType;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -770,6 +770,23 @@ public class TestHoodieSchemaConverter {
     RowType blobLikeRowType = (RowType) blobLikeRow.getLogicalType();
     HoodieSchema convertedSchema = HoodieSchemaConverter.convertToSchema(blobLikeRowType);
     assertEquals(HoodieSchemaType.BLOB, convertedSchema.getType());
+
+    // Positive case: same structure but every nested field nullable. Flink SQL CREATE TABLE does not
+    // preserve NOT NULL on nested ROW fields, so detection must not depend on nested nullability.
+    DataType allNullableBlobRow = DataTypes.ROW(
+        DataTypes.FIELD(HoodieSchema.Blob.TYPE, DataTypes.STRING().nullable()),
+        DataTypes.FIELD(HoodieSchema.Blob.INLINE_DATA_FIELD, DataTypes.BYTES().nullable()),
+        DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE, DataTypes.ROW(
+            DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH, DataTypes.STRING().nullable()),
+            DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET, DataTypes.BIGINT().nullable()),
+            DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH, DataTypes.BIGINT().nullable()),
+            DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, DataTypes.BOOLEAN().nullable())
+        ).nullable())
+    ).notNull();
+
+    RowType allNullableBlobRowType = (RowType) allNullableBlobRow.getLogicalType();
+    HoodieSchema allNullableConverted = HoodieSchemaConverter.convertToSchema(allNullableBlobRowType);
+    assertEquals(HoodieSchemaType.BLOB, allNullableConverted.getType());
 
     // Negative case 1: Different field names
     DataType differentNames = DataTypes.ROW(

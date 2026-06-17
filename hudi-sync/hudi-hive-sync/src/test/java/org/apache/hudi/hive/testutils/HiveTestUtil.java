@@ -39,8 +39,8 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
@@ -85,7 +85,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
-import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
@@ -140,6 +139,11 @@ public class HiveTestUtil {
   private static Set<String> createdTablesSet = new HashSet<>();
 
   public static void setUp(Option<TypedProperties> hiveSyncProperties, boolean shouldClearBasePathAndTables) throws Exception {
+    setUp(hiveSyncProperties, shouldClearBasePathAndTables, null);
+  }
+
+  public static void setUp(Option<TypedProperties> hiveSyncProperties, boolean shouldClearBasePathAndTables,
+                           java.nio.file.Path tempDir) throws Exception {
     configuration = new Configuration();
     if (zkServer == null) {
       zkService = new ZookeeperTestService(configuration);
@@ -155,7 +159,10 @@ public class HiveTestUtil {
       hiveSyncProps.setProperty(HIVE_URL.key(), hiveTestService.getJdbcHive2Url());
       basePath = hiveSyncProps.getProperty(META_SYNC_BASE_PATH.key());
     } else {
-      basePath = Files.createTempDirectory("hivesynctest" + Instant.now().toEpochMilli()).toUri().toString();
+      java.nio.file.Path baseDir = tempDir == null
+          ? Files.createTempDirectory("hivesynctest")
+          : Files.createTempDirectory(Files.createDirectories(tempDir), "hivesynctest");
+      basePath = baseDir.toUri().toString();
 
       hiveSyncProps = new TypedProperties();
       hiveSyncProps.setProperty(HIVE_URL.key(), hiveTestService.getJdbcHive2Url());
@@ -183,15 +190,17 @@ public class HiveTestUtil {
     if (shouldClearBasePathAndTables) {
       clear();
     }
+    if (!hiveSyncProperties.isPresent()) {
+      HoodieTableMetaClient.newTableBuilder()
+          .setTableType(HoodieTableType.COPY_ON_WRITE)
+          .setTableName(TABLE_NAME)
+          .setPayloadClass(HoodieAvroPayload.class)
+          .initTable(HadoopFSUtils.getStorageConfWithCopy(configuration), basePath);
+    }
   }
 
   public static void clear() throws IOException, HiveException, MetaException {
     fileSystem.delete(new Path(basePath), true);
-    HoodieTableMetaClient.newTableBuilder()
-        .setTableType(HoodieTableType.COPY_ON_WRITE)
-        .setTableName(TABLE_NAME)
-        .setPayloadClass(HoodieAvroPayload.class)
-        .initTable(HadoopFSUtils.getStorageConfWithCopy(configuration), basePath);
 
     if (ddlExecutor != null) {
       for (String tableName : createdTablesSet) {
@@ -716,8 +725,10 @@ public class HiveTestUtil {
     HoodieSchema schema = getTestDataSchema(isLogSchemaSimple);
     HoodieBaseFile dataFile = new HoodieBaseFile(storage.getPathInfo(parquetFilePath));
     // Write a log file for this parquet file
-    Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(parquetFilePath.getParent())
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(dataFile.getFileId())
+    Writer logWriter = HoodieLogFormatWriter.builder()
+        .withParentPath(parquetFilePath.getParent())
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withLogFileId(dataFile.getFileId())
         .withInstantTime(dataFile.getCommitTime()).withStorage(storage).build();
     List<HoodieRecord> records = (isLogSchemaSimple ? SchemaTestUtil.generateTestRecords(0, 100)
         : SchemaTestUtil.generateEvolvedTestRecords(100, 100)).stream()
@@ -736,9 +747,13 @@ public class HiveTestUtil {
     HoodieSchema schema = SchemaTestUtil.getSchema(logSchemaPath);
     HoodieBaseFile dataFile = new HoodieBaseFile(storage.getPathInfo(parquetFilePath));
     // Write a log file for this parquet file
-    Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(parquetFilePath.getParent())
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(dataFile.getFileId())
-        .withInstantTime(dataFile.getCommitTime()).withStorage(storage).build();
+    Writer logWriter = HoodieLogFormatWriter.builder()
+        .withParentPath(parquetFilePath.getParent())
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withLogFileId(dataFile.getFileId())
+        .withInstantTime(dataFile.getCommitTime())
+        .withStorage(storage)
+        .build();
     List<HoodieRecord> records = SchemaTestUtil.generateTestRecords(logSchemaPath, dataPath).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
     Map<HeaderMetadataType, String> header = new HashMap<>(2);
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, dataFile.getCommitTime());

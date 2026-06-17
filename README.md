@@ -136,6 +136,7 @@ Refer to the table below for building with different Spark and Scala versions.
 | `-Dspark3.5 -Dscala-2.13` | hudi-spark3.5-bundle_2.13                    | For Spark 3.5.x and Scala 2.13                   |
 | `-Dspark4.0`              | hudi-spark4.0-bundle_2.13                    | For Spark 4.0 and Scala 2.13 (Needs java 17)     |
 | `-Dspark4.1`              | hudi-spark4.1-bundle_2.13                    | For Spark 4.1 and Scala 2.13 (Needs java 17)     |
+| `-Dspark4.2`              | hudi-spark4.2-bundle_2.13                    | For Spark 4.2 and Scala 2.13 (Needs java 17)     |
 | `-Dspark3`                | hudi-spark3-bundle_2.12 (legacy bundle name) | For Spark 3.5.x and Scala 2.12                   |
 
 Please note that only Spark-related bundles, i.e., `hudi-spark-bundle`, `hudi-utilities-bundle`,
@@ -174,15 +175,11 @@ Refer to the table below for building with different Flink and Scala versions.
 | `-Dflink1.20`       | hudi-flink1.20-bundle          | For Flink 1.20 (same as default) |
 | `-Dflink1.19`       | hudi-flink1.19-bundle          | For Flink 1.19                   |
 | `-Dflink1.18`       | hudi-flink1.18-bundle          | For Flink 1.18                   |
-| `-Dflink1.17`       | hudi-flink1.17-bundle          | For Flink 1.17                   |
 
 For example,
 ```
 # Build against Flink 2.1.x
 mvn clean package -DskipTests -Dflink2.1
-
-# Build against Flink 1.17.x
-mvn clean package -DskipTests -Dflink1.17
 ```
 
 ## Running Tests

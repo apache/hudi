@@ -23,16 +23,15 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.io.util.FileIOUtils;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -44,6 +43,7 @@ import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.io.storage.HoodieNativeAvroHFileReader;
 import org.apache.hudi.io.storage.hadoop.HoodieAvroHFileWriter;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -53,6 +53,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -74,7 +75,6 @@ import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.TreeMap;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -82,8 +82,8 @@ import java.util.stream.StreamSupport;
 
 import static org.apache.hudi.common.bloom.BloomFilterFactory.createBloomFilter;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
-import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getHoodieSchemaFromResource;
+import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.io.hfile.TestHFileReader.BOOTSTRAP_INDEX_HFILE_SUFFIX;
@@ -99,6 +99,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -157,20 +158,24 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   @Override
   protected HoodieAvroHFileWriter createWriter(
       HoodieSchema schema, boolean populateMetaFields) throws Exception {
+    return createWriter(schema, populateMetaFields, true);
+  }
+
+  protected HoodieAvroHFileWriter createWriter(
+      HoodieSchema schema, boolean populateMetaFields, boolean hfileBloomFilterEnabled) throws Exception {
     String instantTime = "000";
     HoodieStorage storage = HoodieTestUtils.getStorage(getFilePath());
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), Boolean.toString(populateMetaFields));
-    TaskContextSupplier mockTaskContextSupplier = mock(TaskContextSupplier.class);
-    Supplier<Integer> partitionSupplier = mock(Supplier.class);
-    when(mockTaskContextSupplier.getPartitionIdSupplier()).thenReturn(partitionSupplier);
-    when(partitionSupplier.get()).thenReturn(10);
 
     HoodieTableConfig tableConfig = new HoodieTableConfig();
     tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
     return (HoodieAvroHFileWriter) HoodieFileWriterFactory.getFileWriter(
-        instantTime, getFilePath(), storage, HoodieStorageConfig.newBuilder().fromProperties(props).build(), schema,
-        mockTaskContextSupplier, HoodieRecord.HoodieRecordType.AVRO, tableConfig);
+        instantTime, getFilePath(), storage, HoodieStorageConfig.newBuilder()
+            .fromProperties(props)
+            .hfileBloomFilterEnable(hfileBloomFilterEnabled)
+            .build(), schema,
+        new LocalTaskContextSupplier(), HoodieRecord.HoodieRecordType.AVRO, tableConfig);
   }
 
   @Override
@@ -259,6 +264,64 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
         }
       });
       hoodieHFileReader.close();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testHFileBloomFilterMetadataWriteConfig(boolean hfileBloomFilterEnabled) throws Exception {
+    HoodieSchema schema = getHoodieSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
+    HoodieAvroHFileWriter writer = createWriter(schema, true, hfileBloomFilterEnabled);
+    for (int i = 0; i < 3; i++) {
+      GenericRecord record = new GenericData.Record(schema.getAvroSchema());
+      String key = "key" + String.format("%02d", i);
+      record.put("_row_key", key);
+      record.put("time", Integer.toString(i));
+      record.put("number", i);
+      writer.writeAvro(key, record);
+    }
+    writer.close();
+
+    HoodieStorage storage = HoodieTestUtils.getStorage(getFilePath());
+    try (HFileReader hfileReader = HFileReaderFactory.builder()
+        .withStorage(storage)
+        .withProps(DEFAULT_PROPS)
+        .withPath(getFilePath())
+        .build()
+        .createHFileReader()) {
+      hfileReader.initializeMetadata();
+      assertEquals(hfileBloomFilterEnabled, hfileReader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK).isPresent());
+      assertEquals(hfileBloomFilterEnabled, hfileReader.getMetaInfo(new UTF8StringKey(KEY_BLOOM_FILTER_TYPE_CODE)).isPresent());
+      assertEquals(hfileBloomFilterEnabled, hfileReader.getMetaInfo(new UTF8StringKey(KEY_MIN_RECORD)).isPresent());
+      assertEquals(hfileBloomFilterEnabled, hfileReader.getMetaInfo(new UTF8StringKey(KEY_MAX_RECORD)).isPresent());
+      assertTrue(hfileReader.getMetaInfo(new UTF8StringKey(SCHEMA_KEY)).isPresent());
+    }
+  }
+
+  @Test
+  public void testPointLookupFallsBackWhenBloomFilterMetadataIsMissing() throws Exception {
+    HoodieSchema schema = getHoodieSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
+    HoodieAvroHFileWriter writer = createWriter(schema, true, false);
+    for (int i = 0; i < 3; i++) {
+      GenericRecord record = new GenericData.Record(schema.getAvroSchema());
+      String key = "key" + String.format("%02d", i);
+      record.put("_row_key", key);
+      record.put("time", Integer.toString(i));
+      record.put("number", i);
+      writer.writeAvro(key, record);
+    }
+    writer.close();
+
+    HoodieStorage storage = HoodieTestUtils.getStorage(getFilePath());
+    try (HoodieAvroHFileReaderImplBase hfileReader = createReader(storage, true)) {
+      assertNull(hfileReader.readBloomFilter());
+
+      List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readRecords(
+          hfileReader, new ArrayList<>(Arrays.asList("key00", "key02", "missing-key")));
+
+      assertEquals(2, records.size());
+      assertEquals("key00", ((GenericRecord) records.get(0)).get("_row_key").toString());
+      assertEquals("key02", ((GenericRecord) records.get(1)).get("_row_key").toString());
     }
   }
 

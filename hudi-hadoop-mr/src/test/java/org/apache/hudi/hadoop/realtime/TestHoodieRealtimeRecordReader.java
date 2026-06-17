@@ -19,6 +19,7 @@
 package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
@@ -51,8 +52,8 @@ import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -213,8 +214,8 @@ public class TestHoodieRealtimeRecordReader {
     List<Pair<String, Integer>> logVersionsWithAction = new ArrayList<>();
     logVersionsWithAction.add(Pair.of(HoodieTimeline.DELTA_COMMIT_ACTION, 1));
     logVersionsWithAction.add(Pair.of(HoodieTimeline.DELTA_COMMIT_ACTION, 2));
-    // TODO: HUDI-154 Once Hive 2.x PR (PR-674) is merged, enable this change
-    // logVersionsWithAction.add(Pair.of(HoodieTimeline.ROLLBACK_ACTION, 3));
+    logVersionsWithAction.add(Pair.of(HoodieTimeline.ROLLBACK_ACTION, 3));
+    
     FileSlice fileSlice =
         new FileSlice(partitioned ? HadoopFSUtils.getRelativePartitionPath(new Path(basePath.toString()),
             new Path(partitionDir.getAbsolutePath())) : "default", baseInstant, "fileid0");
@@ -231,7 +232,7 @@ public class TestHoodieRealtimeRecordReader {
 
         HoodieLogFormat.Writer writer;
         if (action.equals(HoodieTimeline.ROLLBACK_ACTION)) {
-          writer = InputFormatTestUtil.writeRollback(partitionDir, storage, "fileid0", baseInstant,
+          writer = InputFormatTestUtil.writeRollback(partitionDir, storage, "fileid0", instantTime,
               instantTime,
               String.valueOf(baseInstantTs + logVersion - 1), logVersion);
         } else {
@@ -243,7 +244,11 @@ public class TestHoodieRealtimeRecordReader {
         long size = writer.getCurrentSize();
         writer.close();
         assertTrue(size > 0, "block - size should be > 0");
-        FileCreateUtilsLegacy.createDeltaCommit(COMMIT_METADATA_SER_DE, basePath.toString(), instantTime, commitMetadata);
+        if (action.equals(HoodieTimeline.ROLLBACK_ACTION)) {
+          FileCreateUtilsLegacy.createRequestedRollbackFile(basePath.toString(), instantTime, new HoodieRollbackPlan());
+        } else {
+          FileCreateUtilsLegacy.createDeltaCommit(COMMIT_METADATA_SER_DE, basePath.toString(), instantTime, commitMetadata);
+        }
 
         // create a split with baseFile (parquet file written earlier) and new log file(s)
         fileSlice.addLogFile(writer.getLogFile());

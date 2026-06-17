@@ -30,19 +30,18 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -61,13 +60,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.StreamSupport;
 
+@Slf4j
 public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
+
   private static final String MERGE_ARCHIVE_PLAN_NAME = "mergeArchivePlan";
   private static final Pattern ARCHIVE_FILE_PATTERN =
       Pattern.compile("^\\.commits_\\.archive\\.([0-9]+).*");
   private static final String STATE_TRANSITION_TIME = "stateTransitionTime";
   private static final String ACTION_TYPE_KEY = "actionType";
-  private static final Logger LOG = LoggerFactory.getLogger(ArchivedTimelineLoaderV1.class);
 
   @Override
   public void loadInstants(HoodieTableMetaClient metaClient,
@@ -172,7 +172,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
               HoodieMergeArchiveFilePlan plan = TimelineMetadataUtils.deserializeAvroMetadataLegacy(FileIOUtils.readDataFromPath(storage, planPath).get(), HoodieMergeArchiveFilePlan.class);
               String mergedArchiveFileName = plan.getMergedArchiveFileName();
               if (!StringUtils.isNullOrEmpty(mergedArchiveFileName) && fs.getPath().getName().equalsIgnoreCase(mergedArchiveFileName)) {
-                LOG.debug("Catch exception because of reading uncompleted merging archive file {}. Ignore it here.", mergedArchiveFileName);
+                log.debug("Catch exception because of reading uncompleted merging archive file {}. Ignore it here.", mergedArchiveFileName);
                 continue;
               }
             }
@@ -207,7 +207,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
         }
       } catch (NumberFormatException e) {
         // log and ignore any format warnings
-        LOG.warn("error getting suffix for archived file: {}", f.getPath());
+        log.warn("error getting suffix for archived file: {}", f.getPath());
       }
 
       // return default value in case of any errors

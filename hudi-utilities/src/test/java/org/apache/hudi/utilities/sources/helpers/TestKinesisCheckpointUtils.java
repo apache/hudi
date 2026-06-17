@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.utilities.sources.helpers.KinesisOffsetGen.CheckpointUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;

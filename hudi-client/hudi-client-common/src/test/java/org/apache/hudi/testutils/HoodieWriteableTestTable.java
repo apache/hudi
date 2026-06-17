@@ -33,6 +33,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
@@ -40,9 +41,9 @@ import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.io.storage.HoodieOrcConfig;
 import org.apache.hudi.io.storage.hadoop.HoodieAvroOrcWriter;
 import org.apache.hudi.io.storage.hadoop.HoodieAvroParquetWriter;
-import org.apache.hudi.io.storage.HoodieOrcConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -168,10 +169,13 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
   }
 
   private Pair<String, HoodieLogFile> appendRecordsToLogFile(String partitionPath, String fileId, List<HoodieRecord> records) throws Exception {
-    try (HoodieLogFormat.Writer logWriter = HoodieLogFormat.newWriterBuilder()
-        .onParentPath(new StoragePath(basePath, partitionPath))
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
-        .withInstantTime(currentInstantTime).withStorage(storage).build()) {
+    try (HoodieLogFormat.Writer logWriter = HoodieLogFormatWriter.builder()
+        .withParentPath(new StoragePath(basePath, partitionPath))
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withLogFileId(fileId)
+        .withInstantTime(currentInstantTime)
+        .withStorage(storage)
+        .build()) {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, currentInstantTime);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());

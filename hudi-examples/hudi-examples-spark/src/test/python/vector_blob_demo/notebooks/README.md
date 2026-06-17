@@ -37,7 +37,7 @@ pip install -r requirements.txt    # adds jupyter + ipykernel for this folder
 ```
 
 The notebooks default `HUDI_BUNDLE_JAR` to
-`~/Downloads/hudi-spark3.5-bundle_2.12-1.2.0-rc1.jar` and `LANCE_BUNDLE_JAR`
+`~/Downloads/hudi-spark3.5-bundle_2.12-1.2.0.jar` and `LANCE_BUNDLE_JAR`
 to `~/Downloads/lance-spark-bundle-3.5_2.12-0.4.0.jar`, matching the `.py`
 scripts. If you placed both jars in `~/Downloads/` per the parent
 [`README.md`](../README.md) §1–2, you don't need to export anything. To

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import lombok.Getter;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.data.HoodieData;
@@ -45,6 +44,8 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
+
+import lombok.Getter;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;

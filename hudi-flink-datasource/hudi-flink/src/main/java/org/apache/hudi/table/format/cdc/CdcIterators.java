@@ -24,8 +24,8 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -389,7 +389,7 @@ public final class CdcIterators {
       this.requiredSchema = requiredSchema;
       this.requiredPos = computeRequiredPos(tableSchema, requiredSchema);
       this.recordBuilder = new GenericRecordBuilder(requiredSchema.getAvroSchema());
-      this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredRowType);
+      this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredSchema, requiredRowType, true);
 
       StoragePath hadoopTablePath = new StoragePath(tablePath);
       HoodieStorage storage = HoodieStorageUtils.getStorage(

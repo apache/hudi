@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TableServiceUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -35,7 +36,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.compact.strategy.CompactionPlanStrategies;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
-import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 

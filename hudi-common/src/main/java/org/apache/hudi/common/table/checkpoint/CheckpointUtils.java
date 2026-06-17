@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.checkpoint;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
@@ -71,23 +70,24 @@ public class CheckpointUtils {
     throw new HoodieException("Checkpoint is not found in the commit metadata: " + commitMetadata.getExtraMetadata());
   }
 
-  public static Checkpoint buildCheckpointFromGeneralSource(
-      String sourceClassName, int writeTableVersion, String checkpointToResume) {
-    return CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, sourceClassName)
-        ? new StreamerCheckpointV2(checkpointToResume) : new StreamerCheckpointV1(checkpointToResume);
+  /**
+   * For sources that do not have a semantic change in the checkpoint, always use checkpoint V1.
+   *
+   * @param checkpointToResume value of the checkpoint to resume
+   * @return {@link Checkpoint} instance
+   */
+  public static Checkpoint createCheckpoint(String checkpointToResume) {
+    return new StreamerCheckpointV1(checkpointToResume);
   }
 
-  // Whenever we create checkpoint from streamer config checkpoint override, we should use this function
-  // to build checkpoints.
-  public static Checkpoint buildCheckpointFromConfigOverride(
-      String sourceClassName, int writeTableVersion, String checkpointToResume) {
-    return CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, sourceClassName)
-        ? new UnresolvedStreamerCheckpointBasedOnCfg(checkpointToResume) : new StreamerCheckpointV1(checkpointToResume);
-  }
-
-  public static boolean shouldTargetCheckpointV2(int writeTableVersion, String sourceClassName) {
-    return writeTableVersion >= HoodieTableVersion.EIGHT.versionCode()
-        && !DATASOURCES_NOT_SUPPORTED_WITH_CKPT_V2.contains(sourceClassName);
+  /**
+   * For sources that do not have a semantic change in the checkpoint, always use checkpoint V1.
+   *
+   * @param checkpointToResume the checkpoint to resume
+   * @return {@link Checkpoint} instance
+   */
+  public static Checkpoint createCheckpoint(Checkpoint checkpointToResume) {
+    return new StreamerCheckpointV1(checkpointToResume);
   }
 
   // TODO(yihua): for checkpoint translation, handle cases where the checkpoint is not exactly the

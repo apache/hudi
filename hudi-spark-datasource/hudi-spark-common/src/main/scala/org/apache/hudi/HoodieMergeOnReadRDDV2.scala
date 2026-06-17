@@ -42,7 +42,7 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf
-import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
+import org.apache.spark.{HoodieSparkInputMetricsUtils, Partition, SerializableWritable, SparkContext, TaskContext}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -146,6 +146,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val partition = split.asInstanceOf[HoodieMergeOnReadPartition]
+    val bytesReadCallback = HoodieSparkInputMetricsUtils.getFSBytesReadOnThreadCallback()
 
     val iter: Iterator[InternalRow] = partition.split match {
       case dataFileOnlySplit if dataFileOnlySplit.logFiles.isEmpty =>
@@ -171,7 +172,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
           val requestedSchema = requiredSchema.schema
           val instantRange = InstantRange.builder().rangeType(RangeType.EXACT_MATCH).explicitInstants(validInstants.value).build()
           val readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig, HOption.of(instantRange), HOption.empty().asInstanceOf[HOption[HPredicate]])
-          val fileGroupReader: HoodieFileGroupReader[IndexedRecord] = HoodieFileGroupReader.newBuilder()
+          val fileGroupReader: HoodieFileGroupReader[IndexedRecord] = HoodieFileGroupReader.builder()
             .withReaderContext(readerContext)
             .withHoodieTableMetaClient(metaClient)
             .withLatestCommitTime(tableState.latestCommitTimestamp.orNull)
@@ -181,13 +182,13 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withProps(properties)
             .withDataSchema(tableSchema.schema)
             .withRequestedSchema(requestedSchema)
-            .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
+            .withInternalSchemaOpt(HOption.ofNullable(tableSchema.internalSchema.orNull))
             .build()
           convertAvroToRowIterator(fileGroupReader.getClosableIterator, requestedSchema)
         } else {
           val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, optionalFilters,
             Seq.empty, storageConf, metaClient.getTableConfig)
-          val fileGroupReader = HoodieFileGroupReader.newBuilder()
+          val fileGroupReader = HoodieFileGroupReader.builder()
             .withReaderContext(readerContext)
             .withHoodieTableMetaClient(metaClient)
             .withLatestCommitTime(tableState.latestCommitTimestamp.orNull)
@@ -197,21 +198,15 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withProps(properties)
             .withDataSchema(tableSchema.schema)
             .withRequestedSchema(requiredSchema.schema)
-            .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
+            .withInternalSchemaOpt(HOption.ofNullable(tableSchema.internalSchema.orNull))
             .build()
           convertCloseableIterator(fileGroupReader.getClosableIterator)
         }
     }
 
-    if (iter.isInstanceOf[Closeable]) {
-      // register a callback to close logScanner which will be executed on task completion.
-      // when tasks finished, this method will be called, and release resources.
-      Option(TaskContext.get()).foreach(_.addTaskCompletionListener[Unit](_ => iter.asInstanceOf[Closeable].close()))
-    }
-
     val commitTimeMetadataFieldIdx = requiredSchema.structTypeSchema.fieldNames.indexOf(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
     val needsFiltering = commitTimeMetadataFieldIdx >= 0 && includedInstantTimeSet.isDefined
-    if (needsFiltering) {
+    val resultIter = if (needsFiltering) {
       val filterT: Predicate[InternalRow] = new Predicate[InternalRow] {
         override def test(row: InternalRow): Boolean = {
           val commitTime = row.getString(commitTimeMetadataFieldIdx)
@@ -219,10 +214,11 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
         }
       }
       iter.filter(filterT.test)
-    }
-    else {
+    } else {
       iter
     }
+
+    withInputMetrics(resultIter, iter, context, bytesReadCallback)
   }
 
   override protected def getPartitions: Array[Partition] =
@@ -259,6 +255,34 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
     }
   }
 
+  private def withInputMetrics(iter: Iterator[InternalRow],
+                               closeableIter: Iterator[InternalRow],
+                               context: TaskContext,
+                               bytesReadCallback: () => Long): Iterator[InternalRow] = {
+    val metricIter = new Iterator[InternalRow] with Closeable {
+      override def hasNext: Boolean = iter.hasNext
+
+      override def next(): InternalRow = {
+        val row = iter.next()
+        HoodieSparkInputMetricsUtils.incRecordsRead(context, 1)
+        row
+      }
+
+      override def close(): Unit = {
+        closeableIter match {
+          case closeable: Closeable => closeable.close()
+          case _ =>
+        }
+      }
+    }
+
+    context.addTaskCompletionListener[Unit] { _ =>
+      HoodieSparkInputMetricsUtils.incBytesRead(context, bytesReadCallback())
+      metricIter.close()
+    }
+    metricIter
+  }
+
   private def getPartitionPath(split: HoodieMergeOnReadFileSplit): StoragePath = {
     // Determine partition path as an immediate parent folder of either
     //    - The base file
@@ -273,4 +297,3 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
 object HoodieMergeOnReadRDDV2 {
   val CONFIG_INSTANTIATION_LOCK = new Object()
 }
-

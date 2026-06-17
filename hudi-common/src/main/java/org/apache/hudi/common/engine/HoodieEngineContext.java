@@ -28,6 +28,8 @@ import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.metrics.LocalRegistry;
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -36,12 +38,14 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableSortingIterator;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.metrics.LocalRegistry;
-import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +55,8 @@ import java.util.stream.Stream;
  * Base class contains the context information needed by the engine at runtime. It will be extended by different
  * engine implementation if needed.
  */
+@AllArgsConstructor
+@Getter
 public abstract class HoodieEngineContext {
 
   /**
@@ -59,19 +65,6 @@ public abstract class HoodieEngineContext {
   private final StorageConfiguration<?> storageConf;
 
   protected TaskContextSupplier taskContextSupplier;
-
-  public HoodieEngineContext(StorageConfiguration<?> storageConf, TaskContextSupplier taskContextSupplier) {
-    this.storageConf = storageConf;
-    this.taskContextSupplier = taskContextSupplier;
-  }
-
-  public StorageConfiguration<?> getStorageConf() {
-    return storageConf;
-  }
-
-  public TaskContextSupplier getTaskContextSupplier() {
-    return taskContextSupplier;
-  }
 
   public abstract HoodieAccumulator newAccumulator();
 
@@ -124,6 +117,21 @@ public abstract class HoodieEngineContext {
   public abstract void cancelJob(String jobId);
 
   public abstract void cancelAllJobs();
+
+  /**
+   * Returns engine-specific properties to be included in commit metadata for debugging.
+   * <p>Contract:
+   * <ul>
+   *   <li>Implementations must only return safe, non-sensitive values (no credentials, no PII).</li>
+   *   <li>This is invoked on the driver, on every commit. It must be cheap and free of side effects.</li>
+   *   <li>Must not reach into checkpoint / runtime state (e.g. for streaming engines like Flink,
+   *       per-checkpoint metadata is set up via the coordinator, not here).</li>
+   * </ul>
+   * Default returns an empty map so external subclasses are not forced to implement this.
+   */
+  public Map<String, String> getEngineProperties() {
+    return Collections.emptyMap();
+  }
 
   /**
    * Returns the application id of the engine (e.g. Spark application id).

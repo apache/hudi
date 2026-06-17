@@ -44,8 +44,8 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.avro.HoodieSparkSchemaConverters;
-import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -95,13 +95,13 @@ public class TestSourceFormatAdapter {
   }
 
   private void setupRowSource(Dataset<Row> ds, TypedProperties properties, SchemaProvider schemaProvider) {
-    InputBatch<Dataset<Row>> batch = new InputBatch<>(Option.of(ds), DUMMY_CHECKPOINT, schemaProvider);
+    InputBatch<Dataset<Row>> batch = new InputBatch<>(Option.of(ds), new StreamerCheckpointV2(DUMMY_CHECKPOINT), schemaProvider);
     testRowDataSource = new TestRowDataSource(properties, jsc, spark, schemaProvider, batch);
   }
 
   private void setupJsonSource(JavaRDD<String> ds, HoodieSchema schema) {
     SchemaProvider basicSchemaProvider = new BasicSchemaProvider(schema);
-    InputBatch<JavaRDD<String>> batch = new InputBatch<>(Option.of(ds), DUMMY_CHECKPOINT, basicSchemaProvider);
+    InputBatch<JavaRDD<String>> batch = new InputBatch<>(Option.of(ds), new StreamerCheckpointV2(DUMMY_CHECKPOINT), basicSchemaProvider);
     testJsonDataSource = new TestJsonDataSource(new TypedProperties(), jsc, spark, basicSchemaProvider, batch);
   }
 
@@ -183,7 +183,7 @@ public class TestSourceFormatAdapter {
     SchemaProvider schemaProvider = new TestSchemaProviderWithTransformation(sourceSchema, targetSchema);
 
     // Setup the row source
-    InputBatch<Dataset<Row>> batch = new InputBatch<>(Option.of(testDataset), DUMMY_CHECKPOINT, schemaProvider);
+    InputBatch<Dataset<Row>> batch = new InputBatch<>(Option.of(testDataset), new StreamerCheckpointV2(DUMMY_CHECKPOINT), schemaProvider);
     TestRowDataSource testSource = new TestRowDataSource(new TypedProperties(), jsc, spark, schemaProvider, batch);
 
     // Create SourceFormatAdapter and fetch data in Avro format

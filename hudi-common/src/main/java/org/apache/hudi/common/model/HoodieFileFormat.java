@@ -55,9 +55,9 @@ public enum HoodieFileFormat {
           + "and designed for ML and AI workloads")
   LANCE(".lance");
 
-  public static final String LANCE_SPARK_ONLY_ERROR_MSG =
-      "Lance base file format is currently only supported with the Spark engine. "
-          + "Please use Parquet, ORC, or HFile for non-Spark engines (Flink, Hive, Presto, Trino).";
+  public static final String LANCE_UNSUPPORTED_ERROR_MSG =
+      "Lance base file format is not supported by this reader or writer path. "
+          + "Please use an engine-specific Lance reader/writer, or use Parquet, ORC, or HFile.";
 
   public static final Set<String> BASE_FILE_EXTENSIONS = Arrays.stream(HoodieFileFormat.values())
       .map(HoodieFileFormat::getFileExtension)

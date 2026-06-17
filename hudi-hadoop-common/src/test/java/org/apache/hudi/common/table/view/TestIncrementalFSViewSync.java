@@ -629,10 +629,15 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       throws IOException {
     Map<String, List<String>> partitionToFiles = deleteFiles(files);
     List<HoodieCleanStat> cleanStats = partitionToFiles.entrySet().stream().map(e ->
-        new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_COMMITS, e.getKey(), e.getValue(), e.getValue(),
-            new ArrayList<>(),
-            instant.length() < 3 ? String.valueOf(Integer.parseInt(instant) + 1) : HoodieInstantTimeGenerator.instantTimePlusMillis(instant, 1),
-            "")).collect(Collectors.toList());
+        HoodieCleanStat.builder()
+            .withPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .withPartitionPath(e.getKey())
+            .withDeletePathPatterns(e.getValue())
+            .withSuccessDeleteFiles(e.getValue())
+            .withFailedDeleteFiles(Collections.emptyList())
+            .withEarliestCommitToRetain(instant.length() < 3 ? String.valueOf(Integer.parseInt(instant) + 1) : HoodieInstantTimeGenerator.instantTimePlusMillis(instant, 1))
+            .withLastCompletedCommitTimestamp("")
+            .build()).collect(Collectors.toList());
 
     HoodieInstant cleanInflightInstant = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, cleanInstant);
     metaClient.getActiveTimeline().createNewInstant(cleanInflightInstant);

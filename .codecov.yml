@@ -47,13 +47,7 @@ ignore:
   - "hudi-hadoop-mr/src/main/java/com/uber/hoodie/hadoop/HoodieInputFormat.java"
   - "hudi-hadoop-mr/src/main/java/com/uber/hoodie/hadoop/realtime/HoodieRealtimeInputFormat.java"
 
-comment:
-  layout: "diff, flags, files"
-  behavior: new
-  require_changes: false
-  require_base: false
-  require_head: true
-  hide_project_coverage: false
+comment: false
 
 flags:
   hudicli:

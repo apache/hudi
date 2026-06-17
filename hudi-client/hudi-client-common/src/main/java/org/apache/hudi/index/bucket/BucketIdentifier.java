@@ -42,7 +42,7 @@ public class BucketIdentifier implements Serializable {
   }
 
   protected static List<String> getHashKeys(String recordKey, String indexKeyFields) {
-    return getHashKeysUsingIndexFields(recordKey, Arrays.asList(indexKeyFields.split(",")));
+    return getHashKeysUsingIndexFields(recordKey, KeyGenUtils.getIndexKeyFields(indexKeyFields));
   }
 
   protected static List<String> getHashKeys(String recordKey, List<String> indexKeyFields) {

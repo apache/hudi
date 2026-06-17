@@ -38,13 +38,13 @@ import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
-import org.apache.hudi.sink.validator.FlinkValidatorUtils;
 import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
 import org.apache.hudi.sink.utils.EventBuffers;
 import org.apache.hudi.sink.utils.EventBuffers.EventBuffer;
 import org.apache.hudi.sink.utils.ExplicitClassloaderThreadFactory;
 import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
+import org.apache.hudi.sink.validator.FlinkValidatorUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.ClientIds;
 import org.apache.hudi.util.ClusteringUtil;
@@ -330,7 +330,7 @@ public class StreamWriteOperatorCoordinator
       // resetToCheckpoint() is called in two cases:
       // 1. The job is restarted from state, start() will be called later.
       // 2. The job is recovered from global failover. The coordinator is already started, and start() will not be called again.
-      if (executor != null && tableState.isRLIWithBootstrap) {
+      if (executor != null && tableState.isRecordLevelIndex) {
         // use sync execution here to make sure the recommitting finishes before RLI bootstrapping
         this.executor.executeSync(this::restoreEvents, "Recommit pending instants on resetting to checkpoint: %s.", checkpointID);
       }
@@ -373,7 +373,7 @@ public class StreamWriteOperatorCoordinator
   @Override
   public void subtaskReset(int i, long resetCkpId) {
     // There exists pending instants waiting for recommiting.
-    if (tableState.isRLIWithBootstrap && !eventBuffers.getPendingInstantsBefore(resetCkpId).isEmpty()) {
+    if (tableState.isRecordLevelIndex && !eventBuffers.getPendingInstantsBefore(resetCkpId).isEmpty()) {
       // use sync execution here to make sure the recommitting finishes before RLI bootstrapping
       executor.executeSync(() -> commitInstants(resetCkpId), "Recommit pending instants on resetting subtask %s to checkpoint: %s.", i, resetCkpId);
     }
@@ -565,7 +565,7 @@ public class StreamWriteOperatorCoordinator
     if (eventBuffer.allBootstrapEventsReceived()) {
       // start to recommit the instant.
       boolean committed = recommitInstant(event.getCheckpointId(), event.getInstantTime(), eventBuffer);
-      if (committed && tableState.isRLIWithBootstrap) {
+      if (committed && tableState.isRecordLevelIndex) {
         context.failJob(new HoodieException("There are pending instants recommitted on job restart,"
             + "triggering a global failover so that RLI bootstrap operator can load the record level index completely."));
       }
@@ -759,7 +759,7 @@ public class StreamWriteOperatorCoordinator
     final boolean syncMetadata;
     final boolean isDeltaTimeCompaction;
     final boolean isStreamingIndexWriteEnabled;
-    final boolean isRLIWithBootstrap;
+    final boolean isRecordLevelIndex;
 
     private TableState(Configuration conf) {
       this.operationType = WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION));
@@ -773,7 +773,7 @@ public class StreamWriteOperatorCoordinator
       this.syncMetadata = conf.get(FlinkOptions.METADATA_ENABLED);
       this.isDeltaTimeCompaction = OptionsResolver.isDeltaTimeCompaction(conf);
       this.isStreamingIndexWriteEnabled = OptionsResolver.isStreamingIndexWriteEnabled(conf);
-      this.isRLIWithBootstrap = OptionsResolver.isRLIWithBootstrap(conf);
+      this.isRecordLevelIndex = OptionsResolver.isGlobalRecordLevelIndex(conf) || OptionsResolver.isRecordLevelIndex(conf);
     }
 
     public static TableState create(Configuration conf) {

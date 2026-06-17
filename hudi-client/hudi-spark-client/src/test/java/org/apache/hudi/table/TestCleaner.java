@@ -31,6 +31,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
@@ -42,8 +43,8 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
-import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -84,7 +85,6 @@ import org.apache.hudi.testutils.HoodieCleanerTestBase;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.hudi.client.WriteClientTestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -724,18 +724,30 @@ public class TestCleaner extends HoodieCleanerTestBase {
     List<String> failedDeleteFiles1 = Collections.singletonList(filePath2);
 
     // create partition1 clean stat.
-    HoodieCleanStat cleanStat1 = new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
-        partition1, deletePathPatterns1, successDeleteFiles1,
-        failedDeleteFiles1, instantTime, "");
+    HoodieCleanStat cleanStat1 = HoodieCleanStat.builder()
+        .withPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+        .withPartitionPath(partition1)
+        .withDeletePathPatterns(deletePathPatterns1)
+        .withSuccessDeleteFiles(successDeleteFiles1)
+        .withFailedDeleteFiles(failedDeleteFiles1)
+        .withEarliestCommitToRetain(instantTime)
+        .withLastCompletedCommitTimestamp("")
+        .build();
 
     List<String> deletePathPatterns2 = new ArrayList<>();
     List<String> successDeleteFiles2 = new ArrayList<>();
     List<String> failedDeleteFiles2 = new ArrayList<>();
 
     // create partition2 empty clean stat.
-    HoodieCleanStat cleanStat2 = new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_COMMITS,
-        partition2, deletePathPatterns2, successDeleteFiles2,
-        failedDeleteFiles2, instantTime, "");
+    HoodieCleanStat cleanStat2 = HoodieCleanStat.builder()
+        .withPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+        .withPartitionPath(partition2)
+        .withDeletePathPatterns(deletePathPatterns2)
+        .withSuccessDeleteFiles(successDeleteFiles2)
+        .withFailedDeleteFiles(failedDeleteFiles2)
+        .withEarliestCommitToRetain(instantTime)
+        .withLastCompletedCommitTimestamp("")
+        .build();
 
     // map with absolute file path.
     Map<String, Tuple3> oldExpected = new HashMap<>();

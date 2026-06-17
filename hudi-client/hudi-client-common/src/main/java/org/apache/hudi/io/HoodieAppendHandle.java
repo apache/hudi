@@ -39,7 +39,7 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.AppendResult;
-import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
@@ -84,6 +84,12 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_DYNAMIC_MAX_ENTRIES;
+import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_FPP_VALUE;
+import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE;
+import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_TYPE;
+import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
+import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_WITH_BLOOM_FILTER_ENABLED;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.collectColumnRangeMetadata;
 
@@ -105,7 +111,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   // Incoming records to be written to logs.
   protected Iterator<HoodieRecord<T>> recordItr;
   // Writer to log into the file group's latest slice.
-  protected Writer writer;
+  protected HoodieLogFormat.Writer writer;
 
   protected final List<WriteStatus> statuses;
   // Total number of records written during appending
@@ -563,14 +569,16 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         writer = null;
       }
 
-      // update final size, once for all log files
-      // TODO we can actually deduce file size purely from AppendResult (based on offset and size
-      //      of the appended block)
+      // Set the final on-disk size of each log file. Appends within an append handle are contiguous,
+      // so a log file's length equals its start offset plus the total bytes appended to it. That is
+      // exactly what fs.getFileStatus().getLength() returns, and both values are already captured by
+      // the AppendResult stats (logOffset and the accumulated fileSizeInBytes). Deriving the size this
+      // way avoids a getPathInfo/HEAD per log file, which is a remote round trip per file group on
+      // object stores.
       for (WriteStatus status : statuses) {
-        long logFileSize = storage.getPathInfo(
-            new StoragePath(config.getBasePath(), status.getStat().getPath()))
-            .getLength();
-        status.getStat().setFileSizeInBytes(logFileSize);
+        HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) status.getStat();
+        long appendedBytes = stat.getFileSizeInBytes();
+        stat.setFileSizeInBytes(stat.getLogOffset() + appendedBytes);
       }
 
       // generate Secondary index stats if streaming writes is enabled.
@@ -731,8 +739,15 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         // Not supporting positions in HFile data blocks
         header.remove(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
         records.sort(Comparator.comparing(HoodieRecord::getRecordKey));
+        Map<String, String> hfileParams = new HashMap<>();
+        hfileParams.put(HFILE_COMPRESSION_ALGORITHM_NAME.key(), writeConfig.getHFileCompressionAlgorithm());
+        hfileParams.put(HFILE_WITH_BLOOM_FILTER_ENABLED.key(), Boolean.toString(writeConfig.hfileBloomFilterEnabled()));
+        hfileParams.put(BLOOM_FILTER_NUM_ENTRIES_VALUE.key(), Integer.toString(writeConfig.getBloomFilterNumEntries()));
+        hfileParams.put(BLOOM_FILTER_FPP_VALUE.key(), Double.toString(writeConfig.getBloomFilterFPP()));
+        hfileParams.put(BLOOM_FILTER_DYNAMIC_MAX_ENTRIES.key(), Integer.toString(writeConfig.getDynamicBloomFilterMaxNumEntries()));
+        hfileParams.put(BLOOM_FILTER_TYPE.key(), writeConfig.getBloomFilterType());
         return new HoodieHFileDataBlock(
-            records, header, writeConfig.getHFileCompressionAlgorithm(), new StoragePath(writeConfig.getBasePath()));
+            records, header, writeConfig.getHFileCompressionAlgorithm(), hfileParams, new StoragePath(writeConfig.getBasePath()));
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(
             records,

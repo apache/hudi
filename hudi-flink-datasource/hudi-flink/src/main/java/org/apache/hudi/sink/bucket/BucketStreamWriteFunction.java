@@ -20,12 +20,14 @@ package org.apache.hudi.sink.bucket;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.RemotePartitionHelper;
 import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.sink.StreamWriteFunction;
+import org.apache.hudi.sink.partitioner.BucketIndexRemotePartitioner;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
 import lombok.extern.slf4j.Slf4j;
@@ -75,6 +77,9 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
    * Functions for calculating the task partition to dispatch.
    */
   private Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc;
+
+  private transient RemotePartitionHelper remotePartitionHelper;
+
   /**
    * Function to calculate num buckets per partition.
    */
@@ -107,6 +112,10 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
     this.isInsertOverwrite = OptionsResolver.isInsertOverwrite(config);
     this.numBucketsFunction = new NumBucketsFunction(config.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
         config.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), config.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
+    if (OptionsResolver.shouldUseBucketRemotePartitioner(config)) {
+      this.remotePartitionHelper = new RemotePartitionHelper(writeClient.getConfig().getViewStorageConfig());
+      log.info("BucketStreamWriteFunction enables remote partitioner.");
+    }
   }
 
   @Override
@@ -158,6 +167,10 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
    * partitionIndex == this taskID belongs to this task.
    */
   public boolean isBucketToLoad(int bucketNumber, String partition) {
+    if (remotePartitionHelper != null) {
+      return BucketIndexRemotePartitioner.getRemotePartition(
+          remotePartitionHelper, numBucketsFunction, partition, bucketNumber, parallelism) == taskID;
+    }
     int numBuckets = numBucketsFunction.getNumBuckets(partition);
     return this.partitionIndexFunc.apply(numBuckets, partition, bucketNumber) == taskID;
   }

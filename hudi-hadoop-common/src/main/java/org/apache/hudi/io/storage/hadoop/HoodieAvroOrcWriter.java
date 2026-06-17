@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
+
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {

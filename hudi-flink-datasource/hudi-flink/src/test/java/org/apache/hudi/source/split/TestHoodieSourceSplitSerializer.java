@@ -18,11 +18,10 @@
 
 package org.apache.hudi.source.split;
 
-import org.apache.hudi.common.table.log.InstantRange;
-import org.apache.hudi.common.util.Option;
-
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase;
+import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
 
@@ -509,10 +508,10 @@ public class TestHoodieSourceSplitSerializer {
 
     assertNotNull(deserialized);
     assertTrue(deserialized.getInstantRange().isPresent());
-    assertTrue(deserialized.getInstantRange().get().getStartInstant().isPresent());
-    assertTrue(deserialized.getInstantRange().get().getEndInstant().isPresent());
-    assertEquals("20230101000000000", deserialized.getInstantRange().get().getStartInstant().get());
-    assertEquals("20230131235959999", deserialized.getInstantRange().get().getEndInstant().get());
+    assertTrue(deserialized.getInstantRange().get().getStartInstantOpt().isPresent());
+    assertTrue(deserialized.getInstantRange().get().getEndInstantOpt().isPresent());
+    assertEquals("20230101000000000", deserialized.getInstantRange().get().getStartInstantOpt().get());
+    assertEquals("20230131235959999", deserialized.getInstantRange().get().getEndInstantOpt().get());
   }
 
   @Test
@@ -540,9 +539,9 @@ public class TestHoodieSourceSplitSerializer {
 
     assertNotNull(deserialized);
     assertTrue(deserialized.getInstantRange().isPresent());
-    assertTrue(deserialized.getInstantRange().get().getStartInstant().isPresent());
-    assertFalse(deserialized.getInstantRange().get().getEndInstant().isPresent());
-    assertEquals("20230101000000000", deserialized.getInstantRange().get().getStartInstant().get());
+    assertTrue(deserialized.getInstantRange().get().getStartInstantOpt().isPresent());
+    assertFalse(deserialized.getInstantRange().get().getEndInstantOpt().isPresent());
+    assertEquals("20230101000000000", deserialized.getInstantRange().get().getStartInstantOpt().get());
   }
 
   @Test
@@ -570,10 +569,10 @@ public class TestHoodieSourceSplitSerializer {
 
     assertNotNull(deserialized);
     assertTrue(deserialized.getInstantRange().isPresent());
-    assertTrue(deserialized.getInstantRange().get().getStartInstant().isPresent());
-    assertTrue(deserialized.getInstantRange().get().getEndInstant().isPresent());
-    assertEquals("20230101000000000", deserialized.getInstantRange().get().getStartInstant().get());
-    assertEquals("20230131235959999", deserialized.getInstantRange().get().getEndInstant().get());
+    assertTrue(deserialized.getInstantRange().get().getStartInstantOpt().isPresent());
+    assertTrue(deserialized.getInstantRange().get().getEndInstantOpt().isPresent());
+    assertEquals("20230101000000000", deserialized.getInstantRange().get().getStartInstantOpt().get());
+    assertEquals("20230131235959999", deserialized.getInstantRange().get().getEndInstantOpt().get());
   }
 
   @Test
@@ -605,8 +604,8 @@ public class TestHoodieSourceSplitSerializer {
     assertTrue(deserialized.getInstantRange().isPresent());
     assertEquals(10, deserialized.getFileOffset());
     assertEquals(500L, deserialized.getConsumed());
-    assertEquals("20230101000000000", deserialized.getInstantRange().get().getStartInstant().get());
-    assertEquals("20230131235959999", deserialized.getInstantRange().get().getEndInstant().get());
+    assertEquals("20230101000000000", deserialized.getInstantRange().get().getStartInstantOpt().get());
+    assertEquals("20230131235959999", deserialized.getInstantRange().get().getEndInstantOpt().get());
   }
 
   @Test
@@ -637,13 +636,13 @@ public class TestHoodieSourceSplitSerializer {
 
     // Verify split1
     assertTrue(deserialized1.getInstantRange().isPresent());
-    assertEquals("20230101000000000", deserialized1.getInstantRange().get().getStartInstant().get());
-    assertEquals("20230131235959999", deserialized1.getInstantRange().get().getEndInstant().get());
+    assertEquals("20230101000000000", deserialized1.getInstantRange().get().getStartInstantOpt().get());
+    assertEquals("20230131235959999", deserialized1.getInstantRange().get().getEndInstantOpt().get());
 
     // Verify split2
     assertTrue(deserialized2.getInstantRange().isPresent());
-    assertEquals("20230201000000000", deserialized2.getInstantRange().get().getStartInstant().get());
-    assertFalse(deserialized2.getInstantRange().get().getEndInstant().isPresent());
+    assertEquals("20230201000000000", deserialized2.getInstantRange().get().getStartInstantOpt().get());
+    assertFalse(deserialized2.getInstantRange().get().getEndInstantOpt().isPresent());
 
     // Verify split3
     assertFalse(deserialized3.getInstantRange().isPresent());
@@ -863,15 +862,15 @@ public class TestHoodieSourceSplitSerializer {
     assertTrue(deserialized2.getInstantRange().isPresent());
     assertEquals(InstantRange.RangeType.OPEN_CLOSED,
         deserialized2.getInstantRange().get().getRangeType());
-    assertEquals("20230201000000000", deserialized2.getInstantRange().get().getStartInstant().get());
-    assertEquals("20230228235959999", deserialized2.getInstantRange().get().getEndInstant().get());
+    assertEquals("20230201000000000", deserialized2.getInstantRange().get().getStartInstantOpt().get());
+    assertEquals("20230228235959999", deserialized2.getInstantRange().get().getEndInstantOpt().get());
 
     // Verify split3 (CLOSED_CLOSED)
     assertTrue(deserialized3.getInstantRange().isPresent());
     assertEquals(InstantRange.RangeType.CLOSED_CLOSED,
         deserialized3.getInstantRange().get().getRangeType());
-    assertEquals("20230301000000000", deserialized3.getInstantRange().get().getStartInstant().get());
-    assertEquals("20230331235959999", deserialized3.getInstantRange().get().getEndInstant().get());
+    assertEquals("20230301000000000", deserialized3.getInstantRange().get().getStartInstantOpt().get());
+    assertEquals("20230331235959999", deserialized3.getInstantRange().get().getEndInstantOpt().get());
   }
 
   @Test
@@ -954,9 +953,9 @@ public class TestHoodieSourceSplitSerializer {
     assertTrue(deserialized.getInstantRange().isPresent());
     assertEquals(InstantRange.RangeType.CLOSED_CLOSED,
         deserialized.getInstantRange().get().getRangeType());
-    assertTrue(deserialized.getInstantRange().get().getStartInstant().isPresent());
-    assertFalse(deserialized.getInstantRange().get().getEndInstant().isPresent());
-    assertEquals("20230101000000000", deserialized.getInstantRange().get().getStartInstant().get());
+    assertTrue(deserialized.getInstantRange().get().getStartInstantOpt().isPresent());
+    assertFalse(deserialized.getInstantRange().get().getEndInstantOpt().isPresent());
+    assertEquals("20230101000000000", deserialized.getInstantRange().get().getStartInstantOpt().get());
 
     // Verify range behavior - start is inclusive, no end boundary
     assertTrue(deserialized.getInstantRange().get().isInRange("20230101000000000")); // start inclusive
@@ -992,9 +991,9 @@ public class TestHoodieSourceSplitSerializer {
     assertTrue(deserialized.getInstantRange().isPresent());
     assertEquals(InstantRange.RangeType.CLOSED_CLOSED,
         deserialized.getInstantRange().get().getRangeType());
-    assertFalse(deserialized.getInstantRange().get().getStartInstant().isPresent());
-    assertTrue(deserialized.getInstantRange().get().getEndInstant().isPresent());
-    assertEquals("20230131235959999", deserialized.getInstantRange().get().getEndInstant().get());
+    assertFalse(deserialized.getInstantRange().get().getStartInstantOpt().isPresent());
+    assertTrue(deserialized.getInstantRange().get().getEndInstantOpt().isPresent());
+    assertEquals("20230131235959999", deserialized.getInstantRange().get().getEndInstantOpt().get());
 
     // Verify range behavior - no start boundary, end is inclusive
     assertTrue(deserialized.getInstantRange().get().isInRange("19700101000000000"));
@@ -1029,9 +1028,9 @@ public class TestHoodieSourceSplitSerializer {
     assertTrue(deserialized.getInstantRange().isPresent());
     assertEquals(InstantRange.RangeType.OPEN_CLOSED,
         deserialized.getInstantRange().get().getRangeType());
-    assertFalse(deserialized.getInstantRange().get().getStartInstant().isPresent());
-    assertTrue(deserialized.getInstantRange().get().getEndInstant().isPresent());
-    assertEquals("20230131235959999", deserialized.getInstantRange().get().getEndInstant().get());
+    assertFalse(deserialized.getInstantRange().get().getStartInstantOpt().isPresent());
+    assertTrue(deserialized.getInstantRange().get().getEndInstantOpt().isPresent());
+    assertEquals("20230131235959999", deserialized.getInstantRange().get().getEndInstantOpt().get());
 
     // Verify range behavior - no start boundary, end is inclusive
     assertTrue(deserialized.getInstantRange().get().isInRange("19700101000000000"));
@@ -1087,23 +1086,23 @@ public class TestHoodieSourceSplitSerializer {
     HoodieSourceSplit deserialized4 = serializer.deserialize(serializer.getVersion(), serialized4);
 
     // Verify OPEN_CLOSED with only start
-    assertTrue(deserialized1.getInstantRange().get().getStartInstant().isPresent());
-    assertFalse(deserialized1.getInstantRange().get().getEndInstant().isPresent());
+    assertTrue(deserialized1.getInstantRange().get().getStartInstantOpt().isPresent());
+    assertFalse(deserialized1.getInstantRange().get().getEndInstantOpt().isPresent());
     assertEquals(InstantRange.RangeType.OPEN_CLOSED, deserialized1.getInstantRange().get().getRangeType());
 
     // Verify OPEN_CLOSED with only end
-    assertFalse(deserialized2.getInstantRange().get().getStartInstant().isPresent());
-    assertTrue(deserialized2.getInstantRange().get().getEndInstant().isPresent());
+    assertFalse(deserialized2.getInstantRange().get().getStartInstantOpt().isPresent());
+    assertTrue(deserialized2.getInstantRange().get().getEndInstantOpt().isPresent());
     assertEquals(InstantRange.RangeType.OPEN_CLOSED, deserialized2.getInstantRange().get().getRangeType());
 
     // Verify CLOSED_CLOSED with only start
-    assertTrue(deserialized3.getInstantRange().get().getStartInstant().isPresent());
-    assertFalse(deserialized3.getInstantRange().get().getEndInstant().isPresent());
+    assertTrue(deserialized3.getInstantRange().get().getStartInstantOpt().isPresent());
+    assertFalse(deserialized3.getInstantRange().get().getEndInstantOpt().isPresent());
     assertEquals(InstantRange.RangeType.CLOSED_CLOSED, deserialized3.getInstantRange().get().getRangeType());
 
     // Verify CLOSED_CLOSED with only end
-    assertFalse(deserialized4.getInstantRange().get().getStartInstant().isPresent());
-    assertTrue(deserialized4.getInstantRange().get().getEndInstant().isPresent());
+    assertFalse(deserialized4.getInstantRange().get().getStartInstantOpt().isPresent());
+    assertTrue(deserialized4.getInstantRange().get().getEndInstantOpt().isPresent());
     assertEquals(InstantRange.RangeType.CLOSED_CLOSED, deserialized4.getInstantRange().get().getRangeType());
   }
 

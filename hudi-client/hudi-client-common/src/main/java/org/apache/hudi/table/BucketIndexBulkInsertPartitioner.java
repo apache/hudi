@@ -25,12 +25,12 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.AppendHandleFactory;
 import org.apache.hudi.io.SingleFileHandleCreateFactory;
 import org.apache.hudi.io.WriteHandleFactory;
+import org.apache.hudi.keygen.KeyGenUtils;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -50,7 +50,7 @@ public abstract class BucketIndexBulkInsertPartitioner<T> extends BucketSortBulk
 
   public BucketIndexBulkInsertPartitioner(HoodieTable table, String sortString, boolean preserveHoodieMetadata) {
     super(table, sortString);
-    this.indexKeyFields = Arrays.asList(table.getConfig().getBucketIndexHashField().split(","));
+    this.indexKeyFields = KeyGenUtils.getIndexKeyFields(table.getConfig().getBucketIndexHashField());
     this.consistentLogicalTimestampEnabled = table.getConfig().isConsistentLogicalTimestampEnabled();
     this.preserveHoodieMetadata = preserveHoodieMetadata;
     // Multiple bulk inserts into COW using `BucketIndexBulkInsertPartitioner` is restricted, otherwise AppendHandleFactory will produce MOR log files

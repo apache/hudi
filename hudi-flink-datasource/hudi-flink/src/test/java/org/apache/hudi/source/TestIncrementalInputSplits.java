@@ -83,8 +83,8 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -438,11 +438,11 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     IncrementalInputSplits.Result result = iis.inputSplits(metaClient, firstInstant.getCompletionTime(), false);
 
     String minStartCommit = result.getInputSplits().stream()
-            .map(split -> split.getInstantRange().get().getStartInstant().get())
+            .map(split -> split.getInstantRange().get().getStartInstantOpt().get())
             .min((commit1,commit2) -> compareTimestamps(commit1, LESSER_THAN, commit2) ? 1 : 0)
             .orElse(null);
     String maxEndCommit = result.getInputSplits().stream()
-            .map(split -> split.getInstantRange().get().getEndInstant().get())
+            .map(split -> split.getInstantRange().get().getEndInstantOpt().get())
             .max((commit1,commit2) -> compareTimestamps(commit1, GREATER_THAN, commit2) ? 1 : 0)
             .orElse(null);
     assertEquals(0, intervalBetween2Instants(commitsTimeline, minStartCommit, maxEndCommit), "Should read 1 instant");

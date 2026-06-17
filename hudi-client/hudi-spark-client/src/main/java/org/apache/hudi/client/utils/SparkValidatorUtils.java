@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.validator.SparkPreCommitValidator;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.ExecutorServiceBasedEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -50,7 +51,6 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -83,7 +83,7 @@ public class SparkValidatorUtils {
       Dataset<Row> afterState = getRecordsFromPendingCommits(sqlContext, partitionsModified, writeMetadata, table, instantTime);
       Dataset<Row> beforeState = getRecordsFromCommittedFiles(sqlContext, partitionsModified, table, afterState.schema());
 
-      Stream<SparkPreCommitValidator> validators = Arrays.stream(config.getPreCommitValidators().split(","))
+      List<SparkPreCommitValidator> validators = Arrays.stream(config.getPreCommitValidators().split(","))
           .map(String::trim)
           .filter(s -> !s.isEmpty())
           .flatMap(validatorClass -> {
@@ -105,10 +105,12 @@ public class SparkValidatorUtils {
             } catch (ReflectiveOperationException e) {
               throw new HoodieValidationException("Failed to instantiate validator: " + validatorClass, e);
             }
-          });
+          })
+          .collect(Collectors.toList());
 
-      boolean allSuccess = validators.map(v -> runValidatorAsync(v, writeMetadata, beforeState, afterState, instantTime)).map(CompletableFuture::join)
-          .reduce(true, Boolean::logicalAnd);
+      boolean allSuccess = new ExecutorServiceBasedEngineContext(context.getStorageConf())
+          .map(validators, v -> runValidator(v, writeMetadata, beforeState, afterState, instantTime), validators.size())
+          .stream().reduce(true, Boolean::logicalAnd);
 
       if (allSuccess) {
         LOG.info("All validations succeeded");
@@ -120,20 +122,20 @@ public class SparkValidatorUtils {
   }
 
   /**
-   * Run validators in a separate thread pool for parallelism. Each of validator can submit a distributed spark job if needed.
+   * Run a single validator synchronously in the calling thread; parallelism across validators is
+   * provided by the {@link ExecutorServiceBasedEngineContext#map} call site. Each validator may submit a distributed Spark
+   * job if needed.
    */
-  private static CompletableFuture<Boolean> runValidatorAsync(SparkPreCommitValidator validator, HoodieWriteMetadata<?> writeMetadata,
-                                                              Dataset<Row> beforeState, Dataset<Row> afterState, String instantTime) {
-    return CompletableFuture.supplyAsync(() -> {
-      try {
-        validator.validate(instantTime, writeMetadata, beforeState, afterState);
-        LOG.info("validation complete for {}", validator.getClass().getName());
-        return true;
-      } catch (HoodieValidationException e) {
-        LOG.error("validation failed for {}", validator.getClass().getName(), e);
-        return false;
-      }
-    });
+  private static boolean runValidator(SparkPreCommitValidator validator, HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata,
+                                      Dataset<Row> beforeState, Dataset<Row> afterState, String instantTime) {
+    try {
+      validator.validate(instantTime, writeMetadata, beforeState, afterState);
+      LOG.info("validation complete for {}", validator.getClass().getName());
+      return true;
+    } catch (HoodieValidationException e) {
+      LOG.error("validation failed for {}", validator.getClass().getName(), e);
+      return false;
+    }
   }
 
   /**

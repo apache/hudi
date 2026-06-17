@@ -58,12 +58,12 @@ if [[ ${SPARK_RUNTIME} == 'spark3.3.4' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
-  FLINK_VERSION=1.17.1
+  FLINK_VERSION=1.18.1
   SPARK_VERSION=3.3.4
   SPARK_HADOOP_VERSION=2
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1171hive313spark334
+  IMAGE_TAG=flink1181hive313spark334
 elif [[ ${SPARK_RUNTIME} == 'spark3.4.3' ]]; then
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
@@ -109,19 +109,24 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.12' ]];
     IMAGE_TAG=flink211hive313spark351
     FLINK_VERSION=2.1.1
   else
-    IMAGE_TAG=flink1170hive313spark351
-    FLINK_VERSION=1.17.0
+    echo "Unsupported Flink profile ${FLINK_PROFILE}"
+    exit 1
   fi
 elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
-  FLINK_VERSION=1.20.1
   SPARK_VERSION=3.5.1
   SPARK_HADOOP_VERSION=3
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1200hive313spark351scala213
+  if [[ ${FLINK_PROFILE} == 'flink1.19' ]]; then
+    IMAGE_TAG=flink1190hive313spark351scala213
+    FLINK_VERSION=1.19.0
+  else
+    IMAGE_TAG=flink1200hive313spark351scala213
+    FLINK_VERSION=1.20.1
+  fi
 elif [[ ${SPARK_RUNTIME} == 'spark4.0.0' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
   HADOOP_VERSION=3.4.0
   HIVE_VERSION=3.1.3
@@ -142,6 +147,16 @@ elif [[ ${SPARK_RUNTIME} == 'spark4.1.1' && ${SCALA_PROFILE} == 'scala-2.13' ]];
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
   IMAGE_TAG=flink1200hive313spark411scala213
+elif [[ ${SPARK_RUNTIME} == 'spark4.2.0-preview4' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
+  HADOOP_VERSION=3.4.3
+  HIVE_VERSION=3.1.3
+  DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.20.1
+  SPARK_VERSION=4.2.0-preview4
+  SPARK_HADOOP_VERSION=3
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1200hive313spark420previewscala213
 fi
 
 # Copy bundle jars to temp dir for mounting
@@ -199,6 +214,11 @@ else
     HUDI_SPARK_BUNDLE_NAME=hudi-spark4.1-bundle_2.13
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.13
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.13
+  elif [[ ${SPARK_PROFILE} == 'spark4.2' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
+    HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.13
+    HUDI_SPARK_BUNDLE_NAME=hudi-spark4.2-bundle_2.13
+    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.13
+    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.13
   elif [[ ${SPARK_PROFILE} == 'spark3' ]]; then
     HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.12
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3-bundle_2.12
@@ -206,9 +226,7 @@ else
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
   fi
 
-  if [[ ${FLINK_PROFILE} == 'flink1.17' ]]; then
-    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.17-bundle
-  elif [[ ${FLINK_PROFILE} == 'flink1.18' ]]; then
+  if [[ ${FLINK_PROFILE} == 'flink1.18' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.18-bundle
   elif [[ ${FLINK_PROFILE} == 'flink1.19' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.19-bundle

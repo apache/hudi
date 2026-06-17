@@ -40,8 +40,8 @@ import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
 import org.apache.hudi.hive.testutils.HiveTestService;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.sources.TestDataSource;
 
@@ -53,6 +53,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema.Builder;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -79,8 +80,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.FileInputStream;
@@ -110,8 +109,8 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
  * Abstract test that provides a dfs & spark contexts.
  *
  */
+@Slf4j
 public class UtilitiesTestBase {
-  private static final Logger LOG = LoggerFactory.getLogger(UtilitiesTestBase.class);
   @TempDir
   protected static java.nio.file.Path sharedTempDir;
   protected static FileSystem fs;
@@ -256,7 +255,7 @@ public class UtilitiesTestBase {
     }
 
     if (!failedReleases.isEmpty()) {
-      LOG.error("Exception happened during releasing: " + String.join(",", failedReleases));
+      log.error("Exception happened during releasing: {}", String.join(",", failedReleases));
     }
   }
 

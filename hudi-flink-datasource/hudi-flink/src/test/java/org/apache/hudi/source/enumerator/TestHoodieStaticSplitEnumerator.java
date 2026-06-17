@@ -19,10 +19,10 @@
 package org.apache.hudi.source.enumerator;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.source.split.assign.HoodieSplitNumberAssigner;
 import org.apache.hudi.source.split.DefaultHoodieSplitProvider;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.SplitRequestEvent;
+import org.apache.hudi.source.split.assign.HoodieSplitNumberAssigner;
 
 import lombok.Getter;
 import org.apache.flink.api.connector.source.ReaderInfo;

@@ -18,12 +18,13 @@
 
 package org.apache.hudi.hive.util;
 
+import org.apache.hudi.exception.HoodieException;
+
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
-import org.apache.hudi.exception.HoodieException;
 
 import java.lang.reflect.InvocationTargetException;
 
