@@ -313,8 +313,9 @@ public class HoodieSchema implements Serializable {
 
   private Schema avroSchema;
   private HoodieSchemaType type;
-  // interned instances are shared across threads, so the lazily built caches use double-checked
-  // locking: lock-free volatile reads on the hot path, initialization guarded by the monitor
+  // interned instances are shared across threads, so the lazily built caches use a benign racy
+  // single-check (see getFields()/getFieldMap()): lock-free volatile reads, and volatile gives
+  // safe publication of the immutable, deterministic result
   private transient volatile List<HoodieSchemaField> fields;
   private transient volatile Map<String, HoodieSchemaField> fieldMap;
 
