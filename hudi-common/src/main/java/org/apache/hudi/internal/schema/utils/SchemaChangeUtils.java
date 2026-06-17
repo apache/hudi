@@ -52,10 +52,6 @@ public class SchemaChangeUtils {
    * @param dst new column type.
    * @return whether to allow the column type to be updated.
    */
-  /**
-   * Variant that allows opting in to timestamp-millis <-> timestamp-micros (and the local-timestamp
-   * variants) precision evolution, which is rejected by default.
-   */
   public static boolean isTypeUpdateAllow(Type src, Type dst, boolean allowTimestampPrecisionEvolution) {
     if (src.isNestedType() || dst.isNestedType()) {
       throw new IllegalArgumentException("only support update primitive type");
