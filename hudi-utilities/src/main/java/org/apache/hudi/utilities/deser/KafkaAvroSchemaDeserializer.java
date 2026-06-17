@@ -59,13 +59,13 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
   }
 
   @Override
-  public Object deserialize(String s, byte[] bytes) {
-    return this.deserialize(s, false, bytes, sourceSchema);
+  public Object deserialize(String topic, byte[] bytes) {
+    return this.deserialize(topic, false, bytes, sourceSchema);
   }
 
   @Override
-  public Object deserialize(String s, byte[] bytes, Schema readerSchema) {
-    return this.deserialize(s, false, bytes, sourceSchema);
+  public Object deserialize(String topic, byte[] bytes, Schema readerSchema) {
+    return this.deserialize(topic, false, bytes, sourceSchema);
   }
 
   @Override
