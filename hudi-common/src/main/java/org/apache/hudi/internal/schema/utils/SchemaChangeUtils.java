@@ -52,29 +52,39 @@ public class SchemaChangeUtils {
    * @param dst new column type.
    * @return whether to allow the column type to be updated.
    */
-  public static boolean isTypeUpdateAllow(Type src, Type dst) {
+  /**
+   * Variant that allows opting in to timestamp-millis <-> timestamp-micros (and the local-timestamp
+   * variants) precision evolution, which is rejected by default.
+   */
+  public static boolean isTypeUpdateAllow(Type src, Type dst, boolean allowTimestampPrecisionEvolution) {
     if (src.isNestedType() || dst.isNestedType()) {
       throw new IllegalArgumentException("only support update primitive type");
     }
     if (src.equals(dst)) {
       return true;
     }
-    return isTypeUpdateAllowInternal(src, dst);
+    return isTypeUpdateAllowInternal(src, dst, allowTimestampPrecisionEvolution);
   }
 
   public static boolean shouldPromoteType(Type src, Type dst) {
     if (src.equals(dst) || src.isNestedType() || dst.isNestedType()) {
       return false;
     }
-    return isTypeUpdateAllowInternal(src, dst);
+    return isTypeUpdateAllowInternal(src, dst, false);
   }
 
-  private static boolean isTypeUpdateAllowInternal(Type src, Type dst) {
+  private static boolean isTypeUpdateAllowInternal(Type src, Type dst, boolean allowTimestampPrecisionEvolution) {
     switch (src.typeId()) {
       case INT:
         return dst == Types.LongType.get() || dst == Types.FloatType.get()
             || dst == Types.DoubleType.get() || dst == Types.StringType.get() || dst.typeId() == Type.TypeID.DECIMAL || dst.typeId() == Type.TypeID.DECIMAL_FIXED;
       case LONG:
+        if (allowTimestampPrecisionEvolution
+            && (dst.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MILLIS || dst.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MICROS)) {
+          // Forward-fix path: 0.x stored local-timestamp columns as bare long because its converter
+          // did not recognize the logical type. Allow attaching the logical type when the gate is open.
+          return true;
+        }
         return dst == Types.FloatType.get() || dst == Types.DoubleType.get() || dst == Types.StringType.get() || dst.typeId() == Type.TypeID.DECIMAL || dst.typeId() == Type.TypeID.DECIMAL_FIXED;
       case FLOAT:
         return dst == Types.DoubleType.get() || dst == Types.StringType.get() || dst.typeId() == Type.TypeID.DECIMAL || dst.typeId() == Type.TypeID.DECIMAL_FIXED;
@@ -90,6 +100,18 @@ public class SchemaChangeUtils {
         return isDecimalFixedUpdateAllowInternal(src, dst);
       case STRING:
         return dst == Types.DateType.get() || dst.typeId() == Type.TypeID.DECIMAL || dst.typeId() == Type.TypeID.DECIMAL_FIXED || dst == Types.BinaryType.get();
+      case TIMESTAMP:
+      case TIMESTAMP_MILLIS:
+        if (!allowTimestampPrecisionEvolution) {
+          return false;
+        }
+        return dst.typeId() == Type.TypeID.TIMESTAMP || dst.typeId() == Type.TypeID.TIMESTAMP_MILLIS;
+      case LOCAL_TIMESTAMP_MILLIS:
+      case LOCAL_TIMESTAMP_MICROS:
+        if (!allowTimestampPrecisionEvolution) {
+          return false;
+        }
+        return dst.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MILLIS || dst.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MICROS;
       default:
         return false;
     }

@@ -65,6 +65,15 @@ public class AvroSchemaEvolutionUtils {
    * @return reconcile Schema
    */
   public static InternalSchema reconcileSchema(Schema incomingSchema, InternalSchema oldTableSchema, boolean makeMissingFieldsNullable) {
+    return reconcileSchema(incomingSchema, oldTableSchema, makeMissingFieldsNullable, false);
+  }
+
+  /**
+   * Variant that allows opting in to timestamp-millis <-> timestamp-micros (and the local-timestamp
+   * variants) precision evolution, which is rejected by default.
+   */
+  public static InternalSchema reconcileSchema(Schema incomingSchema, InternalSchema oldTableSchema,
+                                               boolean makeMissingFieldsNullable, boolean allowTimestampPrecisionEvolution) {
     /* If incoming schema is null, we fall back on table schema. */
     if (incomingSchema.getType() == Schema.Type.NULL) {
       return oldTableSchema;
@@ -119,7 +128,8 @@ public class AvroSchemaEvolutionUtils {
 
     // do type evolution.
     InternalSchema internalSchemaAfterAddColumns = SchemaChangeUtils.applyTableChanges2Schema(oldTableSchema, addChange);
-    TableChanges.ColumnUpdateChange typeChange = TableChanges.ColumnUpdateChange.get(internalSchemaAfterAddColumns);
+    TableChanges.ColumnUpdateChange typeChange = TableChanges.ColumnUpdateChange.get(
+        internalSchemaAfterAddColumns, false, allowTimestampPrecisionEvolution);
     typeChangeColumns.stream().filter(f -> !inComingInternalSchema.findType(f).isNestedType()).forEach(col -> {
       typeChange.updateColumnType(col, inComingInternalSchema.findType(col));
     });
@@ -150,7 +160,13 @@ public class AvroSchemaEvolutionUtils {
   }
 
   public static Schema reconcileSchema(Schema incomingSchema, Schema oldTableSchema, boolean makeMissingFieldsNullable) {
-    return convert(reconcileSchema(incomingSchema, convert(HoodieSchema.fromAvroSchema(oldTableSchema)), makeMissingFieldsNullable), oldTableSchema.getFullName()).toAvroSchema();
+    return reconcileSchema(incomingSchema, oldTableSchema, makeMissingFieldsNullable, false);
+  }
+
+  public static Schema reconcileSchema(Schema incomingSchema, Schema oldTableSchema, boolean makeMissingFieldsNullable,
+                                       boolean allowTimestampPrecisionEvolution) {
+    return convert(reconcileSchema(incomingSchema, convert(HoodieSchema.fromAvroSchema(oldTableSchema)), makeMissingFieldsNullable, allowTimestampPrecisionEvolution),
+        oldTableSchema.getFullName()).toAvroSchema();
   }
 
   /**
