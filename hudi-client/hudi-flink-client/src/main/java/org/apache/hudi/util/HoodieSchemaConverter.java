@@ -272,6 +272,16 @@ public class HoodieSchemaConverter {
 
   /**
    * Detects if a Flink RowType represents a BLOB structure by validating it matches the schema defined in {@link HoodieSchema.Blob}.
+   *
+   * <p>Detection intentionally keys off the stable structural signals (field names and base type
+   * roots) and does <b>not</b> assert nested-field nullability. Flink SQL {@code CREATE TABLE} does
+   * not reliably preserve {@code NOT NULL} constraints on nested {@code ROW} fields, so requiring an
+   * exact nullability match would silently demote a user's BLOB column to a generic record when the
+   * column is declared through DDL. The canonical nullability is restored by {@link HoodieSchema#createBlob()}.
+   *
+   * <p>TODO: This heuristic is a workaround for the lack of a native Flink/Parquet BLOB logical
+   * type. See <a href="https://github.com/apache/hudi/issues/18711">apache/hudi#18711</a> for
+   * the tracked work to remove this structural inference.
    */
   private static boolean isBlobStructure(RowType rowType) {
     // Validate: 3 fields with exact names
@@ -286,24 +296,20 @@ public class HoodieSchemaConverter {
       return false;
     }
 
-    // Validate 'type' field: non-null STRING
-    LogicalType typeField = rowType.getTypeAt(0);
-    if (!isFamily(typeField, LogicalTypeFamily.CHARACTER_STRING) || typeField.isNullable()) {
+    // Validate 'type' field: STRING
+    if (!isFamily(rowType.getTypeAt(0), LogicalTypeFamily.CHARACTER_STRING)) {
       return false;
     }
 
-    // Validate 'data' field: nullable BYTES/VARBINARY
+    // Validate 'data' field: BYTES/VARBINARY
     LogicalType dataField = rowType.getTypeAt(1);
     if (dataField.getTypeRoot() != LogicalTypeRoot.BINARY && dataField.getTypeRoot() != LogicalTypeRoot.VARBINARY) {
       return false;
     }
-    if (!dataField.isNullable()) {
-      return false;
-    }
 
-    // Validate 'reference' field: nullable ROW
+    // Validate 'reference' field: ROW
     LogicalType referenceField = rowType.getTypeAt(2);
-    if (!referenceField.isNullable() || referenceField.getTypeRoot() != LogicalTypeRoot.ROW) {
+    if (referenceField.getTypeRoot() != LogicalTypeRoot.ROW) {
       return false;
     }
 
@@ -322,24 +328,20 @@ public class HoodieSchemaConverter {
     }
 
     // Validate reference sub-field types
-    // external_path: non-null STRING
-    if (!isFamily(referenceRow.getTypeAt(0), LogicalTypeFamily.CHARACTER_STRING)
-        || referenceRow.getTypeAt(0).isNullable()) {
+    // external_path: STRING
+    if (!isFamily(referenceRow.getTypeAt(0), LogicalTypeFamily.CHARACTER_STRING)) {
       return false;
     }
-    // offset: nullable BIGINT
-    if (referenceRow.getTypeAt(1).getTypeRoot() != LogicalTypeRoot.BIGINT
-        || !referenceRow.getTypeAt(1).isNullable()) {
+    // offset: BIGINT
+    if (referenceRow.getTypeAt(1).getTypeRoot() != LogicalTypeRoot.BIGINT) {
       return false;
     }
-    // length: nullable BIGINT
-    if (referenceRow.getTypeAt(2).getTypeRoot() != LogicalTypeRoot.BIGINT
-        || !referenceRow.getTypeAt(2).isNullable()) {
+    // length: BIGINT
+    if (referenceRow.getTypeAt(2).getTypeRoot() != LogicalTypeRoot.BIGINT) {
       return false;
     }
-    // managed: non-null BOOLEAN
-    if (referenceRow.getTypeAt(3).getTypeRoot() != LogicalTypeRoot.BOOLEAN
-        || referenceRow.getTypeAt(3).isNullable()) {
+    // managed: BOOLEAN
+    if (referenceRow.getTypeAt(3).getTypeRoot() != LogicalTypeRoot.BOOLEAN) {
       return false;
     }
 
