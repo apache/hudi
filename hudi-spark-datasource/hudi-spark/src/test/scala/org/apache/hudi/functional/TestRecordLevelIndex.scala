@@ -393,6 +393,41 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
     assertEquals(0, partition3Locations.size)
   }
 
+  @Test
+  def testPartitionedRecordLevelIndexLookupUsesFullKey(): Unit = {
+    initMetaClient(HoodieTableType.COPY_ON_WRITE)
+    val dataGen = new HoodieTestDataGenerator()
+    val inserts = dataGen.generateInserts("001", 3)
+    val insertDf = toDataset(spark, inserts).withColumn("data_partition_path", lit("partition1"))
+    val options = Map(HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+      RECORDKEY_FIELD.key -> "_row_key",
+      PARTITIONPATH_FIELD.key -> "data_partition_path",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "false",
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "true",
+      HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key() -> "false",
+      HoodieIndexConfig.INDEX_TYPE.key() -> RECORD_LEVEL_INDEX.name())
+    insertDf.write.format("hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val writeConfig = getWriteConfig(options)
+    val metadata = metadataWriter(writeConfig).getTableMetadata
+    val recordKeys = inserts.asScala.map(i => i.getRecordKey).asJava
+    assertEquals(3, readRecordIndex(metadata, recordKeys, HOption.of("partition1")).size)
+
+    // Partitioned RLI lookup is still a full record-key lookup within the data partition.
+    // A prefix-only key would incorrectly match real records if the lookup used prefix matching.
+    val recordKeySet = recordKeys.asScala.toSet
+    val prefixOnlyKey = recordKeys.asScala
+      .flatMap(key => (1 until key.length).map(key.substring(0, _)))
+      .find(prefix => !recordKeySet.contains(prefix))
+      .get
+    assertTrue(readRecordIndex(metadata, util.Collections.singletonList(prefixOnlyKey), HOption.of("partition1")).isEmpty)
+  }
+
   @ParameterizedTest
   @MethodSource(Array("testArgsForPartitionedRecordLevelIndex"))
   def testPartitionedRecordLevelIndexInitializationBasic(testCase: TestPartitionedRecordLevelIndexTestCase): Unit = {
