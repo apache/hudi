@@ -604,6 +604,54 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
+  @MethodSource("tableTypeAndBooleanTrueFalseParams")
+  void testDataSkippingWithPartitionedRecordLevelIndex(
+      HoodieTableType tableType, boolean useSourceV2) throws Exception {
+    String writerTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name())
+        .option(FlinkOptions.TABLE_TYPE, tableType.name())
+        .end();
+    streamTableEnv.executeSql(writerTableDDL);
+    execInsertSql(streamTableEnv, TestSQL.INSERT_T1);
+
+    String readerTableDDL = sql("t1_read")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
+        .option(FlinkOptions.TABLE_TYPE, tableType.name())
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
+        .end();
+    batchTableEnv.executeSql(readerTableDDL);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> batchTableEnv.sqlQuery(
+            "select * from t1_read where `partition` = 'par1' and uuid = 'id1'").execute().collect());
+    assertRowsEquals(result, "[+I[id1, Danny, 23, 1970-01-01T00:00:01, par1]]");
+
+    List<Row> multiPartitionResult = CollectionUtil.iterableToList(
+        () -> batchTableEnv.sqlQuery(
+            "select * from t1_read where `partition` in ('par1', 'par4') and uuid in ('id1', 'id7')").execute().collect());
+    assertRowsEquals(multiPartitionResult, "["
+        + "+I[id1, Danny, 23, 1970-01-01T00:00:01, par1], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4]]");
+
+    // insert a record with id1 into the par4.
+    String insert = "insert into t1 values ('id1','Jack',23,TIMESTAMP '1970-01-01 00:00:01','par4')";
+    execInsertSql(streamTableEnv, insert);
+    // test scenario query predicate also includes a partition name which doesn't exist.
+    multiPartitionResult = CollectionUtil.iterableToList(
+        () -> batchTableEnv.sqlQuery(
+            "select * from t1_read where `partition` in ('par1', 'par4', 'par5') and uuid in ('id1', 'id7')").execute().collect());
+    assertRowsEqualsUnordered(multiPartitionResult,
+        Arrays.asList(
+            "+I[id1, Danny, 23, 1970-01-01T00:00:01, par1]",
+            "+I[id1, Jack, 23, 1970-01-01T00:00:01, par4]",
+            "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4]"));
+  }
+
+  @ParameterizedTest
   @MethodSource("tableTypeAndSourceV2AndBooleanTrueFalseParams")
   void testReadWithPartitionStatsPruning(HoodieTableType tableType, boolean useSourceV2, boolean hiveStylePartitioning) throws Exception {
     String hoodieTableDDL = sql("t1")

@@ -29,8 +29,8 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.source.stats.BaseRecordLevelIndex;
 import org.apache.hudi.source.stats.FileStatsIndex;
-import org.apache.hudi.source.stats.RecordLevelIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.StreamerUtil;
@@ -73,7 +73,7 @@ public class FileIndex implements Serializable, AutoCloseable {
   private final Function<String, Integer> partitionBucketIdFunc;   // for bucket pruning
   private List<String> partitionPaths;                             // cache of partition paths
   private final FileStatsIndex fileStatsIndex;                     // for data skipping
-  private final Option<RecordLevelIndex> recordLevelIndex;
+  private final Option<BaseRecordLevelIndex> recordLevelIndex;
   private final HoodieTableMetaClient metaClient;
 
   private FileIndex(
@@ -93,7 +93,7 @@ public class FileIndex implements Serializable, AutoCloseable {
     this.fileStatsIndex = new FileStatsIndex(path.toString(), rowType, conf, metaClient);
     this.partitionBucketIdFunc = partitionBucketIdFunc;
     List<ExpressionEvaluators.Evaluator> evaluators = Option.ofNullable(colStatsProbe).map(ColumnStatsProbe::getEvaluators).orElse(Collections.emptyList());
-    this.recordLevelIndex = RecordLevelIndex.create(path.toString(), conf, metaClient, evaluators, rowType);
+    this.recordLevelIndex = BaseRecordLevelIndex.create(path.toString(), conf, metaClient, evaluators, rowType);
     this.metaClient = metaClient;
   }
 
@@ -288,7 +288,7 @@ public class FileIndex implements Serializable, AutoCloseable {
   @Override
   public void close() {
     this.fileStatsIndex.close();
-    this.recordLevelIndex.ifPresent(RecordLevelIndex::close);
+    this.recordLevelIndex.ifPresent(BaseRecordLevelIndex::close);
     this.partitionPruner.ifPresent(PartitionPruners.PartitionPruner::close);
   }
 

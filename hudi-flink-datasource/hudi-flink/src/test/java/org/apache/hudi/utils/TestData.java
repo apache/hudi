@@ -675,6 +675,17 @@ public class TestData {
   }
 
   /**
+   * Assert that expected row strings and actual collection of rows are equal regardless of the order.
+   *
+   * @param rows     Actual result rows
+   * @param expected Expected row strings
+   */
+  public static void assertRowsEqualsUnordered(List<Row> rows, List<String> expected) {
+    List<String> actualRows = rows.stream().map(Row::toString).collect(Collectors.toList());
+    assertEquals(new HashSet<>(expected), new HashSet<>(actualRows));
+  }
+
+  /**
    * Sort the {@code rows} using field at index 0 and asserts
    * it equals with the expected string {@code expected}.
    *

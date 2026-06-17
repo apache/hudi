@@ -260,6 +260,77 @@ public class TestFileIndex {
     assertThat(fileSlices.size(), is(expectedCnt));
   }
 
+  @ParameterizedTest
+  @MethodSource("filtersAndResults")
+  void testFileListingWithPartitionedRecordLevelIndex(String recordFields, ColumnStatsProbe probe, int maxKeyCnt, int expectedCnt) throws Exception {
+    DataType dataType = TestConfigurations.ROW_DATA_TYPE_WITH_ATOMIC_TYPES;
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath(), dataType);
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, recordFields);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_RLI_KEYS_MAX_NUM, maxKeyCnt);
+    // Enable partitioned record level index specifically for this test
+    conf.setString(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+
+    // Write test data
+    TestData.writeData(TestData.DATA_SET_WITH_ATOMIC_TYPES, conf);
+
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    // Create a filter on the record key 'uuid' with EQUALS operator to trigger record-level index
+    FileIndex fileIndex =
+        FileIndex.builder()
+            .path(new StoragePath(tempFile.getAbsolutePath()))
+            .conf(conf)
+            .rowType((RowType) dataType.getLogicalType())
+            .metaClient(metaClient)
+            .columnStatsProbe(probe)
+            .build();
+
+    // Get filtered file slices - this should use partitioned record-level index data skipping
+    List<FileSlice> fileSlices = getFilteredFileSlices(metaClient, fileIndex);
+    assertThat(fileSlices.size(), is(expectedCnt));
+  }
+
+  @Test
+  void testFileListingWithPartitionedRecordLevelIndexExceedingMaxPartitions() throws Exception {
+    DataType dataType = TestConfigurations.ROW_DATA_TYPE_WITH_ATOMIC_TYPES;
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath(), dataType);
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "f_str");
+    // the dataset spans 3 partitions (par1, par2, par3), set the threshold below it to trigger fallback
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_RLI_PARTITIONS_MAX_NUM, 2);
+    conf.setString(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+
+    TestData.writeData(TestData.DATA_SET_WITH_ATOMIC_TYPES, conf);
+
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    // record predicate `f_str` = 'str1' would normally prune to a single file slice
+    CallExpression equalExpr = CallExpression.permanent(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(
+            new FieldReferenceExpression("f_str", DataTypes.STRING(), 0, 0),
+            new ValueLiteralExpression("str1", DataTypes.STRING().notNull())
+        ),
+        DataTypes.BOOLEAN());
+    ColumnStatsProbe probe = ColumnStatsProbe.newInstance(Collections.singletonList(equalExpr));
+    FileIndex fileIndex =
+        FileIndex.builder()
+            .path(new StoragePath(tempFile.getAbsolutePath()))
+            .conf(conf)
+            .rowType((RowType) dataType.getLogicalType())
+            .metaClient(metaClient)
+            .columnStatsProbe(probe)
+            .build();
+
+    // the number of candidate partitions (3) exceeds the configured threshold (2),
+    // so partitioned record level index pruning is skipped and all file slices are returned
+    List<FileSlice> fileSlices = getFilteredFileSlices(metaClient, fileIndex);
+    assertThat(fileSlices.size(), is(3));
+  }
+
   private static Stream<Arguments> filtersAndResults() {
     CallExpression equalTinyInt = CallExpression.permanent(
         BuiltInFunctionDefinitions.EQUALS,
