@@ -40,6 +40,7 @@ Here is the list of PMC and Committers who have contributed to the project. For 
 | Name                 | Github Username     | Apache ID                                                                           |
 |----------------------|---------------------|-------------------------------------------------------------------------------------|
 | Alexey Kudinkin      | alexeykudinkin      | [akudinkin](https://people.apache.org/committer-index.html#akudinkin)               |
+| Chaoyang Liu         | TheR1sing3un        | [chaoyang](https://people.apache.org/committer-index.html#chaoyang)                 |
 | Forward Xu           | XuQianJin-Stars     | [forwardxu](https://people.apache.org/committer-index.html#forwardxu)               |
 | Hui An               | boneanxs            | [rexan](https://people.apache.org/committer-index.html#rexan)                       |
 | Jonathan Vexler      | jonvex              | [jonvex](https://people.apache.org/committer-index.html#jonvex)                     |
