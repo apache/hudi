@@ -435,10 +435,12 @@ public class StreamWriteOperatorCoordinator
 
   private void restoreEvents() {
     if (this.eventBuffers.nonEmpty()) {
-      final HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
       this.eventBuffers.getEventBufferStream()
-          .forEach(entry -> recommitInstant(completedTimeline, entry.getKey(), entry.getValue().getLeft(), entry.getValue().getRight()));
-      this.metaClient.reloadActiveTimeline();
+          .forEach(entry -> {
+            this.metaClient.reloadActiveTimeline();
+            final HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
+            recommitInstant(completedTimeline, entry.getKey(), entry.getValue().getLeft(), entry.getValue().getRight());
+          });
     }
   }
 
@@ -608,8 +610,19 @@ public class StreamWriteOperatorCoordinator
    */
   private boolean commitInstants(long checkpointId) {
     // use < instead of <= because the write metadata event sends the last known checkpoint id which is smaller than the current one.
+    boolean[] isFirstInstant = {true};
     List<Boolean> result = this.eventBuffers.getEventBufferStream().filter(entry -> entry.getKey() < checkpointId)
-        .map(entry -> commitInstant(entry.getKey(), entry.getValue().getLeft(), entry.getValue().getRight())).collect(Collectors.toList());
+        .map(entry -> {
+          if (isFirstInstant[0]) {
+            isFirstInstant[0] = false;
+          } else {
+            // Refresh the baseline for subsequent instants so that OCC conflict resolution
+            // sees the just-committed instant as completed, not as a concurrent conflict.
+            this.metaClient.reloadActiveTimeline();
+            this.writeClient.preTxn(tableState.operationType, this.metaClient);
+          }
+          return commitInstant(entry.getKey(), entry.getValue().getLeft(), entry.getValue().getRight());
+        }).collect(Collectors.toList());
     return result.stream().anyMatch(i -> i);
   }
 

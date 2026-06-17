@@ -162,7 +162,7 @@ public class TransactionUtils {
             .getInstantsAsStream()
             .filter(instant -> instant.getCompletionTime() != null
                 && compareTimestamps(instant.getCompletionTime(), LESSER_THAN, currentInstantTime))
-            .max(Comparator.comparing(HoodieInstant::getCompletionTime)));
+            .max(Comparator.comparing(HoodieInstant::requestedTime)));
     return getHoodieInstantAndMetaDataPair(metaClient, hoodieInstantOption);
   }
 

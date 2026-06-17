@@ -30,6 +30,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
@@ -41,6 +42,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommit;
@@ -49,7 +51,10 @@ import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyU
 import static org.apache.hudi.common.model.WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL;
 import static org.apache.hudi.common.model.WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -131,5 +136,81 @@ class TestTransactionUtils extends HoodieCommonTestHarness {
             lastSuccessfulInstant, false, Collections.singleton(newInstantTime));
     // since we bypass entire conflict resolution
     verify(spyMetaClient, times(0)).reloadActiveTimeline();
+  }
+
+  @Test
+  void getLastCompletedTxnInstantAndMetadataSelectsMaxRequestedTime() throws Exception {
+    // Simulate interleaved completions:
+    // Commit A: requested=T1, completed=T5 (slow commit)
+    // Commit B: requested=T2, completed=T3 (fast commit)
+    // currentInstantTime=T6
+    // The method should return B (max requestedTime=T2), not A (max completionTime=T5).
+    String t1 = "20240101010101000";
+    String t2 = "20240101010102000";
+    String t3 = "20240101010103000";
+    String t5 = "20240101010105000";
+    String t6 = "20240101010106000";
+
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    HoodieCommitMetadata metadataA = createCommitMetadata(t1, "file-1");
+    HoodieCommitMetadata metadataB = createCommitMetadata(t2, "file-2");
+    testTable.addCommit(t1, Option.of(t5), Option.of(metadataA));
+    testTable.addCommit(t2, Option.of(t3), Option.of(metadataB));
+
+    metaClient.reloadActiveTimeline();
+    Option<Pair<HoodieInstant, Map<String, String>>> result =
+        TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient, t6);
+
+    assertTrue(result.isPresent());
+    assertEquals(t2, result.get().getLeft().requestedTime(),
+        "Should select the instant with the latest requestedTime (T2), not the latest completionTime (T5)");
+  }
+
+  @Test
+  void getLastCompletedTxnInstantAndMetadataExcludesInstantsCompletedAfterCurrent() throws Exception {
+    // Commit A: requested=T1, completed=T3 (completed before current)
+    // Commit B: requested=T2, completed=T5 (completed after current)
+    // currentInstantTime=T4
+    // Should return A only, since B's completionTime >= currentInstantTime.
+    String t1 = "20240101010101000";
+    String t2 = "20240101010102000";
+    String t3 = "20240101010103000";
+    String t4 = "20240101010104000";
+    String t5 = "20240101010105000";
+
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    HoodieCommitMetadata metadataA = createCommitMetadata(t1, "file-1");
+    HoodieCommitMetadata metadataB = createCommitMetadata(t2, "file-2");
+    testTable.addCommit(t1, Option.of(t3), Option.of(metadataA));
+    testTable.addCommit(t2, Option.of(t5), Option.of(metadataB));
+
+    metaClient.reloadActiveTimeline();
+    Option<Pair<HoodieInstant, Map<String, String>>> result =
+        TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient, t4);
+
+    assertTrue(result.isPresent());
+    assertEquals(t1, result.get().getLeft().requestedTime(),
+        "Should only include instants whose completionTime < currentInstantTime");
+  }
+
+  @Test
+  void getLastCompletedTxnInstantAndMetadataReturnsEmptyWhenNoInstantsQualify() throws Exception {
+    // Commit A: requested=T1, completed=T3
+    // currentInstantTime=T2 (before A's completion)
+    // Should return empty.
+    String t1 = "20240101010101000";
+    String t2 = "20240101010102000";
+    String t3 = "20240101010103000";
+
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    HoodieCommitMetadata metadataA = createCommitMetadata(t1, "file-1");
+    testTable.addCommit(t1, Option.of(t3), Option.of(metadataA));
+
+    metaClient.reloadActiveTimeline();
+    Option<Pair<HoodieInstant, Map<String, String>>> result =
+        TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient, t2);
+
+    assertFalse(result.isPresent(),
+        "Should return empty when no instants have completionTime < currentInstantTime");
   }
 }
