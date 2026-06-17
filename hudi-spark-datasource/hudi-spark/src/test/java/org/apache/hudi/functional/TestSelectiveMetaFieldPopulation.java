@@ -261,11 +261,21 @@ class TestSelectiveMetaFieldPopulation extends SparkClientFunctionalTestHarness 
         .option(DataSourceReadOptions.END_COMMIT().key(), sortedInstants.get(3).getRight())
         .load(path);
 
-    // NOTE: prefer collectAsList() over count()/filter().count() here. With selective meta
-    // exclusion, the _hoodie_record_key column is all-null on post-flip rows; Spark's
-    // Parquet count/predicate-pushdown shortcut can read all-null column statistics and
-    // skip materializing rows entirely, returning 0 even though rows exist. collectAsList()
-    // forces materialization and avoids the stats shortcut.
+    // count() / filter().count() against an incremental relation currently returns 0:
+    // HoodieFileGroupReaderBasedFileFormat hides its requiredFilters (the commit-time span
+    // predicate) from Spark's Catalyst planner, so Spark's column pruning drops
+    // _hoodie_commit_time from the scan schema for shapes that need no data columns
+    // (count, isEmpty, projections without meta). Parquet then evaluates the predicate
+    // against missing columns as all-null and returns 0 rows. The bug is independent of
+    // selective meta-field exclusion but this test surfaces it because the workload uses
+    // _hoodie_commit_time as the only populated meta column.
+    //
+    // Tracking fix: https://github.com/apache/hudi/pull/18949 (augments the read schema
+    // with filter-only columns and projects them away after filtering). Once that lands,
+    // re-enable the assertEquals below.
+    //
+    // assertEquals(2, incremental.count(),
+    //     "Incremental query should return rows from commits 3 and 4 only");
     List<Row> incrementalRows = incremental.collectAsList();
     assertEquals(2, incrementalRows.size(),
         "Incremental query should return rows from commits 3 and 4 only");
