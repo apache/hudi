@@ -561,6 +561,13 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns the index key fields as a list, parsing the comma-separated config value once.
+   */
+  public static List<String> getIndexKeyFields(Configuration conf) {
+    return KeyGenUtils.getIndexKeyFields(getIndexKeyField(conf));
+  }
+
+  /**
    * Returns the conflict resolution strategy.
    */
   public static ConflictResolutionStrategy getConflictResolutionStrategy(Configuration conf) {
