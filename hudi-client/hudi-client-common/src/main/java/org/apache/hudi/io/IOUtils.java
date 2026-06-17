@@ -111,12 +111,12 @@ public class IOUtils {
    * cores per task into total cores to get task slots).
    *
    * <p>Distinct from {@link #getMaxMemoryAllowedForMerge} in two ways: returns {@code Option}
-   * rather than collapsing the absent case to a default, and accepts the floor as a parameter
-   * so callers (e.g., {@code HoodieAppendHandle}) can use a smaller floor than the spillable-map
-   * 100MB.
+   * rather than collapsing the absent case to a default, and accepts the minimum-bytes value
+   * as a parameter so callers (e.g., {@code HoodieAppendHandle}) can use a smaller floor than
+   * the spillable-map 100MB.
    */
   public static Option<Long> getMaxMemoryAllowedForLogAppend(
-      TaskContextSupplier context, String maxMemoryFraction, long minFloor) {
+      TaskContextSupplier context, String maxMemoryFraction, long minBytes) {
     Option<String> totalMemoryOpt = context.getProperty(EngineProperty.TOTAL_MEMORY_AVAILABLE);
     Option<String> memoryFractionOpt = context.getProperty(EngineProperty.MEMORY_FRACTION_IN_USE);
     Option<String> totalCoresOpt = context.getProperty(EngineProperty.TOTAL_CORES_PER_EXECUTOR);
@@ -134,7 +134,7 @@ public class IOUtils {
     }
     double userAvailableMemory = executorMemoryInBytes * (1 - memoryFraction) / executorTaskNum;
     long ceiling = (long) Math.floor(userAvailableMemory * appendFraction);
-    return Option.of(Math.max(minFloor, ceiling));
+    return Option.of(Math.max(minBytes, ceiling));
   }
 
   /**
