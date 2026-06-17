@@ -21,7 +21,7 @@ package org.apache.hudi
 
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hudi.common.engine.RecordContext
-import org.apache.hudi.common.schema.{AvroToHoodieSchemaCache, HoodieSchema}
+import org.apache.hudi.common.schema.{HoodieAvroSchemaCache, HoodieSchema}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
@@ -47,7 +47,7 @@ trait SparkFileFormatInternalRecordContext extends BaseSparkInternalRecordContex
    * @return An [[InternalRow]].
    */
   override def convertAvroRecord(avroRecord: IndexedRecord): InternalRow = {
-    val schema = AvroToHoodieSchemaCache.intern(avroRecord.getSchema)
+    val schema = HoodieAvroSchemaCache.intern(avroRecord.getSchema)
     val structType = HoodieInternalRowUtils.getCachedSchema(schema)
     val deserializer = deserializerMap.getOrElseUpdate(schema, {
       sparkAdapter.createAvroDeserializer(schema, structType)

@@ -33,7 +33,7 @@ import org.apache.avro.Schema;
  *
  * <p>This is a global cache which works for a JVM lifecycle.
  */
-public class AvroToHoodieSchemaCache {
+public class HoodieAvroSchemaCache {
 
   private static final LoadingCache<Schema, HoodieSchema> AVRO_SCHEMA_CACHE =
       Caffeine.newBuilder().weakKeys().maximumSize(1024)
