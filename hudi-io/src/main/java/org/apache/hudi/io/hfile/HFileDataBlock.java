@@ -148,9 +148,10 @@ public class HFileDataBlock extends HFileBlock {
         // know that the cursor is ahead of the lookup key in this case.
         return isAtFirstKey(relativeOffset) ? SEEK_TO_BEFORE_BLOCK_FIRST_KEY : SEEK_TO_IN_RANGE;
       }
+      int entryKeyLength = IOUtils.readInt(byteBuff, relativeOffset);
+      int entryValueLength = IOUtils.readInt(byteBuff, relativeOffset + SIZEOF_INT32);
       long increment =
-          (long) KEY_OFFSET + (long) IOUtils.readInt(byteBuff, relativeOffset)
-              + (long) IOUtils.readInt(byteBuff, relativeOffset + SIZEOF_INT32)
+          (long) KEY_OFFSET + (long) entryKeyLength + (long) entryValueLength
               + ZERO_TS_VERSION_BYTE_LENGTH;
       lastRelativeOffset = relativeOffset;
       relativeOffset += increment;
