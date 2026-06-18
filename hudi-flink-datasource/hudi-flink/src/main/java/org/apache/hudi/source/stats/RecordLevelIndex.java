@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -58,7 +57,16 @@ import java.util.stream.Collectors;
 @Slf4j
 public class RecordLevelIndex extends BaseRecordLevelIndex {
   private static final long serialVersionUID = 1L;
-  private final int maxPartitions;
+
+  /**
+   * Upper bound on the number of candidate data-table partitions eligible for a partitioned RLI lookup.
+   *
+   * <p>Unlike the global RLI (a single lookup over all keys), the partitioned variant performs one metadata-table
+   * read per candidate partition. When a query does not filter on the partition column the candidate set can span
+   * many partitions, and fanning out a lookup to each one can add latency that outweighs the skipping benefit.
+   * Once the candidate partition count exceeds this threshold, pruning is skipped.
+   */
+  private static final int MAX_PARTITIONS = 3;
 
   RecordLevelIndex(
       String basePath,
@@ -66,10 +74,6 @@ public class RecordLevelIndex extends BaseRecordLevelIndex {
       HoodieTableMetaClient metaClient,
       List<String> hoodieKeysFromFilter) {
     super(basePath, conf, metaClient, hoodieKeysFromFilter);
-    this.maxPartitions = conf.get(FlinkOptions.READ_DATA_SKIPPING_RLI_PARTITIONS_MAX_NUM);
-    ValidationUtils.checkArgument(
-        this.maxPartitions > 0,
-        FlinkOptions.READ_DATA_SKIPPING_RLI_PARTITIONS_MAX_NUM.key() + " must be greater than zero");
   }
 
   /**
@@ -87,9 +91,9 @@ public class RecordLevelIndex extends BaseRecordLevelIndex {
     if (partitions.isEmpty()) {
       return Option.empty();
     }
-    if (partitions.size() > maxPartitions) {
+    if (partitions.size() > MAX_PARTITIONS) {
       log.info("The number of candidate partitions {} exceeds the partitioned record level index lookup threshold {}. Skipping pruning.",
-          partitions.size(), maxPartitions);
+          partitions.size(), MAX_PARTITIONS);
       return Option.empty();
     }
 

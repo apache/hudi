@@ -511,15 +511,6 @@ public class FlinkOptions extends HoodieConfig {
           + "E.g., given query: SELECT * FROM T WHERE `uuid` IN (1,2,3,4,5,6,7,8,9), the number of hoodie keys is 9, and\n"
           + "the maximum value is 8, so the source will not perform record level index filtering.");
 
-  @AdvancedConfig
-  public static final ConfigOption<Integer> READ_DATA_SKIPPING_RLI_PARTITIONS_MAX_NUM = ConfigOptions
-      .key("read.data.skipping.rli.partitions.max.num")
-      .intType()
-      .defaultValue(3)
-      .withDescription("The maximum number of candidate data table partitions that can be queried through the partitioned record level index "
-          + "for data skipping optimization. Each candidate partition requires a separate metadata table lookup. If the number of candidate "
-          + "partitions exceeds this value, the source skips record level index filtering. The value must be greater than zero.");
-
   // ------------------------------------------------------------------------
   //  Write Options
   // ------------------------------------------------------------------------

@@ -22,14 +22,11 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.index.record.HoodieRecordIndex;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -71,7 +68,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.utils.TestConfigurations.ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -216,16 +212,6 @@ public class TestRecordLevelIndex {
     verify(metadataTable, never()).readRecordIndexLocationsWithKeys(any());
   }
 
-  @ParameterizedTest
-  @ValueSource(ints = {0, -1})
-  void testRejectsNonPositivePartitionLookupThreshold(int maxPartitions) {
-    Configuration conf = new Configuration();
-    conf.set(FlinkOptions.READ_DATA_SKIPPING_RLI_PARTITIONS_MAX_NUM, maxPartitions);
-
-    assertThrows(IllegalArgumentException.class,
-        () -> new RecordLevelIndex("", conf, metaClient, Collections.singletonList("id1")));
-  }
-
   @Test
   void testGlobalRliMatchesPartitionAndFileId() {
     HoodieTableMetadata metadataTable = mock(HoodieTableMetadata.class);
@@ -268,15 +254,6 @@ public class TestRecordLevelIndex {
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     when(tableConfig.isMetadataTableAvailable()).thenReturn(true);
     when(tableConfig.getMetadataPartitions()).thenReturn(Collections.singleton(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX));
-  }
-
-  private static HoodieIndexDefinition indexDefinition(boolean partitioned) {
-    return HoodieIndexDefinition.newBuilder()
-        .withIndexName(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)
-        .withIndexType(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)
-        .withIndexOptions(Collections.singletonMap(
-            HoodieRecordIndex.IS_PARTITIONED_OPTION, String.valueOf(partitioned)))
-        .build();
   }
 
   private static FileSlice fileSlice(String partition, String fileId) {

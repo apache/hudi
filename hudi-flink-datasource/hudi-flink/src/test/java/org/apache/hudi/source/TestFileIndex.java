@@ -294,25 +294,21 @@ public class TestFileIndex {
 
   @Test
   void testFileListingWithPartitionedRecordLevelIndexExceedingMaxPartitions() throws Exception {
-    DataType dataType = TestConfigurations.ROW_DATA_TYPE_WITH_ATOMIC_TYPES;
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath(), dataType);
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
-    conf.set(FlinkOptions.METADATA_ENABLED, true);
     conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
-    conf.set(FlinkOptions.RECORD_KEY_FIELD, "f_str");
-    // the dataset spans 3 partitions (par1, par2, par3), set the threshold below it to trigger fallback
-    conf.set(FlinkOptions.READ_DATA_SKIPPING_RLI_PARTITIONS_MAX_NUM, 2);
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
     conf.setString(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
 
-    TestData.writeData(TestData.DATA_SET_WITH_ATOMIC_TYPES, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
     // record predicate `f_str` = 'str1' would normally prune to a single file slice
     CallExpression equalExpr = CallExpression.permanent(
         BuiltInFunctionDefinitions.EQUALS,
         Arrays.asList(
-            new FieldReferenceExpression("f_str", DataTypes.STRING(), 0, 0),
-            new ValueLiteralExpression("str1", DataTypes.STRING().notNull())
+            new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0),
+            new ValueLiteralExpression("id1", DataTypes.STRING().notNull())
         ),
         DataTypes.BOOLEAN());
     ColumnStatsProbe probe = ColumnStatsProbe.newInstance(Collections.singletonList(equalExpr));
@@ -320,15 +316,15 @@ public class TestFileIndex {
         FileIndex.builder()
             .path(new StoragePath(tempFile.getAbsolutePath()))
             .conf(conf)
-            .rowType((RowType) dataType.getLogicalType())
+            .rowType(TestConfigurations.ROW_TYPE)
             .metaClient(metaClient)
             .columnStatsProbe(probe)
             .build();
 
-    // the number of candidate partitions (3) exceeds the configured threshold (2),
+    // the number of candidate partitions (4) exceeds the configured threshold (3),
     // so partitioned record level index pruning is skipped and all file slices are returned
     List<FileSlice> fileSlices = getFilteredFileSlices(metaClient, fileIndex);
-    assertThat(fileSlices.size(), is(3));
+    assertThat(fileSlices.size(), is(4));
   }
 
   private static Stream<Arguments> filtersAndResults() {
