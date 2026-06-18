@@ -11,13 +11,12 @@ down by areas on our [stack](/docs/hudi_stack).
 
 ## Recent Release(s)
 
-[1.1.1](/releases/release-1.1#release-111) (Dec 2025)
+[1.2.0](/releases/release-1.2#release-120) (May 2026)
 
 ## Future Releases
 
 | Release | Timeline  |
 |---------|-----------|
-| 1.2.0   | Jan 2026  |
 | 2.0.0   | Jun 2026  |
 
 ## Storage Engine
