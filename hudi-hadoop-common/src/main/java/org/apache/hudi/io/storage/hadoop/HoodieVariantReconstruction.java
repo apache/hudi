@@ -51,9 +51,9 @@ import java.util.List;
  *
  * <p>See https://github.com/apache/hudi/issues/18931.
  */
-final class VariantReconstruction {
+final class HoodieVariantReconstruction {
 
-  private static final Logger LOG = LoggerFactory.getLogger(VariantReconstruction.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieVariantReconstruction.class);
 
   private final HoodieSchema intermediateSchema;
   private final Schema outputAvroSchema;
@@ -64,7 +64,7 @@ final class VariantReconstruction {
   private final Schema[] shreddedSubSchemas;
   private final Schema[] unshreddedSubSchemas;
 
-  private VariantReconstruction(HoodieSchema intermediateSchema, Schema outputAvroSchema,
+  private HoodieVariantReconstruction(HoodieSchema intermediateSchema, Schema outputAvroSchema,
                                 VariantShreddingProvider provider, boolean[] isTarget,
                                 Schema[] shreddedSubSchemas, Schema[] unshreddedSubSchemas) {
     this.intermediateSchema = intermediateSchema;
@@ -88,7 +88,7 @@ final class VariantReconstruction {
    * none is needed (no shredded variant columns in the file, reading shredded variants disabled, or
    * no provider available - in which case the read proceeds unchanged).
    */
-  static VariantReconstruction create(HoodieSchema fileSchema, HoodieSchema requestedSchema, HoodieStorage storage) {
+  static HoodieVariantReconstruction create(HoodieSchema fileSchema, HoodieSchema requestedSchema, HoodieStorage storage) {
     if (requestedSchema.getType() != HoodieSchemaType.RECORD || fileSchema.getType() != HoodieSchemaType.RECORD) {
       return null;
     }
@@ -142,7 +142,7 @@ final class VariantReconstruction {
       }
     }
 
-    return new VariantReconstruction(intermediateSchema, outputSchema.toAvroSchema(), provider,
+    return new HoodieVariantReconstruction(intermediateSchema, outputSchema.toAvroSchema(), provider,
         isTarget, shreddedSubSchemas, unshreddedSubSchemas);
   }
 

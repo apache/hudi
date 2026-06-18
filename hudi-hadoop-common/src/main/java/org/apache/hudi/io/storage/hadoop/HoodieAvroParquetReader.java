@@ -187,7 +187,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     Configuration hadoopConf = storage.getConf().unwrapCopyAs(Configuration.class);
     // If the on-disk file shreds variant columns, read them in their shredded (typed_value-bearing)
     // shape and reconstruct the unshredded variant per-record below (#18931). null when not needed.
-    VariantReconstruction reconstruction = VariantReconstruction.create(getSchema(), schema, storage);
+    HoodieVariantReconstruction reconstruction = HoodieVariantReconstruction.create(getSchema(), schema, storage);
     HoodieSchema readSchema = reconstruction == null ? schema : reconstruction.intermediateSchema();
     HoodieSchema repairedFileSchema = HoodieSchemaRepair.repairLogicalTypes(getSchema(), readSchema);
     Option<HoodieSchema> promotedSchema = Option.empty();
