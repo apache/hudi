@@ -20,10 +20,9 @@ package org.apache.hudi.io.storage.row.parquet;
 
 import org.apache.hudi.adapter.DataTypeAdapter;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.util.HoodieSchemaConverter;
 
 import lombok.extern.slf4j.Slf4j;
@@ -229,10 +228,7 @@ public class ParquetSchemaConverter {
     for (int i = 0; i < rowType.getFieldCount(); i++) {
       String fieldName = rowType.getFieldNames().get(i);
       LogicalType fieldType = rowType.getTypeAt(i);
-      HoodieSchema fieldSchema = nonNullSchema.getField(fieldName)
-          .map(HoodieSchemaField::schema)
-          .orElseThrow(() -> new HoodieSchemaException(
-              "Field " + fieldName + " doesn't exist in schema: " + nonNullSchema));
+      HoodieSchema fieldSchema = HoodieSchemaUtils.getFieldSchema(nonNullSchema, fieldName);
       types[i] = convertToParquetType(
           fieldName,
           fieldType,
@@ -426,8 +422,7 @@ public class ParquetSchemaConverter {
                 field.getName(),
                 field.getType(),
                 field.getType().isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED,
-                resolvedSchema.getField(field.getName()).map(HoodieSchemaField::schema)
-                    .orElseThrow(() -> new HoodieSchemaException("Field " + field.getName() + " doesn't exist in schema: " + resolvedSchema)))));
+                HoodieSchemaUtils.getFieldSchema(resolvedSchema, field.getName()))));
         return builder.named(name);
       default:
         if (DataTypeAdapter.isVariantType(type)) {

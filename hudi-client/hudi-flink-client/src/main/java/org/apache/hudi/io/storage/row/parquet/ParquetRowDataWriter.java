@@ -19,10 +19,9 @@
 package org.apache.hudi.io.storage.row.parquet;
 
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.VectorConversionUtils;
 
@@ -70,17 +69,15 @@ public class ParquetRowDataWriter {
   public ParquetRowDataWriter(
       RecordConsumer recordConsumer,
       boolean utcTimestamp,
-      HoodieSchema hoodieSchema) {
+      HoodieSchema schema) {
     this.recordConsumer = recordConsumer;
     this.utcTimestamp = utcTimestamp;
 
-    RowType rowType = HoodieSchemaConverter.convertToRowType(hoodieSchema);
+    RowType rowType = HoodieSchemaConverter.convertToRowType(schema);
     this.filedWriters = new FieldWriter[rowType.getFieldCount()];
     this.fieldNames = rowType.getFieldNames().toArray(new String[0]);
     for (int i = 0; i < rowType.getFieldCount(); i++) {
-      String fieldName = fieldNames[i];
-      HoodieSchema fieldSchema = hoodieSchema.getNonNullType().getField(fieldName).map(HoodieSchemaField::schema)
-          .orElseThrow(() -> new HoodieSchemaException("Field " + fieldName + " doesn't exist in schema: " + hoodieSchema));
+      HoodieSchema fieldSchema = HoodieSchemaUtils.getFieldSchema(schema, fieldNames[i]);
       this.filedWriters[i] = createWriter(rowType.getTypeAt(i), fieldSchema);
     }
   }
@@ -170,10 +167,7 @@ public class ParquetRowDataWriter {
         ValidationUtils.checkArgument(nonNullSchema.getType() == HoodieSchemaType.RECORD || nonNullSchema.getType() == HoodieSchemaType.BLOB,
             "Hoodie schema should be RECORD or BLOB type.");
         FieldWriter[] fieldWriters = rowType.getFields().stream()
-            .map(field -> createWriter(
-                field.getType(),
-                nonNullSchema.getField(field.getName()).map(HoodieSchemaField::schema)
-                    .orElseThrow(() -> new HoodieSchemaException("Field " + field.getName() + " doesn't exist in schema: " + nonNullSchema))))
+            .map(field -> createWriter(field.getType(), HoodieSchemaUtils.getFieldSchema(nonNullSchema, field.getName())))
             .toArray(FieldWriter[]::new);
         String[] fieldNames = rowType.getFields().stream()
             .map(RowType.RowField::getName).toArray(String[]::new);

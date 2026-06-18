@@ -74,6 +74,19 @@ public final class HoodieSchemaUtils {
   }
 
   /**
+   * Returns the schema for the specified field.
+   *
+   * @param schema    record schema that contains the field
+   * @param fieldName field name to resolve
+   * @return schema of the resolved field
+   * @throws HoodieSchemaException if the field does not exist in the schema
+   */
+  public static HoodieSchema getFieldSchema(HoodieSchema schema, String fieldName) {
+    return schema.getNonNullType().getField(fieldName).map(HoodieSchemaField::schema)
+        .orElseThrow(() -> new HoodieSchemaException("Field " + fieldName + " doesn't exist in schema: " + schema));
+  }
+
+  /**
    * Creates a write schema for Hudi operations, adding necessary metadata fields.
    *
    * @param schema             the base schema string (JSON format)
