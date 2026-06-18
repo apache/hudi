@@ -34,7 +34,9 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.FlinkHoodieIndexFactory;
@@ -49,6 +51,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.upgrade.FlinkUpgradeDowngradeHelper;
+import org.apache.hudi.util.TxnStateMemo;
 
 import com.codahale.metrics.Timer;
 import lombok.AccessLevel;
@@ -60,6 +63,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -96,6 +100,12 @@ public class HoodieFlinkWriteClient<T>
    * Whether streaming write to metadata table is enabled.
    */
   private final boolean isStreamingWriteMetadataTable;
+
+  /**
+   * Transaction state snapshots keyed by instant.
+   */
+  private final TxnStateMemo txnStateMemo = new TxnStateMemo();
+  private Set<String> conflictResolutionExclusionInstants = Collections.emptySet();
 
   public HoodieFlinkWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     this(context, writeConfig, false);
@@ -136,6 +146,7 @@ public class HoodieFlinkWriteClient<T>
     if (isStreamingWriteMetadataTable) {
       this.streamingMetadataWriteHandler.cleanResources(instantTime);
     }
+    this.txnStateMemo.slip(instantTime);
   }
 
   /**
@@ -389,26 +400,37 @@ public class HoodieFlinkWriteClient<T>
    * Refresh the last transaction metadata,
    * should be called before the Driver starts a new transaction with a reloaded metaclient.
    */
-  public void preTxn(WriteOperationType operationType, HoodieTableMetaClient metaClient) {
+  public void preTxn(WriteOperationType operationType, HoodieTableMetaClient metaClient, String currentInstant, Collection<String> sameWriterInstants) {
     if (txnManager.isLockRequired() && config.needResolveWriteConflict(operationType, metaClient.isMetadataTable(), config, metaClient.getTableConfig())) {
-      this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
-      this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
+      Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxnAndMetadata =
+          TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
+      Set<String> pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
+      Set<String> conflictResolutionExclusionInstants = getConflictResolutionExclusionInstants(currentInstant, sameWriterInstants);
+      this.txnStateMemo.memo(currentInstant, lastCompletedTxnAndMetadata, conflictResolutionExclusionInstants, pendingInflightAndRequestedInstants);
     }
     tableServiceClient.startAsyncArchiveService(this);
   }
 
-  /**
-   * Initializes the transaction state for recommitting an inflight instant during recovery.
-   * Sets lastCompletedTxnAndMetadata to the last completed instant whose requested time
-   * and completion time are both before the given instant's requested time, ensuring
-   * OCC conflict resolution only checks against genuinely concurrent commits.
-   */
-  public void preTxnForRecommit(WriteOperationType operationType, HoodieTableMetaClient metaClient, String currentInstantTime) {
-    if (txnManager.isLockRequired() && config.needResolveWriteConflict(operationType, metaClient.isMetadataTable(), config, metaClient.getTableConfig())) {
-      this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient, currentInstantTime);
-      this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
-      this.pendingInflightAndRequestedInstants.remove(currentInstantTime);
+  private Set<String> getConflictResolutionExclusionInstants(String currentInstant, Collection<String> sameWriterInstants) {
+    Set<String> exclusionInstants = new HashSet<>(sameWriterInstants);
+    exclusionInstants.add(currentInstant);
+    return exclusionInstants;
+  }
+
+  public void loadTxn(String instantTime) {
+    Option<TxnStateMemo.TxnState> txnState = this.txnStateMemo.get(instantTime);
+    if (txnState.isPresent()) {
+      this.lastCompletedTxnAndMetadata = txnState.get().getLastCompletedTxnAndMetadata();
+      this.conflictResolutionExclusionInstants = txnState.get().getConflictResolutionExclusionInstants();
+      this.pendingInflightAndRequestedInstants = txnState.get().getPendingInflightAndRequestedInstants();
+      tableServiceClient.setLastCompletedTxnAndMetadata(this.lastCompletedTxnAndMetadata);
+      tableServiceClient.setPendingInflightAndRequestedInstants(this.pendingInflightAndRequestedInstants);
     }
+  }
+
+  @Override
+  protected Set<String> getConflictResolutionExclusionInstants() {
+    return this.conflictResolutionExclusionInstants;
   }
 
   /**

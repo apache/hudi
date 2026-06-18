@@ -229,7 +229,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     Timer.Context conflictResolutionTimer = metrics.getConflictResolutionCtx();
     try {
       TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
-          Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner(), true, pendingInflightAndRequestedInstants);
+          Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner(), true,
+          pendingInflightAndRequestedInstants, getConflictResolutionExclusionInstants());
       metrics.emitConflictResolutionSuccessful();
     } catch (HoodieWriteConflictException e) {
       metrics.emitConflictResolutionFailed();
@@ -240,6 +241,10 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         conflictResolutionTimer.stop();
       }
     }
+  }
+
+  protected Set<String> getConflictResolutionExclusionInstants() {
+    return Collections.emptySet();
   }
 
   /**

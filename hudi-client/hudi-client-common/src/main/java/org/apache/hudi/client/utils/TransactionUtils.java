@@ -39,14 +39,11 @@ import org.apache.hudi.table.HoodieTable;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
-import java.util.Comparator;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.config.HoodieWriteConfig.ENABLE_SCHEMA_CONFLICT_RESOLUTION;
 
 @Slf4j
@@ -55,14 +52,16 @@ public class TransactionUtils {
   /**
    * Resolve any write conflicts when committing data.
    *
-   * @param table
-   * @param currentTxnOwnerInstant
-   * @param thisCommitMetadata
-   * @param config
-   * @param lastCompletedTxnOwnerInstant
-   * @param pendingInstants
-   * @return
-   * @throws HoodieWriteConflictException
+   * @param table hoodie table instance to resolve conflicts against
+   * @param currentTxnOwnerInstant current transaction owner instant
+   * @param thisCommitMetadata commit metadata for the current transaction
+   * @param config write config
+   * @param lastCompletedTxnOwnerInstant last completed transaction observed before this write
+   * @param timelineRefreshedWithinTransaction whether the table timeline has already been refreshed within this transaction
+   * @param pendingInstants instants that were inflight or requested before the current write started
+   * @param conflictResolutionExclusionInstants instant requested times to exclude from conflict resolution candidates
+   * @return metadata for the resolved commit when conflict resolution succeeds
+   * @throws HoodieWriteConflictException when a write conflict cannot be resolved
    */
   public static Option<HoodieCommitMetadata> resolveWriteConflictIfAny(
       final HoodieTable table,
@@ -71,7 +70,8 @@ public class TransactionUtils {
       final HoodieWriteConfig config,
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
       boolean timelineRefreshedWithinTransaction,
-      Set<String> pendingInstants) throws HoodieWriteConflictException {
+      Set<String> pendingInstants,
+      Set<String> conflictResolutionExclusionInstants) throws HoodieWriteConflictException {
     WriteOperationType operationType = thisCommitMetadata.map(HoodieCommitMetadata::getOperationType).orElse(null);
     if (config.needResolveWriteConflict(operationType, table.isMetadataTable(), config, table.getMetaClient().getTableConfig())) {
       // deal with pendingInstants
@@ -85,7 +85,8 @@ public class TransactionUtils {
 
       Stream<HoodieInstant> instantStream = Stream.concat(resolutionStrategy.getCandidateInstants(
               table.getMetaClient(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant, Option.of(config)),
-          completedInstantsDuringCurrentWriteOperation);
+          completedInstantsDuringCurrentWriteOperation)
+          .filter(instant -> !conflictResolutionExclusionInstants.contains(instant.requestedTime()));
 
       final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.orElseGet(HoodieCommitMetadata::new));
       instantStream.forEach(instant -> {
@@ -141,28 +142,6 @@ public class TransactionUtils {
       HoodieTableMetaClient metaClient) {
     Option<HoodieInstant> hoodieInstantOption = metaClient.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().lastInstant();
-    return getHoodieInstantAndMetaDataPair(metaClient, hoodieInstantOption);
-  }
-
-  /**
-   * Get the last completed transaction hoodie instant before the given instant time.
-   * The returned instant has both requested time and completion time less than the given instant time,
-   * ensuring it was fully completed before the given instant was created.
-   *
-   * @param metaClient table meta client
-   * @param currentInstantTime the requested time of the current inflight instant
-   * @return the last completed instant before the given instant, with its extra metadata
-   */
-  public static Option<Pair<HoodieInstant, Map<String, String>>> getLastCompletedTxnInstantAndMetadata(
-      HoodieTableMetaClient metaClient, String currentInstantTime) {
-    Option<HoodieInstant> hoodieInstantOption = Option.fromJavaOptional(
-        metaClient.getActiveTimeline().getCommitsTimeline()
-            .filterCompletedInstants()
-            .findInstantsBefore(currentInstantTime)
-            .getInstantsAsStream()
-            .filter(instant -> instant.getCompletionTime() != null
-                && compareTimestamps(instant.getCompletionTime(), LESSER_THAN, currentInstantTime))
-            .max(Comparator.comparing(HoodieInstant::requestedTime)));
     return getHoodieInstantAndMetaDataPair(metaClient, hoodieInstantOption);
   }
 

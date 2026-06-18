@@ -133,6 +133,10 @@ public class EventBuffers implements Serializable {
     return result;
   }
 
+  public Collection<String> getAllInstants() {
+    return this.eventBuffers.values().stream().map(Pair::getLeft).collect(Collectors.toList());
+  }
+
   public void initNewEventBuffer(long checkpointId, String instantTime) {
     this.eventBuffers.put(checkpointId, Pair.of(instantTime, new EventBuffer(dataWriteParallelism, indexWriteParallelism)));
   }

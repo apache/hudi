@@ -203,7 +203,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       setCommitMetadata(result);
       // table instance is created outside the transaction boundary so setting `timelineRefreshedWithinTransaction` to false below
       TransactionUtils.resolveWriteConflictIfAny(table, txnManager.getCurrentTransactionOwner(),
-          result.getCommitMetadata(), config, txnManager.getLastCompletedTransactionOwner(), false, pendingInflightAndRequestedInstants);
+          result.getCommitMetadata(), config, txnManager.getLastCompletedTransactionOwner(), false, pendingInflightAndRequestedInstants, Collections.emptySet());
       commit(result);
     } finally {
       txnManager.endStateChange(inflightInstant);

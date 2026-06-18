@@ -435,12 +435,9 @@ public class StreamWriteOperatorCoordinator
 
   private void restoreEvents() {
     if (this.eventBuffers.nonEmpty()) {
+      final HoodieTimeline completedTimeline = this.metaClient.reloadActiveTimeline().filterCompletedInstants();
       this.eventBuffers.getEventBufferStream()
-          .forEach(entry -> {
-            this.metaClient.reloadActiveTimeline();
-            final HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
-            recommitInstant(completedTimeline, entry.getKey(), entry.getValue().getLeft(), entry.getValue().getRight());
-          });
+          .forEach(entry -> recommitInstant(completedTimeline, entry.getKey(), entry.getValue().getLeft(), entry.getValue().getRight()));
     }
   }
 
@@ -512,8 +509,6 @@ public class StreamWriteOperatorCoordinator
   private String startInstant() {
     // refresh the meta client which is reused
     metaClient.reloadActiveTimeline();
-    // refresh the last txn metadata
-    this.writeClient.preTxn(tableState.operationType, this.metaClient);
     // put the assignment in front of metadata generation,
     // because the instant request from write task is asynchronous.
     this.instant = this.writeClient.startCommit(tableState.commitAction, this.metaClient);
@@ -525,6 +520,8 @@ public class StreamWriteOperatorCoordinator
     this.writeClient.setWriteTimer(tableState.commitAction);
     log.info("Create instant [{}] for table [{}] with type [{}]", this.instant,
         this.conf.get(FlinkOptions.TABLE_NAME), conf.get(FlinkOptions.TABLE_TYPE));
+    // refresh the last txn metadata
+    this.writeClient.preTxn(tableState.operationType, this.metaClient, this.instant, this.eventBuffers.getAllInstants());
     return this.instant;
   }
 
@@ -549,15 +546,14 @@ public class StreamWriteOperatorCoordinator
       if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()) {
         writeClient.getHeartbeatClient().start(instant);
       }
-      // Initialize the transaction state so that OCC conflict resolution uses the correct
-      // baseline: the last completed instant before this inflight instant was created.
-      // Without this, lastCompletedTxnAndMetadata is empty and conflict resolution checks
-      // against all completed instants on the timeline, causing false conflicts.
-      writeClient.preTxnForRecommit(tableState.operationType, this.metaClient, instant);
+      // Initialize the transaction state so same-writer instants can be excluded
+      // during OCC conflict resolution.
+      writeClient.preTxn(tableState.operationType, this.metaClient, instant, this.eventBuffers.getAllInstants());
       return commitInstant(checkpointId, instant, bootstrapBuffer);
     } else {
       // clean the corresponding event buffer if the instant is already committed.
       eventBuffers.reset(checkpointId);
+      writeClient.cleanResources(instant);
       return false;
     }
   }
@@ -610,23 +606,9 @@ public class StreamWriteOperatorCoordinator
    */
   private boolean commitInstants(long checkpointId) {
     // use < instead of <= because the write metadata event sends the last known checkpoint id which is smaller than the current one.
-    List<Map.Entry<Long, Pair<String, EventBuffer>>> entries = this.eventBuffers.getEventBufferStream()
-        .filter(entry -> entry.getKey() < checkpointId)
-        .collect(Collectors.toList());
-    boolean anyCommitted = false;
-    for (int i = 0; i < entries.size(); i++) {
-      if (i > 0) {
-        // Refresh the baseline for subsequent instants so that OCC conflict resolution
-        // sees the just-committed instant as completed, not as a concurrent conflict.
-        this.metaClient.reloadActiveTimeline();
-        this.writeClient.preTxn(tableState.operationType, this.metaClient);
-      }
-      Map.Entry<Long, Pair<String, EventBuffer>> entry = entries.get(i);
-      if (commitInstant(entry.getKey(), entry.getValue().getLeft(), entry.getValue().getRight())) {
-        anyCommitted = true;
-      }
-    }
-    return anyCommitted;
+    List<Boolean> result = this.eventBuffers.getEventBufferStream().filter(entry -> entry.getKey() < checkpointId)
+        .map(entry -> commitInstant(entry.getKey(), entry.getValue().getLeft(), entry.getValue().getRight())).collect(Collectors.toList());
+    return result.stream().anyMatch(i -> i);
   }
 
   /**
@@ -635,24 +617,26 @@ public class StreamWriteOperatorCoordinator
    * @return true if the write statuses are committed successfully.
    */
   private boolean commitInstant(long checkpointId, String instant, EventBuffer eventBuffer) {
-    if (eventBuffer.isEmptyDataWriteBuffer()) {
-      // all the data write tasks are reset by failover, reset the while buffer and returns early.
-      this.eventBuffers.reset(checkpointId);
-      // stop the heart beat for lazy cleaning
-      writeClient.cleanResources(instant);
-      return false;
-    }
+    try {
+      if (eventBuffer.isEmptyDataWriteBuffer()) {
+        // all the data write tasks are reset by failover, reset the while buffer and returns early.
+        this.eventBuffers.reset(checkpointId);
+        return false;
+      }
 
-    List<WriteStatus> dataWriteResults = eventBuffer.collectDataWriteStatuses();
-    if (dataWriteResults.isEmpty() && !OptionsResolver.allowCommitOnEmptyBatch(conf)) {
-      // No data has written, reset the buffer and returns early
-      this.eventBuffers.reset(checkpointId);
-      // stop the heart beat for lazy cleaning
+      List<WriteStatus> dataWriteResults = eventBuffer.collectDataWriteStatuses();
+      if (dataWriteResults.isEmpty() && !OptionsResolver.allowCommitOnEmptyBatch(conf)) {
+        // No data has written, reset the buffer and returns early
+        this.eventBuffers.reset(checkpointId);
+        return false;
+      }
+      doCommit(checkpointId, instant, dataWriteResults, eventBuffer.collectIndexWriteStatuses());
+      return true;
+    } finally {
+      // Stop the heartbeat and remove the memoized transaction state regardless of
+      // whether commit succeeds or fails before the coordinator restarts.
       writeClient.cleanResources(instant);
-      return false;
     }
-    doCommit(checkpointId, instant, dataWriteResults, eventBuffer.collectIndexWriteStatuses());
-    return true;
   }
 
   /**
@@ -673,6 +657,7 @@ public class StreamWriteOperatorCoordinator
     FlinkValidatorUtils.runValidators(conf, instant, allWriteStatus,
         checkpointCommitMetadata, () -> StreamerUtil.getPreviousCommitMetadata(this.metaClient));
 
+    this.writeClient.loadTxn(instant);
     boolean success = writeClient.commit(instant, allWriteStatus, Option.of(checkpointCommitMetadata),
         tableState.commitAction, partitionToReplacedFileIds);
     if (success) {
