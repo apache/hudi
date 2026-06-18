@@ -38,6 +38,29 @@ import org.apache.avro.generic.GenericRecord;
 public interface VariantShreddingProvider {
 
   /**
+   * Provider implementations to auto-detect on the classpath, in priority order, when the variant
+   * shredding provider class is not set explicitly via config. Sole provider today: variant
+   * shredding currently requires Spark 4.0+.
+   */
+  String[] CLASSPATH_CANDIDATES = {"org.apache.hudi.variant.Spark4VariantShreddingProvider"};
+
+  /**
+   * Returns the fully-qualified class name of the first {@link VariantShreddingProvider}
+   * implementation available on the classpath, or {@code null} if none is present.
+   */
+  static String detectProviderClassOnClasspath() {
+    for (String candidate : CLASSPATH_CANDIDATES) {
+      try {
+        Class.forName(candidate);
+        return candidate;
+      } catch (ClassNotFoundException | NoClassDefFoundError e) {
+        // Provider not on classpath; try the next candidate.
+      }
+    }
+    return null;
+  }
+
+  /**
    * Transform an unshredded variant GenericRecord into a shredded one.
    * <p>
    * The input record is expected to have:

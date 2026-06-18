@@ -55,11 +55,6 @@ final class VariantReconstruction {
 
   private static final Logger LOG = LoggerFactory.getLogger(VariantReconstruction.class);
 
-  // Classpath fallback when the provider class config is not set; mirrors HoodieAvroFileWriterFactory.
-  private static final String[] PROVIDER_CANDIDATES = {
-      "org.apache.hudi.variant.Spark4VariantShreddingProvider"
-  };
-
   private final HoodieSchema intermediateSchema;
   private final Schema outputAvroSchema;
   private final VariantShreddingProvider provider;
@@ -180,19 +175,11 @@ final class VariantReconstruction {
   }
 
   private static VariantShreddingProvider loadProvider(HoodieStorage storage) {
-    String configured = storage.getConf()
+    String providerClass = storage.getConf()
         .getString(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key()).orElse(null);
-    if (configured != null && !configured.isEmpty()) {
-      return (VariantShreddingProvider) ReflectionUtils.loadClass(configured);
+    if (providerClass == null || providerClass.isEmpty()) {
+      providerClass = VariantShreddingProvider.detectProviderClassOnClasspath();
     }
-    for (String candidate : PROVIDER_CANDIDATES) {
-      try {
-        Class.forName(candidate);
-        return (VariantShreddingProvider) ReflectionUtils.loadClass(candidate);
-      } catch (ClassNotFoundException | NoClassDefFoundError e) {
-        // Provider not on classpath; try the next candidate.
-      }
-    }
-    return null;
+    return providerClass == null ? null : (VariantShreddingProvider) ReflectionUtils.loadClass(providerClass);
   }
 }
