@@ -93,7 +93,8 @@ import static io.trino.plugin.hudi.HudiTableProperties.LOCATION_PROPERTY;
 import static io.trino.plugin.hudi.HudiTableProperties.PARTITIONED_BY_PROPERTY;
 import static io.trino.plugin.hudi.HudiUtil.buildTableMetaClient;
 import static io.trino.plugin.hudi.HudiUtil.getLatestTableSchema;
-import static io.trino.plugin.hudi.HudiUtil.getOrderingColumnHandles;
+import static io.trino.plugin.hudi.HudiSessionProperties.getRecordMergerImpls;
+import static io.trino.plugin.hudi.HudiUtil.getMergeRequiredColumnHandles;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.StandardErrorCode.QUERY_REJECTED;
 import static io.trino.spi.StandardErrorCode.UNSUPPORTED_TABLE_TYPE;
@@ -176,7 +177,7 @@ public class HudiMetadata
                 table.getStorage().getLocation(),
                 hoodieTableType,
                 getPartitionKeyColumnHandles(table, typeManager),
-                Lazy.lazily(() -> getOrderingColumnHandles(table, typeManager, lazyMetaClient, NANOSECONDS)),
+                Lazy.lazily(() -> getMergeRequiredColumnHandles(table, typeManager, lazyMetaClient, getRecordMergerImpls(session), NANOSECONDS)),
                 ImmutableSet.of(),
                 TupleDomain.all(),
                 TupleDomain.all(),

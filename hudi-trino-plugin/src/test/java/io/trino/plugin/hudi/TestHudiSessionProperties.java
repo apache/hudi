@@ -20,6 +20,7 @@ import io.trino.testing.TestingConnectorSession;
 import org.junit.jupiter.api.Test;
 
 import static io.trino.plugin.hudi.HudiSessionProperties.getColumnsToHide;
+import static io.trino.plugin.hudi.HudiSessionProperties.getRecordMergerImpls;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestHudiSessionProperties
@@ -35,5 +36,18 @@ public class TestHudiSessionProperties
                 .build();
         assertThat(getColumnsToHide(session))
                 .containsExactlyInAnyOrderElementsOf(ImmutableList.of("col1", "col2"));
+    }
+
+    @Test
+    public void testSessionPropertyRecordMergerImpls()
+    {
+        HudiConfig config = new HudiConfig()
+                .setRecordMergerImpls(ImmutableList.of("com.example.MergerOne", "com.example.MergerTwo"));
+        HudiSessionProperties sessionProperties = new HudiSessionProperties(config, new ParquetReaderConfig());
+        ConnectorSession session = TestingConnectorSession.builder()
+                .setPropertyMetadata(sessionProperties.getSessionProperties())
+                .build();
+        assertThat(getRecordMergerImpls(session))
+                .containsExactly("com.example.MergerOne", "com.example.MergerTwo");
     }
 }

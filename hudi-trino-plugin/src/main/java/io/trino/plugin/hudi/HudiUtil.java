@@ -43,19 +43,25 @@ import io.trino.spi.type.VarcharType;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
@@ -67,6 +73,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -92,6 +99,7 @@ import static io.trino.plugin.hudi.HudiErrorCode.HUDI_META_CLIENT_ERROR;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_SCHEMA_ERROR;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_UNSUPPORTED_FILE_FORMAT;
 import static java.lang.Math.toIntExact;
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.PARTITION_PATH_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
@@ -413,21 +421,74 @@ public final class HudiUtil
         }
     }
 
-    public static List<HiveColumnHandle> getOrderingColumnHandles(Table table, TypeManager typeManager, Lazy<HoodieTableMetaClient> lazyMetaClient, HiveTimestampPrecision timestampPrecision)
+    /**
+     * Returns the column handles that must be present in the read schema for the file group reader to merge
+     * correctly: the ordering columns, plus the mandatory merge columns declared by a configured custom record
+     * merger (via {@link HoodieRecordMerger#getMandatoryFieldsForMerging}).
+     * <p>
+     * For COMMIT_TIME / EVENT_TIME tables this is exactly the ordering columns (so behavior is unchanged). For a
+     * CUSTOM merge mode with a registered merger, it additionally includes any data columns the merger reads at
+     * merge time (e.g. an arbitrary decision column) so that those columns are read from the base file even when
+     * the query does not project them -- without this the merger would see null for an un-projected column.
+     */
+    public static List<HiveColumnHandle> getMergeRequiredColumnHandles(
+            Table table,
+            TypeManager typeManager,
+            Lazy<HoodieTableMetaClient> lazyMetaClient,
+            List<String> recordMergerImpls,
+            HiveTimestampPrecision timestampPrecision)
     {
-        RecordMergeMode recordMergeMode = lazyMetaClient.get().getTableConfig().getRecordMergeMode();
-        if (recordMergeMode == null || recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING) {
-            // if commit time ordering is enabled, return empty list
-            return Collections.emptyList();
+        HoodieTableMetaClient metaClient = lazyMetaClient.get();
+        HoodieTableConfig tableConfig = metaClient.getTableConfig();
+        RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
+
+        LinkedHashSet<String> requiredColumnNames = new LinkedHashSet<>();
+        if (recordMergeMode != null && recordMergeMode != RecordMergeMode.COMMIT_TIME_ORDERING) {
+            requiredColumnNames.addAll(tableConfig.getOrderingFields());
         }
 
-        ImmutableList.Builder<HiveColumnHandle> columns = ImmutableList.builder();
-        List<String> orderingColumnNames = lazyMetaClient.get().getTableConfig().getOrderingFields();
+        // For a CUSTOM merge mode, ask the configured merger which fields it needs at merge time and include them
+        // so they are read even when not projected. Only the merger's declared columns are added (not all columns),
+        // so non-custom tables and mergers that only use the key/ordering fields incur no extra reads.
+        if (recordMergeMode == RecordMergeMode.CUSTOM && recordMergerImpls != null && !recordMergerImpls.isEmpty()) {
+            Option<HoodieRecordMerger> merger = HoodieRecordUtils.createValidRecordMerger(
+                    EngineType.JAVA, String.join(",", recordMergerImpls), tableConfig.getRecordMergeStrategyId());
+            if (merger.isPresent()) {
+                TypedProperties props = new TypedProperties();
+                props.putAll(tableConfig.getProps());
+                props.setProperty(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY, String.join(",", recordMergerImpls));
+                HoodieSchema tableSchema;
+                try {
+                    tableSchema = new TableSchemaResolver(metaClient).getTableSchema();
+                }
+                catch (Exception e) {
+                    throw new TrinoException(HUDI_SCHEMA_ERROR, "Failed to resolve table schema for merge column resolution", e);
+                }
+                String[] mandatoryFields = merger.get().getMandatoryFieldsForMerging(tableSchema, tableConfig, props);
+                if (mandatoryFields != null) {
+                    Collections.addAll(requiredColumnNames, mandatoryFields);
+                }
+            }
+        }
 
+        if (requiredColumnNames.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return buildColumnHandles(table, typeManager, requiredColumnNames, timestampPrecision);
+    }
+
+    /**
+     * Builds {@link HiveColumnHandle}s, preserving physical (data-column) index, for the data columns whose names
+     * appear in {@code columnNames}. Names that are not data columns (e.g. Hudi meta fields) or whose types are not
+     * supported by the storage format are skipped.
+     */
+    private static List<HiveColumnHandle> buildColumnHandles(Table table, TypeManager typeManager, Set<String> columnNames, HiveTimestampPrecision timestampPrecision)
+    {
+        ImmutableList.Builder<HiveColumnHandle> columns = ImmutableList.builder();
         int hiveColumnIndex = 0;
         for (Column field : table.getDataColumns()) {
             // ignore unsupported types rather than failing
-            if (orderingColumnNames.contains(field.getName())) {
+            if (columnNames.contains(field.getName())) {
                 HiveType hiveType = field.getType();
                 if (typeSupported(hiveType.getTypeInfo(), table.getStorage().getStorageFormat())) {
                     columns.add(createBaseColumn(field.getName(), hiveColumnIndex, hiveType, getType(hiveType, typeManager, timestampPrecision), REGULAR, field.getComment()));
@@ -435,7 +496,6 @@ public final class HudiUtil
             }
             hiveColumnIndex++;
         }
-
         return columns.build();
     }
 

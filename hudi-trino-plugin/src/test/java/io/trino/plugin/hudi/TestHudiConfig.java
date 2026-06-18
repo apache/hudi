@@ -33,6 +33,7 @@ public class TestHudiConfig
     {
         assertRecordedDefaults(recordDefaults(HudiConfig.class)
                 .setColumnsToHide(ImmutableList.of())
+                .setRecordMergerImpls(ImmutableList.of())
                 .setTableStatisticsEnabled(true)
                 .setMetadataEnabled(true)
                 .setUseParquetColumnNames(true)
@@ -67,6 +68,7 @@ public class TestHudiConfig
     {
         Map<String, String> properties = ImmutableMap.<String, String>builder()
                 .put("hudi.columns-to-hide", "_hoodie_record_key")
+                .put("hudi.record-merger-impls", "com.example.MergerOne,com.example.MergerTwo")
                 .put("hudi.table-statistics-enabled", "false")
                 .put("hudi.metadata-enabled", "false")
                 .put("hudi.parquet.use-column-names", "false")
@@ -98,6 +100,7 @@ public class TestHudiConfig
 
         HudiConfig expected = new HudiConfig()
                 .setColumnsToHide(ImmutableList.of("_hoodie_record_key"))
+                .setRecordMergerImpls(ImmutableList.of("com.example.MergerOne", "com.example.MergerTwo"))
                 .setTableStatisticsEnabled(false)
                 .setMetadataEnabled(false)
                 .setUseParquetColumnNames(false)

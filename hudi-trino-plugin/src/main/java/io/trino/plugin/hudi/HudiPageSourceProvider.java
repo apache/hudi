@@ -51,6 +51,7 @@ import io.trino.spi.connector.EmptyPageSource;
 import io.trino.spi.predicate.TupleDomain;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -89,6 +90,7 @@ import static io.trino.plugin.hudi.HudiErrorCode.HUDI_CURSOR_ERROR;
 import static io.trino.plugin.hudi.HudiSessionProperties.getParquetMaxReadBlockRowCount;
 import static io.trino.plugin.hudi.HudiSessionProperties.getParquetMaxReadBlockSize;
 import static io.trino.plugin.hudi.HudiSessionProperties.getParquetSmallFileThreshold;
+import static io.trino.plugin.hudi.HudiSessionProperties.getRecordMergerImpls;
 import static io.trino.plugin.hudi.HudiSessionProperties.isParquetIgnoreStatistics;
 import static io.trino.plugin.hudi.HudiSessionProperties.isParquetUseColumnIndex;
 import static io.trino.plugin.hudi.HudiSessionProperties.isParquetVectorizedDecodingEnabled;
@@ -101,6 +103,7 @@ import static io.trino.plugin.hudi.HudiUtil.getLatestTableSchema;
 import static io.trino.plugin.hudi.HudiUtil.prependHudiMetaAndOrderingColumns;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 
 public class HudiPageSourceProvider
         implements ConnectorPageSourceProvider
@@ -234,7 +237,7 @@ public class HudiPageSourceProvider
                         .withDataSchema(dataSchema)
                         .withRequestedSchema(HoodieSchema.fromAvroSchema(requestedSchema))
                         .withLatestCommitTime(hudiTableHandle.getLatestCommitTime())
-                        .withProps(metaClient.getTableConfig().getProps())
+                        .withProps(buildReaderProperties(session, metaClient))
                         .withShouldUseRecordPosition(false)
                         .withStart(start)
                         .withLength(length)
@@ -245,6 +248,23 @@ public class HudiPageSourceProvider
                 readerContext,
                 hiveColumnHandles,
                 synthesizedColumnHandler);
+    }
+
+    /**
+     * Builds the properties passed to the {@link HoodieFileGroupReader}, starting from the persisted table config
+     * and layering in any custom record merger implementation classes configured on the connector or session.
+     * The merger impl classes are a read/write config and are not persisted in {@code hoodie.properties}, so they
+     * must be supplied here for {@link HudiTrinoReaderContext#getRecordMerger} to resolve a CUSTOM record merger.
+     */
+    private static TypedProperties buildReaderProperties(ConnectorSession session, HoodieTableMetaClient metaClient)
+    {
+        TypedProperties props = new TypedProperties();
+        TypedProperties.putAll(props, metaClient.getTableConfig().getProps());
+        List<String> recordMergerImpls = getRecordMergerImpls(session);
+        if (!recordMergerImpls.isEmpty()) {
+            props.setProperty(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY, String.join(",", recordMergerImpls));
+        }
+        return props;
     }
 
     static ConnectorPageSource createPageSource(
