@@ -188,11 +188,11 @@ public class ITTestDynamoDBBasedLockProvider {
       String tableName = (String) lockConfig.getConfig().get(HoodieTableConfig.HOODIE_TABLE_NAME_KEY);
       String basePath = (String) lockConfig.getConfig().get(HoodieCommonConfig.BASE_PATH.key());
       // Base path is constructed with prefix s3a; verify that for partition key calculation, s3a
-      // is replaced with s3 AND the path is normalized (trailing slash). The fixture URI here has
-      // no trailing slash, so normalization adds one before hashing.
+      // is replaced with s3 AND the path is normalized (trailing slashes stripped). The fixture
+      // URI here has no trailing slash, so the normalized form is unchanged before hashing.
       Assertions.assertTrue(basePath.startsWith(SCHEME_S3A));
       Assertions.assertEquals(
-          HashID.generateXXHashAsString(SCHEME_S3 + URI_NO_CLOUD_PROVIDER_PREFIX + "/", HashID.Size.BITS_64),
+          HashID.generateXXHashAsString(SCHEME_S3 + URI_NO_CLOUD_PROVIDER_PREFIX, HashID.Size.BITS_64),
           dynamoDbBasedLockProvider.getPartitionKey());
     }
 

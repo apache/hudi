@@ -765,8 +765,12 @@ public class FSUtils {
    * <p>Implicit lock providers (DynamoDB and Zookeeper variants) hash this string to choose the
    * lock row / znode for a table. Two callers writing to the same table must produce the same
    * hash, so any benign formatting drift in the basePath has to be eliminated before hashing.
-   * This method trims surrounding whitespace, normalizes s3a:// to s3://, then forces exactly
-   * one trailing slash. Inner double slashes are intentionally preserved.
+   * This method trims surrounding whitespace, normalizes s3a:// to s3://, then strips any
+   * trailing slashes. Inner double slashes are intentionally preserved.
+   *
+   * <p>No trailing slash is appended: most callers already supply a basePath without one, so
+   * the canonical form matches what previous releases hashed (which applied only s3aToS3) for
+   * those callers, keeping the derived lock key stable across the upgrade.
    *
    * <p>Scheme-only inputs (e.g. {@code "s3://"}, {@code "s3a:///"}) and all-slash inputs
    * (e.g. {@code "///"}) are rejected — stripping the trailing slashes from those leaves
@@ -797,7 +801,7 @@ public class FSUtils {
       throw new IllegalArgumentException(
           "Hudi table base path is not a valid lockable path: '" + basePath + "'");
     }
-    return schemeNormalized.substring(0, end) + "/";
+    return schemeNormalized.substring(0, end);
   }
 
   public static StoragePathInfo toStoragePathInfo(HoodieFileStatus fileStatus) {
