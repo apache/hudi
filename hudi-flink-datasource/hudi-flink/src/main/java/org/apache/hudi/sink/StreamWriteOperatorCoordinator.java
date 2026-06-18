@@ -610,20 +610,23 @@ public class StreamWriteOperatorCoordinator
    */
   private boolean commitInstants(long checkpointId) {
     // use < instead of <= because the write metadata event sends the last known checkpoint id which is smaller than the current one.
-    boolean[] isFirstInstant = {true};
-    List<Boolean> result = this.eventBuffers.getEventBufferStream().filter(entry -> entry.getKey() < checkpointId)
-        .map(entry -> {
-          if (isFirstInstant[0]) {
-            isFirstInstant[0] = false;
-          } else {
-            // Refresh the baseline for subsequent instants so that OCC conflict resolution
-            // sees the just-committed instant as completed, not as a concurrent conflict.
-            this.metaClient.reloadActiveTimeline();
-            this.writeClient.preTxn(tableState.operationType, this.metaClient);
-          }
-          return commitInstant(entry.getKey(), entry.getValue().getLeft(), entry.getValue().getRight());
-        }).collect(Collectors.toList());
-    return result.stream().anyMatch(i -> i);
+    List<Map.Entry<Long, Pair<String, EventBuffer>>> entries = this.eventBuffers.getEventBufferStream()
+        .filter(entry -> entry.getKey() < checkpointId)
+        .collect(Collectors.toList());
+    boolean anyCommitted = false;
+    for (int i = 0; i < entries.size(); i++) {
+      if (i > 0) {
+        // Refresh the baseline for subsequent instants so that OCC conflict resolution
+        // sees the just-committed instant as completed, not as a concurrent conflict.
+        this.metaClient.reloadActiveTimeline();
+        this.writeClient.preTxn(tableState.operationType, this.metaClient);
+      }
+      Map.Entry<Long, Pair<String, EventBuffer>> entry = entries.get(i);
+      if (commitInstant(entry.getKey(), entry.getValue().getLeft(), entry.getValue().getRight())) {
+        anyCommitted = true;
+      }
+    }
+    return anyCommitted;
   }
 
   /**
