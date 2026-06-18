@@ -24,6 +24,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -54,9 +55,15 @@ import java.io.OutputStream;
 import java.util.Properties;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_WRITER_TO_ALLOW_DUPLICATES;
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS;
 import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
+
+  // Sole provider today: variant shredding currently requires Spark 4.0+. If more providers are
+  // added, restore a candidate list here and try each in turn.
+  private static final String SPARK4_VARIANT_SHREDDING_PROVIDER =
+      "org.apache.hudi.variant.Spark4VariantShreddingProvider";
 
   public HoodieAvroFileWriterFactory(HoodieStorage storage) {
     super(storage);
@@ -140,9 +147,37 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
                                                            StorageConfiguration storageConf,
                                                            boolean enableBloomFilter) {
     Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
+    HoodieSchema effectiveSchema = HoodieAvroWriteSupport.generateEffectiveSchema(schema, config);
+    // Work on a copy so we never mutate the shared config's internal Properties.
+    Properties props = TypedProperties.copy(config.getProps());
+    // Auto-detect variant shredding provider from classpath if not explicitly configured
+    if (!props.containsKey(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key())) {
+      String detectedClass = detectShreddingProviderClass();
+      if (detectedClass != null) {
+        props.setProperty(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key(), detectedClass);
+      }
+    }
     return (HoodieAvroWriteSupport) ReflectionUtils.loadClass(
         config.getStringOrDefault(HoodieStorageConfig.HOODIE_AVRO_WRITE_SUPPORT_CLASS),
         new Class<?>[] {MessageType.class, HoodieSchema.class, Option.class, Properties.class},
-        getAvroSchemaConverter((Configuration) storageConf.unwrapAs(Configuration.class)).convert(schema), schema, filter, config.getProps());
+        // Build the Parquet schema from the effective (possibly shredded) schema so the message type
+        // matches the records actually written - a shredded variant has a nullable value and a
+        // typed_value column; converting the original schema would mark value REQUIRED and drop
+        // typed_value, failing the write with "Null-value for required field: value".
+        getAvroSchemaConverter((Configuration) storageConf.unwrapAs(Configuration.class)).convert(effectiveSchema), schema, filter, props);
+  }
+
+  /**
+   * Auto-detect a {@link org.apache.hudi.avro.VariantShreddingProvider} implementation
+   * available on the classpath. Returns the fully-qualified class name if found, or null.
+   */
+  private static String detectShreddingProviderClass() {
+    try {
+      Class.forName(SPARK4_VARIANT_SHREDDING_PROVIDER);
+      return SPARK4_VARIANT_SHREDDING_PROVIDER;
+    } catch (ClassNotFoundException e) {
+      // not on classpath
+      return null;
+    }
   }
 }

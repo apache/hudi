@@ -24,15 +24,22 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieParquetConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -41,12 +48,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.parquet.column.ParquetProperties.DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK;
 import static org.apache.parquet.column.ParquetProperties.DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieBaseParquetWriter {
@@ -117,5 +129,44 @@ public class TestHoodieBaseParquetWriter {
       assertFalse(writer.canWrite(),
           "The writer stops write new records while the file doesn't reach the max file size limit");
     }
+  }
+
+  @Test
+  public void testRejectAlreadyShreddedVariantInput() {
+    // A record read from an already-shredded base file (compaction/clustering) arrives with a
+    // populated typed_value. The Avro write support cannot reconstruct the unshredded variant yet,
+    // so it must fail fast rather than silently drop the payload. Guard tracked in
+    // https://github.com/apache/hudi/issues/18931.
+    HoodieSchema recordSchema = HoodieSchema.createRecord("guardTest", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("v", HoodieSchema.createVariant())));
+
+    // Shredding disabled so no VariantShreddingProvider is required; the variant field is still tracked.
+    Properties props = new Properties();
+    props.setProperty(HoodieStorageConfig.PARQUET_VARIANT_WRITE_SHREDDING_ENABLED.key(), "false");
+
+    HoodieSchema effectiveSchema = HoodieAvroWriteSupport.generateEffectiveSchema(recordSchema, props);
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
+        new AvroSchemaConverter().convert(effectiveSchema.toAvroSchema()), recordSchema, Option.empty(), props);
+
+    // Input whose variant column is already shredded (carries typed_value).
+    Map<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
+    shreddedFields.put("a", HoodieSchema.create(HoodieSchemaType.INT));
+    Schema shreddedVariantAvro =
+        HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields).getAvroSchema();
+
+    Schema inputAvro = Schema.createRecord("guardInput", null, null, false);
+    inputAvro.setFields(Arrays.asList(
+        new Schema.Field("id", Schema.create(Schema.Type.INT), null, (Object) null),
+        new Schema.Field("v", shreddedVariantAvro, null, (Object) null)));
+    GenericRecord variantValue = new GenericData.Record(shreddedVariantAvro);
+    variantValue.put(HoodieSchema.Variant.VARIANT_METADATA_FIELD, ByteBuffer.wrap(new byte[] {1}));
+    GenericRecord input = new GenericData.Record(inputAvro);
+    input.put("id", 1);
+    input.put("v", variantValue);
+
+    HoodieException ex = assertThrows(HoodieException.class, () -> writeSupport.write(input));
+    assertTrue(ex.getMessage().contains("already-shredded") && ex.getMessage().contains("18931"),
+        "Expected the read-then-reshred guard message, got: " + ex.getMessage());
   }
 }
