@@ -325,7 +325,8 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
             shreddedFields);
         HoodieSchema replacement = wasNullable
             ? HoodieSchema.createNullable(shreddedVariant) : shreddedVariant;
-        newFields.add(HoodieSchemaUtils.createNewSchemaField(field.makeNullable().withSchema(replacement)));
+        // replacement already mirrors the field's original nullability, so withSchema alone suffices.
+        newFields.add(HoodieSchemaUtils.createNewSchemaField(field.withSchema(replacement)));
         changed = true;
       } else {
         newFields.add(HoodieSchemaUtils.createNewSchemaField(field));
