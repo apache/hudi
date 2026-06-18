@@ -27,14 +27,13 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -52,8 +51,6 @@ import java.util.List;
  * <p>See https://github.com/apache/hudi/issues/18931.
  */
 final class HoodieVariantReconstruction {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieVariantReconstruction.class);
 
   private final HoodieSchema intermediateSchema;
   private final Schema outputAvroSchema;
@@ -85,8 +82,9 @@ final class HoodieVariantReconstruction {
 
   /**
    * Builds a reconstruction for the given file and requested schemas, or returns {@code null} when
-   * none is needed (no shredded variant columns in the file, reading shredded variants disabled, or
-   * no provider available - in which case the read proceeds unchanged).
+   * none is needed (no shredded variant columns in the file, or reading shredded variants disabled).
+   * Throws when the file has shredded variant columns to reconstruct but no provider is available,
+   * since proceeding would silently drop the typed_value payload.
    */
   static HoodieVariantReconstruction create(HoodieSchema fileSchema, HoodieSchema requestedSchema, HoodieStorage storage) {
     if (requestedSchema.getType() != HoodieSchemaType.RECORD || fileSchema.getType() != HoodieSchemaType.RECORD) {
@@ -119,10 +117,11 @@ final class HoodieVariantReconstruction {
 
     VariantShreddingProvider provider = loadProvider(storage);
     if (provider == null) {
-      LOG.warn("Base file has shredded variant column(s) but no VariantShreddingProvider is available; "
-          + "variants will not be reconstructed. Set {} or add a provider implementation to the classpath.",
-          HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key());
-      return null;
+      // Reading would drop typed_value and silently corrupt variants whose payload lives there, so fail fast.
+      throw new HoodieException("Base file has shredded variant column(s) and reading shredded variants is "
+          + "enabled, but no VariantShreddingProvider is available to reconstruct them. Set "
+          + HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key()
+          + " or add a provider implementation (e.g. the Spark variant module) to the classpath.");
     }
 
     HoodieSchema intermediateSchema = HoodieSchema.createRecord(
