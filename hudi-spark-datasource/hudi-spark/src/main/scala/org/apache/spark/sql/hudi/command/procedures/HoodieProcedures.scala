@@ -41,6 +41,7 @@ object HoodieProcedures {
       ,(RollbackToInstantTimeProcedure.NAME, RollbackToInstantTimeProcedure.builder)
       ,(RestoreToInstantProcedure.NAME, RestoreToInstantProcedure.builder)
       ,(RunClusteringProcedure.NAME, RunClusteringProcedure.builder)
+      ,(RepairClusteringPlanProcedure.NAME, RepairClusteringPlanProcedure.builder)
       ,(ShowClusteringProcedure.NAME, ShowClusteringProcedure.builder)
       ,(ShowCommitsProcedure.NAME, ShowCommitsProcedure.builder)
       ,(ShowCommitsMetadataProcedure.NAME, ShowCommitsMetadataProcedure.builder)
