@@ -21,6 +21,7 @@ package org.apache.hudi.variant;
 
 import org.apache.hudi.avro.VariantShreddingProvider;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalType;
@@ -101,7 +102,10 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
     }
     ByteBuffer metadataBuf = (ByteBuffer) shreddedVariant.get(HoodieSchema.Variant.VARIANT_METADATA_FIELD);
     if (metadataBuf == null) {
-      return null;
+      // metadata is REQUIRED in the shredded schema, so a null here means the base file is malformed;
+      // fail fast rather than silently nulling out the variant column.
+      throw new HoodieException("Cannot reconstruct variant: shredded record is missing the required '"
+          + HoodieSchema.Variant.VARIANT_METADATA_FIELD + "' field; the base file is malformed.");
     }
 
     // Reuse the same VariantSchema index assignment as the write path (no builder needed on read).
