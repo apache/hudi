@@ -137,7 +137,7 @@ First of all, please confirm if you do indeed have duplicates **AFTER** ensuring
 
 ### Ingestion
 
-#### java.io.EOFException: Received -1 when reading from channel, socket has likely been closed. at [kafka.utils.Utils$.read](http://kafka.utils.Utils$.read)(Utils.scala:381) at kafka.network.BoundedByteBufferReceive.readFrom(BoundedByteBufferReceive.scala:54)
+#### java.io.EOFException: Received -1 when reading from channel, socket has likely been closed. at `kafka.utils.Utils$.read`(Utils.scala:381) at kafka.network.BoundedByteBufferReceive.readFrom(BoundedByteBufferReceive.scala:54)
 
 This might happen if you are ingesting from Kafka source, your cluster is ssl enabled by default and you are using some version of Hudi older than 0.5.1. Previous versions of Hudi were using spark-streaming-kafka-0-8 library. With the release of 0.5.1 version of Hudi, spark was upgraded to 2.4.4 and spark-streaming-kafka library was upgraded to spark-streaming-kafka-0-10. SSL support was introduced from spark-streaming-kafka-0-10. Please see here for reference.
 
