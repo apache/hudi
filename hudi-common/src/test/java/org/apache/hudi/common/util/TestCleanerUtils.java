@@ -241,7 +241,7 @@ class TestCleanerUtils {
   }
 
   @Test
-  void testGetEarliestCommitToRetainByHoursUsesLatestCommitBeforeCutoff() {
+  void testGetEarliestCommitToRetainByHoursUsesEarliestCommitAfterCutoff() {
     ZonedDateTime nowUtc = ZonedDateTime.of(2026, 6, 19, 6, 30, 0, 0, ZoneId.of("UTC"));
     List<String> timestamps = new ArrayList<>();
     timestamps.add(formatInstant(nowUtc.minusHours(4).minusMinutes(30)));
@@ -259,7 +259,7 @@ class TestCleanerUtils {
         Long.MAX_VALUE);
 
     assertTrue(result.isPresent());
-    assertEquals(timestamps.get(1), result.get().requestedTime());
+    assertEquals(timestamps.get(2), result.get().requestedTime());
   }
 
   @Test
