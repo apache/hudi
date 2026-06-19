@@ -728,17 +728,17 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
         parquetFiles.foreach { filePath =>
           val schema = readParquetSchema(filePath)
           val v1Group = getFieldAsGroup(schema, "v1")
-          assert(groupContainsField(v1Group, "typed_value"),
+          assert(v1Group.containsField("typed_value"),
             s"v1 should be shredded with an inferred typed_value. Schema:\n$v1Group")
           val typedValue = getFieldAsGroup(v1Group, "typed_value")
-          assert(groupContainsField(typedValue, "a") && groupContainsField(typedValue, "b")
-            && groupContainsField(typedValue, "nested"),
+          assert(typedValue.containsField("a") && typedValue.containsField("b")
+            && typedValue.containsField("nested"),
             s"Inferred typed_value should contain a, b, nested. Schema:\n$typedValue")
-          assert(!groupContainsField(typedValue, "bad-key"),
+          assert(!typedValue.containsField("bad-key"),
             s"Avro-illegal keys must be dropped from typed_value. Schema:\n$typedValue")
-          assert(!groupContainsField(getFieldAsGroup(schema, "v2"), "typed_value"),
+          assert(!getFieldAsGroup(schema, "v2").containsField("typed_value"),
             s"v2 holds empty objects; inference should decline. File: $filePath Schema:\n$schema")
-          assert(!groupContainsField(getFieldAsGroup(schema, "v3"), "typed_value"),
+          assert(!getFieldAsGroup(schema, "v3").containsField("typed_value"),
             s"v3 is all null; inference should decline. File: $filePath Schema:\n$schema")
         }
       }
@@ -806,9 +806,9 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
       parquetFiles.foreach { filePath =>
         val schema = readParquetSchema(filePath)
         val variantGroup = getFieldAsGroup(schema, "v")
-        assert(groupContainsField(variantGroup, "typed_value"),
+        assert(variantGroup.containsField("typed_value"),
           s"Compacted base file should carry the inferred typed_value. Schema:\n$variantGroup")
-        assert(groupContainsField(getFieldAsGroup(variantGroup, "typed_value"), "key"),
+        assert(getFieldAsGroup(variantGroup, "typed_value").containsField("key"),
           s"Inferred typed_value should contain the key field. Schema:\n$variantGroup")
       }
     })
@@ -859,10 +859,10 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
       parquetFiles.foreach { filePath =>
         val schema = readParquetSchema(filePath)
         val variantGroup = getFieldAsGroup(schema, "v")
-        assert(groupContainsField(variantGroup, "typed_value"),
+        assert(variantGroup.containsField("typed_value"),
           s"Row-writer base file should carry the inferred typed_value. Schema:\n$variantGroup")
         val typedValue = getFieldAsGroup(variantGroup, "typed_value")
-        assert(groupContainsField(typedValue, "a") && groupContainsField(typedValue, "b"),
+        assert(typedValue.containsField("a") && typedValue.containsField("b"),
           s"Inferred typed_value should contain a and b. Schema:\n$typedValue")
       }
     }
