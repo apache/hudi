@@ -225,14 +225,19 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   }
 
   @Override
-  public void close() {
+  protected void closeResources() throws Exception {
+    // Close the ExternalSpillableMaps (which hold on-disk BitCaskDiskMaps / RocksDB handles, each with a
+    // JVM shutdown hook) before super.closeResources(), while still under the writeLock held by
+    // AbstractTableFileSystemView#close(). Draining them here -- before the view's map fields are nulled
+    // out and while the lock excludes concurrent readers -- guarantees the disk maps and their shutdown
+    // hooks are released instead of being orphaned.
     closeFileGroupsMapIfPresent();
     closePendingClusteringMapIfPresent();
     closePendingCompactionMapIfPresent();
     closePendingLogCompactionMapIfPresent();
     closeBootstrapFileMapIfPresent();
     closeReplaceInstantsMapIfPresent();
-    super.close();
+    super.closeResources();
   }
 
   private void closeReplaceInstantsMapIfPresent() {

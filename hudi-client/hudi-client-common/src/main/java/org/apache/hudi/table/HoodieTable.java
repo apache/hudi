@@ -63,6 +63,7 @@ import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.InstantFileNameParser;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
@@ -135,7 +136,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
  * @param <O> Type of outputs
  */
 @Slf4j
-public abstract class HoodieTable<T, I, K, O> implements Serializable {
+public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoCloseable {
 
   @Getter
   protected final HoodieWriteConfig config;
@@ -194,6 +195,42 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> getTableMetadata());
     }
     return viewManager;
+  }
+
+  /**
+   * Releases the resources held by this table instance: the lazily-built {@link FileSystemViewManager}
+   * (for local views only) and the table metadata reader.
+   *
+   * <p>A locally-managed view ({@code SPILLABLE_DISK}/{@code MEMORY}/{@code EMBEDDED_KV}) caches a
+   * file-system view backed by on-disk spillable maps; closing it here frees those promptly. A
+   * {@code REMOTE_ONLY}/{@code REMOTE_FIRST} view, however, talks to an embedded timeline server shared
+   * with the write client and other table-service cycles -- closing it here would tear down server-side
+   * state still in use and break subsequent operations -- so the view manager is left alone for remote
+   * views.
+   *
+   * <p>Idempotent and safe to call when nothing was lazily instantiated; never throws.
+   */
+  @Override
+  public synchronized void close() {
+    if (viewManager != null) {
+      FileSystemViewStorageType storageType = config.getViewStorageConfig().getStorageType();
+      if (storageType != FileSystemViewStorageType.REMOTE_ONLY && storageType != FileSystemViewStorageType.REMOTE_FIRST) {
+        try {
+          viewManager.close();
+        } catch (Exception e) {
+          log.warn("Failed to close FileSystemViewManager for table {}", config.getBasePath(), e);
+        }
+      }
+      viewManager = null;
+    }
+    if (metadata != null) {
+      try {
+        metadata.close();
+      } catch (Exception e) {
+        log.warn("Failed to close metadata reader for table {}", config.getBasePath(), e);
+      }
+      metadata = null;
+    }
   }
 
   /**
