@@ -358,15 +358,27 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       // API.  Note that for COW table, the merging logic of two slices does not happen as there
       // is no compaction, thus there is no performance impact.
       HoodieTableFileSystemView finalFileSystemView = fileSystemView;
+      // For an MDT under a non-flat layout, the FS view indexes file slices by their physical
+      // partition (bucket sub-paths), but the partition list here uses logical partition names.
+      // Resolve via HoodieTableMetadataUtil which fans out across the layout's physical sub-paths.
+      final boolean isMdt = HoodieTableMetadata.isMetadataTable(basePath);
       return partitions.stream().collect(
           Collectors.toMap(
               Function.identity(),
-              partitionPath ->
-                  queryInstant.map(instant ->
-                          finalFileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
-                      )
-                      .orElseGet(() -> finalFileSystemView.getLatestFileSlices(partitionPath.path))
-                      .collect(Collectors.toList())
+              partitionPath -> {
+                if (isMdt) {
+                  return queryInstant.isPresent()
+                      ? HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metaClient,
+                          finalFileSystemView, partitionPath.path)
+                      : HoodieTableMetadataUtil.getPartitionLatestFileSlices(metaClient,
+                          Option.of(finalFileSystemView), partitionPath.path);
+                }
+                return queryInstant.map(instant ->
+                        finalFileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
+                    )
+                    .orElseGet(() -> finalFileSystemView.getLatestFileSlices(partitionPath.path))
+                    .collect(Collectors.toList());
+              }
           ));
     } finally {
       long elapsedMs = timer.endTimer();

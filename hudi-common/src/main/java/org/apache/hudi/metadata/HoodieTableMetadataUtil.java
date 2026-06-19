@@ -1518,25 +1518,50 @@ public class HoodieTableMetadataUtil {
     HoodieTableFileSystemView fsView = null;
     try {
       fsView = fileSystemView.orElseGet(() -> getFileSystemViewForMetadataTable(metaClient));
-      Stream<FileSlice> fileSliceStream;
-      if (mergeFileSlices) {
-        if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
-          fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
-              // including pending compaction instant as the last instant so that the finished delta commits
-              // that start earlier than the compaction can be queried.
-              partition, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant().get().requestedTime());
+      List<String> physicalPartitions = resolvePhysicalPartitions(metaClient, partition);
+      List<FileSlice> all = new ArrayList<>();
+      boolean any = false;
+      for (String physical : physicalPartitions) {
+        Stream<FileSlice> fileSliceStream;
+        if (mergeFileSlices) {
+          if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
+            fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
+                // including pending compaction instant as the last instant so that the finished delta commits
+                // that start earlier than the compaction can be queried.
+                physical, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant().get().requestedTime());
+          } else {
+            return Collections.emptyList();
+          }
         } else {
-          return Collections.emptyList();
+          fileSliceStream = fsView.getLatestFileSlices(physical);
         }
-      } else {
-        fileSliceStream = fsView.getLatestFileSlices(partition);
+        fileSliceStream.forEach(all::add);
+        any = true;
       }
-      return fileSliceStream.sorted(Comparator.comparing(FileSlice::getFileId)).collect(Collectors.toList());
+      if (!any) {
+        return Collections.emptyList();
+      }
+      all.sort(Comparator.comparing(FileSlice::getFileId));
+      return all;
     } finally {
-      if (!fileSystemView.isPresent()) {
+      if (!fileSystemView.isPresent() && fsView != null) {
         fsView.close();
       }
     }
+  }
+
+  /**
+   * Resolve the physical sub-paths to scan for the given MDT partition under the configured
+   * layout. Layout-aware: for the flat layout this returns {@code [partition]}; for sub-directory
+   * bucketing it returns one entry per bucket directory. {@code fileGroupCount} is sourced from
+   * the MDT's persisted layout state — this method does not perform any filesystem listing.
+   */
+  private static List<String> resolvePhysicalPartitions(HoodieTableMetaClient metaClient, String partition) {
+    HoodieMetadataTableLayout layout = HoodieMetadataTableLayouts.load(metaClient.getTableConfig());
+    int fgCount = metaClient.getTableConfig()
+        .getMetadataLayoutPartitionFileGroupCounts()
+        .getOrDefault(partition, 0);
+    return layout.getPhysicalPartitions(partition, fgCount);
   }
 
   /**
@@ -1553,10 +1578,13 @@ public class HoodieTableMetadataUtil {
     HoodieTableFileSystemView fsView = null;
     try {
       fsView = fileSystemView.orElseGet(() -> getFileSystemViewForMetadataTable(metaClient));
-      Stream<FileSlice> fileSliceStream = fsView.getLatestFileSlicesIncludingInflight(partition);
-      return fileSliceStream
-          .sorted(Comparator.comparing(FileSlice::getFileId))
-          .collect(Collectors.toList());
+      List<String> physicalPartitions = resolvePhysicalPartitions(metaClient, partition);
+      List<FileSlice> all = new ArrayList<>();
+      for (String physical : physicalPartitions) {
+        fsView.getLatestFileSlicesIncludingInflight(physical).forEach(all::add);
+      }
+      all.sort(Comparator.comparing(FileSlice::getFileId));
+      return all;
     } finally {
       if (!fileSystemView.isPresent() && fsView != null) {
         fsView.close();
