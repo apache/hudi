@@ -51,6 +51,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 
@@ -151,8 +153,18 @@ public class CleanerUtils {
     } else if (cleaningPolicy == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
       ZonedDateTime latestDateTime = ZonedDateTime.ofInstant(latestInstant, timeZone.getZoneId());
       String earliestTimeToRetain = TimelineUtils.formatDate(Date.from(latestDateTime.minusHours(hoursRetained).toInstant()));
-      earliestCommitToRetain = Option.fromJavaOptional(completedCommitsTimeline.getInstantsAsStream().filter(i -> compareTimestamps(i.requestedTime(),
-          GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
+      earliestCommitToRetain = completedCommitsTimeline.getReverseOrderedInstants()
+          .filter(i -> compareTimestamps(i.requestedTime(), LESSER_THAN_OR_EQUALS, earliestTimeToRetain))
+          .findFirst()
+          .map(Option::of)
+          .orElse(completedCommitsTimeline.firstInstant());
+
+      Option<HoodieInstant> earliestPendingCommit = commitsTimeline.filter(s -> !s.isCompleted()).firstInstant();
+      if (earliestPendingCommit.isPresent()
+          && (!earliestCommitToRetain.isPresent()
+          || compareTimestamps(earliestPendingCommit.get().requestedTime(), LESSER_THAN, earliestCommitToRetain.get().requestedTime()))) {
+        earliestCommitToRetain = completedCommitsTimeline.findInstantsBefore(earliestPendingCommit.get().requestedTime()).lastInstant();
+      }
     }
 
     // Apply maxCommitsToClean cap if configured and applicable
