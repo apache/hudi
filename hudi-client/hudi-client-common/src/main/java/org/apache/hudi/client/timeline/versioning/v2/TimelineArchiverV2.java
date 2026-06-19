@@ -62,6 +62,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.client.utils.ArchivalUtils.getEarliestInstantToRetainForClean;
 import static org.apache.hudi.client.utils.ArchivalUtils.getMinAndMaxInstantsToKeep;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
@@ -236,7 +237,11 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
             config.getCleanerPolicy());
     earliestInstantToRetainCandidates.add(earliestInstantToRetainForClustering);
 
-    // 4. If metadata table is enabled, do not archive instants which are more recent than the last compaction on the
+    // 4. If enabled, block archival based on ECTR from the last completed clean to ensure we don't archive
+    // commits that have data files that haven't been cleaned yet.
+    earliestInstantToRetainCandidates.add(getEarliestInstantToRetainForClean(table, completedCommitsTimeline, config));
+
+    // 5. If metadata table is enabled, do not archive instants which are more recent than the last compaction on the
     // metadata table.
     if (config.isMetadataTableEnabled()
         && table.getMetaClient().getTableConfig().isMetadataTableAvailable()
@@ -256,7 +261,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
       }
     }
 
-    // 5. If this is a metadata table, do not archive the commits that live in data set
+    // 6. If this is a metadata table, do not archive the commits that live in data set
     // active timeline. This is required by metadata table,
     // see HoodieTableMetadataUtil#processRollbackMetadata for details.
     if (table.isMetadataTable()) {

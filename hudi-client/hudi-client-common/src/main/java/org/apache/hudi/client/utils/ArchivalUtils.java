@@ -20,6 +20,7 @@
 
 package org.apache.hudi.client.utils;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -28,10 +29,12 @@ import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.IOException;
 import java.text.ParseException;
 import java.time.Instant;
 
@@ -108,6 +111,37 @@ public class ArchivalUtils {
       minInstantsToKeep = configuredMinInstantsToKeep;
     }
     return Pair.of(minInstantsToKeep, maxInstantsToKeep);
+  }
+
+  public static Option<HoodieInstant> getEarliestInstantToRetainForClean(
+      HoodieTable<?, ?, ?, ?> table,
+      HoodieTimeline commitTimeline,
+      HoodieWriteConfig config) {
+    if (!config.shouldBlockArchivalOnCleanECTR()) {
+      return Option.empty();
+    }
+
+    Option<HoodieInstant> lastCleanInstant = table.getCleanTimeline().filterCompletedInstants().lastInstant();
+    if (!lastCleanInstant.isPresent()) {
+      return Option.empty();
+    }
+
+    try {
+      HoodieCleanMetadata cleanMetadata = table.getActiveTimeline().readCleanMetadata(lastCleanInstant.get());
+      String earliestCommitToRetain = cleanMetadata.getEarliestCommitToRetain();
+      if (earliestCommitToRetain == null || earliestCommitToRetain.trim().isEmpty()) {
+        return Option.empty();
+      }
+
+      Option<HoodieInstant> earliestInstantToRetain =
+          commitTimeline.findInstantsAfterOrEquals(earliestCommitToRetain).firstInstant();
+      log.info("Blocking archival based on earliest commit to retain {} from last clean {}. Earliest instant to retain is {}",
+          earliestCommitToRetain, lastCleanInstant.get().requestedTime(), earliestInstantToRetain.map(instant -> instant).orElse(null));
+      return earliestInstantToRetain;
+    } catch (IOException e) {
+      log.warn("Failed to read clean metadata for {}", lastCleanInstant.get(), e);
+      throw new HoodieIOException("Failed to read clean metadata for " + lastCleanInstant.get(), e);
+    }
   }
 
   private static Option<HoodieInstant> getEarliestCommitToRetain(
