@@ -135,7 +135,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
  * @param <O> Type of outputs
  */
 @Slf4j
-public abstract class HoodieTable<T, I, K, O> implements Serializable {
+public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoCloseable {
 
   @Getter
   protected final HoodieWriteConfig config;
@@ -194,6 +194,35 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> getTableMetadata());
     }
     return viewManager;
+  }
+
+  /**
+   * Releases the resources held by this table instance: the {@link FileSystemViewManager} (which can
+   * cache file-system views backed by on-disk spillable maps) and the table metadata reader. A
+   * {@link HoodieTable} created for a single driver-side operation (e.g. table-service scheduling) and
+   * never closed leaves its cached views' disk maps (and their cleanup state) around until the JVM
+   * exits, so callers that create a table for a single operation should close it.
+   *
+   * <p>Idempotent and safe to call when nothing was lazily instantiated; never throws.
+   */
+  @Override
+  public synchronized void close() {
+    if (viewManager != null) {
+      try {
+        viewManager.close();
+      } catch (Exception e) {
+        log.warn("Failed to close FileSystemViewManager for table {}", config.getBasePath(), e);
+      }
+      viewManager = null;
+    }
+    if (metadata != null) {
+      try {
+        metadata.close();
+      } catch (Exception e) {
+        log.warn("Failed to close metadata reader for table {}", config.getBasePath(), e);
+      }
+      metadata = null;
+    }
   }
 
   /**
