@@ -135,13 +135,16 @@ public class VariantShreddingInferenceInternalRowFileWriter implements HoodieInt
       return;
     }
     closed = true;
+    boolean delegateClosed = false;
     try {
       rethrowIfFailed();
       // Materialize even with an empty buffer: handles expect the file to exist at close.
       materialize();
+      // Mark before close() so a throwing delegate.close() surfaces, not retried in the catch.
+      delegateClosed = true;
       delegate.close();
     } catch (IOException | RuntimeException e) {
-      if (delegate != null) {
+      if (delegate != null && !delegateClosed) {
         try {
           delegate.close();
         } catch (Exception suppressed) {
