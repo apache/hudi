@@ -559,6 +559,9 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
       return toByteArray((ByteBuffer) record.get(fieldNameFor(ordinal)));
     }
 
+    // The scalar getters below read typed_value directly: Spark only invokes them for the scalar
+    // typed_value (ordinal == typedIdx), so resolving via fieldNameFor(ordinal) would be redundant.
+    // isNullAt/getBinary stay on fieldNameFor because they are also called for value/metadata.
     @Override public boolean getBoolean(int ordinal) {
       return (Boolean) record.get(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD);
     }
