@@ -216,11 +216,12 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
       if ("local-timestamp-micros".equals(name)) {
         return new VariantSchema.TimestampNTZType();
       }
-      if ("timestamp-millis".equals(name)) {
-        return new VariantSchema.TimestampType();
-      }
-      if ("local-timestamp-millis".equals(name)) {
-        return new VariantSchema.TimestampNTZType();
+      // The Variant binary spec stores timestamps in microseconds, so a millisecond-precision
+      // typed_value cannot represent a variant timestamp. Decline to shred it as a scalar (the value
+      // stays in the residual unshredded binary) rather than mapping it to the micros TimestampType,
+      // which would silently scale the value by 1000x.
+      if ("timestamp-millis".equals(name) || "local-timestamp-millis".equals(name)) {
+        return null;
       }
       if ("uuid".equals(name)) {
         return new VariantSchema.UuidType();
