@@ -136,7 +136,7 @@ public class ArchivalUtils {
       Option<HoodieInstant> earliestInstantToRetain =
           commitTimeline.findInstantsAfterOrEquals(earliestCommitToRetain).firstInstant();
       log.info("Blocking archival based on earliest commit to retain {} from last clean {}. Earliest instant to retain is {}",
-          earliestCommitToRetain, lastCleanInstant.get().requestedTime(), earliestInstantToRetain.map(instant -> instant).orElse(null));
+          earliestCommitToRetain, lastCleanInstant.get().requestedTime(), earliestInstantToRetain.orElse(null));
       return earliestInstantToRetain;
     } catch (IOException e) {
       log.warn("Failed to read clean metadata for {}", lastCleanInstant.get(), e);

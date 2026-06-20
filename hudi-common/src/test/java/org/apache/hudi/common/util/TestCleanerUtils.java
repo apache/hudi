@@ -285,6 +285,48 @@ class TestCleanerUtils {
     assertEquals(completedTimestamps.get(0), result.get().requestedTime());
   }
 
+  @Test
+  void testGetEarliestCommitToRetainByHoursDoesNotUsePendingWhenNoCompletedInstantAfterCutoff() {
+    ZonedDateTime nowUtc = ZonedDateTime.of(2026, 6, 19, 6, 30, 0, 0, ZoneId.of("UTC"));
+    List<String> completedTimestamps = new ArrayList<>();
+    completedTimestamps.add(formatInstant(nowUtc.minusHours(5)));
+    completedTimestamps.add(formatInstant(nowUtc.minusHours(4)));
+    String pendingTimestamp = formatInstant(nowUtc.minusHours(3));
+
+    Option<HoodieInstant> result = CleanerUtils.getEarliestCommitToRetain(
+        createMockTimelineWithTimestamps(completedTimestamps, Collections.singletonList(pendingTimestamp)),
+        HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS,
+        12,
+        nowUtc.toInstant(),
+        2,
+        HoodieTimelineTimeZone.UTC,
+        Option.empty(),
+        Long.MAX_VALUE);
+
+    assertFalse(result.isPresent());
+  }
+
+  @Test
+  void testGetEarliestCommitToRetainByHoursReturnsEmptyWhenPendingPrecedesAllCompletedInstants() {
+    ZonedDateTime nowUtc = ZonedDateTime.of(2026, 6, 19, 6, 30, 0, 0, ZoneId.of("UTC"));
+    List<String> completedTimestamps = new ArrayList<>();
+    completedTimestamps.add(formatInstant(nowUtc.minusHours(1).minusMinutes(30)));
+    completedTimestamps.add(formatInstant(nowUtc.minusHours(1)));
+    String pendingTimestamp = formatInstant(nowUtc.minusHours(3));
+
+    Option<HoodieInstant> result = CleanerUtils.getEarliestCommitToRetain(
+        createMockTimelineWithTimestamps(completedTimestamps, Collections.singletonList(pendingTimestamp)),
+        HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS,
+        12,
+        nowUtc.toInstant(),
+        2,
+        HoodieTimelineTimeZone.UTC,
+        Option.empty(),
+        Long.MAX_VALUE);
+
+    assertFalse(result.isPresent());
+  }
+
   /**
    * Helper method to create a mock timeline with specified number of commits.
    * Commits are named as "20000000000000", "20000000000001", etc.

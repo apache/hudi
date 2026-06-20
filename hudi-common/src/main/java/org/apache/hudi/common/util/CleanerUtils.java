@@ -158,8 +158,8 @@ public class CleanerUtils {
 
       Option<HoodieInstant> earliestPendingCommit = commitsTimeline.filter(s -> !s.isCompleted()).firstInstant();
       if (earliestPendingCommit.isPresent()
-          && (!earliestCommitToRetain.isPresent()
-          || compareTimestamps(earliestPendingCommit.get().requestedTime(), LESSER_THAN, earliestCommitToRetain.get().requestedTime()))) {
+          && earliestCommitToRetain.isPresent()
+          && compareTimestamps(earliestPendingCommit.get().requestedTime(), LESSER_THAN, earliestCommitToRetain.get().requestedTime())) {
         earliestCommitToRetain = completedCommitsTimeline.findInstantsBefore(earliestPendingCommit.get().requestedTime()).lastInstant();
       }
     }
