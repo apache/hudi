@@ -95,7 +95,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     if (metadataConfig.isMetricsEnabled()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(HoodieMetricsConfig.newBuilder()
           .fromProperties(metadataConfig.getProps()).withPath(dataBasePath).build(), dataMetaClient.getStorage(),
-          metadataConfig.shouldEnableDetailedMetrics()));
+          metadataConfig.isDetailedMetricsEnabled()));
     } else {
       this.metrics = Option.empty();
     }

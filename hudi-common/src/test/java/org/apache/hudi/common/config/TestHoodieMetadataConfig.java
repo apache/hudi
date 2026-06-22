@@ -282,7 +282,7 @@ class TestHoodieMetadataConfig {
         .fromProperties(props)
         .build();
     assertTrue(config.isMetricsEnabled());
-    assertFalse(config.shouldEnableDetailedMetrics());
+    assertFalse(config.isDetailedMetricsEnabled());
 
     props = new Properties();
     props.put(HoodieMetadataConfig.METRICS_ENABLE.key(), true);
@@ -291,6 +291,6 @@ class TestHoodieMetadataConfig {
         .fromProperties(props)
         .build();
     assertTrue(config.isMetricsEnabled());
-    assertTrue(config.shouldEnableDetailedMetrics());
+    assertTrue(config.isDetailedMetricsEnabled());
   }
 }

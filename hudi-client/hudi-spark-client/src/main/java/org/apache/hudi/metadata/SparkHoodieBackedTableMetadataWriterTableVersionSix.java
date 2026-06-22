@@ -106,7 +106,7 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
       } else {
         registry = Registry.getRegistry("HoodieMetadata");
       }
-      this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig(), dataMetaClient.getStorage(), dataWriteConfig.getMetadataConfig().shouldEnableDetailedMetrics()));
+      this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig(), dataMetaClient.getStorage(), dataWriteConfig.getMetadataConfig().isDetailedMetricsEnabled()));
     } else {
       this.metrics = Option.empty();
     }
