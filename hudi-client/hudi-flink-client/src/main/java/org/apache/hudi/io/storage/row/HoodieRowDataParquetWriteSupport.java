@@ -28,6 +28,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.api.WriteSupport;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -52,6 +53,11 @@ public class HoodieRowDataParquetWriteSupport extends RowDataParquetWriteSupport
     Map<String, String> extraMetadata =
         bloomFilterWriteSupportOpt.map(HoodieBloomFilterWriteSupport::finalizeMetadata)
             .orElse(Collections.emptyMap());
+    String vectorColumnsMetadata = HoodieSchema.buildVectorColumnsMetadataValue(schema);
+    if (!vectorColumnsMetadata.isEmpty()) {
+      extraMetadata = new HashMap<>(extraMetadata);
+      extraMetadata.put(HoodieSchema.VECTOR_COLUMNS_METADATA_KEY, vectorColumnsMetadata);
+    }
 
     return new WriteSupport.FinalizedWriteContext(extraMetadata);
   }

@@ -331,6 +331,10 @@ public class RowDataToAvroConverters {
 
       @Override
       public Object convert(HoodieSchema schema, Object object) {
+        if (schema.getType() == HoodieSchemaType.VECTOR) {
+          HoodieSchema.Vector vectorSchema = (HoodieSchema.Vector) schema;
+          return new GenericData.Fixed(schema.toAvroSchema(), VectorConversionUtils.encodeVectorArrayData((ArrayData) object, vectorSchema));
+        }
         final HoodieSchema elementSchema = schema.getElementType();
         ArrayData arrayData = (ArrayData) object;
         List<Object> list = new ArrayList<>();
@@ -394,4 +398,3 @@ public class RowDataToAvroConverters {
     };
   }
 }
-

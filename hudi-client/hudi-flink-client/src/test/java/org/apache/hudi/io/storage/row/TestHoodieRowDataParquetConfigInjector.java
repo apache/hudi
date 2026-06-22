@@ -22,11 +22,15 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.testutils.DisableDictionaryInjector;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieParquetConfigInjector;
 import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -35,6 +39,7 @@ import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 import org.apache.hudi.util.HoodieSchemaConverter;
 
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.data.GenericArrayData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.types.DataType;
@@ -46,13 +51,17 @@ import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ColumnChunkMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.schema.PrimitiveType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.util.Arrays;
 
+import static org.apache.hudi.common.model.HoodieRecord.HoodieRecordType.FLINK;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -220,5 +229,46 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
 
     // Verify the parquet file was created
     assertTrue(storage.exists(parquetPath));
+  }
+
+  @Test
+  public void testGetFileWriterPropagatesHoodieSchemaForVectorColumns() throws Exception {
+    final String instantTime = "104";
+    HoodieStorage storage = HoodieTestUtils.getStorage(tmpDir.toString());
+    final StoragePath parquetPath = new StoragePath(
+        basePath + "/partition/path/test_vector_schema_" + instantTime + ".parquet");
+
+    HoodieSchema hoodieSchema = HoodieSchema.createRecord(
+        "vector_record",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("embedding", HoodieSchema.createVector(2))));
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .build();
+
+    HoodieFileWriter writer = HoodieFileWriterFactory.getFileWriter(
+        instantTime, parquetPath, storage, config, hoodieSchema, new LocalTaskContextSupplier(), FLINK);
+    assertTrue(writer instanceof HoodieRowDataParquetWriter);
+
+    GenericRowData row = new GenericRowData(2);
+    row.setField(0, 1);
+    row.setField(1, new GenericArrayData(new float[] {1.0f, 2.0f}));
+    ((HoodieRowDataParquetWriter) writer).write(row);
+    writer.close();
+
+    Configuration hadoopConf = new Configuration();
+    Path hadoopPath = new Path(parquetPath.toUri());
+    ParquetFileReader reader = ParquetFileReader.open(hadoopConf, hadoopPath);
+    ParquetMetadata metadata = reader.getFooter();
+    reader.close();
+
+    PrimitiveType embeddingType = metadata.getFileMetaData().getSchema().getType("embedding").asPrimitiveType();
+    assertEquals(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, embeddingType.getPrimitiveTypeName());
+    assertEquals(8, embeddingType.getTypeLength());
+    assertEquals("embedding:VECTOR(2)",
+        metadata.getFileMetaData().getKeyValueMetaData().get(HoodieSchema.VECTOR_COLUMNS_METADATA_KEY));
   }
 }

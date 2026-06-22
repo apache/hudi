@@ -20,24 +20,22 @@ package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodiePayloadProps;
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,27 +67,6 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
     cleanupResources();
   }
 
-  /**
-   * Adds Hoodie metadata fields to the row type, matching production behavior in BulkInsertWriterHelper.
-   */
-  private static RowType addMetadataFields(RowType rowType, boolean withOperationField) {
-    List<RowType.RowField> mergedFields = new ArrayList<>();
-
-    LogicalType metadataFieldType = DataTypes.STRING().getLogicalType();
-    mergedFields.add(new RowType.RowField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, metadataFieldType));
-    mergedFields.add(new RowType.RowField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, metadataFieldType));
-    mergedFields.add(new RowType.RowField(HoodieRecord.RECORD_KEY_METADATA_FIELD, metadataFieldType));
-    mergedFields.add(new RowType.RowField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, metadataFieldType));
-    mergedFields.add(new RowType.RowField(HoodieRecord.FILENAME_METADATA_FIELD, metadataFieldType));
-
-    if (withOperationField) {
-      mergedFields.add(new RowType.RowField(HoodieRecord.OPERATION_METADATA_FIELD, metadataFieldType));
-    }
-
-    mergedFields.addAll(rowType.getFields());
-    return new RowType(mergedFields);
-  }
-
   @Test
   public void testEventTimeFieldIndexWithDoubleType() throws Exception {
     // Schema with DOUBLE event_time field
@@ -101,8 +78,6 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         DataTypes.FIELD("partition", DataTypes.VARCHAR(20))
     ).notNull();
     RowType baseRowType = (RowType) dataType.getLogicalType();
-    // Add metadata fields like production code does
-    RowType rowTypeWithMetadata = addMetadataFields(baseRowType, false);
 
     Properties props = new Properties();
     props.setProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "event_time");
@@ -110,13 +85,15 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         .withPath(basePath)
         .withProperties(props)
         .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(HoodieSchemaConverter.convertToSchema(baseRowType).getAvroSchema().toString())
         .build();
 
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, context, metaClient);
 
     HoodieRowDataCreateHandle handle = new HoodieRowDataCreateHandle(
         table, config, PARTITION_PATH, FILE_ID, INSTANT_TIME,
-        TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID, rowTypeWithMetadata, false, false);
+        TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID,
+        HoodieSchemaUtils.addMetadataFields(HoodieSchemaConverter.convertToSchema(baseRowType), false), false, false);
 
     assertNotNull(handle);
     // Verify the handle was created successfully with event time configured
@@ -133,7 +110,6 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         DataTypes.FIELD("partition", DataTypes.VARCHAR(20))
     ).notNull();
     RowType baseRowType = (RowType) dataType.getLogicalType();
-    RowType rowTypeWithMetadata = addMetadataFields(baseRowType, false);
 
     Properties props = new Properties();
     props.setProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "event_time");
@@ -141,6 +117,7 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         .withPath(basePath)
         .withProperties(props)
         .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(HoodieSchemaConverter.convertToSchema(baseRowType).getAvroSchema().toString())
         .build();
 
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, context, metaClient);
@@ -148,7 +125,8 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
     // Should create handle but log warning about unsupported type
     HoodieRowDataCreateHandle handle = new HoodieRowDataCreateHandle(
         table, config, PARTITION_PATH, FILE_ID, INSTANT_TIME,
-        TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID, rowTypeWithMetadata, false, false);
+        TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID,
+        HoodieSchemaUtils.addMetadataFields(HoodieSchemaConverter.convertToSchema(baseRowType), false), false, false);
 
     assertNotNull(handle);
   }
@@ -163,7 +141,6 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         DataTypes.FIELD("partition", DataTypes.VARCHAR(20))
     ).notNull();
     RowType baseRowType = (RowType) dataType.getLogicalType();
-    RowType rowTypeWithMetadata = addMetadataFields(baseRowType, false);
 
     Properties props = new Properties();
     props.setProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "event_time");
@@ -171,6 +148,7 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         .withPath(basePath)
         .withProperties(props)
         .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(HoodieSchemaConverter.convertToSchema(baseRowType).getAvroSchema().toString())
         .build();
 
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, context, metaClient);
@@ -178,7 +156,8 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
     // Should create handle but log warning about missing field
     HoodieRowDataCreateHandle handle = new HoodieRowDataCreateHandle(
         table, config, PARTITION_PATH, FILE_ID, INSTANT_TIME,
-        TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID, rowTypeWithMetadata, false, false);
+        TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID,
+        HoodieSchemaUtils.addMetadataFields(HoodieSchemaConverter.convertToSchema(baseRowType), false), false, false);
 
     assertNotNull(handle);
   }
@@ -194,11 +173,11 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         DataTypes.FIELD("partition", DataTypes.VARCHAR(20))
     ).notNull();
     RowType baseRowType = (RowType) dataType.getLogicalType();
-    RowType rowTypeWithMetadata = addMetadataFields(baseRowType, false);
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(HoodieSchemaConverter.convertToSchema(baseRowType).getAvroSchema().toString())
         // No event time field configured
         .build();
 
@@ -206,7 +185,8 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
 
     HoodieRowDataCreateHandle handle = new HoodieRowDataCreateHandle(
         table, config, PARTITION_PATH, FILE_ID, INSTANT_TIME,
-        TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID, rowTypeWithMetadata, false, false);
+        TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID,
+        HoodieSchemaUtils.addMetadataFields(HoodieSchemaConverter.convertToSchema(baseRowType), false), false, false);
 
     assertNotNull(handle);
   }
@@ -222,13 +202,13 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         DataTypes.FIELD("partition", DataTypes.VARCHAR(20))
     ).notNull();
     RowType baseRowType = (RowType) dataType.getLogicalType();
-    RowType rowTypeWithMetadata = addMetadataFields(baseRowType, false);
 
     Properties props = new Properties();
     props.setProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "event_time");
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withProperties(props)
+        .withSchema(HoodieSchemaConverter.convertToSchema(baseRowType).getAvroSchema().toString())
         .withEmbeddedTimelineServerEnabled(false)
         .build();
 
@@ -236,7 +216,8 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
 
     HoodieRowDataCreateHandle handle = new HoodieRowDataCreateHandle(
         table, config, PARTITION_PATH, FILE_ID, INSTANT_TIME,
-        TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID, rowTypeWithMetadata, false, false);
+        TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID,
+        HoodieSchemaUtils.addMetadataFields(HoodieSchemaConverter.convertToSchema(baseRowType), false), false, false);
 
     // Create test records with event time
     double eventTimeSeconds1 = 1729512000.0; // 2024-10-21 12:00:00
@@ -293,7 +274,6 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         DataTypes.FIELD("partition", DataTypes.VARCHAR(20))
     ).notNull();
     RowType baseRowType = (RowType) dataType.getLogicalType();
-    RowType rowTypeWithMetadata = addMetadataFields(baseRowType, false);
 
     Properties props = new Properties();
     props.setProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "event_time");
@@ -301,13 +281,15 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         .withPath(basePath)
         .withProperties(props)
         .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(HoodieSchemaConverter.convertToSchema(baseRowType).getAvroSchema().toString())
         .build();
 
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, context, metaClient);
 
     HoodieRowDataCreateHandle handle = new HoodieRowDataCreateHandle(
         table, config, PARTITION_PATH, FILE_ID, INSTANT_TIME,
-        TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID, rowTypeWithMetadata, false, false);
+        TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID,
+        HoodieSchemaUtils.addMetadataFields(HoodieSchemaConverter.convertToSchema(baseRowType), false), false, false);
 
     long eventTimeMillis1 = 1729512000000L;
     long eventTimeMillis2 = 1729515600000L;
@@ -350,7 +332,6 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         DataTypes.FIELD("partition", DataTypes.VARCHAR(20))
     ).notNull();
     RowType baseRowType = (RowType) dataType.getLogicalType();
-    RowType rowTypeWithMetadata = addMetadataFields(baseRowType, false);
 
     Properties props = new Properties();
     props.setProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "event_time");
@@ -358,13 +339,15 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         .withPath(basePath)
         .withProperties(props)
         .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(HoodieSchemaConverter.convertToSchema(baseRowType).getAvroSchema().toString())
         .build();
 
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, context, metaClient);
 
     HoodieRowDataCreateHandle handle = new HoodieRowDataCreateHandle(
         table, config, PARTITION_PATH, FILE_ID, INSTANT_TIME,
-        TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID, rowTypeWithMetadata, false, false);
+        TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID,
+        HoodieSchemaUtils.addMetadataFields(HoodieSchemaConverter.convertToSchema(baseRowType), false), false, false);
 
     // Create record with null event time
     GenericRowData row = new GenericRowData(5);
@@ -400,11 +383,11 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
         DataTypes.FIELD("partition", DataTypes.VARCHAR(20))
     ).notNull();
     RowType baseRowType = (RowType) dataType.getLogicalType();
-    RowType rowTypeWithMetadata = addMetadataFields(baseRowType, false);
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(HoodieSchemaConverter.convertToSchema(baseRowType).getAvroSchema().toString())
         // No event time field configured
         .build();
 
@@ -412,7 +395,8 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
 
     HoodieRowDataCreateHandle handle = new HoodieRowDataCreateHandle(
         table, config, PARTITION_PATH, FILE_ID, INSTANT_TIME,
-        TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID, rowTypeWithMetadata, false, false);
+        TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID,
+        HoodieSchemaUtils.addMetadataFields(HoodieSchemaConverter.convertToSchema(baseRowType), false), false, false);
 
     // Create record with timestamp
     GenericRowData row = new GenericRowData(5);

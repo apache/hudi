@@ -32,6 +32,7 @@ import org.apache.flink.formats.json.JsonToRowDataConverters;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.data.GenericArrayData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.types.DataType;
@@ -39,6 +40,7 @@ import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -200,5 +202,68 @@ class TestRowDataToAvroConverters {
         "STRING field must write as Utf8 (not EnumSymbol) when HoodieSchema is not ENUM; found: "
             + (typeValue == null ? "null" : typeValue.getClass().getName()));
     Assertions.assertEquals("OUT_OF_LINE", typeValue.toString());
+  }
+
+  @Test
+  void testRowDataToAvroVectorEncoding() {
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "vector_record",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("embedding", HoodieSchema.createVector(2)),
+            HoodieSchemaField.of("features", HoodieSchema.createVector(2, HoodieSchema.Vector.VectorElementType.DOUBLE)),
+            HoodieSchemaField.of("codes", HoodieSchema.createVector(3, HoodieSchema.Vector.VectorElementType.INT8))));
+    RowType rowType = (RowType) HoodieSchemaConverter.convertToDataType(schema).getLogicalType();
+    RowDataToAvroConverters.RowDataToAvroConverter converter =
+        RowDataToAvroConverters.createConverter(rowType);
+
+    GenericRowData rowData = GenericRowData.of(
+        1,
+        new GenericArrayData(new float[] {1.0f, 2.0f}),
+        new GenericArrayData(new double[] {3.0d, 4.0d}),
+        new GenericArrayData(new byte[] {5, 6, 7}));
+    GenericRecord avroRecord = (GenericRecord) converter.convert(schema, rowData);
+
+    Assertions.assertArrayEquals(vectorBytes(1.0f, 2.0f),
+        ((GenericData.Fixed) avroRecord.get("embedding")).bytes());
+    Assertions.assertArrayEquals(vectorBytes(3.0d, 4.0d),
+        ((GenericData.Fixed) avroRecord.get("features")).bytes());
+    Assertions.assertArrayEquals(new byte[] {5, 6, 7},
+        ((GenericData.Fixed) avroRecord.get("codes")).bytes());
+  }
+
+  @Test
+  void testRowDataToAvroVectorValidation() {
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "vector_record",
+        null,
+        null,
+        Arrays.asList(HoodieSchemaField.of("embedding", HoodieSchema.createVector(2))));
+    RowType rowType = (RowType) HoodieSchemaConverter.convertToDataType(schema).getLogicalType();
+    RowDataToAvroConverters.RowDataToAvroConverter converter =
+        RowDataToAvroConverters.createConverter(rowType);
+
+    Assertions.assertThrows(IllegalArgumentException.class,
+        () -> converter.convert(schema, GenericRowData.of(new GenericArrayData(new float[] {1.0f}))));
+  }
+
+  private static byte[] vectorBytes(float... values) {
+    ByteBuffer buffer = ByteBuffer.allocate(values.length * Float.BYTES)
+        .order(HoodieSchema.VectorLogicalType.VECTOR_BYTE_ORDER);
+    for (float value : values) {
+      buffer.putFloat(value);
+    }
+    return buffer.array();
+  }
+
+  private static byte[] vectorBytes(double... values) {
+    ByteBuffer buffer = ByteBuffer.allocate(values.length * Double.BYTES)
+        .order(HoodieSchema.VectorLogicalType.VECTOR_BYTE_ORDER);
+    for (double value : values) {
+      buffer.putDouble(value);
+    }
+    return buffer.array();
   }
 }
