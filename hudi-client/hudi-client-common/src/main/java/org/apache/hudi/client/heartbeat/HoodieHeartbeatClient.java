@@ -36,13 +36,13 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.Serializable;
 import java.util.Map;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -65,12 +65,12 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   // heartbeat interval in millis
   private final Long heartbeatIntervalInMs;
   private final Long maxAllowableHeartbeatIntervalInMs;
-  // Maximum time the timer thread will wait for a single heartbeat file write to complete before
+  // Maximum time the scheduler thread will wait for a single heartbeat file write to complete before
   // abandoning it and letting the next tick retry. Bounded to one interval so that a slow/hung
-  // storage write cannot block the timer thread (and thus freeze all subsequent heartbeats).
+  // storage write cannot block the scheduler thread (and thus freeze all subsequent heartbeats).
   private final Long heartbeatWriteTimeoutMs;
   private final Map<String, Heartbeat> instantToHeartbeatMap;
-  // Daemon executor used to perform the (potentially slow) storage write off the timer thread so the
+  // Daemon executor used to perform the (potentially slow) storage write off the scheduler thread so the
   // write can be time-bounded. A cached pool is intentional: if one write hangs, that thread is left
   // parked while the next tick proceeds on a fresh thread. Lazily created and marked transient since
   // this client is Serializable with a transient storage handle.
@@ -104,10 +104,12 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     private boolean isHeartbeatStopped = false;
     private Long lastHeartbeatTime;
     private Integer numHeartbeats = 0;
-    private Timer timer = new Timer(true);
+    private ScheduledExecutorService heartbeatScheduler =
+        Executors.newSingleThreadScheduledExecutor(new CustomizedThreadFactory("heartbeat_scheduler", true));
+    private ScheduledFuture<?> scheduledFuture;
   }
 
-  class HeartbeatTask extends TimerTask {
+  class HeartbeatTask implements Runnable {
 
     private final String instantTime;
 
@@ -117,7 +119,11 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
 
     @Override
     public void run() {
-      updateHeartbeat(instantTime);
+      try {
+        updateHeartbeat(instantTime);
+      } catch (Exception e) {
+        log.error("Failed to update heartbeat for instant {}; will retry on next tick", instantTime, e);
+      }
     }
   }
 
@@ -139,11 +145,11 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     newHeartbeat.setHeartbeatStarted(true);
     instantToHeartbeatMap.put(instantTime, newHeartbeat);
     // Ensure heartbeat is generated for the first time with this blocking call.
-    // Since timer submits the task to a thread, no guarantee when that thread will get CPU
+    // Since scheduler submits the task to a thread, no guarantee when that thread will get CPU
     // cycles to generate the first heartbeat.
     updateHeartbeat(instantTime);
-    newHeartbeat.getTimer().scheduleAtFixedRate(new HeartbeatTask(instantTime), this.heartbeatIntervalInMs,
-        this.heartbeatIntervalInMs);
+    newHeartbeat.setScheduledFuture(newHeartbeat.getHeartbeatScheduler().scheduleAtFixedRate(
+        new HeartbeatTask(instantTime), this.heartbeatIntervalInMs, this.heartbeatIntervalInMs, TimeUnit.MILLISECONDS));
   }
 
   /**
@@ -155,7 +161,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   public Heartbeat stop(String instantTime) throws HoodieException {
     Heartbeat heartbeat = instantToHeartbeatMap.remove(instantTime);
     if (isHeartbeatStarted(heartbeat)) {
-      stopHeartbeatTimer(heartbeat);
+      stopHeartbeatScheduler(heartbeat);
       HeartbeatUtils.deleteHeartbeatFile(storage, basePath, instantTime);
       log.info("Deleted heartbeat file for instant {}", instantTime);
     }
@@ -163,12 +169,12 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   }
 
   /**
-   * Stops all timers of heartbeats started via this instance of the client.
+   * Stops all heartbeat schedulers started via this instance of the client.
    *
    * @throws HoodieException
    */
   public void stopHeartbeatTimers() throws HoodieException {
-    instantToHeartbeatMap.values().stream().filter(this::isHeartbeatStarted).forEach(this::stopHeartbeatTimer);
+    instantToHeartbeatMap.values().stream().filter(this::isHeartbeatStarted).forEach(this::stopHeartbeatScheduler);
   }
 
   /**
@@ -183,15 +189,22 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   }
 
   /**
-   * Stops the timer of the given heartbeat.
+   * Stops the scheduler of the given heartbeat.
    *
    * @param heartbeat The heartbeat to stop.
    */
-  private void stopHeartbeatTimer(Heartbeat heartbeat) {
+  private void stopHeartbeatScheduler(Heartbeat heartbeat) {
     log.info("Stopping heartbeat for instant {}", heartbeat.getInstantTime());
-    heartbeat.getTimer().cancel();
+    shutdownHeartbeatScheduler(heartbeat);
     heartbeat.setHeartbeatStopped(true);
     log.info("Stopped heartbeat for instant {}", heartbeat.getInstantTime());
+  }
+
+  private void shutdownHeartbeatScheduler(Heartbeat heartbeat) {
+    if (heartbeat.getScheduledFuture() != null) {
+      heartbeat.getScheduledFuture().cancel(false);
+    }
+    heartbeat.getHeartbeatScheduler().shutdownNow();
   }
 
   public static Boolean heartbeatExists(HoodieStorage storage, String basePath, String instantTime) throws IOException {
@@ -227,16 +240,16 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
       Heartbeat heartbeat = instantToHeartbeatMap.get(instantTime);
       if (heartbeat.getLastHeartbeatTime() != null && isHeartbeatExpired(instantTime)) {
         // A previous refresh was delayed past the tolerable interval. Stop refreshing this heartbeat
-        // (cancel the timer) and do NOT advance the last heartbeat time, so the heartbeat stays expired
+        // (cancel the scheduler) and do NOT advance the last heartbeat time, so the heartbeat stays expired
         // and the writer aborts at commit time via HeartbeatUtils.abortIfHeartbeatExpired(). We must not
         // keep refreshing here: a concurrent process (e.g. an async cleaner under LAZY failed-writes
         // policy) may already have started rolling back this instant once it observed the expiry, and
         // resurrecting the heartbeat could let this writer commit on top of rolled-back files.
-        // The timer is cancelled cleanly rather than via Thread.interrupt(), which would permanently
-        // kill the timer thread (turning a transient delay into a permanent blackout on the first miss).
+        // The scheduler is cancelled cleanly rather than via Thread.interrupt(), which would permanently
+        // kill the scheduler thread (turning a transient delay into a permanent blackout on the first miss).
         log.error("Missed generating heartbeat for instant {} within allowable interval {} ms; stopping heartbeat refresh",
             instantTime, this.maxAllowableHeartbeatIntervalInMs);
-        heartbeat.getTimer().cancel();
+        shutdownHeartbeatScheduler(heartbeat);
         return;
       }
       heartbeat.setInstantTime(instantTime);
@@ -245,7 +258,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     } catch (TimeoutException te) {
       // The storage write did not complete within the bounded window. Do not advance the last heartbeat
       // time (the write is unconfirmed); the next scheduled tick will retry on a fresh executor thread.
-      // Crucially, the timer thread is freed instead of being blocked by a hung storage call.
+      // Crucially, the scheduler thread is freed instead of being blocked by a hung storage call.
       log.warn("Heartbeat file write for instant {} did not complete within {} ms; will retry on next tick",
           instantTime, this.heartbeatWriteTimeoutMs);
     } catch (IOException io) {
@@ -260,8 +273,8 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
 
   /**
    * Writes the heartbeat file for the given instant on a dedicated daemon executor, bounded by
-   * {@link #heartbeatWriteTimeoutMs}. Performing the storage write off the timer thread (and with a
-   * timeout) ensures that a slow or hung storage call cannot block the timer thread and freeze all
+   * {@link #heartbeatWriteTimeoutMs}. Performing the storage write off the scheduler thread (and with a
+   * timeout) ensures that a slow or hung storage call cannot block the scheduler thread and freeze all
    * subsequent heartbeats for this instant.
    */
   private void writeHeartbeatFile(String instantTime) throws IOException, TimeoutException {

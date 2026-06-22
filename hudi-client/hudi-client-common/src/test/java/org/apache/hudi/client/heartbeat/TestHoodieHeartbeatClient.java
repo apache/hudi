@@ -32,6 +32,7 @@ import java.io.OutputStream;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.awaitility.Awaitility.await;
@@ -121,29 +122,45 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
 
   /**
    * Regression test for the heartbeat-expiry incident: a single slow/hung storage write must not
-   * block (freeze) the heartbeat timer thread. The first heartbeat write blocks (simulating a hung
-   * cloud-storage call); we assert the timer keeps producing heartbeats on fresh threads once that
-   * write times out, proving the timer thread was not blocked by the synchronous storage call (#1).
+   * block (freeze) the heartbeat scheduler thread. The first heartbeat write blocks (simulating a hung
+   * cloud-storage call); we assert the scheduler keeps producing heartbeats on fresh threads once that
+   * write times out, proving the scheduler thread was not blocked by the synchronous storage call (#1).
    * A high tolerable-misses is used so that recovery after the blocked write does not itself trip the
    * expiry path (which intentionally stops refresh on a genuine lapse).
    */
   @Test
-  public void testSlowHeartbeatWriteDoesNotBlockTimer() {
+  public void testSlowHeartbeatWriteDoesNotBlockScheduler() {
     CountDownLatch releaseFirstWrite = new CountDownLatch(1);
     SlowCreateStorage slowStorage =
         new SlowCreateStorage((FileSystem) metaClient.getStorage().getFileSystem(), releaseFirstWrite);
     // interval 1s, write timeout = 1s; high tolerable-misses so the ~1s recovery gap stays well within
-    // the allowable window and the timer keeps beating rather than treating it as a lapse.
+    // the allowable window and the scheduler keeps beating rather than treating it as a lapse.
     HoodieHeartbeatClient hoodieHeartbeatClient =
         new HoodieHeartbeatClient(slowStorage, metaClient.getBasePath().toString(),
             heartBeatInterval, 10);
     try {
       hoodieHeartbeatClient.start(instantTime1);
-      // Despite the first write hanging, the timer must keep generating heartbeats on fresh threads.
+      // Despite the first write hanging, the scheduler must keep generating heartbeats on fresh threads.
       await().atMost(15, SECONDS)
           .until(() -> hoodieHeartbeatClient.getHeartbeat(instantTime1).getNumHeartbeats() >= 2);
     } finally {
       releaseFirstWrite.countDown();
+      hoodieHeartbeatClient.close();
+    }
+  }
+
+  @Test
+  public void testScheduledHeartbeatRetriesAfterWriteFailure() {
+    FailOnceAfterInitialCreateStorage storage =
+        new FailOnceAfterInitialCreateStorage((FileSystem) metaClient.getStorage().getFileSystem());
+    HoodieHeartbeatClient hoodieHeartbeatClient =
+        new HoodieHeartbeatClient(storage, metaClient.getBasePath().toString(), heartBeatInterval, 10);
+    try {
+      hoodieHeartbeatClient.start(instantTime1);
+      await().atMost(10, SECONDS).until(storage::hasInjectedFailure);
+      await().atMost(10, SECONDS)
+          .until(() -> hoodieHeartbeatClient.getHeartbeat(instantTime1).getNumHeartbeats() >= 2);
+    } finally {
       hoodieHeartbeatClient.close();
     }
   }
@@ -173,6 +190,29 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
         }
       }
       return super.create(path, overwrite);
+    }
+  }
+
+  private static class FailOnceAfterInitialCreateStorage extends HoodieHadoopStorage {
+
+    private final AtomicInteger createCalls = new AtomicInteger(0);
+    private final AtomicBoolean injectedFailure = new AtomicBoolean(false);
+
+    FailOnceAfterInitialCreateStorage(FileSystem fs) {
+      super(fs);
+    }
+
+    @Override
+    public OutputStream create(StoragePath path, boolean overwrite) throws IOException {
+      int currentCall = createCalls.incrementAndGet();
+      if (currentCall == 2 && injectedFailure.compareAndSet(false, true)) {
+        throw new IOException("Injected scheduled heartbeat write failure");
+      }
+      return super.create(path, overwrite);
+    }
+
+    private boolean hasInjectedFailure() {
+      return injectedFailure.get();
     }
   }
 }
