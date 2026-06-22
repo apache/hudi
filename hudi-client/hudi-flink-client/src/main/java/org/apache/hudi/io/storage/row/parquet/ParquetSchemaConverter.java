@@ -221,14 +221,14 @@ public class ParquetSchemaConverter {
     return convertToParquetMessageType(name, hoodieSchema);
   }
 
-  public static MessageType convertToParquetMessageType(String name, HoodieSchema schema) {
-    HoodieSchema nonNullSchema = schema.getNonNullType();
-    RowType rowType = HoodieSchemaConverter.convertToRowType(nonNullSchema);
+  public static MessageType convertToParquetMessageType(String name, HoodieSchema oriRowSchema) {
+    HoodieSchema rowSchema = oriRowSchema.getNonNullType();
+    RowType rowType = HoodieSchemaConverter.convertToRowType(rowSchema);
     Type[] types = new Type[rowType.getFieldCount()];
     for (int i = 0; i < rowType.getFieldCount(); i++) {
       String fieldName = rowType.getFieldNames().get(i);
       LogicalType fieldType = rowType.getTypeAt(i);
-      HoodieSchema fieldSchema = HoodieSchemaUtils.getFieldSchema(nonNullSchema, fieldName);
+      HoodieSchema fieldSchema = HoodieSchemaUtils.getFieldSchema(rowSchema, fieldName);
       types[i] = convertToParquetType(
           fieldName,
           fieldType,
@@ -287,8 +287,8 @@ public class ParquetSchemaConverter {
   }
 
   private static Type convertToParquetType(
-      String name, LogicalType type, Type.Repetition repetition, HoodieSchema hoodieSchema) {
-    HoodieSchema resolvedSchema = hoodieSchema.getNonNullType();
+      String name, LogicalType type, Type.Repetition repetition, HoodieSchema oriFieldSchema) {
+    HoodieSchema fieldSchema = oriFieldSchema.getNonNullType();
     switch (type.getTypeRoot()) {
       case CHAR:
       case VARCHAR:
@@ -362,8 +362,8 @@ public class ParquetSchemaConverter {
               .named(name);
         }
       case ARRAY:
-        if (resolvedSchema.getType() == HoodieSchemaType.VECTOR) {
-          HoodieSchema.Vector vectorSchema = (HoodieSchema.Vector) resolvedSchema;
+        if (fieldSchema.getType() == HoodieSchemaType.VECTOR) {
+          HoodieSchema.Vector vectorSchema = (HoodieSchema.Vector) fieldSchema;
           int fixedSize = Math.multiplyExact(
               vectorSchema.getDimension(),
               vectorSchema.getVectorElementType().getElementSize());
@@ -389,7 +389,7 @@ public class ParquetSchemaConverter {
                 "element",
                 arrayType.getElementType(),
                 eleRepetition,
-                resolvedSchema.getElementType()));
+                fieldSchema.getElementType()));
       case MAP:
         // <map-repetition> group <name> (MAP) {
         //   repeated group key_value {
@@ -406,12 +406,12 @@ public class ParquetSchemaConverter {
                 Types
                     .repeatedGroup()
                     .addField(convertToParquetType(
-                        "key", keyType, Type.Repetition.REQUIRED, resolvedSchema.getKeyType()))
+                        "key", keyType, Type.Repetition.REQUIRED, fieldSchema.getKeyType()))
                     .addField(convertToParquetType(
                         "value",
                         valueType,
                         valueType.isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED,
-                        resolvedSchema.getValueType()))
+                        fieldSchema.getValueType()))
                     .named("key_value"))
             .named(name);
       case ROW:
@@ -422,7 +422,7 @@ public class ParquetSchemaConverter {
                 field.getName(),
                 field.getType(),
                 field.getType().isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED,
-                HoodieSchemaUtils.getFieldSchema(resolvedSchema, field.getName()))));
+                HoodieSchemaUtils.getFieldSchema(fieldSchema, field.getName()))));
         return builder.named(name);
       default:
         if (DataTypeAdapter.isVariantType(type)) {

@@ -102,9 +102,9 @@ public class ParquetRowDataWriter {
     recordConsumer.endMessage();
   }
 
-  private FieldWriter createWriter(LogicalType t, HoodieSchema fieldSchema) {
+  private FieldWriter createWriter(LogicalType t, HoodieSchema oriFieldSchema) {
     // strip the nullable wrapper so the element/key/value/record sub-schemas can be resolved directly
-    HoodieSchema nonNullSchema = fieldSchema.getNonNullType();
+    HoodieSchema fieldSchema = oriFieldSchema.getNonNullType();
     switch (t.getTypeRoot()) {
       case CHAR:
       case VARCHAR:
@@ -148,26 +148,26 @@ public class ParquetRowDataWriter {
           return new Timestamp96Writer(tsLtzPrecision);
         }
       case ARRAY:
-        if (nonNullSchema.getType() == HoodieSchemaType.VECTOR) {
-          return new VectorWriter((HoodieSchema.Vector) nonNullSchema);
+        if (fieldSchema.getType() == HoodieSchemaType.VECTOR) {
+          return new VectorWriter((HoodieSchema.Vector) fieldSchema);
         }
         ArrayType arrayType = (ArrayType) t;
         LogicalType elementType = arrayType.getElementType();
-        FieldWriter elementWriter = createWriter(elementType, nonNullSchema.getElementType());
+        FieldWriter elementWriter = createWriter(elementType, fieldSchema.getElementType());
         return new ArrayWriter(elementWriter);
       case MAP:
         MapType mapType = (MapType) t;
         LogicalType keyType = mapType.getKeyType();
         LogicalType valueType = mapType.getValueType();
-        FieldWriter keyWriter = createWriter(keyType, nonNullSchema.getKeyType());
-        FieldWriter valueWriter = createWriter(valueType, nonNullSchema.getValueType());
+        FieldWriter keyWriter = createWriter(keyType, fieldSchema.getKeyType());
+        FieldWriter valueWriter = createWriter(valueType, fieldSchema.getValueType());
         return new MapWriter(keyWriter, valueWriter);
       case ROW:
         RowType rowType = (RowType) t;
-        ValidationUtils.checkArgument(nonNullSchema.getType() == HoodieSchemaType.RECORD || nonNullSchema.getType() == HoodieSchemaType.BLOB,
+        ValidationUtils.checkArgument(fieldSchema.getType() == HoodieSchemaType.RECORD || fieldSchema.getType() == HoodieSchemaType.BLOB,
             "Hoodie schema should be RECORD or BLOB type.");
         FieldWriter[] fieldWriters = rowType.getFields().stream()
-            .map(field -> createWriter(field.getType(), HoodieSchemaUtils.getFieldSchema(nonNullSchema, field.getName())))
+            .map(field -> createWriter(field.getType(), HoodieSchemaUtils.getFieldSchema(fieldSchema, field.getName())))
             .toArray(FieldWriter[]::new);
         String[] fieldNames = rowType.getFields().stream()
             .map(RowType.RowField::getName).toArray(String[]::new);
