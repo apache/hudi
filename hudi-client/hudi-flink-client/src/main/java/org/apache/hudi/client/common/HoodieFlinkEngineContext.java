@@ -52,7 +52,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.FlinkClientUtil;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -115,9 +114,9 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
 
   @Override
   public <T> HoodieData<T> union(List<HoodieData<T>> dataList) {
-    List<T> allData = new ArrayList<>();
-    dataList.forEach(hoodieData -> allData.addAll(hoodieData.collectAsList()));
-    return HoodieListData.eager(allData);
+    return HoodieListData.eager(dataList.stream()
+        .flatMap(hoodieData -> hoodieData.collectAsList().stream())
+        .collect(Collectors.toList()));
   }
 
   @Override
