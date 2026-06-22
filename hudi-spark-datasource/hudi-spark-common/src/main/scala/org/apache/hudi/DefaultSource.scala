@@ -110,7 +110,7 @@ class DefaultSource extends RelationProvider
     // Add default options for unspecified read options keys.
     // Effective precedence (low -> high):
     // 1) global DFS props
-    // 2) spark.hoodie.* SQL confs (normalized in parametersWithReadDefaults)
+    // 2) spark.hoodie.* SQL confs (normalized to hoodie.* in collectHoodieAndSparkHoodieConfs)
     // 3) hoodie.* SQL confs
     // 4) explicit DataFrame/DataSource options
     val parameters = DataSourceOptionsHelper.parametersWithReadDefaults(
@@ -170,11 +170,11 @@ class DefaultSource extends RelationProvider
                               mode: SaveMode,
                               optParams: Map[String, String],
                               df: DataFrame): BaseRelation = {
-    // Pull `hoodie.*` and `spark.hoodie.*` from SparkConf and merge with explicit options
-    // (explicit options win). This mirrors what the read createRelation already does, so
-    // configs like `--conf spark.hoodie.datasource.hive_sync.use_spark_catalog=true` are
-    // honored on writes too. The spark.* prefix is stripped downstream in
-    // parametersWithWriteDefaults.
+    // Pull `hoodie.*` and `spark.hoodie.*` from SparkConf, normalize `spark.hoodie.*` to
+    // canonical `hoodie.*`, and merge with explicit options (explicit options win). This
+    // mirrors what the read createRelation already does, so configs like
+    // `--conf spark.hoodie.datasource.hive_sync.use_spark_catalog=true` are honored on
+    // writes too. `HoodieSparkSqlWriter` and downstream callers see only canonical keys.
     val effectiveOpts =
       DataSourceOptionsHelper.collectHoodieAndSparkHoodieConfs(sqlContext, optParams)
     try {
