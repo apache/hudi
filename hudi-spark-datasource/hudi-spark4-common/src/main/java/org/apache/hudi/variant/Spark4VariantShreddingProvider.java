@@ -560,47 +560,52 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
       return toByteArray((ByteBuffer) record.get(fieldNameFor(ordinal)));
     }
 
-    // The scalar getters below read typed_value directly: Spark only invokes them for the scalar
-    // typed_value (ordinal == typedIdx), so resolving via fieldNameFor(ordinal) would be redundant.
-    // isNullAt/getBinary stay on fieldNameFor because they are also called for value/metadata.
+    // The scalar/struct/array getters below ignore `ordinal` and read typed_value directly via
+    // typedValue(): Spark's rebuild() only invokes them for the scalar typed_value (ordinal ==
+    // typedIdx), so dispatching via fieldNameFor(ordinal) would be redundant. isNullAt/getBinary
+    // stay on fieldNameFor because rebuild() also calls them for the value/metadata fields.
+    private Object typedValue() {
+      return record.get(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD);
+    }
+
     @Override public boolean getBoolean(int ordinal) {
-      return (Boolean) record.get(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD);
+      return (Boolean) typedValue();
     }
 
     @Override public byte getByte(int ordinal) {
-      return ((Number) record.get(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD)).byteValue();
+      return ((Number) typedValue()).byteValue();
     }
 
     @Override public short getShort(int ordinal) {
-      return ((Number) record.get(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD)).shortValue();
+      return ((Number) typedValue()).shortValue();
     }
 
     @Override public int getInt(int ordinal) {
-      return ((Number) record.get(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD)).intValue();
+      return ((Number) typedValue()).intValue();
     }
 
     @Override public long getLong(int ordinal) {
-      return ((Number) record.get(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD)).longValue();
+      return ((Number) typedValue()).longValue();
     }
 
     @Override public float getFloat(int ordinal) {
-      return ((Number) record.get(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD)).floatValue();
+      return ((Number) typedValue()).floatValue();
     }
 
     @Override public double getDouble(int ordinal) {
-      return ((Number) record.get(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD)).doubleValue();
+      return ((Number) typedValue()).doubleValue();
     }
 
     @Override public String getString(int ordinal) {
-      return record.get(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD).toString();
+      return typedValue().toString();
     }
 
     @Override public UUID getUuid(int ordinal) {
-      return UUID.fromString(record.get(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD).toString());
+      return UUID.fromString(typedValue().toString());
     }
 
     @Override public BigDecimal getDecimal(int ordinal, int precision, int scale) {
-      Object value = record.get(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD);
+      Object value = typedValue();
       if (value instanceof BigDecimal) {
         return (BigDecimal) value;
       }
@@ -617,11 +622,11 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
 
     @Override public ShreddingUtils.ShreddedRow getStruct(int ordinal, int numFields) {
       // Object shredding: typed_value is a record whose fields are the shredded object fields.
-      return new AvroObjectRow((GenericRecord) record.get(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD), schema);
+      return new AvroObjectRow((GenericRecord) typedValue(), schema);
     }
 
     @Override public ShreddingUtils.ShreddedRow getArray(int ordinal) {
-      return new AvroArrayRow((List<?>) record.get(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD), schema.arraySchema);
+      return new AvroArrayRow((List<?>) typedValue(), schema.arraySchema);
     }
   }
 
