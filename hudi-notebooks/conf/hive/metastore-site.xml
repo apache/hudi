@@ -28,24 +28,15 @@
 		<name>metastore.expression.proxy</name>
 		<value>org.apache.hadoop.hive.metastore.DefaultPartitionExpressionProxy</value>
 	</property>
+	<!-- Pre-event listeners (runs before the metadata operation is committed) -->
 	<property>
-		<name>fs.s3a.impl</name>
-		<value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+		<name>hive.metastore.pre.event.listeners</name>
+		<value>org.apache.hadoop.hive.ql.security.authorization.AuthorizationPreEventListener</value>
 	</property>
+
+	<!-- Post-event listeners (runs after the metadata operation is committed) -->
 	<property>
-		<name>fs.s3a.access.key</name>
-		<value>admin</value>
-	</property>
-	<property>
-		<name>fs.s3a.secret.key</name>
-		<value>password</value>
-	</property>
-	<property>
-		<name>fs.s3a.endpoint</name>
-		<value>http://minio:9000</value>
-	</property>
-	<property>
-		<name>fs.s3a.path.style.access</name>
-		<value>true</value>
+		<name>hive.metastore.event.listeners</name>
+		<value>org.apache.atlas.hive.hook.HiveHook</value>
 	</property>
 </configuration>

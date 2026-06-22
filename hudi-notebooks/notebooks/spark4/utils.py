@@ -107,16 +107,28 @@ def get_spark_session(
         )
         print(f"Hudi bundle not found at {local_jar}; downloading {jar_url} ...")
         urllib.request.urlretrieve(jar_url, local_jar)
-
+        
+    lance_version = "0.5.0"
+    lance_jar = f"lance-spark-bundle-{spark_minor_version}_{scala_version}-{lance_version}.jar"
+    lance_local_jar = os.path.join('/opt/lance', lance_version, lance_jar)
+    if not os.path.exists(lance_local_jar):
+        os.makedirs(os.path.dirname(lance_local_jar), exist_ok=True)
+        lance_jar_url = (
+            f"https://repo1.maven.org/maven2/org/lance/lance-spark-bundle-{spark_minor_version}_{scala_version}/{lance_version}/{lance_jar}"
+        )
+        print(f"Lance bundle not found at {lance_local_jar}; downloading {lance_jar_url} ...")
+        urllib.request.urlretrieve(lance_jar_url, lance_local_jar)
+    
     # Add the bundle to the driver AND executor extraClassPath so Hudi's classes load on
     # the system classpath of every JVM. On a standalone cluster this avoids a
     # ClassCastException when metadata-table log blocks are read on the executor's
     # parallel-stream (ForkJoinPool) threads, whose context classloader is the system loader.
     _spark = (
         SparkSession.builder.appName(app_name)
-        .config("spark.driver.extraClassPath", local_jar)
-        .config("spark.executor.extraClassPath", local_jar)
+        .config("spark.driver.extraClassPath", f"{local_jar}:{lance_local_jar}")
+        .config("spark.executor.extraClassPath", f"{local_jar}:{lance_local_jar}")
         .config("spark.hadoop.fs.defaultFS", "s3a://warehouse")
+        .config("spark.hadoop.fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
         .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
         .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
@@ -150,8 +162,8 @@ def ls(base_path):
     Args:
         base_path: Path starting with 's3a://' (e.g. s3a://warehouse/hudi_table/).
     """
-    if not base_path.startswith("s3a://"):
-        raise ValueError("Path must start with 's3a://'")
+    #if not base_path.startswith("s3a://"):
+    #    raise ValueError("Path must start with 's3a://'")
 
     global _spark
     if _spark is None:
@@ -171,6 +183,15 @@ def ls(base_path):
     except Exception as e:
         print(f"Exception occurred while listing files from path {base_path}", e)
 
+
+def drop_table(table_name:str = None, table_path:str = None):
+    if table_name:
+        _spark.sql(f"""
+            DROP TABLE IF EXISTS {table_name}
+        """)
+    if table_path:
+        _path = _spark._jvm.org.apache.hadoop.fs.Path(table_path)
+        _path.getFileSystem(_spark._jsc.hadoopConfiguration()).delete(_path, True)
 
 def display(df, num_rows=None):
     """

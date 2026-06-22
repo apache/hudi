@@ -67,6 +67,7 @@ COPY notebooks/common/images/ $NOTEBOOK_HOME/images/
 COPY notebooks/spark4/utils.py $NOTEBOOK_HOME/utils.py
 COPY notebooks/spark4/*.ipynb $NOTEBOOK_HOME/
 COPY conf/spark4/ $SPARK_HOME/conf/
+COPY conf/hadoop/core-site.xml $SPARK_HOME/conf/core-site.xml
 COPY entrypoint.sh $SPARK_HOME/entrypoint.sh
 RUN chmod +x /opt/spark/entrypoint.sh
 
