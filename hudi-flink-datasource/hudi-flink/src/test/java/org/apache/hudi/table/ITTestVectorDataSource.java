@@ -19,7 +19,9 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -28,6 +30,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -37,6 +40,11 @@ import org.apache.hudi.sink.clustering.ClusteringCommitSink;
 import org.apache.hudi.sink.clustering.ClusteringOperator;
 import org.apache.hudi.sink.clustering.ClusteringPlanSourceFunction;
 import org.apache.hudi.sink.clustering.FlinkClusteringConfig;
+import org.apache.hudi.sink.compact.CompactOperator;
+import org.apache.hudi.sink.compact.CompactionCommitEvent;
+import org.apache.hudi.sink.compact.CompactionCommitSink;
+import org.apache.hudi.sink.compact.CompactionPlanSourceFunction;
+import org.apache.hudi.sink.compact.FlinkCompactionConfig;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.HoodieSchemaConverter;
@@ -55,19 +63,27 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
+import org.apache.parquet.hadoop.ParquetFileReader;
+import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.schema.PrimitiveType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
 import java.lang.reflect.Array;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -150,6 +166,29 @@ public class ITTestVectorDataSource {
     assertFloatArray(vectorProjection.get(0).getField(1), new float[] {-1.0f, -2.0f, -3.0f, -4.0f});
   }
 
+  @Test
+  public void testColumnProjectionContainsVectorColumn() throws Exception {
+    TableEnvironment tableEnv = TestTableEnvs.getBatchTableEnv();
+    String tablePath = tempDir.resolve("projection_with_vector").toUri().toString();
+    createVectorTable(tableEnv, "vector_table", tablePath, HoodieTableType.COPY_ON_WRITE, "embedding:2,features:2");
+
+    execInsertSql(tableEnv,
+        "INSERT INTO vector_table(id, embedding, features, label, tags, ts) VALUES "
+            + "('id1', ARRAY[CAST(1.0 AS FLOAT), CAST(1.5 AS FLOAT)], "
+            + " ARRAY[CAST(10.0 AS DOUBLE), CAST(10.5 AS DOUBLE)], 'label1', ARRAY['red', 'blue'], 1), "
+            + "('id2', ARRAY[CAST(2.0 AS FLOAT), CAST(2.5 AS FLOAT)], "
+            + " ARRAY[CAST(20.0 AS DOUBLE), CAST(20.5 AS DOUBLE)], 'label2', ARRAY['green'], 2)");
+
+    List<Row> rows = collect(tableEnv,
+        "SELECT label, embedding, tags, features FROM vector_table WHERE id = 'id1'");
+    assertEquals(1, rows.size());
+    Row row = rows.get(0);
+    assertEquals("label1", row.getField(0));
+    assertFloatArray(row.getField(1), new float[] {1.0f, 1.5f});
+    assertObjectArray(row.getField(2), new Object[] {"red", "blue"});
+    assertDoubleArray(row.getField(3), new double[] {10.0d, 10.5d});
+  }
+
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
   public void testVectorAppendWriteRoundTrip(HoodieTableType tableType) throws Exception {
@@ -190,6 +229,54 @@ public class ITTestVectorDataSource {
     assertByteArray(rows.get(1).getField(3), new byte[] {-1, -2, -3});
     assertEquals("append2", rows.get(1).getField(4));
     assertEquals(2000L, rows.get(1).getField(5));
+  }
+
+  @Test
+  public void testVectorWithNonVectorArrayColumn() throws Exception {
+    TableEnvironment tableEnv = TestTableEnvs.getBatchTableEnv();
+    String tablePath = tempDir.resolve("vector_with_array").toUri().toString();
+    createVectorTable(tableEnv, "vector_table", tablePath, HoodieTableType.COPY_ON_WRITE, "embedding:2");
+
+    execInsertSql(tableEnv,
+        "INSERT INTO vector_table(id, embedding, label, tags, ts) VALUES "
+            + "('id1', ARRAY[CAST(1.0 AS FLOAT), CAST(1.1 AS FLOAT)], 'array1', ARRAY['red', 'blue'], 1), "
+            + "('id2', ARRAY[CAST(2.0 AS FLOAT), CAST(2.2 AS FLOAT)], 'array2', ARRAY['green'], 2)");
+
+    assertStoredVectorSchema(tablePath, "embedding", 2, HoodieSchema.Vector.VectorElementType.FLOAT);
+
+    List<Row> rows = collect(tableEnv, "SELECT id, embedding, tags FROM vector_table ORDER BY id");
+    assertEquals(2, rows.size());
+    assertEquals("id1", rows.get(0).getField(0));
+    assertFloatArray(rows.get(0).getField(1), new float[] {1.0f, 1.1f});
+    assertObjectArray(rows.get(0).getField(2), new Object[] {"red", "blue"});
+    assertEquals("id2", rows.get(1).getField(0));
+    assertFloatArray(rows.get(1).getField(1), new float[] {2.0f, 2.2f});
+    assertObjectArray(rows.get(1).getField(2), new Object[] {"green"});
+  }
+
+  @Test
+  public void testVectorColumnsWithDifferentDimensions() throws Exception {
+    TableEnvironment tableEnv = TestTableEnvs.getBatchTableEnv();
+    String tablePath = tempDir.resolve("different_dimensions").toUri().toString();
+    createDifferentDimensionVectorTable(tableEnv, tablePath);
+
+    execInsertSql(tableEnv,
+        "INSERT INTO dimension_vector_table VALUES "
+            + "('id1', "
+            + floatArrayLiteral(2) + ", "
+            + floatArrayLiteral(128) + ", "
+            + floatArrayLiteral(2048) + ", "
+            + "1)");
+
+    assertStoredVectorSchema(tablePath, "vec2", 2, HoodieSchema.Vector.VectorElementType.FLOAT);
+    assertStoredVectorSchema(tablePath, "vec128", 128, HoodieSchema.Vector.VectorElementType.FLOAT);
+    assertStoredVectorSchema(tablePath, "vec2048", 2048, HoodieSchema.Vector.VectorElementType.FLOAT);
+
+    List<Row> rows = collect(tableEnv, "SELECT vec2, vec128, vec2048 FROM dimension_vector_table WHERE id = 'id1'");
+    assertEquals(1, rows.size());
+    assertFloatArray(rows.get(0).getField(0), new float[] {0.0f, 1.0f});
+    assertFloatArrayLengthAndEndpoints(rows.get(0).getField(1), 128, 0.0f, 127.0f);
+    assertFloatArrayLengthAndEndpoints(rows.get(0).getField(2), 2048, 0.0f, 2047.0f);
   }
 
   @ParameterizedTest
@@ -249,8 +336,44 @@ public class ITTestVectorDataSource {
     assertClusteredVectorRows(tableEnv);
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"avro", "parquet"})
+  public void testVectorMergeOnReadCompaction(String logBlockFormat) throws Exception {
+    TableEnvironment tableEnv = TestTableEnvs.getBatchTableEnv();
+    String tablePath = tempDir.resolve("compaction_" + logBlockFormat).toUri().toString();
+    String vectorColsConf = "embedding:2,features:2,codes:2";
+    createVectorTable(
+        tableEnv,
+        "vector_table",
+        tablePath,
+        HoodieTableType.MERGE_ON_READ,
+        vectorColsConf,
+        null,
+        Collections.singletonMap(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logBlockFormat));
+
+    execInsertSql(tableEnv,
+        "INSERT INTO vector_table(id, embedding, features, codes, label, ts) VALUES "
+            + "('id1', ARRAY[CAST(1.0 AS FLOAT), CAST(1.1 AS FLOAT)], ARRAY[CAST(10.0 AS DOUBLE), CAST(10.1 AS DOUBLE)], "
+            + " ARRAY[CAST(1 AS TINYINT), CAST(2 AS TINYINT)], 'old1', 1), "
+            + "('id2', ARRAY[CAST(2.0 AS FLOAT), CAST(2.2 AS FLOAT)], ARRAY[CAST(20.0 AS DOUBLE), CAST(20.2 AS DOUBLE)], "
+            + " ARRAY[CAST(3 AS TINYINT), CAST(4 AS TINYINT)], 'old2', 2)");
+    execInsertSql(tableEnv,
+        "INSERT INTO vector_table(id, embedding, features, codes, label, ts) VALUES "
+            + "('id1', ARRAY[CAST(9.0 AS FLOAT), CAST(9.9 AS FLOAT)], ARRAY[CAST(90.0 AS DOUBLE), CAST(90.9 AS DOUBLE)], "
+            + " ARRAY[CAST(9 AS TINYINT), CAST(8 AS TINYINT)], 'new1', 10), "
+            + "('id3', ARRAY[CAST(3.0 AS FLOAT), CAST(3.3 AS FLOAT)], ARRAY[CAST(30.0 AS DOUBLE), CAST(30.3 AS DOUBLE)], "
+            + " ARRAY[CAST(5 AS TINYINT), CAST(6 AS TINYINT)], 'new3', 3)");
+
+    runCompaction(tablePath, vectorColsConf);
+
+    assertStoredVectorSchema(tablePath, "embedding", 2, HoodieSchema.Vector.VectorElementType.FLOAT);
+    assertStoredVectorSchema(tablePath, "features", 2, HoodieSchema.Vector.VectorElementType.DOUBLE);
+    assertStoredVectorSchema(tablePath, "codes", 2, HoodieSchema.Vector.VectorElementType.INT8);
+    assertCompactedVectorRows(tableEnv);
+  }
+
   @Test
-  public void testVectorDimensionMismatchFails() {
+  public void testDimensionMismatchOnWrite() {
     TableEnvironment tableEnv = TestTableEnvs.getBatchTableEnv();
     String tablePath = tempDir.resolve("dimension_mismatch").toUri().toString();
     createVectorTable(tableEnv, "vector_table", tablePath, HoodieTableType.COPY_ON_WRITE, "embedding:3");
@@ -260,6 +383,57 @@ public class ITTestVectorDataSource {
             + "('id1', ARRAY[CAST(1.0 AS FLOAT), CAST(2.0 AS FLOAT)], 'bad', 1)"));
     assertTrue(containsMessage(exception, "dimension mismatch"),
         "Expected dimension mismatch in exception chain, got: " + exception.getMessage());
+  }
+
+  @Test
+  public void testParquetFooterContainsVectorMetadata() throws Exception {
+    TableEnvironment tableEnv = TestTableEnvs.getBatchTableEnv();
+    Path tableDir = tempDir.resolve("vector_footer");
+    String tablePath = tableDir.toUri().toString();
+    createVectorTable(tableEnv, "vector_table", tablePath, HoodieTableType.COPY_ON_WRITE, "embedding:2,features:2,codes:2");
+
+    execInsertSql(tableEnv,
+        "INSERT INTO vector_table(id, embedding, features, codes, label, ts) VALUES "
+            + "('id1', ARRAY[CAST(1.0 AS FLOAT), CAST(1.5 AS FLOAT)], ARRAY[CAST(10.0 AS DOUBLE), CAST(10.5 AS DOUBLE)], "
+            + " ARRAY[CAST(1 AS TINYINT), CAST(2 AS TINYINT)], 'footer', 1)");
+
+    Path parquetFile = findFirstParquetFile(tableDir);
+    try (ParquetFileReader reader = ParquetFileReader.open(
+        new org.apache.hadoop.conf.Configuration(), new org.apache.hadoop.fs.Path(parquetFile.toUri()))) {
+      ParquetMetadata metadata = reader.getFooter();
+      assertEquals("embedding:VECTOR(2),features:VECTOR(2, DOUBLE),codes:VECTOR(2, INT8)",
+          metadata.getFileMetaData().getKeyValueMetaData().get(HoodieSchema.VECTOR_COLUMNS_METADATA_KEY));
+
+      PrimitiveType embeddingType = metadata.getFileMetaData().getSchema().getType("embedding").asPrimitiveType();
+      assertEquals(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, embeddingType.getPrimitiveTypeName());
+      assertEquals(8, embeddingType.getTypeLength());
+      PrimitiveType featuresType = metadata.getFileMetaData().getSchema().getType("features").asPrimitiveType();
+      assertEquals(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, featuresType.getPrimitiveTypeName());
+      assertEquals(16, featuresType.getTypeLength());
+      PrimitiveType codesType = metadata.getFileMetaData().getSchema().getType("codes").asPrimitiveType();
+      assertEquals(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, codesType.getPrimitiveTypeName());
+      assertEquals(2, codesType.getTypeLength());
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("invalidVectorColumnConfigs")
+  public void testInvalidVectorColumns(String vectorColumns, String expectedMessage) {
+    TableEnvironment tableEnv = TestTableEnvs.getBatchTableEnv();
+    String tableName = "invalid_vector_" + Integer.toHexString(vectorColumns.hashCode()).replace('-', '_');
+    String tablePath = tempDir.resolve(tableName).toUri().toString();
+
+    Exception exception = assertThrows(Exception.class, () -> {
+      createVectorTable(tableEnv, tableName, tablePath, HoodieTableType.COPY_ON_WRITE, vectorColumns);
+      execInsertSql(tableEnv,
+          "INSERT INTO " + tableName + "(id, embedding, features, codes, label, tags, ts) VALUES "
+              + "('id1', ARRAY[CAST(1.0 AS FLOAT), CAST(2.0 AS FLOAT)], "
+              + " ARRAY[CAST(1.0 AS DOUBLE), CAST(2.0 AS DOUBLE)], "
+              + " ARRAY[CAST(1 AS TINYINT), CAST(2 AS TINYINT)], "
+              + " 'label1', ARRAY['tag1'], 1)");
+    });
+    assertTrue(containsMessage(exception, expectedMessage),
+        "Expected exception chain to contain '" + expectedMessage + "', got: " + exception.getMessage());
   }
 
   private static void createVectorTable(
@@ -313,6 +487,29 @@ public class ITTestVectorDataSource {
             + " nullable_embedding ARRAY<FLOAT>,"
             + " label STRING,"
             + " tags ARRAY<STRING>,"
+            + " ts BIGINT,"
+            + " PRIMARY KEY (id) NOT ENFORCED"
+            + ") WITH ("
+            + formatOptions(options)
+            + ")");
+  }
+
+  private static void createDifferentDimensionVectorTable(TableEnvironment tableEnv, String tablePath) {
+    Map<String, String> options = new LinkedHashMap<>();
+    options.put("connector", "hudi");
+    options.put("path", tablePath);
+    options.put(FlinkOptions.TABLE_TYPE.key(), HoodieTableType.COPY_ON_WRITE.name());
+    options.put(FlinkOptions.ORDERING_FIELDS.key(), "ts");
+    options.put(FlinkOptions.VECTOR_COLUMNS.key(), "vec2:2,vec128:128,vec2048:2048");
+    options.put(FlinkOptions.WRITE_TASKS.key(), "1");
+    options.put(FlinkOptions.READ_TASKS.key(), "1");
+
+    tableEnv.executeSql(
+        "CREATE TABLE dimension_vector_table ("
+            + " id STRING,"
+            + " vec2 ARRAY<FLOAT>,"
+            + " vec128 ARRAY<FLOAT>,"
+            + " vec2048 ARRAY<FLOAT>,"
             + " ts BIGINT,"
             + " PRIMARY KEY (id) NOT ENFORCED"
             + ") WITH ("
@@ -376,6 +573,60 @@ public class ITTestVectorDataSource {
       env.execute("flink_hudi_vector_clustering");
       assertTrue(table.getMetaClient().reloadActiveTimeline().filterCompletedInstants().containsInstant(instant.requestedTime()));
     }
+  }
+
+  private static void runCompaction(String tablePath, String vectorColsConf) throws Exception {
+    FlinkCompactionConfig cfg = new FlinkCompactionConfig();
+    cfg.path = tablePath;
+    Configuration conf = FlinkCompactionConfig.toFlinkConfig(cfg);
+
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    conf.set(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, metaClient.getTableConfig().getRecordKeyFieldProp());
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    conf.set(FlinkOptions.VECTOR_COLUMNS, vectorColsConf);
+    CompactionUtil.setPartitionField(conf, metaClient);
+    CompactionUtil.setAvroSchema(conf, metaClient);
+    CompactionUtil.inferChangelogMode(conf, metaClient);
+
+    try (HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(conf)) {
+      HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+      Option<String> compactionInstantTime = writeClient.scheduleCompaction(Option.empty());
+      assertTrue(compactionInstantTime.isPresent(), "The compaction plan should be scheduled");
+
+      HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
+          table.getMetaClient(), compactionInstantTime.get());
+      assertTrue(compactionPlan.getOperations().size() > 0, "The compaction plan should contain operations");
+
+      HoodieInstant instant = INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstantTime.get());
+      table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
+
+      StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+      env.addSource(new CompactionPlanSourceFunction(Collections.singletonList(Pair.of(compactionInstantTime.get(), compactionPlan)), conf))
+          .name("compaction_source")
+          .uid("uid_vector_compaction_source")
+          .rebalance()
+          .transform("compact_task",
+              TypeInformation.of(CompactionCommitEvent.class),
+              new CompactOperator(conf))
+          .setParallelism(compactionPlan.getOperations().size())
+          .addSink(new CompactionCommitSink(conf))
+          .name("compaction_commit")
+          .uid("uid_vector_compaction_commit")
+          .setParallelism(1);
+
+      env.execute("flink_hudi_vector_compaction");
+      assertTrue(table.getMetaClient().reloadActiveTimeline().filterCompletedInstants().containsInstant(instant.requestedTime()));
+    }
+  }
+
+  private static Stream<Object[]> invalidVectorColumnConfigs() {
+    return Stream.of(
+        new Object[] {"missing:2", "does not exist"},
+        new Object[] {"label:2", "must be declared as ARRAY<FLOAT>, ARRAY<DOUBLE>, or ARRAY<TINYINT>"},
+        new Object[] {"tags:2", "must use ARRAY<FLOAT>, ARRAY<DOUBLE>, or ARRAY<TINYINT>"},
+        new Object[] {"embedding:0", "dimension must be positive"},
+        new Object[] {"embedding:2,embedding:3", "Duplicate VECTOR column descriptor"});
   }
 
   private static String formatOptions(Map<String, String> options) {
@@ -445,6 +696,27 @@ public class ITTestVectorDataSource {
     return CollectionUtil.iteratorToList(tableEnv.executeSql(query).collect());
   }
 
+  private static Path findFirstParquetFile(Path tableDir) throws IOException {
+    try (Stream<Path> paths = Files.walk(tableDir)) {
+      return paths
+          .filter(Files::isRegularFile)
+          .filter(path -> path.getFileName().toString().endsWith(".parquet"))
+          .findFirst()
+          .orElseThrow(() -> new AssertionError("Expected a parquet base file under " + tableDir));
+    }
+  }
+
+  private static String floatArrayLiteral(int dimension) {
+    StringBuilder builder = new StringBuilder("ARRAY[");
+    for (int i = 0; i < dimension; i++) {
+      if (i > 0) {
+        builder.append(", ");
+      }
+      builder.append("CAST(").append(i).append(".0 AS FLOAT)");
+    }
+    return builder.append(']').toString();
+  }
+
   private static void assertStoredVectorSchema(
       String tablePath,
       String fieldName,
@@ -483,6 +755,12 @@ public class ITTestVectorDataSource {
     for (int i = 0; i < expected.length; i++) {
       assertEquals(expected[i], ((Number) arrayValue(value, i)).floatValue(), 0.00001f);
     }
+  }
+
+  private static void assertFloatArrayLengthAndEndpoints(Object value, int expectedLength, float first, float last) {
+    assertEquals(expectedLength, arrayLength(value));
+    assertEquals(first, ((Number) arrayValue(value, 0)).floatValue(), 0.00001f);
+    assertEquals(last, ((Number) arrayValue(value, expectedLength - 1)).floatValue(), 0.00001f);
   }
 
   private static void assertDoubleArray(Object value, double[] expected) {
