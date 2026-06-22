@@ -98,19 +98,20 @@ def get_spark_session(
 
     # Resolve the Hudi bundle to a local path. The image pre-downloads it under
     # $HUDI_HOME; if it is missing, fetch it from Maven Central now.
-    local_jar = os.path.join(hudi_home, hudi_version, bundle_jar)
-    if not os.path.exists(local_jar):
-        os.makedirs(os.path.dirname(local_jar), exist_ok=True)
-        jar_url = (
+    hudi_local_jar = os.path.join(hudi_home, hudi_version, bundle_jar)
+    if not os.path.exists(hudi_local_jar):
+        os.makedirs(os.path.dirname(hudi_local_jar), exist_ok=True)
+        hudi_jar_url = (
             f"https://repo1.maven.org/maven2/org/apache/hudi/"
             f"{bundle_name}/{hudi_version}/{bundle_jar}"
         )
-        print(f"Hudi bundle not found at {local_jar}; downloading {jar_url} ...")
-        urllib.request.urlretrieve(jar_url, local_jar)
+        print(f"Hudi bundle not found at {hudi_local_jar}; downloading {hudi_jar_url} ...")
+        urllib.request.urlretrieve(hudi_jar_url, hudi_local_jar)
         
     lance_version = "0.5.0"
+    lance_home = "/opt/lance"
     lance_jar = f"lance-spark-bundle-{spark_minor_version}_{scala_version}-{lance_version}.jar"
-    lance_local_jar = os.path.join('/opt/lance', lance_version, lance_jar)
+    lance_local_jar = os.path.join(lance_home, lance_version, lance_jar)
     if not os.path.exists(lance_local_jar):
         os.makedirs(os.path.dirname(lance_local_jar), exist_ok=True)
         lance_jar_url = (
@@ -119,16 +120,11 @@ def get_spark_session(
         print(f"Lance bundle not found at {lance_local_jar}; downloading {lance_jar_url} ...")
         urllib.request.urlretrieve(lance_jar_url, lance_local_jar)
     
-    # Add the bundle to the driver AND executor extraClassPath so Hudi's classes load on
-    # the system classpath of every JVM. On a standalone cluster this avoids a
-    # ClassCastException when metadata-table log blocks are read on the executor's
-    # parallel-stream (ForkJoinPool) threads, whose context classloader is the system loader.
+    extraclasspath = f"{hudi_local_jar}:{lance_local_jar}"
     _spark = (
         SparkSession.builder.appName(app_name)
-        .config("spark.driver.extraClassPath", f"{local_jar}:{lance_local_jar}")
-        .config("spark.executor.extraClassPath", f"{local_jar}:{lance_local_jar}")
-        .config("spark.hadoop.fs.defaultFS", "s3a://warehouse")
-        .config("spark.hadoop.fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+        .config("spark.driver.extraClassPath", extraclasspath)
+        .config("spark.executor.extraClassPath", extraclasspath)
         .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
         .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
@@ -184,15 +180,58 @@ def ls(base_path):
         print(f"Exception occurred while listing files from path {base_path}", e)
 
 
-def drop_table(table_name:str = None, table_path:str = None):
-    if table_name:
-        _spark.sql(f"""
-            DROP TABLE IF EXISTS {table_name}
-        """)
-    if table_path:
+def drop_table(table_name: str = None, table_path: str = None):
+    try:
+        _spark.sql(f"DROP TABLE IF EXISTS {table_name}")
+        print(f"✓ Table '{table_name}' dropped successfully.")
+    except Exception as e:
+        raise RuntimeError(f"Failed to drop table '{table_name}': {e}") from e
+    try:
         _path = _spark._jvm.org.apache.hadoop.fs.Path(table_path)
         _path.getFileSystem(_spark._jsc.hadoopConfiguration()).delete(_path, True)
+    except Exception as e:
+        raise RuntimeError(f"Failed to delete a files from path '{table_path}': {e}") from e
 
+def create_table(sql_query: str, table_name: str, table_path: str = None, describe: bool = True) -> None:
+    drop_table(table_name, table_path)
+    try:
+        _spark.sql(sql_query)
+        print(f"✓ Table '{table_name}' created successfully.")
+        if describe:
+            desc_table(table_name)
+    except Exception as e:
+        raise RuntimeError(
+        f"Failed to create table '{table_name}': {e}"
+    ) from e
+
+
+def desc_table(table_name: str) -> None:
+    print(f"\nSchema for '{table_name}':\n")
+    display(
+        _spark.sql(f"DESCRIBE EXTENDED {table_name}")
+    )
+
+
+def get_count(table_name:str = None) -> int: 
+    return (
+        _spark.table(table_name)
+        .count()
+    )
+
+
+def insert_data(insert_query: str, table_name: str, show_count: bool = True) -> None:
+    try:
+        _spark.sql(insert_query)
+        message = f"✓ Data inserted successfully into '{table_name}'."
+        if show_count:
+            message += f" Total Records: {get_count(table_name):,}"
+        print(message)
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to insert data into '{table_name}': {e}"
+        ) from e
+        
+    
 def display(df, num_rows=None):
     """
     Display a PySpark DataFrame as a formatted HTML table (Databricks-style).
