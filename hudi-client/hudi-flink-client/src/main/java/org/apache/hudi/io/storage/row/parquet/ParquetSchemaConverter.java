@@ -148,9 +148,17 @@ public class ParquetSchemaConverter {
           dataType = DataTypes.of(new TimestampType(9));
           break;
         case FIXED_LEN_BYTE_ARRAY:
-          LogicalTypeAnnotation.DecimalLogicalTypeAnnotation decimalType =
-              (LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) logicalType;
-          dataType = DataTypes.of(new DecimalType(decimalType.getPrecision(), decimalType.getScale()));
+          if (logicalType instanceof LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) {
+            LogicalTypeAnnotation.DecimalLogicalTypeAnnotation decimalType =
+                (LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) logicalType;
+            dataType = DataTypes.of(new DecimalType(decimalType.getPrecision(), decimalType.getScale()));
+          } else {
+            // VECTOR columns are stored as bare FIXED_LEN_BYTE_ARRAY without a Parquet logical type annotation,
+            // HoodieParquetFileFormatHelper#buildImplicitSchemaChangeInfo.
+            // Treat the physical type as bytes here; vector semantics are restored
+            // from the schema/footer metadata by the vector-aware read path.
+            dataType = DataTypes.BYTES();
+          }
           break;
         default:
           throw new UnsupportedOperationException("Unsupported type: " + parquetType);
