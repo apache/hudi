@@ -157,7 +157,14 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
 
     try {
       if (!storage.exists(filePath)) {
-        log.warn("Properties file {} not found. Ignoring to load props file", filePath);
+        // DEFAULT_PATH (hudi-defaults.conf) is optional global config and is commonly absent.
+        // Keep the absence quiet for that path (HUDI-13986) but warn for explicitly user-specified
+        // files so a typo in --props isn't silently ignored.
+        if (filePath.equals(DEFAULT_PATH)) {
+          log.debug("Properties file {} not found. Ignoring to load props file", filePath);
+        } else {
+          log.warn("Properties file {} not found. Ignoring to load props file", filePath);
+        }
         return;
       }
     } catch (IOException ioe) {
