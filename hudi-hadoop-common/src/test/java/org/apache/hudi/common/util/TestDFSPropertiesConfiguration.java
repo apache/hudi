@@ -338,4 +338,20 @@ public class TestDFSPropertiesConfiguration {
     assertEquals("str", props.getString("string.prop"));  // From t1.props
     assertTrue(props.getBoolean("boolean.prop"));  // From t1.props
   }
+
+  @Test
+  public void testExplicitMissingPropertiesFileThrows() {
+    // Explicit user-supplied paths (e.g. --props /typo.props) should fail fast rather than
+    // silently load empty properties. Only include= recursion and optional global-defaults
+    // paths are tolerated.
+    StoragePath missingPath = new StoragePath(dfsBasePath + "/this-file-does-not-exist.props");
+    assertThrows(HoodieIOException.class,
+        () -> new DFSPropertiesConfiguration(dfs.getConf(), missingPath),
+        "Constructor should throw when the explicit properties file is missing");
+
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration();
+    assertThrows(HoodieIOException.class,
+        () -> cfg.addPropsFromFile(missingPath),
+        "Public addPropsFromFile should throw when the explicit properties file is missing");
+  }
 }

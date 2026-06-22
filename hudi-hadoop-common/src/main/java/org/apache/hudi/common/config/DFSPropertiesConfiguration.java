@@ -118,15 +118,18 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
             String.format("Failed to read %s from class loader", DEFAULT_PROPERTIES_FILE), ioe);
       }
     }
-    // Try loading the external config file from local file system
+    // Try loading the external config file from local file system. Both DEFAULT_PATH and
+    // HUDI_CONF_DIR are optional global config locations — use the tolerant overload so a
+    // missing file does not propagate as an exception (preserves prior behavior covered by
+    // testClassInitializationNeverThrows).
     try {
-      conf.addPropsFromFile(DEFAULT_PATH);
+      conf.addPropsFromFile(DEFAULT_PATH, true);
     } catch (Exception e) {
       log.warn("Cannot load default config file: {}", DEFAULT_PATH, e);
     }
     Option<StoragePath> defaultConfPath = getConfPathFromEnv();
     if (defaultConfPath.isPresent() && !defaultConfPath.get().equals(DEFAULT_PATH)) {
-      conf.addPropsFromFile(defaultConfPath.get());
+      conf.addPropsFromFile(defaultConfPath.get(), true);
     }
     return conf.getProps();
   }
@@ -141,11 +144,29 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   }
 
   /**
-   * Add properties from external configuration files.
+   * Add properties from an external configuration file. Throws if the file does not exist —
+   * the caller is presumed to have explicitly named the file (e.g. {@code --props /path/...}),
+   * so a typo should fail fast rather than silently load empty properties.
+   *
+   * <p>For optional or include-resolved paths, use {@link #addPropsFromFile(StoragePath, boolean)}
+   * with {@code tolerateMissing=true}.
    *
    * @param filePath file path for configuration file.
    */
   public void addPropsFromFile(StoragePath filePath) {
+    addPropsFromFile(filePath, false);
+  }
+
+  /**
+   * Add properties from an external configuration file.
+   *
+   * @param filePath         file path for configuration file.
+   * @param tolerateMissing  when {@code true}, a missing file is logged at {@code debug} and
+   *                         ignored (used for optional global-defaults paths and {@code include=}
+   *                         recursion). When {@code false}, missing files raise
+   *                         {@link HoodieIOException} so explicit user-supplied paths fail fast.
+   */
+  void addPropsFromFile(StoragePath filePath, boolean tolerateMissing) {
     if (visitedFilePaths.contains(filePath.toString())) {
       throw new IllegalStateException("Loop detected; file " + filePath + " already referenced");
     }
@@ -157,15 +178,11 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
 
     try {
       if (!storage.exists(filePath)) {
-        // DEFAULT_PATH (hudi-defaults.conf) is optional global config and is commonly absent.
-        // Keep the absence quiet for that path (HUDI-13986) but warn for explicitly user-specified
-        // files so a typo in --props isn't silently ignored.
-        if (filePath.equals(DEFAULT_PATH)) {
+        if (tolerateMissing) {
           log.debug("Properties file {} not found. Ignoring to load props file", filePath);
-        } else {
-          log.warn("Properties file {} not found. Ignoring to load props file", filePath);
+          return;
         }
-        return;
+        throw new HoodieIOException("Properties file does not exist: " + filePath);
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Cannot check if the properties file exist: " + filePath, ioe);
@@ -202,7 +219,9 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
               && cfgFilePath != null) {
             providedPath = new StoragePath(cfgFilePath.getParent(), split[1]);
           }
-          addPropsFromFile(providedPath);
+          // include= references may legitimately point to optional files (e.g. environment-
+          // specific overrides); skip silently when missing rather than failing the whole load.
+          addPropsFromFile(providedPath, true);
         } else {
           hoodieConfig.setValue(split[0], split[1]);
         }
