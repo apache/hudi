@@ -67,6 +67,8 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    boolean commitTimeOnly = !populateMetaFields
+        && config.getBooleanOrDefault(HoodieTableConfig.META_FIELDS_COMMIT_TIME_ENABLED);
 
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs = HoodieParquetConfigInjector.applyConfigInjector(path, storage.getConf(), config);
     StorageConfiguration storageConfiguration = injectedConfigs.getLeft();
@@ -86,7 +88,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         hoodieConfig.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
         storageConfiguration, hoodieConfig.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
         hoodieConfig.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
-    return new HoodieAvroParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields);
+    return new HoodieAvroParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields, commitTimeOnly);
   }
 
   protected HoodieFileWriter newParquetFileWriter(
