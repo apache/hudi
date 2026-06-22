@@ -51,6 +51,8 @@ import java.util.Map;
 @Slf4j
 public class VariantShreddingInferenceInternalRowFileWriter implements HoodieInternalRowFileWriter {
 
+  private static final int SIZE_ESTIMATE_INTERVAL = 100;
+
   /** Creates the real row file writer once the inferred typed_value schemas are known. */
   @FunctionalInterface
   public interface InferredRowWriterFactory {
@@ -63,8 +65,6 @@ public class VariantShreddingInferenceInternalRowFileWriter implements HoodieInt
   private final InferredRowWriterFactory writerFactory;
   private final long maxBufferedBytes;
   private final DefaultSizeEstimator<InternalRow> sizeEstimator = new DefaultSizeEstimator<>();
-
-  private static final int SIZE_ESTIMATE_INTERVAL = 100;
 
   private final List<BufferedRow> buffer = new ArrayList<>();
   private final List<VariantSample[]> samples = new ArrayList<>();
