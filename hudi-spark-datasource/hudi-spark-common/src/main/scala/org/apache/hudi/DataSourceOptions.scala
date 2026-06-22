@@ -1034,29 +1034,46 @@ object DataSourceOptionsHelper {
   private val log = LoggerFactory.getLogger(DataSourceOptionsHelper.getClass)
 
   // Prefix constants for config normalization
+  private val HOODIE_PREFIX = "hoodie."
   private val SPARK_HOODIE_PREFIX = "spark.hoodie."
   private val SPARK_PREFIX = "spark."
 
   /**
-   * Collects `hoodie.*` and `spark.hoodie.*` configs from the SparkConf and merges them
-   * with explicit DataFrame options. Explicit options win over SparkConf.
+   * Collects `hoodie.*` and `spark.hoodie.*` configs from the SparkConf, normalizes the
+   * `spark.hoodie.*` keys to canonical `hoodie.*`, and merges with explicit DataFrame
+   * options. Explicit options win over SparkConf.
    *
    * Use this from both read and write entry points so SparkConf-level Hudi configs are
    * forwarded consistently. Without this, only the read path picks up SparkConf, and
    * write/hive_sync configs set via `--conf spark.hoodie.X=Y` are silently dropped.
+   *
+   * Example (SparkConf has both prefixes set; explicit options override):
+   * {{{
+   *   SparkConf:  spark.hoodie.X = "a", hoodie.Y = "b"
+   *   optParams:  hoodie.X = "c"
+   *   result:     hoodie.X = "c"   // explicit wins over both prefixes
+   *               hoodie.Y = "b"
+   * }}}
    */
   def collectHoodieAndSparkHoodieConfs(sqlContext: SQLContext,
                                        optParams: Map[String, String]): Map[String, String] = {
     val sparkConfs = sqlContext.getAllConfs.filter {
-      case (key, _) => key.startsWith("hoodie.") || key.startsWith(SPARK_HOODIE_PREFIX)
+      case (key, _) => key.startsWith(HOODIE_PREFIX) || key.startsWith(SPARK_HOODIE_PREFIX)
     }
-    sparkConfs ++ optParams
+    normalizeSparkHoodiePrefix(sparkConfs) ++ optParams
   }
 
   /**
    * Strips the `spark.` prefix from `spark.hoodie.*` keys so downstream code only sees
    * canonical `hoodie.*` keys. If both `spark.hoodie.X` and `hoodie.X` are present, the
    * latter wins (explicit options/configs override the SparkConf-prefixed form).
+   *
+   * The function is idempotent: running it on an already-normalized map is a no-op.
+   * Both `collectHoodieAndSparkHoodieConfs` (the entry-point helper) and
+   * `parametersWithReadDefaults` / `parametersWithWriteDefaults` (the per-path defaulting
+   * helpers) call it; this defense-in-depth ensures callers that bypass
+   * `collectHoodieAndSparkHoodieConfs` (e.g., SQL `ALTER TABLE` paths) still get
+   * normalized configs.
    */
   def normalizeSparkHoodiePrefix(parameters: Map[String, String]): Map[String, String] = {
     val normalized = parameters.collect {
