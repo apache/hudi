@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
+import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.table.read.ParquetRowIndexBasedSchemaHandler;
@@ -50,19 +51,24 @@ import org.apache.hudi.storage.StoragePath;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
 /**
- * A file group reader for LSM file groups backed by native parquet log files.
+ * Record reader for RFC-103 LSM file groups backed by native parquet log files.
  *
- * <p>This reader is intentionally separate from {@code HoodieFileGroupReader}. Callers opt into
- * this reader when they know the file group follows LSM sorted-file semantics.
+ * <p>This reader is intentionally separate from {@code HoodieFileGroupReader}. Callers should use it
+ * only when the file group follows pure LSM sorted-file semantics: the optional base file is treated
+ * as the L1 sorted run and native parquet log files are treated as L0 sorted runs. Mixed legacy log
+ * file groups should continue to use {@code HoodieFileGroupReader}.
+ *
+ * <p>The reader owns file-group level setup that mirrors {@code HoodieFileGroupReader}: schema
+ * handling, merge properties, iterator mode, output projection, read stats, and update callbacks.
+ * The actual sorted k-way merge is delegated to {@link LsmFileGroupRecordIterator}.
  */
-public final class HoodieLsmFileGroupReader<T> implements Closeable {
+public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> {
 
   private final HoodieReaderContext<T> readerContext;
   private final HoodieTableMetaClient metaClient;
@@ -169,6 +175,13 @@ public final class HoodieLsmFileGroupReader<T> implements Closeable {
     this.readStats = new HoodieReadStats();
   }
 
+  /**
+   * Creates a buffered iterator in the requested output mode.
+   *
+   * <p>{@code includeBaseFile} controls whether the L1/base sorted run participates in the merge.
+   * Log-only consumers, such as compaction-style readers, pass {@code false} so only native parquet
+   * log files are scanned.
+   */
   private ClosableIterator<BufferedRecord<T>> getBufferedRecordIterator(IteratorMode iteratorMode,
                                                                         boolean includeBaseFile) throws IOException {
     this.readerContext.setIteratorMode(iteratorMode);
@@ -177,10 +190,12 @@ public final class HoodieLsmFileGroupReader<T> implements Closeable {
     return new HoodieLsmFileGroupReaderIterator<>(this);
   }
 
+  @Override
   public ClosableIterator<BufferedRecord<T>> getClosableBufferedRecordIterator() throws IOException {
     return getBufferedRecordIterator(IteratorMode.HOODIE_RECORD, true);
   }
 
+  @Override
   public ClosableIterator<T> getClosableIterator() throws IOException {
     return new CloseableMappingIterator<>(getBufferedRecordIterator(IteratorMode.ENGINE_RECORD, true), BufferedRecord::getRecord);
   }
@@ -190,10 +205,12 @@ public final class HoodieLsmFileGroupReader<T> implements Closeable {
         bufferedRecord -> readerContext.getRecordContext().constructFinalHoodieRecord(bufferedRecord));
   }
 
+  @Override
   public ClosableIterator<String> getClosableKeyIterator() throws IOException {
     return new CloseableMappingIterator<>(getBufferedRecordIterator(IteratorMode.RECORD_KEY, true), BufferedRecord::getRecordKey);
   }
 
+  @Override
   public ClosableIterator<BufferedRecord<T>> getLogRecordsOnly() throws IOException {
     return getBufferedRecordIterator(IteratorMode.HOODIE_RECORD, false);
   }
@@ -210,6 +227,7 @@ public final class HoodieLsmFileGroupReader<T> implements Closeable {
     return nextVal;
   }
 
+  @Override
   public void onWriteFailure(String recordKey) {
     this.fileGroupUpdateCallback.ifPresent(callback -> callback.onFailure(recordKey));
   }

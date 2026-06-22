@@ -79,7 +79,7 @@ public class FSUtils {
   public static final Pattern LOG_FILE_PATTERN =
       Pattern.compile("^\\.([^._]+)_([^.]*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(\\.cdc)?)?$");
   public static final Pattern NATIVE_LOG_FILE_PATTERN =
-      Pattern.compile("^([^_]+)_((\\d+)-(\\d+)-(\\d+))_([^_]+)_(\\d+)(\\.delete)?\\.(parquet)$");
+      Pattern.compile("^([^_]+)_((\\d+)-(\\d+)-(\\d+))_([^_]+)_(\\d+)(\\.(?:log|deletes|cdc))\\.(parquet)$");
   public static final Pattern PREFIX_BY_FILE_ID_PATTERN = Pattern.compile("^(.+)-(\\d+)");
   private static final Pattern BASE_FILE_PATTERN = Pattern.compile("[a-zA-Z0-9-]+_[a-zA-Z0-9-]+_[0-9]+\\.[a-zA-Z0-9]+");
 
@@ -521,7 +521,7 @@ public class FSUtils {
   }
 
   public static boolean isNativeDeleteLogFile(String fileName) {
-    return matchNativeLogFile(fileName).map(matcher -> matcher.group(8) != null).orElse(false);
+    return matchNativeLogFile(fileName).map(matcher -> ".deletes".equals(matcher.group(8))).orElse(false);
   }
 
   private static Option<Matcher> matchLogFile(String fileName) {
@@ -530,7 +530,7 @@ public class FSUtils {
       return nativeLogMatcher;
     }
     Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
-    return matcher.matches() && matcher.group(3).equals(LOG_FILE_EXTENSION)
+    return matcher.matches()
         ? Option.of(matcher)
         : Option.empty();
   }
