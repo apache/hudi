@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.DisableDictionaryInjector;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -75,7 +76,7 @@ public class TestHoodieAvroParquetConfigInjector {
 
     // Create writer and write some data
     HoodieFileWriter writer = new HoodieAvroFileWriterFactory(storage)
-        .newParquetFileWriter(instantTime, parquetPath, config, schema, new LocalTaskContextSupplier());
+        .newParquetFileWriter(instantTime, parquetPath, config, schema, new LocalTaskContextSupplier(), new HoodieTableConfig());
 
     assertTrue(writer instanceof HoodieAvroParquetWriter);
 
@@ -130,7 +131,7 @@ public class TestHoodieAvroParquetConfigInjector {
     // Should throw an exception when trying to create the writer
     assertThrows(Exception.class, () -> {
       new HoodieAvroFileWriterFactory(storage)
-          .newParquetFileWriter(instantTime, parquetPath, config, schema, new LocalTaskContextSupplier());
+          .newParquetFileWriter(instantTime, parquetPath, config, schema, new LocalTaskContextSupplier(), new HoodieTableConfig());
     });
   }
 
@@ -152,7 +153,7 @@ public class TestHoodieAvroParquetConfigInjector {
 
     // Create writer and write some data
     HoodieFileWriter writer = new HoodieAvroFileWriterFactory(storage)
-        .newParquetFileWriter(instantTime, parquetPath, config, schema, new LocalTaskContextSupplier());
+        .newParquetFileWriter(instantTime, parquetPath, config, schema, new LocalTaskContextSupplier(), new HoodieTableConfig());
 
     assertTrue(writer instanceof HoodieAvroParquetWriter);
 

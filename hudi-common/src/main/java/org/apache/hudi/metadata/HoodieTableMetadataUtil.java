@@ -64,6 +64,7 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -1650,14 +1651,38 @@ public class HoodieTableMetadataUtil {
                                                       Option<HoodieRecordType> recordType,
                                                       HoodieIndexVersion indexVersion) {
     Map<String, HoodieSchema> columnsToIndexWithoutRequiredMetas = getColumnsToIndexWithoutRequiredMetaFields(metadataConfig, tableSchemaLazyOpt, isTableInitializing, recordType, indexVersion);
-    if (!tableConfig.populateMetaFields()) {
+    HoodieMetaFieldFlags flags = tableConfig.getHoodieMetaFieldFlags();
+    if (!flags.isAnyPopulated()) {
       return columnsToIndexWithoutRequiredMetas;
     }
 
+    // Only auto-index meta columns that are actually populated on disk. With selective
+    // exclusion via META_FIELDS_EXCLUDE_LIST, an excluded column is null in every file -
+    // indexing it would produce null min/max stats that cannot be used to prune files.
     Map<String, HoodieSchema> colsToIndexSchemaMap = new LinkedHashMap<>();
-    colsToIndexSchemaMap.putAll(META_COLS_TO_ALWAYS_INDEX_SCHEMA_MAP);
+    META_COLS_TO_ALWAYS_INDEX_SCHEMA_MAP.forEach((col, schema) -> {
+      if (isMetaColPopulatedOnDisk(col, flags)) {
+        colsToIndexSchemaMap.put(col, schema);
+      }
+    });
     colsToIndexSchemaMap.putAll(columnsToIndexWithoutRequiredMetas);
     return colsToIndexSchemaMap;
+  }
+
+  private static boolean isMetaColPopulatedOnDisk(String metaColumn, HoodieMetaFieldFlags flags) {
+    // HoodieRecord meta-field name constants are resolved at runtime (HoodieMetadataField.getFieldName()),
+    // so they are not compile-time constants and cannot be used in a switch.
+    if (HoodieRecord.COMMIT_TIME_METADATA_FIELD.equals(metaColumn)) {
+      return flags.isCommitTimePopulated();
+    }
+    if (HoodieRecord.RECORD_KEY_METADATA_FIELD.equals(metaColumn)) {
+      return flags.isRecordKeyPopulated();
+    }
+    if (HoodieRecord.PARTITION_PATH_METADATA_FIELD.equals(metaColumn)) {
+      return flags.isPartitionPathPopulated();
+    }
+    // Defensive: any non-meta column is treated as populated by definition.
+    return true;
   }
 
   /**

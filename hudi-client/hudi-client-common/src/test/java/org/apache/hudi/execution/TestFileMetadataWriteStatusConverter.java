@@ -154,7 +154,7 @@ public class TestFileMetadataWriteStatusConverter extends HoodieCommonTestHarnes
     HoodieAvroParquetWriter fileWriter =
         (HoodieAvroParquetWriter) HoodieFileWriterFactory.getFileWriter(instantTime, new StoragePath(fileName),
             metaClient.getStorage(), writeConfig, hoodieSchemaWithMetadataFields, mockedContextSupplier,
-            writeConfig.getRecordMerger().getRecordType());
+            writeConfig.getRecordMerger().getRecordType(), metaClient.getTableConfig());
 
     for (int i = 0; i < recordsCount; i++) {
       String recordKey = UUID.randomUUID().toString();

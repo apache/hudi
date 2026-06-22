@@ -226,8 +226,10 @@ public class FileGroupReaderSchemaHandler<T> {
       requiredFields.add(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
     }
 
-    // Add record key fields.
-    if (cfg.populateMetaFields()) {
+    // Add record key fields. Read from the meta column only when _hoodie_record_key is
+    // populated on disk; otherwise (populate.meta.fields=false or _hoodie_record_key in
+    // META_FIELDS_EXCLUDE_LIST) project the configured source record-key fields instead.
+    if (cfg.getHoodieMetaFieldFlags().isRecordKeyPopulated()) {
       requiredFields.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);
     } else {
       Option<String[]> fields = cfg.getRecordKeyFields();

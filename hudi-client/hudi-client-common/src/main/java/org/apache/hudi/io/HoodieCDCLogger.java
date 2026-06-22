@@ -116,7 +116,11 @@ public class HoodieCDCLogger implements Closeable {
       long maxInMemorySizeInBytes) {
     try {
       this.commitTime = commitTime;
-      this.keyField = config.populateMetaFields()
+      // Use the meta-column for the CDC key only when _hoodie_record_key is populated
+      // on disk; otherwise fall back to the configured source record-key field.
+      // Sourced from the persisted table config (single source of truth) rather than the
+      // writer config so we are not dependent on the engine-specific merge step.
+      this.keyField = tableConfig.getHoodieMetaFieldFlags().isRecordKeyPopulated()
           ? HoodieRecord.RECORD_KEY_METADATA_FIELD
           : tableConfig.getRecordKeyFieldProp();
       this.partitionPath = partitionPath;

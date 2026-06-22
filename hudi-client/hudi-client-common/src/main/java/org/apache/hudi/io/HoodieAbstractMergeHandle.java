@@ -78,7 +78,8 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
     this.keyGeneratorOpt = keyGeneratorOpt;
     initPartitionMetadataAndFilePaths(partitionPath);
     initWriteStatus(fileId, partitionPath);
-    validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
+    validateAndSetAndKeyGenProps(keyGeneratorOpt,
+        hoodieTable.getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isKeyGeneratorRequired());
   }
 
   /**
@@ -143,8 +144,17 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
     setWriteStatusPath();
   }
 
-  private void validateAndSetAndKeyGenProps(Option<BaseKeyGenerator> keyGeneratorOpt, boolean populateMetaFields) {
-    ValidationUtils.checkArgument(populateMetaFields == !keyGeneratorOpt.isPresent());
+  private void validateAndSetAndKeyGenProps(Option<BaseKeyGenerator> keyGeneratorOpt,
+                                            boolean keyGeneratorRequired) {
+    // Invariant: the merge handle reconstructs the record key and/or partition path of old
+    // records via the supplied BaseKeyGenerator when those meta columns are not populated
+    // on disk - either populate.meta.fields=false or the field is in META_FIELDS_EXCLUDE_LIST.
+    // When both columns are populated, the values come from the base file and no key
+    // generator is needed.
+    ValidationUtils.checkArgument(keyGeneratorRequired == keyGeneratorOpt.isPresent(),
+        "Merge handle keyGenerator presence must mirror meta-field population: "
+            + "keyGeneratorRequired=" + keyGeneratorRequired
+            + ", keyGeneratorOpt.isPresent=" + keyGeneratorOpt.isPresent());
     this.keyGeneratorOpt = keyGeneratorOpt;
   }
 

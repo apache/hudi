@@ -113,8 +113,13 @@ object HoodieDatasetBulkInsertHelper
           iter.map { row =>
             // auto generate record keys if needed
             val metaFields = new Array[UTF8String](5)
+            // Always populate record_key and partition_path here so that downstream dedupe (which
+            // reads these fields) works correctly. The write handle (HoodieRowCreateHandle) will
+            // null these out at file-write time when they are excluded by metaFieldFlags.
             metaFields(2) = keyGenerator.getRecordKey(row, schema)
             metaFields(3) = keyGenerator.getPartitionPath(row, schema)
+            // commit_time, commit_seqno, and file_name are placeholders here; the write handle
+            // overwrites them with the actual values (or null when excluded).
             metaFields(0) = UTF8String.EMPTY_UTF8
             metaFields(1) = UTF8String.EMPTY_UTF8
             metaFields(4) = UTF8String.EMPTY_UTF8
@@ -126,7 +131,7 @@ object HoodieDatasetBulkInsertHelper
       }
 
       val dedupedRdd = if (config.shouldCombineBeforeInsert) {
-        dedupeRows(prependedRdd, updatedSchema, tableConfig.getOrderingFields.asScala.toList, SparkHoodieIndexFactory.isGlobalIndex(config), targetParallelism)
+        dedupeRows(prependedRdd, updatedSchema, tableConfig.getOrderingFields.asScala.toList, SparkHoodieIndexFactory.isGlobalIndex(config, tableConfig), targetParallelism)
       } else {
         prependedRdd
       }

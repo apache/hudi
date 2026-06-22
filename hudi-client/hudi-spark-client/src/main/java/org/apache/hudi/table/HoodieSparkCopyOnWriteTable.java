@@ -32,7 +32,6 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.SparkPartitionUtils;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -245,15 +244,11 @@ public class HoodieSparkCopyOnWriteTable<T>
 
   protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
                                               Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
-    Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
-    if (!config.populateMetaFields()) {
-      try {
-        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(TypedProperties.copy(config.getProps())));
-      } catch (Exception e) {
-        throw new HoodieException("Only BaseKeyGenerator (or any key generator that extends from BaseKeyGenerator) are supported when meta "
-            + "columns are disabled. Please choose the right key generator if you wish to disable meta fields.", e);
-      }
-    }
+    // Returns a key generator only when the _hoodie_record_key column is not populated on disk
+    // (either populate.meta.fields=false or _hoodie_record_key in META_FIELDS_EXCLUDE_LIST), so the
+    // merge handle can recompute the record key from source fields for the old base-file records.
+    Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(
+        config, getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isKeyGeneratorRequired());
     HoodieMergeHandle mergeHandle = HoodieMergeHandleFactory.create(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
         dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
     if (mergeHandle.getOldFilePath() != null && mergeHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {

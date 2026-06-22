@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -327,6 +328,17 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated "
           + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
 
+  public static final ConfigProperty<String> META_FIELDS_EXCLUDE_LIST = ConfigProperty
+      .key("hoodie.table.meta.fields.exclude.list")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("Comma-separated list of Hudi meta field names to exclude from population. "
+          + "Excluded fields remain in the schema but are written as null for optimal storage savings "
+          + "(nulls take zero data bytes in Parquet, stored only as bit flags in definition levels). "
+          + "Valid values: _hoodie_commit_time, _hoodie_commit_seqno, _hoodie_record_key, "
+          + "_hoodie_partition_path, _hoodie_file_name. Only effective when "
+          + "hoodie.populate.meta.fields is true.");
+
   public static final ConfigProperty<String> KEY_GENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.table.keygenerator.class")
       .noDefaultValue()
@@ -534,7 +546,7 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   private static void modify(HoodieStorage storage, StoragePath metadataFolder, Properties modifyProps, BiConsumer<Properties, Properties> propsToUpdate,
-                             Set<String> propsToDelete) {
+                             Set<String> propsToDelete, PreModifyHook preModifyHook) {
     StoragePath cfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE);
     StoragePath backupCfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE_BACKUP);
     try {
@@ -543,6 +555,13 @@ public class HoodieTableConfig extends HoodieConfig {
 
       // 1. Read the existing config
       TypedProperties props = fetchConfigs(storage, metadataFolder, HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
+
+      // 1a. Run the pre-modify hook BEFORE any destructive write so a rejected validation
+      // leaves hoodie.properties (and the backup) untouched. The hook may also yield extra
+      // keys to delete (e.g. META_FIELDS_EXCLUDE_LIST when populate flips true->false) so
+      // the persisted state stays internally consistent. Keeping the hook external lets
+      // modify() remain purely the on-disk mutation protocol.
+      Set<String> extraDeletes = preModifyHook.run(props, modifyProps, propsToUpdate, propsToDelete);
 
       // 2. backup the existing properties.
       try (OutputStream out = storage.create(backupCfgPath, false)) {
@@ -557,6 +576,7 @@ public class HoodieTableConfig extends HoodieConfig {
       try (OutputStream out = storage.create(cfgPath, true)) {
         propsToUpdate.accept(props, modifyProps);
         propsToDelete.forEach(propToDelete -> props.remove(propToDelete));
+        extraDeletes.forEach(props::remove);
         checksum = storeProperties(props, out, cfgPath);
       }
       log.warn("{} modified to: {} (at {})", cfgPath.getName(), props, cfgPath.getParent());
@@ -589,23 +609,94 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   /**
+   * Pre-modification hook invoked by {@link #modify} after the current on-disk props are
+   * read but before any destructive write. Implementations may throw to abort the update
+   * (the on-disk file remains untouched) and may return additional property keys to delete
+   * during the same write to keep persisted state internally consistent.
+   */
+  @FunctionalInterface
+  private interface PreModifyHook {
+    Set<String> run(Properties currentProps,
+                    Properties modifyProps,
+                    BiConsumer<Properties, Properties> propsToUpdate,
+                    Set<String> propsToDelete);
+  }
+
+  /** No-op pre-modify hook: no validation, no extra deletes. */
+  private static final PreModifyHook NOOP_PRE_MODIFY_HOOK =
+      (currentProps, modifyProps, propsToUpdate, propsToDelete) -> Collections.emptySet();
+
+  /**
+   * Computes the (populate, exclude) state before and after the requested modification
+   * and asks {@link HoodieMetaFieldFlags#validateTransition} to enforce the lattice rules.
+   *
+   * <p>The merge is computed off to the side (a copy of {@code currentProps} + the requested
+   * upserts/deletes) so this check runs strictly before any on-disk mutation. If the merged
+   * state flips {@code populate.meta.fields} from {@code true} to {@code false}, the requested
+   * modification is mutated to also strip {@link #META_FIELDS_EXCLUDE_LIST} - the exclude list
+   * is meaningless once meta fields are disabled, and keeping a stale value around would be
+   * confusing for operators inspecting {@code hoodie.properties}.
+   */
+  private static Set<String> validateAndNormalizeMetaFieldsTransition(Properties currentProps,
+                                                                       Properties modifyProps,
+                                                                       BiConsumer<Properties, Properties> propsToUpdate,
+                                                                       Set<String> propsToDelete) {
+    Properties merged = new Properties();
+    merged.putAll(currentProps);
+    propsToUpdate.accept(merged, modifyProps);
+    propsToDelete.forEach(merged::remove);
+
+    boolean oldPopulate = parsePopulateMetaFields(currentProps);
+    boolean newPopulate = parsePopulateMetaFields(merged);
+    Set<String> oldExclude = HoodieMetaFieldFlags.parseExcludeList(
+        currentProps.getProperty(META_FIELDS_EXCLUDE_LIST.key()));
+    Set<String> newExclude = HoodieMetaFieldFlags.parseExcludeList(
+        merged.getProperty(META_FIELDS_EXCLUDE_LIST.key()));
+
+    HoodieMetaFieldFlags.validateTransition(oldPopulate, oldExclude, newPopulate, newExclude);
+
+    // populate=true -> populate=false: strip the now-meaningless exclude list and warn so
+    // operators can find the prior value in the logs if they need to.
+    if (oldPopulate && !newPopulate
+        && currentProps.getProperty(META_FIELDS_EXCLUDE_LIST.key()) != null) {
+      String prior = currentProps.getProperty(META_FIELDS_EXCLUDE_LIST.key());
+      log.warn("Clearing {} (prior value: '{}') because {} is being set to false; the "
+              + "exclude list is meaningless once meta fields are disabled.",
+          META_FIELDS_EXCLUDE_LIST.key(), prior, POPULATE_META_FIELDS.key());
+      return Collections.singleton(META_FIELDS_EXCLUDE_LIST.key());
+    }
+    return Collections.emptySet();
+  }
+
+  private static boolean parsePopulateMetaFields(Properties props) {
+    String value = props.getProperty(POPULATE_META_FIELDS.key());
+    if (value == null || value.isEmpty()) {
+      return POPULATE_META_FIELDS.defaultValue();
+    }
+    return Boolean.parseBoolean(value);
+  }
+
+  /**
    * Upserts the table config with the set of properties passed in. We implement a fail-safe backup protocol
    * here for safely updating with recovery and also ensuring the table config continues to be readable.
    */
   public static void update(HoodieStorage storage, StoragePath metadataFolder,
                             Properties updatedProps) {
-    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties, Collections.EMPTY_SET);
+    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties, Collections.EMPTY_SET,
+        HoodieTableConfig::validateAndNormalizeMetaFieldsTransition);
   }
 
   public static void updateAndDeleteProps(HoodieStorage storage, StoragePath metadataFolder,
                                           Properties updatedProps, Set<String> propstoDelete) {
-    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties, propstoDelete);
+    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties, propstoDelete,
+        HoodieTableConfig::validateAndNormalizeMetaFieldsTransition);
   }
 
   public static void delete(HoodieStorage storage, StoragePath metadataFolder, Set<String> deletedProps) {
     Properties props = new Properties();
     deletedProps.forEach(p -> props.setProperty(p, ""));
-    modify(storage, metadataFolder, props, ConfigUtils::deleteProperties, Collections.EMPTY_SET);
+    modify(storage, metadataFolder, props, ConfigUtils::deleteProperties, Collections.EMPTY_SET,
+        HoodieTableConfig::validateAndNormalizeMetaFieldsTransition);
   }
 
   /**
@@ -1196,6 +1287,34 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public boolean populateMetaFields() {
     return Boolean.parseBoolean(getStringOrDefault(POPULATE_META_FIELDS));
+  }
+
+  /**
+   * Checks if a specific meta field is excluded from population via
+   * {@link #META_FIELDS_EXCLUDE_LIST}.
+   *
+   * @param metaFieldName the meta field name to check (e.g. {@code _hoodie_commit_time})
+   * @return true if the field is in the exclusion list
+   */
+  public boolean isMetaFieldExcluded(String metaFieldName) {
+    return HoodieMetaFieldFlags.parseExcludeList(getString(META_FIELDS_EXCLUDE_LIST))
+        .contains(metaFieldName);
+  }
+
+  /**
+   * Returns the {@link HoodieMetaFieldFlags} reflecting POPULATE_META_FIELDS and
+   * META_FIELDS_EXCLUDE_LIST as persisted on this table. This is the source of truth
+   * for both writers and readers - {@link HoodieMetaFieldFlags} should never be sourced
+   * from a writer-side config since the persisted table state is what determines on-disk
+   * meta-field availability across commits.
+   *
+   * <p>Resolved on every call from the current properties so callers observe in-process
+   * mutations of POPULATE_META_FIELDS / META_FIELDS_EXCLUDE_LIST (e.g. tests that flip
+   * the prop, or {@link #update} mid-life). The parse is cheap - two property reads and a
+   * comma-split on a value that is empty in the OOB case.
+   */
+  public HoodieMetaFieldFlags getHoodieMetaFieldFlags() {
+    return HoodieMetaFieldFlags.fromConfig(this);
   }
 
   /**

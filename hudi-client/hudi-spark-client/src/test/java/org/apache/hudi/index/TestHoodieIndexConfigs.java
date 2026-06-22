@@ -19,6 +19,8 @@
 
 package org.apache.hudi.index;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -47,10 +49,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestHoodieIndexConfigs {
 
   private String basePath;
+  private HoodieTableMetaClient metaClient;
 
   @BeforeEach
-  public void setUp(@TempDir Path tempDir) {
+  public void setUp(@TempDir Path tempDir) throws Exception {
     basePath = tempDir.toString();
+    metaClient = HoodieTestUtils.init(basePath);
   }
 
   @ParameterizedTest
@@ -63,22 +67,22 @@ public class TestHoodieIndexConfigs {
       case INMEMORY:
         config = clientConfigBuilder.withPath(basePath)
             .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
-        assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof HoodieInMemoryHashIndex);
+        assertTrue(SparkHoodieIndexFactory.createIndex(config, metaClient) instanceof HoodieInMemoryHashIndex);
         break;
       case BLOOM:
         config = clientConfigBuilder.withPath(basePath)
             .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
-        assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof HoodieBloomIndex);
+        assertTrue(SparkHoodieIndexFactory.createIndex(config, metaClient) instanceof HoodieBloomIndex);
         break;
       case GLOBAL_BLOOM:
         config = clientConfigBuilder.withPath(basePath)
             .withIndexConfig(indexConfigBuilder.withIndexType(IndexType.GLOBAL_BLOOM).build()).build();
-        assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof HoodieGlobalBloomIndex);
+        assertTrue(SparkHoodieIndexFactory.createIndex(config, metaClient) instanceof HoodieGlobalBloomIndex);
         break;
       case SIMPLE:
         config = clientConfigBuilder.withPath(basePath)
             .withIndexConfig(indexConfigBuilder.withIndexType(IndexType.SIMPLE).build()).build();
-        assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof HoodieSimpleIndex);
+        assertTrue(SparkHoodieIndexFactory.createIndex(config, metaClient) instanceof HoodieSimpleIndex);
         break;
       case BUCKET:
         Properties props = new Properties();
@@ -86,19 +90,19 @@ public class TestHoodieIndexConfigs {
         config = clientConfigBuilder.withPath(basePath)
             .withIndexConfig(indexConfigBuilder.fromProperties(props).withIndexType(IndexType.BUCKET)
                 .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE).build()).build();
-        assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof HoodieSimpleBucketIndex);
+        assertTrue(SparkHoodieIndexFactory.createIndex(config, metaClient) instanceof HoodieSimpleBucketIndex);
 
         config = HoodieWriteConfig.newBuilder().withPath(basePath)
             .withIndexConfig(indexConfigBuilder.fromProperties(props).withIndexType(IndexType.BUCKET)
                 .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING).build())
             .build();
-        assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof HoodieSparkConsistentBucketIndex);
+        assertTrue(SparkHoodieIndexFactory.createIndex(config, metaClient) instanceof HoodieSparkConsistentBucketIndex);
         break;
       case RECORD_INDEX:
         config = clientConfigBuilder.withPath(basePath)
             .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.RECORD_INDEX).build())
             .build();
-        assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof SparkMetadataTableGlobalRecordLevelIndex);
+        assertTrue(SparkHoodieIndexFactory.createIndex(config, metaClient) instanceof SparkMetadataTableGlobalRecordLevelIndex);
         break;
       default:
         // no -op. just for checkstyle errors
@@ -112,14 +116,14 @@ public class TestHoodieIndexConfigs {
     final HoodieWriteConfig config1 = clientConfigBuilder.withPath(basePath)
         .withIndexConfig(indexConfigBuilder.withIndexClass(IndexWithConstructor.class.getName()).build()).build();
     final Throwable thrown1 = assertThrows(HoodieException.class, () -> {
-      SparkHoodieIndexFactory.createIndex(config1);
+      SparkHoodieIndexFactory.createIndex(config1, metaClient);
     }, "exception is expected");
     assertTrue(thrown1.getMessage().contains("is not a subclass of HoodieIndex"));
 
     final HoodieWriteConfig config2 = clientConfigBuilder.withPath(basePath)
         .withIndexConfig(indexConfigBuilder.withIndexClass(IndexWithoutConstructor.class.getName()).build()).build();
     final Throwable thrown2 = assertThrows(HoodieException.class, () -> {
-      SparkHoodieIndexFactory.createIndex(config2);
+      SparkHoodieIndexFactory.createIndex(config2, metaClient);
     }, "exception is expected");
     assertTrue(thrown2.getMessage().contains("Unable to instantiate class"));
   }

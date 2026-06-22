@@ -85,7 +85,7 @@ public class SparkRDDWriteClient<T> extends
 
   @Override
   protected HoodieIndex createIndex(HoodieWriteConfig writeConfig) {
-    return SparkHoodieIndexFactory.createIndex(config);
+    return SparkHoodieIndexFactory.createIndex(config, createMetaClient(true));
   }
 
   public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,

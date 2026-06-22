@@ -1013,6 +1013,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String bootstrapBasePath;
     private Boolean bootstrapIndexEnable;
     private Boolean populateMetaFields;
+    private String metaFieldsExcludeList;
     private String keyGeneratorClassProp;
     private String partitionValueExtractorClass;
     private String keyGeneratorType;
@@ -1167,6 +1168,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public TableBuilder setPopulateMetaFields(boolean populateMetaFields) {
       this.populateMetaFields = populateMetaFields;
+      return this;
+    }
+
+    public TableBuilder setMetaFieldsExcludeList(String metaFieldsExcludeList) {
+      this.metaFieldsExcludeList = metaFieldsExcludeList;
       return this;
     }
 
@@ -1384,6 +1390,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.POPULATE_META_FIELDS)) {
         setPopulateMetaFields(hoodieConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST)) {
+        setMetaFieldsExcludeList(hoodieConfig.getString(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST));
+      }
       if (hoodieConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)) {
         setKeyGeneratorClassProp(hoodieConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME));
       } else if (hoodieConfig.contains(HoodieTableConfig.KEY_GENERATOR_TYPE)) {
@@ -1521,6 +1530,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != populateMetaFields) {
         tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
+      }
+      if (null != metaFieldsExcludeList && !metaFieldsExcludeList.trim().isEmpty()) {
+        tableConfig.setValue(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST, metaFieldsExcludeList);
       }
       if (null != keyGeneratorClassProp) {
         KeyGeneratorType type = KeyGeneratorType.fromClassName(keyGeneratorClassProp);

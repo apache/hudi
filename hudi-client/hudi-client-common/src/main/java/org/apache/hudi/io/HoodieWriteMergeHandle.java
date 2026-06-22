@@ -180,8 +180,8 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       // Create the writer for writing the new version file
       fileWriter = HoodieFileWriterFactory.getFileWriter(
           instantTime, newFilePath, hoodieTable.getStorage(),
-
-          config, writeSchemaWithMetaFields, taskContextSupplier, getRecordType());
+          config, writeSchemaWithMetaFields, taskContextSupplier, getRecordType(),
+          hoodieTable.getMetaClient().getTableConfig());
     } catch (IOException io) {
       log.error("Error in update task at commit {}", instantTime, io);
       writeStatus.setGlobalError(io);
@@ -411,10 +411,21 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
 
   protected void writeToFile(HoodieKey key, HoodieRecord<T> record, HoodieSchema schema, Properties props, boolean shouldPreserveRecordMetadata) throws IOException {
     if (shouldPreserveRecordMetadata) {
-      // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
-      //       file holding this record even in cases when overall metadata is preserved
-      HoodieRecord populatedRecord = record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName());
-      fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields, props);
+      // shouldPreserveRecordMetadata is the contract used by clustering / bootstrap: keep the
+      // commit_time / commit_seqno / record_key / partition_path values that already exist on
+      // the source record (changing them would break incremental queries over historical data).
+      // The four preserved fields therefore carry forward unmodified from the source row -
+      // including null values, which honor an upstream META_FIELDS_EXCLUDE_LIST.
+      //
+      // _hoodie_file_name is the lone exception: the record physically moves to a new file as
+      // part of this write, so the column has to be rewritten to point at the new file. The
+      // ternary below special-cases the case where _hoodie_file_name is itself excluded for
+      // this table, in which case the column stays null on disk.
+      HoodieRecord toWrite = hoodieTable.getMetaClient().getTableConfig()
+          .getHoodieMetaFieldFlags().isFileNamePopulated()
+          ? record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName())
+          : record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, null);
+      fileWriter.write(key.getRecordKey(), toWrite, writeSchemaWithMetaFields, props);
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.
       record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());

@@ -80,7 +80,7 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
       // Fallback to another index so that tagLocation is still accurate and there are no duplicates.
       HoodieWriteConfig otherConfig = HoodieWriteConfig.newBuilder().withProperties(config.getProps())
           .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(getFallbackIndexType()).build()).build();
-      HoodieIndex fallbackIndex = SparkHoodieIndexFactory.createIndex(otherConfig);
+      HoodieIndex fallbackIndex = SparkHoodieIndexFactory.createIndex(otherConfig, hoodieTable.getMetaClient());
 
       // Fallback index needs to be a global index like record index
       ValidationUtils.checkArgument(isGlobal() == fallbackIndex.isGlobal(), "Fallback index needs to have same isGlobal() as the record index");

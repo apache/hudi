@@ -99,17 +99,30 @@ public class HoodieSparkKeyGeneratorFactory {
   }
 
   /**
-   * Creates BaseKeyGenerator if meta columns are disabled.
+   * Creates BaseKeyGenerator if either {@code _hoodie_record_key} or
+   * {@code _hoodie_partition_path} meta column is not populated on disk and the corresponding
+   * value must therefore be reconstructed from source fields. The key generator handles both
+   * derivations, so a single instance covers either missing column. Returning
+   * {@link Option#empty()} signals that callers should read both directly from the meta columns.
+   *
+   * <p>The "key generator required" flag must be sourced from the persisted
+   * {@link org.apache.hudi.common.table.HoodieTableConfig} via
+   * {@code tableConfig.getHoodieMetaFieldFlags().isKeyGeneratorRequired()} - readers and
+   * writers must agree on the on-disk meta-field shape, and only the table config is the
+   * source of truth.
    *
    * @throws HoodieException if unable instantiate or cast class to {@link BaseKeyGenerator}.
    */
-  public static Option<BaseKeyGenerator> createBaseKeyGenerator(HoodieWriteConfig writeConfig) {
-    if (!writeConfig.populateMetaFields()) {
+  public static Option<BaseKeyGenerator> createBaseKeyGenerator(HoodieWriteConfig writeConfig,
+                                                                 boolean keyGeneratorRequired) {
+    if (keyGeneratorRequired) {
       try {
         TypedProperties typedProperties = TypedProperties.copy(writeConfig.getProps());
         return Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(typedProperties));
       } catch (ClassCastException cce) {
-        throw new HoodieException("Only BaseKeyGenerators are supported when meta columns are disabled ", cce);
+        throw new HoodieException(
+            "Only BaseKeyGenerators are supported when _hoodie_record_key or "
+                + "_hoodie_partition_path meta column is not populated ", cce);
       }
     } else {
       return Option.empty();

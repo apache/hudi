@@ -168,12 +168,14 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), Boolean.toString(populateMetaFields));
 
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
     return (HoodieAvroHFileWriter) HoodieFileWriterFactory.getFileWriter(
         instantTime, getFilePath(), storage, HoodieStorageConfig.newBuilder()
             .fromProperties(props)
             .hfileBloomFilterEnable(hfileBloomFilterEnabled)
             .build(), schema,
-        new LocalTaskContextSupplier(), HoodieRecord.HoodieRecordType.AVRO);
+        new LocalTaskContextSupplier(), HoodieRecord.HoodieRecordType.AVRO, tableConfig);
   }
 
   @Override

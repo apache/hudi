@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.DisableDictionaryInjector;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -123,7 +124,7 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
     // Create writer and write some data
     HoodieRowDataFileWriterFactory factory = new HoodieRowDataFileWriterFactory(storage);
     HoodieFileWriter writer = factory.newParquetFileWriter(
-        instantTime, parquetPath, config, schema, new LocalTaskContextSupplier());
+        instantTime, parquetPath, config, rowType, new LocalTaskContextSupplier(), new HoodieTableConfig());
 
     assertTrue(writer instanceof HoodieRowDataParquetWriter);
 
@@ -181,7 +182,7 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
     // Should throw an exception when trying to create the writer
     HoodieRowDataFileWriterFactory factory = new HoodieRowDataFileWriterFactory(storage);
     assertThrows(Exception.class, () -> {
-      factory.newParquetFileWriter(instantTime, parquetPath, config, schema, new LocalTaskContextSupplier());
+      factory.newParquetFileWriter(instantTime, parquetPath, config, rowType, new LocalTaskContextSupplier(), new HoodieTableConfig());
     });
   }
 
@@ -202,7 +203,7 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
     // Create writer and write some data
     HoodieRowDataFileWriterFactory factory = new HoodieRowDataFileWriterFactory(storage);
     HoodieFileWriter writer = factory.newParquetFileWriter(
-        instantTime, parquetPath, config, schema, new LocalTaskContextSupplier());
+        instantTime, parquetPath, config, rowType, new LocalTaskContextSupplier(), new HoodieTableConfig());
 
     assertTrue(writer instanceof HoodieRowDataParquetWriter);
 

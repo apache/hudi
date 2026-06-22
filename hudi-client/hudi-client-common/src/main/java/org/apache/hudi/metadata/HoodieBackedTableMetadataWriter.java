@@ -995,7 +995,12 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       final String fileId = fileSlice.getFileId();
       HoodieReaderContext<T> readerContext = readerContextFactory.getContext();
       HoodieSchema dataSchema = resolveDataSchemaForRLIBootstrap(metaClient, dataWriteConfig);
-      HoodieSchema requestedSchema = metaClient.getTableConfig().populateMetaFields() ? getRecordKeySchema()
+      // Project _hoodie_record_key from the file only when it is actually populated on
+      // disk. With selective exclusion (META_FIELDS_EXCLUDE_LIST), the column is null and
+      // we must project the configured source record-key fields instead so the record-index
+      // is rebuilt from the user data columns.
+      HoodieSchema requestedSchema = metaClient.getTableConfig().getHoodieMetaFieldFlags().isRecordKeyPopulated()
+          ? getRecordKeySchema()
           : HoodieSchemaUtils.projectSchema(dataSchema, Arrays.asList(metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0])));
       Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(dataWriteConfig.getInternalSchema());
       HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>builder()

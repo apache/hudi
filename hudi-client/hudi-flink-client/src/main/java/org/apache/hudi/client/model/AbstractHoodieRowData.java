@@ -138,7 +138,8 @@ public abstract class AbstractHoodieRowData implements RowData {
   @Override
   public StringData getString(int ordinal) {
     if (ordinal < metaColumnsNum) {
-      return StringData.fromString(getMetaColumnVal(ordinal));
+      String val = getMetaColumnVal(ordinal);
+      return val == null ? null : StringData.fromString(val);
     }
     return row.getString(rebaseOrdinal(ordinal));
   }

@@ -69,7 +69,8 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
   protected HoodieFileWriter newParquetFileWriter(
       OutputStream outputStream,
       HoodieConfig config,
-      HoodieSchema schema) throws IOException {
+      HoodieSchema schema,
+      HoodieTableConfig tableConfig) throws IOException {
     HoodieRowDataParquetWriteSupport writeSupport =
         new HoodieRowDataParquetWriteSupport(
             storage.getConf().unwrapAs(Configuration.class), schema, null);
@@ -94,8 +95,9 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       StoragePath storagePath,
       HoodieConfig config,
       HoodieSchema schema,
-      TaskContextSupplier taskContextSupplier) throws IOException {
-    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+      TaskContextSupplier taskContextSupplier,
+      HoodieTableConfig tableConfig) throws IOException {
+    boolean populateMetaFields = tableConfig.populateMetaFields();
     boolean withOperation = config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
 
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs = HoodieParquetConfigInjector.applyConfigInjector(storagePath, storage.getConf(), config);
@@ -113,13 +115,32 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
         instantTime, taskContextSupplier, populateMetaFields, withOperation);
   }
 
+  /**
+   * Create a parquet RowData writer on a given storage path.
+   *
+   * <p>Convenience overload retained for tests that already have a Flink RowType in hand;
+   * delegates to the HoodieSchema-based overload via {@link HoodieSchemaConverter}.
+   */
+  public HoodieFileWriter newParquetFileWriter(
+      String instantTime,
+      StoragePath storagePath,
+      HoodieConfig config,
+      RowType rowType,
+      TaskContextSupplier taskContextSupplier,
+      HoodieTableConfig tableConfig) throws IOException {
+    return newParquetFileWriter(instantTime, storagePath, config,
+        HoodieSchemaConverter.convertToSchema(rowType).getNonNullType(),
+        taskContextSupplier, tableConfig);
+  }
+
   @Override
   public HoodieFileWriter newLanceFileWriter(
       String instantTime,
       StoragePath path,
       HoodieConfig config,
       HoodieSchema schema,
-      TaskContextSupplier taskContextSupplier) {
+      TaskContextSupplier taskContextSupplier,
+      HoodieTableConfig tableConfig) {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
     boolean withOperation = config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
     Option<org.apache.hudi.common.bloom.BloomFilter> bloomFilter = enableBloomFilter(populateMetaFields, config)

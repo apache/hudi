@@ -93,7 +93,9 @@ public abstract class HoodieInternalRow extends InternalRow {
   @Override
   public void update(int ordinal, Object value) {
     if (ordinal < metaFields.length) {
-      if (value instanceof UTF8String) {
+      if (value == null) {
+        metaFields[ordinal] = null;
+      } else if (value instanceof UTF8String) {
         metaFields[ordinal] = (UTF8String) value;
       } else if (value instanceof String) {
         metaFields[ordinal] = UTF8String.fromString((String) value);

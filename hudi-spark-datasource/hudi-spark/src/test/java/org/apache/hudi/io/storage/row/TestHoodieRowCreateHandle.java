@@ -32,6 +32,10 @@ import org.apache.hudi.testutils.SparkDatasetTestUtils;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -114,6 +118,67 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
       // verify output
       assertOutput(writeStatus, size, fileId, partitionPath, instantTime, totalInputRows, fileNames, fileAbsPaths, populateMetaFields);
     }
+  }
+
+  @Test
+  public void testSelectiveMetaFieldPopulation() throws Exception {
+    // Exclude record_key, partition_path, file_name, and commit_seqno but keep commit_time.
+    // The exclusion list is a TABLE-level property (HoodieTableConfig.META_FIELDS_EXCLUDE_LIST),
+    // so we set it directly on the metaClient's tableConfig - that is where writers read it from.
+    metaClient.getTableConfig().setValue(
+        org.apache.hudi.common.table.HoodieTableConfig.META_FIELDS_EXCLUDE_LIST,
+        "_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,_hoodie_commit_seqno");
+    HoodieWriteConfig config = SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort)
+        .withPopulateMetaFields(true)
+        .build();
+
+    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
+    String fileId = UUID.randomUUID().toString();
+    String instantTime = "000";
+
+    // Use schema with nullable meta fields (matches production behavior in HoodieSqlCommonUtils)
+    // since excluded meta fields are written as null
+    StructType nullableMetaSchema = new StructType(new StructField[] {
+        new StructField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, DataTypes.StringType, true, Metadata.empty()),
+        new StructField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, DataTypes.StringType, true, Metadata.empty()),
+        new StructField(HoodieRecord.RECORD_KEY_METADATA_FIELD, DataTypes.StringType, true, Metadata.empty()),
+        new StructField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, DataTypes.StringType, true, Metadata.empty()),
+        new StructField(HoodieRecord.FILENAME_METADATA_FIELD, DataTypes.StringType, true, Metadata.empty()),
+        new StructField(SparkDatasetTestUtils.RECORD_KEY_FIELD_NAME, DataTypes.StringType, false, Metadata.empty()),
+        new StructField(SparkDatasetTestUtils.PARTITION_PATH_FIELD_NAME, DataTypes.StringType, false, Metadata.empty()),
+        new StructField("randomInt", DataTypes.IntegerType, false, Metadata.empty()),
+        new StructField("randomLong", DataTypes.LongType, false, Metadata.empty())});
+
+    HoodieRowCreateHandle handle = new HoodieRowCreateHandle(table, config, partitionPath, fileId, instantTime,
+        RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), nullableMetaSchema);
+    int size = 10 + RANDOM.nextInt(100);
+    Dataset<Row> inputRows = SparkDatasetTestUtils.getRandomRows(sqlContext, size, partitionPath, false);
+
+    WriteStatus writeStatus = writeAndGetWriteStatus(inputRows, handle);
+
+    assertFalse(writeStatus.hasErrors());
+    assertEquals(size, writeStatus.getTotalRecords());
+
+    // Read back and verify selective population
+    Dataset<Row> result = sqlContext.read().parquet(basePath + "/" + writeStatus.getStat().getPath());
+    result.collectAsList().forEach(entry -> {
+      // commit_time should be populated (not excluded)
+      String commitTime = entry.getString(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+      assertEquals(instantTime, commitTime);
+
+      // commit_seqno should be null (excluded)
+      assertTrue(entry.isNullAt(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)));
+
+      // record_key should be null (excluded)
+      assertTrue(entry.isNullAt(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.RECORD_KEY_METADATA_FIELD)));
+
+      // partition_path should be null (excluded)
+      assertTrue(entry.isNullAt(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD)));
+
+      // file_name should be null (excluded)
+      assertTrue(entry.isNullAt(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.FILENAME_METADATA_FIELD)));
+    });
   }
 
   /**

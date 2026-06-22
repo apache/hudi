@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -209,14 +210,28 @@ public abstract class AbstractHoodieLogRecordScanner {
       this.populateMetaFields = false;
       this.recordKeyField = keyFieldOverride.get();
       this.partitionPathFieldOpt = Option.empty();
-    } else if (tableConfig.populateMetaFields()) {
-      this.populateMetaFields = true;
-      this.recordKeyField = HoodieRecord.RECORD_KEY_METADATA_FIELD;
-      this.partitionPathFieldOpt = Option.of(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
     } else {
-      this.populateMetaFields = false;
-      this.recordKeyField = tableConfig.getRecordKeyFieldProp();
-      this.partitionPathFieldOpt = Option.of(tableConfig.getPartitionFieldProp());
+      // _hoodie_record_key / _hoodie_partition_path may be null in log blocks when the
+      // column is excluded via META_FIELDS_EXCLUDE_LIST (even with populate.meta.fields=true);
+      // in that case the reader must read the configured source field instead.
+      //
+      // populateMetaFields here is the downstream switch (see processDataBlock) that lets
+      // wrapIntoHoodieRecordPayloadWithParams read record-key/partition-path from the meta
+      // columns. We must gate it on BOTH columns being populated - otherwise the alternate
+      // path (using recordKeyField + partitionPathField names) is needed to source the
+      // missing value from data columns.
+      // Defensive null-check on flags for tests that mock HoodieTableConfig without
+      // stubbing the flags getter; falls back to the coarse-grained populateMetaFields().
+      HoodieMetaFieldFlags flags = tableConfig.getHoodieMetaFieldFlags();
+      boolean recordKeyPopulated = flags != null ? flags.isRecordKeyPopulated() : tableConfig.populateMetaFields();
+      boolean partitionPathPopulated = flags != null ? flags.isPartitionPathPopulated() : tableConfig.populateMetaFields();
+      this.populateMetaFields = recordKeyPopulated && partitionPathPopulated;
+      this.recordKeyField = recordKeyPopulated
+          ? HoodieRecord.RECORD_KEY_METADATA_FIELD
+          : tableConfig.getRecordKeyFieldProp();
+      this.partitionPathFieldOpt = Option.of(partitionPathPopulated
+          ? HoodieRecord.PARTITION_PATH_METADATA_FIELD
+          : tableConfig.getPartitionFieldProp());
     }
 
     this.partitionNameOverrideOpt = partitionNameOverride;

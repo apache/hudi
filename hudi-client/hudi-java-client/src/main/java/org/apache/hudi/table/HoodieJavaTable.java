@@ -75,7 +75,7 @@ public abstract class HoodieJavaTable<T>
 
   @Override
   protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
-    return JavaHoodieIndexFactory.createIndex(config);
+    return JavaHoodieIndexFactory.createIndex(config, getMetaClient());
   }
 
   @Override

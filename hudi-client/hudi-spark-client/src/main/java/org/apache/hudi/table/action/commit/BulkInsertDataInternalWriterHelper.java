@@ -107,7 +107,11 @@ public class BulkInsertDataInternalWriterHelper {
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
     this.fileIdPrefix = UUID.randomUUID().toString();
 
-    if (!populateMetaFields) {
+    // Allocate a key generator when either the partition_path or record_key meta column is
+    // not populated on disk - either because populate.meta.fields=false or because the field
+    // is in META_FIELDS_EXCLUDE_LIST. The keygen reconstructs the missing value from source
+    // fields at write time.
+    if (hoodieTable.getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isKeyGeneratorRequired()) {
       this.keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.getKeyGenerator(writeConfig.getProps());
     } else {
       this.keyGeneratorOpt = Option.empty();
@@ -202,7 +206,9 @@ public class BulkInsertDataInternalWriterHelper {
   }
 
   protected UTF8String extractPartitionPath(InternalRow row) {
-    if (populateMetaFields) {
+    // Read partition_path from the meta column only when it is populated on disk; with
+    // selective exclusion the column may be null even when populateMetaFields==true.
+    if (hoodieTable.getMetaClient().getTableConfig().getHoodieMetaFieldFlags().isPartitionPathPopulated()) {
       // In case meta-fields are materialized w/in the table itself, we can just simply extract
       // partition path from there
       //
