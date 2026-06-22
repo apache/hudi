@@ -19,6 +19,8 @@
 
 package org.apache.spark.sql.hudi.analysis
 
+import org.apache.hudi.HoodieSparkUtils
+
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
@@ -134,29 +136,47 @@ class TestHoodieAnalysisErrorHandling extends HoodieSparkSqlTestBase {
   }
 
   /**
-   * Match Spark's native "column not resolved" error. Spark 3.4+ uses the
-   * `UNRESOLVED_COLUMN.WITH_SUGGESTION` error class with a phrase like
-   * "A column or function parameter with name ... cannot be resolved"; older
-   * Spark just says "cannot be resolved". Accept either, but also require the
-   * specific column name appears so we know the right column was reported.
+   * Assert the failure is Spark's native unresolved-column error and not a Hudi rewrite.
+   *
+   * On Spark 3.4+ we require the structured `UNRESOLVED_COLUMN` error-class token. That
+   * token is produced only by Spark's own `CheckAnalysis`; the pre-PR Hudi path rewrote
+   * the failure as a generic "Failed to resolve query ..." message that never carried it,
+   * so requiring the token here actually distinguishes the new behavior from the old (the
+   * looser "cannot be resolved" substring would have matched either way — see
+   * https://github.com/apache/hudi/pull/18147#discussion_r2795763747). On Spark 3.3, which
+   * predates error classes, the phrasing varies by code path — accept the legacy
+   * "cannot resolve" / "cannot be resolved" forms as well as "Column '...' does not exist"
+   * (what Spark 3.3 emits for the unresolved references in these queries).
+   *
+   * In all cases require the offending column name to appear, so we know the precise
+   * column was reported rather than some unrelated resolution failure.
    */
   private def assertNativeUnresolvedColumn(msg: String, columnName: String): Unit = {
-    val hasCannotResolve =
-      msg.contains("cannot be resolved") ||
-        msg.contains("UNRESOLVED_COLUMN")
-    assert(hasCannotResolve,
-      s"Expected Spark's native unresolved-column error; got: $msg")
+    if (HoodieSparkUtils.gteqSpark3_4) {
+      assert(msg.contains("UNRESOLVED_COLUMN"),
+        s"Expected Spark's structured UNRESOLVED_COLUMN error class; got: $msg")
+    } else {
+      assert(msg.contains("cannot resolve") || msg.contains("cannot be resolved") ||
+        msg.contains("does not exist"),
+        s"Expected Spark's native unresolved-column error; got: $msg")
+    }
     assert(msg.contains(columnName),
       s"Expected error to mention column '$columnName'; got: $msg")
   }
 
+  /**
+   * Assert the failure is Spark's native table-not-found error. On Spark 3.4+ require the
+   * structured `TABLE_OR_VIEW_NOT_FOUND` error-class token (same reasoning as
+   * [[assertNativeUnresolvedColumn]]); on Spark 3.3 fall back to the legacy phrasing.
+   */
   private def assertNativeTableNotFound(msg: String, tableName: String): Unit = {
-    val hasTableNotFound =
-      msg.contains("TABLE_OR_VIEW_NOT_FOUND") ||
-        msg.toLowerCase.contains("table or view not found") ||
-        msg.contains("cannot be resolved")
-    assert(hasTableNotFound,
-      s"Expected Spark's native table-not-found error; got: $msg")
+    if (HoodieSparkUtils.gteqSpark3_4) {
+      assert(msg.contains("TABLE_OR_VIEW_NOT_FOUND"),
+        s"Expected Spark's structured TABLE_OR_VIEW_NOT_FOUND error class; got: $msg")
+    } else {
+      assert(msg.toLowerCase.contains("table or view not found"),
+        s"Expected Spark's native table-not-found error; got: $msg")
+    }
     assert(msg.contains(tableName),
       s"Expected error to mention table '$tableName'; got: $msg")
   }
