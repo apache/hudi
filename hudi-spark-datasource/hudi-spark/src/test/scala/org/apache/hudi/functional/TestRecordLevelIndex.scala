@@ -748,8 +748,9 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
     val metadata = metadataWriter(writeConfig).getTableMetadata
     val recordKeys = inserts.asScala.map(i => i.getRecordKey).asJava.stream().collect(Collectors.toList())
 
-    // Verify record index entries for both partitions
-    // When using fare.currency field, the actual partition paths will be like "fare.currency=USD"
+    // Verify record index entries for the USD partition. HoodieTestDataGenerator's
+    // FARE_NESTED_SCHEMA populator hard-codes currency="USD", so all 10 records land
+    // in fare.currency=USD and the assertion below is deterministic.
     val usdPartitionLocations = readRecordIndex(metadata, recordKeys, HOption.of("fare.currency=USD"))
 
     // All records should be found
