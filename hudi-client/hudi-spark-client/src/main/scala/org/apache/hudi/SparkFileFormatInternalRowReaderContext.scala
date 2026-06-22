@@ -133,9 +133,9 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     if (!shouldProjectVariants) {
       return recordIterator
     }
-    val req = sparkRequiredSchema.get
+    val requiredStruct = sparkRequiredSchema.get
     val dataStruct = HoodieInternalRowUtils.getCachedSchema(dataBlockSchema)
-    val targetStruct = overlayVariantProjections(dataStruct, req)
+    val targetStruct = overlayVariantProjections(dataStruct, requiredStruct)
     sparkAdapter.buildVariantProjector(dataStruct, targetStruct) match {
       case Some(p) =>
         new CloseableMappingIterator[InternalRow, InternalRow](recordIterator,
