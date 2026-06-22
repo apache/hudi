@@ -730,6 +730,10 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
           val v1Group = getFieldAsGroup(schema, "v1")
           assert(v1Group.containsField("typed_value"),
             s"v1 should be shredded with an inferred typed_value. Schema:\n$v1Group")
+          // The shredded variant group must carry the VARIANT logical type so external readers
+          // recognize it (parquet 1.16+; the inferrer is only present on Spark 4.1+, which ships it).
+          assert(Option(v1Group.getLogicalTypeAnnotation).exists(_.toString.contains("VARIANT")),
+            s"Shredded variant group must carry the VARIANT logical type annotation. Schema:\n$v1Group")
           val typedValue = getFieldAsGroup(v1Group, "typed_value")
           assert(typedValue.containsField("a") && typedValue.containsField("b")
             && typedValue.containsField("nested"),

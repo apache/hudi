@@ -29,7 +29,7 @@ import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.parquet.schema.{MessageType, Type}
+import org.apache.parquet.schema.{GroupType, MessageType, Type, Types}
 import org.apache.parquet.schema.Type.Repetition
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
@@ -470,6 +470,14 @@ trait SparkAdapter extends Serializable {
     fieldSchema: HoodieSchema,
     repetition: Repetition
   ): Type
+
+  /**
+   * Applies the Parquet VARIANT logical type annotation to a shredded variant group builder so
+   * external readers recognize the column as a Variant. Only meaningful on parquet 1.16+
+   * (Spark 4.1+); the default leaves the builder unchanged because the annotation type does not
+   * exist on earlier parquet (Spark 3.x never shreds variants, Spark 4.0 ships parquet 1.15.2).
+   */
+  def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = builder
 
   /**
    * Checks if a StructType represents a shredded Variant schema (has special shredding metadata).

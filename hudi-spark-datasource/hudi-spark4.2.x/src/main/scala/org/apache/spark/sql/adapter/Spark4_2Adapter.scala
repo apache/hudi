@@ -301,7 +301,7 @@ class Spark4_2Adapter extends BaseSpark4Adapter {
 
   // Apply LogicalTypeAnnotation.variantType((byte) 1) to the variant group, matching parquet 1.16+'s
   // SparkToParquetSchemaConverter convention.
-  override protected def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = {
+  override def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = {
     builder.as(LogicalTypeAnnotation.variantType(1.toByte))
   }
 
