@@ -309,7 +309,12 @@ object HoodieAnalysis extends SparkAdapterSupport {
           analyzer.execute(plan)
         }
 
-        if (resolved.output.exists(attr => isMetaField(attr.name))) {
+        // If the plan is still not fully resolved (e.g., it references non-existent
+        // tables or columns), fall through. Spark's CheckAnalysis runs later and
+        // produces precise UNRESOLVED_COLUMN / TABLE_OR_VIEW_NOT_FOUND errors with
+        // "did you mean" suggestions; intercepting UnresolvedException here would
+        // discard that context. Only inspect the output once the plan is resolved.
+        if (resolved.resolved && resolved.output.exists(attr => isMetaField(attr.name))) {
           Some(resolved.output)
         } else {
           None

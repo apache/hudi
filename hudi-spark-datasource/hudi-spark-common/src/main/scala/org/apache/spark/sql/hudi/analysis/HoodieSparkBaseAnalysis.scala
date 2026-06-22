@@ -185,7 +185,14 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
       val sourceTable = if (sourceTableO.resolved) sourceTableO else analyzer.execute(sourceTableO)
       val m = mO.asInstanceOf[MergeIntoTable].copy(targetTable = targetTable, sourceTable = sourceTable)
       // END: custom Hudi change
-      EliminateSubqueryAliases(targetTable) match {
+      // If the source table still has unresolved references (e.g. a non-existent
+      // column in the source query, or a missing source table), return the
+      // partially-resolved MIT and let Spark's CheckAnalysis surface the error.
+      // Continuing into the resolve-assignments path would either lose the column
+      // context or throw a less informative UnresolvedException.
+      if (!sourceTable.resolved) {
+        m
+      } else EliminateSubqueryAliases(targetTable) match {
         case r: NamedRelation if r.skipSchemaResolution =>
           // Do not resolve the expression if the target table accepts any schema.
           // This allows data sources to customize their own resolution logic using
