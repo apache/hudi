@@ -66,32 +66,6 @@ public class TestHoodieTableResourceLifecycle extends HoodieJavaClientTestHarnes
   }
 
   @Test
-  public void testUnclosedHoodieTableLeavesSpillableViewOnDisk() throws Exception {
-    String spillDir = basePath + "/.view_spill";
-    HoodieWriteConfig writeConfig = spillableDiskViewConfig(spillDir);
-    try (HoodieJavaWriteClient<?> client = getHoodieWriteClient(writeConfig)) {
-      insertFirstBatch(writeConfig, client, "001", "000", 10, HoodieJavaWriteClient::insert, false, true, 10,
-          metaClient.getInstantGenerator());
-    }
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-
-    // Mimic one table-service work unit on the driver: build a HoodieTable, materialize its spillable
-    // file-system view (forcing a spill to a BitCaskDiskMap), then drop the table without closing it.
-    HoodieTable<?, ?, ?, ?> table = HoodieJavaTable.create(writeConfig, context, metaClient);
-    table.getHoodieView().loadAllPartitions();
-    assertTrue(countDiskMapDirs(spillDir) > 0,
-        "Spilling the file-group view should create an on-disk BitCaskDiskMap directory");
-
-    table = null;
-    System.gc();
-    Thread.sleep(200);
-    // An unclosed HoodieTable leaves its disk map around until JVM exit; nothing closed the
-    // table -> view -> map, so GC does not release the on-disk resources.
-    assertTrue(countDiskMapDirs(spillDir) > 0,
-        "An unclosed HoodieTable must leave the spillable view's on-disk BitCaskDiskMap behind");
-  }
-
-  @Test
   public void testCloseReleasesSpillableFileSystemView() throws Exception {
     String spillDir = basePath + "/.view_spill";
     HoodieWriteConfig writeConfig = spillableDiskViewConfig(spillDir);

@@ -382,7 +382,16 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     metrics.emitCompactionCompleted();
 
     HoodieTable table = tableOpt.orElseGet(() -> createTable(config, context.getStorageConf()));
-    completeCompaction(compactionWriteMetadata.getCommitMetadata().get(), table, compactionInstantTime, tableWriteStats.getMetadataTableWriteStats());
+    try {
+      completeCompaction(compactionWriteMetadata.getCommitMetadata().get(), table, compactionInstantTime, tableWriteStats.getMetadataTableWriteStats());
+    } finally {
+      // Close only a table we created here; a caller-provided table is owned by the caller. Without this the
+      // per-cycle FileSystemView / BitCaskDiskMap would leak for the Option.empty() callers (e.g. StreamSync,
+      // HoodieCompactor, HoodieSparkCompactor) until JVM exit.
+      if (!tableOpt.isPresent()) {
+        table.close();
+      }
+    }
   }
 
   /**
@@ -446,7 +455,14 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     CommonClientUtils.stitchCompactionHoodieWriteStats(writeMetadata, tableWriteStats.getDataTableWriteStats());
     metrics.emitCompactionCompleted();
     HoodieTable table = tableOpt.orElseGet(() -> createTable(config, context.getStorageConf()));
-    completeLogCompaction(writeMetadata.getCommitMetadata().get(), table, compactionInstantTime, tableWriteStats.getMetadataTableWriteStats());
+    try {
+      completeLogCompaction(writeMetadata.getCommitMetadata().get(), table, compactionInstantTime, tableWriteStats.getMetadataTableWriteStats());
+    } finally {
+      // Close only a table we created here; a caller-provided table is owned by the caller.
+      if (!tableOpt.isPresent()) {
+        table.close();
+      }
+    }
   }
 
   /**
