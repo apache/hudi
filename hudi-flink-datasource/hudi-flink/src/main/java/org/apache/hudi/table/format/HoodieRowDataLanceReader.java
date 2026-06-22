@@ -32,9 +32,10 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.io.memory.HoodieArrowAllocator;
-import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.row.HoodieFlinkLanceArrowUtils;
+import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.RowDataQueryContexts;
@@ -65,7 +66,7 @@ import static org.apache.hudi.avro.HoodieBloomFilterWriteSupport.HOODIE_MIN_RECO
 /**
  * Lance reader for Flink RowData base files.
  */
-public class HoodieRowDataLanceReader implements HoodieFileReader<RowData> {
+public class HoodieRowDataLanceReader implements HoodieRowDataFileReader {
 
   private static final int DEFAULT_BATCH_SIZE = 512;
 
@@ -150,6 +151,20 @@ public class HoodieRowDataLanceReader implements HoodieFileReader<RowData> {
     HoodieSchema schema = HoodieSchemaUtils.getRecordKeySchema();
     ClosableIterator<RowData> rowDataItr = getRowDataIterator(RowDataQueryContexts.fromSchema(schema).getRowType(), schema);
     return new CloseableMappingIterator<>(rowDataItr, rowData -> rowData.getString(0).toString());
+  }
+
+  @Override
+  public ClosableIterator<RowData> getRowDataIterator(
+      HoodieSchema dataSchema,
+      HoodieSchema requiredSchema,
+      InternalSchemaManager internalSchemaManager,
+      List<ExpressionPredicates.Predicate> predicates) {
+    // Lance base-file reading does not support schema evolution.
+    if (internalSchemaManager != InternalSchemaManager.DISABLED
+        && !internalSchemaManager.getMergeSchema(path.getName()).isEmptySchema()) {
+      throw new HoodieValidationException("Flink Lance base-file support does not support schema evolution.");
+    }
+    return getRowDataIterator(RowDataQueryContexts.fromSchema(requiredSchema).getRowType(), requiredSchema);
   }
 
   public ClosableIterator<RowData> getRowDataIterator(DataType dataType, HoodieSchema requestedSchema) {
