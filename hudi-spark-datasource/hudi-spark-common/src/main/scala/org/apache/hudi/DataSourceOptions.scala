@@ -1076,12 +1076,12 @@ object DataSourceOptionsHelper {
    * normalized configs.
    */
   def normalizeSparkHoodiePrefix(parameters: Map[String, String]): Map[String, String] = {
-    val normalized = parameters.collect {
+    val rekeyedSparkHoodie = parameters.collect {
       case (key, value) if key.startsWith(SPARK_HOODIE_PREFIX) =>
         (key.stripPrefix(SPARK_PREFIX), value)
     }
     val nonSparkHoodie = parameters.filterNot(_._1.startsWith(SPARK_HOODIE_PREFIX))
-    normalized ++ nonSparkHoodie
+    rekeyedSparkHoodie ++ nonSparkHoodie
   }
 
   // put all the configs with alternatives here
