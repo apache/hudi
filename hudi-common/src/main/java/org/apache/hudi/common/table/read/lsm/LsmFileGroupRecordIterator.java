@@ -38,7 +38,7 @@ import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.OrderingValues;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -85,6 +85,7 @@ import static org.apache.hudi.io.util.FileIOUtils.getDefaultSpillableMapBasePath
 public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedRecord<T>> {
 
   private static final String DELETE_LOG_RECORD_KEY_FIELD = "record_key";
+  private static final List<String> DELETE_LOG_ORDERING_FIELD_NAMES = Arrays.asList("ordering_val");
 
   private final HoodieReaderContext<T> readerContext;
   private final HoodieStorage storage;
@@ -146,18 +147,18 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
   }
 
   /**
-   * Builds one reader state for each sorted run that has at least one record.
+   * Builds one sorted-run reader for each sorted run that has at least one record.
    *
    * <p>The assigned {@code mergeOrder} is the stable source precedence used when multiple runs expose
    * the same key. It is assigned before spill selection so direct and spilled iterators remain
    * semantically identical during the loser-tree merge.
    */
-  private List<ReaderState<T>> initializeReaders() throws IOException {
-    List<ReaderState<T>> readerStates = new ArrayList<>();
+  private List<SortedRunReader<T>> initializeReaders() throws IOException {
+    List<SortedRunReader<T>> sortedRunReaders = new ArrayList<>();
     int mergeOrder = 0;
     boolean hasBaseFileReader = includeBaseFile && inputSplit.getBaseFileOption().isPresent();
     if (hasBaseFileReader) {
-      addReader(readerStates, mergeOrder++, createBaseFileIterator(inputSplit.getBaseFileOption().get()));
+      addReader(sortedRunReaders, mergeOrder++, createBaseFileIterator(inputSplit.getBaseFileOption().get()));
     }
 
     List<LogReaderSpec> logReaderSpecs = new ArrayList<>();
@@ -167,9 +168,9 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
     Set<Integer> directLogMergeOrders = selectDirectLogMergeOrders(logReaderSpecs, hasBaseFileReader);
     for (LogReaderSpec spec : logReaderSpecs) {
       ClosableIterator<BufferedRecord<T>> iterator = createFileIterator(spec.logFile.getPathInfo(), spec.logFile.getPath(), spec.logFile.getFileSize());
-      addReader(readerStates, spec.mergeOrder, maybeSpillIterator(directLogMergeOrders.contains(spec.mergeOrder), iterator));
+      addReader(sortedRunReaders, spec.mergeOrder, maybeSpillIterator(directLogMergeOrders.contains(spec.mergeOrder), iterator));
     }
-    return readerStates;
+    return sortedRunReaders;
   }
 
   /**
@@ -180,6 +181,13 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
    * readers tend to be cheaper to keep open while avoiding unnecessary spill materialization.
    */
   private Set<Integer> selectDirectLogMergeOrders(List<LogReaderSpec> logReaderSpecs, boolean hasBaseFileReader) {
+    return selectDirectLogMergeOrders(logReaderSpecs, hasBaseFileReader, spillThreshold);
+  }
+
+  @VisibleForTesting
+  static Set<Integer> selectDirectLogMergeOrders(List<LogReaderSpec> logReaderSpecs,
+                                                 boolean hasBaseFileReader,
+                                                 int spillThreshold) {
     int directLogBudget = spillThreshold - (hasBaseFileReader ? 1 : 0);
     if (directLogBudget <= 0) {
       return new HashSet<>();
@@ -210,13 +218,14 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
   /**
    * Metadata used only for choosing the direct-versus-spilled L0 reader plan.
    */
-  private static class LogReaderSpec {
-    private final int mergeOrder;
-    private final HoodieLogFile logFile;
-    private final boolean nativeDeleteLog;
-    private final long fileSize;
+  @VisibleForTesting
+  static class LogReaderSpec {
+    final int mergeOrder;
+    final HoodieLogFile logFile;
+    final boolean nativeDeleteLog;
+    final long fileSize;
 
-    private LogReaderSpec(int mergeOrder, HoodieLogFile logFile) {
+    LogReaderSpec(int mergeOrder, HoodieLogFile logFile) {
       this.mergeOrder = mergeOrder;
       this.logFile = logFile;
       this.nativeDeleteLog = FSUtils.isNativeDeleteLogFile(logFile.getFileName());
@@ -227,20 +236,24 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
   /**
    * Adds a reader to the merge only when the underlying sorted run contains at least one record.
    */
-  private void addReader(List<ReaderState<T>> readerStates, int mergeOrder, ClosableIterator<BufferedRecord<T>> iterator) {
-    ReaderState<T> readerState = new ReaderState<>(mergeOrder, iterator);
-    if (readerState.advance()) {
-      readerStates.add(readerState);
+  private void addReader(List<SortedRunReader<T>> sortedRunReaders, int mergeOrder, ClosableIterator<BufferedRecord<T>> iterator) {
+    SortedRunReader<T> sortedRunReader = new SortedRunReader<>(mergeOrder, iterator);
+    if (sortedRunReader.advance()) {
+      sortedRunReaders.add(sortedRunReader);
     } else {
-      readerState.close();
+      sortedRunReader.close();
     }
   }
 
   /**
-   * Creates the L1/base sorted-run iterator, using the bootstrap base file when the base file is
-   * bootstrapped.
+   * Creates the L1/base sorted-run iterator.
    */
   private ClosableIterator<BufferedRecord<T>> createBaseFileIterator(HoodieBaseFile baseFile) throws IOException {
+    if (baseFile.getBootstrapBaseFile().isPresent()) {
+      // Bootstrap base files require joining the skeleton file with the external data file.
+      // Keep that path on HoodieFileGroupReader until the LSM reader implements the same merge.
+      throw new UnsupportedOperationException("LSM file group reader does not support bootstrap base files");
+    }
     BaseFile file = baseFile.getBootstrapBaseFile().orElse(baseFile);
     return createFileIterator(file.getPathInfo(), file.getStoragePath(), file.getFileSize());
   }
@@ -305,9 +318,18 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
           storagePath, 0, length, HoodieSchemas.DELETE_LOG_SCHEMA, HoodieSchemas.DELETE_LOG_SCHEMA, storage);
     }
     return new CloseableMappingIterator<>(recordIterator, record -> {
-      Object recordKey = readerContext.getRecordContext().getValue(record, HoodieSchemas.DELETE_LOG_SCHEMA, DELETE_LOG_RECORD_KEY_FIELD);
-      return BufferedRecords.createDelete(recordKey.toString(), OrderingValues.getDefault());
+      return createNativeDeleteRecord(readerContext, record);
     });
+  }
+
+  @VisibleForTesting
+  static <T> BufferedRecord<T> createNativeDeleteRecord(HoodieReaderContext<T> readerContext, T record) {
+    Object recordKey = readerContext.getRecordContext().getValue(record, HoodieSchemas.DELETE_LOG_SCHEMA, DELETE_LOG_RECORD_KEY_FIELD);
+    // Preserve the delete log's ordering value so event-time/custom merge modes can compare
+    // deletes against data records instead of treating every native delete as commit-time ordered.
+    Comparable orderingValue =
+        readerContext.getRecordContext().getOrderingValue(record, HoodieSchemas.DELETE_LOG_SCHEMA, DELETE_LOG_ORDERING_FIELD_NAMES);
+    return BufferedRecords.createDelete(recordKey.toString(), orderingValue);
   }
 
   @Override
@@ -368,27 +390,19 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
     readers.close();
   }
 
-  private enum State {
-    WINNER_WITH_NEW_KEY,
-    WINNER_WITH_SAME_KEY,
-    WINNER_POPPED,
-    LOSER_WITH_NEW_KEY,
-    LOSER_WITH_SAME_KEY,
-    LOSER_POPPED
-  }
-
   /**
    * Loser-tree state machine for k-way merging. Each leaf keeps one active record from
    * one sorted input stream; {@code tree[0]} stores the current champion and internal
    * nodes store the loser from the corresponding tournament match.
    */
-  private static class LoserTree<T> {
-    private final List<ReaderState<T>> leaves;
+  @VisibleForTesting
+  static class LoserTree<T> {
+    private final List<SortedRunReader<T>> leaves;
     private final int leafBase;
     private final int[] tree;
     private final int[] winners;
 
-    private LoserTree(List<ReaderState<T>> leaves) {
+    LoserTree(List<SortedRunReader<T>> leaves) {
       this.leaves = leaves;
       this.leafBase = nextPowerOfTwo(Math.max(1, leaves.size()));
       this.tree = new int[leafBase];
@@ -409,38 +423,32 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
           replay(node);
         }
       }
-      setChampionState(null);
     }
 
-    private boolean isEmpty() {
+    boolean isEmpty() {
       return tree[0] < 0;
     }
 
-    private BufferedRecord<T> peekWinner() {
+    BufferedRecord<T> peekWinner() {
       int winnerIndex = tree[0];
       return winnerIndex < 0 ? null : leaves.get(winnerIndex).current;
     }
 
-    private BufferedRecord<T> popWinner() {
+    BufferedRecord<T> popWinner() {
       int winnerIndex = tree[0];
-      ReaderState<T> winner = leaves.get(winnerIndex);
+      SortedRunReader<T> winner = leaves.get(winnerIndex);
       BufferedRecord<T> record = winner.current;
-      String recordKey = record.getRecordKey();
-      winner.state = State.WINNER_POPPED;
-      winner.firstSameKeyIndex = -1;
       if (!winner.advance()) {
-        winner.state = State.LOSER_POPPED;
         winner.close();
       }
-      update(winnerIndex, recordKey);
+      update(winnerIndex);
       return record;
     }
 
-    private void update(int leafIndex, String poppedKey) {
+    private void update(int leafIndex) {
       winners[leafBase + leafIndex] = leaves.get(leafIndex).current == null ? -1 : leafIndex;
       if (leafBase == 1) {
         tree[0] = winners[leafBase];
-        setChampionState(poppedKey);
         return;
       }
       int node = (leafBase + leafIndex) >> 1;
@@ -448,7 +456,6 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
         replay(node);
         node >>= 1;
       }
-      setChampionState(poppedKey);
     }
 
     private void replay(int node) {
@@ -464,15 +471,12 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
         winners[node] = left;
         tree[node] = -1;
       } else {
-        int compareResult = compare(left, right);
-        if (compareResult <= 0) {
+        if (compare(left, right) <= 0) {
           winners[node] = left;
           tree[node] = right;
-          markLoser(right, left, compareResult);
         } else {
           winners[node] = right;
           tree[node] = left;
-          markLoser(left, right, compareResult);
         }
       }
       if (node == 1) {
@@ -481,8 +485,8 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
     }
 
     private int compare(int leftIndex, int rightIndex) {
-      ReaderState<T> left = leaves.get(leftIndex);
-      ReaderState<T> right = leaves.get(rightIndex);
+      SortedRunReader<T> left = leaves.get(leftIndex);
+      SortedRunReader<T> right = leaves.get(rightIndex);
       int keyCompare = left.current.getRecordKey().compareTo(right.current.getRecordKey());
       if (keyCompare != 0) {
         return keyCompare;
@@ -493,41 +497,8 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
       return Integer.compare(left.mergeOrder, right.mergeOrder);
     }
 
-    private void markLoser(int loserIndex, int winnerIndex, int compareResult) {
-      ReaderState<T> loser = leaves.get(loserIndex);
-      boolean sameKey = leaves.get(loserIndex).current.getRecordKey().equals(leaves.get(winnerIndex).current.getRecordKey());
-      loser.state = sameKey ? State.LOSER_WITH_SAME_KEY : State.LOSER_WITH_NEW_KEY;
-      loser.firstSameKeyIndex = sameKey ? winnerIndex : -1;
-    }
-
-    private void setChampionState(String poppedKey) {
-      int championIndex = tree[0];
-      if (championIndex < 0) {
-        return;
-      }
-      ReaderState<T> champion = leaves.get(championIndex);
-      champion.state = poppedKey != null && poppedKey.equals(champion.current.getRecordKey())
-          ? State.WINNER_WITH_SAME_KEY
-          : State.WINNER_WITH_NEW_KEY;
-      champion.firstSameKeyIndex = findFirstSameKeyIndex(championIndex);
-    }
-
-    private int findFirstSameKeyIndex(int championIndex) {
-      String championKey = leaves.get(championIndex).current.getRecordKey();
-      int firstSameKeyIndex = -1;
-      for (int loserIndex : tree) {
-        if (loserIndex >= 0 && loserIndex != championIndex
-            && leaves.get(loserIndex).current != null
-            && championKey.equals(leaves.get(loserIndex).current.getRecordKey())
-            && (firstSameKeyIndex < 0 || leaves.get(loserIndex).mergeOrder < leaves.get(firstSameKeyIndex).mergeOrder)) {
-          firstSameKeyIndex = loserIndex;
-        }
-      }
-      return firstSameKeyIndex;
-    }
-
     private void close() {
-      leaves.forEach(ReaderState::close);
+      leaves.forEach(SortedRunReader::close);
     }
 
     private static int nextPowerOfTwo(int value) {
@@ -539,20 +510,19 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
     }
   }
 
-  private static class ReaderState<T> {
+  @VisibleForTesting
+  static class SortedRunReader<T> {
     private final int mergeOrder;
     private final ClosableIterator<BufferedRecord<T>> iterator;
     private BufferedRecord<T> current;
-    private State state = State.WINNER_WITH_NEW_KEY;
-    private int firstSameKeyIndex = -1;
     private boolean closed;
 
-    private ReaderState(int mergeOrder, ClosableIterator<BufferedRecord<T>> iterator) {
+    SortedRunReader(int mergeOrder, ClosableIterator<BufferedRecord<T>> iterator) {
       this.mergeOrder = mergeOrder;
       this.iterator = iterator;
     }
 
-    private boolean advance() {
+    boolean advance() {
       if (iterator.hasNext()) {
         current = iterator.next();
         return true;
@@ -561,7 +531,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
       return false;
     }
 
-    private void close() {
+    void close() {
       if (!closed) {
         iterator.close();
         closed = true;

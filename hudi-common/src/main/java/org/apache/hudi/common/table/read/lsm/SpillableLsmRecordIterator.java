@@ -64,6 +64,7 @@ class SpillableLsmRecordIterator<T> implements ClosableIterator<BufferedRecord<T
                              String spillBasePath) {
     this.serializer = serializer;
     this.recordContext = recordContext;
+    Throwable spillFailure = null;
     try {
       Path spillDirectory = Paths.get(spillBasePath);
       Files.createDirectories(spillDirectory);
@@ -71,9 +72,13 @@ class SpillableLsmRecordIterator<T> implements ClosableIterator<BufferedRecord<T
       this.spillFile.deleteOnExit();
       this.recordCount = spill(sourceIterator);
     } catch (IOException e) {
+      spillFailure = e;
       throw new HoodieIOException("Failed to spill LSM input iterator", e);
+    } catch (RuntimeException e) {
+      spillFailure = e;
+      throw e;
     } finally {
-      sourceIterator.close();
+      closeSourceIterator(sourceIterator, spillFailure);
     }
   }
 
@@ -152,6 +157,19 @@ class SpillableLsmRecordIterator<T> implements ClosableIterator<BufferedRecord<T
       Files.deleteIfExists(spillFile.toPath());
     } catch (IOException e) {
       throw new HoodieIOException("Failed to delete spilled LSM input file " + spillFile, e);
+    }
+  }
+
+  private void closeSourceIterator(ClosableIterator<BufferedRecord<T>> sourceIterator,
+                                   Throwable spillFailure) {
+    try {
+      sourceIterator.close();
+    } catch (RuntimeException e) {
+      if (spillFailure != null) {
+        spillFailure.addSuppressed(e);
+      } else {
+        throw e;
+      }
     }
   }
 }

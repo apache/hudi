@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read.lsm;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -35,6 +36,8 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestSpillableLsmRecordIterator {
@@ -64,9 +67,39 @@ class TestSpillableLsmRecordIterator {
     assertEquals(0, spillFileCount());
   }
 
+  @Test
+  void testSpillFailurePreservesSourceCloseFailureAsSuppressed() throws IOException {
+    Path spillBaseFile = Files.createTempFile(tempDir, "spill-base", ".tmp");
+    RuntimeException closeFailure = new RuntimeException("source close failed");
+
+    HoodieIOException exception = assertThrows(HoodieIOException.class, () -> new SpillableLsmRecordIterator<>(
+        closeFailingIterator(closeFailure), new DefaultSerializer<>(), null, spillBaseFile.toString()));
+
+    assertSame(closeFailure, exception.getCause().getSuppressed()[0]);
+  }
+
   private long spillFileCount() throws IOException {
     try (Stream<Path> paths = Files.list(tempDir)) {
       return paths.count();
     }
+  }
+
+  private ClosableIterator<BufferedRecord<String>> closeFailingIterator(RuntimeException closeFailure) {
+    return new ClosableIterator<BufferedRecord<String>>() {
+      @Override
+      public boolean hasNext() {
+        return false;
+      }
+
+      @Override
+      public BufferedRecord<String> next() {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public void close() {
+        throw closeFailure;
+      }
+    };
   }
 }

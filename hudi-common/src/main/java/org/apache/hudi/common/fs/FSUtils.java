@@ -79,7 +79,7 @@ public class FSUtils {
   public static final Pattern LOG_FILE_PATTERN =
       Pattern.compile("^\\.([^._]+)_([^.]*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(\\.cdc)?)?$");
   public static final Pattern NATIVE_LOG_FILE_PATTERN =
-      Pattern.compile("^([^_]+)_((\\d+)-(\\d+)-(\\d+))_([^_]+)_(\\d+)(\\.(?:log|deletes|cdc))\\.(parquet)$");
+      Pattern.compile("^([^._]+)_((\\d+)-(\\d+)-(\\d+))_([^_]+)_(\\d+)(\\.(?:log|deletes|cdc))\\.(parquet)$");
   public static final Pattern PREFIX_BY_FILE_ID_PATTERN = Pattern.compile("^(.+)-(\\d+)");
   private static final Pattern BASE_FILE_PATTERN = Pattern.compile("[a-zA-Z0-9-]+_[a-zA-Z0-9-]+_[0-9]+\\.[a-zA-Z0-9]+");
 

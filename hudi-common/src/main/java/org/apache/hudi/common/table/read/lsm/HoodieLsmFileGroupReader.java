@@ -185,6 +185,9 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
   private ClosableIterator<BufferedRecord<T>> getBufferedRecordIterator(IteratorMode iteratorMode,
                                                                         boolean includeBaseFile) throws IOException {
     this.readerContext.setIteratorMode(iteratorMode);
+    if (lsmRecordIterator != null) {
+      lsmRecordIterator.close();
+    }
     this.lsmRecordIterator = new LsmFileGroupRecordIterator<>(
         readerContext, storage, inputSplit, orderingFieldNames, metaClient, props, readerParameters, readStats, fileGroupUpdateCallback, includeBaseFile);
     return new HoodieLsmFileGroupReaderIterator<>(this);
