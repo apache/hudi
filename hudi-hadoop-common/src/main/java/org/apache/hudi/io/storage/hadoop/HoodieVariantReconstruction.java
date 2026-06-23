@@ -82,16 +82,12 @@ final class HoodieVariantReconstruction {
 
   /**
    * Builds a reconstruction for the given file and requested schemas, or returns {@code null} when
-   * none is needed (no shredded variant columns in the file, or reading shredded variants disabled).
-   * Throws when the file has shredded variant columns to reconstruct but no provider is available,
-   * since proceeding would silently drop the typed_value payload.
+   * none is needed (the file has no shredded variant columns). Throws when the file has shredded
+   * variant columns to reconstruct but reading shredded variants is disabled, or no provider is
+   * available: either way, reading at the unshredded schema would silently drop the typed_value payload.
    */
   static HoodieVariantReconstruction create(HoodieSchema fileSchema, HoodieSchema requestedSchema, HoodieStorage storage) {
     if (requestedSchema.getType() != HoodieSchemaType.RECORD || fileSchema.getType() != HoodieSchemaType.RECORD) {
-      return null;
-    }
-    if (!storage.getConf().getBoolean(HoodieStorageConfig.PARQUET_VARIANT_ALLOW_READING_SHREDDED.key(),
-        HoodieStorageConfig.PARQUET_VARIANT_ALLOW_READING_SHREDDED.defaultValue())) {
       return null;
     }
 
@@ -112,7 +108,18 @@ final class HoodieVariantReconstruction {
       }
     }
     if (!anyTarget) {
+      // No shredded variant columns in the file: nothing to reconstruct, regardless of the flag.
       return null;
+    }
+
+    if (!storage.getConf().getBoolean(HoodieStorageConfig.PARQUET_VARIANT_ALLOW_READING_SHREDDED.key(),
+        HoodieStorageConfig.PARQUET_VARIANT_ALLOW_READING_SHREDDED.defaultValue())) {
+      // Reading at the unshredded schema would drop typed_value and silently corrupt variants whose
+      // payload lives there, so fail fast. Mirrors the no-provider branch and Spark's
+      // allowReadingShredded=false, which rejects shredded reads rather than discarding data.
+      throw new HoodieException("Base file has shredded variant column(s) but reading shredded variants is "
+          + "disabled (" + HoodieStorageConfig.PARQUET_VARIANT_ALLOW_READING_SHREDDED.key()
+          + "=false). Enable it to reconstruct them; otherwise the typed_value payload would be silently dropped.");
     }
 
     VariantShreddingProvider provider = loadProvider(storage);
