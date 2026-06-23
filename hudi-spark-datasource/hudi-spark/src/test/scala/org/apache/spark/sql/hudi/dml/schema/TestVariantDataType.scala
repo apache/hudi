@@ -136,8 +136,12 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath
-      // Shred variants on write so the compacted base file is shredded; the AVRO read path must
-      // then reconstruct the unshredded variant when reading it back (#18931).
+      // Shred variants on write so the compacted base file is shredded, then read it back. Note the
+      // Spark SQL read here goes through the InternalRow reader (SparkFileFormatInternalRowReaderContext),
+      // which reconstructs the shredded variant natively - it does NOT exercise the AVRO read-path
+      // reconstruction (#18931, HoodieVariantReconstruction), which Spark compaction never reaches.
+      // That path is covered directly by TestSpark4VariantShreddingProvider and
+      // TestHoodieVariantReconstruction.
       spark.sql(
         s"""
            |create table $tableName (
