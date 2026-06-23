@@ -2181,16 +2181,16 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     cleanProps.setProperty("hoodie.clean.automatic", "true");
     cleanProps.setProperty("hoodie.clean.commits.retained", "1");
     cleanProps.setProperty("hoodie.clean.multiple.enabled", "false");
-    HoodieWriteConfig cleanCfgs = getConfigBuilder().withProperties(cleanProps).build();
-    SparkRDDWriteClient cleanClient = new SparkRDDWriteClient(context, cleanCfgs);
+    HoodieWriteConfig cleanCfg = getConfigBuilder().withProperties(cleanProps).build();
+    SparkRDDWriteClient cleanClient = new SparkRDDWriteClient(context, cleanCfg);
     cleanClient.scheduleTableService(Option.empty(), TableServiceType.CLEAN);
 
     // Verify whether clean operation is scheduled.
-    Option<HoodieInstant> firsCleanInstant = metaClient.reloadActiveTimeline().lastInstant();
-    assertTrue(firsCleanInstant.isPresent());
-    assertEquals(CLEAN_ACTION, firsCleanInstant.get().getAction());
+    Option<HoodieInstant> firstCleanInstant = metaClient.reloadActiveTimeline().lastInstant();
+    assertTrue(firstCleanInstant.isPresent());
+    assertEquals(CLEAN_ACTION, firstCleanInstant.get().getAction());
 
-    // Second upsert
+    // Third upsert
     String fourthCommit = WriteClientTestUtils.createNewInstantTime();
     updateBatch(cfg, client, fourthCommit, thirdCommit, Option.empty(), "000", 100,
         SparkRDDWriteClient::upsert, false, true, 100, 100, 4, INSTANT_GENERATOR);
@@ -2206,7 +2206,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertEquals(1, cleanTimeline.countInstants());
     HoodieInstant cleanInstant = cleanTimeline.getInstants().get(0);
     assertTrue(cleanInstant.isCompleted());
-    assertEquals(firsCleanInstant.get().requestedTime(), cleanInstant.requestedTime());
+    assertEquals(firstCleanInstant.get().requestedTime(), cleanInstant.requestedTime());
   }
 
   /**
