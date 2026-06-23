@@ -20,6 +20,7 @@ import io.trino.plugin.hudi.util.SynthesizedColumnHandler;
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
 import io.trino.spi.connector.ConnectorPageSource;
+import io.trino.spi.connector.SourcePage;
 import io.trino.spi.metrics.Metrics;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
@@ -88,7 +89,7 @@ public class HudiPageSource
     }
 
     @Override
-    public Page getNextPage()
+    public SourcePage getNextSourcePage()
     {
         checkState(pageBuilder.isEmpty(), "PageBuilder is not empty at the beginning of a new page");
         try {
@@ -102,7 +103,7 @@ public class HudiPageSource
 
         Page newPage = pageBuilder.build();
         pageBuilder.reset();
-        return newPage;
+        return SourcePage.create(newPage);
     }
 
     @Override
