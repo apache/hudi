@@ -30,7 +30,6 @@ import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -69,7 +68,6 @@ class SpillableLsmRecordIterator<T> implements ClosableIterator<BufferedRecord<T
       Path spillDirectory = Paths.get(spillBasePath);
       Files.createDirectories(spillDirectory);
       this.spillFile = Files.createTempFile(spillDirectory, SPILL_FILE_PREFIX, SPILL_FILE_SUFFIX).toFile();
-      this.spillFile.deleteOnExit();
       this.recordCount = spill(sourceIterator);
     } catch (IOException e) {
       spillFailure = e;
@@ -148,7 +146,7 @@ class SpillableLsmRecordIterator<T> implements ClosableIterator<BufferedRecord<T
 
   private void ensureInputStream() throws IOException {
     if (inputStream == null) {
-      inputStream = new DataInputStream(new BufferedInputStream(new FileInputStream(spillFile), BUFFER_SIZE));
+      inputStream = new DataInputStream(new BufferedInputStream(Files.newInputStream(spillFile.toPath()), BUFFER_SIZE));
     }
   }
 

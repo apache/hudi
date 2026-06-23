@@ -203,6 +203,7 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
     return new CloseableMappingIterator<>(getBufferedRecordIterator(IteratorMode.ENGINE_RECORD, true), BufferedRecord::getRecord);
   }
 
+  @Override
   public ClosableIterator<HoodieRecord<T>> getClosableHoodieRecordIterator() throws IOException {
     return new CloseableMappingIterator<>(getBufferedRecordIterator(IteratorMode.HOODIE_RECORD, true),
         bufferedRecord -> readerContext.getRecordContext().constructFinalHoodieRecord(bufferedRecord));

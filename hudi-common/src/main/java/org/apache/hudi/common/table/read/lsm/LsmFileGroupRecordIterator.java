@@ -22,7 +22,6 @@ package org.apache.hudi.common.table.read.lsm;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -254,8 +253,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
       // Keep that path on HoodieFileGroupReader until the LSM reader implements the same merge.
       throw new UnsupportedOperationException("LSM file group reader does not support bootstrap base files");
     }
-    BaseFile file = baseFile.getBootstrapBaseFile().orElse(baseFile);
-    return createFileIterator(file.getPathInfo(), file.getStoragePath(), file.getFileSize());
+    return createFileIterator(baseFile.getPathInfo(), baseFile.getStoragePath(), baseFile.getFileSize());
   }
 
   /**

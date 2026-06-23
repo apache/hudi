@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -75,11 +76,13 @@ public class FSUtils {
 
   // Log files are of this pattern - .b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1_1-0-1
   // Archive log files are of this pattern - .commits_.archive.1_1-0-1
+  // Native log files are of this pattern - b5068208-e1a4-11e6-bf01-fe55135034f3_1-0-1_20170101134598_1.log.parquet
+  // For native log files, the file extension is log/deletes/cdc and the suffix is the native file format.
   public static final String PATH_SEPARATOR = "/";
   public static final Pattern LOG_FILE_PATTERN =
       Pattern.compile("^\\.([^._]+)_([^.]*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(\\.cdc)?)?$");
   public static final Pattern NATIVE_LOG_FILE_PATTERN =
-      Pattern.compile("^([^._]+)_((\\d+)-(\\d+)-(\\d+))_([^_]+)_(\\d+)(\\.(?:log|deletes|cdc))\\.(parquet)$");
+      Pattern.compile("^([^._]+)_((\\d+)-(\\d+)-(\\d+))_([^_]+)_(\\d+)\\.(log|deletes|cdc)\\.([^.]+)$");
   public static final Pattern PREFIX_BY_FILE_ID_PATTERN = Pattern.compile("^(.+)-(\\d+)");
   private static final Pattern BASE_FILE_PATTERN = Pattern.compile("[a-zA-Z0-9-]+_[a-zA-Z0-9-]+_[0-9]+\\.[a-zA-Z0-9]+");
 
@@ -335,7 +338,7 @@ public class FSUtils {
   public static String getFileExtensionFromLog(StoragePath logPath) {
     Option<Matcher> nativeLogMatcher = matchNativeLogFile(logPath.getName());
     if (nativeLogMatcher.isPresent()) {
-      return nativeLogMatcher.get().group(9);
+      return nativeLogMatcher.get().group(8);
     }
     Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
     if (!matcher.matches()) {
@@ -521,7 +524,19 @@ public class FSUtils {
   }
 
   public static boolean isNativeDeleteLogFile(String fileName) {
-    return matchNativeLogFile(fileName).map(matcher -> ".deletes".equals(matcher.group(8))).orElse(false);
+    return matchNativeLogFile(fileName).map(matcher -> "deletes".equals(matcher.group(8))).orElse(false);
+  }
+
+  public static boolean isCDCLogFile(String fileName) {
+    if (StringUtils.isNullOrEmpty(fileName)) {
+      return false;
+    }
+    Option<Matcher> nativeLogMatcher = matchNativeLogFile(fileName);
+    if (nativeLogMatcher.isPresent()) {
+      return HoodieCDCUtils.CDC_LOGFILE_SUFFIX.substring(1).equals(nativeLogMatcher.get().group(8));
+    }
+    Matcher matcher = LOG_FILE_PATTERN.matcher(getFileNameFromPath(fileName));
+    return matcher.matches() && HoodieCDCUtils.CDC_LOGFILE_SUFFIX.equals(matcher.group(10));
   }
 
   private static Option<Matcher> matchLogFile(String fileName) {
@@ -530,9 +545,7 @@ public class FSUtils {
       return nativeLogMatcher;
     }
     Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
-    return matcher.matches()
-        ? Option.of(matcher)
-        : Option.empty();
+    return matcher.matches() ? Option.of(matcher) : Option.empty();
   }
 
   public static boolean isDataFile(StoragePath path) {
