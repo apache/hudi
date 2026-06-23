@@ -167,6 +167,39 @@ class TestDataSourceOptions {
   }
 
   @Test
+  def testCollectSparkHoodieConfsForwardsOnlySparkPrefix(): Unit = {
+    val sqlContext = mock(classOf[SQLContext])
+    when(sqlContext.getAllConfs).thenReturn(Map(
+      "spark.hoodie.datasource.hive_sync.use_spark_catalog" -> "true", // forwarded (the --conf use case)
+      "hoodie.logfile.data.block.format" -> "parquet",                 // bare hoodie.* must NOT leak into writes
+      "hoodie.datasource.write.operation" -> "bulk_insert",            // bare hoodie.* must NOT leak into writes
+      "spark.sql.shuffle.partitions" -> "200"                          // non-hoodie, filtered out
+    ))
+
+    val result = DataSourceOptionsHelper.collectSparkHoodieConfs(sqlContext, Map.empty)
+
+    assertEquals("true", result("hoodie.datasource.hive_sync.use_spark_catalog"))
+    assertFalse(result.contains("hoodie.logfile.data.block.format"))
+    assertFalse(result.contains("hoodie.datasource.write.operation"))
+    assertFalse(result.contains("spark.sql.shuffle.partitions"))
+  }
+
+  @Test
+  def testCollectSparkHoodieConfsExplicitOptionsWin(): Unit = {
+    val sqlContext = mock(classOf[SQLContext])
+    when(sqlContext.getAllConfs).thenReturn(Map(
+      "spark.hoodie.datasource.write.operation" -> "insert"
+    ))
+
+    val result = DataSourceOptionsHelper.collectSparkHoodieConfs(sqlContext, Map(
+      "hoodie.datasource.write.operation" -> "upsert" // explicit overrides spark.hoodie.*
+    ))
+
+    assertEquals("upsert", result("hoodie.datasource.write.operation"))
+    assertFalse(result.contains("spark.hoodie.datasource.write.operation"))
+  }
+
+  @Test
   def testWriteDefaultsSupportSparkHoodieConfigs(): Unit = {
     val params = HoodieWriterUtils.parametersWithWriteDefaults(Map(
       "spark.hoodie.datasource.write.operation" -> "upsert"
