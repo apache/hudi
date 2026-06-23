@@ -366,6 +366,46 @@ public class TestHiveSyncTool {
   }
 
   /**
+   * Exercises the DROP path in HiveQL mode with batching on. DROP routes through
+   * IMetaStoreClient.dropPartition (Thrift, not Hive Driver), so when batching is
+   * enabled it fans out across IMetaStoreClientPool. Verifies the partition set
+   * shrinks as expected when batches drop in parallel.
+   */
+  @Test
+  public void testHiveQLDropPartitionsWithBatching() throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), HiveSyncMode.HIVEQL.name());
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_ENABLED.key(), "true");
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_THREADS.key(), "3");
+    // Small batch_num so we get multiple drop batches dispatched in parallel.
+    hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "2");
+
+    int partitionCount = 8;
+    HiveTestUtil.createCOWTable("100", partitionCount, true);
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(partitionCount, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+        "All partitions should be added before drop test");
+
+    // Drop half the partitions through the parallel pool path.
+    List<String> existing = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).stream()
+        .map(p -> getRelativePartitionPath(new Path(basePath), new Path(p.getStorageLocation())))
+        .collect(Collectors.toList());
+    List<String> toDrop = existing.subList(0, partitionCount / 2);
+    hiveClient.dropPartitions(HiveTestUtil.TABLE_NAME, toDrop);
+
+    List<Partition> remaining = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
+    assertEquals(partitionCount - toDrop.size(), remaining.size(),
+        "Parallel DROP should remove exactly the requested partitions");
+    Set<String> remainingPaths = remaining.stream()
+        .map(p -> getRelativePartitionPath(new Path(basePath), new Path(p.getStorageLocation())))
+        .collect(Collectors.toSet());
+    for (String dropped : toDrop) {
+      assertFalse(remainingPaths.contains(dropped),
+          "Dropped partition " + dropped + " must not appear in remaining set");
+    }
+  }
+
+  /**
    * Exercises the SET_LOCATION path in HiveQL mode with batching on. SET_LOCATION
    * emits one ALTER PARTITION ... SET LOCATION statement per partition (Hive SQL
    * has no multi-partition SET LOCATION), so this is the fan-out path most likely

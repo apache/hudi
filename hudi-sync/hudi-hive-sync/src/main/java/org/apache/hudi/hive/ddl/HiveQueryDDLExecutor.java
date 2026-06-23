@@ -18,12 +18,14 @@
 
 package org.apache.hudi.hive.ddl;
 
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.util.HiveDriverPool;
 import org.apache.hudi.hive.util.HivePartitionUtil;
+import org.apache.hudi.hive.util.IMetaStoreClientPool;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
@@ -44,6 +46,7 @@ import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
 /**
@@ -59,16 +62,22 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   // (createTable, schema evolution, single-statement runSQL callers) always uses the
   // session `hiveDriver` above. See HiveDriverPool javadoc.
   private final Option<HiveDriverPool> driverPool;
+  // When present, dropPartitionsToTable fans batches across this Thrift client pool.
+  // Owned by HoodieHiveSyncClient; close() is delegated through there. See
+  // IMetaStoreClientPool javadoc for the usage contract (partition-row ops only).
+  private final Option<IMetaStoreClientPool> metaStoreClientPool;
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient) {
-    this(config, metaStoreClient, Option.empty());
+    this(config, metaStoreClient, Option.empty(), Option.empty());
   }
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient,
-                              Option<HiveDriverPool> driverPool) {
+                              Option<HiveDriverPool> driverPool,
+                              Option<IMetaStoreClientPool> metaStoreClientPool) {
     super(config);
     this.metaStoreClient = metaStoreClient;
     this.driverPool = driverPool;
+    this.metaStoreClientPool = metaStoreClientPool;
     try {
       this.sessionState = new SessionState(config.getHiveConf(),
           UserGroupInformation.getCurrentUser().getShortUserName());
@@ -187,18 +196,66 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
     log.info("Drop partitions {} on {}", partitionsToDrop.size(), tableName);
     try {
-      for (String dropPartition : partitionsToDrop) {
-        if (HivePartitionUtil.partitionExists(metaStoreClient, tableName, dropPartition, partitionValueExtractor,
-            config)) {
-          String partitionClause =
-              HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, config);
-          metaStoreClient.dropPartition(databaseName, tableName, partitionClause, false);
-        }
-        log.info("Drop partition {} on {}", dropPartition, tableName);
-      }
+      int batchSyncPartitionNum = config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
+      List<List<String>> batches = CollectionUtils.batches(partitionsToDrop, batchSyncPartitionNum);
+      runDropBatches(tableName, batches);
     } catch (Exception e) {
       log.error("{} drop partition failed", tableId(databaseName, tableName), e);
       throw new HoodieHiveSyncException(tableId(databaseName, tableName) + " drop partition failed", e);
+    }
+  }
+
+  /**
+   * Drops partitions one batch at a time. When {@link #metaStoreClientPool} is present,
+   * batches fan out across the pool's worker threads (each borrowing an independent
+   * IMetaStoreClient); otherwise batches are dispatched sequentially against the
+   * session client. Hive has no batch-drop primitive that matches dropPartition's
+   * semantics, so each worker still iterates its chunk one partition at a time — the
+   * win is fanning chunks across independent Thrift clients.
+   */
+  private void runDropBatches(String tableName, List<List<String>> batches) throws Exception {
+    if (!metaStoreClientPool.isPresent()) {
+      for (List<String> batch : batches) {
+        applyDropBatch(metaStoreClient, tableName, batch);
+      }
+      return;
+    }
+    IMetaStoreClientPool pool = metaStoreClientPool.get();
+    List<Future<Void>> futures = new ArrayList<>(batches.size());
+    for (List<String> batch : batches) {
+      futures.add(pool.executor().submit(() ->
+          pool.run(poolClient -> {
+            applyDropBatch(poolClient, tableName, batch);
+            return null;
+          })
+      ));
+    }
+    Exception firstError = null;
+    for (Future<Void> f : futures) {
+      try {
+        f.get();
+      } catch (Exception e) {
+        if (firstError == null) {
+          firstError = e;
+        } else {
+          log.warn("Additional drop batch failed on {} (suppressed in favor of first error)", tableName, e);
+        }
+      }
+    }
+    if (firstError != null) {
+      throw firstError;
+    }
+  }
+
+  private void applyDropBatch(IMetaStoreClient poolClient, String tableName, List<String> batch) throws Exception {
+    for (String dropPartition : batch) {
+      if (HivePartitionUtil.partitionExists(poolClient, tableName, dropPartition,
+          partitionValueExtractor, config)) {
+        String partitionClause =
+            HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, config);
+        poolClient.dropPartition(databaseName, tableName, partitionClause, false);
+      }
+      log.info("Drop partition {} on {}", dropPartition, tableName);
     }
   }
 
