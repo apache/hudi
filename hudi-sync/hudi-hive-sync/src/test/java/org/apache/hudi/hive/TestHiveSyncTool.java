@@ -96,9 +96,12 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getRelativePartitionPath;
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_FILTER_PUSHDOWN_ENABLED;
 import static org.apache.hudi.hive.HiveSyncConfig.RECREATE_HIVE_TABLE_ON_ERROR;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_AS_DATA_SOURCE_TABLE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BATCHING_ENABLED;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BATCHING_THREADS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_TABLE_STRATEGY;
@@ -327,6 +330,105 @@ public class TestHiveSyncTool {
     reSyncHiveTable();
     assertEquals(2, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "Table partitions should match the number of partitions we wrote");
+  }
+
+  /**
+   * Exercises HiveQL sync with parallel partition batching enabled. Routes through
+   * the HiveDriverPool — each worker thread owns a Driver+SessionState pair, and
+   * the SQL list (qualified with `db`.`tbl`) is fanned out across them.
+   */
+  @Test
+  public void testHiveQLSyncWithBatchingEnabled() throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), HiveSyncMode.HIVEQL.name());
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_ENABLED.key(), "true");
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_THREADS.key(), "3");
+    hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "3");
+
+    int partitionCount = 10;
+    HiveTestUtil.createCOWTable("100", partitionCount, true);
+
+    reInitHiveSyncClient();
+    assertFalse(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
+        "Table should not exist before initial sync");
+    reSyncHiveTable();
+    assertEquals(partitionCount, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+        "All partitions should be added under parallel HiveQL batching");
+
+    // Add more partitions, then sync again to exercise the parallel update path.
+    HiveTestUtil.addCOWPartition("2050/01/01", true, true, "101");
+    HiveTestUtil.addCOWPartition("2050/01/02", true, true, "102");
+    HiveTestUtil.addCOWPartition("2050/01/03", true, true, "103");
+    HiveTestUtil.addCOWPartition("2050/01/04", true, true, "104");
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(partitionCount + 4, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+        "Incremental add via parallel HiveQL batching should sync the new partitions");
+  }
+
+  /**
+   * Exercises the SET_LOCATION path in HiveQL mode with batching on. SET_LOCATION
+   * emits one ALTER PARTITION ... SET LOCATION statement per partition (Hive SQL
+   * has no multi-partition SET LOCATION), so this is the fan-out path most likely
+   * to exercise concurrent ALTER PARTITION calls against the same table.
+   */
+  @Test
+  public void testHiveQLSetLocationWithBatching() throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), HiveSyncMode.HIVEQL.name());
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_ENABLED.key(), "true");
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_THREADS.key(), "3");
+    hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "2");
+
+    int partitionCount = 6;
+    HiveTestUtil.createCOWTable("100", partitionCount, true);
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(partitionCount, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size());
+
+    // Drive the SET_LOCATION path by directly calling updatePartitionsToTable with
+    // existing partition paths. Each partition produces its own ALTER ... SET LOCATION
+    // statement, fanned out across the 3 workers in the pool.
+    List<String> existingPartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).stream()
+        .map(p -> getRelativePartitionPath(new Path(basePath), new Path(p.getStorageLocation())))
+        .collect(Collectors.toList());
+    hiveClient.updatePartitionsToTable(HiveTestUtil.TABLE_NAME, existingPartitions);
+
+    List<Partition> after = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
+    assertEquals(partitionCount, after.size(),
+        "Parallel SET_LOCATION must not change the partition set");
+    Set<String> relativePaths = after.stream()
+        .map(p -> getRelativePartitionPath(new Path(basePath), new Path(p.getStorageLocation())))
+        .collect(Collectors.toSet());
+    assertEquals(partitionCount, relativePaths.size(),
+        "Each partition should resolve to a unique relative path after parallel SET_LOCATION");
+    assertTrue(relativePaths.containsAll(existingPartitions),
+        "All original partition paths should still be present after parallel SET_LOCATION");
+  }
+
+  /**
+   * Exercises the TOUCH path in HiveQL mode with batching on. Verifies that
+   * splitting one giant ALTER TABLE TOUCH PARTITION(...)... into multiple smaller
+   * statements does not break partition visibility downstream.
+   */
+  @Test
+  public void testHiveQLTouchPartitionsWithBatching() throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), HiveSyncMode.HIVEQL.name());
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_ENABLED.key(), "true");
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_THREADS.key(), "2");
+    hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "2");
+    hiveSyncProps.setProperty(META_SYNC_TOUCH_PARTITIONS_ENABLED.key(), "true");
+
+    int partitionCount = 6;
+    HiveTestUtil.createCOWTable("100", partitionCount, true);
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(partitionCount, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size());
+
+    // Touch existing partitions (no new data) — should hit the batched TOUCH path
+    // without changing the partition count.
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(partitionCount, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+        "TOUCH batching must not change the partition set");
   }
 
   @ParameterizedTest
