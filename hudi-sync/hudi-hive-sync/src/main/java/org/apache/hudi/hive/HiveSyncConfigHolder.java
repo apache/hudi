@@ -122,6 +122,23 @@ public class HiveSyncConfigHolder {
       .defaultValue(1000)
       .markAdvanced()
       .withDocumentation("The number of partitions one batch when synchronous partitions to hive.");
+  public static final ConfigProperty<Boolean> HIVE_SYNC_BATCHING_ENABLED = ConfigProperty
+      .key("hoodie.datasource.hive_sync.batching.enabled")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("When true, partition operations (add/update/touch/drop) in the active sync mode "
+          + "are split into batches of `hoodie.datasource.hive_sync.batch_num` and dispatched in parallel "
+          + "to a pool of workers. Table-level operations (create/alter table, last commit time, writer "
+          + "version) continue to use the single session client/driver. Default off; existing behavior is "
+          + "unchanged unless explicitly opted in.");
+  public static final ConfigProperty<Integer> HIVE_SYNC_BATCHING_THREADS = ConfigProperty
+      .key("hoodie.datasource.hive_sync.batching.threads")
+      .defaultValue(4)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Pool size (number of worker resources) and worker-thread count used for parallel "
+          + "partition sync when `hoodie.datasource.hive_sync.batching.enabled` is true.");
   public static final ConfigProperty<String> HIVE_SYNC_MODE = ConfigProperty
       .key("hoodie.datasource.hive_sync.mode")
       .noDefaultValue()
