@@ -593,7 +593,8 @@ CREATE TABLE hudi_table(
   id BIGINT PRIMARY KEY NOT ENFORCED,
   name STRING,
   price DOUBLE,
-  ts BIGINT
+  ts BIGINT,
+  dt STRING
 )
 PARTITIONED BY (`dt`)
 WITH (
