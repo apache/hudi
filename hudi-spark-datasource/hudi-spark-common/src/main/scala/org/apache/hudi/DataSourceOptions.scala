@@ -1043,9 +1043,10 @@ object DataSourceOptionsHelper {
    * `spark.hoodie.*` keys to canonical `hoodie.*`, and merges with explicit DataFrame
    * options. Explicit options win over SparkConf.
    *
-   * Use this from both read and write entry points so SparkConf-level Hudi configs are
-   * forwarded consistently. Without this, only the read path picks up SparkConf, and
-   * write/hive_sync configs set via `--conf spark.hoodie.X=Y` are silently dropped.
+   * This is the read-path entry point: reads have always picked up session-level `hoodie.*`
+   * confs (e.g. `hoodie.datasource.query.type`), so both prefixes are forwarded here.
+   * Do NOT use this for writes — see `collectSparkHoodieConfs` for why ambient `hoodie.*`
+   * confs must not be forwarded to the write path.
    *
    * Example (SparkConf has both prefixes set; explicit options override):
    * {{{
@@ -1056,9 +1057,39 @@ object DataSourceOptionsHelper {
    * }}}
    */
   def collectHoodieAndSparkHoodieConfs(sqlContext: SQLContext,
-                                       optParams: Map[String, String]): Map[String, String] = {
+                                       optParams: Map[String, String]): Map[String, String] =
+    collectConfsByPrefix(sqlContext, optParams, includeHoodiePrefix = true)
+
+  /**
+   * Collects only `spark.hoodie.*` configs from the SparkConf, normalizes them to canonical
+   * `hoodie.*`, and merges with explicit DataFrame options. Explicit options win over SparkConf.
+   *
+   * This is the write-path entry point. It deliberately does NOT forward bare `hoodie.*`
+   * session confs: unlike reads, the DataFrame write path historically honored only the
+   * explicit `.option(...)` map, so injecting ambient `hoodie.*` session state (e.g. a
+   * session-level `hoodie.datasource.write.operation` or `hoodie.logfile.data.block.format`)
+   * would silently change every `df.write`. The bug this addresses (HUDI-#18649) is about
+   * `--conf spark.hoodie.X=Y` being dropped on writes, which only requires forwarding the
+   * `spark.hoodie.*` form.
+   *
+   * Example:
+   * {{{
+   *   SparkConf:  spark.hoodie.X = "a", hoodie.Y = "b"   // bare hoodie.Y is NOT forwarded
+   *   optParams:  hoodie.Z = "c"
+   *   result:     hoodie.X = "a"
+   *               hoodie.Z = "c"
+   * }}}
+   */
+  def collectSparkHoodieConfs(sqlContext: SQLContext,
+                              optParams: Map[String, String]): Map[String, String] =
+    collectConfsByPrefix(sqlContext, optParams, includeHoodiePrefix = false)
+
+  private def collectConfsByPrefix(sqlContext: SQLContext,
+                                   optParams: Map[String, String],
+                                   includeHoodiePrefix: Boolean): Map[String, String] = {
     val sparkConfs = sqlContext.getAllConfs.filter {
-      case (key, _) => key.startsWith(HOODIE_PREFIX) || key.startsWith(SPARK_HOODIE_PREFIX)
+      case (key, _) =>
+        key.startsWith(SPARK_HOODIE_PREFIX) || (includeHoodiePrefix && key.startsWith(HOODIE_PREFIX))
     }
     normalizeSparkHoodiePrefix(sparkConfs) ++ optParams
   }

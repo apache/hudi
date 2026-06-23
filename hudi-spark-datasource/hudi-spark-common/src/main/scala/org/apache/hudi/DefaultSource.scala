@@ -170,13 +170,15 @@ class DefaultSource extends RelationProvider
                               mode: SaveMode,
                               optParams: Map[String, String],
                               df: DataFrame): BaseRelation = {
-    // Pull `hoodie.*` and `spark.hoodie.*` from SparkConf, normalize `spark.hoodie.*` to
-    // canonical `hoodie.*`, and merge with explicit options (explicit options win). This
-    // mirrors what the read createRelation already does, so configs like
+    // Pull `spark.hoodie.*` from SparkConf, normalize to canonical `hoodie.*`, and merge
+    // with explicit options (explicit options win), so configs like
     // `--conf spark.hoodie.datasource.hive_sync.use_spark_catalog=true` are honored on
-    // writes too. `HoodieSparkSqlWriter` and downstream callers see only canonical keys.
+    // writes too. Unlike the read path, we deliberately do NOT forward bare `hoodie.*`
+    // session confs here: the DataFrame write path historically honored only the explicit
+    // `.option(...)` map, and injecting ambient session `hoodie.*` state would silently
+    // change every write. `HoodieSparkSqlWriter` and downstream callers see only canonical keys.
     val effectiveOpts =
-      DataSourceOptionsHelper.collectHoodieAndSparkHoodieConfs(sqlContext, optParams)
+      DataSourceOptionsHelper.collectSparkHoodieConfs(sqlContext, optParams)
     try {
       if (effectiveOpts.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
         HoodieSparkSqlWriter.bootstrap(sqlContext, mode, effectiveOpts, df)
