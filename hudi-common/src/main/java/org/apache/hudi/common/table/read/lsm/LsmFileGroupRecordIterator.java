@@ -83,9 +83,6 @@ import static org.apache.hudi.io.util.FileIOUtils.getDefaultSpillableMapBasePath
  */
 public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedRecord<T>> {
 
-  private static final String DELETE_LOG_RECORD_KEY_FIELD = "record_key";
-  private static final List<String> DELETE_LOG_ORDERING_FIELD_NAMES = Arrays.asList("ordering_val");
-
   private final HoodieReaderContext<T> readerContext;
   private final HoodieStorage storage;
   private final InputSplit inputSplit;
@@ -300,33 +297,39 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
   /**
    * Creates delete records from an RFC-103 native delete log.
    *
-   * <p>The delete log schema intentionally contains only the record key and ordering value fields;
+   * <p>The delete log schema intentionally contains only the record key and ordering fields;
    * partition path and full data columns are not read for delete-only logs.
    */
   private ClosableIterator<BufferedRecord<T>> createNativeDeleteLogIterator(StoragePathInfo pathInfo,
                                                                             StoragePath storagePath,
                                                                             long fileSize) throws IOException {
+    HoodieSchema deleteLogSchema = HoodieSchemas.createDeleteLogSchema(
+        readerContext.getSchemaHandler().getTableSchema(), orderingFieldNames);
     ClosableIterator<T> recordIterator;
     if (pathInfo != null) {
       recordIterator = readerContext.getFileRecordIterator(
-          pathInfo, 0, pathInfo.getLength(), HoodieSchemas.DELETE_LOG_SCHEMA, HoodieSchemas.DELETE_LOG_SCHEMA, storage);
+          pathInfo, 0, pathInfo.getLength(), deleteLogSchema, deleteLogSchema, storage);
     } else {
       long length = fileSize >= 0 ? fileSize : storage.getPathInfo(storagePath).getLength();
       recordIterator = readerContext.getFileRecordIterator(
-          storagePath, 0, length, HoodieSchemas.DELETE_LOG_SCHEMA, HoodieSchemas.DELETE_LOG_SCHEMA, storage);
+          storagePath, 0, length, deleteLogSchema, deleteLogSchema, storage);
     }
     return new CloseableMappingIterator<>(recordIterator, record -> {
-      return createNativeDeleteRecord(readerContext, record);
+      return createNativeDeleteRecord(readerContext, record, deleteLogSchema, orderingFieldNames);
     });
   }
 
   @VisibleForTesting
-  static <T> BufferedRecord<T> createNativeDeleteRecord(HoodieReaderContext<T> readerContext, T record) {
-    Object recordKey = readerContext.getRecordContext().getValue(record, HoodieSchemas.DELETE_LOG_SCHEMA, DELETE_LOG_RECORD_KEY_FIELD);
+  static <T> BufferedRecord<T> createNativeDeleteRecord(HoodieReaderContext<T> readerContext,
+                                                        T record,
+                                                        HoodieSchema deleteLogSchema,
+                                                        List<String> orderingFieldNames) {
+    Object recordKey = readerContext.getRecordContext()
+        .getValue(record, deleteLogSchema, HoodieSchemas.DELETE_LOG_RECORD_KEY_FIELD);
     // Preserve the delete log's ordering value so event-time/custom merge modes can compare
     // deletes against data records instead of treating every native delete as commit-time ordered.
     Comparable orderingValue =
-        readerContext.getRecordContext().getOrderingValue(record, HoodieSchemas.DELETE_LOG_SCHEMA, DELETE_LOG_ORDERING_FIELD_NAMES);
+        readerContext.getRecordContext().getOrderingValue(record, deleteLogSchema, orderingFieldNames);
     return BufferedRecords.createDelete(recordKey.toString(), orderingValue);
   }
 

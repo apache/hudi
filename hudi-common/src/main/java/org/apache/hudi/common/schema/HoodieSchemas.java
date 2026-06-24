@@ -19,17 +19,27 @@
 
 package org.apache.hudi.common.schema;
 
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static org.apache.hudi.common.schema.HoodieSchemaUtils.createNewSchemaField;
+
 /**
  * Factory class for {@link HoodieSchema}.
  */
 public class HoodieSchemas {
-  public static final HoodieSchema DELETE_LOG_SCHEMA = HoodieSchema.parse(
-      "{"
-          + "\"type\":\"record\","
-          + "\"name\":\"hudi_delete_log_record\","
-          + "\"fields\":["
-          + "{\"name\":\"record_key\",\"type\":\"string\"},"
-          + "{\"name\":\"ordering_val\",\"type\":[\"null\",\"bytes\"],\"default\":null}"
-          + "]"
-          + "}");
+  public static final String DELETE_LOG_RECORD_KEY_FIELD = "record_key";
+
+  public static HoodieSchema createDeleteLogSchema(HoodieSchema tableSchema, List<String> orderingFieldNames) {
+    List<HoodieSchemaField> fields = Stream.concat(
+        Stream.of(createNewSchemaField(
+            DELETE_LOG_RECORD_KEY_FIELD, HoodieSchema.create(HoodieSchemaType.STRING), null, null)),
+        orderingFieldNames.stream().map(orderingFieldName -> tableSchema.getField(orderingFieldName)
+            .map(HoodieSchemaUtils::createNewSchemaField)
+            .orElseThrow(() ->
+                new IllegalArgumentException("Ordering field " + orderingFieldName + " not found in table schema"))))
+        .collect(Collectors.toList());
+    return HoodieSchema.createRecord("hudi_delete_log_record", null, null, fields);
+  }
 }

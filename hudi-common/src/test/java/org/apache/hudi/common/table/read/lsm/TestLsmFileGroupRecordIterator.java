@@ -22,7 +22,10 @@ package org.apache.hudi.common.table.read.lsm;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemas;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -37,6 +40,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -45,6 +49,17 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class TestLsmFileGroupRecordIterator {
+
+  @Test
+  void testDeleteLogSchemaUsesRecordKeyAndOrderingFields() {
+    HoodieSchema deleteLogSchema = HoodieSchemas.createDeleteLogSchema(tableSchema(), Arrays.asList("ts"));
+
+    assertEquals(Arrays.asList("record_key", "ts"), deleteLogSchema.getFields().stream()
+        .map(HoodieSchemaField::name)
+        .collect(Collectors.toList()));
+    assertEquals(HoodieSchemaType.STRING, deleteLogSchema.getField("record_key").get().schema().getType());
+    assertEquals(HoodieSchemaType.LONG, deleteLogSchema.getField("ts").get().schema().getType());
+  }
 
   @Test
   void testLoserTreeMergesByRecordKeyThenMergeOrder() {
@@ -69,13 +84,15 @@ class TestLsmFileGroupRecordIterator {
     HoodieReaderContext<Map<String, Object>> readerContext = mock(HoodieReaderContext.class);
     RecordContext<Map<String, Object>> recordContext = mock(RecordContext.class);
     Map<String, Object> record = Collections.emptyMap();
-    List<String> orderingFields = Collections.singletonList("ordering_val");
+    List<String> orderingFields = Collections.singletonList("ts");
+    HoodieSchema deleteLogSchema = HoodieSchemas.createDeleteLogSchema(tableSchema(), orderingFields);
 
     when(readerContext.getRecordContext()).thenReturn(recordContext);
-    when(recordContext.getValue(record, HoodieSchemas.DELETE_LOG_SCHEMA, "record_key")).thenReturn("key1");
-    when(recordContext.getOrderingValue(eq(record), eq(HoodieSchemas.DELETE_LOG_SCHEMA), eq(orderingFields))).thenReturn(42L);
+    when(recordContext.getValue(record, deleteLogSchema, "record_key")).thenReturn("key1");
+    when(recordContext.getOrderingValue(eq(record), eq(deleteLogSchema), eq(orderingFields))).thenReturn(42L);
 
-    BufferedRecord<Map<String, Object>> deleteRecord = LsmFileGroupRecordIterator.createNativeDeleteRecord(readerContext, record);
+    BufferedRecord<Map<String, Object>> deleteRecord =
+        LsmFileGroupRecordIterator.createNativeDeleteRecord(readerContext, record, deleteLogSchema, orderingFields);
 
     assertEquals("key1", deleteRecord.getRecordKey());
     assertEquals(42L, deleteRecord.getOrderingValue());
@@ -108,6 +125,12 @@ class TestLsmFileGroupRecordIterator {
 
   private static BufferedRecord<String> record(String recordKey, String value) {
     return new BufferedRecord<>(recordKey, 1, value, null, null);
+  }
+
+  private static HoodieSchema tableSchema() {
+    return HoodieSchema.createRecord("test_record", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("ts", HoodieSchema.create(HoodieSchemaType.LONG))));
   }
 
   private static List<String> drain(LsmFileGroupRecordIterator.LoserTree<String> loserTree) {
