@@ -100,7 +100,9 @@ public interface VariantShreddingProvider {
    * @param shreddedSchema   the Avro schema of {@code shreddedVariant} (carries typed_value)
    * @param unshreddedSchema target Avro schema with {value: ByteBuffer, metadata: ByteBuffer}
    * @return a GenericRecord conforming to {@code unshreddedSchema} with the full reconstructed
-   *         variant binary in {@code value}, or null if the input metadata is missing
+   *         variant binary in {@code value}, or {@code null} when {@code shreddedVariant} is null
+   * @throws org.apache.hudi.exception.HoodieException if {@code shreddedVariant} is missing its
+   *         required {@code metadata} field (a malformed shredded base file)
    */
   GenericRecord rebuildVariantRecord(
       GenericRecord shreddedVariant,
