@@ -487,9 +487,9 @@ public final class HudiUtil
         ImmutableList.Builder<HiveColumnHandle> columns = ImmutableList.builder();
         int hiveColumnIndex = 0;
         for (Column field : table.getDataColumns()) {
-            // ignore unsupported types rather than failing
             if (columnNames.contains(field.getName())) {
                 HiveType hiveType = field.getType();
+                // ignore unsupported types rather than failing
                 if (typeSupported(hiveType.getTypeInfo(), table.getStorage().getStorageFormat())) {
                     columns.add(createBaseColumn(field.getName(), hiveColumnIndex, hiveType, getType(hiveType, typeManager, timestampPrecision), REGULAR, field.getComment()));
                 }
