@@ -104,7 +104,10 @@ final class HoodieVariantReconstruction {
         // Read this column in its on-disk shredded shape.
         intermediateFields.add(requestedField.withSchema(fileField.get().schema()));
       } else {
-        intermediateFields.add(requestedField);
+        // Copy non-target fields too (withSchema makes a fresh Avro Field): reusing the requested
+        // field's Avro Field, already bound to the requested record, would fail Schema.setFields with
+        // "Field already used" when building the intermediate record below.
+        intermediateFields.add(requestedField.withSchema(requestedField.schema()));
       }
     }
     if (!anyTarget) {
