@@ -125,11 +125,23 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
   }
 
   test("Test Query Log Only MOR Table With VARIANT column triggers compaction") {
-    assume(HoodieSparkUtils.gteqSpark4_0, "Variant type requires Spark 4.0 or higher")
+    // Gated on Spark >= 4.1. Compaction writes the base file via the AVRO shredding writer, which
+    // lays the variant group out as [metadata, value, typed_value]. Spark 4.0's read support
+    // (Spark40HoodieParquetReadSupport.reorderVariantFields) rebuilds that group as [value, metadata]
+    // and drops typed_value, so the subsequent native read fails with MALFORMED_VARIANT. Spark 4.1+
+    // reads variant fields by name (SPARK-54410) and reconstructs correctly.
+    // TODO(voon): drop this comment once Spark 4.0 is removed.
+    assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
 
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath
+      // Shred variants on write so the compacted base file is shredded, then read it back. Note the
+      // Spark SQL read here goes through the InternalRow reader (SparkFileFormatInternalRowReaderContext),
+      // which reconstructs the shredded variant natively - it does NOT exercise the AVRO read-path
+      // reconstruction (#18931, HoodieVariantReconstruction), which Spark compaction never reaches.
+      // That path is covered directly by TestSpark4VariantShreddingProvider and
+      // TestHoodieVariantReconstruction.
       spark.sql(
         s"""
            |create table $tableName (
@@ -142,6 +154,8 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
            |  primaryKey = 'id',
            |  type = 'mor',
            |  preCombineField = 'ts',
+           |  hoodie.parquet.variant.write.shredding.enabled = 'true',
+           |  hoodie.parquet.variant.force.shredding.schema.for.test = 'key string',
            |  hoodie.index.type = 'INMEMORY',
            |  hoodie.compact.inline = 'true',
            |  hoodie.compact.inline.max.delta.commits = '5',
@@ -578,9 +592,9 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
            |insert into $tableName values
            |  (1, 'row1', parse_json('{"a": 1, "b": "hello"}'), 1000)
         """.stripMargin)
-      // Reading shredded variants back needs Spark 4.1+ (spark.sql.variant.allowReadingShredded);
-      // Spark 4.0's reader rejects the 3-field shredded layout (4.0 read support is added later, see
-      // https://github.com/apache/hudi/issues/18931). The shredded write is still validated below.
+      // Reading shredded variants back via Spark SQL needs Spark 4.1+ (spark.sql.variant.allowReadingShredded,
+      // SPARK-54410); Spark 4.0's native reader rejects the 3-field shredded layout. The shredded write is
+      // still validated below.
       if (HoodieSparkUtils.gteqSpark4_1) {
         checkAnswer(s"select id, name, cast(v as string), ts from $tableName order by id")(
           Seq(1, "row1", "{\"a\":1,\"b\":\"hello\"}", 1000)

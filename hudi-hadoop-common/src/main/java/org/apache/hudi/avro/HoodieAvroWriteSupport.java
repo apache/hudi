@@ -88,13 +88,6 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
    */
   private final VariantShreddingProvider shreddingProvider;
 
-  /**
-   * Names of all variant-typed top-level fields, regardless of shredding. Used to fail fast on the
-   * not-yet-supported read-then-reshred path (compaction/clustering over an already-shredded base
-   * file). See https://github.com/apache/hudi/issues/18931.
-   */
-  private final String[] variantFieldNames;
-
   public HoodieAvroWriteSupport(MessageType schema, HoodieSchema hoodieSchema, Option<BloomFilter> bloomFilterOpt,
                                 Properties properties) {
     this(schema, hoodieSchema, generateEffectiveSchema(hoodieSchema, properties), bloomFilterOpt, properties);
@@ -115,10 +108,8 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
         properties.getProperty(PARQUET_VARIANT_WRITE_SHREDDING_ENABLED.key(),
             String.valueOf(PARQUET_VARIANT_WRITE_SHREDDING_ENABLED.defaultValue())));
 
-    // Single pass over the effective schema fields: collect every variant-typed field name (for the
-    // read-then-reshred guard) and, when shredding is enabled, the subset that needs shredding.
+    // When shredding is enabled, collect the variant fields that need shredding.
     Map<Integer, ShreddedVariantField> shreddedFields = new LinkedHashMap<>();
-    List<String> variantNames = new ArrayList<>();
 
     if (effectiveSchema.getType() == HoodieSchemaType.RECORD) {
       List<HoodieSchemaField> fields = effectiveSchema.getFields();
@@ -132,7 +123,6 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
         if (fieldSchema.getType() != HoodieSchemaType.VARIANT) {
           continue;
         }
-        variantNames.add(field.name());
         if (variantWriteShreddingEnabled) {
           HoodieSchema.Variant variant = (HoodieSchema.Variant) fieldSchema;
           if (variant.isShredded() && variant.getTypedValueField().isPresent()) {
@@ -149,7 +139,6 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
     }
 
     this.shreddedVariantFields = shreddedFields;
-    this.variantFieldNames = variantNames.toArray(new String[0]);
 
     // Load shredding provider via reflection if needed
     if (!shreddedVariantFields.isEmpty()) {
@@ -194,7 +183,7 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
       // Schemas from clustering/compaction may still be shredded (read from on-disk Parquet files
       // written with shredding enabled), so we need to strip typed_value when shredding
       // is disabled.
-      return stripVariantShredding(hoodieSchema);
+      return VariantSchemaUtils.stripVariantShredding(hoodieSchema);
     }
 
     // Check if a forced shredding schema is configured
@@ -219,9 +208,6 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
   @SuppressWarnings("unchecked")
   @Override
   public void write(T record) {
-    if (variantFieldNames.length > 0) {
-      assertInputNotAlreadyShredded((IndexedRecord) record);
-    }
     if (!shreddedVariantFields.isEmpty() && shreddingProvider != null) {
       super.write((T) shredRecord((IndexedRecord) record));
     } else {
@@ -271,32 +257,6 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
     }
 
     return shreddedRecord;
-  }
-
-  /**
-   * Fails fast on the not-yet-supported read-then-reshred path. Records read from an already-shredded
-   * base file (compaction/clustering) arrive with a populated {@code typed_value} and a possibly-null
-   * {@code value}. The writer has no logic to reconstruct the unshredded variant, so shredding would
-   * silently drop the payload (shredding enabled) and the parquet writer would reject the null at the
-   * REQUIRED {@code value} field (shredding disabled). Reconstruction is tracked in
-   * https://github.com/apache/hudi/issues/18931.
-   */
-  private void assertInputNotAlreadyShredded(IndexedRecord inputRecord) {
-    Schema inputSchema = inputRecord.getSchema();
-    for (String fieldName : variantFieldNames) {
-      Schema.Field field = inputSchema.getField(fieldName);
-      if (field == null) {
-        continue;
-      }
-      Object value = inputRecord.get(field.pos());
-      if (value instanceof GenericRecord
-          && ((GenericRecord) value).getSchema().getField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD) != null) {
-        throw new HoodieException("Writing an already-shredded variant field '" + fieldName
-            + "' is not supported yet. Compaction/clustering read a base file written with variant "
-            + "shredding and re-wrote it through the Avro path; the reader does not yet reconstruct "
-            + "the unshredded variant. Tracked in https://github.com/apache/hudi/issues/18931.");
-      }
-    }
   }
 
   @Override
@@ -365,7 +325,8 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
             shreddedFields);
         HoodieSchema replacement = wasNullable
             ? HoodieSchema.createNullable(shreddedVariant) : shreddedVariant;
-        newFields.add(HoodieSchemaUtils.createNewSchemaField(field.makeNullable().withSchema(replacement)));
+        // replacement already mirrors the field's original nullability, so withSchema alone suffices.
+        newFields.add(HoodieSchemaUtils.createNewSchemaField(field.withSchema(replacement)));
         changed = true;
       } else {
         newFields.add(HoodieSchemaUtils.createNewSchemaField(field));
@@ -432,52 +393,6 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
         }
         throw new IllegalArgumentException("Unsupported shredding type: " + type);
     }
-  }
-
-  /**
-   * Strips shredding from variant fields in the schema.
-   * Replaces shredded variant fields with unshredded variants (removing typed_value).
-   */
-  private static HoodieSchema stripVariantShredding(HoodieSchema schema) {
-    if (schema.getType() != HoodieSchemaType.RECORD) {
-      return schema;
-    }
-
-    List<HoodieSchemaField> fields = schema.getFields();
-    List<HoodieSchemaField> newFields = new ArrayList<>();
-    boolean changed = false;
-
-    for (HoodieSchemaField field : fields) {
-      HoodieSchema fieldSchema = field.schema();
-      boolean wasNullable = fieldSchema.isNullable();
-      HoodieSchema unwrapped = wasNullable ? fieldSchema.getNonNullType() : fieldSchema;
-
-      if (unwrapped.getType() == HoodieSchemaType.VARIANT) {
-        HoodieSchema.Variant variant = (HoodieSchema.Variant) unwrapped;
-        if (variant.isShredded()) {
-          // Replace with unshredded variant
-          HoodieSchema.Variant unshredded = HoodieSchema.createVariant(
-              unwrapped.getAvroSchema().getName(),
-              unwrapped.getAvroSchema().getNamespace(),
-              unwrapped.getAvroSchema().getDoc());
-          HoodieSchema replacement = wasNullable ? HoodieSchema.createNullable(unshredded) : unshredded;
-          newFields.add(field.withSchema(replacement));
-          changed = true;
-          continue;
-        }
-      }
-      newFields.add(field);
-    }
-
-    if (!changed) {
-      return schema;
-    }
-
-    return HoodieSchema.createRecord(
-        schema.getAvroSchema().getName(),
-        schema.getAvroSchema().getNamespace(),
-        schema.getAvroSchema().getDoc(),
-        newFields);
   }
 
   /**

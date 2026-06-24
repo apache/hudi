@@ -20,6 +20,7 @@
 package org.apache.hudi.io.storage.hadoop;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.avro.VariantShreddingProvider;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieParquetConfig;
@@ -59,11 +60,6 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_VARIANT_
 import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
-
-  // Sole provider today: variant shredding currently requires Spark 4.0+. If more providers are
-  // added, restore a candidate list here and try each in turn.
-  private static final String SPARK4_VARIANT_SHREDDING_PROVIDER =
-      "org.apache.hudi.variant.Spark4VariantShreddingProvider";
 
   public HoodieAvroFileWriterFactory(HoodieStorage storage) {
     super(storage);
@@ -152,7 +148,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
     Properties props = TypedProperties.copy(config.getProps());
     // Auto-detect variant shredding provider from classpath if not explicitly configured
     if (!props.containsKey(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key())) {
-      String detectedClass = detectShreddingProviderClass();
+      String detectedClass = VariantShreddingProvider.detectProviderClassOnClasspath();
       if (detectedClass != null) {
         props.setProperty(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key(), detectedClass);
       }
@@ -167,17 +163,4 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         getAvroSchemaConverter((Configuration) storageConf.unwrapAs(Configuration.class)).convert(effectiveSchema), schema, filter, props);
   }
 
-  /**
-   * Auto-detect a {@link org.apache.hudi.avro.VariantShreddingProvider} implementation
-   * available on the classpath. Returns the fully-qualified class name if found, or null.
-   */
-  private static String detectShreddingProviderClass() {
-    try {
-      Class.forName(SPARK4_VARIANT_SHREDDING_PROVIDER);
-      return SPARK4_VARIANT_SHREDDING_PROVIDER;
-    } catch (ClassNotFoundException e) {
-      // not on classpath
-      return null;
-    }
-  }
 }

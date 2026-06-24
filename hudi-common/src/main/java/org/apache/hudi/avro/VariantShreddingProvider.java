@@ -38,6 +38,29 @@ import org.apache.avro.generic.GenericRecord;
 public interface VariantShreddingProvider {
 
   /**
+   * Provider implementations to auto-detect on the classpath, in priority order, when the variant
+   * shredding provider class is not set explicitly via config. Sole provider today: variant
+   * shredding currently requires Spark 4.0+.
+   */
+  String[] CLASSPATH_CANDIDATES = {"org.apache.hudi.variant.Spark4VariantShreddingProvider"};
+
+  /**
+   * Returns the fully-qualified class name of the first {@link VariantShreddingProvider}
+   * implementation available on the classpath, or {@code null} if none is present.
+   */
+  static String detectProviderClassOnClasspath() {
+    for (String candidate : CLASSPATH_CANDIDATES) {
+      try {
+        Class.forName(candidate);
+        return candidate;
+      } catch (ClassNotFoundException | NoClassDefFoundError e) {
+        // Provider not on classpath; try the next candidate.
+      }
+    }
+    return null;
+  }
+
+  /**
    * Transform an unshredded variant GenericRecord into a shredded one.
    * <p>
    * The input record is expected to have:
@@ -63,4 +86,26 @@ public interface VariantShreddingProvider {
       GenericRecord unshreddedVariant,
       Schema shreddedSchema,
       HoodieSchema.Variant variantSchema);
+
+  /**
+   * Reconstruct an unshredded variant GenericRecord from a shredded one (the inverse of
+   * {@link #shredVariantRecord}).
+   * <p>
+   * Used on the read path: records read from an already-shredded base file (compaction/clustering)
+   * arrive with {@code typed_value} populated. This rebuilds the full variant binary so the record
+   * presents the standard unshredded {@code {metadata, value}} shape before it reaches the
+   * merger/writer.
+   *
+   * @param shreddedVariant  GenericRecord with {value, metadata, typed_value} read from a shredded base file
+   * @param shreddedSchema   the Avro schema of {@code shreddedVariant} (carries typed_value)
+   * @param unshreddedSchema target Avro schema with {value: ByteBuffer, metadata: ByteBuffer}
+   * @return a GenericRecord conforming to {@code unshreddedSchema} with the full reconstructed
+   *         variant binary in {@code value}, or {@code null} when {@code shreddedVariant} is null
+   * @throws org.apache.hudi.exception.HoodieException if {@code shreddedVariant} is missing its
+   *         required {@code metadata} field (a malformed shredded base file)
+   */
+  GenericRecord rebuildVariantRecord(
+      GenericRecord shreddedVariant,
+      Schema shreddedSchema,
+      Schema unshreddedSchema);
 }
