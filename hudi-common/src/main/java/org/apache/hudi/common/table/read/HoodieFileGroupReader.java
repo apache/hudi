@@ -51,7 +51,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -70,7 +69,7 @@ import java.util.stream.Stream;
  *            in Spark and {@code RowData} in Flink.
  */
 @AllArgsConstructor
-public final class HoodieFileGroupReader<T> implements Closeable {
+public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
 
   private final HoodieReaderContext<T> readerContext;
   private final HoodieTableMetaClient metaClient;

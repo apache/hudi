@@ -59,6 +59,13 @@ public class HoodieReaderConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to use positions in the block header for data blocks containing updates and delete blocks for merging.");
 
+  public static final ConfigProperty<Integer> LSM_SORT_MERGE_SPILL_THRESHOLD = ConfigProperty
+      .key("hoodie.lsm.sort.merge.spill.threshold")
+      .defaultValue(16)
+      .markAdvanced()
+      .withDocumentation("Maximum number of sorted LSM input files to keep as direct readers during sort merge. "
+          + "When the fan-in is larger, remaining inputs are drained to sequential local spill files and read back during merge.");
+
   public static final String REALTIME_SKIP_MERGE = "skip_merge";
   public static final String REALTIME_PAYLOAD_COMBINE = "payload_combine";
   public static final ConfigProperty<String> MERGE_TYPE = ConfigProperty

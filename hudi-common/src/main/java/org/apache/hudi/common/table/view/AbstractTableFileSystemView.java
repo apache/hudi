@@ -70,7 +70,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock.ReadLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -509,6 +508,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       // 2. file is not .hoodie_partition_metadata
       if (pathName.startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
         return false;
+      } else if (FSUtils.isLogFile(pathInfo.getPath())) {
+        return false;
       } else if (isMultipleBaseFileFormatsEnabled) {
         return pathName.contains(HoodieFileFormat.PARQUET.getFileExtension())
             || pathName.contains(HoodieFileFormat.ORC.getFileExtension())
@@ -529,8 +530,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     String logFileExtension = metaClient.getTableConfig().getLogFileFormat().getFileExtension();
     Predicate<StoragePathInfo> rtFilePredicate = pathInfo -> {
       String fileName = pathInfo.getPath().getName();
-      Matcher matcher = FSUtils.LOG_FILE_PATTERN.matcher(fileName);
-      return matcher.matches() && fileName.contains(logFileExtension);
+      return FSUtils.isLogFile(pathInfo.getPath()) && fileName.contains(logFileExtension);
     };
     return pathInfoList.stream().filter(rtFilePredicate).map(HoodieLogFile::new);
   }
