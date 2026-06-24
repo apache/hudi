@@ -10,7 +10,7 @@ env:
 
 jobs:
   compile-against-trino-master:
-    name: Compile hudi-trino-plugin against trinodb/trino master
+    name: Compile hudi-trino against trinodb/trino master
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Hudi
@@ -48,12 +48,12 @@ jobs:
           VERSION=$(grep -m1 '<version>' trino/pom.xml | sed -E 's|.*<version>([0-9]+)(-SNAPSHOT)?</version>.*|\1|')
           echo "trino_version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Detected Trino version: $VERSION"
-      - name: Compile hudi-trino-plugin against current Trino SPI (JDK 25)
+      - name: Compile hudi-trino against current Trino SPI (JDK 25)
         working-directory: hudi
         run: |
           mvn $MVN_ARGS -Phudi-trino \
             -Dtrino.connector.version=${{ steps.trino-version.outputs.trino_version }} \
-            -pl hudi-trino-plugin compile
+            -pl hudi-trino compile
       - name: Open issue on failure
         if: failure()
         uses: actions/github-script@v7
@@ -62,6 +62,6 @@ jobs:
             github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `hudi-trino-plugin SPI drift detected against Trino ${{ steps.trino-version.outputs.trino_version }}`,
+              title: `hudi-trino SPI drift detected against Trino ${{ steps.trino-version.outputs.trino_version }}`,
               body: `Nightly compatibility build failed. See run ${context.runId}.`
             });

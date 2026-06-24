@@ -6,14 +6,14 @@ on:
       - master
       - 'release-*'
     paths:
-      - 'hudi-trino-plugin/**'
+      - 'hudi-trino/**'
       - '.github/workflows/hudi_trino_ci.yml'
   pull_request:
     branches:
       - master
       - 'release-*'
     paths:
-      - 'hudi-trino-plugin/**'
+      - 'hudi-trino/**'
       - '.github/workflows/hudi_trino_ci.yml'
   workflow_dispatch:
 
@@ -31,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       # Hudi targets Java 11 and uses Lombok 1.18.36, which does not run on JDK 25.
-      # Build the upstream modules hudi-trino-plugin depends on under JDK 17 first,
+      # Build the upstream modules hudi-trino depends on under JDK 17 first,
       # install them into the local m2, then build the connector itself under JDK 25.
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -62,6 +62,6 @@ jobs:
         working-directory: trino-src
         run: mvn $MVN_ARGS install -pl :trino-spi,:trino-filesystem,:trino-hive,:trino-main -am -DskipTests -Dair.check.skip-all=true
       - name: Build connector (JDK 25)
-        run: mvn $MVN_ARGS -Phudi-trino -pl hudi-trino-plugin install -Dmaven.test.skip=true
+        run: mvn $MVN_ARGS -Phudi-trino -pl hudi-trino install -Dmaven.test.skip=true
       - name: Test connector (JDK 25)
-        run: mvn $MVN_ARGS -Phudi-trino,hudi-trino-tests -pl hudi-trino-plugin test
+        run: mvn $MVN_ARGS -Phudi-trino,hudi-trino-tests -pl hudi-trino test

@@ -26,7 +26,6 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <!-- Source dir is hudi-trino-plugin/ but artifactId is hudi-trino per RFC-105. -->
     <artifactId>hudi-trino</artifactId>
     <packaging>jar</packaging>
     <description>Hudi connector for Trino (RFC-105)</description>
@@ -606,7 +605,7 @@
                             <rules>
                                 <requireJavaVersion>
                                     <version>[${hudi.trino.java.version},)</version>
-                                    <message>hudi-trino-plugin requires JDK ${hudi.trino.java.version} or newer.</message>
+                                    <message>hudi-trino requires JDK ${hudi.trino.java.version} or newer.</message>
                                 </requireJavaVersion>
                             </rules>
                         </configuration>

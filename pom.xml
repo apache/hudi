@@ -131,7 +131,7 @@
     <hive.avro.version>1.11.4</hive.avro.version>
     <presto.version>0.273</presto.version>
     <trino.version>481</trino.version>
-    <!-- Trino SPI version that hudi-trino-plugin main code compiles against. -->
+    <!-- Trino SPI version that hudi-trino main code compiles against. -->
     <trino.connector.version>481</trino.connector.version>
     <!-- Trino version used by the hudi-trino-tests profile for *-tests.jar classifier deps.
          Trino does not publish trino-spi / trino-filesystem / trino-hive test-jars; the
@@ -2288,7 +2288,7 @@
       <!-- RFC-105: non-shaded Trino connector. JDK 25 + Trino SPI; off by default. -->
       <id>hudi-trino</id>
       <modules>
-        <module>hudi-trino-plugin</module>
+        <module>hudi-trino</module>
       </modules>
     </profile>
     <profile>
