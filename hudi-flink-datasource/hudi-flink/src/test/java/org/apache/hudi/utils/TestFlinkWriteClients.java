@@ -38,6 +38,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.HoodieIndex;
@@ -119,6 +120,18 @@ public class TestFlinkWriteClients {
     conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "12");
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     assertEquals(12, writeConfig.getGlobalRecordLevelIndexMinFileGroupCount());
+  }
+
+  @Test
+  void testUserConfiguredMigrationCommitArchivalBatchSizeIsPropagated() {
+    // A raw hoodie.* property set on the Flink configuration must be propagated to the write config
+    // (and therefore reach the upgrade handler that reads it during the v7 -> v8 LSM timeline migration).
+    conf.setString(HoodieArchivalConfig.MIGRATION_COMMITS_ARCHIVAL_BATCH_SIZE.key(), "123");
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertEquals(123, writeConfig.getMigrationCommitArchivalBatchSize());
+    // The regular archival batch size must stay independent at its own default.
+    assertEquals(Integer.parseInt(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.defaultValue()),
+        writeConfig.getCommitArchivalBatchSize());
   }
 
   @Test

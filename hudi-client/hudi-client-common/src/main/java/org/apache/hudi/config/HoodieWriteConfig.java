@@ -2020,6 +2020,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE);
   }
 
+  public int getMigrationCommitArchivalBatchSize() {
+    return getInt(HoodieArchivalConfig.MIGRATION_COMMITS_ARCHIVAL_BATCH_SIZE);
+  }
+
   public boolean shouldBlockArchivalOnCleanECTR() {
     return getBoolean(HoodieArchivalConfig.BLOCK_ARCHIVAL_ON_LATEST_CLEAN_ECTR);
   }
