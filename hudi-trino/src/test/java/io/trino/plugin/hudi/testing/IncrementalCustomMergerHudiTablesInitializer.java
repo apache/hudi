@@ -75,7 +75,6 @@ import static io.trino.metastore.HiveType.HIVE_STRING;
 import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
 import static java.lang.String.format;
 import static java.nio.file.Files.createTempDirectory;
-import static java.util.Objects.requireNonNull;
 
 /**
  * Creates a non-partitioned Merge-On-Read table configured with the {@link MaxRankRecordMerger} custom merger
@@ -430,7 +429,6 @@ public class IncrementalCustomMergerHudiTablesInitializer
             specs.add(new ColumnSpec("b" + i, Kind.BOOLEAN));
         }
         List<ColumnSpec> built = specs.build();
-        requireNonNull(built);
         if (built.size() != 30) {
             throw new IllegalStateException("Expected 30 data columns but built " + built.size());
         }
