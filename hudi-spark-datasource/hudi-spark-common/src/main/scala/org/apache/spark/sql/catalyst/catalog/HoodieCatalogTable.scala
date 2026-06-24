@@ -19,6 +19,7 @@ package org.apache.spark.sql.catalyst.catalog
 
 import org.apache.hudi.{DataSourceOptionsHelper, HoodieSchemaConversionUtils}
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
+import org.apache.hudi.HoodieSchemaUtils
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieTableType
@@ -281,6 +282,23 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       mapHoodieConfigsToSqlOptions(tableConfigs))
 
     val resolver = spark.sessionState.conf.resolver
+    // Reject BLOB columns as partition path fields (record key / ordering are validated in validateTable).
+    // Partition fields are not part of sqlOptions, so they are derived here the same way as in initHoodieTable.
+    val partitionFieldSpec =
+      if (SparkConfigUtils.containsConfigProperty(tableConfigs, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)) {
+        SparkConfigUtils.getStringWithAltKeys(tableConfigs, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)
+          .split(",").map(_.split(":")(0)).mkString(",")
+      } else {
+        table.partitionColumnNames.mkString(",")
+      }
+    val partitionBlobs = HoodieSchemaUtils.findBlobFields(finalSchema, partitionFieldSpec, resolver)
+    if (partitionBlobs.nonEmpty) {
+      throw new HoodieAnalysisException(
+        s"BLOB type column(s) ${partitionBlobs.mkString("[", ", ", "]")} cannot be used as partition path field. " +
+          "BLOB columns hold large binary payloads (INLINE or EXTERNAL) and are not supported as " +
+          "record key, ordering/preCombine, or partition path fields.")
+    }
+
     val dataSchema = finalSchema.filterNot { f =>
       table.partitionColumnNames.exists(resolver(_, f.name))
     }
