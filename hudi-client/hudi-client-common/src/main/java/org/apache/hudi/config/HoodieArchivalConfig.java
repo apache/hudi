@@ -89,7 +89,7 @@ public class HoodieArchivalConfig extends HoodieConfig {
           + " archive log. This config controls such archival batch size.");
 
   public static final ConfigProperty<Integer> MIGRATION_COMMITS_ARCHIVAL_BATCH_SIZE = ConfigProperty
-      .key("hoodie.migration.commits.archival.batch")
+      .key("hoodie.timeline.migration.commits.archival.batch")
       .defaultValue(500)
       .markAdvanced()
       .withDocumentation("Batch size used when migrating the legacy archived timeline to the LSM timeline during a"

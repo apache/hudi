@@ -137,7 +137,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
       }, instants.size());
     }
 
-    upgradeToLSMTimeline(table, context, config);
+    upgradeToLSMTimeline(table, config);
 
     return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, Collections.emptySet());
   }
@@ -249,7 +249,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     }
   }
 
-  static void upgradeToLSMTimeline(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig config) {
+  static void upgradeToLSMTimeline(HoodieTable table, HoodieWriteConfig config) {
     table.getMetaClient().getTableConfig().getTimelineLayoutVersion().ifPresent(
         timelineLayoutVersion -> ValidationUtils.checkState(TimelineLayoutVersion.LAYOUT_VERSION_1.equals(timelineLayoutVersion),
             "Upgrade to LSM timeline is only supported for layout version 1. Given version: " + timelineLayoutVersion));
@@ -259,8 +259,9 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
       LSMTimelineWriter lsmTimelineWriter = LSMTimelineWriter.getInstance(config, table, Option.of(archivePath));
       // Use a dedicated, larger batch size for the one-time migration to minimize the number of parquet
       // files created on remote storage. Each write() call involves multiple remote storage operations
-      // (exists check, parquet write, manifest update); using the regular archival batch size (default 10)
-      // with hundreds of actions creates excessive I/O that significantly increases the migration time.
+      // (exists check, parquet write, manifest update); the regular archival batch size is much smaller
+      // than what migration needs, so with hundreds of actions it creates excessive I/O that
+      // significantly increases the migration time.
       int batchSize = config.getMigrationCommitArchivalBatchSize();
       List<ActiveAction> activeActionsBatch = new ArrayList<>(batchSize);
       try (ClosableIterator<ActiveAction> iterator = reader.getActiveActionsIterator()) {

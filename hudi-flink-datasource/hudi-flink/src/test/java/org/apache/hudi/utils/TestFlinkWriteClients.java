@@ -130,7 +130,8 @@ public class TestFlinkWriteClients {
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     assertEquals(123, writeConfig.getMigrationCommitArchivalBatchSize());
     // The regular archival batch size must stay independent at its own default.
-    assertEquals(10, writeConfig.getCommitArchivalBatchSize());
+    assertEquals(Integer.parseInt(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.defaultValue()),
+        writeConfig.getCommitArchivalBatchSize());
   }
 
   @Test

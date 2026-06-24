@@ -24,7 +24,6 @@ import org.apache.hudi.client.utils.LegacyArchivedMetaEntryReader;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -174,21 +173,38 @@ class TestSevenToEightUpgradeHandler {
   }
 
   @Test
-  void testUpgradeToLSMTimelineUsesMigrationBatchSize() throws Exception {
+  void testUpgradeToLSMTimelineSingleBatch() throws Exception {
     // A single batch large enough to hold all actions should result in exactly one write() call,
     // proving the migration batch size config (not the regular archival batch size) drives batching.
-    int totalActions = 4;
+    LSMTimelineWriter writer = runMigration(500, 4);
+    verify(writer, times(1)).write(any(), any(), any());
+    verify(writer, never()).compactAndClean(any());
+  }
 
+  @Test
+  void testUpgradeToLSMTimelineBatchesByMigrationBatchSize() throws Exception {
+    // With more actions than the migration batch size, the in-loop batching branch must fire:
+    // 4 actions with a batch size of 2 -> [2, 2] -> 2 write() calls. This pins that the configured
+    // migration batch size (not just "all actions in one batch") actually governs batching.
+    LSMTimelineWriter writer = runMigration(2, 4);
+    verify(writer, times(2)).write(any(), any(), any());
+    verify(writer, never()).compactAndClean(any());
+  }
+
+  /**
+   * Runs {@link SevenToEightUpgradeHandler#upgradeToLSMTimeline} with the given migration batch size
+   * over the given number of archived actions, and returns the (mocked) LSM timeline writer for verification.
+   */
+  private LSMTimelineWriter runMigration(int migrationBatchSize, int totalActions) {
     HoodieTable table = mock(HoodieTable.class);
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
-    HoodieEngineContext context = mock(HoodieEngineContext.class);
 
     when(table.getMetaClient()).thenReturn(metaClient);
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     when(tableConfig.getTimelineLayoutVersion()).thenReturn(Option.of(TimelineLayoutVersion.LAYOUT_VERSION_1));
     when(metaClient.getMetaPath()).thenReturn(new StoragePath("/tmp/.hoodie"));
-    when(config.getMigrationCommitArchivalBatchSize()).thenReturn(500);
+    when(config.getMigrationCommitArchivalBatchSize()).thenReturn(migrationBatchSize);
     // The regular archival batch size must not be consulted during migration.
     lenient().when(config.getCommitArchivalBatchSize()).thenReturn(1);
 
@@ -206,11 +222,9 @@ class TestSevenToEightUpgradeHandler {
       mockedWriterStatic.when(() -> LSMTimelineWriter.getInstance(
           any(HoodieWriteConfig.class), any(HoodieTable.class), any(Option.class))).thenReturn(writer);
 
-      SevenToEightUpgradeHandler.upgradeToLSMTimeline(table, context, config);
-
-      verify(writer, times(1)).write(any(), any(), any());
-      verify(writer, never()).compactAndClean(any());
+      SevenToEightUpgradeHandler.upgradeToLSMTimeline(table, config);
     }
+    return writer;
   }
 
   private static Map<ConfigProperty, String> createMap(Object... keyValues) {
