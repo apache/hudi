@@ -178,6 +178,54 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     cleanupResources();
   }
 
+  /**
+   * Triage helper added on the ci-triage-multiwriter-zk branch.
+   *
+   * <p>Wraps {@code new TestingServer()} so we can attribute Azure CI flakes that
+   * look like {@code BindException: Address already in use} or
+   * {@code HoodieLockException: Failed to connect to ZooKeeper within 10000 ms}
+   * to the underlying socket-bind step rather than to any patch under test.
+   *
+   * <p>Logs the chosen ZK port, the time-to-bind, and the JVM PID + hostname.
+   * On {@code BindException} (or any nested {@code BindException} cause) it
+   * retries up to 5 times with a short backoff. Other failures rethrow.
+   */
+  private TestingServer startTestingServerWithDiagnostics() throws Exception {
+    final int maxAttempts = 5;
+    Exception lastFailure = null;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      long startNanos = System.nanoTime();
+      try {
+        TestingServer server = new TestingServer();
+        long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L;
+        String pid = java.lang.management.ManagementFactory.getRuntimeMXBean().getName();
+        String host = java.net.InetAddress.getLocalHost().getHostName();
+        LOG.info("[ZK-triage] TestingServer started: port={} connectString={} tempDir={} bindMillis={} attempt={} jvm={} host={}",
+            server.getPort(), server.getConnectString(), server.getTempDirectory().getAbsolutePath(),
+            elapsedMs, attempt, pid, host);
+        return server;
+      } catch (Exception e) {
+        long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L;
+        boolean isBindException = false;
+        for (Throwable t = e; t != null; t = t.getCause()) {
+          if (t instanceof java.net.BindException) {
+            isBindException = true;
+            break;
+          }
+        }
+        LOG.warn("[ZK-triage] TestingServer start failed attempt={} bindException={} bindMillis={} message={}",
+            attempt, isBindException, elapsedMs, e.toString(), e);
+        lastFailure = e;
+        if (!isBindException) {
+          throw e;
+        }
+        Thread.sleep(500L * attempt);
+      }
+    }
+    LOG.error("[ZK-triage] TestingServer failed to start after {} attempts", maxAttempts, lastFailure);
+    throw lastFailure;
+  }
+
   private static final List<Class> LOCK_PROVIDER_CLASSES = Arrays.asList(
       // [HUDI-8887] Based on OS/docker container used, the underlying file system API might not support
       // atomic operations which impairs the functionality of lock provider. Disable the test dimension to
@@ -465,7 +513,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     TestingServer server = null;
     if (earlyConflictDetectionStrategy.equalsIgnoreCase(SimpleTransactionDirectMarkerBasedDetectionStrategy.class.getName())) {
       // need to setup zk related env there. Bcz SimpleTransactionDirectMarkerBasedDetectionStrategy is only support zk lock for now.
-      server = new TestingServer();
+      server = startTestingServerWithDiagnostics();
       Properties properties = new Properties();
       properties.setProperty(ZK_BASE_PATH_PROP_KEY, basePath);
       properties.setProperty(ZK_CONNECT_URL_PROP_KEY, server.getConnectString());

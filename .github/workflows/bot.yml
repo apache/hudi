@@ -1,16 +1,11 @@
 name: Java CI
 
+# Disabled for ci-triage-multiwriter-zk branch: only run on manual dispatch so
+# the heavy GA matrix does not consume runners while we triage the Azure
+# TestHoodieClientMultiWriter ZK/BindException flake. Restore on master before
+# merging anything from this branch.
 on:
-  push:
-    branches:
-      - master
-      - 'release-*'
-      - branch-0.x
-  pull_request:
-    branches:
-      - master
-      - 'release-*'
-      - branch-0.x
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.ref }}
