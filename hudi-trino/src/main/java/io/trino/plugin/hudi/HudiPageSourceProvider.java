@@ -171,7 +171,7 @@ public class HudiPageSourceProvider
         // Enable predicate pushdown for splits containing only base files
         boolean isBaseFileOnly = hudiSplit.getLogFiles().isEmpty();
         // Convert columns to HiveColumnHandles
-        List<HiveColumnHandle> hiveColumnHandles = getHiveColumns(columns, isBaseFileOnly);
+        List<HiveColumnHandle> hiveColumnHandles = getHiveColumns(columns);
 
         // Get non-synthesized columns (columns that are available in data file)
         List<HiveColumnHandle> dataColumnHandles = hiveColumnHandles.stream()
@@ -435,8 +435,7 @@ public class HudiPageSourceProvider
         return combinedPredicate;
     }
 
-    private static List<HiveColumnHandle> getHiveColumns(List<ColumnHandle> columns,
-                                                         boolean isBaseFileOnly)
+    private static List<HiveColumnHandle> getHiveColumns(List<ColumnHandle> columns)
     {
         return columns.stream()
                 .map(HiveColumnHandle.class::cast)
