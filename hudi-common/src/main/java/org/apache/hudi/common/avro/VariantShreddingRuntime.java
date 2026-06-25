@@ -57,7 +57,7 @@ public final class VariantShreddingRuntime {
    * The fully-qualified name of the first {@link VariantShreddingProvider} implementation
    * found on the classpath, if any.
    */
-  public static Option<String> detectProviderClass() {
+  public static Option<String> getProviderClass() {
     return PROVIDER_CLASS;
   }
 
