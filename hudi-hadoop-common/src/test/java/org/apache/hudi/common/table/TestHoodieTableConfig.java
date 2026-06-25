@@ -384,7 +384,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @Test
   void testDefinedTableConfigs() {
     List<ConfigProperty<?>> configProperties = HoodieTableConfig.definedTableConfigs();
-    assertEquals(44, configProperties.size());
+    assertEquals(45, configProperties.size());
     configProperties.forEach(c -> {
       assertNotNull(c);
       assertFalse(c.doc().isEmpty());
@@ -796,4 +796,3 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertEquals("Unsupported flow for table versions less than 9", ioException.getMessage().toString());
   }
 }
-

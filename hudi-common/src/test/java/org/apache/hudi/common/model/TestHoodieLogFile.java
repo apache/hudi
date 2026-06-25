@@ -230,13 +230,12 @@ public class TestHoodieLogFile {
         nativeLogPath(LogExtensions.DELETE_LOG_EXTENSION, 8)));
     HoodieLogFile cdcFile = new HoodieLogFile(new StoragePath(
         nativeLogPath(LogExtensions.CDC_LOG_EXTENSION, 8)));
-    HoodieLogFile archiveFile = new HoodieLogFile(new StoragePath(
-        nativeLogPath(LogExtensions.ARCHIVE_LOG_EXTENSION, 8)));
 
-    List<HoodieLogFile> logFiles = Arrays.asList(archiveFile, cdcFile, deleteFile, logFile);
+    List<HoodieLogFile> logFiles = Arrays.asList(cdcFile, deleteFile, logFile);
     logFiles.sort(HoodieLogFile.getLogFileComparator());
 
-    assertEquals(Arrays.asList(logFile, deleteFile, cdcFile, archiveFile), logFiles);
+    assertEquals(Arrays.asList(logFile, deleteFile, cdcFile), logFiles);
+    assertFalse(FSUtils.matchNativeLogFile(nativeLogPath(LogExtensions.ARCHIVE_LOG_EXTENSION, 8)).isPresent());
   }
 
   private String nativeLogPath(String extension, int version) {
