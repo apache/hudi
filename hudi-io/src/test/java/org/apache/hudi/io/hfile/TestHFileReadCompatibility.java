@@ -22,6 +22,7 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.util.IOUtils;
 
 import org.apache.hadoop.conf.Configuration;
@@ -29,6 +30,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellComparatorImpl;
+import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
@@ -41,7 +43,9 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
+import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -67,6 +71,11 @@ class TestHFileReadCompatibility {
       new TestRecord("row4", "value4"),
       new TestRecord("row5", "value5")
   );
+
+  // Small block size + many records => many data blocks => block-boundary keys land in the root
+  // index, which is exactly where the HBase point-lookup parsing happened.
+  private static final int MULTI_BLOCK_RECORDS = 2000;
+  private static final int SMALL_BLOCK_SIZE = 512;
 
   @ParameterizedTest
   @CsvSource({
@@ -180,6 +189,115 @@ class TestHFileReadCompatibility {
     });
   }
 
+  /**
+   * Point-lookup compatibility: an HBase reader seeks every key (which necessarily includes the
+   * block-boundary keys stored in the root index) in a native-written multi-block file. Before the
+   * {@link HFileRootIndexBlock} fix the block-index first key lacked the HBase KeyValue suffix, so
+   * seeking a boundary key read the family-length byte past the end and threw
+   * {@code ArrayIndexOutOfBoundsException} in {@code KeyValue.getFamilyLength}. The scan-based test
+   * above never exercised this path.
+   */
+  @ParameterizedTest
+  @EnumSource(value = CompressionCodec.class, names = {"NONE", "GZIP"})
+  void hbaseReaderPointLooksUpEveryKeyInNativeMultiBlockFile(CompressionCodec codec)
+      throws IOException {
+    byte[] data = writeMultiBlockHudiHFile(MULTI_BLOCK_RECORDS, SMALL_BLOCK_SIZE, codec);
+    try (HFile.Reader reader = createHBaseHFileReader(data)) {
+      int blocks = reader.getTrailer().getDataIndexCount();
+      Assertions.assertTrue(blocks > 1, "expected a multi-block file; got " + blocks);
+      Assertions.assertEquals(MULTI_BLOCK_RECORDS, reader.getEntries());
+      HFileScanner scanner = reader.getScanner(true, true);
+      for (int i = 0; i < MULTI_BLOCK_RECORDS; i++) {
+        KeyValue probe = new KeyValue(Bytes.toBytes(key(i)), null, null, null);
+        Assertions.assertEquals(0, scanner.seekTo(probe), "expected exact match for " + key(i));
+        Cell cell = scanner.getCell();
+        Assertions.assertEquals(key(i),
+            Bytes.toString(cell.getRowArray(), cell.getRowOffset(), cell.getRowLength()));
+        Assertions.assertEquals(value(i),
+            Bytes.toString(cell.getValueArray(), cell.getValueOffset(), cell.getValueLength()));
+      }
+    }
+  }
+
+  /** {@code midKey()} parses a block-index key as a {@code KeyValue}; pre-fix this threw AIOOBE. */
+  @Test
+  void hbaseReaderMidKeyParsesNativeBlockIndexKey() throws IOException {
+    byte[] data = writeMultiBlockHudiHFile(MULTI_BLOCK_RECORDS, SMALL_BLOCK_SIZE, CompressionCodec.NONE);
+    try (HFile.Reader reader = createHBaseHFileReader(data)) {
+      Assertions.assertTrue(reader.midKey().isPresent());
+    }
+  }
+
+  /**
+   * Byte comparison under both NONE and GZIP: given identical records, the native writer and the
+   * HBase writer produce cells that an HBase reader sees as byte-identical (key bytes and value
+   * bytes), establishing that the native writer emits HBase-format cells.
+   */
+  @ParameterizedTest
+  @EnumSource(value = CompressionCodec.class, names = {"NONE", "GZIP"})
+  void nativeAndHBaseWrittenCellsAreByteIdenticalUnderHBaseReader(CompressionCodec codec)
+      throws IOException {
+    byte[] nativeData = writeMultiBlockHudiHFile(MULTI_BLOCK_RECORDS, SMALL_BLOCK_SIZE, codec);
+    byte[] hbaseData =
+        writeMultiBlockHBaseHFile(MULTI_BLOCK_RECORDS, SMALL_BLOCK_SIZE, hbaseAlgo(codec));
+    try (HFile.Reader nativeReader = createHBaseHFileReader(nativeData);
+         HFile.Reader hbaseReader = createHBaseHFileReader(hbaseData)) {
+      Assertions.assertEquals(hbaseReader.getEntries(), nativeReader.getEntries());
+      HFileScanner ns = nativeReader.getScanner(true, true);
+      HFileScanner hs = hbaseReader.getScanner(true, true);
+      Assertions.assertTrue(ns.seekTo());
+      Assertions.assertTrue(hs.seekTo());
+      int compared = 0;
+      boolean nativeHasNext;
+      boolean hbaseHasNext;
+      do {
+        Cell nativeCell = ns.getCell();
+        Cell hbaseCell = hs.getCell();
+        Assertions.assertArrayEquals(keyBytes(nativeCell), keyBytes(hbaseCell),
+            "KeyValue key bytes differ at record " + compared);
+        Assertions.assertArrayEquals(valueBytes(nativeCell), valueBytes(hbaseCell),
+            "value bytes differ at record " + compared);
+        compared++;
+        nativeHasNext = ns.next();
+        hbaseHasNext = hs.next();
+      } while (nativeHasNext && hbaseHasNext);
+      Assertions.assertEquals(MULTI_BLOCK_RECORDS, compared);
+      Assertions.assertFalse(nativeHasNext, "native scanner had extra cells");
+      Assertions.assertFalse(hbaseHasNext, "hbase scanner had extra cells");
+    }
+  }
+
+  /**
+   * Cross-reader equivalence: the same native-written multi-block file reads identically through
+   * the native hudi-io reader and the HBase reader (same rows and values, in order).
+   */
+  @Test
+  void nativeWrittenFileReadsIdenticallyByBothReaders() throws IOException {
+    byte[] data = writeMultiBlockHudiHFile(MULTI_BLOCK_RECORDS, SMALL_BLOCK_SIZE, CompressionCodec.NONE);
+    try (HFileReader nativeReader = createHFileReader(data);
+         HFile.Reader hbaseReader = createHBaseHFileReader(data)) {
+      Assertions.assertEquals(MULTI_BLOCK_RECORDS, hbaseReader.getEntries());
+      nativeReader.seekTo();
+      HFileScanner hbaseScanner = hbaseReader.getScanner(true, true);
+      Assertions.assertTrue(hbaseScanner.seekTo());
+      for (int i = 0; i < MULTI_BLOCK_RECORDS; i++) {
+        org.apache.hudi.io.hfile.KeyValue nativeKv = nativeReader.getKeyValue().get();
+        Cell hbaseCell = hbaseScanner.getCell();
+        Assertions.assertEquals(key(i), nativeKv.getKey().getContentInString());
+        Assertions.assertEquals(key(i),
+            Bytes.toString(hbaseCell.getRowArray(), hbaseCell.getRowOffset(), hbaseCell.getRowLength()));
+        byte[] nativeValue = Arrays.copyOfRange(nativeKv.getBytes(), nativeKv.getValueOffset(),
+            nativeKv.getValueOffset() + nativeKv.getValueLength());
+        Assertions.assertArrayEquals(value(i).getBytes(StandardCharsets.UTF_8), nativeValue);
+        Assertions.assertArrayEquals(nativeValue, valueBytes(hbaseCell));
+        if (i < MULTI_BLOCK_RECORDS - 1) {
+          Assertions.assertTrue(nativeReader.next());
+          Assertions.assertTrue(hbaseScanner.next());
+        }
+      }
+    }
+  }
+
   static boolean isPrefix(byte[] prefix, byte[] array) {
     if (prefix.length > array.length) {
       return false; // can't be prefix if longer
@@ -193,39 +311,25 @@ class TestHFileReadCompatibility {
   }
 
   static HFileReader createHFileReaderFromResource(String fileName) throws IOException {
-    // Read HFile data from resources
-    byte[] hfileData = readHFileFromResources(fileName);
-    // Convert to ByteBuffer
-    ByteBuffer buffer = ByteBuffer.wrap(hfileData);
-    // Create SeekableDataInputStream
+    return createHFileReader(readHFileFromResources(fileName));
+  }
+
+  static HFileReader createHFileReader(byte[] hfileData) {
     SeekableDataInputStream inputStream = new ByteArraySeekableDataInputStream(
-        new ByteBufferBackedInputStream(buffer)
-    );
-    // Create and return HFileReaderImpl
+        new ByteBufferBackedInputStream(ByteBuffer.wrap(hfileData)));
     return new HFileReaderImpl(inputStream, hfileData.length);
   }
 
   static HFile.Reader createHBaseHFileReaderFromResource(String fileName) throws IOException {
-    // Read HFile data from resources
-    byte[] hfileData = readHFileFromResources(fileName);
-    // Create a temporary file to write the HFile data
+    return createHBaseHFileReader(readHFileFromResources(fileName));
+  }
+
+  static HFile.Reader createHBaseHFileReader(byte[] hfileData) throws IOException {
     Path tempFile = new Path(Files.createTempFile("hbase_hfile_", ".hfile").toString());
-    try {
-      // Write the byte array to temporary file
-      Files.write(Paths.get(tempFile.toString()), hfileData);
-      // Create Hadoop Configuration and FileSystem
-      Configuration conf = new Configuration();
-      FileSystem fs = FileSystem.get(conf);
-      // Create HBase HFile.Reader from the temporary file
-      HFile.Reader reader = HFile.createReader(fs, new Path(tempFile.toString()), conf);
-      // Note: The temporary file will be cleaned up when the reader is closed
-      // or you can manually delete it after use
-      return reader;
-    } catch (IOException e) {
-      // Clean up temp file if creation fails
-      Files.deleteIfExists(Paths.get(tempFile.toString()));
-      throw e;
-    }
+    Files.write(Paths.get(tempFile.toString()), hfileData);
+    Configuration conf = new Configuration();
+    FileSystem fs = FileSystem.get(conf);
+    return HFile.createReader(fs, tempFile, conf);
   }
 
   private static byte[] readHFileFromResources(String filename) throws IOException {
@@ -295,6 +399,67 @@ class TestHFileReadCompatibility {
             new String(KEY_VALUE_VERSION.getBytes(), StandardCharsets.UTF_8), toBytes(keyValueVersion));
       }
     }
+  }
+
+  private static String key(int i) {
+    return String.format("key%06d", i);
+  }
+
+  private static String value(int i) {
+    return "value-" + i;
+  }
+
+  private static Compression.Algorithm hbaseAlgo(CompressionCodec codec) {
+    return codec == CompressionCodec.GZIP ? Compression.Algorithm.GZ : Compression.Algorithm.NONE;
+  }
+
+  private static byte[] writeMultiBlockHudiHFile(int numRecords, int blockSize, CompressionCodec codec)
+      throws IOException {
+    org.apache.hudi.io.hfile.HFileContext context = org.apache.hudi.io.hfile.HFileContext.builder()
+        .blockSize(blockSize).compressionCodec(codec).build();
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    try (HFileWriter writer = new HFileWriterImpl(context, baos)) {
+      for (int i = 0; i < numRecords; i++) {
+        writer.append(key(i), value(i).getBytes(StandardCharsets.UTF_8));
+      }
+    }
+    return baos.toByteArray();
+  }
+
+  // Same cells the native writer emits: family length 0, timestamp = LATEST, type = Put.
+  private static byte[] writeMultiBlockHBaseHFile(int numRecords, int blockSize,
+                                                  Compression.Algorithm algo) throws IOException {
+    Configuration conf = new Configuration();
+    FileSystem fs = FileSystem.getLocal(conf);
+    Path path = new Path(Files.createTempFile("hbase_write_", ".hfile").toString());
+    HFileContext context = new HFileContextBuilder()
+        .withBlockSize(blockSize)
+        .withCompression(algo)
+        .withCellComparator(CellComparatorImpl.COMPARATOR)
+        .withIncludesMvcc(true)
+        .build();
+    try (HFile.Writer writer = HFile.getWriterFactory(conf, new CacheConfig(conf))
+        .withPath(fs, path).withFileContext(context).create()) {
+      for (int i = 0; i < numRecords; i++) {
+        writer.append(new KeyValue(Bytes.toBytes(key(i)), new byte[0], new byte[0],
+            HConstants.LATEST_TIMESTAMP, value(i).getBytes(StandardCharsets.UTF_8)));
+      }
+    }
+    return Files.readAllBytes(Paths.get(path.toString()));
+  }
+
+  private static byte[] keyBytes(Cell c) {
+    KeyValue kv = new KeyValue(c.getRowArray(), c.getRowOffset(), c.getRowLength(),
+        c.getFamilyArray(), c.getFamilyOffset(), c.getFamilyLength(),
+        c.getQualifierArray(), c.getQualifierOffset(), c.getQualifierLength(),
+        c.getTimestamp(), KeyValue.Type.codeToType(c.getTypeByte()),
+        c.getValueArray(), c.getValueOffset(), c.getValueLength());
+    return Arrays.copyOfRange(kv.getKey(), 0, kv.getKeyLength());
+  }
+
+  private static byte[] valueBytes(Cell c) {
+    return Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(),
+        c.getValueOffset() + c.getValueLength());
   }
 
   // Simple test record class

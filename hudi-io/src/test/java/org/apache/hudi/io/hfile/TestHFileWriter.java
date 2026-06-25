@@ -55,6 +55,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestHFileWriter {
   private static final String TEST_FILE = "test.hfile";
   private static final HFileContext CONTEXT = HFileContext.builder().build();
+  // Golden bytes (NONE compression, fixed input) that lock the on-disk encoding of the data block
+  // and the root block-index block. Update intentionally ONLY after reviewing HBase-reader
+  // compatibility, since any change here is a storage-format change.
+  private static final String GOLDEN_DATA_REGION_HEX =
+      "44415441424c4b2a000000610000005dffffffffffffffff00000040000000007e000000100000000600046b65793100"
+          + "7fffffffffffffff0476616c75653100000000100000000600046b657932007fffffffffffffff0476616c7565320000"
+          + "0000100000000600046b657933007fffffffffffffff0476616c7565330000000000";
+  private static final String GOLDEN_ROOT_INDEX_BLOCK_HEX =
+      "494458524f4f5432000000210000001dffffffffffffffff00000040000000003e000000000000000000000082100004"
+          + "6b657931007fffffffffffffff0400000000";
 
   @AfterEach
   public void tearDown() throws IOException {
@@ -232,6 +242,35 @@ class TestHFileWriter {
     }
   }
 
+  /**
+   * Format lock: with NONE compression and a fixed input the data block and root block-index block
+   * are deterministic, so their raw bytes are asserted against a golden. Any change to the on-disk
+   * encoding (dropping the KeyValue suffix, ts/type, or framing) fails here, forcing a format
+   * review. Neither block holds the file-creation timestamp, so the bytes are stable across runs.
+   */
+  @Test
+  void writerBlockBytesAreStableFormatLock() throws Exception {
+    writeTestFile();
+    byte[] data = Files.readAllBytes(Paths.get(TEST_FILE));
+    int idxRootOffset = indexOf(data, HFileBlockType.ROOT_INDEX.getMagic());
+    assertTrue(idxRootOffset > 0, "root index block not found");
+
+    byte[] dataRegion = Arrays.copyOfRange(data, 0, idxRootOffset);
+    // Root index block: 33-byte v3 block header + onDiskSizeWithoutHeader payload (at header + 8).
+    int onDiskSizeWithoutHeader = readIntBE(data, idxRootOffset + 8);
+    byte[] rootIndexBlock =
+        Arrays.copyOfRange(data, idxRootOffset, idxRootOffset + 33 + onDiskSizeWithoutHeader);
+
+    // Logged so the golden can be regenerated intentionally.
+    log.info("GOLDEN_DATA_REGION_HEX={}", hex(dataRegion));
+    log.info("GOLDEN_ROOT_INDEX_BLOCK_HEX={}", hex(rootIndexBlock));
+
+    assertEquals(GOLDEN_DATA_REGION_HEX, hex(dataRegion),
+        "data block bytes changed (storage-format change); review HBase compatibility");
+    assertEquals(GOLDEN_ROOT_INDEX_BLOCK_HEX, hex(rootIndexBlock),
+        "root block-index bytes changed (storage-format change); review HBase compatibility");
+  }
+
   private static void writeTestFile() throws Exception {
     try (
         DataOutputStream outputStream =
@@ -246,7 +285,9 @@ class TestHFileWriter {
   private static void validateHFileSize() throws IOException {
     Path path = Paths.get(TEST_FILE);
     long actualSize = Files.size(path);
-    long expectedSize = 4537;
+    // Each root block-index entry carries the 10-byte HBase KeyValue suffix (column-family
+    // length + timestamp + key type). This file has one index entry, so the size grows by 10.
+    long expectedSize = 4547;
     assertEquals(expectedSize, actualSize);
   }
 
@@ -337,6 +378,32 @@ class TestHFileWriter {
     if (!Arrays.equals(expected, actual)) {
       throw new AssertionError("Byte array mismatch");
     }
+  }
+
+  private static int indexOf(byte[] haystack, byte[] needle) {
+    outer:
+    for (int i = 0; i + needle.length <= haystack.length; i++) {
+      for (int j = 0; j < needle.length; j++) {
+        if (haystack[i + j] != needle[j]) {
+          continue outer;
+        }
+      }
+      return i;
+    }
+    return -1;
+  }
+
+  private static int readIntBE(byte[] b, int off) {
+    return ((b[off] & 0xff) << 24) | ((b[off + 1] & 0xff) << 16)
+        | ((b[off + 2] & 0xff) << 8) | (b[off + 3] & 0xff);
+  }
+
+  private static String hex(byte[] b) {
+    StringBuilder sb = new StringBuilder(b.length * 2);
+    for (byte x : b) {
+      sb.append(Character.forDigit((x >> 4) & 0xf, 16)).append(Character.forDigit(x & 0xf, 16));
+    }
+    return sb.toString();
   }
 
   public static String generateRandomStringStream(int length) {
