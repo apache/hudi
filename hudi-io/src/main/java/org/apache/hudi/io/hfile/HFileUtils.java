@@ -21,52 +21,12 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.io.util.IOUtils;
 
-import java.io.DataOutputStream;
-import java.io.IOException;
-
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
  * Util methods for reading and writing HFile.
  */
 public class HFileUtils {
-  // Hudi does not set a version timestamp on key-value pairs, so the latest timestamp is used.
-  public static final long LATEST_TIMESTAMP = Long.MAX_VALUE;
-  // Key type is constant Put (4) in Hudi.
-  public static final byte KEY_TYPE_PUT = (byte) 4;
-  // HBase KeyValue key suffix beyond the row: column-family length (1) + timestamp (8) + type (1).
-  public static final int KEY_METADATA_SUFFIX_LENGTH =
-      DataSize.SIZEOF_BYTE + DataSize.SIZEOF_INT64 + DataSize.SIZEOF_BYTE;
-
-  /**
-   * Returns the serialized length of the HBase KeyValue key for a row: the 2-byte row-length
-   * prefix, the row, and the 10-byte metadata suffix (column-family length, timestamp, key type).
-   *
-   * @param rowLength length of the row (key content) in bytes.
-   * @return the HBase KeyValue key length.
-   */
-  public static int keyValueKeyLength(int rowLength) {
-    return DataSize.SIZEOF_INT16 + rowLength + KEY_METADATA_SUFFIX_LENGTH;
-  }
-
-  /**
-   * Writes the HBase KeyValue key for a row:
-   * {@code [2-byte rowLen][row][1-byte cfLen=0][8-byte ts=LATEST][1-byte type=Put]}. Both the data
-   * block and the root index block use this so an HBase reader parses their keys identically; a
-   * point lookup compares index keys against data keys, so any mismatch in the metadata bytes
-   * would break it.
-   *
-   * @param out output stream to write to.
-   * @param row row (key content) bytes.
-   */
-  public static void writeKeyValueKey(DataOutputStream out, byte[] row) throws IOException {
-    out.writeShort((short) row.length);
-    out.write(row);
-    out.write(0);                     // column-family length
-    out.writeLong(LATEST_TIMESTAMP);  // timestamp
-    out.write(KEY_TYPE_PUT);          // key type
-  }
-
   /**
    * Reads the HFile major version from the input.
    *

@@ -36,6 +36,7 @@ import java.nio.ByteBuffer;
 
 import static org.apache.hudi.io.hfile.DataSize.MAGIC_LENGTH;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_BYTE;
+import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT32;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT64;
 import static org.apache.hudi.io.util.IOUtils.readInt;
@@ -56,6 +57,12 @@ public abstract class HFileBlock {
   static final int CHECKSUM_SIZE = SIZEOF_INT32;
   private static final int DEFAULT_BYTES_PER_CHECKSUM = 16 * 1024;
   private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
+  // Hudi does not set a version timestamp on key-value pairs, so the latest timestamp is used.
+  private static final long LATEST_TIMESTAMP = Long.MAX_VALUE;
+  // Key type is constant Put (4) in Hudi.
+  private static final byte KEY_TYPE_PUT = (byte) 4;
+  // HBase KeyValue key suffix beyond the row: column-family length (1) + timestamp (8) + type (1).
+  private static final int KEY_METADATA_SUFFIX_LENGTH = SIZEOF_BYTE + SIZEOF_INT64 + SIZEOF_BYTE;
 
   static class Header {
     // Format of header is:
@@ -316,6 +323,37 @@ public abstract class HFileBlock {
       return new byte[numChecksumBytes];
     }
     throw new HoodieException("Only NULL checksum type is supported");
+  }
+
+  /**
+   * Returns the serialized length of the HBase KeyValue key for a row: the 2-byte row-length
+   * prefix, the row, and the 10-byte metadata suffix (column-family length, timestamp, key type).
+   *
+   * <p>The data block and the root index block both write the full HBase KeyValue key (not just
+   * the row) so that an HBase-based HFile reader can parse and point-look-up either block: a point
+   * lookup compares index keys against data keys, so the two must use byte-identical key encoding.
+   *
+   * @param rowLength length of the row (key content) in bytes.
+   * @return the HBase KeyValue key length.
+   */
+  protected static int keyValueKeyLength(int rowLength) {
+    return SIZEOF_INT16 + rowLength + KEY_METADATA_SUFFIX_LENGTH;
+  }
+
+  /**
+   * Writes the HBase KeyValue key for a row:
+   * {@code [2-byte rowLen][row][1-byte cfLen=0][8-byte ts=LATEST][1-byte type=Put]}. See
+   * {@link #keyValueKeyLength(int)} for why the data and index blocks share this encoding.
+   *
+   * @param out output stream to write to.
+   * @param row row (key content) bytes.
+   */
+  protected static void writeKey(DataOutputStream out, byte[] row) throws IOException {
+    out.writeShort((short) row.length);
+    out.write(row);
+    out.write(0);                     // column-family length
+    out.writeLong(LATEST_TIMESTAMP);  // timestamp
+    out.write(KEY_TYPE_PUT);          // key type
   }
 
   /**

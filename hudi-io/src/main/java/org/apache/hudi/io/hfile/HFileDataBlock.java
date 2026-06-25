@@ -203,13 +203,14 @@ public class HFileDataBlock extends HFileBlock {
     ByteArrayOutputStream baos = new ByteArrayOutputStream(context.getBlockSize());
     try (DataOutputStream dataOutputStream = new DataOutputStream(baos)) {
       for (KeyValueEntry kv : entriesToWrite) {
-        // Full HBase KeyValue key (row + column-family length + timestamp + key type), identical to
-        // the root index block so an HBase reader parses data and index entries the same way.
-        dataOutputStream.writeInt(HFileUtils.keyValueKeyLength(kv.key.length));
+        // Length of key + length of a short variable indicating length of key.
+        // Note that 10 extra bytes are required by hbase reader.
+        // That is: 1 byte for column family length, 8 bytes for timestamp, 1 bytes for key type.
+        dataOutputStream.writeInt(keyValueKeyLength(kv.key.length));
         // Length of value.
         dataOutputStream.writeInt(kv.value.length);
         // Key.
-        HFileUtils.writeKeyValueKey(dataOutputStream, kv.key);
+        writeKey(dataOutputStream, kv.key);
         // Value.
         dataOutputStream.write(kv.value);
         // MVCC.
