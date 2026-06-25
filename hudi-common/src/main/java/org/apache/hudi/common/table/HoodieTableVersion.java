@@ -57,7 +57,9 @@ public enum HoodieTableVersion {
   // 1.0
   EIGHT(8, CollectionUtils.createImmutableList("1.0.0"), TimelineLayoutVersion.LAYOUT_VERSION_2),
   // 1.1
-  NINE(9, CollectionUtils.createImmutableList("1.1.0"), TimelineLayoutVersion.LAYOUT_VERSION_2);
+  NINE(9, CollectionUtils.createImmutableList("1.1.0"), TimelineLayoutVersion.LAYOUT_VERSION_2),
+  // 1.3
+  TEN(10, CollectionUtils.createImmutableList("1.3.0"), TimelineLayoutVersion.LAYOUT_VERSION_2);
 
   @Accessors(fluent = true) // Required so that #versionCode() is generated instead of #getVersionCode() by Lombok
   private final int versionCode;

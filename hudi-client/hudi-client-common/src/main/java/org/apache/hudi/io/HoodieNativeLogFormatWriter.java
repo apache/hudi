@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
@@ -138,7 +139,7 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     try {
       closeFileWriters();
     } catch (IOException e) {
-      throw new RuntimeException("Failed to close native log file writers", e);
+      throw new HoodieIOException("Failed to close native log file writers", e);
     }
   }
 
@@ -148,6 +149,10 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
 
   public boolean canWriteDataFile() {
     return dataFileWriter == null || dataFileWriter.canWrite();
+  }
+
+  public boolean canWriteDeleteFile() {
+    return deleteFileWriter == null || deleteFileWriter.canWrite();
   }
 
   public void appendRecord(HoodieRecord record, HoodieSchema recordSchema, String keyFieldName) throws IOException {
@@ -188,28 +193,6 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     return fieldValues;
   }
 
-  public AppendResult flushAppend() throws IOException {
-    return flushAppend(Collections.emptyMap());
-  }
-
-  public AppendResult flushDataAppend(Map<HeaderMetadataType, String> header) throws IOException {
-    int appendVersion = currentAppendVersion;
-    lastAppendResults = new ArrayList<>();
-    lastDataFileFormatMetadata = Option.empty();
-    addFooterMetadataToDataFile(header);
-    if (dataFileWriter != null) {
-      dataFileWriter.close();
-      lastDataFileFormatMetadata = Option.ofNullable(dataFileWriter.getFileFormatMetadata());
-      dataFileWriter = null;
-    }
-    if (dataLogFile != null) {
-      lastAppendResults.add(toAppendResult(dataLogFile));
-    }
-    dataLogFile = null;
-    currentAppendVersion = -1;
-    return completeAppend(appendVersion);
-  }
-
   public AppendResult flushAppend(Map<HeaderMetadataType, String> header) throws IOException {
     int appendVersion = currentAppendVersion;
     lastAppendResults = new ArrayList<>();
@@ -229,16 +212,6 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
   }
 
   private void addFooterMetadata(Map<HeaderMetadataType, String> header) throws IOException {
-    Map<String, String> footerMetadata = getFooterMetadata(header);
-    if (dataFileWriter != null) {
-      dataFileWriter.addFooterMetadata(footerMetadata);
-    }
-    if (deleteFileWriter != null) {
-      deleteFileWriter.addFooterMetadata(footerMetadata);
-    }
-  }
-
-  private void addFooterMetadataToDataFile(Map<HeaderMetadataType, String> header) throws IOException {
     if (dataFileWriter != null) {
       dataFileWriter.addFooterMetadata(getFooterMetadata(header));
     }
@@ -248,8 +221,7 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     Map<String, String> logFormatMetadata = new LinkedHashMap<>();
     logFormatMetadata.put(HeaderMetadataType.VERSION.name(), String.valueOf(NATIVE_LOG_FORMAT_VERSION));
     header.forEach((key, value) -> {
-      if (value != null && key != HeaderMetadataType.SCHEMA) {
-        // filter out the redundant schema since the footer already carries it.
+      if (value != null) {
         logFormatMetadata.put(key.name(), value);
       }
     });

@@ -357,6 +357,8 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertTrue(HoodieTableConfig.validateConfigVersion(HoodieTableConfig.INITIAL_VERSION, HoodieTableVersion.EIGHT));
     assertTrue(HoodieTableConfig.validateConfigVersion(ConfigProperty.key("").noDefaultValue().withDocumentation(""),
         HoodieTableVersion.SIX));
+    assertFalse(HoodieTableConfig.validateConfigVersion(HoodieTableConfig.TABLE_STORAGE_LAYOUT, HoodieTableVersion.NINE));
+    assertTrue(HoodieTableConfig.validateConfigVersion(HoodieTableConfig.TABLE_STORAGE_LAYOUT, HoodieTableVersion.TEN));
     assertFalse(HoodieTableConfig.validateConfigVersion(HoodieTableConfig.INITIAL_VERSION, HoodieTableVersion.SIX));
   }
 

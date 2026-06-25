@@ -122,7 +122,7 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
         ? HoodieRecord.RECORD_KEY_METADATA_FIELD
         : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
     if (!writer.canWriteDataFile()) {
-      flushDataAppend();
+      flushAppend();
     }
     writer.appendRecord(populatedRecord, writeSchemaWithMetaFields, keyField);
     if (isUpdateRecord || isLogCompaction) {
@@ -141,6 +141,9 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
     String keyField = schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD).isPresent()
         ? HoodieRecord.RECORD_KEY_METADATA_FIELD
         : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
+    if (!writer.canWriteDeleteFile()) {
+      flushAppend();
+    }
     writer.appendDeleteRecord(hoodieRecord, schema, keyField);
     recordsDeleted++;
   }
@@ -149,24 +152,12 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
   protected void flushAppend() {
     try {
       header.put(HeaderMetadataType.INSTANT_TIME, instantTime);
-      // header.put(HeaderMetadataType.SCHEMA, writeSchemaWithMetaFields.toString());
+      header.put(HeaderMetadataType.SCHEMA, writeSchemaWithMetaFields.toString());
       if (writer != null && writer.hasPendingWrites()) {
         processAppendResult(writer.flushAppend(getUpdatedHeader(header)));
       }
     } catch (IOException e) {
       throw new HoodieAppendException("Failed while flushing records to native log for fileId " + fileId, e);
-    }
-  }
-
-  private void flushDataAppend() {
-    try {
-      header.put(HeaderMetadataType.INSTANT_TIME, instantTime);
-      header.put(HeaderMetadataType.SCHEMA, writeSchemaWithMetaFields.toString());
-      if (writer != null && writer.hasPendingWrites()) {
-        processAppendResult(writer.flushDataAppend(getUpdatedHeader(header)));
-      }
-    } catch (IOException e) {
-      throw new HoodieAppendException("Failed while flushing records to native data log for fileId " + fileId, e);
     }
   }
 

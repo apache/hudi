@@ -54,6 +54,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -186,7 +187,7 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
   public List<WriteStatus> close() {
     try {
       if (isClosed()) {
-        return statuses.isEmpty() ? java.util.Collections.singletonList(writeStatus) : statuses;
+        return statuses.isEmpty() ? Collections.singletonList(writeStatus) : statuses;
       }
 
       markClosed();
