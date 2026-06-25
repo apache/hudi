@@ -30,14 +30,12 @@ import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.MapFunction;
-import org.apache.spark.api.java.function.ReduceFunction;
 import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
 import java.io.Serializable;
+import java.util.List;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_MAX_FILE_SIZE;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
@@ -45,7 +43,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.DATAFILE_FORMAT;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_CHECK;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.SOURCE_MAX_BYTES_PER_PARTITION;
-import static org.apache.hudi.utilities.config.CloudSourceConfig.SOURCE_MAX_ROWS_PER_SYNC;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.SOURCE_MAX_FILES_PER_SYNC;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.SOURCE_FILE_FORMAT;
 
 /**
@@ -104,11 +102,10 @@ public class CloudDataFetcher implements Serializable {
     log.info("Adding filter string to Dataset: {}", filter);
     Dataset<Row> filteredSourceData = queryInfoDatasetPair.getRight().filter(filter);
 
-    long rowLimit = props.getLong(SOURCE_MAX_ROWS_PER_SYNC.key(), SOURCE_MAX_ROWS_PER_SYNC.defaultValue());
     log.info("Adjusting end checkpoint:{} based on sourceLimit :{}", queryInfo.getEndInstant(), sourceLimit);
     Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> checkPointAndDataset =
         IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
-            filteredSourceData, sourceLimit, rowLimit, queryInfo, cloudObjectIncrCheckpoint);
+            filteredSourceData, sourceLimit, queryInfo, cloudObjectIncrCheckpoint);
     if (!checkPointAndDataset.getRight().isPresent()) {
       log.info("Empty source, returning endpoint:{}", checkPointAndDataset.getLeft());
       return Pair.of(Option.empty(), new StreamerCheckpointV1(checkPointAndDataset.getLeft().toString()));
@@ -116,8 +113,15 @@ public class CloudDataFetcher implements Serializable {
     log.info("Adjusted end checkpoint :{}", checkPointAndDataset.getLeft());
 
     boolean checkIfFileExists = getBooleanWithAltKeys(props, ENABLE_EXISTS_CHECK);
-    Dataset<CloudObjectMetadata> cloudObjectMetadataDS = CloudObjectsSelectorCommon.getObjectMetadata(cloudType, sparkContext, checkPointAndDataset.getRight().get(), checkIfFileExists, props);
-    log.info("Total number of files to process :{}", cloudObjectMetadataDS.count());
+    List<CloudObjectMetadata> cloudObjectMetadata = CloudObjectsSelectorCommon.getObjectMetadata(cloudType, sparkContext, checkPointAndDataset.getRight().get(), checkIfFileExists, props);
+
+    // Limit the number of files per sync to prevent driver OOM with many small files
+    long numFilesLimit = props.getLong(SOURCE_MAX_FILES_PER_SYNC.key(), SOURCE_MAX_FILES_PER_SYNC.defaultValue());
+    if (cloudObjectMetadata.size() > numFilesLimit) {
+      log.info("Trimming cloudObjectMetadata list from {} to {} files based on numFilesLimit config", cloudObjectMetadata.size(), numFilesLimit);
+      cloudObjectMetadata = cloudObjectMetadata.subList(0, (int) Math.min(numFilesLimit, Integer.MAX_VALUE));
+    }
+    log.info("Total number of files to process :{}", cloudObjectMetadata.size());
 
     long bytesPerPartition = props.containsKey(SOURCE_MAX_BYTES_PER_PARTITION.key()) ? props.getLong(SOURCE_MAX_BYTES_PER_PARTITION.key()) :
         props.getLong(PARQUET_MAX_FILE_SIZE.key(), Long.parseLong(PARQUET_MAX_FILE_SIZE.defaultValue()));
@@ -130,17 +134,18 @@ public class CloudDataFetcher implements Serializable {
       }
       numSourcePartitions = sourceProfileSupplier.get().getSourceProfile().getSourcePartitions();
     }
-    Option<Dataset<Row>> datasetOption = getCloudObjectDataDF(cloudObjectMetadataDS, schemaProvider, bytesPerPartition, numSourcePartitions);
+    Option<Dataset<Row>> datasetOption = getCloudObjectDataDF(cloudObjectMetadata, schemaProvider, bytesPerPartition, numSourcePartitions);
     return Pair.of(datasetOption, new StreamerCheckpointV1(checkPointAndDataset.getLeft().toString()));
   }
 
-  private Option<Dataset<Row>> getCloudObjectDataDF(Dataset<CloudObjectMetadata> cloudObjectMetadataDS,
+  private Option<Dataset<Row>> getCloudObjectDataDF(List<CloudObjectMetadata> cloudObjectMetadata,
                                                     Option<SchemaProvider> schemaProviderOption,
                                                     long bytesPerPartition,
                                                     int numSourcePartitions) {
-    // Calculate total size using Dataset aggregation
-    long totalSize = cloudObjectMetadataDS.map((MapFunction<CloudObjectMetadata, Long>) CloudObjectMetadata::getSize, Encoders.LONG())
-        .reduce((ReduceFunction<Long>) Long::sum);
+    long totalSize = 0;
+    for (CloudObjectMetadata o : cloudObjectMetadata) {
+      totalSize += o.getSize();
+    }
     // inflate 10% for potential hoodie meta fields
     double totalSizeWithHoodieMetaFields = totalSize * 1.1;
     metrics.updateStreamerSourceBytesToBeIngestedInSyncRound(totalSize);
@@ -150,6 +155,6 @@ public class CloudDataFetcher implements Serializable {
       numPartitions = numSourcePartitions;
     }
     metrics.updateStreamerSourceParallelism(numPartitions);
-    return cloudObjectsSelectorCommon.loadAsDataset(sparkSession, cloudObjectMetadataDS, getFileFormat(props), schemaProviderOption, numPartitions);
+    return cloudObjectsSelectorCommon.loadAsDataset(sparkSession, cloudObjectMetadata, getFileFormat(props), schemaProviderOption, numPartitions);
   }
 }

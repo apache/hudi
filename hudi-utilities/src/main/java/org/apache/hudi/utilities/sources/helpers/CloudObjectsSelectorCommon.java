@@ -41,8 +41,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.FlatMapFunction;
-import org.apache.spark.api.java.function.MapFunction;
+import org.apache.spark.api.java.function.MapPartitionsFunction;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
@@ -110,34 +109,37 @@ public class CloudObjectsSelectorCommon {
   }
 
   /**
-   * Return a function that extracts filepath from a single Row without using any intermediate list.
+   * Return a function that extracts filepaths from a list of Rows.
    * Here Row is assumed to have the schema [bucket_name, filepath_relative_to_bucket, object_size]
    * @param storageUrlSchemePrefix    Eg: s3:// or gs://. The storage-provider-specific prefix to use within the URL.
    * @param storageConf               storage configuration.
-   * @param checkIfExists             check if each file exists, before returning
-   * @return FlatMapFunction that returns 0 or 1 CloudObjectMetadata per row
+   * @param checkIfExists             check if each file exists, before adding it to the returned list
+   * @return
    */
-  public static FlatMapFunction<Row, CloudObjectMetadata> getCloudObjectMetadataPerPartition(
+  public static MapPartitionsFunction<Row, CloudObjectMetadata> getCloudObjectMetadataPerPartition(
       String storageUrlSchemePrefix, StorageConfiguration<Configuration> storageConf, boolean checkIfExists) {
-    return row -> {
-      Option<String> filePathUrl = getUrlForFile(row, storageUrlSchemePrefix, storageConf, checkIfExists);
-      if (filePathUrl.isPresent()) {
-        String url = filePathUrl.get();
-        log.info("Adding file: {}", url);
-        long size;
-        Object obj = row.get(2);
-        if (obj instanceof String) {
-          size = Long.parseLong((String) obj);
-        } else if (obj instanceof Integer) {
-          size = ((Integer) obj).longValue();
-        } else if (obj instanceof Long) {
-          size = (long) obj;
-        } else {
-          throw new HoodieIOException("unexpected object size's type in Cloud storage events: " + obj.getClass());
-        }
-        return Collections.singletonList(new CloudObjectMetadata(url, size)).iterator();
-      }
-      return Collections.emptyIterator();
+    return rows -> {
+      List<CloudObjectMetadata> cloudObjectMetadataPerPartition = new ArrayList<>();
+      rows.forEachRemaining(row -> {
+        Option<String> filePathUrl = getUrlForFile(row, storageUrlSchemePrefix, storageConf, checkIfExists);
+        filePathUrl.ifPresent(url -> {
+          log.info("Adding file: {}", url);
+          long size;
+          Object obj = row.get(2);
+          if (obj instanceof String) {
+            size = Long.parseLong((String) obj);
+          } else if (obj instanceof Integer) {
+            size = ((Integer) obj).longValue();
+          } else if (obj instanceof Long) {
+            size = (long) obj;
+          } else {
+            throw new HoodieIOException("unexpected object size's type in Cloud storage events: " + obj.getClass());
+          }
+          cloudObjectMetadataPerPartition.add(new CloudObjectMetadata(url, size));
+        });
+      });
+
+      return cloudObjectMetadataPerPartition.iterator();
     };
   }
 
@@ -241,9 +243,9 @@ public class CloudObjectsSelectorCommon {
    * @param cloudObjectMetadataDF a Dataset that contains metadata of S3/GCS objects. Assumed to be a persisted form
    *                              of a Cloud Storage SQS/PubSub Notification event.
    * @param checkIfExists         Check if each file exists, before returning its full path
-   * @return A {@link Dataset} of {@link CloudObjectMetadata} containing file info.
+   * @return A {@link List} of {@link CloudObjectMetadata} containing file info.
    */
-  public static Dataset<CloudObjectMetadata> getObjectMetadata(
+  public static List<CloudObjectMetadata> getObjectMetadata(
       Type type,
       JavaSparkContext jsc,
       Dataset<Row> cloudObjectMetadataDF,
@@ -255,22 +257,28 @@ public class CloudObjectsSelectorCommon {
       return cloudObjectMetadataDF
           .select("bucket", "name", "size")
           .distinct()
-          .flatMap(getCloudObjectMetadataPerPartition(GCS_PREFIX, storageConf, checkIfExists), Encoders.kryo(CloudObjectMetadata.class));
+          .mapPartitions(getCloudObjectMetadataPerPartition(GCS_PREFIX, storageConf, checkIfExists), Encoders.kryo(CloudObjectMetadata.class))
+          .collectAsList();
     } else if (type == Type.S3) {
       String s3FS = getStringWithAltKeys(props, S3_FS_PREFIX, true).toLowerCase();
       String s3Prefix = s3FS + "://";
       return cloudObjectMetadataDF
           .select(CloudObjectsSelectorCommon.S3_BUCKET_NAME, CloudObjectsSelectorCommon.S3_OBJECT_KEY, CloudObjectsSelectorCommon.S3_OBJECT_SIZE)
           .distinct()
-          .flatMap(getCloudObjectMetadataPerPartition(s3Prefix, storageConf, checkIfExists), Encoders.kryo(CloudObjectMetadata.class));
+          .mapPartitions(getCloudObjectMetadataPerPartition(s3Prefix, storageConf, checkIfExists), Encoders.kryo(CloudObjectMetadata.class))
+          .collectAsList();
     }
     throw new UnsupportedOperationException("Invalid cloud type " + type);
   }
 
-  public Option<Dataset<Row>> loadAsDataset(SparkSession spark, Dataset<CloudObjectMetadata> cloudObjectMetadataDS,
+  public Option<Dataset<Row>> loadAsDataset(SparkSession spark, List<CloudObjectMetadata> cloudObjectMetadata,
                                             String fileFormat, Option<SchemaProvider> schemaProviderOption, int numPartitions) {
-    // Check if dataset is empty
-    if (cloudObjectMetadataDS.isEmpty()) {
+    if (log.isDebugEnabled()) {
+      log.debug("Extracted distinct files {} and some samples {}",
+          cloudObjectMetadata.size(), cloudObjectMetadata.stream().map(CloudObjectMetadata::getPath).limit(10).collect(Collectors.toList()));
+    }
+
+    if (cloudObjectMetadata.isEmpty()) {
       return Option.empty();
     }
     DataFrameReader reader = applyMergeSchemaOption(spark.read().format(fileFormat), fileFormat);
@@ -304,12 +312,9 @@ public class CloudObjectsSelectorCommon {
       log.info("SparkOptions loaded: {}", sparkOptionsMap);
       reader = reader.options(sparkOptionsMap);
     }
-    // Extract paths from the Dataset - only collect at this point when needed for reader.load()
-    List<String> paths = cloudObjectMetadataDS
-        .map((MapFunction<CloudObjectMetadata, String>) CloudObjectMetadata::getPath, Encoders.STRING())
-        .collectAsList();
-    if (log.isDebugEnabled()) {
-      log.debug("Extracted distinct files " + paths.size() + " and some samples " + paths.stream().limit(10).collect(Collectors.toList()));
+    List<String> paths = new ArrayList<>();
+    for (CloudObjectMetadata o : cloudObjectMetadata) {
+      paths.add(o.getPath());
     }
     boolean isCommaSeparatedPathFormat = properties.getBoolean(SPARK_DATASOURCE_READER_COMMA_SEPARATED_PATH_FORMAT.key(), false);
 
@@ -317,7 +322,7 @@ public class CloudObjectsSelectorCommon {
     if (isCommaSeparatedPathFormat) {
       dataset = reader.load(String.join(",", paths));
     } else {
-      dataset = reader.load(paths.toArray(new String[paths.size()]));
+      dataset = reader.load(paths.toArray(new String[cloudObjectMetadata.size()]));
     }
 
     if (schemaProviderOption.isPresent()) {
