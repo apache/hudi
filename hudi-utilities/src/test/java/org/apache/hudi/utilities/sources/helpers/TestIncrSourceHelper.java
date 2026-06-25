@@ -381,5 +381,4 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     assertEquals(commitTimeForWrites, queryInfo.getEndInstant());
 
   }
-
 }
