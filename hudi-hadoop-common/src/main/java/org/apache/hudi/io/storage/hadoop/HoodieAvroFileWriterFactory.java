@@ -102,7 +102,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
     if (config.contains(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key())) {
       return !StringUtils.isNullOrEmpty(config.getString(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS));
     }
-    return VariantShreddingRuntime.detectProviderClass().isPresent();
+    return VariantShreddingRuntime.getProviderClass().isPresent();
   }
 
   private HoodieFileWriter createParquetFileWriter(
@@ -187,7 +187,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
     Properties props = TypedProperties.copy(config.getProps());
     // Auto-detect variant shredding provider from classpath if not explicitly configured
     if (!props.containsKey(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key())) {
-      VariantShreddingRuntime.detectProviderClass().ifPresent(detected ->
+      VariantShreddingRuntime.getProviderClass().ifPresent(detected ->
           props.setProperty(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key(), detected));
     }
     return (HoodieAvroWriteSupport) ReflectionUtils.loadClass(

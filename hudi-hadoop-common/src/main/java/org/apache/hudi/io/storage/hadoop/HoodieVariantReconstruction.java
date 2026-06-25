@@ -198,7 +198,7 @@ final class HoodieVariantReconstruction {
     String providerClass = storage.getConf()
         .getString(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key()).orElse(null);
     if (providerClass == null || providerClass.isEmpty()) {
-      providerClass = VariantShreddingRuntime.detectProviderClass().orElse(null);
+      providerClass = VariantShreddingRuntime.getProviderClass().orElse(null);
     }
     return providerClass == null ? null : (VariantShreddingProvider) ReflectionUtils.loadClass(providerClass);
   }
