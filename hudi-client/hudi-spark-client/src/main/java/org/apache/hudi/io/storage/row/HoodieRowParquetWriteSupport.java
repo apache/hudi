@@ -892,11 +892,11 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       // its {metadata, value, typed_value} shredding schema). Tag the parquet group with the VARIANT
       // logical type so external readers recognize it as a Variant, matching Spark's native shredded
       // parquet schema. No-op on Spark 4.0/3.x (the annotation only exists in parquet 1.16+).
-      Types.GroupBuilder<GroupType> finalBuilder =
+      Types.GroupBuilder<GroupType> taggedBuilder =
           SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantShreddingStruct(nestedStruct)
               ? SparkAdapterSupport$.MODULE$.sparkAdapter().applyVariantLogicalType(groupBuilder)
               : groupBuilder;
-      return finalBuilder.named(structField.name());
+      return taggedBuilder.named(structField.name());
     } else {
       throw new UnsupportedOperationException("Unsupported type: " + dataType);
     }
