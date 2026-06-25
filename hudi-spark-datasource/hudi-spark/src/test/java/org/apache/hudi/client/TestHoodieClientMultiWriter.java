@@ -137,8 +137,21 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Tag("functional")
 public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
+  // Pin the tolerable heartbeat misses used by the early-conflict-detection test so its
+  // heartbeat-expiry wait does not depend on the global default
+  // (hoodie.client.heartbeat.tolerable.misses), which changed from 2 to 10 in #18904.
+  private static final int EARLY_CONFLICT_HEARTBEAT_TOLERABLE_MISSES = 2;
+
+  static {
+    // ZooKeeper's embedded admin server binds the fixed default port 8080 (Curator only
+    // randomizes the client port), so a concurrent or leaked TestingServer in a reused
+    // fork collides with "Address already in use". The admin server is unused here.
+    System.setProperty("zookeeper.admin.enableServer", "false");
+  }
+
   private Properties lockProperties = null;
 
+  private TestingServer zkTestingServer = null;
 
   /**
    * super is not thread safe!!
@@ -175,6 +188,10 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
   @AfterEach
   public void clean() throws IOException {
+    if (zkTestingServer != null) {
+      zkTestingServer.close();
+      zkTestingServer = null;
+    }
     cleanupResources();
   }
 
@@ -462,14 +479,14 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     int heartBeatIntervalForCommit4 = 3 * 1000;
 
     HoodieWriteConfig writeConfig;
-    TestingServer server = null;
     if (earlyConflictDetectionStrategy.equalsIgnoreCase(SimpleTransactionDirectMarkerBasedDetectionStrategy.class.getName())) {
       // need to setup zk related env there. Bcz SimpleTransactionDirectMarkerBasedDetectionStrategy is only support zk lock for now.
-      server = new TestingServer();
+      // zkTestingServer is closed in @AfterEach so a failing assertion cannot leak it (and its port-8080 admin server).
+      zkTestingServer = new TestingServer();
       Properties properties = new Properties();
       properties.setProperty(ZK_BASE_PATH_PROP_KEY, basePath);
-      properties.setProperty(ZK_CONNECT_URL_PROP_KEY, server.getConnectString());
-      properties.setProperty(ZK_BASE_PATH_PROP_KEY, server.getTempDirectory().getAbsolutePath());
+      properties.setProperty(ZK_CONNECT_URL_PROP_KEY, zkTestingServer.getConnectString());
+      properties.setProperty(ZK_BASE_PATH_PROP_KEY, zkTestingServer.getTempDirectory().getAbsolutePath());
       properties.setProperty(ZK_SESSION_TIMEOUT_MS_PROP_KEY, "10000");
       properties.setProperty(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY, "10000");
       properties.setProperty(ZK_LOCK_KEY_PROP_KEY, "key");
@@ -521,8 +538,11 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     storage.create(heartbeatFilePath, true);
 
     // Wait for heart beat expired for failed commitTime3 "003"
-    // Otherwise commit4 still can see conflict between failed write 003.
-    Thread.sleep(heartBeatIntervalForCommit4 * 2);
+    // Otherwise commit4 still can see conflict between failed write 003. The early-conflict
+    // check treats 003 as alive until its heartbeat is older than
+    // (tolerable misses * heartbeat interval); tolerable misses is pinned in
+    // buildWriteConfigForEarlyConflictDetect, so wait one interval past that window.
+    Thread.sleep(heartBeatIntervalForCommit4 * (EARLY_CONFLICT_HEARTBEAT_TOLERABLE_MISSES + 1));
 
     final String nextCommitTime4 = "004";
     assertDoesNotThrow(() -> {
@@ -541,9 +561,6 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     assertTrue(completedInstant.contains(nextCommitTime4));
 
     FileIOUtils.deleteDirectory(new File(basePath));
-    if (server != null) {
-      server.close();
-    }
     client1.close();
     client2.close();
     client3.close();
@@ -1771,6 +1788,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     if (markerType.equalsIgnoreCase(MarkerType.DIRECT.name())) {
       return getConfigBuilder()
           .withHeartbeatIntervalInMs(60 * 1000)
+          .withHeartbeatTolerableMisses(EARLY_CONFLICT_HEARTBEAT_TOLERABLE_MISSES)
           .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
               .withStorageType(FileSystemViewStorageType.MEMORY)
               .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
@@ -1791,6 +1809,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       return getConfigBuilder()
           .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(20 * 1024).build())
           .withHeartbeatIntervalInMs(60 * 1000)
+          .withHeartbeatTolerableMisses(EARLY_CONFLICT_HEARTBEAT_TOLERABLE_MISSES)
           .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
               .withStorageType(FileSystemViewStorageType.MEMORY)
               .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
