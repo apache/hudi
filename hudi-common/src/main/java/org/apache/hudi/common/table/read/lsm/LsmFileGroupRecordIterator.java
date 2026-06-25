@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemas;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -325,7 +326,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
                                                         HoodieSchema deleteLogSchema,
                                                         List<String> orderingFieldNames) {
     Object recordKey = readerContext.getRecordContext()
-        .getValue(record, deleteLogSchema, HoodieSchemas.DELETE_LOG_RECORD_KEY_FIELD);
+        .getValue(record, deleteLogSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD);
     // Preserve the delete log's ordering value so event-time/custom merge modes can compare
     // deletes against data records instead of treating every native delete as commit-time ordered.
     Comparable orderingValue =

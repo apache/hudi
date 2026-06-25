@@ -77,8 +77,8 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
       log.info("Small file corrections for updates for commit {} for file {}", instantTime, fileId);
       return super.handleUpdate(partitionPath, fileId, recordItr);
     } else {
-      HoodieAppendHandle<?, ?, ?, ?> appendHandle = new HoodieAppendHandle<>(config, instantTime, table,
-          partitionPath, fileId, recordItr, taskContextSupplier);
+      HoodieAppendHandle<?, ?, ?, ?> appendHandle = new AppendHandleFactory()
+          .create(config, instantTime, table, partitionPath, fileId, recordItr, taskContextSupplier);
       appendHandle.doAppend();
       return Collections.singletonList(appendHandle.close()).iterator();
     }

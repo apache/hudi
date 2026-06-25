@@ -32,6 +32,7 @@ import org.apache.avro.generic.IndexedRecord;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
+import java.util.Map;
 
 /**
  * HoodieParquetWriter extends the ParquetWriter to help limit the size of underlying file. Provides a way to check if
@@ -82,6 +83,11 @@ public class HoodieAvroParquetWriter
     if (populateMetaFields) {
       writeSupport.add(key);
     }
+  }
+
+  @Override
+  public void addFooterMetadata(Map<String, String> footerMetadata) {
+    footerMetadata.forEach(writeSupport::addFooterMetadata);
   }
 
   @Override

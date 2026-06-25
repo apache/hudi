@@ -44,14 +44,14 @@ import java.util.List;
  * or the file size hits the configured threshold).
  */
 @Slf4j
-public class FlinkAppendHandle<T, I, K, O>
-    extends HoodieAppendHandle<T, I, K, O> implements MiniBatchHandle {
+public class FlinkInlineLogAppendHandle<T, I, K, O>
+    extends HoodieInlineLogAppendHandle<T, I, K, O> implements MiniBatchHandle {
 
   private boolean isClosed = false;
   private final WriteMarkers writeMarkers;
   private final BucketType bucketType;
 
-  public FlinkAppendHandle(
+  public FlinkInlineLogAppendHandle(
       HoodieWriteConfig config,
       String instantTime,
       HoodieTable<T, I, K, O> hoodieTable,

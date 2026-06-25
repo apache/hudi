@@ -59,10 +59,10 @@ public class HoodieLogFile implements Serializable {
 
   static {
     Map<String, Integer> extensionPrecedence = new HashMap<>();
-    extensionPrecedence.put("log", 0);
-    extensionPrecedence.put("deletes", 1); // the deletes come after logs to ensure commit time sequence.
-    extensionPrecedence.put("cdc", 2);
-    extensionPrecedence.put("archive", 3);
+    extensionPrecedence.put(LogExtensions.DATA_LOG_EXTENSION, 0);
+    extensionPrecedence.put(LogExtensions.DELETE_LOG_EXTENSION, 1); // the deletes come after logs to ensure commit time sequence.
+    extensionPrecedence.put(LogExtensions.CDC_LOG_EXTENSION, 2);
+    extensionPrecedence.put(LogExtensions.ARCHIVE_LOG_EXTENSION, 3);
     EXTENSION_PRECEDENCE = Collections.unmodifiableMap(extensionPrecedence);
   }
 
@@ -206,6 +206,11 @@ public class HoodieLogFile implements Serializable {
     String fileId = getFileId();
     String deltaCommitTime = getDeltaCommitTime();
     StoragePath path = getPath();
+    if (FSUtils.matchNativeLogFile(path.getName()).isPresent()) {
+      return new HoodieLogFile(new StoragePath(path.getParent(),
+          FSUtils.makeNativeLogFileName(fileId, logWriteToken, deltaCommitTime, logVersion + 1,
+              fileExtension, HoodieFileFormat.fromFileExtension("." + getSuffix()))));
+    }
     String extension = "." + fileExtension;
     return new HoodieLogFile(new StoragePath(path.getParent(),
         FSUtils.makeLogFileName(fileId, extension, deltaCommitTime, logVersion + 1, logWriteToken)));

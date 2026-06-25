@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.schema;
 
+import org.apache.hudi.common.model.HoodieRecord;
+
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -29,12 +31,11 @@ import static org.apache.hudi.common.schema.HoodieSchemaUtils.createNewSchemaFie
  * Factory class for {@link HoodieSchema}.
  */
 public class HoodieSchemas {
-  public static final String DELETE_LOG_RECORD_KEY_FIELD = "record_key";
 
   public static HoodieSchema createDeleteLogSchema(HoodieSchema tableSchema, List<String> orderingFieldNames) {
     List<HoodieSchemaField> fields = Stream.concat(
         Stream.of(createNewSchemaField(
-            DELETE_LOG_RECORD_KEY_FIELD, HoodieSchema.create(HoodieSchemaType.STRING), null, null)),
+            HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieSchema.create(HoodieSchemaType.STRING), null, null)),
         orderingFieldNames.stream().map(orderingFieldName -> tableSchema.getField(orderingFieldName)
             .map(HoodieSchemaUtils::createNewSchemaField)
             .orElseThrow(() ->

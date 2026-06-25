@@ -52,20 +52,17 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
 
 /**
- * A base append handle implementation based on the {@link HoodieFileGroupReader}.
- * <p>
- * This append-handle is used for log-compaction, which passes a file slice from the
- * compaction operation of a single file group to a file group reader, get an iterator of
- * the records, and writes the records to a new log file.
+ * File-group-reader based log-compaction append handle for native MOR log files.
  */
 @NotThreadSafe
-public class FileGroupReaderBasedAppendHandle<T, I, K, O> extends HoodieAppendHandle<T, I, K, O> {
+public class FileGroupReaderBasedNativeLogAppendHandle<T, I, K, O> extends HoodieNativeLogAppendHandle<T, I, K, O> {
   private final HoodieReaderContext<T> readerContext;
   private final CompactionOperation operation;
   private HoodieReadStats readStats;
 
-  public FileGroupReaderBasedAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                          CompactionOperation operation, TaskContextSupplier taskContextSupplier, HoodieReaderContext<T> readerContext) {
+  public FileGroupReaderBasedNativeLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                                   CompactionOperation operation, TaskContextSupplier taskContextSupplier,
+                                                   HoodieReaderContext<T> readerContext) {
     super(config, instantTime, hoodieTable, operation.getPartitionPath(), operation.getFileId(), taskContextSupplier);
     this.operation = operation;
     this.readerContext = readerContext;
@@ -81,7 +78,6 @@ public class FileGroupReaderBasedAppendHandle<T, I, K, O> extends HoodieAppendHa
     Stream<HoodieLogFile> logFiles = operation.getDeltaFileNames().stream().map(logFileName ->
         new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
             config.getBasePath(), operation.getPartitionPath()), logFileName)));
-    // Initializes the record iterator, log compaction requires writing the deletes into the delete block of the resulting log file.
     try (HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>builder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(hoodieTable.getMetaClient())

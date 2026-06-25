@@ -240,6 +240,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .withAlternatives("hoodie.table.rt.file.format")
       .withDocumentation("Log format used for the delta logs.");
 
+  public static final ConfigProperty<String> TABLE_STORAGE_LAYOUT = ConfigProperty
+      .key("hoodie.table.storage.layout")
+      .defaultValue(TableStorageLayout.DEFAULT.configValue)
+      .sinceVersion("1.3.0")
+      .withDocumentation("Physical table storage layout. Valid values are default and lsm_tree.");
+
   public static final ConfigProperty<String> TIMELINE_LAYOUT_VERSION = ConfigProperty
       .key("hoodie.timeline.layout.version")
       .noDefaultValue()
@@ -1168,6 +1174,36 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public HoodieFileFormat getLogFileFormat() {
     return HoodieFileFormat.valueOf(getStringOrDefault(LOG_FILE_FORMAT));
+  }
+
+  public TableStorageLayout getTableStorageLayout() {
+    return TableStorageLayout.fromConfigValue(getStringOrDefault(TABLE_STORAGE_LAYOUT));
+  }
+
+  public boolean isLSMTreeStorageLayout() {
+    return getTableStorageLayout() == TableStorageLayout.LSM_TREE;
+  }
+
+  public enum TableStorageLayout {
+    DEFAULT("default"),
+    LSM_TREE("lsm_tree");
+
+    private final String configValue;
+
+    TableStorageLayout(String configValue) {
+      this.configValue = configValue;
+    }
+
+    public String configValue() {
+      return configValue;
+    }
+
+    public static TableStorageLayout fromConfigValue(String configValue) {
+      return Arrays.stream(values())
+          .filter(layout -> layout.configValue.equalsIgnoreCase(configValue))
+          .findFirst()
+          .orElseThrow(() -> new IllegalArgumentException("Unknown table storage layout: " + configValue));
+    }
   }
 
   /**

@@ -21,7 +21,6 @@ package org.apache.hudi.io.v2;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
@@ -30,7 +29,7 @@ import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.FlinkAppendHandle;
+import org.apache.hudi.io.FlinkInlineLogAppendHandle;
 import org.apache.hudi.io.MiniBatchHandle;
 import org.apache.hudi.io.log.block.HoodieFlinkAvroDataBlock;
 import org.apache.hudi.io.log.block.HoodieFlinkParquetDataBlock;
@@ -59,19 +58,19 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_CO
 
 /**
  * A write handle that supports creating a log file and writing records based on record Iterator.
- * The differences from {@code FlinkAppendHandle} are:
+ * The differences from {@code FlinkInlineLogAppendHandle} are:
  *
- * <p> 1. {@code RowDataLogHandle} does not convert RowData into Avro record before writing.
- * <p> 2. {@code RowDataLogHandle} writes Parquet data block by default.
+ * <p> 1. {@code RowDataInlineLogWriteHandle} does not convert RowData into Avro record before writing.
+ * <p> 2. {@code RowDataInlineLogWriteHandle} writes Parquet data block by default.
  *
  * <p>The back-up writer may roll over to a new log file if there already exists a log file for the
  * given file group and instant.
  */
 @Slf4j
-public class RowDataLogWriteHandle<T, I, K, O>
-    extends FlinkAppendHandle<T, I, K, O> implements MiniBatchHandle {
+public class RowDataInlineLogWriteHandle<T, I, K, O>
+    extends FlinkInlineLogAppendHandle<T, I, K, O> implements MiniBatchHandle {
 
-  public RowDataLogWriteHandle(
+  public RowDataInlineLogWriteHandle(
       HoodieWriteConfig config,
       String instantTime,
       HoodieTable<T, I, K, O> hoodieTable,
@@ -97,13 +96,11 @@ public class RowDataLogWriteHandle<T, I, K, O>
   }
 
   @Override
-  protected void processAppendResult(AppendResult result, Option<HoodieLogBlock> dataBlock) {
+  protected void collectColumnStats(HoodieDeltaWriteStat stat) {
     if (getLogBlockType() == HoodieLogBlockType.AVRO_DATA_BLOCK) {
-      super.processAppendResult(result, dataBlock);
+      super.collectColumnStats(stat);
       return;
     }
-    HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
-    updateWriteStatus(result, stat);
 
     // for parquet data block, we can get column stats from parquet footer directly.
     if (config.isMetadataColumnStatsIndexEnabled()) {
@@ -114,25 +111,20 @@ public class RowDataLogWriteHandle<T, I, K, O>
               Option.of(HoodieRecord.HoodieRecordType.FLINK), indexVersion).keySet());
 
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata;
-      if (dataBlock.isEmpty()) {
+      if (appendDataBlock.isEmpty()) {
         // only delete block exists
         columnRangeMetadata = new HashMap<>();
         columnsToIndexSet.forEach(col -> columnRangeMetadata.put(col, HoodieColumnRangeMetadata.createEmpty(stat.getPath(), col, indexVersion)));
       } else {
-        ValidationUtils.checkArgument(dataBlock.get() instanceof ColumnRangeMetadataProvider,
+        ValidationUtils.checkArgument(appendDataBlock.get() instanceof ColumnRangeMetadataProvider,
             "Log block for Flink ingestion should always be an instance of ColumnRangeMetadataProvider for collecting column stats efficiently.");
         columnRangeMetadata =
-            ((ColumnRangeMetadataProvider) dataBlock.get()).getColumnRangeMeta(stat.getPath(), indexVersion).entrySet().stream()
+            ((ColumnRangeMetadataProvider) appendDataBlock.get()).getColumnRangeMeta(stat.getPath(), indexVersion).entrySet().stream()
                 .filter(e -> columnsToIndexSet.contains(e.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
       }
       stat.putRecordsStats(columnRangeMetadata);
     }
-    resetWriteCounts();
-    assert stat.getRuntimeStats() != null;
-    log.info("WriteHandle for partitionPath {} filePath {}, took {} ms.",
-        partitionPath, stat.getPath(), stat.getRuntimeStats().getTotalUpsertTime());
-    timer.startTimer();
   }
 
   /**

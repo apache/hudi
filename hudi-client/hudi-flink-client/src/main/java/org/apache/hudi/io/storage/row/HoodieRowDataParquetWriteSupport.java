@@ -36,6 +36,7 @@ import java.util.Map;
  */
 public class HoodieRowDataParquetWriteSupport extends RowDataParquetWriteSupport {
 
+  private final Map<String, String> footerMetadata = new HashMap<>();
   private final Option<HoodieBloomFilterWriteSupport<String>> bloomFilterWriteSupportOpt;
 
   public HoodieRowDataParquetWriteSupport(Configuration conf, HoodieSchema schema, BloomFilter bloomFilter) {
@@ -58,8 +59,16 @@ public class HoodieRowDataParquetWriteSupport extends RowDataParquetWriteSupport
       extraMetadata = new HashMap<>(extraMetadata);
       extraMetadata.put(HoodieSchema.VECTOR_COLUMNS_METADATA_KEY, vectorColumnsMetadata);
     }
+    if (!footerMetadata.isEmpty()) {
+      extraMetadata = new HashMap<>(extraMetadata);
+      extraMetadata.putAll(footerMetadata);
+    }
 
     return new WriteSupport.FinalizedWriteContext(extraMetadata);
+  }
+
+  public void addFooterMetadata(Map<String, String> footerMetadata) {
+    this.footerMetadata.putAll(footerMetadata);
   }
 
   public void add(String recordKey) {
