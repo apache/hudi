@@ -323,6 +323,23 @@ public class IncrSourceHelper {
   }
 
   /**
+   * Extract the checkpoint (commit_time, file_key) from the last row of the given dataset,
+   * ordering by the order column and key column descending.
+   * Used to recalculate the checkpoint after a files-per-sync limit is applied.
+   *
+   * @param dataset   Dataset whose last row (by order+key) determines the checkpoint
+   * @param queryInfo Query info with column names for ordering and key extraction
+   * @return Checkpoint corresponding to the last file in the dataset
+   */
+  public static CloudObjectIncrCheckpoint getCheckpointFromLastRow(Dataset<Row> dataset, QueryInfo queryInfo) {
+    Row lastRow = dataset
+        .select(queryInfo.getOrderColumn(), queryInfo.getKeyColumn())
+        .orderBy(col(queryInfo.getOrderColumn()).desc(), col(queryInfo.getKeyColumn()).desc())
+        .first();
+    return new CloudObjectIncrCheckpoint(lastRow.getString(0), lastRow.getString(1));
+  }
+
+  /**
    * Determine the policy to choose if a checkpoint is missing (detected by the absence of a start commit),
    * during a run of a {@link HoodieIncrSource}.
    *
