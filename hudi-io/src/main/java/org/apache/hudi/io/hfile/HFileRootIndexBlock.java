@@ -29,9 +29,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
 
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_BYTE;
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT64;
 import static org.apache.hudi.io.util.IOUtils.copy;
 import static org.apache.hudi.io.util.IOUtils.decodeVarLongSizeOnDisk;
 import static org.apache.hudi.io.util.IOUtils.readInt;
@@ -43,16 +40,6 @@ import static org.apache.hudi.io.util.IOUtils.writeVarInt;
  * Represents a {@link HFileBlockType#ROOT_INDEX} block.
  */
 public class HFileRootIndexBlock extends HFileIndexBlock {
-  // Each block-index "first key" is written as a full HBase KeyValue key
-  // ([2-byte rowLen][row][1-byte cfLen=0][8-byte ts][1-byte type]) so an HBase-based HFile reader
-  // can parse and point-look-up the block index, matching the data-block KeyValue encoding. The
-  // native reader reads only the row via the leading 2-byte length prefix, so it reads both this
-  // and the older row-only format.
-  private static final long LATEST_TIMESTAMP = Long.MAX_VALUE;
-  private static final byte KEY_TYPE_PUT = (byte) 4;
-  // HBase KeyValue key suffix: column-family length (1) + timestamp (8) + key type (1).
-  private static final int KEY_METADATA_SUFFIX_LENGTH = SIZEOF_BYTE + SIZEOF_INT64 + SIZEOF_BYTE;
-
   public HFileRootIndexBlock(HFileContext context,
                              byte[] byteBuff,
                              int startOffsetInBuff) {
@@ -121,16 +108,10 @@ public class HFileRootIndexBlock extends HFileIndexBlock {
         outputStream.writeLong(entry.getOffset());
         outputStream.writeInt(entry.getSize());
 
-        int rowLength = entry.getFirstKey().getLength();
-        // 2-byte row-length prefix + row + 10-byte KeyValue suffix.
-        // Hadoop WritableUtils VarInt encoding matches HBase's HFile format.
-        outputStream.write(writeVarInt(SIZEOF_INT16 + rowLength + KEY_METADATA_SUFFIX_LENGTH));
-        outputStream.writeShort((short) rowLength);
-        outputStream.write(entry.getFirstKey().getBytes());
-        // KeyValue suffix: column-family length (0), timestamp (latest), key type (Put).
-        outputStream.write(0);
-        outputStream.writeLong(LATEST_TIMESTAMP);
-        outputStream.write(KEY_TYPE_PUT);
+        // Varint-encoded key length (Hadoop WritableUtils, matching HBase's HFile format), then the
+        // full HBase KeyValue key, identical to the data block so an HBase reader can point-look-up.
+        outputStream.write(writeVarInt(HFileUtils.keyValueKeyLength(entry.getFirstKey().getLength())));
+        HFileUtils.writeKeyValueKey(outputStream, entry.getFirstKey().getBytes());
       }
     }
 
