@@ -120,8 +120,8 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
     }
     // Try loading the external config file from local file system. Both DEFAULT_PATH and
     // HUDI_CONF_DIR are optional global config locations — use the tolerant overload so a
-    // missing file does not propagate as an exception (preserves prior behavior covered by
-    // testClassInitializationNeverThrows).
+    // missing file does not propagate as an exception (preserves prior silent-ignore behavior
+    // for optional global-defaults paths).
     try {
       conf.addPropsFromFile(DEFAULT_PATH, true);
     } catch (Exception e) {
@@ -144,17 +144,19 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   }
 
   /**
-   * Add properties from an external configuration file. Throws if the file does not exist —
-   * the caller is presumed to have explicitly named the file (e.g. {@code --props /path/...}),
-   * so a typo should fail fast rather than silently load empty properties.
+   * Add properties from an external configuration file. A missing file is tolerated only when the
+   * caller's path equals {@link #DEFAULT_PATH} (the optional global {@code hudi-defaults.conf}); any
+   * other missing file fails fast with {@link HoodieIOException}, so a typo in an explicit
+   * user-supplied path (e.g. {@code --props /path/...}) is surfaced rather than silently loading
+   * empty properties.
    *
-   * <p>For optional or include-resolved paths, use {@link #addPropsFromFile(StoragePath, boolean)}
-   * with {@code tolerateMissing=true}.
+   * <p>For include-resolved paths use {@link #addPropsFromFile(StoragePath, boolean)} with
+   * {@code tolerateMissing=true}.
    *
    * @param filePath file path for configuration file.
    */
   public void addPropsFromFile(StoragePath filePath) {
-    addPropsFromFile(filePath, false);
+    addPropsFromFile(filePath, filePath.equals(DEFAULT_PATH));
   }
 
   /**
