@@ -639,7 +639,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
         })
         .collect(Collectors.toList());
 
-    assertTrue(rollbackLogFiles.size() > 0, "Should have rollback log files with rollback instant time");
+    assertFalse(rollbackLogFiles.isEmpty(), "Should have rollback log files with rollback instant time");
     for (HoodieLogFile logFile : rollbackLogFiles) {
       String writeToken = logFile.getLogWriteToken();
       assertFalse(writeToken.isEmpty(), "Write token should not be empty");
@@ -715,7 +715,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     while (itr.hasNext()) {
       FileStatus fileStatus = itr.next();
       String fileName = fileStatus.getPath().getName();
-      if (fileName.contains("log")) {
+      if (FSUtils.isLogFile(fileName)) {
         String fileId = FSUtils.getFileId(fileName);
         logFilesByFileId.computeIfAbsent(fileId, k -> new ArrayList<>()).add(fileName);
       }
