@@ -469,7 +469,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    *
    * @param <T> The type of engine-specific record representation.
    */
-  private static class FilteringEngineRecordIterator<T> implements ClosableIterator<T> {
+  protected static class FilteringEngineRecordIterator<T> implements ClosableIterator<T> {
     private final ClosableIterator<T> nested; // nested iterator
 
     private final Set<String> keys; // the filtering keys

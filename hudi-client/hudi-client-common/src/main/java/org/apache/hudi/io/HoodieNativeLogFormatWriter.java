@@ -30,11 +30,11 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.LogFileCreationCallback;
+import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
-import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
@@ -47,8 +47,6 @@ import org.apache.hudi.storage.StoragePath;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -60,8 +58,6 @@ import static org.apache.hudi.common.model.LogExtensions.DELETE_LOG_EXTENSION;
  * Writes MOR log blocks as native files, for example {@code .log.parquet} and {@code .deletes.parquet}.
  */
 public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
-
-  private static final String LOG_FORMAT_METADATA_FOOTER_KEY = "hudi.log.format.metadata";
 
   private final HoodieWriteConfig writeConfig;
   private final HoodieFileFormat nativeFileFormat;
@@ -215,20 +211,8 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
 
   private void addFooterMetadata(Map<HeaderMetadataType, String> header) throws IOException {
     if (dataFileWriter != null) {
-      dataFileWriter.addFooterMetadata(getFooterMetadata(header));
+      dataFileWriter.addFooterMetadata(NativeLogFooterMetadata.toFooterMetadata(header));
     }
-  }
-
-  private Map<String, String> getFooterMetadata(Map<HeaderMetadataType, String> header) throws IOException {
-    Map<String, String> logFormatMetadata = new LinkedHashMap<>();
-    logFormatMetadata.put(HeaderMetadataType.VERSION.name(), String.valueOf(HoodieLogFormat.CURRENT_VERSION));
-    header.forEach((key, value) -> {
-      if (value != null) {
-        logFormatMetadata.put(key.name(), value);
-      }
-    });
-    return Collections.singletonMap(
-        LOG_FORMAT_METADATA_FOOTER_KEY, JsonUtils.getObjectMapper().writeValueAsString(logFormatMetadata));
   }
 
   private void ensureDataFileWriter(HoodieSchema recordSchema) throws IOException {

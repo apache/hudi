@@ -2505,6 +2505,38 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testNativeLogFilesAreVisibleInFileSystemView() throws Exception {
+    String partitionPath = "2026/06/25";
+    new File(basePath + "/" + partitionPath).mkdirs();
+
+    String fileId = UUID.randomUUID().toString();
+    String instantTime = "001";
+    String nativeDataLogFileName = String.format("%s_%s_%s_%d.log.parquet", fileId, TEST_WRITE_TOKEN, instantTime, 1);
+    String nativeDeleteLogFileName = String.format("%s_%s_%s_%d.deletes.parquet", fileId, TEST_WRITE_TOKEN, instantTime, 2);
+    String nativeCdcLogFileName = String.format("%s_%s_%s_%d.cdc.parquet", fileId, TEST_WRITE_TOKEN, instantTime, 3);
+    new File(basePath + "/" + partitionPath + "/" + nativeDataLogFileName).createNewFile();
+    new File(basePath + "/" + partitionPath + "/" + nativeDeleteLogFileName).createNewFile();
+    new File(basePath + "/" + partitionPath + "/" + nativeCdcLogFileName).createNewFile();
+
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.addWriteStat(partitionPath, getHoodieWriteStat(partitionPath, fileId, nativeDataLogFileName));
+    commitMetadata.addWriteStat(partitionPath, getHoodieWriteStat(partitionPath, fileId, nativeDeleteLogFileName));
+    commitMetadata.addWriteStat(partitionPath, getHoodieWriteStat(partitionPath, fileId, nativeCdcLogFileName));
+    HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime);
+    saveAsComplete(metaClient.getActiveTimeline(), instant, commitMetadata);
+
+    try (SyncableFileSystemView fileSystemView = getFileSystemView(metaClient.reloadActiveTimeline(), true)) {
+      Set<String> logFileNames = fileSystemView.getAllFileSlices(partitionPath)
+          .flatMap(FileSlice::getLogFiles)
+          .map(logFile -> logFile.getPath().getName())
+          .collect(Collectors.toSet());
+      assertTrue(logFileNames.contains(nativeDataLogFileName));
+      assertTrue(logFileNames.contains(nativeDeleteLogFileName));
+      assertTrue(logFileNames.contains(nativeCdcLogFileName));
+    }
+  }
+
+  @Test
   public void testGetLatestMergedFileSlicesBeforeOrOnIncludingInflight() throws IOException {
     String partitionPath = "2023/01/01";
     String fileId = UUID.randomUUID().toString();

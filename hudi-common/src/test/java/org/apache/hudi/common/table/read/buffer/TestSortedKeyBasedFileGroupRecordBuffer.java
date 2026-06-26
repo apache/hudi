@@ -98,7 +98,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
         ClosableIterator.wrap(Arrays.asList(testRecord6, testRecord4, testRecord1, testRecord6Update, testRecord2Update).iterator()));
 
     HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
-    when(deleteBlock.getRecordsToDelete()).thenReturn(new DeleteRecord[] {DeleteRecord.create("3", "")});
+    mockDeleteRecords(deleteBlock, DeleteRecord.create("3", ""));
     fileGroupRecordBuffer.processDataBlock(dataBlock, Option.empty());
     fileGroupRecordBuffer.processDeleteBlock(deleteBlock);
 
@@ -175,7 +175,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     when(dataBlock2.getEngineRecordIterator(mockReaderContext)).thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord2Update, testRecord5, testRecord3, testRecord1).iterator()));
 
     HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
-    when(deleteBlock.getRecordsToDelete()).thenReturn(new DeleteRecord[] {DeleteRecord.create("3", "")});
+    mockDeleteRecords(deleteBlock, DeleteRecord.create("3", ""));
     fileGroupRecordBuffer.processDataBlock(dataBlock1, Option.empty());
     fileGroupRecordBuffer.processDataBlock(dataBlock2, Option.empty());
     fileGroupRecordBuffer.processDeleteBlock(deleteBlock);

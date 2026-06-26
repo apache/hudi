@@ -22,7 +22,6 @@ package org.apache.hudi.common.table.read.buffer;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -111,11 +110,6 @@ class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   @Override
   public void processDeleteBlock(HoodieDeleteBlock deleteBlock) {
-    // no-op
-  }
-
-  @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable index) {
     // no-op
   }
 

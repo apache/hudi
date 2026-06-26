@@ -527,11 +527,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param pathInfoList List of StoragePathInfo
    */
   private Stream<HoodieLogFile> convertFileStatusesToLogFiles(List<StoragePathInfo> pathInfoList) {
-    String logFileExtension = metaClient.getTableConfig().getLogFileFormat().getFileExtension();
-    Predicate<StoragePathInfo> rtFilePredicate = pathInfo -> {
-      String fileName = pathInfo.getPath().getName();
-      return FSUtils.isLogFile(pathInfo.getPath()) && fileName.contains(logFileExtension);
-    };
+    Predicate<StoragePathInfo> rtFilePredicate = pathInfo -> FSUtils.isLogFile(pathInfo.getPath());
     return pathInfoList.stream().filter(rtFilePredicate).map(HoodieLogFile::new);
   }
 

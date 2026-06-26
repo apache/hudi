@@ -19,8 +19,10 @@
 
 package org.apache.hudi.common.testutils.reader;
 
+import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
@@ -34,9 +36,11 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemas;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
+import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -50,16 +54,22 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.io.storage.hadoop.HoodieAvroParquetWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -79,6 +89,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHE
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.DELETE;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.INSERT;
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 public class HoodieFileSliceTestUtils {
   public static final String FORWARD_SLASH = "/";
@@ -93,6 +104,7 @@ public class HoodieFileSliceTestUtils {
   public static final HoodieTestDataGenerator DATA_GEN =
       new HoodieTestDataGenerator(0xDEED);
   public static final TypedProperties PROPERTIES = new TypedProperties();
+  private static final String WRITE_TOKEN = "1-0-1";
   private static String[] orderingFields = new String[] {"timestamp"};
 
   // We use a number to represent a record key, and a (start, end) range
@@ -125,6 +137,16 @@ public class HoodieFileSliceTestUtils {
     return new Path(
         basePath + FORWARD_SLASH + logFileName(
         instantTime, fileId, version));
+  }
+
+  private static Path generateNativeLogFilePath(
+      String basePath,
+      String fileId,
+      String instantTime,
+      int version,
+      String extension) {
+    return new Path(basePath + FORWARD_SLASH
+        + String.format("%s_%s_%s_%d%s", fileId, WRITE_TOKEN, instantTime, version, extension));
   }
 
   // Note:
@@ -318,6 +340,85 @@ public class HoodieFileSliceTestUtils {
     return new HoodieLogFile(logFilePath);
   }
 
+  public static HoodieLogFile createNativeDataLogFile(
+      String logFilePath,
+      List<IndexedRecord> records,
+      HoodieSchema schema,
+      String logInstantTime
+  ) throws IOException {
+    HoodieStorage storage = HoodieTestUtils.getStorage(logFilePath);
+    try (HoodieAvroFileWriter writer = createNativeLogWriter(storage, logFilePath, schema, logInstantTime)) {
+      for (IndexedRecord record : records) {
+        writer.writeAvro(
+            (String) record.get(schema.getField(ROW_KEY).get().pos()), record);
+      }
+    }
+    return new HoodieLogFile(logFilePath);
+  }
+
+  public static HoodieLogFile createNativeDeleteLogFile(
+      HoodieStorage storage,
+      String logFilePath,
+      List<IndexedRecord> records,
+      HoodieSchema tableSchema,
+      String logInstantTime
+  ) throws IOException {
+    HoodieSchema deleteLogSchema = HoodieSchemas.createDeleteLogSchema(tableSchema, Arrays.asList(TIMESTAMP));
+    try (HoodieAvroFileWriter writer = createNativeLogWriter(storage, logFilePath, deleteLogSchema, logInstantTime)) {
+      for (IndexedRecord record : records) {
+        String recordKey = record.get(record.getSchema().getField(ROW_KEY).pos()).toString();
+        GenericRecord deleteRecord = new GenericData.Record(deleteLogSchema.toAvroSchema());
+        deleteRecord.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKey);
+        deleteRecord.put(TIMESTAMP, record.get(record.getSchema().getField(TIMESTAMP).pos()));
+        writer.writeAvro(recordKey, deleteRecord);
+      }
+    }
+    return new HoodieLogFile(logFilePath);
+  }
+
+  private static HoodieAvroFileWriter createNativeLogWriter(
+      HoodieStorage storage,
+      String logFilePath,
+      HoodieSchema schema,
+      String logInstantTime
+  ) throws IOException {
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
+        getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(schema),
+        schema,
+        Option.empty(),
+        new Properties());
+    // Write the footer using the same shared serializer the real HoodieNativeLogFormatWriter uses,
+    // so the read path is exercised against the actual on-disk contract.
+    NativeLogFooterMetadata.toFooterMetadata(getNativeLogBlockHeader(schema, logInstantTime))
+        .forEach(writeSupport::addFooterMetadata);
+
+    HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig = new HoodieParquetConfig<>(
+        writeSupport,
+        CompressionCodecName.GZIP,
+        ParquetWriter.DEFAULT_BLOCK_SIZE,
+        ParquetWriter.DEFAULT_PAGE_SIZE,
+        1024 * 1024 * 1024,
+        storage.getConf(),
+        0.1,
+        true);
+    return new HoodieAvroParquetWriter(
+        new StoragePath(logFilePath),
+        parquetConfig,
+        logInstantTime,
+        new LocalTaskContextSupplier(),
+        false);
+  }
+
+  private static Map<HoodieLogBlock.HeaderMetadataType, String> getNativeLogBlockHeader(
+      HoodieSchema schema,
+      String logInstantTime
+  ) {
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, logInstantTime);
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
+    return header;
+  }
+
   /**
    * Based on provided parameters to generate a {@link FileSlice} object.
    */
@@ -451,5 +552,91 @@ public class HoodieFileSliceTestUtils {
         partitionPath,
         HOODIE_SCHEMA,
         plans));
+  }
+
+  /**
+   * Generate a file slice mixing legacy inline logs with RFC-103 native parquet data and delete logs.
+   */
+  public static Option<FileSlice> getMixedLegacyAndNativeFileSlice(
+      HoodieStorage storage,
+      String basePath,
+      String partitionPath,
+      String fileId
+  ) throws IOException, InterruptedException {
+    String partitionBasePath = basePath + FORWARD_SLASH + partitionPath;
+    new File(partitionBasePath).mkdirs();
+
+    Map<String, Long> keyToPositionMap = new HashMap<>();
+    DataGenerationPlan baseFilePlan = DataGenerationPlan.newBuilder()
+        .withOperationType(INSERT)
+        .withPartitionPath(partitionPath)
+        .withRecordKeys(generateKeys(new KeyRange(1, 10)))
+        .withTimeStamp(2L)
+        .withInstantTime("001")
+        .withWritePositions(false)
+        .build();
+    List<IndexedRecord> baseRecords = generateRecords(baseFilePlan);
+    HoodieBaseFile baseFile = createBaseFile(
+        generateBaseFilePath(partitionBasePath, fileId, baseFilePlan.getInstantTime()).toString(),
+        baseRecords,
+        HOODIE_SCHEMA,
+        baseFilePlan.getInstantTime());
+    for (int i = 0; i < baseFilePlan.getRecordKeys().size(); i++) {
+      keyToPositionMap.put(baseFilePlan.getRecordKeys().get(i), (long) i);
+    }
+
+    List<HoodieLogFile> logFiles = new ArrayList<>();
+    DataGenerationPlan legacyDeletePlan = DataGenerationPlan.newBuilder()
+        .withOperationType(DELETE)
+        .withPartitionPath(partitionPath)
+        .withRecordKeys(generateKeys(new KeyRange(1, 5)))
+        .withTimeStamp(3L)
+        .withInstantTime("002")
+        .withWritePositions(false)
+        .build();
+    logFiles.add(createLogFile(
+        storage,
+        generateLogFilePath(partitionBasePath, fileId, legacyDeletePlan.getInstantTime(), 1).toString(),
+        generateRecords(legacyDeletePlan),
+        HOODIE_SCHEMA,
+        fileId,
+        baseFilePlan.getInstantTime(),
+        legacyDeletePlan.getInstantTime(),
+        1,
+        DELETE_BLOCK,
+        false,
+        keyToPositionMap));
+
+    DataGenerationPlan nativeDataPlan = DataGenerationPlan.newBuilder()
+        .withOperationType(INSERT)
+        .withPartitionPath(partitionPath)
+        .withRecordKeys(generateKeys(new KeyRange(1, 2)))
+        .withTimeStamp(4L)
+        .withInstantTime("003")
+        .withWritePositions(false)
+        .build();
+    logFiles.add(createNativeDataLogFile(
+        generateNativeLogFilePath(partitionBasePath, fileId, nativeDataPlan.getInstantTime(), 2, ".log.parquet").toString(),
+        generateRecords(nativeDataPlan),
+        HOODIE_SCHEMA,
+        nativeDataPlan.getInstantTime()));
+
+    DataGenerationPlan nativeDeletePlan = DataGenerationPlan.newBuilder()
+        .withOperationType(DELETE)
+        .withPartitionPath(partitionPath)
+        .withRecordKeys(generateKeys(new KeyRange(6, 8)))
+        .withTimeStamp(1L)
+        .withInstantTime("004")
+        .withWritePositions(false)
+        .build();
+    logFiles.add(createNativeDeleteLogFile(
+        storage,
+        generateNativeLogFilePath(partitionBasePath, fileId, nativeDeletePlan.getInstantTime(), 3, ".deletes.parquet").toString(),
+        generateRecords(nativeDeletePlan),
+        HOODIE_SCHEMA,
+        nativeDeletePlan.getInstantTime()));
+
+    return Option.of(new FileSlice(
+        new HoodieFileGroupId(partitionPath, fileId), baseFile.getCommitTime(), baseFile, logFiles));
   }
 }

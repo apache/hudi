@@ -865,7 +865,18 @@ public class FSUtils {
   private static Option<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
     return Option.fromJavaOptional(logFiles.min(HoodieLogFile.getReverseLogFileComparator()));
   }
-  
+
+  /**
+   * Return the file size of a log file.
+   */
+  public static long getFileSize(HoodieStorage storage, HoodieLogFile logFile) {
+    try {
+      return logFile.getFileSize() >= 0 ? logFile.getFileSize() : storage.getPathInfo(logFile.getPath()).getLength();
+    } catch (IOException e) {
+      throw new HoodieIOException("Unable to get file size for " + logFile, e);
+    }
+  }
+
   public static Map<String, Boolean> deleteFilesParallelize(
       HoodieTableMetaClient metaClient,
       List<String> paths,
