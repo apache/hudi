@@ -296,6 +296,16 @@
                     <exclude>**/*.proto</exclude>
                   </excludes>
                 </filter>
+                <filter>
+                  <!-- trino-jdbc bundles aircompressor v3 compiled to Java 25 (class major
+                       version 69), which the shade plugin's ASM cannot read. These classes are
+                       unreferenced by the JDBC client (the spooling DecompressionUtils binds the
+                       legacy Java 8 lz4/zstd codecs), so drop the whole subtree from the bundle. -->
+                  <artifact>io.trino:trino-jdbc</artifact>
+                  <excludes>
+                    <exclude>io/trino/jdbc/$internal/airlift/compress/v3/**</exclude>
+                  </excludes>
+                </filter>
               </filters>
             </configuration>
           </execution>
