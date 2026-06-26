@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
@@ -64,6 +63,7 @@ import java.util.stream.IntStream;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -681,7 +681,9 @@ class TestRollbackHelper extends HoodieRollbackTestBase {
     String missingKey = RollbackHelperV1.logVersionLookupKey(partition, "fileId-no-logs", baseInstant);
     assertTrue(result.containsKey(missingKey));
     assertEquals(HoodieLogFile.LOGFILE_BASE_VERSION, (int) result.get(missingKey).getLeft());
-    assertEquals(HoodieLogFormat.UNKNOWN_WRITE_TOKEN, result.get(missingKey).getRight());
+    // Sentinel entries (no real log file) carry a null write token so they cannot be confused
+    // with a real log file that happens to use UNKNOWN_WRITE_TOKEN.
+    assertNull(result.get(missingKey).getRight());
   }
 
   @Test
@@ -698,10 +700,15 @@ class TestRollbackHelper extends HoodieRollbackTestBase {
         ctx.rollbackRequests, true, 5);
     validateStateAfterRollback(ctx.rollbackRequests);
 
+    // Rollback log files are written with a per-task write token from TaskContextSupplier.
+    // HoodieLocalEngineContext uses LocalTaskContextSupplier which returns 0/0/0 -> token "0-0-0".
+    String rollbackWriteToken = FSUtils.makeWriteToken(0, 0, 0);
     StoragePath rollbackLogPath1 = new StoragePath(new StoragePath(basePath, ctx.partition2),
-        FileCreateUtils.logFileName(ctx.baseInstantTimeOfLogFiles, ctx.logFileId1, 2));
+        FSUtils.makeLogFileName(ctx.logFileId1, HoodieLogFile.DELTA_EXTENSION,
+            ctx.baseInstantTimeOfLogFiles, 2, rollbackWriteToken));
     StoragePath rollbackLogPath2 = new StoragePath(new StoragePath(basePath, ctx.partition2),
-        FileCreateUtils.logFileName(ctx.baseInstantTimeOfLogFiles, ctx.logFileId2, ROLLBACK_LOG_VERSION));
+        FSUtils.makeLogFileName(ctx.logFileId2, HoodieLogFile.DELTA_EXTENSION,
+            ctx.baseInstantTimeOfLogFiles, ROLLBACK_LOG_VERSION, rollbackWriteToken));
 
     List<Pair<String, HoodieRollbackStat>> expected = buildExpectedBaseFileStats(ctx);
     expected.add(Pair.of(ctx.partition2,
@@ -733,8 +740,10 @@ class TestRollbackHelper extends HoodieRollbackTestBase {
         ctx.rollbackRequests, true, 5);
     validateStateAfterRollback(ctx.rollbackRequests);
 
+    String rollbackWriteToken = FSUtils.makeWriteToken(0, 0, 0);
     StoragePath rollbackLogPath = new StoragePath(new StoragePath(basePath, ctx.partition),
-        FileCreateUtils.logFileName(ctx.baseInstantTimeOfLogFiles, ctx.logFileId, ROLLBACK_LOG_VERSION));
+        FSUtils.makeLogFileName(ctx.logFileId, HoodieLogFile.DELTA_EXTENSION,
+            ctx.baseInstantTimeOfLogFiles, ROLLBACK_LOG_VERSION, rollbackWriteToken));
 
     List<Pair<String, HoodieRollbackStat>> expected = new ArrayList<>();
     expected.add(Pair.of(ctx.partition,
@@ -797,8 +806,12 @@ class TestRollbackHelper extends HoodieRollbackTestBase {
       assertTrue(storage.exists(new StoragePath(partitionStoragePath, logFileName)));
     }
 
+    // doDelete=false: no rollback log file is created. The reported path is the existing latest
+    // log file (the WriterBuilder rediscovers the existing log when we don't explicitly bump the
+    // version), so it carries the existing log file's write token.
     StoragePath rollbackLogPath = new StoragePath(partitionStoragePath,
-        FileCreateUtils.logFileName(ctx.baseInstantTimeOfLogFiles, ctx.logFileId, ctx.logVersionCount));
+        FSUtils.makeLogFileName(ctx.logFileId, HoodieLogFile.DELTA_EXTENSION,
+            ctx.baseInstantTimeOfLogFiles, ctx.logVersionCount, HoodieLogFormat.UNKNOWN_WRITE_TOKEN));
     List<Pair<String, HoodieRollbackStat>> expected = Collections.singletonList(
         Pair.of(ctx.partition,
             HoodieRollbackStat.newBuilder()
