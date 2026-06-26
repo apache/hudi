@@ -13,7 +13,6 @@
  */
 package io.trino.plugin.hudi;
 
-import com.google.common.io.Closer;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hudi.reader.HudiTrinoReaderContext;
 import io.trino.plugin.hudi.util.HudiAvroSerializer;
@@ -132,14 +131,10 @@ public class HudiPageSource
     public void close()
             throws IOException
     {
-        // recordIterator is the outermost wrapper: CloseableMappingIterator ->
-        // HoodieFileGroupReaderIterator -> fileGroupReader.close() -> baseFileIterator.close()
-        // (which closes the Trino pageSource) + recordBuffer.close(). Closing it alone therefore
-        // releases every underlying resource exactly once; also registering fileGroupReader/
-        // pageSource would re-close the same handles, since close() does not null its fields.
-        try (Closer closer = Closer.create()) {
-            closer.register(recordIterator::close);
-        }
+        // recordIterator is the outermost wrapper; closing it cascades down through the file
+        // group reader to the underlying Trino pageSource, releasing each resource exactly once.
+        // Closing fileGroupReader/pageSource here too would double-close the same handles.
+        recordIterator.close();
     }
 
     @Override
