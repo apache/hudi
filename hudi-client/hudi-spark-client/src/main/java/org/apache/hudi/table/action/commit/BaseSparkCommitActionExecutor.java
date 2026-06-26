@@ -44,6 +44,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.index.HoodieIndex;
@@ -121,9 +122,11 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       return inputRecords;
     }
 
-    UpdateStrategy<T, HoodieData<HoodieRecord<T>>> updateStrategy = (UpdateStrategy<T, HoodieData<HoodieRecord<T>>>) ReflectionUtils
-        .loadClass(config.getClusteringUpdatesStrategyClass(), new Class<?>[] {HoodieEngineContext.class, HoodieTable.class, Set.class},
-            this.context, table, fileGroupsInPendingClustering);
+    // Get file groups that will be replaced by this operation (for INSERT_OVERWRITE, etc.)
+    Set<HoodieFileGroupId> fileGroupsToBeReplaced = getFileGroupsBeingReplaced(inputRecords);
+
+    UpdateStrategy<T, HoodieData<HoodieRecord<T>>> updateStrategy =
+        loadClusteringUpdateStrategy(fileGroupsInPendingClustering, fileGroupsToBeReplaced);
     // For SparkAllowUpdateStrategy with rollback pending clustering as false, need not handle
     // the file group intersection between current ingestion and pending clustering file groups.
     // This will be handled at the conflict resolution strategy.
@@ -161,6 +164,50 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       table.getMetaClient().reloadActiveTimeline();
     }
     return recordsAndPendingClusteringFileGroups.getLeft();
+  }
+
+  /**
+   * Get the file groups that will be replaced by the current operation.
+   * This is relevant for INSERT_OVERWRITE, INSERT_OVERWRITE_TABLE, and DELETE_PARTITION operations.
+   *
+   * @param inputRecords the input records for the operation
+   * @return set of file group IDs that will be replaced
+   */
+  protected Set<HoodieFileGroupId> getFileGroupsBeingReplaced(HoodieData<HoodieRecord<T>> inputRecords) {
+    // Default implementation returns empty set. Subclasses should override as needed.
+    return Collections.emptySet();
+  }
+
+  /**
+   * Loads {@code hoodie.clustering.updates.strategy} via reflection, preferring the new 4-arg
+   * constructor (with {@code fileGroupsToBeReplaced}) and falling back to the legacy 3-arg
+   * constructor for custom strategies that pre-date this PR.
+   */
+  @SuppressWarnings("unchecked")
+  private UpdateStrategy<T, HoodieData<HoodieRecord<T>>> loadClusteringUpdateStrategy(
+      Set<HoodieFileGroupId> fileGroupsInPendingClustering,
+      Set<HoodieFileGroupId> fileGroupsToBeReplaced) {
+    String strategyClass = config.getClusteringUpdatesStrategyClass();
+    try {
+      return (UpdateStrategy<T, HoodieData<HoodieRecord<T>>>) ReflectionUtils.loadClass(
+          strategyClass,
+          new Class<?>[] {HoodieEngineContext.class, HoodieTable.class, Set.class, Set.class},
+          this.context, table, fileGroupsInPendingClustering, fileGroupsToBeReplaced);
+    } catch (HoodieException ex) {
+      if (!(ex.getCause() instanceof NoSuchMethodException)) {
+        throw ex;
+      }
+      // Legacy custom strategies only have the 3-arg constructor. INSERT_OVERWRITE overlap with
+      // pending clustering will not be detected for these classes (they never see
+      // fileGroupsToBeReplaced); recommend bumping to the 4-arg constructor.
+      log.warn("Clustering update strategy {} is missing the 4-arg constructor with "
+          + "fileGroupsToBeReplaced; falling back to the 3-arg constructor. INSERT_OVERWRITE "
+          + "overlap with pending clustering will not be detected for this strategy.", strategyClass);
+      return (UpdateStrategy<T, HoodieData<HoodieRecord<T>>>) ReflectionUtils.loadClass(
+          strategyClass,
+          new Class<?>[] {HoodieEngineContext.class, HoodieTable.class, Set.class},
+          this.context, table, fileGroupsInPendingClustering);
+    }
   }
 
   @Override
