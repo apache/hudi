@@ -64,6 +64,22 @@ public class HoodieMemoryConfig extends HoodieConfig {
   public static final long DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES = HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
   // Minimum memory size (100MB) for the spillable map.
   public static final long DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES = 100 * 1024 * 1024L;
+  // Minimum memory size (16MB) for the HoodieAppendHandle in-memory log-block buffer.
+  // Floor is smaller than the spillable-map floor: the append-handle buffer is per-handle and
+  // many handles may be active concurrently in a task, so we tolerate smaller blocks on tight
+  // executors to avoid OOM.
+  public static final long MIN_MEMORY_FOR_LOG_APPEND_BUFFER_IN_BYTES = 16 * 1024 * 1024L;
+
+  public static final ConfigProperty<String> MAX_MEMORY_FRACTION_FOR_LOG_APPEND = ConfigProperty
+      .key("hoodie.memory.logfile.append.fraction")
+      .defaultValue(String.valueOf(0.6))
+      .markAdvanced()
+      .withDocumentation("Fraction of per-task user memory available to a HoodieAppendHandle's "
+          + "in-memory log-block buffer. Multiplied with the user memory fraction "
+          + "(1 - spark.memory.fraction) and divided by executor cores to derive a dynamic "
+          + "per-task ceiling, which then bounds hoodie.logfile.data.block.max.size from above. "
+          + "Only used when the engine exposes memory/cores (Spark); otherwise the configured "
+          + "block size is honored as-is.");
 
   public static final ConfigProperty<Long> MAX_MEMORY_FOR_MERGE = ConfigProperty
       .key("hoodie.memory.merge.max.size")

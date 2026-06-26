@@ -99,6 +99,45 @@ public class IOUtils {
   }
 
   /**
+   * Returns {@code Option.of(per-task memory ceiling in bytes)} when the engine exposes
+   * {@link EngineProperty#TOTAL_MEMORY_AVAILABLE}, {@link EngineProperty#MEMORY_FRACTION_IN_USE},
+   * and {@link EngineProperty#TOTAL_CORES_PER_EXECUTOR} (Spark). Returns {@code Option.empty()}
+   * otherwise (engines that do not expose memory/cores) so callers can fall back to a static
+   * config-driven cap rather than the spillable-map 1GB default.
+   *
+   * <p>Formula mirrors {@link #getMaxMemoryAllowedForMerge}: {@code userAvailableMemory =
+   * totalExecutorMemory * (1 - memoryFraction) / executorTaskNum}, then multiplied by the
+   * supplied fraction. Honors {@link EngineProperty#SINGLE_TASK_CORES} when present (divides
+   * cores per task into total cores to get task slots).
+   *
+   * <p>Distinct from {@link #getMaxMemoryAllowedForMerge} in two ways: returns {@code Option}
+   * rather than collapsing the absent case to a default, and accepts the minimum-bytes value
+   * as a parameter so callers (e.g., {@code HoodieAppendHandle}) can use a smaller floor than
+   * the spillable-map 100MB.
+   */
+  public static Option<Long> getMaxMemoryAllowedForLogAppend(
+      TaskContextSupplier context, String maxMemoryFraction, long minBytes) {
+    Option<String> totalMemoryOpt = context.getProperty(EngineProperty.TOTAL_MEMORY_AVAILABLE);
+    Option<String> memoryFractionOpt = context.getProperty(EngineProperty.MEMORY_FRACTION_IN_USE);
+    Option<String> totalCoresOpt = context.getProperty(EngineProperty.TOTAL_CORES_PER_EXECUTOR);
+    if (!(totalMemoryOpt.isPresent() && memoryFractionOpt.isPresent() && totalCoresOpt.isPresent())) {
+      return Option.empty();
+    }
+    long executorMemoryInBytes = Long.parseLong(totalMemoryOpt.get());
+    double memoryFraction = Double.parseDouble(memoryFractionOpt.get());
+    double appendFraction = Double.parseDouble(maxMemoryFraction);
+    long executorCores = Long.parseLong(totalCoresOpt.get());
+    Option<String> singleTaskCoresOpt = context.getProperty(EngineProperty.SINGLE_TASK_CORES);
+    long executorTaskNum = executorCores;
+    if (singleTaskCoresOpt.isPresent()) {
+      executorTaskNum = executorCores / Long.parseLong(singleTaskCoresOpt.get());
+    }
+    double userAvailableMemory = executorMemoryInBytes * (1 - memoryFraction) / executorTaskNum;
+    long ceiling = (long) Math.floor(userAvailableMemory * appendFraction);
+    return Option.of(Math.max(minBytes, ceiling));
+  }
+
+  /**
    * Triggers the merge action with given merge handle {@code HoodieMergeHandle}.
    *
    * <p>Note: it can be either regular write path merging
