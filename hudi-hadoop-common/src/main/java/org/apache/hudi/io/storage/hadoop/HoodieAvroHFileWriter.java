@@ -53,6 +53,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.io.util.FileIOUtils.closeQuietly;
 
 /**
  * HoodieHFileWriter writes IndexedRecords into an HFile. The record's key is used as the key and the
@@ -105,8 +106,14 @@ public class HoodieAvroHFileWriter
         .build();
     StorageConfiguration<Configuration> storageConf = new HadoopStorageConfiguration(conf);
     StoragePath filePath = new StoragePath(this.file.toUri());
-    OutputStream outputStream =  HoodieStorageUtils.getStorage(filePath, storageConf).create(filePath);
-    this.writer = new HFileWriterImpl(context, outputStream);
+    OutputStream outputStream = HoodieStorageUtils.getStorage(filePath, storageConf).create(filePath);
+    try {
+      this.writer = new HFileWriterImpl(context, outputStream);
+    } finally {
+      if (this.writer == null) {
+        closeQuietly(outputStream);
+      }
+    }
     this.prevRecordKey = "";
     writer.appendFileInfo(
         HoodieAvroHFileReaderImplBase.SCHEMA_KEY, getUTF8Bytes(schema.toString()));

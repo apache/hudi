@@ -64,6 +64,7 @@ import org.apache.parquet.schema.Type;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -137,7 +138,13 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       ParquetFileWriter.Mode writerMode = ParquetFileWriter.Mode.CREATE;
       writer = new ParquetFileWriter(HadoopOutputFile.fromPath(outPutFile, conf), schema, writerMode, DEFAULT_BLOCK_SIZE, MAX_PADDING_SIZE_DEFAULT, DEFAULT_COLUMN_INDEX_TRUNCATE_LENGTH,
           DEFAULT_STATISTICS_TRUNCATE_LENGTH, ParquetProperties.DEFAULT_PAGE_WRITE_CHECKSUM_ENABLED);
-      writer.start();
+      try {
+        writer.start();
+      } catch (Exception e) {
+        closeParquetFileWriterQuietly(writer);
+        writer = null;
+        throw e;
+      }
       log.info("init writer ");
     } catch (Exception e) {
       log.error("failed to init parquet writer", e);
@@ -147,16 +154,41 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
 
   @Override
   public void close() throws IOException {
+    if (writer == null) {
+      return;
+    }
     Map<String, String> extraMetaData = finalizeMetadata();
     extraMetaData = extraMetaData == null ? new HashMap<>() : extraMetaData;
     extraMetaData.remove("parquet.avro.schema");
     extraMetaData.remove("org.apache.spark.sql.parquet.row.metadata");
-    writer.end(extraMetaData);
-    // Release the buffer
-    reusableBlockBuffer = null;
+    try {
+      writer.end(extraMetaData);
+    } finally {
+      writer = null;
+      // Release the buffer
+      reusableBlockBuffer = null;
+    }
   }
 
   protected abstract Map<String, String> finalizeMetadata();
+
+  private void closeParquetFileWriterQuietly(ParquetFileWriter parquetFileWriter) {
+    if (parquetFileWriter == null) {
+      return;
+    }
+    Method closeMethod;
+    try {
+      // ParquetFileWriter does not implement Closeable in all versions, so attempt close() reflectively.
+      closeMethod = parquetFileWriter.getClass().getMethod("close");
+    } catch (NoSuchMethodException e) {
+      return;
+    }
+    try {
+      closeMethod.invoke(parquetFileWriter);
+    } catch (ReflectiveOperationException | RuntimeException e) {
+      log.warn("Failed to close parquet file writer", e);
+    }
+  }
 
   public void processBlocksFromReader(CompressionConverter.TransParquetFileReader reader, BlockMetaData block, String originalCreatedBy) throws IOException {
 
@@ -473,22 +505,26 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
         new ColumnChunkPageWriteStore(compressor, newSchema, props.getAllocator(), props.getColumnIndexTruncateLength(), props.getPageWriteChecksumEnabled(), null, numBlocksRewritten);
     ColumnWriteStore cStore = props.newColumnWriteStore(newSchema, cPageStore);
     ColumnWriter cWriter = cStore.getColumnWriter(descriptor);
+    Throwable failure = null;
+    try {
+      // For masked column, we assume it's present (DL = max) and not repeated (RL = 0)
+      // This is valid for _hoodie_file_name which is a top-level field.
+      int rlvl = 0;
+      int dlvl = descriptor.getMaxDefinitionLevel();
 
-    // For masked column, we assume it's present (DL = max) and not repeated (RL = 0)
-    // This is valid for _hoodie_file_name which is a top-level field.
-    int rlvl = 0;
-    int dlvl = descriptor.getMaxDefinitionLevel();
+      for (int i = 0; i < totalChunkValues; i++) {
+        cWriter.write(maskValue, rlvl, dlvl);
+        cStore.endRecord();
+      }
 
-    for (int i = 0; i < totalChunkValues; i++) {
-      cWriter.write(maskValue, rlvl, dlvl);
-      cStore.endRecord();
+      cStore.flush();
+      cPageStore.flushToFileWriter(writer);
+    } catch (IOException | RuntimeException e) {
+      failure = e;
+      throw e;
+    } finally {
+      closeColumnWriters(cStore, cWriter, failure);
     }
-
-    cStore.flush();
-    cPageStore.flushToFileWriter(writer);
-
-    cStore.close();
-    cWriter.close();
   }
 
   private void addNullColumn(ColumnDescriptor descriptor, long totalChunkValues, EncodingStats encodingStats, ParquetFileWriter writer, MessageType schema, CompressionCodecName newCodecName)
@@ -505,32 +541,66 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
         new ColumnChunkPageWriteStore(compressor, newSchema, props.getAllocator(), props.getColumnIndexTruncateLength(), props.getPageWriteChecksumEnabled(), null, numBlocksRewritten);
     ColumnWriteStore cStore = props.newColumnWriteStore(newSchema, cPageStore);
     ColumnWriter cWriter = cStore.getColumnWriter(descriptor);
-    int dMax = descriptor.getMaxDefinitionLevel();
+    Throwable failure = null;
+    try {
+      int dMax = descriptor.getMaxDefinitionLevel();
 
-    for (int i = 0; i < totalChunkValues; i++) {
-      int rlvl = 0;
-      int dlvl = 0;
-      if (dlvl == dMax) {
-        // since we checked ether optional or repeated, dlvl should be > 0
-        if (dlvl == 0) {
-          throw new IOException("definition level is detected to be 0 for column " + Arrays.stream(descriptor.getPath()).collect(Collectors.joining(".")) + " to be nullified");
+      for (int i = 0; i < totalChunkValues; i++) {
+        int rlvl = 0;
+        int dlvl = 0;
+        if (dlvl == dMax) {
+          // since we checked ether optional or repeated, dlvl should be > 0
+          if (dlvl == 0) {
+            throw new IOException("definition level is detected to be 0 for column " + Arrays.stream(descriptor.getPath()).collect(Collectors.joining(".")) + " to be nullified");
+          }
+          // we just write one null for the whole list at the top level,
+          // instead of nullify the elements in the list one by one
+          if (rlvl == 0) {
+            cWriter.writeNull(rlvl, dlvl - 1);
+          }
+        } else {
+          cWriter.writeNull(rlvl, dlvl); // 因为repeatition level没有重复所以后面都是以0在第一层，definition level是字段path的第0层
         }
-        // we just write one null for the whole list at the top level,
-        // instead of nullify the elements in the list one by one
-        if (rlvl == 0) {
-          cWriter.writeNull(rlvl, dlvl - 1);
-        }
-      } else {
-        cWriter.writeNull(rlvl, dlvl); // 因为repeatition level没有重复所以后面都是以0在第一层，definition level是字段path的第0层
+        cStore.endRecord();
       }
-      cStore.endRecord();
+
+      cStore.flush();
+      cPageStore.flushToFileWriter(writer);
+    } catch (IOException | RuntimeException e) {
+      failure = e;
+      throw e;
+    } finally {
+      closeColumnWriters(cStore, cWriter, failure);
     }
+  }
 
-    cStore.flush();
-    cPageStore.flushToFileWriter(writer);
-
-    cStore.close();
-    cWriter.close();
+  private void closeColumnWriters(ColumnWriteStore cStore, ColumnWriter cWriter, Throwable failure) {
+    RuntimeException closeException = null;
+    try {
+      if (cStore != null) {
+        cStore.close();
+      }
+    } catch (RuntimeException re) {
+      closeException = re;
+    }
+    try {
+      if (cWriter != null) {
+        cWriter.close();
+      }
+    } catch (RuntimeException re) {
+      if (closeException == null) {
+        closeException = re;
+      } else {
+        closeException.addSuppressed(re);
+      }
+    }
+    if (closeException != null) {
+      if (failure != null) {
+        failure.addSuppressed(closeException);
+      } else {
+        throw closeException;
+      }
+    }
   }
 
   private List<ColumnDescriptor> missedColumns(MessageType requiredSchema, MessageType fileSchema) {

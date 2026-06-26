@@ -36,6 +36,7 @@ import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.AutoCloseableUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -119,6 +120,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
     } catch (Throwable t) {
       log.error("Error writing record " + record, t);
       if (!config.getIgnoreWriteFailed()) {
+        closeFileWriterQuietly(t);
         throw new HoodieException(t.getMessage(), t);
       }
       writeStatus.markFailure(record, t, recordMetadata);
@@ -166,6 +168,11 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
   protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, HoodieSchema schema, HoodieSchema targetSchema, String fileName, Properties prop) {
     MetadataValues metadataValues = new MetadataValues().setFileName(fileName);
     return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
+  }
+
+  private void closeFileWriterQuietly(Throwable failure) {
+    AutoCloseableUtils.closeQuietlyWithSuppressed(fileWriter, failure);
+    fileWriter = null;
   }
 
   @Override

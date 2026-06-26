@@ -64,6 +64,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.AutoCloseableUtils;
 import org.apache.hudi.util.CommonClientUtils;
 import org.apache.hudi.util.Lazy;
 
@@ -537,6 +538,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     } catch (Throwable t) {
       log.error("Error writing record " + record, t);
       if (!config.getIgnoreWriteFailed()) {
+        closeLogWriterQuietly(t);
         throw new HoodieException(t.getMessage(), t);
       }
       writeStatus.markFailure(record, t, recordMetadata);
@@ -558,11 +560,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         ((Closeable) recordItr).close();
       }
       recordItr = null;
-
-      if (writer != null) {
-        writer.close();
-        writer = null;
-      }
+      closeLogWriter(null);
 
       // Set the final on-disk size of each log file. Appends within an append handle are contiguous,
       // so a log file's length equals its start offset plus the total bytes appended to it. That is
@@ -588,7 +586,21 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
       return statuses;
     } catch (IOException e) {
+      closeLogWriterQuietly(e);
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
+    } catch (RuntimeException e) {
+      closeLogWriterQuietly(e);
+      throw e;
+    } finally {
+      recordItr = null;
+    }
+  }
+
+  private void closeLogWriter(Throwable failure) throws IOException {
+    try {
+      AutoCloseableUtils.closeWithSuppressed(writer, failure);
+    } finally {
+      writer = null;
     }
   }
 
@@ -603,8 +615,14 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       appendDataAndDeleteBlocks(header, true);
       estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;
     } catch (Exception e) {
+      closeLogWriterQuietly(e);
       throw new HoodieUpsertException("Failed to compact blocks for fileId " + fileId, e);
     }
+  }
+
+  private void closeLogWriterQuietly(Throwable failure) {
+    AutoCloseableUtils.closeQuietlyWithSuppressed(writer, failure);
+    writer = null;
   }
 
   @Override

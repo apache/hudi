@@ -51,6 +51,7 @@ import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.f
 import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.getFileGroupKey;
 import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.getPartitionKey;
 import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.partitionIndexPath;
+import static org.apache.hudi.io.util.FileIOUtils.closeQuietly;
 
 @Slf4j
 public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
@@ -174,14 +175,14 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
    * Close Writer Handles.
    */
   public void close() {
-    try {
-      if (!closed) {
-        indexByPartitionWriter.close();
-        indexByFileIdWriter.close();
-        closed = true;
-      }
-    } catch (IOException ioe) {
-      throw new HoodieIOException(ioe.getMessage(), ioe);
+    if (closed) {
+      return;
+    }
+    Exception failure = closeWriter(indexByPartitionWriter, null);
+    failure = closeWriter(indexByFileIdWriter, failure);
+    closed = true;
+    if (failure != null) {
+      throw new HoodieException(failure.getMessage(), failure);
     }
   }
 
@@ -189,12 +190,50 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
   public void begin() {
     try {
       HFileContext context = HFileContext.builder().build();
-      OutputStream outputStreamForPartitionWriter = metaClient.getStorage().create(indexByPartitionPath);
-      this.indexByPartitionWriter = new HFileWriterImpl(context, outputStreamForPartitionWriter);
-      OutputStream outputStreamForFileIdWriter = metaClient.getStorage().create(indexByFileIdPath);
-      this.indexByFileIdWriter = new HFileWriterImpl(context, outputStreamForFileIdWriter);
+      this.indexByPartitionWriter = createHFileWriter(indexByPartitionPath, context);
+      this.indexByFileIdWriter = createHFileWriter(indexByFileIdPath, context);
     } catch (IOException ioe) {
+      closeAfterFailedBegin(ioe);
       throw new HoodieIOException(ioe.getMessage(), ioe);
+    } catch (RuntimeException re) {
+      closeAfterFailedBegin(re);
+      throw re;
+    }
+  }
+
+  private HFileWriter createHFileWriter(StoragePath path, HFileContext context) throws IOException {
+    OutputStream outputStream = metaClient.getStorage().create(path);
+    HFileWriter writer = null;
+    try {
+      writer = new HFileWriterImpl(context, outputStream);
+      return writer;
+    } finally {
+      if (writer == null) {
+        closeQuietly(outputStream);
+      }
+    }
+  }
+
+  private Exception closeWriter(HFileWriter writer, Exception failure) {
+    if (writer == null) {
+      return failure;
+    }
+    try {
+      writer.close();
+    } catch (IOException | RuntimeException e) {
+      if (failure == null) {
+        return e;
+      }
+      failure.addSuppressed(e);
+    }
+    return failure;
+  }
+
+  private void closeAfterFailedBegin(Throwable failure) {
+    try {
+      close();
+    } catch (Throwable closeException) {
+      failure.addSuppressed(closeException);
     }
   }
 
