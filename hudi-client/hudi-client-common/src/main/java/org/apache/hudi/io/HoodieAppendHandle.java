@@ -727,12 +727,18 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
                                         List<HoodieRecord> records,
                                         Map<HeaderMetadataType, String> header,
                                         String keyField) {
+    if (hoodieTable.requireSortedRecords()) {
+      records.sort(Comparator.comparing(HoodieRecord::getRecordKey));
+      header.put(HeaderMetadataType.IS_SORTED, Boolean.toString(true));
+    }
+
     switch (logDataBlockFormat) {
       case AVRO_DATA_BLOCK:
         return new HoodieAvroDataBlock(records, header, keyField);
       case HFILE_DATA_BLOCK:
         // Not supporting positions in HFile data blocks
         header.remove(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
+        // HFile format always requires sorted records
         records.sort(Comparator.comparing(HoodieRecord::getRecordKey));
         Map<String, String> hfileParams = new HashMap<>();
         hfileParams.put(HFILE_COMPRESSION_ALGORITHM_NAME.key(), writeConfig.getHFileCompressionAlgorithm());

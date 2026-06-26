@@ -212,7 +212,8 @@ public abstract class HoodieLogBlock {
     RECORD_POSITIONS(HoodieTableVersion.SIX),
     BLOCK_IDENTIFIER(HoodieTableVersion.SIX),
     IS_PARTIAL(HoodieTableVersion.EIGHT),
-    BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS(HoodieTableVersion.EIGHT);
+    BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS(HoodieTableVersion.EIGHT),
+    IS_SORTED(HoodieTableVersion.EIGHT);
 
     @SuppressWarnings("unused")
     private final HoodieTableVersion earliestTableVersion;
