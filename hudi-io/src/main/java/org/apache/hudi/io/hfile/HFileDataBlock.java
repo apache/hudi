@@ -210,7 +210,7 @@ public class HFileDataBlock extends HFileBlock {
         // Length of value.
         dataOutputStream.writeInt(kv.value.length);
         // Key.
-        writeKey(dataOutputStream, kv.key, kv.key.length);
+        writeKey(dataOutputStream, kv.key, 0, kv.key.length);
         // Value.
         dataOutputStream.write(kv.value);
         // MVCC.

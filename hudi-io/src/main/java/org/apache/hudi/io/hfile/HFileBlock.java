@@ -347,12 +347,14 @@ public abstract class HFileBlock {
    *
    * @param out       output stream to write to.
    * @param row       buffer holding the row (key content) bytes.
-   * @param rowLength number of leading row bytes to write; passed explicitly because a key's
-   *                  backing array may be larger than its content length.
+   * @param offset    start of the row within {@code row}; a key may be a view into a larger buffer.
+   * @param rowLength number of row bytes to write; passed explicitly because a key's backing array
+   *                  may be larger than its content length.
    */
-  protected static void writeKey(DataOutputStream out, byte[] row, int rowLength) throws IOException {
+  protected static void writeKey(DataOutputStream out, byte[] row, int offset, int rowLength)
+      throws IOException {
     out.writeShort((short) rowLength);
-    out.write(row, 0, rowLength);
+    out.write(row, offset, rowLength);
     out.write(0);                     // column-family length
     out.writeLong(LATEST_TIMESTAMP);  // timestamp
     out.write(KEY_TYPE_PUT);          // key type
