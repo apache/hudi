@@ -190,12 +190,9 @@ class TestHFileReadCompatibility {
   }
 
   /**
-   * Point-lookup compatibility: an HBase reader seeks every key (which necessarily includes the
-   * block-boundary keys stored in the root index) in a native-written multi-block file. Before the
-   * {@link HFileRootIndexBlock} fix the block-index first key lacked the HBase KeyValue suffix, so
-   * seeking a boundary key read the family-length byte past the end and threw
-   * {@code ArrayIndexOutOfBoundsException} in {@code KeyValue.getFamilyLength}. The scan-based test
-   * above never exercised this path.
+   * Validates the block-index key encoding in the HFile: an HBase reader point-looks-up every key
+   * (including the block-boundary keys stored in the root index) in a native-written multi-block
+   * file and gets an exact match with the correct value.
    */
   @ParameterizedTest
   @EnumSource(value = CompressionCodec.class, names = {"NONE", "GZIP"})
@@ -219,7 +216,7 @@ class TestHFileReadCompatibility {
     }
   }
 
-  /** {@code midKey()} parses a block-index key as a {@code KeyValue}; pre-fix this threw AIOOBE. */
+  /** Validates the block-index key encoding parses as a {@code KeyValue} via {@code midKey()}. */
   @Test
   void hbaseReaderMidKeyParsesNativeBlockIndexKey() throws IOException {
     byte[] data = writeMultiBlockHudiHFile(MULTI_BLOCK_RECORDS, SMALL_BLOCK_SIZE, CompressionCodec.NONE);
