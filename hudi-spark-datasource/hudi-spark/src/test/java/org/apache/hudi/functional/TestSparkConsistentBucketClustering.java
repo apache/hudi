@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -49,6 +50,7 @@ import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -102,6 +104,10 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
   }
 
   public void setup(int maxFileSize, Map<String, String> options, boolean singleJob) throws IOException {
+    setup(maxFileSize, options, singleJob, false);
+  }
+
+  public void setup(int maxFileSize, Map<String, String> options, boolean singleJob, boolean nonPartitioned) throws IOException {
     initPath();
     initSparkContexts();
     initTestDataGenerator();
@@ -109,6 +115,13 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     Properties props = getPropertiesForKeyGen(true);
     props.putAll(options);
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    if (nonPartitioned) {
+      // Non-partitioned tables produce records with an empty partition path and use the non-partition key generator.
+      dataGen = new HoodieTestDataGenerator(new String[] {HoodieTestDataGenerator.NO_PARTITION_PATH});
+      props.setProperty(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), KeyGeneratorType.NON_PARTITION.name());
+      props.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
+      props.remove(HoodieTableConfig.PARTITION_FIELDS.key());
+    }
     metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ, props);
     config = getConfigBuilder().withProps(props)
         .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props)
@@ -130,16 +143,21 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
   }
 
   /**
-   * Test resizing with bucket number upper bound and lower bound
+   * Test resizing with bucket number upper bound and lower bound, on both partitioned and non-partitioned tables.
+   *
+   * <p>Non-partitioned coverage guards GitHub issue #18161: consistent hashing clustering used to fail on
+   * non-partitioned tables because the empty partition path was rejected by the execution strategy. For a
+   * non-partitioned table {@code dataGen.getPartitionPaths()} returns the single empty partition path, so the
+   * assertions below cover both cases without branching.
    *
    * @throws IOException
    */
   @ParameterizedTest
-  @MethodSource("configParams")
-  public void testResizing(boolean isSplit, boolean rowWriterEnable, boolean single) throws IOException {
+  @MethodSource("resizingConfigParams")
+  public void testResizing(boolean isSplit, boolean rowWriterEnable, boolean single, boolean nonPartitioned) throws IOException {
     final int maxFileSize = isSplit ? 5120 : 128 * 1024 * 1024;
     final int targetBucketNum = isSplit ? 14 : 4;
-    setup(maxFileSize, Collections.emptyMap(), single);
+    setup(maxFileSize, Collections.emptyMap(), single, nonPartitioned);
     config.setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
     config.setValue("hoodie.metadata.enable", "false");
     writeData(2000, true);
@@ -382,6 +400,16 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
         Arguments.of(true, true, false),
         Arguments.of(false, true, false)
     );
+  }
+
+  // configParams crossed with the partitioned / non-partitioned dimension (isSplit, rowWriterEnable, single, nonPartitioned).
+  private static Stream<Arguments> resizingConfigParams() {
+    return configParams().flatMap(args -> {
+      Object[] a = args.get();
+      return Stream.of(
+          Arguments.of(a[0], a[1], a[2], false),
+          Arguments.of(a[0], a[1], a[2], true));
+    });
   }
 
   private static Stream<Arguments> configParamsForSorting() {
