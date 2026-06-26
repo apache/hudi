@@ -101,16 +101,16 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
    * @param config instance of {@link HoodieWriteConfig} to use.
    * @param instantTime instant time of the current commit.
    * @param hoodieTable instance of {@link HoodieTable} being updated.
-   * @param recordItr iterator of records to be merged with the file.
+   * @param mergeContext context carrying incoming data to merge and characteristics
    * @param partitionPath partition path of the base file.
    * @param fileId file ID of the base file.
    * @param taskContextSupplier instance of {@link TaskContextSupplier} to use.
    * @param keyGeneratorOpt optional instance of {@link BaseKeyGenerator} to use for extracting keys from records.
    */
   public FileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                         Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                                         MergeContext<T> mergeContext, String partitionPath, String fileId,
                                          TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    this(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, getLatestBaseFile(hoodieTable, partitionPath, fileId), keyGeneratorOpt);
+    this(config, instantTime, hoodieTable, mergeContext, partitionPath, fileId, taskContextSupplier, getLatestBaseFile(hoodieTable, partitionPath, fileId), keyGeneratorOpt);
   }
 
   /**
@@ -120,7 +120,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
    * @param config instance of {@link HoodieWriteConfig} to use.
    * @param instantTime instant time of the current commit.
    * @param hoodieTable instance of {@link HoodieTable} being updated.
-   * @param recordItr iterator of records to be merged with the file.
+   * @param mergeContext context carrying incoming data to merge and characteristics
    * @param partitionPath partition path of the base file.
    * @param fileId file ID of the base file.
    * @param taskContextSupplier instance of {@link TaskContextSupplier} to use.
@@ -128,16 +128,16 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
    * @param keyGeneratorOpt optional instance of {@link BaseKeyGenerator} to use for extracting keys from records.
    */
   public FileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                         Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                                         MergeContext<T> mergeContext, String partitionPath, String fileId,
                                          TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, baseFile, keyGeneratorOpt);
+    super(config, instantTime, hoodieTable, mergeContext, partitionPath, fileId, taskContextSupplier, baseFile, keyGeneratorOpt);
     this.compactionOperation = Option.empty();
     TypedProperties properties = config.getProps();
     properties.putAll(hoodieTable.getMetaClient().getTableConfig().getProps());
     this.maxInstantTime = instantTime;
     initRecordTypeAndCdcLogger(hoodieTable.getConfig().getRecordMerger().getRecordType());
     this.props = TypedProperties.copy(config.getProps());
-    this.incomingRecordsItr = recordItr;
+    this.incomingRecordsItr = mergeContext.getRecordItr();
   }
 
   /**

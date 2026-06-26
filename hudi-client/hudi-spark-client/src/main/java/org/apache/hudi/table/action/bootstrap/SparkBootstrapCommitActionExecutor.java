@@ -328,7 +328,7 @@ public class SparkBootstrapCommitActionExecutor<T>
   }
 
   @Override
-  protected Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
+  protected Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, long numUpdates, Iterator<HoodieRecord<T>> recordItr) {
     throw new UnsupportedOperationException("Should not called in bootstrap code path");
   }
 

@@ -36,6 +36,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
+import org.apache.hudi.io.MergeContext;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -56,6 +57,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -122,7 +124,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
     jsc.parallelize(Arrays.asList(1)).map(x -> {
       Executable executable = () -> {
         HoodieWriteMergeHandle mergeHandle = new HoodieWriteMergeHandle(updateTable.getConfig(), "101", updateTable,
-            updateRecords.iterator(), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
+            MergeContext.create(updateRecords.size(), (Iterator) updateRecords.iterator()), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
         List<GenericRecord> oldRecords = HoodieIOFactory.getIOFactory(updateTable.getStorage())
             .getFileFormatUtils(updateTable.getBaseFileFormat())
             .readAvroRecords(updateTable.getStorage(),
