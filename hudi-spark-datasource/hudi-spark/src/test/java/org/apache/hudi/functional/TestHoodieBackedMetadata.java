@@ -4389,11 +4389,19 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
+    // Pin the inputs so the estimator's output is the only thing that determines fileGroupCount:
+    //   expectedNumRecords = 200 records * growthFactor(2.0) = 400
+    //   maxRecordsPerFileGroup = maxFileGroupSizeBytes(2400) / avgRecordSize(48) = 50
+    //   estimatedFileGroupCount = 400 / 50 = 8 (within configured bounds [1, 10])
+    // If the estimator returned 0, fileGroupCount would clamp to minFileGroupCount=1, so an
+    // assertion of fileGroupCount > 1 proves the estimator's row-count read drove the sizing.
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(false, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .withEnableRecordLevelIndex(true)
             .withPartitionedRecordIndexFileGroupCount(1, 10)
+            .withRecordIndexGrowthFactor(2.0f)
+            .withRecordIndexMaxFileGroupSizeBytes(2400L)
             .build())
         .withIndexConfig(HoodieIndexConfig.newBuilder()
             .withIndexType(HoodieIndex.IndexType.RECORD_INDEX)
@@ -4421,8 +4429,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       int fileGroupCount = HoodieTableMetadataUtil.getPartitionLatestFileSlices(
           metadataReader.getMetadataMetaClient(), Option.empty(),
           RECORD_INDEX.getPartitionPath()).size();
-      assertTrue(fileGroupCount >= 1 && fileGroupCount <= 10,
-          "File group count should be within configured bounds [1, 10]: " + fileGroupCount);
+      assertTrue(fileGroupCount > 1 && fileGroupCount <= 10,
+          "Estimator should have driven fileGroupCount above minFileGroupCount=1 (got: "
+              + fileGroupCount + "); a value of 1 implies the row-count estimate was 0 or unused.");
 
       validateMetadata(client);
     }
