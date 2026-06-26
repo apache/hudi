@@ -100,6 +100,10 @@ public class InputSplit {
     return !logFiles.isEmpty();
   }
 
+  public boolean hasRecordIterator() {
+    return recordIterator.isPresent();
+  }
+
   public boolean isParquetBaseFile() {
     return baseFileOption.map(baseFile -> HoodieFileFormat.fromFileExtension(baseFile.getStoragePath().getFileExtension()) == HoodieFileFormat.PARQUET).orElse(false);
   }

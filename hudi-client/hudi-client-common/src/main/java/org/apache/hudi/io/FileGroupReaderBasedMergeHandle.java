@@ -44,6 +44,7 @@ import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
+import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -60,6 +61,7 @@ import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -87,10 +89,10 @@ import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
 
   private final Option<CompactionOperation> compactionOperation;
-  private final String maxInstantTime;
+  protected final String maxInstantTime;
   private HoodieReadStats readStats;
   private HoodieRecord.HoodieRecordType recordType;
-  private Option<HoodieCDCLogger> cdcLogger;
+  private Option<HoodieCDCLogWriter<?>> cdcLogger;
   private final TypedProperties props;
   private final Iterator<HoodieRecord<T>> incomingRecordsItr;
 
@@ -172,18 +174,38 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     // If the table is a metadata table or the base file is an HFile, we use AVRO record type, otherwise we use the engine record type.
     this.recordType = hoodieTable.isMetadataTable() || HFILE.getFileExtension().equals(hoodieTable.getBaseFileExtension()) ? HoodieRecord.HoodieRecordType.AVRO : enginRecordType;
     if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
-      this.cdcLogger = Option.of(new HoodieCDCLogger(
+      this.cdcLogger = Option.of(createCDCLogWriter());
+    } else {
+      this.cdcLogger = Option.empty();
+    }
+  }
+
+  private HoodieCDCLogWriter<?> createCDCLogWriter() {
+    if (HoodieCDCLogWriterFactory.shouldWriteNativeCDCLogs(hoodieTable.getMetaClient().getTableConfig())) {
+      return new HoodieNativeCDCLogger(
           instantTime,
           config,
           hoodieTable.getMetaClient().getTableConfig(),
           partitionPath,
           storage,
           getWriterSchema(),
-          createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX, Option.empty()),
-          IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config)));
-    } else {
-      this.cdcLogger = Option.empty();
+          FSUtils.constructAbsolutePath(hoodieTable.getMetaClient().getBasePath(), partitionPath),
+          fileId,
+          writeToken,
+          getLogCreationCallback(),
+          taskContextSupplier,
+          readerContext.getRecordContext(),
+          recordType);
     }
+    return new HoodieCDCLogger(
+        instantTime,
+        config,
+        hoodieTable.getMetaClient().getTableConfig(),
+        partitionPath,
+        storage,
+        getWriterSchema(),
+        createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX, Option.empty()),
+        IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 
   private void init(CompactionOperation operation, String partitionPath) {
@@ -265,7 +287,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
             config.getBasePath(), op.getPartitionPath()), logFileName))));
     // Initializes file group reader
-    try (HoodieFileGroupReader<T> fileGroupReader = getFileGroupReader(usePosition, internalSchemaOption, props, logFilesStreamOpt, incomingRecordsItr)) {
+    try (HoodieRecordReader<T> fileGroupReader = getFileGroupReader(usePosition, internalSchemaOption, props, logFilesStreamOpt, incomingRecordsItr)) {
       // Reads the records from the file slice
       try (ClosableIterator<HoodieRecord<T>> recordIterator = fileGroupReader.getClosableHoodieRecordIterator()) {
         while (recordIterator.hasNext()) {
@@ -316,8 +338,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         : IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
   }
 
-  private HoodieFileGroupReader<T> getFileGroupReader(boolean usePosition, Option<InternalSchema> internalSchemaOption, TypedProperties props,
-                                                        Option<Stream<HoodieLogFile>> logFileStreamOpt, Iterator<HoodieRecord<T>> incomingRecordsItr) {
+  protected HoodieRecordReader<T> getFileGroupReader(boolean usePosition, Option<InternalSchema> internalSchemaOption, TypedProperties props,
+                                                     Option<Stream<HoodieLogFile>> logFileStreamOpt, Iterator<HoodieRecord<T>> incomingRecordsItr) {
     HoodieFileGroupReader.HoodieFileGroupReaderBuilder<T> fileGroupBuilder = HoodieFileGroupReader.<T>builder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(maxInstantTime).withPartitionPath(partitionPath).withBaseFileOption(Option.ofNullable(baseFileToMerge))
         .withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
@@ -366,11 +388,20 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     }
   }
 
-  private Option<BaseFileUpdateCallback<T>> createCallback() {
+  protected Option<BaseFileUpdateCallback<T>> createCallback() {
     List<BaseFileUpdateCallback<T>> callbacks = new ArrayList<>();
     // Handle CDC workflow.
     if (cdcLogger.isPresent()) {
-      callbacks.add(new CDCCallback<>(cdcLogger.get(), readerContext));
+      HoodieCDCLogWriter<?> logger = cdcLogger.get();
+      if (logger instanceof HoodieNativeCDCLogger) {
+        @SuppressWarnings("unchecked")
+        HoodieNativeCDCLogger<T> nativeCDCLogger = (HoodieNativeCDCLogger<T>) logger;
+        callbacks.add(new NativeCDCCallback<>(nativeCDCLogger));
+      } else {
+        @SuppressWarnings("unchecked")
+        HoodieCDCLogWriter<IndexedRecord> inlineCDCLogger = (HoodieCDCLogWriter<IndexedRecord>) logger;
+        callbacks.add(new CDCCallback<>(inlineCDCLogger, readerContext));
+      }
     }
     // Indexes are not updated during compaction
     if (compactionOperation.isEmpty()) {
@@ -394,10 +425,10 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   }
 
   private static class CDCCallback<T> implements BaseFileUpdateCallback<T> {
-    private final HoodieCDCLogger cdcLogger;
+    private final HoodieCDCLogWriter<IndexedRecord> cdcLogger;
     private final RecordContext<T> recordContext;
 
-    CDCCallback(HoodieCDCLogger cdcLogger, HoodieReaderContext<T> readerContext) {
+    CDCCallback(HoodieCDCLogWriter<IndexedRecord> cdcLogger, HoodieReaderContext<T> readerContext) {
       this.cdcLogger = cdcLogger;
       this.recordContext = readerContext.getRecordContext();
     }
@@ -431,6 +462,38 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         return null;
       }
       return recordContext.convertToAvroRecord(record.getRecord(), recordContext.getSchemaFromBufferRecord(record));
+    }
+  }
+
+  private static class NativeCDCCallback<T> implements BaseFileUpdateCallback<T> {
+    private final HoodieNativeCDCLogger<T> cdcLogger;
+
+    NativeCDCCallback(HoodieNativeCDCLogger<T> cdcLogger) {
+      this.cdcLogger = cdcLogger;
+    }
+
+    @Override
+    public void onUpdate(String recordKey, BufferedRecord<T> previousRecord, BufferedRecord<T> mergedRecord) {
+      cdcLogger.put(recordKey, previousRecord, Option.of(mergedRecord));
+    }
+
+    @Override
+    public void onInsert(String recordKey, BufferedRecord<T> newRecord) {
+      cdcLogger.put(recordKey, null, Option.of(newRecord));
+    }
+
+    @Override
+    public void onDelete(String recordKey, BufferedRecord<T> previousRecord, HoodieOperation hoodieOperation) {
+      // delete record from log block and update no base record from base file, skip generating changelog.
+      if (previousRecord == null) {
+        return;
+      }
+      cdcLogger.put(recordKey, previousRecord, Option.empty());
+    }
+
+    @Override
+    public void onFailure(String recordKey) {
+      cdcLogger.remove(recordKey);
     }
   }
 

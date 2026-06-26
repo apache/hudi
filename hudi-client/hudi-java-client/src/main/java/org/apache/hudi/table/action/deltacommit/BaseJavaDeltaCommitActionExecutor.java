@@ -42,6 +42,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.HoodieRecordUtils.sortRecordsByRecordKey;
+
 @Slf4j
 abstract class BaseJavaDeltaCommitActionExecutor<T> extends BaseJavaCommitActionExecutor<T> {
 
@@ -75,6 +77,9 @@ abstract class BaseJavaDeltaCommitActionExecutor<T> extends BaseJavaCommitAction
       log.info("Small file corrections for updates for commit " + instantTime + " for file " + fileId);
       return super.handleUpdate(partitionPath, fileId, recordItr);
     } else {
+      if (table.requireSortedRecords()) {
+        recordItr = sortRecordsByRecordKey(recordItr);
+      }
       HoodieAppendHandle<?, ?, ?, ?> appendHandle = new AppendHandleFactory()
           .create(config, instantTime, table, partitionPath, fileId, recordItr, taskContextSupplier);
       appendHandle.doAppend();
@@ -86,6 +91,9 @@ abstract class BaseJavaDeltaCommitActionExecutor<T> extends BaseJavaCommitAction
   public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr) {
     // If canIndexLogFiles, write inserts to log files else write inserts to base files
     if (table.getIndex().canIndexLogFiles()) {
+      if (table.requireSortedRecords()) {
+        recordItr = sortRecordsByRecordKey(recordItr);
+      }
       return new JavaLazyInsertIterable<>(recordItr, true, config, instantTime, table, idPfx,
           taskContextSupplier, new AppendHandleFactory<>());
     } else {

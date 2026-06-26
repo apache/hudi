@@ -21,6 +21,7 @@ package org.apache.hudi.sink.buffer;
 import org.apache.hudi.table.action.commit.BucketInfo;
 
 import lombok.Getter;
+import org.apache.flink.runtime.operators.sort.QuickSort;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
@@ -53,6 +54,10 @@ public class RowDataBucket {
 
   public MutableObjectIterator<BinaryRowData> getDataIterator() {
     return dataBuffer.getIterator();
+  }
+
+  public void sort() throws IOException {
+    new QuickSort().sort(dataBuffer);
   }
 
   public boolean writeRow(RowData rowData) throws IOException {

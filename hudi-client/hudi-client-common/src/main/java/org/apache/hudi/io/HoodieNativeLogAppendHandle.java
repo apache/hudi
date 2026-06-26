@@ -101,6 +101,7 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
           getLogCreationCallback(),
           config.getWriteVersion(),
           config,
+          hoodieTable.getBaseFileFormat(),
           writeSchemaWithMetaFields,
           taskContextSupplier,
           hoodieTable.getReaderContextFactoryForWrite().getContext().getRecordContext(),

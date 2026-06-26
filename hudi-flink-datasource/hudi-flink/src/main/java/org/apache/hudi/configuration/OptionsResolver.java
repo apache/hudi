@@ -70,6 +70,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_GR
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP;
+import static org.apache.hudi.common.table.HoodieTableConfig.TableStorageLayout.LSM_TREE;
 import static org.apache.hudi.metadata.HoodieBackedTableMetadataWriter.RECORD_INDEX_AVERAGE_RECORD_SIZE;
 
 /**
@@ -160,6 +161,15 @@ public class OptionsResolver {
     return conf.get(FlinkOptions.TABLE_TYPE)
         .toUpperCase(Locale.ROOT)
         .equals(FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+  }
+
+  /**
+   * Returns whether the table uses LSM tree storage layout.
+   */
+  public static boolean isLsmTreeStorageLayout(Configuration conf) {
+    return HoodieTableConfig.TableStorageLayout.fromConfigValue(conf.getString(
+        HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TABLE_STORAGE_LAYOUT.defaultValue())) == LSM_TREE;
   }
 
   /**

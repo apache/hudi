@@ -129,6 +129,10 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
               && !conf.contains(FlinkOptions.HIVE_STYLE_PARTITIONING)) {
             conf.set(FlinkOptions.HIVE_STYLE_PARTITIONING, tableConfig.getBoolean(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE));
           }
+          if (tableConfig.contains(HoodieTableConfig.TABLE_STORAGE_LAYOUT)
+              && !conf.containsKey(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key())) {
+            conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), tableConfig.getString(HoodieTableConfig.TABLE_STORAGE_LAYOUT));
+          }
           if (tableConfig.contains(HoodieTableConfig.TYPE) && conf.contains(FlinkOptions.TABLE_TYPE)) {
             if (!tableConfig.getString(HoodieTableConfig.TYPE).equals(conf.get(FlinkOptions.TABLE_TYPE))) {
               log.error("Table type conflict : {} in {} and {} in table options. Update your config to match the table type in hoodie.properties.",

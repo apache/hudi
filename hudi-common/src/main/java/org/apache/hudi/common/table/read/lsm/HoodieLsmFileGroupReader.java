@@ -52,6 +52,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.List;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
@@ -94,6 +95,7 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
       TypedProperties props,
       Option<HoodieBaseFile> baseFileOption,
       Stream<HoodieLogFile> logFiles,
+      Iterator<? extends HoodieRecord> recordIterator,
       String partitionPath,
       Long start,
       Long length,
@@ -108,7 +110,7 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
     ValidationUtils.checkArgument(requestedSchema != null, "Requested schema is required");
     ValidationUtils.checkArgument(props != null, "Props is required");
     ValidationUtils.checkArgument(partitionPath != null, "Partition path is required");
-    ValidationUtils.checkArgument(hoodieTableMetaClient.getTableConfig().getLogFileFormat() == HoodieFileFormat.PARQUET,
+    ValidationUtils.checkArgument(logFiles == null || hoodieTableMetaClient.getTableConfig().getLogFileFormat() == HoodieFileFormat.PARQUET,
         "LSM file group reader expects parquet log files");
 
     if (internalSchemaOpt == null) {
@@ -145,6 +147,7 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
     this.inputSplit = InputSplit.builder()
         .baseFileOption(baseFileOption)
         .logFileStream(logFiles)
+        .recordIterator((Iterator<HoodieRecord>) recordIterator)
         .partitionPath(partitionPath)
         .start(start)
         .length(length)

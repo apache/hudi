@@ -26,6 +26,8 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.schema.HoodieSchemas;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
@@ -33,6 +35,7 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
@@ -52,6 +55,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -89,6 +93,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
   private final InputSplit inputSplit;
   private final HoodieSchema readerSchema;
   private final List<String> orderingFieldNames;
+  private final TypedProperties props;
   private final boolean includeBaseFile;
   private final BufferedRecordMerger<T> bufferedRecordMerger;
   private final UpdateProcessor<T> updateProcessor;
@@ -133,6 +138,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
     this.inputSplit = inputSplit;
     this.readerSchema = readerContext.getSchemaHandler().getRequiredSchema();
     this.orderingFieldNames = orderingFieldNames;
+    this.props = props;
     this.includeBaseFile = includeBaseFile;
     this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
         readerContext, readerContext.getMergeMode(), false, readerContext.getRecordMerger(),
@@ -158,9 +164,15 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
       addReader(sortedRunReaders, mergeOrder++, createBaseFileIterator(inputSplit.getBaseFileOption().get()));
     }
 
+    if (inputSplit.hasRecordIterator()) {
+      addReader(sortedRunReaders, mergeOrder++, createRecordIterator(inputSplit.getRecordIterator()));
+    }
+
     List<LogReaderSpec> logReaderSpecs = new ArrayList<>();
-    for (HoodieLogFile logFile : inputSplit.getLogFiles()) {
-      logReaderSpecs.add(new LogReaderSpec(mergeOrder++, logFile));
+    if (!inputSplit.hasRecordIterator()) {
+      for (HoodieLogFile logFile : inputSplit.getLogFiles()) {
+        logReaderSpecs.add(new LogReaderSpec(mergeOrder++, logFile));
+      }
     }
     Set<Integer> directLogMergeOrders = selectDirectLogMergeOrders(logReaderSpecs, hasBaseFileReader);
     for (LogReaderSpec spec : logReaderSpecs) {
@@ -252,6 +264,41 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
       throw new UnsupportedOperationException("LSM file group reader does not support bootstrap base files");
     }
     return createFileIterator(baseFile.getPathInfo(), baseFile.getStoragePath(), baseFile.getFileSize());
+  }
+
+  /**
+   * Creates a sorted-run iterator from incoming write records.
+   */
+  private ClosableIterator<BufferedRecord<T>> createRecordIterator(Iterator<HoodieRecord> recordIterator) {
+    HoodieSchema recordSchema = HoodieSchemaCache.intern(getRecordSchema());
+    String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
+    DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, recordSchema);
+    return new ClosableIterator<BufferedRecord<T>>() {
+      @Override
+      public boolean hasNext() {
+        return recordIterator.hasNext();
+      }
+
+      @Override
+      public BufferedRecord<T> next() {
+        return BufferedRecords.fromHoodieRecord(recordIterator.next(), recordSchema, readerContext.getRecordContext(),
+            props, orderingFieldsArray, deleteContext);
+      }
+
+      @Override
+      public void close() {
+        // no op.
+      }
+    };
+  }
+
+  private HoodieSchema getRecordSchema() {
+    Option<Pair<String, String>> payloadClasses = readerContext.getPayloadClasses(props);
+    if (payloadClasses.isPresent() && payloadClasses.get().getRight().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
+      String schemaStr = props.getString("hoodie.payload.record.schema");
+      return HoodieSchema.parse(schemaStr);
+    }
+    return HoodieSchemaUtils.removeMetadataFields(readerContext.getSchemaHandler().getRequestedSchema());
   }
 
   /**
