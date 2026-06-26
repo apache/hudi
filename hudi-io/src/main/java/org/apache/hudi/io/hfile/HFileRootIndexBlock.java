@@ -108,7 +108,9 @@ public class HFileRootIndexBlock extends HFileIndexBlock {
         outputStream.writeLong(entry.getOffset());
         outputStream.writeInt(entry.getSize());
 
-        outputStream.write(writeVarInt(keyValueKeyLength(entry.getFirstKey().getLength())));
+        // Use Hadoop WritableUtils VarInt encoding to match HBase's HFile format and the reader.
+        int kvKeyLength = keyValueKeyLength(entry.getFirstKey().getLength());
+        outputStream.write(writeVarInt(kvKeyLength));
         Key firstKey = entry.getFirstKey();
         writeKey(outputStream, firstKey.getBytes(), firstKey.getOffset(), firstKey.getLength());
       }
