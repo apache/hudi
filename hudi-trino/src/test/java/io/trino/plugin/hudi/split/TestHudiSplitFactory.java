@@ -31,6 +31,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.OptionalLong;
 
 import static io.airlift.units.DataSize.Unit.MEGABYTE;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -182,7 +183,7 @@ public class TestHudiSplitFactory
                 ImmutableList.of(),
                 TupleDomain.all(),
                 TupleDomain.all(),
-                java.util.OptionalLong.empty(),
+                OptionalLong.empty(),
                 "",
                 "101");
     }
