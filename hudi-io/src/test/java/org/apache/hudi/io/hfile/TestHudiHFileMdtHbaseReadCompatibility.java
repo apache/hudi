@@ -38,9 +38,8 @@ import java.util.Random;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Cross-version compatibility test: every HFile written by Hudi's native
@@ -91,12 +90,12 @@ class TestHudiHFileMdtHbaseReadCompatibility {
 
   private static Stream<Arguments> mdtShapes() {
     return Stream.of(
-        // shape-name, keyLen, valueLen
-        Arguments.of("FILES", 24, 96),
+        // shape-name, keyLen, valueLen — keyLen must be >= shape-prefix length ("<shape>::") + 10 (idx)
+        Arguments.of("FILES", 32, 96),
         Arguments.of("COLUMN_STATS", 32, 256),
         Arguments.of("RECORD_INDEX", 40, 24),
         Arguments.of("SECONDARY_INDEX", 120, 24),
-        Arguments.of("BLOOM_FILTERS", 24, 64 * 1024)
+        Arguments.of("BLOOM_FILTERS", 32, 64 * 1024)
     );
   }
 
@@ -112,19 +111,15 @@ class TestHudiHFileMdtHbaseReadCompatibility {
 
       Configuration conf = new Configuration();
       FileSystem fs = FileSystem.get(conf);
-      assertDoesNotThrow(
-          () -> HFile.createReader(fs, new Path(tempFile.toString()), conf),
-          "HBase 2.4.x trailer parse failed for Hudi-native MDT shape "
-              + shape + ". A trailer-layout change in HFileWriterImpl will make every "
-              + "older-Hudi reader CorruptHFileException on this MDT partition shape.");
-
       try (HFile.Reader reader = HFile.createReader(
           fs, new Path(tempFile.toString()), conf)) {
         assertEquals(records.length, reader.getEntries(),
-            "Trailer entry count mismatch for MDT shape " + shape);
+            "Trailer entry count mismatch for MDT shape " + shape
+                + ". A trailer-layout change in HFileWriterImpl would surface here.");
 
         HFileScanner scanner = reader.getScanner(true, true);
-        assertNotNull(scanner.seekTo());
+        assertTrue(scanner.seekTo(),
+            "Scanner failed to position at first key for MDT shape " + shape);
         int i = 0;
         do {
           Cell cell = scanner.getCell();
@@ -163,30 +158,34 @@ class TestHudiHFileMdtHbaseReadCompatibility {
    * Generate sorted, fixed-width keys with a deterministic prefix per shape and
    * deterministic-but-noisy values. Sorted keys are required by HFile (writer
    * fails on out-of-order append) and match how MDT records actually arrive.
+   *
+   * <p>The key layout is: {@code <prefix><10-digit-idx><'x' padding>}, then
+   * zero-padded on the right up to {@code keyLen}. Truncation is forbidden —
+   * if the prefix + idx would not fit in {@code keyLen}, that signals the
+   * shape parameter is too small and the test bails immediately rather than
+   * silently emit duplicate keys (which would let a broken writer pass).
    */
   private static Record[] generateRecords(int count, int keyLen, int valueLen, String shape) {
+    String prefix = shape + "::";
+    int minKeyLen = prefix.length() + 10;
+    if (keyLen < minKeyLen) {
+      throw new IllegalArgumentException(
+          "keyLen (" + keyLen + ") for shape " + shape + " is too small; "
+              + "must be >= prefix length (" + prefix.length() + ") + 10 idx digits = "
+              + minKeyLen + ". Truncating the idx suffix would produce duplicate keys.");
+    }
     Random rng = new Random(RNG_SEED);
     Record[] out = new Record[count];
-    byte[] valueBuf = new byte[valueLen];
-    String prefix = shape + "::";
-    int padLen = Math.max(0, keyLen - prefix.length() - 10);
+    int padLen = keyLen - minKeyLen;
     for (int i = 0; i < count; i++) {
       String idx = String.format(Locale.ROOT, "%010d", i);
-      StringBuilder key = new StringBuilder(prefix).append(idx);
+      StringBuilder key = new StringBuilder(keyLen).append(prefix).append(idx);
       for (int j = 0; j < padLen; j++) {
         key.append('x');
       }
       byte[] keyBytes = key.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-      // Truncate or zero-pad to exactly keyLen so sort order is preserved.
-      if (keyBytes.length > keyLen) {
-        keyBytes = Arrays.copyOf(keyBytes, keyLen);
-      } else if (keyBytes.length < keyLen) {
-        byte[] padded = new byte[keyLen];
-        System.arraycopy(keyBytes, 0, padded, 0, keyBytes.length);
-        keyBytes = padded;
-      }
+      // Invariant: keyBytes.length == keyLen (ASCII-only chars in prefix + idx + 'x').
       byte[] value = new byte[valueLen];
-      System.arraycopy(valueBuf, 0, value, 0, valueLen);
       rng.nextBytes(value);
       out[i] = new Record(keyBytes, value);
     }
