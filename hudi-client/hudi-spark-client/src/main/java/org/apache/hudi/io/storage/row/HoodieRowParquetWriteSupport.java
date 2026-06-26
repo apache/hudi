@@ -127,6 +127,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
 
   @Getter
   private final Configuration hadoopConf;
+  private final Map<String, String> footerMetadata = new HashMap<>();
   private final Option<HoodieBloomFilterWriteSupport<UTF8String>> bloomFilterWriteSupportOpt;
   private final byte[] decimalBuffer = new byte[Decimal.minBytesForPrecision()[DecimalType.MAX_PRECISION()]];
   private final Enumeration.Value datetimeRebaseMode = (Enumeration.Value) SparkAdapterSupport$.MODULE$.sparkAdapter().getDateTimeRebaseMode();
@@ -432,8 +433,16 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     Map<String, String> extraMetadata =
         bloomFilterWriteSupportOpt.map(HoodieBloomFilterWriteSupport::finalizeMetadata)
             .orElse(Collections.emptyMap());
+    if (!footerMetadata.isEmpty()) {
+      extraMetadata = new HashMap<>(extraMetadata);
+      extraMetadata.putAll(footerMetadata);
+    }
 
     return new WriteSupport.FinalizedWriteContext(extraMetadata);
+  }
+
+  public void addFooterMetadata(Map<String, String> footerMetadata) {
+    this.footerMetadata.putAll(footerMetadata);
   }
 
   public void add(UTF8String recordKey) {

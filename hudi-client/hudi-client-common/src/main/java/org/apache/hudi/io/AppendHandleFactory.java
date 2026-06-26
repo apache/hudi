@@ -19,17 +19,37 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+
+import java.util.Iterator;
 
 public class AppendHandleFactory<T, I, K, O> extends WriteHandleFactory<T, I, K, O> {
 
   @Override
   public HoodieAppendHandle<T, I, K, O> create(final HoodieWriteConfig hoodieConfig, final String commitTime,
-                                     final HoodieTable<T, I, K, O> hoodieTable, final String partitionPath,
-                                     final String fileIdPrefix, final TaskContextSupplier sparkTaskContextSupplier) {
+                                               final HoodieTable<T, I, K, O> hoodieTable, final String partitionPath,
+                                               final String fileIdPrefix, final TaskContextSupplier sparkTaskContextSupplier) {
 
-    return new HoodieAppendHandle(hoodieConfig, commitTime, hoodieTable, partitionPath,
-        getNextFileId(fileIdPrefix), sparkTaskContextSupplier);
+    String fileId = getNextFileId(fileIdPrefix);
+    if (hoodieTable.getMetaClient().getTableConfig().isLSMTreeStorageLayout()) {
+      return new HoodieNativeLogAppendHandle<>(hoodieConfig, commitTime, hoodieTable, partitionPath,
+          fileId, sparkTaskContextSupplier);
+    }
+    return new HoodieInlineLogAppendHandle<>(hoodieConfig, commitTime, hoodieTable, partitionPath,
+        fileId, sparkTaskContextSupplier);
+  }
+
+  public HoodieAppendHandle<T, I, K, O> create(final HoodieWriteConfig hoodieConfig, final String commitTime,
+                                               final HoodieTable<T, I, K, O> hoodieTable, final String partitionPath,
+                                               final String fileId, final Iterator<HoodieRecord<T>> recordItr,
+                                               final TaskContextSupplier sparkTaskContextSupplier) {
+    if (hoodieTable.getMetaClient().getTableConfig().isLSMTreeStorageLayout()) {
+      return new HoodieNativeLogAppendHandle<>(hoodieConfig, commitTime, hoodieTable, partitionPath,
+          fileId, recordItr, sparkTaskContextSupplier);
+    }
+    return new HoodieInlineLogAppendHandle<>(hoodieConfig, commitTime, hoodieTable, partitionPath,
+        fileId, recordItr, sparkTaskContextSupplier);
   }
 }

@@ -475,6 +475,15 @@ public class FSUtils {
     return HoodieLogFile.LOG_FILE_PREFIX + suffix;
   }
 
+  public static String makeNativeLogFileName(String fileId, String writeToken, String deltaCommitTime, int version,
+                                             String logFileExtension, HoodieFileFormat nativeFileFormat) {
+    String extension = logFileExtension.startsWith(".") ? logFileExtension.substring(1) : logFileExtension;
+    String formatSuffix = nativeFileFormat.getFileExtension().startsWith(".")
+        ? nativeFileFormat.getFileExtension().substring(1)
+        : nativeFileFormat.getFileExtension();
+    return String.format("%s_%s_%s_%d.%s.%s", fileId, writeToken, deltaCommitTime, version, extension, formatSuffix);
+  }
+
   public static boolean isBaseFile(StoragePath path) {
     if (matchNativeLogFile(path.getName()).isPresent()) {
       return false;

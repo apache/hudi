@@ -29,6 +29,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.flink.table.data.RowData;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.function.Function;
 
 /**
@@ -67,6 +68,11 @@ public class HoodieRowDataParquetWriter extends HoodieBaseParquetWriter<RowData>
   public void writeRow(String key, RowData row) throws IOException {
     super.write(row);
     writeSupport.add(key);
+  }
+
+  @Override
+  public void addFooterMetadata(Map<String, String> footerMetadata) {
+    writeSupport.addFooterMetadata(footerMetadata);
   }
 
   @Override

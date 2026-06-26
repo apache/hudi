@@ -211,15 +211,36 @@ public class TestHoodieLogFile {
   @Test
   void logFileComparatorOrdersNativeDeletesAfterLogsForSameVersion() {
     HoodieLogFile logFile = new HoodieLogFile(new StoragePath(
-        "/tmp/136281f3-c24e-423b-a65a-95dbfbddce1d_1-0-1_20250409161256974_8.log.parquet"));
+        nativeLogPath(LogExtensions.DATA_LOG_EXTENSION, 8)));
     HoodieLogFile deleteFile = new HoodieLogFile(new StoragePath(
-        "/tmp/136281f3-c24e-423b-a65a-95dbfbddce1d_1-0-1_20250409161256974_8.deletes.parquet"));
+        nativeLogPath(LogExtensions.DELETE_LOG_EXTENSION, 8)));
 
     List<HoodieLogFile> logFiles = Arrays.asList(deleteFile, logFile);
     logFiles.sort(HoodieLogFile.getLogFileComparator());
 
     assertEquals(logFile, logFiles.get(0));
     assertEquals(deleteFile, logFiles.get(1));
+  }
+
+  @Test
+  void logFileComparatorOrdersNativeLogExtensionsByPrecedenceForSameVersion() {
+    HoodieLogFile logFile = new HoodieLogFile(new StoragePath(
+        nativeLogPath(LogExtensions.DATA_LOG_EXTENSION, 8)));
+    HoodieLogFile deleteFile = new HoodieLogFile(new StoragePath(
+        nativeLogPath(LogExtensions.DELETE_LOG_EXTENSION, 8)));
+    HoodieLogFile cdcFile = new HoodieLogFile(new StoragePath(
+        nativeLogPath(LogExtensions.CDC_LOG_EXTENSION, 8)));
+
+    List<HoodieLogFile> logFiles = Arrays.asList(cdcFile, deleteFile, logFile);
+    logFiles.sort(HoodieLogFile.getLogFileComparator());
+
+    assertEquals(Arrays.asList(logFile, deleteFile, cdcFile), logFiles);
+    assertFalse(FSUtils.matchNativeLogFile(nativeLogPath(LogExtensions.ARCHIVE_LOG_EXTENSION, 8)).isPresent());
+  }
+
+  private String nativeLogPath(String extension, int version) {
+    return String.format("/tmp/%s_%s_%s_%d.%s.parquet",
+        fileId, writeToken, "20250409161256974", version, extension);
   }
 
   private void assertFileGetters(StoragePathInfo pathInfo, HoodieLogFile hoodieLogFile,

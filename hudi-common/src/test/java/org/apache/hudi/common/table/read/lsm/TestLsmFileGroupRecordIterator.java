@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read.lsm;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -54,10 +55,10 @@ class TestLsmFileGroupRecordIterator {
   void testDeleteLogSchemaUsesRecordKeyAndOrderingFields() {
     HoodieSchema deleteLogSchema = HoodieSchemas.createDeleteLogSchema(tableSchema(), Arrays.asList("ts"));
 
-    assertEquals(Arrays.asList("record_key", "ts"), deleteLogSchema.getFields().stream()
+    assertEquals(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, "ts"), deleteLogSchema.getFields().stream()
         .map(HoodieSchemaField::name)
         .collect(Collectors.toList()));
-    assertEquals(HoodieSchemaType.STRING, deleteLogSchema.getField("record_key").get().schema().getType());
+    assertEquals(HoodieSchemaType.STRING, deleteLogSchema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD).get().schema().getType());
     assertEquals(HoodieSchemaType.LONG, deleteLogSchema.getField("ts").get().schema().getType());
   }
 
@@ -88,7 +89,7 @@ class TestLsmFileGroupRecordIterator {
     HoodieSchema deleteLogSchema = HoodieSchemas.createDeleteLogSchema(tableSchema(), orderingFields);
 
     when(readerContext.getRecordContext()).thenReturn(recordContext);
-    when(recordContext.getValue(record, deleteLogSchema, "record_key")).thenReturn("key1");
+    when(recordContext.getValue(record, deleteLogSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD)).thenReturn("key1");
     when(recordContext.getOrderingValue(eq(record), eq(deleteLogSchema), eq(orderingFields))).thenReturn(42L);
 
     BufferedRecord<Map<String, Object>> deleteRecord =

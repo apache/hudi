@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.io.AppendHandleFactory;
 import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -75,8 +76,8 @@ public class JavaUpsertPreppedDeltaCommitActionExecutor<T> extends BaseJavaDelta
     List<WriteStatus> allWriteStatuses = new ArrayList<>();
     try {
       recordsByFileId.forEach((k, v) -> {
-        HoodieAppendHandle<?, ?, ?, ?> appendHandle = new HoodieAppendHandle(config, instantTime, table,
-            k.getRight(), k.getLeft(), v.iterator(), taskContextSupplier);
+        HoodieAppendHandle<?, ?, ?, ?> appendHandle = new AppendHandleFactory()
+            .create(config, instantTime, table, k.getRight(), k.getLeft(), v.iterator(), taskContextSupplier);
         appendHandle.doAppend();
         allWriteStatuses.addAll(appendHandle.close());
       });
