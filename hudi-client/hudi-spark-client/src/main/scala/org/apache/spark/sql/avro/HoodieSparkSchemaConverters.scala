@@ -123,7 +123,24 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
       case ByteType | ShortType | IntegerType => HoodieSchema.create(HoodieSchemaType.INT)
       case LongType => HoodieSchema.create(HoodieSchemaType.LONG)
       case DateType => HoodieSchema.createDate()
-      case TimestampType => HoodieSchema.createTimestampMicros()
+      case TimestampType =>
+        // Honor spark.sql.parquet.outputTimestampType so the user's setting flows through
+        // to the avro→parquet pipeline (HoodieAvroWriteSupport path). Avro doesn't model
+        // INT96, so an INT96 request is downgraded to MICROS at the schema level — only
+        // the Row-based bulk_insert writer (HoodieRowParquetWriteSupport) can emit INT96.
+        // See apache/hudi#18752.
+        val outputTsType = try {
+          val sqlConf = SQLConf.get
+          val key = SQLConf.PARQUET_OUTPUT_TIMESTAMP_TYPE.key
+          if (sqlConf.contains(key)) sqlConf.getConfString(key) else null
+        } catch {
+          case _: Throwable => null
+        }
+        if ("TIMESTAMP_MILLIS".equals(outputTsType)) {
+          HoodieSchema.createTimestampMillis()
+        } else {
+          HoodieSchema.createTimestampMicros()
+        }
       case TimestampNTZType => HoodieSchema.createLocalTimestampMicros()
       case FloatType => HoodieSchema.create(HoodieSchemaType.FLOAT)
       case DoubleType => HoodieSchema.create(HoodieSchemaType.DOUBLE)

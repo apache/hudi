@@ -127,6 +127,8 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
 
   @Getter
   private final Configuration hadoopConf;
+  /** Resolved output timestamp type — see constructor. One of TIMESTAMP_MICROS, TIMESTAMP_MILLIS, INT96. */
+  private final String outputTimestampType;
   private final Option<HoodieBloomFilterWriteSupport<UTF8String>> bloomFilterWriteSupportOpt;
   private final byte[] decimalBuffer = new byte[Decimal.minBytesForPrecision()[DecimalType.MAX_PRECISION()]];
   private final Enumeration.Value datetimeRebaseMode = (Enumeration.Value) SparkAdapterSupport$.MODULE$.sparkAdapter().getDateTimeRebaseMode();
@@ -150,7 +152,17 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     Configuration hadoopConf = new Configuration(conf);
     String writeLegacyFormatEnabled = config.getStringOrDefault(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED, "false");
     hadoopConf.set("spark.sql.parquet.writeLegacyFormat", writeLegacyFormatEnabled);
-    hadoopConf.set("spark.sql.parquet.outputTimestampType", config.getStringOrDefault(HoodieStorageConfig.PARQUET_OUTPUT_TIMESTAMP_TYPE));
+    // Resolve the effective parquet output timestamp type. Priority:
+    //   1. Hudi's hoodie.parquet.outputtimestamptype, when the user explicitly set it
+    //      (this is the documented override mechanism).
+    //   2. Spark's own spark.sql.parquet.outputTimestampType, when the user set it on the
+    //      SparkSession but didn't set the Hudi-specific key.
+    //   3. The Hudi default (TIMESTAMP_MICROS).
+    // Previously this line unconditionally read the Hudi key with its default value, which
+    // silently overrode any spark.sql.parquet.outputTimestampType the user had configured.
+    String chosenOutputTimestampType = resolveOutputTimestampType(conf, config);
+    this.outputTimestampType = chosenOutputTimestampType;
+    hadoopConf.set("spark.sql.parquet.outputTimestampType", chosenOutputTimestampType);
     hadoopConf.set("spark.sql.parquet.fieldId.write.enabled", config.getStringOrDefault(PARQUET_FIELD_ID_WRITE_ENABLED));
 
     // Variant shredding configs
@@ -487,19 +499,32 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     } else if (dataType == DataTypes.LongType || dataType instanceof DayTimeIntervalType) {
       return (row, ordinal) -> recordConsumer.addLong(row.getLong(ordinal));
     } else if (dataType == DataTypes.TimestampType) {
+      // Choose the encoding that matches outputTimestampType — same key Spark's own
+      // ParquetWriteSupport uses to set the parquet schema, so writer and schema agree.
+      // The Hudi avro writer schema only carries MICROS/MILLIS precision (no INT96), so
+      // the previous version of this method drove the writer from schema precision alone
+      // and silently ignored the user's outputTimestampType — see apache/hudi#18752.
+      if ("INT96".equals(outputTimestampType)) {
+        return (row, ordinal) -> recordConsumer.addBinary(microsToInt96Binary(
+            (long) timestampRebaseFunction.apply(row.getLong(ordinal))));
+      }
+      if ("TIMESTAMP_MILLIS".equals(outputTimestampType)) {
+        return (row, ordinal) -> recordConsumer.addLong(DateTimeUtils.microsToMillis(
+            (long) timestampRebaseFunction.apply(row.getLong(ordinal))));
+      }
+      // Default TIMESTAMP_MICROS path. If the writer schema explicitly carries MILLIS
+      // (rare — only when an upstream caller injects an avro schema with timestamp-millis)
+      // we still honor it for backward compat.
       if (resolvedSchema != null && resolvedSchema.getType() == HoodieSchemaType.TIMESTAMP) {
         HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) resolvedSchema;
-        if (timestampSchema.getPrecision() == TimePrecision.MICROS) {
-          return (row, ordinal) -> recordConsumer.addLong((long) timestampRebaseFunction.apply(row.getLong(ordinal)));
-        } else if (timestampSchema.getPrecision() == TimePrecision.MILLIS) {
-          return (row, ordinal) -> recordConsumer.addLong(DateTimeUtils.microsToMillis((long) timestampRebaseFunction.apply(row.getLong(ordinal))));
-        } else {
+        if (timestampSchema.getPrecision() == TimePrecision.MILLIS) {
+          return (row, ordinal) -> recordConsumer.addLong(DateTimeUtils.microsToMillis(
+              (long) timestampRebaseFunction.apply(row.getLong(ordinal))));
+        } else if (timestampSchema.getPrecision() != TimePrecision.MICROS) {
           throw new UnsupportedOperationException("Unsupported timestamp precision for TimestampType: " + timestampSchema.getPrecision());
         }
-      } else {
-        // Default to micros precision when no timestamp schema is available
-        return (row, ordinal) -> recordConsumer.addLong((long) timestampRebaseFunction.apply(row.getLong(ordinal)));
       }
+      return (row, ordinal) -> recordConsumer.addLong((long) timestampRebaseFunction.apply(row.getLong(ordinal)));
     } else if (SparkAdapterSupport$.MODULE$.sparkAdapter().isTimestampNTZType(dataType)) {
       if (resolvedSchema != null && resolvedSchema.getType() == HoodieSchemaType.TIMESTAMP) {
         HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) resolvedSchema;
@@ -762,22 +787,31 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     } else if (dataType == DataTypes.LongType || dataType instanceof DayTimeIntervalType) {
       return Types.primitive(INT64, repetition).named(structField.name());
     } else if (dataType == DataTypes.TimestampType) {
+      // First honor any precision that the writer's avro schema explicitly carries
+      // (preserves backward-compat for callers that inject a timestamp-millis avro
+      // schema directly), then fall back to the user's outputTimestampType.
       if (resolvedSchema != null && resolvedSchema.getType() == HoodieSchemaType.TIMESTAMP) {
         HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) resolvedSchema;
-        if (timestampSchema.getPrecision() == TimePrecision.MICROS) {
-          return Types.primitive(INT64, repetition)
-              .as(LogicalTypeAnnotation.timestampType(true, LogicalTypeAnnotation.TimeUnit.MICROS)).named(structField.name());
-        } else if (timestampSchema.getPrecision() == TimePrecision.MILLIS) {
+        if (timestampSchema.getPrecision() == TimePrecision.MILLIS) {
           return Types.primitive(INT64, repetition)
               .as(LogicalTypeAnnotation.timestampType(true, LogicalTypeAnnotation.TimeUnit.MILLIS)).named(structField.name());
-        } else {
+        } else if (timestampSchema.getPrecision() != TimePrecision.MICROS) {
           throw new UnsupportedOperationException("Unsupported timestamp precision for TimestampType: " + timestampSchema.getPrecision());
         }
-      } else {
-        // Default to micros precision when no timestamp schema is available
-        return Types.primitive(INT64, repetition)
-            .as(LogicalTypeAnnotation.timestampType(true, LogicalTypeAnnotation.TimeUnit.MICROS)).named(structField.name());
+        // MICROS schema: fall through to outputTimestampType dispatch.
       }
+      // Schema is MICROS (or absent). Honor the resolved outputTimestampType the user
+      // requested via spark.sql.parquet.outputTimestampType (apache/hudi#18752).
+      if ("INT96".equals(outputTimestampType)) {
+        return Types.primitive(org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT96, repetition)
+            .named(structField.name());
+      }
+      if ("TIMESTAMP_MILLIS".equals(outputTimestampType)) {
+        return Types.primitive(INT64, repetition)
+            .as(LogicalTypeAnnotation.timestampType(true, LogicalTypeAnnotation.TimeUnit.MILLIS)).named(structField.name());
+      }
+      return Types.primitive(INT64, repetition)
+          .as(LogicalTypeAnnotation.timestampType(true, LogicalTypeAnnotation.TimeUnit.MICROS)).named(structField.name());
     } else if (SparkAdapterSupport$.MODULE$.sparkAdapter().isTimestampNTZType(dataType)) {
       if (resolvedSchema != null && resolvedSchema.getType() == HoodieSchemaType.TIMESTAMP) {
         HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) resolvedSchema;
@@ -885,5 +919,85 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     } else {
       throw new UnsupportedOperationException("Unsupported type: " + dataType);
     }
+  }
+
+  // INT96 = julianDay(4 bytes) + nanosOfDay(8 bytes), little-endian.
+  // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#timestamp
+  // Spark's TimestampType is stored internally as microseconds since the unix epoch.
+  static final long MICROS_PER_DAY = 86_400_000_000L;
+  static final int JULIAN_DAY_OF_EPOCH = 2440588;
+
+  /**
+   * Resolves the effective parquet output timestamp type. Priority:
+   * <ol>
+   *   <li>{@code hoodie.parquet.outputtimestamptype} on the Hudi write config — when the
+   *       user explicitly set it (distinguished from the default by inspecting the raw
+   *       properties before defaults are populated).</li>
+   *   <li>{@code spark.sql.parquet.outputTimestampType} on the Spark SQLConf — when the
+   *       user explicitly set it on the SparkSession. Spark propagates SQLConf to
+   *       executor tasks via TaskContext, so SQLConf.get() works at write time on both
+   *       driver and executors.</li>
+   *   <li>The same key in the Hadoop conf — covers callers that propagated it manually.</li>
+   *   <li>The Hudi default ({@code TIMESTAMP_MICROS}).</li>
+   * </ol>
+   *
+   * <p>The pre-fix code unconditionally read the Hudi key with its default, silently
+   * overriding any spark.sql.parquet.outputTimestampType the user had configured (#18752).
+   * Note that {@link HoodieConfig#contains(ConfigProperty)} returns true even for default-
+   * populated keys, so distinguishing user-explicit from default requires checking the
+   * raw properties map before defaults are merged.
+   *
+   * <p>Known limitation: because HoodieConfig conflates user-set with default-populated
+   * values, we treat the Hudi key as "user-explicit" only when it differs from the
+   * default. If a user explicitly sets the Hudi key to the default value
+   * ({@code TIMESTAMP_MICROS}) while also setting a different Spark conf, the Spark
+   * conf wins. There is no clean way to detect that edge case without plumbing the
+   * original user options Map all the way through the writer construction path.
+   */
+  static String resolveOutputTimestampType(Configuration conf, HoodieConfig config) {
+    // Priority:
+    //   1. hoodie.parquet.outputtimestamptype — when explicitly set (not just defaulted).
+    //      HoodieConfig.contains() returns true even for default-populated keys, so we
+    //      compare against the default value directly. A value identical to the default
+    //      is treated as "user didn't set it" and falls through; in that case the
+    //      SparkSession fallback will resolve to the same value, so behavior is unchanged.
+    //   2. spark.sql.parquet.outputTimestampType on the SparkSession's SQLConf. Spark
+    //      propagates SQLConf to executor tasks via TaskContext, so SQLConf.get() works
+    //      at write time on both driver and executors. SQLConf#contains distinguishes
+    //      user-set from default, which is the signal we need to avoid treating Spark's
+    //      own default as a user choice.
+    //   3. Manually-propagated spark.sql.parquet.outputTimestampType in the Hadoop conf.
+    //   4. The Hudi default (TIMESTAMP_MICROS).
+    String hoodieVal = config.getProps().getProperty(HoodieStorageConfig.PARQUET_OUTPUT_TIMESTAMP_TYPE.key());
+    String hoodieDefault = HoodieStorageConfig.PARQUET_OUTPUT_TIMESTAMP_TYPE.defaultValue();
+    if (hoodieVal != null && !hoodieVal.equals(hoodieDefault)) {
+      return hoodieVal;
+    }
+    try {
+      org.apache.spark.sql.internal.SQLConf sqlConf = SQLConf.get();
+      String sqlConfKey = SQLConf.PARQUET_OUTPUT_TIMESTAMP_TYPE().key();
+      if (sqlConf.contains(sqlConfKey)) {
+        return sqlConf.getConfString(sqlConfKey);
+      }
+    } catch (Throwable t) {
+      // SQLConf may not be available in non-Spark contexts; fall through.
+    }
+    String hadoopConfVal = conf.get("spark.sql.parquet.outputTimestampType");
+    if (hadoopConfVal != null) {
+      return hadoopConfVal;
+    }
+    return hoodieDefault;
+  }
+
+  static Binary microsToInt96Binary(long micros) {
+    long days = Math.floorDiv(micros, MICROS_PER_DAY);
+    long microsOfDay = Math.floorMod(micros, MICROS_PER_DAY);
+    int julianDay = (int) (days + JULIAN_DAY_OF_EPOCH);
+    long nanosOfDay = microsOfDay * 1000L;
+    ByteBuffer buf = ByteBuffer.allocate(12).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+    buf.putLong(nanosOfDay);
+    buf.putInt(julianDay);
+    buf.flip();
+    return Binary.fromConstantByteBuffer(buf);
   }
 }
