@@ -25,7 +25,9 @@ import org.apache.hudi.avro.model.HoodieFSPermission;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex.IndexWriter;
+import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
@@ -235,6 +237,58 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       // completionTimeQueryView will be set to null after close.
       Assertions.assertThrows(NullPointerException.class, () -> ((AbstractTableFileSystemView) fsView).getCompletionTime(""));
     }
+  }
+
+  /**
+   * For non-bootstrap tables, the file system view must avoid instantiating the real
+   * {@link HFileBootstrapIndex} during init: its constructor issues two storage.exists()
+   * probes, which translate to billable HEAD requests on S3-like object stores. The
+   * NoOp substitute keeps {@code useIndex()} returning false without those probes.
+   */
+  @Test
+  public void testBootstrapIndexIsNoOpWhenBootstrapBasePathAbsent() throws Exception {
+    closeFsView();
+    cleanMetaClient();
+    // Re-init the table WITHOUT a bootstrap base path.
+    metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
+    basePath = metaClient.getBasePath().toString();
+    assertFalse(metaClient.getTableConfig().getBootstrapBasePath().isPresent(),
+        "Precondition: table must not have a bootstrap base path configured");
+
+    refreshFsView();
+
+    BootstrapIndex index = readBootstrapIndex(fsView);
+    assertTrue(index instanceof NoOpBootstrapIndex,
+        "Expected NoOpBootstrapIndex for non-bootstrap tables to skip storage.exists() probes, got: "
+            + index.getClass().getName());
+    assertFalse(index.useIndex(), "NoOpBootstrapIndex.useIndex() must be false");
+  }
+
+  /**
+   * Counterpart of {@link #testBootstrapIndexIsNoOpWhenBootstrapBasePathAbsent()}:
+   * when a bootstrap base path is configured we must still load the real index
+   * implementation (here {@link HFileBootstrapIndex}).
+   */
+  @Test
+  public void testBootstrapIndexIsLoadedWhenBootstrapBasePathPresent() throws Exception {
+    closeFsView();
+    cleanMetaClient();
+    metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType(),
+        BOOTSTRAP_SOURCE_PATH, /* bootstrapIndexEnable = */ true);
+    basePath = metaClient.getBasePath().toString();
+    assertTrue(metaClient.getTableConfig().getBootstrapBasePath().isPresent(),
+        "Precondition: table must have a bootstrap base path configured");
+
+    refreshFsView();
+
+    BootstrapIndex index = readBootstrapIndex(fsView);
+    assertTrue(index instanceof HFileBootstrapIndex,
+        "Expected HFileBootstrapIndex when bootstrap base path is configured and index is enabled, got: "
+            + index.getClass().getName());
+  }
+
+  private static BootstrapIndex readBootstrapIndex(SyncableFileSystemView view) {
+    return ((AbstractTableFileSystemView) view).getBootstrapIndex();
   }
 
   protected void testViewForFileSlicesWithNoBaseFile(int expNumTotalFileSlices,
