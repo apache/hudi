@@ -131,12 +131,6 @@
     <hive.avro.version>1.11.4</hive.avro.version>
     <presto.version>0.273</presto.version>
     <trino.version>481</trino.version>
-    <!-- Trino SPI version that hudi-trino main code compiles against. -->
-    <trino.connector.version>481</trino.connector.version>
-    <!-- Trino version used by the hudi-trino-tests profile for *-tests.jar classifier deps.
-         Trino does not publish trino-spi / trino-filesystem / trino-hive test-jars; the
-         profile is opt-in and assumes a locally-built Trino snapshot in ~/.m2. -->
-    <trino.connector.test.version>481</trino.connector.test.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
     <orc.spark.version>1.6.0</orc.spark.version>

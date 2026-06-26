@@ -19,7 +19,7 @@ Tests depend on Trino test-jars (`trino-spi`, `trino-filesystem`, `trino-hive`, 
 
 To run the tests:
 
-1. Build the matching Trino version locally so its `*-tests.jar` artifacts land in your `~/.m2` (see `trino.connector.test.version` in the root pom for the version to build).
+1. Build the matching Trino version locally so its `*-tests.jar` artifacts land in your `~/.m2` (see `trino.version` in the root pom for the version to build).
 2. Activate both profiles:
 
 ```

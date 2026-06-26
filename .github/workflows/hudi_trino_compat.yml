@@ -52,7 +52,7 @@ jobs:
         working-directory: hudi
         run: |
           mvn $MVN_ARGS -Phudi-trino \
-            -Dtrino.connector.version=${{ steps.trino-version.outputs.trino_version }} \
+            -Dtrino.version=${{ steps.trino-version.outputs.trino_version }} \
             -pl hudi-trino compile
       - name: Open issue on failure
         if: failure()
