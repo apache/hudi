@@ -114,7 +114,8 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
     Option<Map<String, String>> extraMetadata = clusteringGroup.getExtraMetadata();
     ValidationUtils.checkArgument(extraMetadata.isPresent(), "Extra metadata should be present for consistent hashing operations");
     String partition = extraMetadata.get().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_PARTITION_KEY);
-    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(partition), "Partition should not be null or empty");
+    // Note: partition can be an empty string for non-partitioned tables, so only check for null here.
+    ValidationUtils.checkArgument(partition != null, "Partition should not be null");
     List<ConsistentHashingNode> nodes = decodeConsistentHashingNodes(clusteringGroup);
     Option<ConsistentHashingNode> newBucket = Option.fromJavaOptional(nodes.stream().filter(node -> node.getTag() == ConsistentHashingNode.NodeTag.REPLACE).findFirst());
     ValidationUtils.checkArgument(newBucket.isPresent(), "New bucket should be present for merge operation");
@@ -200,7 +201,8 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
     Option<Map<String, String>> extraMetadata = clusteringGroup.getExtraMetadata();
     ValidationUtils.checkArgument(extraMetadata.isPresent(), "Extra metadata should be present for consistent hashing operations");
     String partition = extraMetadata.get().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_PARTITION_KEY);
-    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(partition), "Partition should not be null or empty");
+    // Note: partition can be an empty string for non-partitioned tables, so only check for null here.
+    ValidationUtils.checkArgument(partition != null, "Partition should not be null");
     List<ConsistentHashingNode> nodes = decodeConsistentHashingNodes(clusteringGroup);
     Integer seqNo = Integer.parseInt(extraMetadata.get().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_SEQUENCE_NUMBER_KEY));
     HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata((short) 0, partition, instantTime, 0, seqNo + 1, Collections.emptyList());
