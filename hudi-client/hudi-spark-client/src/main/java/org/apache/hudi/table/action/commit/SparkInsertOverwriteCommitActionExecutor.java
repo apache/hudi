@@ -84,10 +84,10 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
 
   @Override
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
-    String staticOverwritePartition = config.getStringOrDefault(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS);
-    if (StringUtils.nonEmpty(staticOverwritePartition)) {
+    String staticOverwritePartitionPaths = config.getStringOrDefault(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS);
+    if (StringUtils.nonEmpty(staticOverwritePartitionPaths)) {
       // static insert overwrite partitions
-      List<String> partitionPaths = Arrays.asList(staticOverwritePartition.split(","));
+      List<String> partitionPaths = Arrays.asList(staticOverwritePartitionPaths.split(","));
       context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of matching static partitions");
       return HoodieJavaPairRDD.getJavaPairRDD(context.parallelize(partitionPaths, partitionPaths.size()).mapToPair(
           partitionPath -> Pair.of(partitionPath, getAllExistingFileIds(partitionPath)))).collectAsMap();
@@ -105,12 +105,12 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
 
   @Override
   protected Set<HoodieFileGroupId> getFileGroupsBeingReplaced(HoodieData<HoodieRecord<T>> inputRecords) {
-    String staticOverwritePartition = config.getStringOrDefault(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS);
+    String staticOverwritePartitionPaths = config.getStringOrDefault(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS);
     List<String> partitionPaths;
 
-    if (StringUtils.nonEmpty(staticOverwritePartition)) {
+    if (StringUtils.nonEmpty(staticOverwritePartitionPaths)) {
       // Static insert overwrite: use the configured partitions
-      partitionPaths = Arrays.asList(staticOverwritePartition.split(","));
+      partitionPaths = Arrays.asList(staticOverwritePartitionPaths.split(","));
     } else {
       // Dynamic insert overwrite: determine partitions from input records
       partitionPaths = inputRecords.map(HoodieRecord::getPartitionPath).distinct().collectAsList();

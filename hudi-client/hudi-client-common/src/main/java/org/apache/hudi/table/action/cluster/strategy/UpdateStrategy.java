@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.Set;
 
 /**
@@ -43,6 +44,16 @@ public abstract class UpdateStrategy<T, I> implements Serializable {
     this.table = table;
     this.fileGroupsInPendingClustering = fileGroupsInPendingClustering;
     this.fileGroupsToBeReplaced = fileGroupsToBeReplaced;
+  }
+
+  /**
+   * Backward-compatible 3-arg constructor for custom {@code hoodie.clustering.updates.strategy}
+   * classes that pre-date the addition of {@code fileGroupsToBeReplaced}. Delegates to the 4-arg
+   * form with an empty replaced set so the existing reflection lookup keeps working.
+   */
+  public UpdateStrategy(HoodieEngineContext engineContext, HoodieTable table,
+                        Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
+    this(engineContext, table, fileGroupsInPendingClustering, Collections.emptySet());
   }
 
   /**
