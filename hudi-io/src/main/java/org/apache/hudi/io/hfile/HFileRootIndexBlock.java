@@ -109,7 +109,7 @@ public class HFileRootIndexBlock extends HFileIndexBlock {
         outputStream.writeInt(entry.getSize());
 
         outputStream.write(writeVarInt(keyValueKeyLength(entry.getFirstKey().getLength())));
-        writeKey(outputStream, entry.getFirstKey().getBytes());
+        writeKey(outputStream, entry.getFirstKey().getBytes(), entry.getFirstKey().getLength());
       }
     }
 
