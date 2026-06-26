@@ -31,6 +31,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.fixInstantTimeCompatibility;
@@ -46,7 +47,7 @@ public class KeepByTimeStrategy extends PartitionTTLStrategy {
 
   public KeepByTimeStrategy(HoodieTable hoodieTable, String instantTime) {
     super(hoodieTable, instantTime);
-    this.ttlInMilis = writeConfig.getPartitionTTLStrategyDaysRetain() * 1000 * 3600 * 24;
+    this.ttlInMilis = TimeUnit.DAYS.toMillis(writeConfig.getPartitionTTLStrategyDaysRetain());
   }
 
   @Override
