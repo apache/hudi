@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -66,7 +65,6 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_AC
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LOG_COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
@@ -361,42 +359,89 @@ public class TimelineUtils {
    * for the archival in metadata table.
    * <p>
    * the qualified earliest instant is chosen as the earlier one between the earliest
-   * commit (COMMIT, DELTA_COMMIT, and REPLACE_COMMIT only, considering non-savepoint
+   * commit that dataset can be potentially restored to
+   * (COMMIT, DELTA_COMMIT, and REPLACE_COMMIT only, considering non-savepoint
    * commit only if enabling archive beyond savepoint) and the earliest inflight
    * instant (all actions).
    *
    * @param dataTableActiveTimeline      the active timeline of the data table.
    * @param shouldArchiveBeyondSavepoint whether to archive beyond savepoint.
+   * @param earliestUncleanedDataTableInstantTimeOption ECTR from latest clean on data table, if present.
    * @return the instant meeting the requirement.
    */
   public static Option<HoodieInstant> getEarliestInstantForMetadataArchival(
-      HoodieActiveTimeline dataTableActiveTimeline, boolean shouldArchiveBeyondSavepoint) {
+      HoodieActiveTimeline dataTableActiveTimeline, boolean shouldArchiveBeyondSavepoint,
+      Option<String> earliestUncleanedDataTableInstantTimeOption) {
     // This is for commits only, not including CLEAN, ROLLBACK, etc.
-    // When archive beyond savepoint is enabled, there are chances that there could be holes
-    // in the timeline due to archival and savepoint interplay.  So, the first non-savepoint
-    // commit in the data timeline is considered as beginning of the active timeline.
-    Option<HoodieInstant> earliestCommit = shouldArchiveBeyondSavepoint
-        ? dataTableActiveTimeline.getTimelineOfActions(
-            CollectionUtils.createSet(
-                COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION, SAVEPOINT_ACTION))
-        .getFirstNonSavepointCommit()
-        : dataTableActiveTimeline.getCommitsTimeline().firstInstant();
-    // This is for all instants which are in-flight
+
+    // If it exists and is still in active timeline of data table, find
+    // the ECTR of latest clean in data table. Otherwise, default to the earliest commit
+    // in timeline, as depending on the user's ingestion workload and clean policy
+    // they may still be able and wish to restore to that instant for recovery purposes
+    Option<HoodieInstant> earliestPossibleRestoreCommit = getEarliestPossibleRestoreCommit(dataTableActiveTimeline,
+        earliestUncleanedDataTableInstantTimeOption);
+
+    // If there are any inflight instants, then get the earlier instant (between inflight and the completed
+    // restore-able commit)
     Option<HoodieInstant> earliestInflight =
         dataTableActiveTimeline.filterInflightsAndRequested().firstInstant();
 
-    if (earliestCommit.isPresent() && earliestInflight.isPresent()) {
-      if (earliestCommit.get().compareTo(earliestInflight.get()) < 0) {
-        return earliestCommit;
-      }
-      return earliestInflight;
-    } else if (earliestCommit.isPresent()) {
-      return earliestCommit;
-    } else if (earliestInflight.isPresent()) {
-      return earliestInflight;
-    } else {
+    if (shouldArchiveBeyondSavepoint) {
+      return findSmallestInstant(earliestInflight, earliestPossibleRestoreCommit);
+    }
+
+    // If we are blocking on earliest savepoint, then check and return the earliest write instant among
+    // - First save-pointed write
+    // - Earliest inflight
+    // - Earliest commit that dataset can potentially be restored to
+    return findSmallestInstant(dataTableActiveTimeline.findFirstSavepointedWrite(),
+        findSmallestInstant(earliestInflight, earliestPossibleRestoreCommit));
+  }
+
+  /**
+   * Returns the earliest commit to retain from the latest completed clean on the given table, if present.
+   */
+  public static Option<String> getEarliestRetainedCommitFromLastClean(HoodieTableMetaClient metaClient) {
+    Option<HoodieInstant> lastClean = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants()
+        .lastInstant();
+    if (!lastClean.isPresent()) {
       return Option.empty();
     }
+    try {
+      HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(metaClient, lastClean.get());
+      String ectr = cleanMetadata.getEarliestCommitToRetain();
+      if (StringUtils.isNullOrEmpty(ectr)) {
+        return Option.empty();
+      }
+      return Option.of(ectr);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read clean metadata for " + lastClean.get(), e);
+    }
+  }
+
+  public static Option<HoodieInstant> findSmallestInstant(Option<HoodieInstant> left,
+      Option<HoodieInstant> right) {
+    if (left.isPresent() && right.isPresent()) {
+      return left.get().compareTo(right.get()) <= 0 ? left : right;
+    } else if (left.isPresent()) {
+      return left;
+    } else {
+      return right;
+    }
+  }
+
+  public static Option<HoodieInstant> getEarliestPossibleRestoreCommit(
+      HoodieActiveTimeline dataTableActiveTimeline, Option<String> earliestUncleanedDataTableInstantTimeOption) {
+    if (earliestUncleanedDataTableInstantTimeOption.isPresent()) {
+      String earliestUncleanedDataTableInstantTime = earliestUncleanedDataTableInstantTimeOption.get();
+      Option<HoodieInstant> earliestUncleanedDataTableInstant = dataTableActiveTimeline
+          .filter(instant -> instant.requestedTime().equals(earliestUncleanedDataTableInstantTime))
+          .firstInstant();
+      if (earliestUncleanedDataTableInstant.isPresent()) {
+        return earliestUncleanedDataTableInstant;
+      }
+    }
+    return dataTableActiveTimeline.getCommitsTimeline().firstInstant();
   }
 
   /**

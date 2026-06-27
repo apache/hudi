@@ -428,6 +428,21 @@ public class HoodieTestTable implements AutoCloseable {
     return addClean(instantTime, Option.empty(), cleanerPlan, metadata, false, false);
   }
 
+  public HoodieTestTable addIncrementalClean(String instantTime, String earliestCommitToRetain) throws IOException {
+    HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant(EMPTY_STRING, EMPTY_STRING, EMPTY_STRING),
+        EMPTY_STRING, EMPTY_STRING, new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.EMPTY_MAP);
+    HoodieCleanStat cleanStats = new HoodieCleanStat(
+        HoodieCleaningPolicy.KEEP_LATEST_COMMITS,
+        HoodieTestUtils.DEFAULT_PARTITION_PATHS[RANDOM.nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)],
+        Collections.emptyList(),
+        Collections.emptyList(),
+        Collections.emptyList(),
+        earliestCommitToRetain,
+        "");
+    HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats), Collections.EMPTY_MAP);
+    return HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata);
+  }
+
   public HoodieTestTable addClean(String instantTime, Option<String> completeTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata) throws IOException {
     return addClean(instantTime, completeTime, cleanerPlan, metadata, false, false);
   }
