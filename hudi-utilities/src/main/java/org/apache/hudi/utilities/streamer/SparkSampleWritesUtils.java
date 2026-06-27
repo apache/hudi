@@ -25,6 +25,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -44,6 +45,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.SAMPLE_WRITES_FOLDER_PATH;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -108,7 +110,14 @@ public class SparkSampleWritesUtils {
     try (SparkRDDWriteClient sampleWriteClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), sampleWriteConfig, Option.empty())) {
       int size = writeConfig.getIntOrDefault(SAMPLE_WRITES_SIZE);
       return recordsOpt.map(records -> {
-        List<HoodieRecord> samples = records.coalesce(1).take(size);
+        // Rewrite each record with an empty partition path so the sample-writes table is
+        // effectively non-partitioned. The bulk-insert writer routes records to files by
+        // HoodieRecord.getPartitionPath(); without this, an input that spans many source
+        // partitions fans out into many tiny files even though parallelism is 1, slowing
+        // the sample write and inflating per-file metadata in the size estimate.
+        List<HoodieRecord> samples = records.coalesce(1).take(size).stream()
+            .map(r -> r.newInstance(new HoodieKey(r.getRecordKey(), "")))
+            .collect(Collectors.toList());
         if (samples.isEmpty()) {
           return emptyRes;
         }

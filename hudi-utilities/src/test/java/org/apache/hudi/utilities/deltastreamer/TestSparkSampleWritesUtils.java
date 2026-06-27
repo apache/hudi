@@ -32,12 +32,19 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.streamer.SparkSampleWritesUtils;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -86,7 +93,7 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
   }
 
   @Test
-  public void overwriteRecordSizeEstimateForEmptyTable() {
+  public void overwriteRecordSizeEstimateForEmptyTable() throws IOException {
     int originalRecordSize = 100;
     TypedProperties props = new TypedProperties();
     props.put(HoodieStreamerConfig.SAMPLE_WRITES_ENABLED.key(), "true");
@@ -99,9 +106,70 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
         .build();
 
     String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(1);
+    // dataGen round-robins across the three DEFAULT_PARTITION_PATHS, so the input spans
+    // multiple source partitions. The sample-writes table must still write non-partitioned.
     JavaRDD<HoodieRecord> records = jsc().parallelize(dataGen.generateInserts(commitTime, 2000), 2);
     Option<HoodieWriteConfig> writeConfigOpt = SparkSampleWritesUtils.getWriteConfigWithRecordSizeEstimate(jsc(), Option.of(records), originalWriteConfig);
     assertTrue(writeConfigOpt.isPresent());
-    assertEquals(779.0, writeConfigOpt.get().getCopyOnWriteRecordSizeEstimate(), 10.0);
+    // The 2000 records now land in a single non-partitioned file instead of being diluted
+    // across the three source partitions, so the per-record estimate is lower and more
+    // accurate (one parquet footer/dictionary amortized over all records) than the previous
+    // multi-file value of ~779.
+    assertEquals(337.0, writeConfigOpt.get().getCopyOnWriteRecordSizeEstimate(), 10.0);
+    assertSampleWritesNonPartitioned();
+  }
+
+  @Test
+  public void sampleWritesAreNonPartitionedEvenForManyPartitionInput() throws IOException {
+    int recordsPerPartition = 50;
+    String[] partitionPaths = IntStream.range(0, 20)
+        .mapToObj(i -> String.format("year=2024/month=01/day=%02d", i + 1))
+        .toArray(String[]::new);
+    HoodieTestDataGenerator manyPartitionGen = new HoodieTestDataGenerator(partitionPaths);
+
+    TypedProperties props = new TypedProperties();
+    props.put(HoodieStreamerConfig.SAMPLE_WRITES_ENABLED.key(), "true");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withProperties(props)
+        .forTable("foo")
+        .withPath(basePath())
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .build();
+
+    String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(1);
+    List<HoodieRecord> allRecords = new ArrayList<>();
+    for (String partition : partitionPaths) {
+      allRecords.addAll(manyPartitionGen.generateInsertsForPartition(commitTime, recordsPerPartition, partition));
+    }
+    JavaRDD<HoodieRecord> records = jsc().parallelize(allRecords, 4);
+
+    Option<HoodieWriteConfig> writeConfigOpt = SparkSampleWritesUtils.getWriteConfigWithRecordSizeEstimate(jsc(), Option.of(records), writeConfig);
+    assertTrue(writeConfigOpt.isPresent(), "Sample write should produce a record-size estimate.");
+    assertSampleWritesNonPartitioned();
+  }
+
+  /**
+   * Walks the sample-writes folder and fails if any data files were placed under a
+   * source-partition subdirectory. A non-partitioned sample-writes table places its data
+   * files directly under each run directory; a partitioned write would fan them out across
+   * subdirectories named after the source partition paths.
+   */
+  private void assertSampleWritesNonPartitioned() throws IOException {
+    Path sampleWritesPath = new Path(basePath(), ".hoodie/.aux/.sample_writes");
+    FileSystem fs = sampleWritesPath.getFileSystem(jsc().hadoopConfiguration());
+    assertTrue(fs.exists(sampleWritesPath), "Sample-writes folder should exist after a sample write.");
+    FileStatus[] runs = fs.listStatus(sampleWritesPath);
+    assertTrue(runs.length > 0, "Sample-writes folder should contain at least one run.");
+    for (FileStatus run : runs) {
+      List<String> partitionDirs = new ArrayList<>();
+      for (FileStatus entry : fs.listStatus(run.getPath())) {
+        if (entry.isDirectory() && !entry.getPath().getName().equals(".hoodie")) {
+          partitionDirs.add(entry.getPath().getName());
+        }
+      }
+      assertTrue(partitionDirs.isEmpty(),
+          "Sample-writes run at " + run.getPath() + " should have no source partition subdirectories, but found: "
+              + Arrays.toString(partitionDirs.toArray()));
+    }
   }
 }
