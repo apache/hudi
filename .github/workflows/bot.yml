@@ -936,6 +936,7 @@ jobs:
   # (excludedGroups=core, tagsToExclude=SparkSQLCoreFlow), so no test runs twice.
   # The per-entry mvnProfiles carries -Pjava17 for the Java 17 rows (empty for Java 11).
   test-spark-core-tests:
+    name: test-spark-core-tests (${{ matrix.scalaProfile }}, ${{ matrix.sparkProfile }}, java${{ matrix.javaVersion }})
     runs-on: ubuntu-latest
     needs: changes
     strategy:
