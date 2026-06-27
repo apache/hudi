@@ -144,8 +144,8 @@ public class HFileWriterImpl implements HFileWriter {
     // 3. Create an index entry.
     rootIndexBlock.add(
         currentDataBlock.getFirstKey(), lastDataBlockOffset, blockBuffer.limit());
-    // 4. Create a new data block.
-    currentDataBlock = HFileDataBlock.createDataBlockToWrite(context, currentOffset);
+    // 4. Create a new data block whose previous-block offset points at the block just flushed.
+    currentDataBlock = HFileDataBlock.createDataBlockToWrite(context, lastDataBlockOffset);
   }
 
   // NOTE that: reader assumes that every meta info piece
