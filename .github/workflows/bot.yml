@@ -311,14 +311,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.3"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
-
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.4"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
-
+          # Full suite runs only on the latest 3.x (Spark 3.5 / Scala 2.12 / Java 11).
+          # Older 3.x versions run the curated core set in test-spark-core-tests.
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
@@ -368,14 +362,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.3"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
-
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.4"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
-
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
@@ -441,14 +427,6 @@ jobs:
       matrix:
         include:
           - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.3"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
-
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.4"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
-
-          - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
@@ -506,14 +484,6 @@ jobs:
       matrix:
         include:
           - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.3"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
-
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.4"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
-
-          - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
@@ -570,14 +540,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.3"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
-
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.4"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
-
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
@@ -685,15 +647,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - scalaProfile: "scala-2.13"
-            sparkProfile: "spark3.5"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
-          - scalaProfile: "scala-2.13"
-            sparkProfile: "spark4.0"
-            sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
-          - scalaProfile: "scala-2.13"
-            sparkProfile: "spark4.1"
-            sparkModules: "hudi-spark-datasource/hudi-spark4.1.x"
+          # Full suite runs only on the latest 4.x (Spark 4.2 / Scala 2.13 / Java 17).
+          # Spark 3.5/4.0/4.1 on Java 17 run the curated core set in
+          # test-spark-java17-core-tests.
           - scalaProfile: "scala-2.13"
             sparkProfile: "spark4.2"
             sparkModules: "hudi-spark-datasource/hudi-spark4.2.x"
@@ -743,15 +699,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - scalaProfile: "scala-2.13"
-            sparkProfile: "spark3.5"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
-          - scalaProfile: "scala-2.13"
-            sparkProfile: "spark4.0"
-            sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
-          - scalaProfile: "scala-2.13"
-            sparkProfile: "spark4.1"
-            sparkModules: "hudi-spark-datasource/hudi-spark4.1.x"
           - scalaProfile: "scala-2.13"
             sparkProfile: "spark4.2"
             sparkModules: "hudi-spark-datasource/hudi-spark4.2.x"
@@ -817,15 +764,6 @@ jobs:
       matrix:
         include:
           - scalaProfile: "scala-2.13"
-            sparkProfile: "spark3.5"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
-          - scalaProfile: "scala-2.13"
-            sparkProfile: "spark4.0"
-            sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
-          - scalaProfile: "scala-2.13"
-            sparkProfile: "spark4.1"
-            sparkModules: "hudi-spark-datasource/hudi-spark4.1.x"
-          - scalaProfile: "scala-2.13"
             sparkProfile: "spark4.2"
             sparkModules: "hudi-spark-datasource/hudi-spark4.2.x"
 
@@ -882,15 +820,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - scalaProfile: "scala-2.13"
-            sparkProfile: "spark3.5"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
-          - scalaProfile: "scala-2.13"
-            sparkProfile: "spark4.0"
-            sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
-          - scalaProfile: "scala-2.13"
-            sparkProfile: "spark4.1"
-            sparkModules: "hudi-spark-datasource/hudi-spark4.1.x"
           - scalaProfile: "scala-2.13"
             sparkProfile: "spark4.2"
             sparkModules: "hudi-spark-datasource/hudi-spark4.2.x"
@@ -949,15 +878,6 @@ jobs:
       matrix:
         include:
           - scalaProfile: "scala-2.13"
-            sparkProfile: "spark3.5"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
-          - scalaProfile: "scala-2.13"
-            sparkProfile: "spark4.0"
-            sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
-          - scalaProfile: "scala-2.13"
-            sparkProfile: "spark4.1"
-            sparkModules: "hudi-spark-datasource/hudi-spark4.1.x"
-          - scalaProfile: "scala-2.13"
             sparkProfile: "spark4.2"
             sparkModules: "hudi-spark-datasource/hudi-spark4.2.x"
 
@@ -1006,6 +926,138 @@ jobs:
           files: ./jacoco-report.xml
           disable_search: true
           flags: spark-scala-tests
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Curated core flow subset (-Pcore-tests) on every Spark version. The full
+  # unit/functional/scala suites above run only on the latest 3.x (spark3.5) and
+  # latest 4.x (spark4.2); these jobs give the other versions a fast critical-path
+  # signal. The core set is excluded from the full suites (excludedGroups=core,
+  # tagsToExclude=SparkSQLCoreFlow), so no test runs twice on a given version.
+  test-spark-core-tests:
+    runs-on: ubuntu-latest
+    needs: changes
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.3"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.4"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.5"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
+
+    steps:
+      - if: needs.changes.outputs.relevant == 'true'
+        uses: actions/checkout@v5
+      - name: Set up JDK 11
+        if: needs.changes.outputs.relevant == 'true'
+        uses: actions/setup-java@v5
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Build Project
+        if: needs.changes.outputs.relevant == 'true'
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_MODULES: ${{ matrix.sparkModules }}
+        run:
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+      - name: Core Tests - Common & Spark
+        if: needs.changes.outputs.relevant == 'true'
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_MODULES: ${{ matrix.sparkModules }}
+        run:
+          mvn test -Pcore-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -fae -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+      - name: Quickstart Test
+        if: needs.changes.outputs.relevant == 'true'
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run:
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark $MVN_ARGS -Djacoco.skip=false
+      - name: Generate merged coverage report
+        if: always() && needs.changes.outputs.relevant == 'true'
+        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
+      - name: Upload coverage to Codecov
+        if: always() && needs.changes.outputs.relevant == 'true'
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        with:
+          files: ./jacoco-report.xml
+          disable_search: true
+          flags: spark-core-tests
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  test-spark-java17-core-tests:
+    runs-on: ubuntu-latest
+    needs: changes
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark3.5"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark4.0"
+            sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark4.1"
+            sparkModules: "hudi-spark-datasource/hudi-spark4.1.x"
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark4.2"
+            sparkModules: "hudi-spark-datasource/hudi-spark4.2.x"
+
+    steps:
+      - if: needs.changes.outputs.relevant == 'true'
+        uses: actions/checkout@v5
+      - name: Set up JDK 17
+        if: needs.changes.outputs.relevant == 'true'
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Build Project
+        if: needs.changes.outputs.relevant == 'true'
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_MODULES: ${{ matrix.sparkModules }}
+        run:
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+      - name: Core Tests - Common & Spark
+        if: needs.changes.outputs.relevant == 'true'
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_MODULES: ${{ matrix.sparkModules }}
+        run:
+          mvn test -Pcore-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -fae -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+      - name: Quickstart Test
+        if: needs.changes.outputs.relevant == 'true'
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run:
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark $MVN_ARGS -Djacoco.skip=false
+      - name: Generate merged coverage report
+        if: always() && needs.changes.outputs.relevant == 'true'
+        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
+      - name: Upload coverage to Codecov
+        if: always() && needs.changes.outputs.relevant == 'true'
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        with:
+          files: ./jacoco-report.xml
+          disable_search: true
+          flags: spark-core-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-flink-1:
