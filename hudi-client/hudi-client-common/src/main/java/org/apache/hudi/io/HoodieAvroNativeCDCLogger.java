@@ -22,7 +22,6 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
-import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -30,17 +29,13 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
-import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.LogFileCreationCallback;
-import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -60,7 +55,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.DATA_BEFORE;
 import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER;
@@ -85,14 +79,10 @@ public class HoodieAvroNativeCDCLogger implements HoodieCDCLogWriter<IndexedReco
   private final TaskContextSupplier taskContextSupplier;
   private final CDCTransformer transformer;
   private final Properties recordProperties;
-  private final ExternalSpillableMap<String, HoodieAvroPayload> cdcData;
-  private final long maxBlockSize;
-  private final SizeEstimator<HoodieAvroPayload> sizeEstimator;
   private final List<StoragePath> cdcAbsPaths;
-  private long averageCDCRecordSize = 0;
-  private AtomicInteger numOfCDCRecordsInMemory = new AtomicInteger();
   private int nextLogVersion;
   private HoodieFileWriter cdcWriter;
+  private PendingCDCRecord pendingRecord;
 
   public HoodieAvroNativeCDCLogger(
       String commitTime,
@@ -105,41 +95,25 @@ public class HoodieAvroNativeCDCLogger implements HoodieCDCLogWriter<IndexedReco
       String fileId,
       String writeToken,
       LogFileCreationCallback fileCreationCallback,
-      TaskContextSupplier taskContextSupplier,
-      long maxInMemorySizeInBytes) {
-    try {
-      this.commitTime = commitTime;
-      this.partitionPath = partitionPath;
-      this.storage = storage;
-      this.config = config;
-      this.dataSchema = HoodieSchemaCache.intern(HoodieSchemaUtils.removeMetadataFields(schema));
-      this.cdcSupplementalLoggingMode = tableConfig.cdcSupplementalLoggingMode();
-      this.cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(cdcSupplementalLoggingMode, dataSchema);
-      this.nativeFileFormat = tableConfig.getBaseFileFormat();
-      this.parentPath = parentPath;
-      this.fileId = fileId;
-      this.writeToken = writeToken;
-      this.fileCreationCallback = fileCreationCallback;
-      this.taskContextSupplier = taskContextSupplier;
-      this.transformer = getTransformer();
-      this.recordProperties = new Properties();
-      this.recordProperties.putAll(config.getProps());
-      this.cdcData = new ExternalSpillableMap<>(
-          maxInMemorySizeInBytes,
-          config.getSpillableMapBasePath(),
-          new DefaultSizeEstimator<>(),
-          new DefaultSizeEstimator<>(),
-          config.getCommonConfig().getSpillableDiskMapType(),
-          new DefaultSerializer<>(),
-          config.getCommonConfig().isBitCaskDiskMapCompressionEnabled(),
-          getClass().getSimpleName());
-      this.maxBlockSize = config.getLogFileDataBlockMaxSize();
-      this.sizeEstimator = new DefaultSizeEstimator<>();
-      this.cdcAbsPaths = new ArrayList<>();
-      this.nextLogVersion = HoodieLogFile.LOGFILE_BASE_VERSION;
-    } catch (IOException e) {
-      throw new HoodieUpsertException("Failed to initialize HoodieAvroNativeCDCLogger", e);
-    }
+      TaskContextSupplier taskContextSupplier) {
+    this.commitTime = commitTime;
+    this.partitionPath = partitionPath;
+    this.storage = storage;
+    this.config = config;
+    this.dataSchema = HoodieSchemaCache.intern(HoodieSchemaUtils.removeMetadataFields(schema));
+    this.cdcSupplementalLoggingMode = tableConfig.cdcSupplementalLoggingMode();
+    this.cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(cdcSupplementalLoggingMode, dataSchema);
+    this.nativeFileFormat = tableConfig.getBaseFileFormat();
+    this.parentPath = parentPath;
+    this.fileId = fileId;
+    this.writeToken = writeToken;
+    this.fileCreationCallback = fileCreationCallback;
+    this.taskContextSupplier = taskContextSupplier;
+    this.transformer = getTransformer();
+    this.recordProperties = new Properties();
+    this.recordProperties.putAll(config.getProps());
+    this.cdcAbsPaths = new ArrayList<>();
+    this.nextLogVersion = HoodieLogFile.LOGFILE_BASE_VERSION;
   }
 
   @Override
@@ -155,21 +129,15 @@ public class HoodieAvroNativeCDCLogger implements HoodieCDCLogWriter<IndexedReco
       cdcRecord = transformer.transform(HoodieCDCOperation.DELETE, recordKey, (GenericRecord) oldRecord, null);
     }
 
-    flushIfNeeded(false);
-    HoodieAvroPayload payload = new HoodieAvroPayload(Option.of(cdcRecord));
-    if (cdcData.isEmpty()) {
-      averageCDCRecordSize = sizeEstimator.sizeEstimate(payload);
-    } else if (numOfCDCRecordsInMemory.get() % 100 == 0) {
-      averageCDCRecordSize = (long) (averageCDCRecordSize * 0.8 + sizeEstimator.sizeEstimate(payload) * 0.2);
-    }
-    cdcData.put(recordKey, payload);
-    numOfCDCRecordsInMemory.incrementAndGet();
+    flushPendingRecord();
+    pendingRecord = new PendingCDCRecord(recordKey, cdcRecord);
   }
 
   @Override
   public void remove(String recordKey) {
-    cdcData.remove(recordKey);
-    numOfCDCRecordsInMemory.decrementAndGet();
+    if (pendingRecord != null && pendingRecord.recordKey.equals(recordKey)) {
+      pendingRecord = null;
+    }
   }
 
   @Override
@@ -190,33 +158,26 @@ public class HoodieAvroNativeCDCLogger implements HoodieCDCLogWriter<IndexedReco
   @Override
   public void close() {
     try {
-      flushIfNeeded(true);
+      flushPendingRecord();
       closeCDCWriter();
     } catch (IOException e) {
       throw new HoodieIOException("Failed to close HoodieAvroNativeCDCLogger", e);
-    } finally {
-      cdcData.close();
     }
   }
 
-  private void flushIfNeeded(boolean force) {
-    if (!force && numOfCDCRecordsInMemory.get() * averageCDCRecordSize < maxBlockSize) {
-      return;
-    }
-    if (cdcData.isEmpty()) {
+  private void flushPendingRecord() {
+    if (pendingRecord == null) {
       return;
     }
     try {
-      for (Map.Entry<String, HoodieAvroPayload> entry : cdcData.entrySet()) {
-        String recordKey = entry.getKey();
-        IndexedRecord cdcRecord = entry.getValue().getInsertValue(cdcSchema.toAvroSchema()).get();
-        ensureCDCWriter();
-        cdcWriter.write(recordKey, new HoodieAvroIndexedRecord(new HoodieKey(recordKey, partitionPath), cdcRecord), cdcSchema, recordProperties);
-      }
-
-      cdcData.clear();
-      numOfCDCRecordsInMemory = new AtomicInteger();
-    } catch (Exception e) {
+      ensureCDCWriter();
+      cdcWriter.write(
+          pendingRecord.recordKey,
+          new HoodieAvroIndexedRecord(new HoodieKey(pendingRecord.recordKey, partitionPath), pendingRecord.record),
+          cdcSchema,
+          recordProperties);
+      pendingRecord = null;
+    } catch (IOException e) {
       throw new HoodieException("Failed to write the cdc data to native cdc log file", e);
     }
   }
@@ -275,6 +236,16 @@ public class HoodieAvroNativeCDCLogger implements HoodieCDCLogWriter<IndexedReco
 
   private GenericRecord removeCommitMetadata(GenericRecord record) {
     return record == null ? null : HoodieAvroUtils.projectRecordToNewSchemaShallow(record, dataSchema.getAvroSchema());
+  }
+
+  private static class PendingCDCRecord {
+    private final String recordKey;
+    private final IndexedRecord record;
+
+    private PendingCDCRecord(String recordKey, IndexedRecord record) {
+      this.recordKey = recordKey;
+      this.record = record;
+    }
   }
 
   /**

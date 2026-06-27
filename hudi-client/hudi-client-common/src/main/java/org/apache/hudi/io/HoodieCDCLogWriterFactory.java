@@ -53,7 +53,6 @@ final class HoodieCDCLogWriterFactory {
       TaskContextSupplier taskContextSupplier,
       Supplier<HoodieLogFormat.Writer> logWriterSupplier) {
     HoodieTableConfig tableConfig = hoodieTable.getMetaClient().getTableConfig();
-    long maxInMemorySizeInBytes = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
     if (shouldWriteNativeCDCLogs(tableConfig)) {
       return new HoodieAvroNativeCDCLogger(
           instantTime,
@@ -66,8 +65,7 @@ final class HoodieCDCLogWriterFactory {
           fileId,
           writeToken,
           logCreationCallback,
-          taskContextSupplier,
-          maxInMemorySizeInBytes);
+          taskContextSupplier);
     }
     return new HoodieCDCLogger(
         instantTime,
@@ -77,7 +75,7 @@ final class HoodieCDCLogWriterFactory {
         storage,
         writerSchema,
         logWriterSupplier.get(),
-        maxInMemorySizeInBytes);
+        IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 
   static boolean shouldWriteNativeCDCLogs(HoodieTableConfig tableConfig) {
