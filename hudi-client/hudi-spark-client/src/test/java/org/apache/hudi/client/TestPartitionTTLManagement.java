@@ -47,6 +47,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -144,6 +145,46 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
 
       // remain 10 rows
       Assertions.assertEquals(10, readRecords(new String[] {partitionPath0, partitionPath1, partitionPath2}).size());
+    }
+  }
+
+  @Test
+  public void testKeepByEventTime() {
+    final HoodieWriteConfig cfg = getConfigBuilder()
+        .withPath(metaClient.getBasePath())
+        .withTTLConfig(HoodieTTLConfig
+            .newBuilder()
+            .withTTLDaysRetain(10)
+            .withTTLStrategyType(PartitionTTLStrategyType.KEEP_BY_EVENT_TIME)
+            .withEventTimeFormat("yyyy/MM/dd")
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
+        .build();
+    // Use default partition paths (yyyy/MM/dd) plus one in the far future so we exercise both branches.
+    String futurePartition = "2099/01/01";
+    String[] partitions = {
+        HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,   // 2016/03/15 -> expired
+        HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH,  // 2015/03/16 -> expired
+        futurePartition                                         // 2099/01/01 -> not expired
+    };
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEED, partitions, new HashMap<>());
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      String instant0 = getCommitTimeAtUTC(0);
+      writeRecordsForPartition(client, dataGen, partitions[0], instant0);
+
+      String instant1 = getCommitTimeAtUTC(1000);
+      writeRecordsForPartition(client, dataGen, partitions[1], instant1);
+
+      String currentInstant = WriteClientTestUtils.createNewInstantTime();
+      writeRecordsForPartition(client, dataGen, partitions[2], currentInstant);
+
+      String instantTime = client.startDeletePartitionCommit(metaClient);
+      HoodieWriteResult result = client.managePartitionTTL(instantTime);
+
+      // Both historic partitions are expired by event time; the future one is preserved.
+      Assertions.assertEquals(Sets.newHashSet(partitions[0], partitions[1]),
+          result.getPartitionToReplaceFileIds().keySet());
+      Assertions.assertEquals(10, readRecords(partitions).size());
     }
   }
 
