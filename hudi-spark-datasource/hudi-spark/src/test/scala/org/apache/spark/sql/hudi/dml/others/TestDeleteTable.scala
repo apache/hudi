@@ -22,13 +22,14 @@ package org.apache.spark.sql.hudi.dml.others
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.functional.CoreFlow
 
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestDeleteTable extends HoodieSparkSqlTestBase {
 
-  test("Test Delete Table") {
+  test("Test Delete Table", CoreFlow) {
     withTempDir { tmp =>
       Seq(true, false).foreach { sparkSqlOptimizedWrites =>
         Seq("cow", "mor").foreach { tableType =>
@@ -187,7 +188,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Delete Table On Non-PK Condition") {
+  test("Test Delete Table On Non-PK Condition", CoreFlow) {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
 
@@ -277,7 +278,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Delete Table with op upsert") {
+  test("Test Delete Table with op upsert", CoreFlow) {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName

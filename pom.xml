@@ -210,6 +210,10 @@
     <skip.hudi-spark3.unit.tests>${skipTests}</skip.hudi-spark3.unit.tests>
     <skip.hudi-spark4.unit.tests>${skipTests}</skip.hudi-spark4.unit.tests>
     <skipDocker>${skipTests}</skipDocker>
+    <!-- Default scalatest tag exclusion: keep the curated core-flow tag out of the
+         normal unit/functional scala runs. The core-tests profile clears this and adds
+         tagsToInclude so the core-flow blocks run only in the dedicated per-version core job. -->
+    <hoodie.scalatest.tagsToExclude>org.apache.hudi.functional.SparkSQLCoreFlow</hoodie.scalatest.tagsToExclude>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <main.basedir>${project.basedir}</main.basedir>
     <spark.bundle.hive.scope>provided</spark.bundle.hive.scope>
@@ -2088,7 +2092,7 @@
             <configuration combine.self="append">
               <skip>${skipUTs}</skip>
               <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
-              <excludedGroups>functional,functional-b,functional-c</excludedGroups>
+              <excludedGroups>functional,functional-b,functional-c,core</excludedGroups>
               <excludes>
                 <exclude>**/IT*.java</exclude>
                 <exclude>**/testsuite/**/Test*.java</exclude>
@@ -2141,6 +2145,7 @@
               <forkCount>1</forkCount>
               <reuseForks>true</reuseForks>
               <groups>functional</groups>
+              <excludedGroups>core</excludedGroups>
             </configuration>
           </plugin>
           <plugin>
@@ -2189,6 +2194,7 @@
               <forkCount>1</forkCount>
               <reuseForks>true</reuseForks>
               <groups>functional-b</groups>
+              <excludedGroups>core</excludedGroups>
             </configuration>
           </plugin>
           <plugin>
@@ -2237,6 +2243,7 @@
               <forkCount>1</forkCount>
               <reuseForks>true</reuseForks>
               <groups>functional-c</groups>
+              <excludedGroups>core</excludedGroups>
             </configuration>
           </plugin>
           <plugin>
@@ -2260,6 +2267,70 @@
                 <configuration>
                   <dataFile>${project.build.directory}/jacoco-agent/${jacoco.agent.dest.filename}</dataFile>
                   <outputDirectory>${project.reporting.outputDirectory}/jacoco-ft</outputDirectory>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <!-- Curated "core flow" subset that runs on every Spark version in CI, while the
+           full unit/functional suites run only on the latest Spark major versions.
+           Runs surefire @Tag("core") JUnit5 tests and scalatest @SparkSQLCoreFlow /
+           taggedAs(CoreFlow) blocks in one pass. tagsToInclude is set ONLY here (an
+           empty tagsToInclude would emit -n "" and run zero scala tests). -->
+      <id>core-tests</id>
+      <properties>
+        <skipUTs>false</skipUTs>
+        <skipFTs>true</skipFTs>
+        <skipITs>true</skipITs>
+        <hoodie.scalatest.tagsToExclude></hoodie.scalatest.tagsToExclude>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <version>${maven-surefire-plugin.version}</version>
+            <configuration combine.self="append">
+              <skip>${skipUTs}</skip>
+              <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
+              <groups>core</groups>
+              <excludes>
+                <exclude>**/IT*.java</exclude>
+                <exclude>**/testsuite/**/Test*.java</exclude>
+              </excludes>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.scalatest</groupId>
+            <artifactId>scalatest-maven-plugin</artifactId>
+            <configuration>
+              <tagsToInclude>org.apache.hudi.functional.SparkSQLCoreFlow</tagsToInclude>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>prepare-agent</goal>
+                </goals>
+                <configuration>
+                  <destFile>${project.build.directory}/jacoco-agent/${jacoco.agent.dest.filename}</destFile>
+                </configuration>
+              </execution>
+              <execution>
+                <id>post-unit-tests</id>
+                <phase>test</phase>
+                <goals>
+                  <goal>report</goal>
+                </goals>
+                <configuration>
+                  <dataFile>${project.build.directory}/jacoco-agent/${jacoco.agent.dest.filename}</dataFile>
+                  <outputDirectory>${project.reporting.outputDirectory}/jacoco-ut</outputDirectory>
                 </configuration>
               </execution>
             </executions>
