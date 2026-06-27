@@ -25,6 +25,7 @@ import org.apache.hudi.HoodieSparkUtils.gteqSpark3_4
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.functional.CoreFlow
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.{AnalysisException, Row}
@@ -33,7 +34,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 
 class TestUpdateTable extends HoodieSparkSqlTestBase {
 
-  test("Test Update Table") {
+  test("Test Update Table", CoreFlow) {
     withRecordType()(withTempDir { tmp =>
       Seq(true, false).foreach { sparkSqlOptimizedWrites =>
         Seq("cow", "mor").foreach { tableType =>
@@ -144,7 +145,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
     })
   }
 
-  test("Test Update Table On Non-PK Condition") {
+  test("Test Update Table On Non-PK Condition", CoreFlow) {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach {tableType =>
         /** non-partitioned table */
@@ -233,7 +234,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
     })
   }
 
-  test("Test ignoring case for Update Table") {
+  test("Test ignoring case for Update Table", CoreFlow) {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName

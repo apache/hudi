@@ -23,6 +23,7 @@ import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
+import org.apache.hudi.functional.CoreFlow
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
@@ -218,7 +219,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Insert Into with values") {
+  test("Test Insert Into with values", CoreFlow) {
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
       // Create a partitioned table
@@ -305,7 +306,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Insert Into with dynamic partition") {
+  test("Test Insert Into with dynamic partition", CoreFlow) {
     Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
         val tableName = generateTableName
@@ -413,7 +414,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Insert Into Non Partitioned Table") {
+  test("Test Insert Into Non Partitioned Table", CoreFlow) {
     withRecordType(Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK))(withTempDir { tmp =>
       val tableName = generateTableName
       withSQLConf("hoodie.datasource.insert.dup.policy" -> "fail") {
@@ -632,7 +633,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       })
   }
 
-  test("Test Insert Overwrite") {
+  test("Test Insert Overwrite", CoreFlow) {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         withTable(generateTableName) { tableName =>

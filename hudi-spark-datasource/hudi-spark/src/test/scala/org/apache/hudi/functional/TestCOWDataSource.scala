@@ -55,7 +55,7 @@ import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{ArrayType, DataTypes, DateType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampType}
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
@@ -800,6 +800,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(schema, actualSchema)
   }
 
+  @Tag("core")
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testCopyOnWriteDeletes(recordType: HoodieRecordType): Unit = {
@@ -831,6 +832,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(snapshotDF2.count(), 80)
   }
 
+  @Tag("core")
   @Test
   def testCopyOnWriteUpserts(): Unit = {
     val recordType = HoodieRecordType.AVRO
@@ -1217,6 +1219,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(hoodieIncViewDF2.count(), insert2NewKeyCnt)
   }
 
+  @Tag("core")
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testComplexDataTypeWriteAndReadConsistency(recordType: HoodieRecordType): Unit = {
@@ -1549,6 +1552,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(false, Metrics.isInitialized(basePath))
   }
 
+  @Tag("core")
   @ParameterizedTest
   @CsvSource(Array(
     "true,false,AVRO", "true,true,AVRO", "false,true,AVRO", "false,false,AVRO"
@@ -1967,6 +1971,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   }
 
   /** Test case to verify MAKE_NEW_COLUMNS_NULLABLE config parameter. */
+  @Tag("core")
   @Test
   def testSchemaEvolutionWithNewColumn(): Unit = {
     val df1 = spark.sql("select '1' as event_id, '2' as ts, '3' as version, 'foo' as event_date")
@@ -2263,6 +2268,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
    * - v6: Uses requestedTime for commits, open_close incremental ranges
    * - v9: Uses completionTime for commits, close_close incremental ranges
    */
+  @Tag("core")
   @ParameterizedTest
   @CsvSource(Array("6", "9"))
   def testIncrementalAndTimeTravelWithEventTimeOrdering(tableVersion: String): Unit = {
