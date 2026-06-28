@@ -53,8 +53,12 @@ object HoodieWriterUtils {
    * Add default options for unspecified write options keys.
    */
   def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
+    // Strip the `spark.` prefix from `spark.hoodie.*` keys so write/hive_sync configs
+    // forwarded from SparkConf reach Hudi under their canonical names. Mirrors what
+    // parametersWithReadDefaults does for the read path.
+    val normalizedParams = DataSourceOptionsHelper.normalizeSparkHoodiePrefix(parameters)
     val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
-    val props = TypedProperties.fromMap(parameters.asJava)
+    val props = TypedProperties.fromMap(normalizedParams.asJava)
     val hoodieConfig: HoodieConfig = new HoodieConfig(props)
     hoodieConfig.setDefaultValue(OPERATION)
     hoodieConfig.setDefaultValue(TABLE_TYPE)
@@ -87,7 +91,7 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(RECONCILE_SCHEMA)
     hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED)
-    Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
+    Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(normalizedParams)
   }
 
   /**

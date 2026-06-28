@@ -20,6 +20,7 @@
 package org.apache.hudi.io.storage.hadoop;
 
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.storage.HFileReaderFactory;
@@ -51,8 +52,7 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
     HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage).withProps(hoodieConfig.getProps())
         .withPath(path).build();
-    return HoodieNativeAvroHFileReader.builder()
-        .readerFactory(readerFactory).path(path).schema(schemaOption).build();
+    return newNativeHFileReader(hoodieConfig, readerFactory, path, schemaOption);
   }
 
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig, StoragePathInfo pathInfo,
@@ -60,8 +60,7 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
     HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage).withProps(hoodieConfig.getProps())
         .withPath(pathInfo.getPath()).withFileSize(pathInfo.getLength()).build();
-    return HoodieNativeAvroHFileReader.builder()
-        .readerFactory(readerFactory).path(pathInfo.getPath()).schema(schemaOption).build();
+    return newNativeHFileReader(hoodieConfig, readerFactory, pathInfo.getPath(), schemaOption);
   }
 
   @Override
@@ -73,8 +72,19 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
     HFileReaderFactory.Builder readerFactoryBuilder = HFileReaderFactory.builder()
         .withStorage(storage).withProps(hoodieConfig.getProps())
         .withContent(content);
+    return newNativeHFileReader(hoodieConfig, readerFactoryBuilder.build(), path, schemaOption);
+  }
+
+  private HoodieNativeAvroHFileReader newNativeHFileReader(HoodieConfig hoodieConfig,
+                                                           HFileReaderFactory readerFactory,
+                                                           StoragePath path,
+                                                           Option<HoodieSchema> schemaOption) {
     return HoodieNativeAvroHFileReader.builder()
-        .readerFactory(readerFactoryBuilder.build()).path(path).schema(schemaOption).build();
+        .readerFactory(readerFactory)
+        .path(path)
+        .schema(schemaOption)
+        .useBloomFilter(hoodieConfig.getBoolean(HoodieMetadataConfig.BLOOM_FILTER_ENABLE))
+        .build();
   }
 
   @Override

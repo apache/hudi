@@ -30,6 +30,8 @@ import org.apache.hudi.util.ViewStorageProperties;
 import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.configuration.Configuration;
 
+import java.util.List;
+
 /**
  * Bucket index input partitioner backed by the embedded timeline service.
  *
@@ -38,20 +40,22 @@ import org.apache.flink.configuration.Configuration;
 public class BucketIndexRemotePartitioner<T extends HoodieKey> implements Partitioner<T> {
 
   private final Configuration conf;
-  private final String indexKeyFields;
+  // Index key fields, pre-parsed by the caller. The per-record partition() path uses the List
+  // overload of getBucketId so the comma-separated config string is never re-split per record.
+  private final List<String> indexKeyFieldList;
   private final NumBucketsFunction numBucketsFunction;
 
   private transient RemotePartitionHelper remotePartitionHelper;
 
-  public BucketIndexRemotePartitioner(Configuration conf, String indexKeyFields) {
+  public BucketIndexRemotePartitioner(Configuration conf, List<String> indexKeyFieldList) {
     this.conf = conf;
-    this.indexKeyFields = indexKeyFields;
+    this.indexKeyFieldList = indexKeyFieldList;
     this.numBucketsFunction = new NumBucketsFunction(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
         conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
   }
 
-  BucketIndexRemotePartitioner(Configuration conf, String indexKeyFields, RemotePartitionHelper remotePartitionHelper) {
-    this(conf, indexKeyFields);
+  BucketIndexRemotePartitioner(Configuration conf, List<String> indexKeyFieldList, RemotePartitionHelper remotePartitionHelper) {
+    this(conf, indexKeyFieldList);
     this.remotePartitionHelper = remotePartitionHelper;
   }
 
@@ -59,7 +63,7 @@ public class BucketIndexRemotePartitioner<T extends HoodieKey> implements Partit
   public int partition(T key, int numPartitions) {
     String partitionPath = normalizePartitionPath(key.getPartitionPath());
     int numBuckets = numBucketsFunction.getNumBuckets(partitionPath);
-    int curBucket = BucketIdentifier.getBucketId(key.getRecordKey(), indexKeyFields, numBuckets);
+    int curBucket = BucketIdentifier.getBucketId(key.getRecordKey(), indexKeyFieldList, numBuckets);
     return doGetRemotePartition(getRemotePartitionHelper(), numBuckets, partitionPath, curBucket, numPartitions);
   }
 

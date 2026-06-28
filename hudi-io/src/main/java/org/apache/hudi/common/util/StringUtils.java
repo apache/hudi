@@ -23,6 +23,7 @@ import javax.annotation.Nullable;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -183,6 +184,41 @@ public class StringUtils {
       return Collections.emptyList();
     }
     return Stream.of(input.split(delimiter)).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
+  }
+
+  /**
+   * Splits {@code input} on commas that are not nested inside parentheses, trimming each
+   * segment and dropping empty ones. Unlike {@link #split(String, String)}, a comma inside a
+   * parenthesised descriptor -- e.g. {@code decimal(15, 1)} or {@code VECTOR(128, DOUBLE)} -- is
+   * kept as part of the segment instead of being treated as a separator.
+   */
+  public static List<String> splitTopLevelCommas(@Nullable String input) {
+    if (isNullOrEmpty(input)) {
+      return Collections.emptyList();
+    }
+    List<String> parts = new ArrayList<>();
+    int depth = 0;
+    int start = 0;
+    for (int i = 0; i < input.length(); i++) {
+      char c = input.charAt(i);
+      if (c == '(') {
+        depth++;
+      } else if (c == ')') {
+        depth--;
+      } else if (c == ',' && depth == 0) {
+        addTrimmedNonEmpty(parts, input.substring(start, i));
+        start = i + 1;
+      }
+    }
+    addTrimmedNonEmpty(parts, input.substring(start));
+    return parts;
+  }
+
+  private static void addTrimmedNonEmpty(List<String> parts, String segment) {
+    String trimmed = segment.trim();
+    if (!trimmed.isEmpty()) {
+      parts.add(trimmed);
+    }
   }
 
   public static String getSuffixBy(String input, int ch) {

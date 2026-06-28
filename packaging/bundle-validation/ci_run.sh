@@ -54,7 +54,17 @@ elif [[ -n "$MAVEN_BASE_URL" ]]; then
 fi
 
 # choose versions based on build profiles
-if [[ ${SPARK_RUNTIME} == 'spark3.4.3' ]]; then
+if [[ ${SPARK_RUNTIME} == 'spark3.3.4' ]]; then
+  HADOOP_VERSION=2.7.7
+  HIVE_VERSION=3.1.3
+  DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.18.1
+  SPARK_VERSION=3.3.4
+  SPARK_HADOOP_VERSION=2
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1181hive313spark334
+elif [[ ${SPARK_RUNTIME} == 'spark3.4.3' ]]; then
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
@@ -99,8 +109,8 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.12' ]];
     IMAGE_TAG=flink211hive313spark351
     FLINK_VERSION=2.1.1
   else
-    IMAGE_TAG=flink1170hive313spark351
-    FLINK_VERSION=1.17.0
+    echo "Unsupported Flink profile ${FLINK_PROFILE}"
+    exit 1
   fi
 elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
   HADOOP_VERSION=3.3.5
@@ -174,7 +184,12 @@ else
   HUDI_KAFKA_CONNECT_BUNDLE_NAME=hudi-kafka-connect-bundle
   HUDI_METASERVER_SERVER_BUNDLE_NAME=hudi-metaserver-server-bundle
 
-  if [[ ${SPARK_PROFILE} == 'spark3.4' ]]; then
+  if [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
+    HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.12
+    HUDI_SPARK_BUNDLE_NAME=hudi-spark3.3-bundle_2.12
+    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
+    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
+  elif [[ ${SPARK_PROFILE} == 'spark3.4' ]]; then
     HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.12
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3.4-bundle_2.12
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
@@ -211,9 +226,7 @@ else
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
   fi
 
-  if [[ ${FLINK_PROFILE} == 'flink1.17' ]]; then
-    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.17-bundle
-  elif [[ ${FLINK_PROFILE} == 'flink1.18' ]]; then
+  if [[ ${FLINK_PROFILE} == 'flink1.18' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.18-bundle
   elif [[ ${FLINK_PROFILE} == 'flink1.19' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.19-bundle

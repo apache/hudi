@@ -24,6 +24,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.CollectionUtils;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.Properties;
 
 public interface HoodieFileWriter extends AutoCloseable {
@@ -34,6 +35,10 @@ public interface HoodieFileWriter extends AutoCloseable {
   void write(String recordKey, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException;
 
   void close() throws IOException;
+
+  default void addFooterMetadata(Map<String, String> footerMetadata) {
+    // No-op for file writers that do not support key/value footer metadata.
+  }
 
   default void writeWithMetadata(HoodieKey key, HoodieRecord record, HoodieSchema schema) throws IOException {
     writeWithMetadata(key, record, schema, CollectionUtils.emptyProps());

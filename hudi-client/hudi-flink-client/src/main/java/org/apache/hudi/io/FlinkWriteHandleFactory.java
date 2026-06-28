@@ -23,7 +23,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.v2.RowDataLogWriteHandle;
+import org.apache.hudi.io.v2.RowDataInlineLogWriteHandle;
+import org.apache.hudi.io.v2.RowDataNativeLogWriteHandle;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -308,7 +309,12 @@ public class FlinkWriteHandleFactory {
       final String fileID = bucketInfo.getFileIdPrefix();
       final String partitionPath = bucketInfo.getPartitionPath();
       final TaskContextSupplier contextSupplier = table.getTaskContextSupplier();
-      return new FlinkAppendHandle<>(config, instantTime, table, partitionPath, fileID, bucketInfo.getBucketType(), recordItr, contextSupplier);
+      if (table.getMetaClient().getTableConfig().isLSMTreeStorageLayout()) {
+        return new FlinkNativeLogAppendHandle<>(config, instantTime, table, partitionPath, fileID,
+            bucketInfo.getBucketType(), recordItr, contextSupplier);
+      }
+      return new FlinkInlineLogAppendHandle<>(config, instantTime, table, partitionPath, fileID,
+          bucketInfo.getBucketType(), recordItr, contextSupplier);
     }
   }
 
@@ -331,7 +337,18 @@ public class FlinkWriteHandleFactory {
         String instantTime,
         HoodieTable<T, I, K, O> table,
         Iterator<HoodieRecord<T>> recordIterator) {
-      return new RowDataLogWriteHandle<>(
+      if (table.getMetaClient().getTableConfig().isLSMTreeStorageLayout()) {
+        return new RowDataNativeLogWriteHandle<>(
+            config,
+            instantTime,
+            table,
+            recordIterator,
+            bucketInfo.getFileIdPrefix(),
+            bucketInfo.getPartitionPath(),
+            bucketInfo.getBucketType(),
+            table.getTaskContextSupplier());
+      }
+      return new RowDataInlineLogWriteHandle<>(
           config,
           instantTime,
           table,

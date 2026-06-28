@@ -31,8 +31,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.FlinkAppendHandle;
 import org.apache.hudi.io.HoodieAppendHandle;
+import org.apache.hudi.io.HoodieInlineLogAppendHandle;
+import org.apache.hudi.io.HoodieNativeLogAppendHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BucketInfo;
@@ -69,8 +70,8 @@ public class HoodieFlinkMergeOnReadTable<T>
       BucketInfo bucketInfo,
       String instantTime,
       Iterator<HoodieRecord<T>> records) {
-    ValidationUtils.checkArgument(writeHandle instanceof FlinkAppendHandle,
-        "MOR RowData handle should always be a FlinkAppendHandle");
+    ValidationUtils.checkArgument(writeHandle instanceof HoodieAppendHandle,
+        "MOR RowData handle should always be a HoodieAppendHandle");
     return new FlinkUpsertDeltaCommitActionExecutor<>(context, writeHandle, bucketInfo, config, this, instantTime, records).execute();
   }
 
@@ -81,9 +82,9 @@ public class HoodieFlinkMergeOnReadTable<T>
       BucketInfo bucketInfo,
       String instantTime,
       List<HoodieRecord<T>> preppedRecords) {
-    ValidationUtils.checkArgument(writeHandle instanceof FlinkAppendHandle,
-        "MOR write handle should always be a FlinkAppendHandle");
-    FlinkAppendHandle<?, ?, ?, ?> appendHandle = (FlinkAppendHandle<?, ?, ?, ?>) writeHandle;
+    ValidationUtils.checkArgument(writeHandle instanceof HoodieAppendHandle,
+        "MOR write handle should always be a HoodieAppendHandle");
+    HoodieAppendHandle<?, ?, ?, ?> appendHandle = (HoodieAppendHandle<?, ?, ?, ?>) writeHandle;
     return new FlinkUpsertPreppedDeltaCommitActionExecutor<>(context, appendHandle, bucketInfo, config, this, instantTime, preppedRecords).execute();
   }
 
@@ -94,8 +95,8 @@ public class HoodieFlinkMergeOnReadTable<T>
       BucketInfo bucketInfo,
       String instantTime,
       Iterator<HoodieRecord<T>> hoodieRecords) {
-    if (writeHandle instanceof FlinkAppendHandle) {
-      FlinkAppendHandle<?, ?, ?, ?> appendHandle = (FlinkAppendHandle<?, ?, ?, ?>) writeHandle;
+    if (writeHandle instanceof HoodieAppendHandle) {
+      HoodieAppendHandle<?, ?, ?, ?> appendHandle = (HoodieAppendHandle<?, ?, ?, ?>) writeHandle;
       return new FlinkUpsertDeltaCommitActionExecutor<>(context, appendHandle, bucketInfo, config, this, instantTime, hoodieRecords).execute();
     } else {
       return super.insert(context, writeHandle, bucketInfo, instantTime, hoodieRecords);
@@ -140,8 +141,11 @@ public class HoodieFlinkMergeOnReadTable<T>
   public Iterator<List<WriteStatus>> handleInsertsForLogCompaction(String instantTime, String partitionPath, String fileId,
                                                                    Map<String, HoodieRecord<?>> recordMap,
                                                                    Map<HoodieLogBlock.HeaderMetadataType, String> header) {
-    HoodieAppendHandle appendHandle = new HoodieAppendHandle(config, instantTime, this,
-        partitionPath, fileId, recordMap.values().iterator(), taskContextSupplier, header);
+    HoodieWriteHandle appendHandle = getMetaClient().getTableConfig().isLSMTreeStorageLayout()
+        ? new HoodieNativeLogAppendHandle(config, instantTime, this,
+            partitionPath, fileId, recordMap.values().iterator(), taskContextSupplier, header)
+        : new HoodieInlineLogAppendHandle(config, instantTime, this,
+            partitionPath, fileId, recordMap.values().iterator(), taskContextSupplier, header);
     appendHandle.write(recordMap);
     List<WriteStatus> writeStatuses = appendHandle.close();
     return Collections.singletonList(writeStatuses).iterator();
@@ -161,4 +165,3 @@ public class HoodieFlinkMergeOnReadTable<T>
         skipLocking).execute();
   }
 }
-

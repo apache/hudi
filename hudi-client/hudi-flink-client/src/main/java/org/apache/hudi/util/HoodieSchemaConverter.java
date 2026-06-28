@@ -24,6 +24,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
@@ -44,7 +45,9 @@ import org.apache.flink.table.types.logical.TimestampType;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -79,6 +82,38 @@ public class HoodieSchemaConverter {
    * @return HoodieSchema matching this logical type
    */
   public static HoodieSchema convertToSchema(LogicalType logicalType, String rowName) {
+    return convertToSchema(logicalType, rowName, Collections.emptyMap());
+  }
+
+  /**
+   * Converts a Flink LogicalType into a HoodieSchema with top-level VECTOR columns.
+   *
+   * <p>The vector column option uses {@code colName[:dimension]} entries separated by commas.
+   * The dimension defaults to 128. The vector element type is inferred from the Flink array
+   * element type: FLOAT, DOUBLE, or TINYINT.
+   *
+   * @param logicalType    Flink logical type
+   * @param rowName        the record name
+   * @param vectorColumns  comma-separated vector column descriptors, or null/empty
+   * @return HoodieSchema matching this logical type
+   */
+  public static HoodieSchema convertToSchema(
+      LogicalType logicalType,
+      String rowName,
+      String vectorColumns) {
+    Map<String, Integer> vectorColumnMap = vectorColumns == null || vectorColumns.trim().isEmpty()
+        ? Collections.emptyMap() : VectorColumnParser.parse(vectorColumns);
+    validateVectorColumns(logicalType, vectorColumnMap);
+    return convertToSchema(logicalType, rowName, vectorColumnMap);
+  }
+
+  private static HoodieSchema convertToSchema(
+      LogicalType logicalType,
+      String rowName,
+      Map<String, Integer> vectorColumns) {
+    ValidationUtils.checkArgument(vectorColumns.isEmpty() || logicalType instanceof RowType,
+        "VECTOR columns can only be configured for top-level ROW schemas.");
+
     int precision;
     boolean nullable = logicalType.isNullable();
     HoodieSchema schema;
@@ -196,8 +231,13 @@ public class HoodieSchemaConverter {
           String fieldName = fieldNames.get(i);
           LogicalType fieldType = rowType.getTypeAt(i);
 
-          // Recursive call for field schema
-          HoodieSchema fieldSchema = convertToSchema(fieldType, rowName + "." + fieldName);
+          HoodieSchema fieldSchema;
+          if (vectorColumns.containsKey(fieldName)) {
+            fieldSchema = VectorColumnParser.convertVectorField(fieldName, fieldType, vectorColumns.get(fieldName));
+          } else {
+            // Recursive call for field schema
+            fieldSchema = convertToSchema(fieldType, rowName + "." + fieldName, Collections.emptyMap());
+          }
 
           // Create field with or without default value
           HoodieSchemaField field;
@@ -215,13 +255,13 @@ public class HoodieSchemaConverter {
       case MULTISET:
       case MAP:
         LogicalType valueType = extractValueTypeForMap(logicalType);
-        HoodieSchema valueSchema = convertToSchema(valueType, rowName);
+        HoodieSchema valueSchema = convertToSchema(valueType, rowName, Collections.emptyMap());
         schema = HoodieSchema.createMap(valueSchema);
         break;
 
       case ARRAY:
         ArrayType arrayType = (ArrayType) logicalType;
-        HoodieSchema elementSchema = convertToSchema(arrayType.getElementType(), rowName);
+        HoodieSchema elementSchema = convertToSchema(arrayType.getElementType(), rowName, Collections.emptyMap());
         schema = HoodieSchema.createArray(elementSchema);
         break;
 
@@ -236,6 +276,28 @@ public class HoodieSchemaConverter {
     }
 
     return nullable ? HoodieSchema.createNullable(schema) : schema;
+  }
+
+  /**
+   * Validates that all configured VECTOR columns resolve to top-level fields of the row schema.
+   *
+   * <p>Invoked by {@link #convertToSchema(LogicalType, String, String)} before schema inference so
+   * an unknown column is rejected instead of being silently ignored during conversion.
+   *
+   * @param logicalType   Flink logical type
+   * @param vectorColumns parsed vector columns (normalized column name to dimension), may be empty
+   */
+  private static void validateVectorColumns(LogicalType logicalType, Map<String, Integer> vectorColumns) {
+    if (vectorColumns.isEmpty()) {
+      return;
+    }
+    List<String> normalizedFieldNames = ((RowType) logicalType).getFieldNames();
+    vectorColumns.keySet().stream()
+        .filter(vectorColumn -> !normalizedFieldNames.contains(vectorColumn))
+        .findFirst()
+        .ifPresent(vectorColumn -> {
+          throw new IllegalArgumentException("VECTOR column '" + vectorColumn + "' does not exist in the table schema.");
+        });
   }
 
   /**
@@ -272,6 +334,16 @@ public class HoodieSchemaConverter {
 
   /**
    * Detects if a Flink RowType represents a BLOB structure by validating it matches the schema defined in {@link HoodieSchema.Blob}.
+   *
+   * <p>Detection intentionally keys off the stable structural signals (field names and base type
+   * roots) and does <b>not</b> assert nested-field nullability. Flink SQL {@code CREATE TABLE} does
+   * not reliably preserve {@code NOT NULL} constraints on nested {@code ROW} fields, so requiring an
+   * exact nullability match would silently demote a user's BLOB column to a generic record when the
+   * column is declared through DDL. The canonical nullability is restored by {@link HoodieSchema#createBlob()}.
+   *
+   * <p>TODO: This heuristic is a workaround for the lack of a native Flink/Parquet BLOB logical
+   * type. See <a href="https://github.com/apache/hudi/issues/18711">apache/hudi#18711</a> for
+   * the tracked work to remove this structural inference.
    */
   private static boolean isBlobStructure(RowType rowType) {
     // Validate: 3 fields with exact names
@@ -286,24 +358,20 @@ public class HoodieSchemaConverter {
       return false;
     }
 
-    // Validate 'type' field: non-null STRING
-    LogicalType typeField = rowType.getTypeAt(0);
-    if (!isFamily(typeField, LogicalTypeFamily.CHARACTER_STRING) || typeField.isNullable()) {
+    // Validate 'type' field: STRING
+    if (!isFamily(rowType.getTypeAt(0), LogicalTypeFamily.CHARACTER_STRING)) {
       return false;
     }
 
-    // Validate 'data' field: nullable BYTES/VARBINARY
+    // Validate 'data' field: BYTES/VARBINARY
     LogicalType dataField = rowType.getTypeAt(1);
     if (dataField.getTypeRoot() != LogicalTypeRoot.BINARY && dataField.getTypeRoot() != LogicalTypeRoot.VARBINARY) {
       return false;
     }
-    if (!dataField.isNullable()) {
-      return false;
-    }
 
-    // Validate 'reference' field: nullable ROW
+    // Validate 'reference' field: ROW
     LogicalType referenceField = rowType.getTypeAt(2);
-    if (!referenceField.isNullable() || referenceField.getTypeRoot() != LogicalTypeRoot.ROW) {
+    if (referenceField.getTypeRoot() != LogicalTypeRoot.ROW) {
       return false;
     }
 
@@ -322,24 +390,20 @@ public class HoodieSchemaConverter {
     }
 
     // Validate reference sub-field types
-    // external_path: non-null STRING
-    if (!isFamily(referenceRow.getTypeAt(0), LogicalTypeFamily.CHARACTER_STRING)
-        || referenceRow.getTypeAt(0).isNullable()) {
+    // external_path: STRING
+    if (!isFamily(referenceRow.getTypeAt(0), LogicalTypeFamily.CHARACTER_STRING)) {
       return false;
     }
-    // offset: nullable BIGINT
-    if (referenceRow.getTypeAt(1).getTypeRoot() != LogicalTypeRoot.BIGINT
-        || !referenceRow.getTypeAt(1).isNullable()) {
+    // offset: BIGINT
+    if (referenceRow.getTypeAt(1).getTypeRoot() != LogicalTypeRoot.BIGINT) {
       return false;
     }
-    // length: nullable BIGINT
-    if (referenceRow.getTypeAt(2).getTypeRoot() != LogicalTypeRoot.BIGINT
-        || !referenceRow.getTypeAt(2).isNullable()) {
+    // length: BIGINT
+    if (referenceRow.getTypeAt(2).getTypeRoot() != LogicalTypeRoot.BIGINT) {
       return false;
     }
-    // managed: non-null BOOLEAN
-    if (referenceRow.getTypeAt(3).getTypeRoot() != LogicalTypeRoot.BOOLEAN
-        || referenceRow.getTypeAt(3).isNullable()) {
+    // managed: BOOLEAN
+    if (referenceRow.getTypeAt(3).getTypeRoot() != LogicalTypeRoot.BOOLEAN) {
       return false;
     }
 

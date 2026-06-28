@@ -458,9 +458,10 @@ public class TestConfigUtils {
   }
 
   @Test
-  void testBuildFileGroupReaderPropertiesIncludesMetadataFileCacheConfig() {
+  void testBuildFileGroupReaderPropertiesIncludesMetadataReaderConfigs() {
     TypedProperties metadataProps = new TypedProperties();
     metadataProps.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB.key(), "123");
+    metadataProps.setProperty(HoodieMetadataConfig.BLOOM_FILTER_ENABLE.key(), "true");
     metadataProps.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), "false");
     metadataProps.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(), "200000");
     metadataProps.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(), "7");
@@ -472,6 +473,7 @@ public class TestConfigUtils {
     TypedProperties fileGroupReaderProps = ConfigUtils.buildFileGroupReaderProperties(metadataConfig, false);
 
     assertEquals("123", fileGroupReaderProps.getProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB.key()));
+    assertEquals("true", fileGroupReaderProps.getProperty(HoodieMetadataConfig.BLOOM_FILTER_ENABLE.key()));
     assertEquals("false", fileGroupReaderProps.getProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key()));
     assertEquals("200000", fileGroupReaderProps.getProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key()));
     assertEquals("7", fileGroupReaderProps.getProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key()));

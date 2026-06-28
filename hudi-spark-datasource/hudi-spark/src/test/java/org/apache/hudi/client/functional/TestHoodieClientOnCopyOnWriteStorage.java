@@ -53,6 +53,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -133,6 +134,7 @@ import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PA
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -2150,6 +2152,61 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String rolledSchema = latestMeta.getMetadata(schemaKey);
     assertFalse(StringUtils.isNullOrEmpty(rolledSchema),
         "Schema should be rolled over into new commit even with lookback=1");
+  }
+
+  @Test
+  public void testExecutingPendingCleanInstantsBeforeSchedulingNewCleanInstant() throws Exception {
+    Properties props = new Properties();
+    props.setProperty("hoodie.clean.automatic", "false");
+    HoodieWriteConfig cfg = getConfigBuilder().withProperties(props).build();
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+
+    // Bulk insert
+    String firstCommit = WriteClientTestUtils.createNewInstantTime();
+    insertFirstBatch(cfg, client, firstCommit, "000", 100, SparkRDDWriteClient::bulkInsert,
+        false, false, 100, INSTANT_GENERATOR);
+
+    // First upsert
+    String secondCommit = WriteClientTestUtils.createNewInstantTime();
+    updateBatch(cfg, client, secondCommit, firstCommit, Option.empty(), "000", 100,
+        SparkRDDWriteClient::upsert, false, true, 100, 100, 2, INSTANT_GENERATOR);
+
+    // Second upsert
+    String thirdCommit = WriteClientTestUtils.createNewInstantTime();
+    updateBatch(cfg, client, thirdCommit, secondCommit, Option.empty(), "000", 100,
+        SparkRDDWriteClient::upsert, false, true, 100, 100, 3, INSTANT_GENERATOR);
+
+    // Schedule clean operation
+    Properties cleanProps = new Properties();
+    cleanProps.setProperty("hoodie.clean.automatic", "true");
+    cleanProps.setProperty("hoodie.clean.commits.retained", "1");
+    cleanProps.setProperty("hoodie.clean.multiple.enabled", "false");
+    HoodieWriteConfig cleanCfg = getConfigBuilder().withProperties(cleanProps).build();
+    SparkRDDWriteClient cleanClient = new SparkRDDWriteClient(context, cleanCfg);
+    cleanClient.scheduleTableService(Option.empty(), TableServiceType.CLEAN);
+
+    // Verify whether clean operation is scheduled.
+    Option<HoodieInstant> firstCleanInstant = metaClient.reloadActiveTimeline().lastInstant();
+    assertTrue(firstCleanInstant.isPresent());
+    assertEquals(CLEAN_ACTION, firstCleanInstant.get().getAction());
+
+    // Third upsert
+    String fourthCommit = WriteClientTestUtils.createNewInstantTime();
+    updateBatch(cfg, client, fourthCommit, thirdCommit, Option.empty(), "000", 100,
+        SparkRDDWriteClient::upsert, false, true, 100, 100, 4, INSTANT_GENERATOR);
+
+    // Execute clean operation. This should complete pending clean operation.
+    cleanClient.clean();
+
+    // Verify timeline
+    HoodieTimeline timeline = metaClient.reloadActiveTimeline();
+    assertEquals(5, timeline.countInstants());
+    assertEquals(0, timeline.filterInflights().countInstants());
+    HoodieTimeline cleanTimeline = timeline.filter(instant -> instant.getAction().equals(CLEAN_ACTION));
+    assertEquals(1, cleanTimeline.countInstants());
+    HoodieInstant cleanInstant = cleanTimeline.getInstants().get(0);
+    assertTrue(cleanInstant.isCompleted());
+    assertEquals(firstCleanInstant.get().requestedTime(), cleanInstant.requestedTime());
   }
 
   /**

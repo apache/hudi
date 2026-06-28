@@ -18,12 +18,18 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieLogFile {
   private final String pathStr = "file:///tmp/hoodie/2021/01/01/.136281f3-c24e-423b-a65a-95dbfbddce1d_100.log.2_1-0-1";
@@ -75,6 +81,166 @@ public class TestHoodieLogFile {
     String pathWithSuffix = pathStr + suffix;
     HoodieLogFile hoodieLogFile = new HoodieLogFile(pathWithSuffix);
     assertFileGetters(pathWithSuffix, null, hoodieLogFile, -1, suffix);
+  }
+
+  @Test
+  void createFromNativeParquetLogFile() {
+    String nativeLogPathStr = "file:///tmp/hoodie/2021/01/01/"
+        + "136281f3-c24e-423b-a65a-95dbfbddce1d_1-0-1_20250409161256974_2.log.parquet";
+    StoragePath nativeLogPath = new StoragePath(nativeLogPathStr);
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(nativeLogPath);
+
+    assertTrue(FSUtils.isLogFile(nativeLogPath));
+    assertFalse(FSUtils.isNativeDeleteLogFile(nativeLogPath.getName()));
+    assertFalse(FSUtils.isBaseFile(nativeLogPath));
+    assertEquals(fileId, hoodieLogFile.getFileId());
+    assertEquals("20250409161256974", hoodieLogFile.getDeltaCommitTime());
+    assertEquals(2, hoodieLogFile.getLogVersion());
+    assertEquals("1-0-1", hoodieLogFile.getLogWriteToken());
+    assertEquals("log", hoodieLogFile.getFileExtension());
+    assertEquals("parquet", hoodieLogFile.getSuffix());
+    assertEquals("log", FSUtils.getFileExtensionFromLog(nativeLogPath));
+    assertEquals("20250409161256974", FSUtils.getCommitTime(nativeLogPath.getName()));
+    assertEquals("20250409161256974", FSUtils.getDeltaCommitTimeFromLogPath(nativeLogPath));
+    assertEquals(2, FSUtils.getFileVersionFromLog(nativeLogPath));
+    assertEquals("1-0-1", FSUtils.getWriteTokenFromLogPath(nativeLogPath));
+    assertEquals(1, FSUtils.getTaskPartitionIdFromLogPath(nativeLogPath));
+    assertEquals(0, FSUtils.getStageIdFromLogPath(nativeLogPath));
+    assertEquals(1, FSUtils.getTaskAttemptIdFromLogPath(nativeLogPath));
+  }
+
+  @Test
+  void createFromNativeDeleteParquetLogFile() {
+    String nativeDeleteLogPathStr = "file:///tmp/hoodie/2021/01/01/"
+        + "136281f3-c24e-423b-a65a-95dbfbddce1d_1-0-1_20250409161256974_3.deletes.parquet";
+    StoragePath nativeDeleteLogPath = new StoragePath(nativeDeleteLogPathStr);
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(nativeDeleteLogPath);
+
+    assertTrue(FSUtils.isLogFile(nativeDeleteLogPath));
+    assertTrue(FSUtils.isNativeDeleteLogFile(nativeDeleteLogPath.getName()));
+    assertFalse(FSUtils.isBaseFile(nativeDeleteLogPath));
+    assertEquals(fileId, hoodieLogFile.getFileId());
+    assertEquals("20250409161256974", hoodieLogFile.getDeltaCommitTime());
+    assertEquals(3, hoodieLogFile.getLogVersion());
+    assertEquals("1-0-1", hoodieLogFile.getLogWriteToken());
+    assertEquals("deletes", hoodieLogFile.getFileExtension());
+    assertEquals("parquet", hoodieLogFile.getSuffix());
+    assertEquals("deletes", FSUtils.getFileExtensionFromLog(nativeDeleteLogPath));
+  }
+
+  @Test
+  void createFromNativeCdcParquetLogFile() {
+    String nativeCdcLogPathStr = "file:///tmp/hoodie/2021/01/01/"
+        + "136281f3-c24e-423b-a65a-95dbfbddce1d_1-0-1_20250409161256974_4.cdc.parquet";
+    StoragePath nativeCdcLogPath = new StoragePath(nativeCdcLogPathStr);
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(nativeCdcLogPath);
+
+    assertTrue(FSUtils.isLogFile(nativeCdcLogPath));
+    assertFalse(FSUtils.isNativeDeleteLogFile(nativeCdcLogPath.getName()));
+    assertFalse(FSUtils.isBaseFile(nativeCdcLogPath));
+    assertEquals(fileId, hoodieLogFile.getFileId());
+    assertEquals("20250409161256974", hoodieLogFile.getDeltaCommitTime());
+    assertEquals(4, hoodieLogFile.getLogVersion());
+    assertEquals("1-0-1", hoodieLogFile.getLogWriteToken());
+    assertEquals("cdc", hoodieLogFile.getFileExtension());
+    assertEquals("parquet", hoodieLogFile.getSuffix());
+    assertEquals("cdc", FSUtils.getFileExtensionFromLog(nativeCdcLogPath));
+    assertTrue(hoodieLogFile.isCDC());
+    assertTrue(FSUtils.isCDCLogFile(nativeCdcLogPathStr));
+  }
+
+  @Test
+  void createFromNativeLanceLogFile() {
+    String nativeLogPathStr = "file:///tmp/hoodie/2021/01/01/"
+        + "136281f3-c24e-423b-a65a-95dbfbddce1d_1-0-1_20250409161256974_5.log.lance";
+    StoragePath nativeLogPath = new StoragePath(nativeLogPathStr);
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(nativeLogPath);
+
+    assertTrue(FSUtils.isLogFile(nativeLogPath));
+    assertFalse(FSUtils.isNativeDeleteLogFile(nativeLogPath.getName()));
+    assertFalse(FSUtils.isBaseFile(nativeLogPath));
+    assertFalse(hoodieLogFile.isCDC());
+    assertEquals(fileId, hoodieLogFile.getFileId());
+    assertEquals("20250409161256974", hoodieLogFile.getDeltaCommitTime());
+    assertEquals(5, hoodieLogFile.getLogVersion());
+    assertEquals("1-0-1", hoodieLogFile.getLogWriteToken());
+    assertEquals("log", hoodieLogFile.getFileExtension());
+    assertEquals("lance", hoodieLogFile.getSuffix());
+  }
+
+  @Test
+  void createFromNativeCdcLanceLogFile() {
+    String nativeCdcLogPathStr = "file:///tmp/hoodie/2021/01/01/"
+        + "136281f3-c24e-423b-a65a-95dbfbddce1d_1-0-1_20250409161256974_6.cdc.lance";
+    StoragePath nativeCdcLogPath = new StoragePath(nativeCdcLogPathStr);
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(nativeCdcLogPath);
+
+    assertTrue(FSUtils.isLogFile(nativeCdcLogPath));
+    assertFalse(FSUtils.isNativeDeleteLogFile(nativeCdcLogPath.getName()));
+    assertFalse(FSUtils.isBaseFile(nativeCdcLogPath));
+    assertEquals(fileId, hoodieLogFile.getFileId());
+    assertEquals("20250409161256974", hoodieLogFile.getDeltaCommitTime());
+    assertEquals(6, hoodieLogFile.getLogVersion());
+    assertEquals("1-0-1", hoodieLogFile.getLogWriteToken());
+    assertEquals("cdc", hoodieLogFile.getFileExtension());
+    assertEquals("lance", hoodieLogFile.getSuffix());
+    assertTrue(hoodieLogFile.isCDC());
+    assertTrue(FSUtils.isCDCLogFile(nativeCdcLogPathStr));
+  }
+
+  @Test
+  void createFromNativeLogFileWithUnknownFormatSuffix() {
+    String nativeLogPathStr = "file:///tmp/hoodie/2021/01/01/"
+        + "136281f3-c24e-423b-a65a-95dbfbddce1d_1-0-1_20250409161256974_7.log.custom";
+    StoragePath nativeLogPath = new StoragePath(nativeLogPathStr);
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(nativeLogPath);
+
+    assertTrue(FSUtils.isLogFile(nativeLogPath));
+    assertFalse(FSUtils.isNativeDeleteLogFile(nativeLogPath.getName()));
+    assertFalse(FSUtils.isBaseFile(nativeLogPath));
+    assertFalse(hoodieLogFile.isCDC());
+    assertEquals(fileId, hoodieLogFile.getFileId());
+    assertEquals("20250409161256974", hoodieLogFile.getDeltaCommitTime());
+    assertEquals(7, hoodieLogFile.getLogVersion());
+    assertEquals("1-0-1", hoodieLogFile.getLogWriteToken());
+    assertEquals("log", hoodieLogFile.getFileExtension());
+    assertEquals("custom", hoodieLogFile.getSuffix());
+    assertFalse(FSUtils.isCDCLogFile(nativeLogPathStr));
+  }
+
+  @Test
+  void logFileComparatorOrdersNativeDeletesAfterLogsForSameVersion() {
+    HoodieLogFile logFile = new HoodieLogFile(new StoragePath(
+        nativeLogPath(LogExtensions.DATA_LOG_EXTENSION, 8)));
+    HoodieLogFile deleteFile = new HoodieLogFile(new StoragePath(
+        nativeLogPath(LogExtensions.DELETE_LOG_EXTENSION, 8)));
+
+    List<HoodieLogFile> logFiles = Arrays.asList(deleteFile, logFile);
+    logFiles.sort(HoodieLogFile.getLogFileComparator());
+
+    assertEquals(logFile, logFiles.get(0));
+    assertEquals(deleteFile, logFiles.get(1));
+  }
+
+  @Test
+  void logFileComparatorOrdersNativeLogExtensionsByPrecedenceForSameVersion() {
+    HoodieLogFile logFile = new HoodieLogFile(new StoragePath(
+        nativeLogPath(LogExtensions.DATA_LOG_EXTENSION, 8)));
+    HoodieLogFile deleteFile = new HoodieLogFile(new StoragePath(
+        nativeLogPath(LogExtensions.DELETE_LOG_EXTENSION, 8)));
+    HoodieLogFile cdcFile = new HoodieLogFile(new StoragePath(
+        nativeLogPath(LogExtensions.CDC_LOG_EXTENSION, 8)));
+
+    List<HoodieLogFile> logFiles = Arrays.asList(cdcFile, deleteFile, logFile);
+    logFiles.sort(HoodieLogFile.getLogFileComparator());
+
+    assertEquals(Arrays.asList(logFile, deleteFile, cdcFile), logFiles);
+    assertFalse(FSUtils.matchNativeLogFile(nativeLogPath(LogExtensions.ARCHIVE_LOG_EXTENSION, 8)).isPresent());
+  }
+
+  private String nativeLogPath(String extension, int version) {
+    return String.format("/tmp/%s_%s_%s_%d.%s.parquet",
+        fileId, writeToken, "20250409161256974", version, extension);
   }
 
   private void assertFileGetters(StoragePathInfo pathInfo, HoodieLogFile hoodieLogFile,

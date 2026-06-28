@@ -21,29 +21,54 @@ package org.apache.hudi.table.format;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.BloomFilterFactory;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.ByteArraySeekableDataInputStream;
+import org.apache.hudi.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
+import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.hfile.HFileReader;
+import org.apache.hudi.io.hfile.HFileReaderImpl;
+import org.apache.hudi.io.hfile.UTF8StringKey;
+import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTableSource;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
@@ -81,6 +106,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -92,6 +118,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.utils.TestData.insertRow;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
@@ -168,6 +195,58 @@ public class TestInputFormat {
         + "+I[id10, Ella, 38, 1970-01-01T00:00:00.007, par4], "
         + "+I[id11, Phoebe, 52, 1970-01-01T00:00:00.008, par4]]";
     assertThat(actual, is(expected));
+  }
+
+  @Test
+  void testRecordIndexLogBlocksContainBloomFilter() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.INDEX_TYPE.key(), HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    options.put(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    options.put(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    options.put(HoodieMetadataConfig.BLOOM_FILTER_ENABLE.key(), "true");
+    options.put(HoodieStorageConfig.HFILE_WITH_BLOOM_FILTER_ENABLED.key(), "true");
+    beforeEach(HoodieTableType.COPY_ON_WRITE, options);
+
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    HoodieStorage storage = StreamerUtil.createMetaClient(conf).getStorage();
+    StoragePath recordIndexPath = new StoragePath(
+        HoodieTableMetadata.getMetadataTableBasePath(conf.get(FlinkOptions.PATH)),
+        MetadataPartitionType.RECORD_INDEX.getPartitionPath());
+    List<StoragePathInfo> logFiles = FSUtils.getAllDataFilesInPartition(storage, recordIndexPath).stream()
+        .filter(pathInfo -> FSUtils.isLogFile(pathInfo.getPath()))
+        .collect(Collectors.toList());
+
+    assertFalse(logFiles.isEmpty(), "The MDT record index partition should contain log files");
+    int hfileDataBlockCount = 0;
+    for (StoragePathInfo logFile : logFiles) {
+      HoodieSchema schema = TableSchemaResolver.readSchemaFromLogFile(storage, logFile.getPath());
+      try (HoodieLogFormat.Reader reader =
+               HoodieLogFormat.newReader(storage, new HoodieLogFile(logFile), schema)) {
+        while (reader.hasNext()) {
+          HoodieLogBlock logBlock = reader.next();
+          if (logBlock instanceof HoodieHFileDataBlock) {
+            assertBloomFilterContainsWrittenKey(storage, logBlock);
+            hfileDataBlockCount++;
+          }
+        }
+      }
+    }
+    assertTrue(hfileDataBlockCount > 0, "The MDT record index log files should contain HFile data blocks");
+
+    HoodieTableMetadata metadataTable = StreamerUtil.createMetaClient(conf).getTableFormat().getMetadataFactory().create(
+        HoodieFlinkEngineContext.DEFAULT,
+        storage,
+        StreamerUtil.metadataConfig(conf),
+        conf.get(FlinkOptions.PATH));
+    List<String> recordKeys = Arrays.asList(
+        "id1", "id2", "id3", "id4", "id5", "id6", "id7", "id8", "missing-key");
+    Map<String, HoodieRecordGlobalLocation> recordLocations = HoodieDataUtils.dedupeAndCollectAsMap(
+        metadataTable.readRecordIndexLocationsWithKeys(HoodieListData.eager(recordKeys)));
+
+    assertThat(recordLocations.size(), is(8));
+    recordKeys.subList(0, 8).forEach(key -> assertTrue(recordLocations.containsKey(key)));
+    assertFalse(recordLocations.containsKey("missing-key"));
   }
 
   @ParameterizedTest
@@ -1517,6 +1596,33 @@ public class TestInputFormat {
         Collections.singletonList("partition"),
         "default",
         conf);
+  }
+
+  private static void assertBloomFilterContainsWrittenKey(
+      HoodieStorage storage, HoodieLogBlock logBlock) throws IOException {
+    HoodieLogBlock.HoodieLogBlockContentLocation contentLocation =
+        logBlock.getBlockContentLocation().get();
+    byte[] hfileContent = new byte[Math.toIntExact(contentLocation.getBlockSize())];
+    try (SeekableDataInputStream inputStream =
+             storage.openSeekable(contentLocation.getLogFile().getPath(), false)) {
+      inputStream.seek(contentLocation.getContentPositionInLogFile());
+      inputStream.readFully(hfileContent);
+    }
+
+    try (HFileReader hfileReader = new HFileReaderImpl(
+        new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(hfileContent)),
+        hfileContent.length)) {
+      hfileReader.initializeMetadata();
+      ByteBuffer bloomFilterBuffer = hfileReader.getMetaBlock(
+          HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK).get();
+      String bloomFilterType = fromUTF8Bytes(hfileReader.getMetaInfo(
+          new UTF8StringKey(HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_TYPE_CODE)).get());
+      BloomFilter bloomFilter = BloomFilterFactory.fromByteBuffer(bloomFilterBuffer, bloomFilterType);
+
+      assertTrue(hfileReader.seekTo(), "The HFile data block should contain at least one record");
+      String writtenKey = hfileReader.getKeyValue().get().getKey().getContentInString();
+      assertTrue(bloomFilter.mightContain(writtenKey));
+    }
   }
 
   private static List<RowData> readData(InputFormat inputFormat) throws IOException {

@@ -389,7 +389,7 @@ public final class CdcIterators {
       this.requiredSchema = requiredSchema;
       this.requiredPos = computeRequiredPos(tableSchema, requiredSchema);
       this.recordBuilder = new GenericRecordBuilder(requiredSchema.getAvroSchema());
-      this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredRowType);
+      this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredSchema, requiredRowType, true);
 
       StoragePath hadoopTablePath = new StoragePath(tablePath);
       HoodieStorage storage = HoodieStorageUtils.getStorage(

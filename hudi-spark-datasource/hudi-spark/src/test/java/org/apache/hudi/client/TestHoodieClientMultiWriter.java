@@ -85,6 +85,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -137,8 +138,21 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Tag("functional")
 public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
+  // Pin the tolerable heartbeat misses used by the early-conflict-detection test so its
+  // heartbeat-expiry wait does not depend on the global default
+  // (hoodie.client.heartbeat.tolerable.misses), which changed from 2 to 10 in #18904.
+  private static final int EARLY_CONFLICT_HEARTBEAT_TOLERABLE_MISSES = 2;
+
+  static {
+    // ZooKeeper's embedded admin server binds the fixed default port 8080 (Curator only
+    // randomizes the client port), so a concurrent or leaked TestingServer in a reused
+    // fork collides with "Address already in use". The admin server is unused here.
+    System.setProperty("zookeeper.admin.enableServer", "false");
+  }
+
   private Properties lockProperties = null;
 
+  private TestingServer zkTestingServer = null;
 
   /**
    * super is not thread safe!!
@@ -175,6 +189,10 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
   @AfterEach
   public void clean() throws IOException {
+    if (zkTestingServer != null) {
+      zkTestingServer.close();
+      zkTestingServer = null;
+    }
     cleanupResources();
   }
 
@@ -462,14 +480,14 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     int heartBeatIntervalForCommit4 = 3 * 1000;
 
     HoodieWriteConfig writeConfig;
-    TestingServer server = null;
     if (earlyConflictDetectionStrategy.equalsIgnoreCase(SimpleTransactionDirectMarkerBasedDetectionStrategy.class.getName())) {
       // need to setup zk related env there. Bcz SimpleTransactionDirectMarkerBasedDetectionStrategy is only support zk lock for now.
-      server = new TestingServer();
+      // zkTestingServer is closed in @AfterEach so a failing assertion cannot leak it (and its port-8080 admin server).
+      zkTestingServer = new TestingServer();
       Properties properties = new Properties();
       properties.setProperty(ZK_BASE_PATH_PROP_KEY, basePath);
-      properties.setProperty(ZK_CONNECT_URL_PROP_KEY, server.getConnectString());
-      properties.setProperty(ZK_BASE_PATH_PROP_KEY, server.getTempDirectory().getAbsolutePath());
+      properties.setProperty(ZK_CONNECT_URL_PROP_KEY, zkTestingServer.getConnectString());
+      properties.setProperty(ZK_BASE_PATH_PROP_KEY, zkTestingServer.getTempDirectory().getAbsolutePath());
       properties.setProperty(ZK_SESSION_TIMEOUT_MS_PROP_KEY, "10000");
       properties.setProperty(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY, "10000");
       properties.setProperty(ZK_LOCK_KEY_PROP_KEY, "key");
@@ -483,71 +501,83 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       writeConfig = buildWriteConfigForEarlyConflictDetect(markerType, properties, InProcessLockProvider.class, earlyConflictDetectionStrategy);
     }
 
-    final SparkRDDWriteClient client1 = getHoodieWriteClient(writeConfig);
+    SparkRDDWriteClient client1 = null;
+    SparkRDDWriteClient client2 = null;
+    SparkRDDWriteClient client3 = null;
+    SparkRDDWriteClient client4 = null;
+    try {
+      client1 = getHoodieWriteClient(writeConfig);
 
-    // Create the first commit
-    final String nextCommitTime1 = "001";
-    createCommitWithInserts(writeConfig, client1, "000", nextCommitTime1, 200);
+      // Create the first commit
+      final String nextCommitTime1 = "001";
+      createCommitWithInserts(writeConfig, client1, "000", nextCommitTime1, 200);
 
-    final SparkRDDWriteClient client2 = getHoodieWriteClient(writeConfig);
-    final SparkRDDWriteClient client3 = getHoodieWriteClient(writeConfig);
+      client2 = getHoodieWriteClient(writeConfig);
+      client3 = getHoodieWriteClient(writeConfig);
 
-    final String nextCommitTime2 = "002";
+      final String nextCommitTime2 = "002";
 
-    // start to write commit 002
-    final JavaRDD<WriteStatus> writeStatusList2 = startCommitForUpdate(writeConfig, client2, nextCommitTime2, 100);
+      // start to write commit 002
+      final SparkRDDWriteClient finalClient2 = client2;
+      final JavaRDD<WriteStatus> writeStatusList2 = startCommitForUpdate(writeConfig, client2, nextCommitTime2, 100);
 
-    // start to write commit 003
-    // this commit 003 will fail quickly because early conflict detection before create marker.
-    final String nextCommitTime3 = "003";
-    assertThrows(SparkException.class, () -> {
-      final JavaRDD<WriteStatus> writeStatusList3 =
-          startCommitForUpdate(writeConfig, client3, nextCommitTime3, 100);
-      client3.commit(nextCommitTime3, writeStatusList3);
-    }, "Early conflict detected but cannot resolve conflicts for overlapping writes");
+      // start to write commit 003
+      // this commit 003 will fail quickly because early conflict detection before create marker.
+      final String nextCommitTime3 = "003";
+      final SparkRDDWriteClient finalClient3 = client3;
+      assertThrows(SparkException.class, () -> {
+        final JavaRDD<WriteStatus> writeStatusList3 =
+            startCommitForUpdate(writeConfig, finalClient3, nextCommitTime3, 100);
+        finalClient3.commit(nextCommitTime3, writeStatusList3);
+      }, "Early conflict detected but cannot resolve conflicts for overlapping writes");
 
-    // start to commit 002 and success
-    assertDoesNotThrow(() -> {
-      client2.commit(nextCommitTime2, writeStatusList2);
-    });
+      // start to commit 002 and success
+      assertDoesNotThrow(() -> {
+        finalClient2.commit(nextCommitTime2, writeStatusList2);
+      });
 
-    HoodieWriteConfig config4 =
-        HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps())
-            .withHeartbeatIntervalInMs(heartBeatIntervalForCommit4).build();
-    final SparkRDDWriteClient client4 = getHoodieWriteClient(config4);
+      HoodieWriteConfig config4 =
+          HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps())
+              .withHeartbeatIntervalInMs(heartBeatIntervalForCommit4).build();
+      client4 = getHoodieWriteClient(config4);
 
-    StoragePath heartbeatFilePath = new StoragePath(
-        HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + StoragePath.SEPARATOR + nextCommitTime3);
-    storage.create(heartbeatFilePath, true);
+      StoragePath heartbeatFilePath = new StoragePath(
+          HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + StoragePath.SEPARATOR + nextCommitTime3);
+      storage.create(heartbeatFilePath, true);
 
-    // Wait for heart beat expired for failed commitTime3 "003"
-    // Otherwise commit4 still can see conflict between failed write 003.
-    Thread.sleep(heartBeatIntervalForCommit4 * 2);
+      // Wait for heart beat expired for failed commitTime3 "003"
+      // Otherwise commit4 still can see conflict between failed write 003. The early-conflict
+      // check treats 003 as alive until its heartbeat is older than
+      // (tolerable misses * heartbeat interval); tolerable misses is pinned in
+      // buildWriteConfigForEarlyConflictDetect, so wait one interval past that window.
+      Thread.sleep(heartBeatIntervalForCommit4 * (EARLY_CONFLICT_HEARTBEAT_TOLERABLE_MISSES + 1));
 
-    final String nextCommitTime4 = "004";
-    assertDoesNotThrow(() -> {
-      final JavaRDD<WriteStatus> writeStatusList4 =
-          startCommitForUpdate(writeConfig, client4, nextCommitTime4, 100);
-      client4.commit(nextCommitTime4, writeStatusList4);
-    });
+      final String nextCommitTime4 = "004";
+      final SparkRDDWriteClient finalClient4 = client4;
+      assertDoesNotThrow(() -> {
+        final JavaRDD<WriteStatus> writeStatusList4 =
+            startCommitForUpdate(writeConfig, finalClient4, nextCommitTime4, 100);
+        finalClient4.commit(nextCommitTime4, writeStatusList4);
+      });
 
-    List<String> completedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline()
-        .filterCompletedInstants().getInstants().stream()
-        .map(HoodieInstant::requestedTime).collect(Collectors.toList());
+      List<String> completedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline()
+          .filterCompletedInstants().getInstants().stream()
+          .map(HoodieInstant::requestedTime).collect(Collectors.toList());
 
-    assertEquals(3, completedInstant.size());
-    assertTrue(completedInstant.contains(nextCommitTime1));
-    assertTrue(completedInstant.contains(nextCommitTime2));
-    assertTrue(completedInstant.contains(nextCommitTime4));
+      assertEquals(3, completedInstant.size());
+      assertTrue(completedInstant.contains(nextCommitTime1));
+      assertTrue(completedInstant.contains(nextCommitTime2));
+      assertTrue(completedInstant.contains(nextCommitTime4));
 
-    FileIOUtils.deleteDirectory(new File(basePath));
-    if (server != null) {
-      server.close();
+      FileIOUtils.deleteDirectory(new File(basePath));
+    } finally {
+      // Close the write clients on every exit path, including failed assertions.
+      // The TestingServer itself is closed by @AfterEach (see zkTestingServer above).
+      FileIOUtils.closeQuietly(client1 == null ? null : (Closeable) client1::close);
+      FileIOUtils.closeQuietly(client2 == null ? null : (Closeable) client2::close);
+      FileIOUtils.closeQuietly(client3 == null ? null : (Closeable) client3::close);
+      FileIOUtils.closeQuietly(client4 == null ? null : (Closeable) client4::close);
     }
-    client1.close();
-    client2.close();
-    client3.close();
-    client4.close();
   }
 
   @Test
@@ -1771,6 +1801,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     if (markerType.equalsIgnoreCase(MarkerType.DIRECT.name())) {
       return getConfigBuilder()
           .withHeartbeatIntervalInMs(60 * 1000)
+          .withHeartbeatTolerableMisses(EARLY_CONFLICT_HEARTBEAT_TOLERABLE_MISSES)
           .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
               .withStorageType(FileSystemViewStorageType.MEMORY)
               .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
@@ -1791,6 +1822,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       return getConfigBuilder()
           .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(20 * 1024).build())
           .withHeartbeatIntervalInMs(60 * 1000)
+          .withHeartbeatTolerableMisses(EARLY_CONFLICT_HEARTBEAT_TOLERABLE_MISSES)
           .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
               .withStorageType(FileSystemViewStorageType.MEMORY)
               .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())

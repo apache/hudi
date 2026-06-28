@@ -35,9 +35,9 @@ jobs:
             sparkProfile: 'spark3.4'
             sparkRuntime: 'spark3.4.3'
           - scalaProfile: 'scala-2.12'
-            flinkProfile: 'flink1.17'
-            sparkProfile: 'spark3.5'
-            sparkRuntime: 'spark3.5.1'
+            flinkProfile: 'flink1.18'
+            sparkProfile: 'spark3.3'
+            sparkRuntime: 'spark3.3.4'
     steps:
       - uses: actions/checkout@v5
       - name: Set up JDK 11

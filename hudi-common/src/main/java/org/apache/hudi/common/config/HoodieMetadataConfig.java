@@ -683,6 +683,15 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "with the actual record count stored in the metadata table. This validation runs in a distributed manner "
           + "using the compute engine. Disabled by default as it adds overhead to the initialization process.");
 
+  public static final ConfigProperty<Boolean> ENABLE_DETAILED_METRICS = ConfigProperty
+      .key(METADATA_PREFIX + ".enable.detailed.metrics")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Enables detailed metadata table metrics — per-metadata-partition file size and base/log "
+          + "file counts. Emitting these requires building a HoodieTableFileSystemView for the metadata table on "
+          + "the driver, which adds memory pressure at scale; leave disabled unless you need the breakdown.");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -1020,6 +1029,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return subIndexNameToDrop.contains(indexName);
   }
 
+  public boolean isDetailedMetricsEnabled() {
+    return getBoolean(ENABLE_DETAILED_METRICS);
+  }
+
   public static class Builder {
 
     private EngineType engineType = EngineType.SPARK;
@@ -1346,6 +1359,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withAutoDeletePartitions(boolean autoDeletePartitions) {
       metadataConfig.setValue(AUTO_DELETE_PARTITIONS, String.valueOf(autoDeletePartitions));
+      return this;
+    }
+
+    public Builder enableDetailedMetadataMetrics(boolean enable) {
+      metadataConfig.setValue(ENABLE_DETAILED_METRICS, String.valueOf(enable));
       return this;
     }
 

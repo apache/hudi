@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -34,7 +35,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
-import org.apache.hudi.exception.InvalidHoodieFileNameException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
@@ -76,9 +76,13 @@ public class FSUtils {
 
   // Log files are of this pattern - .b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1_1-0-1
   // Archive log files are of this pattern - .commits_.archive.1_1-0-1
+  // Native log files are of this pattern - b5068208-e1a4-11e6-bf01-fe55135034f3_1-0-1_20170101134598_1.log.parquet
+  // For native log files, the file extension is log/deletes/cdc and the suffix is the native file format.
   public static final String PATH_SEPARATOR = "/";
   public static final Pattern LOG_FILE_PATTERN =
       Pattern.compile("^\\.([^._]+)_([^.]*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(\\.cdc)?)?$");
+  public static final Pattern NATIVE_LOG_FILE_PATTERN =
+      Pattern.compile("^([^._]+)_((\\d+)-(\\d+)-(\\d+))_([^_]+)_(\\d+)\\.(log|deletes|cdc)\\.([^.]+)$");
   public static final Pattern PREFIX_BY_FILE_ID_PATTERN = Pattern.compile("^(.+)-(\\d+)");
   private static final Pattern BASE_FILE_PATTERN = Pattern.compile("[a-zA-Z0-9-]+_[a-zA-Z0-9-]+_[0-9]+\\.[a-zA-Z0-9]+");
 
@@ -131,6 +135,10 @@ public class FSUtils {
 
   public static String getCommitTime(String fullFileName) {
     try {
+      Option<Matcher> nativeLogMatcher = matchNativeLogFile(fullFileName);
+      if (nativeLogMatcher.isPresent()) {
+        return nativeLogMatcher.get().group(6);
+      }
       if (isLogFile(fullFileName)) {
         return fullFileName.split("_")[1].split("\\.", 2)[0];
       }
@@ -328,6 +336,10 @@ public class FSUtils {
    * Get the file extension from the log file.
    */
   public static String getFileExtensionFromLog(StoragePath logPath) {
+    Option<Matcher> nativeLogMatcher = matchNativeLogFile(logPath.getName());
+    if (nativeLogMatcher.isPresent()) {
+      return nativeLogMatcher.get().group(8);
+    }
     Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
     if (!matcher.matches()) {
       throw new InvalidHoodiePathException(logPath.toString(), "LogFile");
@@ -336,22 +348,19 @@ public class FSUtils {
   }
 
   public static String getFileIdFromFileName(String fileName) {
-    if (FSUtils.isLogFile(fileName)) {
-      Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
-      if (!matcher.matches()) {
-        throw new InvalidHoodieFileNameException(fileName, "LogFile");
-      }
-      return matcher.group(1);
+    Option<Matcher> logFileMatcher = matchLogFile(fileName);
+    if (logFileMatcher.isPresent()) {
+      return logFileMatcher.get().group(1);
     }
     return FSUtils.getFileId(fileName);
   }
 
   public static String getFileIdFromLogPath(StoragePath path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.matches()) {
+    Option<Matcher> logFileMatcher = matchLogFile(path.getName());
+    if (!logFileMatcher.isPresent()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
-    return matcher.group(1);
+    return logFileMatcher.get().group(1);
   }
 
   public static String getFileIdFromFilePath(StoragePath filePath) {
@@ -365,6 +374,10 @@ public class FSUtils {
    * Get the second part of the file name in the log file. That will be the delta commit time.
    */
   public static String getDeltaCommitTimeFromLogPath(StoragePath path) {
+    Option<Matcher> nativeLogMatcher = matchNativeLogFile(path.getName());
+    if (nativeLogMatcher.isPresent()) {
+      return nativeLogMatcher.get().group(6);
+    }
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
@@ -376,6 +389,10 @@ public class FSUtils {
    * Get TaskPartitionId used in log-path.
    */
   public static Integer getTaskPartitionIdFromLogPath(StoragePath path) {
+    Option<Matcher> nativeLogMatcher = matchNativeLogFile(path.getName());
+    if (nativeLogMatcher.isPresent()) {
+      return Integer.parseInt(nativeLogMatcher.get().group(3));
+    }
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
@@ -388,6 +405,10 @@ public class FSUtils {
    * Get Write-Token used in log-path.
    */
   public static String getWriteTokenFromLogPath(StoragePath path) {
+    Option<Matcher> nativeLogMatcher = matchNativeLogFile(path.getName());
+    if (nativeLogMatcher.isPresent()) {
+      return nativeLogMatcher.get().group(2);
+    }
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
@@ -399,6 +420,10 @@ public class FSUtils {
    * Get StageId used in log-path.
    */
   public static Integer getStageIdFromLogPath(StoragePath path) {
+    Option<Matcher> nativeLogMatcher = matchNativeLogFile(path.getName());
+    if (nativeLogMatcher.isPresent()) {
+      return Integer.parseInt(nativeLogMatcher.get().group(4));
+    }
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
@@ -411,6 +436,10 @@ public class FSUtils {
    * Get Task Attempt Id used in log-path.
    */
   public static Integer getTaskAttemptIdFromLogPath(StoragePath path) {
+    Option<Matcher> nativeLogMatcher = matchNativeLogFile(path.getName());
+    if (nativeLogMatcher.isPresent()) {
+      return Integer.parseInt(nativeLogMatcher.get().group(5));
+    }
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
@@ -427,6 +456,10 @@ public class FSUtils {
   }
 
   public static int getFileVersionFromLog(String logFileName) {
+    Option<Matcher> nativeLogMatcher = matchNativeLogFile(logFileName);
+    if (nativeLogMatcher.isPresent()) {
+      return Integer.parseInt(nativeLogMatcher.get().group(7));
+    }
     Matcher matcher = LOG_FILE_PATTERN.matcher(logFileName);
     if (!matcher.matches()) {
       throw new HoodieIOException("Invalid log file name: " + logFileName);
@@ -442,7 +475,19 @@ public class FSUtils {
     return HoodieLogFile.LOG_FILE_PREFIX + suffix;
   }
 
+  public static String makeNativeLogFileName(String fileId, String writeToken, String deltaCommitTime, int version,
+                                             String logFileExtension, HoodieFileFormat nativeFileFormat) {
+    String extension = logFileExtension.startsWith(".") ? logFileExtension.substring(1) : logFileExtension;
+    String formatSuffix = nativeFileFormat.getFileExtension().startsWith(".")
+        ? nativeFileFormat.getFileExtension().substring(1)
+        : nativeFileFormat.getFileExtension();
+    return String.format("%s_%s_%s_%d.%s.%s", fileId, writeToken, deltaCommitTime, version, extension, formatSuffix);
+  }
+
   public static boolean isBaseFile(StoragePath path) {
+    if (matchNativeLogFile(path.getName()).isPresent()) {
+      return false;
+    }
     String extension = getFileExtension(path.getName());
     if (HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(extension)) {
       return BASE_FILE_PATTERN.matcher(path.getName()).matches();
@@ -466,11 +511,50 @@ public class FSUtils {
   }
 
   public static boolean isLogFile(String fileName) {
+    if (matchNativeLogFile(fileName).isPresent()) {
+      return true;
+    }
     if (fileName.startsWith(LOG_FILE_START_WITH_CHARACTER)) {
       Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
       return matcher.matches() && matcher.group(3).equals(LOG_FILE_EXTENSION);
     }
     return false;
+  }
+
+  public static Option<Matcher> matchNativeLogFile(String fileName) {
+    if (StringUtils.isNullOrEmpty(fileName)) {
+      return Option.empty();
+    }
+    String actualFileName = fileName.contains(StoragePath.SEPARATOR)
+        ? fileName.substring(fileName.lastIndexOf(StoragePath.SEPARATOR) + 1)
+        : fileName;
+    Matcher matcher = NATIVE_LOG_FILE_PATTERN.matcher(actualFileName);
+    return matcher.matches() ? Option.of(matcher) : Option.empty();
+  }
+
+  public static boolean isNativeDeleteLogFile(String fileName) {
+    return matchNativeLogFile(fileName).map(matcher -> "deletes".equals(matcher.group(8))).orElse(false);
+  }
+
+  public static boolean isCDCLogFile(String fileName) {
+    if (StringUtils.isNullOrEmpty(fileName)) {
+      return false;
+    }
+    Option<Matcher> nativeLogMatcher = matchNativeLogFile(fileName);
+    if (nativeLogMatcher.isPresent()) {
+      return HoodieCDCUtils.CDC_LOGFILE_SUFFIX.substring(1).equals(nativeLogMatcher.get().group(8));
+    }
+    Matcher matcher = LOG_FILE_PATTERN.matcher(getFileNameFromPath(fileName));
+    return matcher.matches() && HoodieCDCUtils.CDC_LOGFILE_SUFFIX.equals(matcher.group(10));
+  }
+
+  private static Option<Matcher> matchLogFile(String fileName) {
+    Option<Matcher> nativeLogMatcher = matchNativeLogFile(fileName);
+    if (nativeLogMatcher.isPresent()) {
+      return nativeLogMatcher;
+    }
+    Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
+    return matcher.matches() ? Option.of(matcher) : Option.empty();
   }
 
   public static boolean isDataFile(StoragePath path) {

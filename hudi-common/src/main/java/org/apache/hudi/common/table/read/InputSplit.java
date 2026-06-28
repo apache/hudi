@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
@@ -77,8 +76,8 @@ public class InputSplit {
     if (logFileStream != null) {
       // Process Log Files (if provided)
       this.logFiles = logFileStream
+          .filter(logFile -> !logFile.isCDC())
           .sorted(HoodieLogFile.getLogFileComparator())
-          .filter(logFile -> !logFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
           .collect(Collectors.toList());
       this.recordIterator = Option.empty();
     } else if (recordIterator != null) {

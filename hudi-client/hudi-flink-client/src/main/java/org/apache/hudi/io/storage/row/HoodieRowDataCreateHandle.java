@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -79,6 +80,8 @@ public class HoodieRowDataCreateHandle implements Serializable {
   private final String fileId;
   private final boolean preserveHoodieMetadata;
   private final boolean skipMetadataWrite;
+  // The schema (with meta fields appended when required) used to create the file writer.
+  private final HoodieSchema writerSchema;
   private final HoodieStorage storage;
   protected final WriteStatus writeStatus;
   private final HoodieRecordLocation newRecordLocation;
@@ -90,7 +93,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
 
   public HoodieRowDataCreateHandle(HoodieTable table, HoodieWriteConfig writeConfig, String partitionPath, String fileId,
                                    String instantTime, int taskPartitionId, long taskId, long taskEpochId,
-                                   RowType rowType, boolean preserveHoodieMetadata, boolean skipMetadataWrite) {
+                                   HoodieSchema schema, boolean preserveHoodieMetadata, boolean skipMetadataWrite) {
     this.partitionPath = partitionPath;
     this.table = table;
     this.writeConfig = writeConfig;
@@ -102,10 +105,11 @@ public class HoodieRowDataCreateHandle implements Serializable {
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.preserveHoodieMetadata = preserveHoodieMetadata;
     this.skipMetadataWrite = skipMetadataWrite;
+    this.writerSchema = schema;
     this.currTimer = HoodieTimer.start();
     this.storage = table.getStorage();
     this.path = makeNewPath(partitionPath);
-    this.eventTimeFieldGetter = initEventTimeFieldGetter(writeConfig, rowType);
+    this.eventTimeFieldGetter = initEventTimeFieldGetter(writeConfig, HoodieSchemaConverter.convertToRowType(writerSchema));
 
     this.writeStatus = new WriteStatus(table.shouldTrackSuccessRecords(),
         writeConfig.getWriteStatusFailureFraction());
@@ -122,7 +126,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
               table.getPartitionMetafileFormat());
       partitionMetadata.trySave();
       createMarkerFile(partitionPath, FSUtils.makeBaseFileName(this.instantTime, getWriteToken(), this.fileId, table.getBaseFileExtension()));
-      this.fileWriter = createNewFileWriter(path, table, writeConfig, rowType, this.instantTime);
+      this.fileWriter = createNewFileWriter(path, table, writeConfig, this.instantTime);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize file writer for path " + path, e);
     }
@@ -292,7 +296,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
   }
 
   protected HoodieRowDataFileWriter createNewFileWriter(
-      Path path, HoodieTable hoodieTable, HoodieWriteConfig config, RowType rowType, String instantTime)
+      Path path, HoodieTable hoodieTable, HoodieWriteConfig config, String instantTime)
       throws IOException {
     StoragePath storagePath = new StoragePath(path.toUri());
     return (HoodieRowDataFileWriter) HoodieFileWriterFactory.getFileWriter(
@@ -300,7 +304,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
         storagePath,
         hoodieTable.getStorage(),
         config,
-        HoodieSchemaConverter.convertToSchema(rowType).getNonNullType(),
+        writerSchema,
         hoodieTable.getTaskContextSupplier(),
         HoodieRecord.HoodieRecordType.FLINK);
   }

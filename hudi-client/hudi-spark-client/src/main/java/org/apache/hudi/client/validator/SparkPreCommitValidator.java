@@ -82,6 +82,18 @@ public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<Writ
     HoodieTimer timer = HoodieTimer.start();
     try {
       validateRecordsBeforeAndAfter(before, after, getPartitionsModified(writeResult));
+    } catch (HoodieValidationException e) {
+      throw e;
+    } catch (RuntimeException e) {
+      // Unexpected bug (NPE, ClassCastException, etc.) — re-throw as-is so it propagates
+      // crash-loud with the original stack trace instead of being silently swallowed as a
+      // generic "validation failed" message.
+      log.error("Validator {} threw unexpected exception for instant {}", getClass().getName(), instantTime, e);
+      throw e;
+    } catch (Exception e) {
+      // Checked exception — promote to RuntimeException so it propagates crash-loud.
+      log.error("Validator {} threw unexpected checked exception for instant {}", getClass().getName(), instantTime, e);
+      throw new RuntimeException(e);
     } finally {
       long duration = timer.endTimer();
       log.info(getClass() + " validator took " + duration + " ms" + ", metrics on? " + getWriteConfig().isMetricsOn());

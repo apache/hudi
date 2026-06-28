@@ -27,6 +27,10 @@ import org.apache.hudi.internal.schema.HoodieSchemaException
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
+import org.apache.hadoop.fs.{FileSystem, Path => HadoopPath}
+import org.apache.parquet.hadoop.ParquetFileReader
+import org.apache.parquet.hadoop.util.HadoopInputFile
+import org.apache.parquet.schema.{GroupType, MessageType, Type}
 import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType}
@@ -121,11 +125,23 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
   }
 
   test("Test Query Log Only MOR Table With VARIANT column triggers compaction") {
-    assume(HoodieSparkUtils.gteqSpark4_0, "Variant type requires Spark 4.0 or higher")
+    // Gated on Spark >= 4.1. Compaction writes the base file via the AVRO shredding writer, which
+    // lays the variant group out as [metadata, value, typed_value]. Spark 4.0's read support
+    // (Spark40HoodieParquetReadSupport.reorderVariantFields) rebuilds that group as [value, metadata]
+    // and drops typed_value, so the subsequent native read fails with MALFORMED_VARIANT. Spark 4.1+
+    // reads variant fields by name (SPARK-54410) and reconstructs correctly.
+    // TODO(voon): drop this comment once Spark 4.0 is removed.
+    assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
 
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath
+      // Shred variants on write so the compacted base file is shredded, then read it back. Note the
+      // Spark SQL read here goes through the InternalRow reader (SparkFileFormatInternalRowReaderContext),
+      // which reconstructs the shredded variant natively - it does NOT exercise the AVRO read-path
+      // reconstruction (#18931, HoodieVariantReconstruction), which Spark compaction never reaches.
+      // That path is covered directly by TestSpark4VariantShreddingProvider and
+      // TestHoodieVariantReconstruction.
       spark.sql(
         s"""
            |create table $tableName (
@@ -138,6 +154,8 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
            |  primaryKey = 'id',
            |  type = 'mor',
            |  preCombineField = 'ts',
+           |  hoodie.parquet.variant.write.shredding.enabled = 'true',
+           |  hoodie.parquet.variant.force.shredding.schema.for.test = 'key string',
            |  hoodie.index.type = 'INMEMORY',
            |  hoodie.compact.inline = 'true',
            |  hoodie.compact.inline.max.delta.commits = '5',
@@ -541,5 +559,159 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
     assert(spark.sql(s"select * from $tableName").count() == 1, "Should be able to read all columns including variant")
 
     spark.sql(s"drop table $tableName")
+  }
+
+  test("Test Shredded Variant Write and Read + Validate Parquet Schema after Write") {
+    assume(HoodieSparkUtils.gteqSpark4_0, "Variant type requires Spark 4.0 or higher")
+
+    // Test 1: Shredding enabled with forced schema → parquet should have typed_value
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  v variant,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'cow',
+           |  preCombineField = 'ts'
+           | )
+        """.stripMargin)
+
+      spark.sql("set hoodie.parquet.variant.write.shredding.enabled = true")
+      spark.sql("set hoodie.parquet.variant.allow.reading.shredded = true")
+      spark.sql("set hoodie.parquet.variant.force.shredding.schema.for.test = a int, b string")
+
+      spark.sql(
+        s"""
+           |insert into $tableName values
+           |  (1, 'row1', parse_json('{"a": 1, "b": "hello"}'), 1000)
+        """.stripMargin)
+      // Reading shredded variants back via Spark SQL needs Spark 4.1+ (spark.sql.variant.allowReadingShredded,
+      // SPARK-54410); Spark 4.0's native reader rejects the 3-field shredded layout. The shredded write is
+      // still validated below.
+      if (HoodieSparkUtils.gteqSpark4_1) {
+        checkAnswer(s"select id, name, cast(v as string), ts from $tableName order by id")(
+          Seq(1, "row1", "{\"a\":1,\"b\":\"hello\"}", 1000)
+        )
+      }
+
+      // Verify parquet schema has shredded structure with typed_value
+      val parquetFiles = listDataParquetFiles(tmp.getCanonicalPath)
+      assert(parquetFiles.nonEmpty, "Should have at least one data parquet file")
+
+      parquetFiles.foreach { filePath =>
+        val schema = readParquetSchema(filePath)
+        val variantGroup = getFieldAsGroup(schema, "v")
+        assert(variantGroup.containsField("typed_value"),
+          s"Shredded variant should have typed_value field. Schema:\n$variantGroup")
+        val valueField = variantGroup.getType(variantGroup.getFieldIndex("value"))
+        assert(valueField.getRepetition == Type.Repetition.OPTIONAL,
+          "Shredded variant value field should be OPTIONAL")
+        val metadataField = variantGroup.getType(variantGroup.getFieldIndex("metadata"))
+        assert(metadataField.getRepetition == Type.Repetition.REQUIRED,
+          "Shredded variant metadata field should be REQUIRED")
+      }
+    })
+  }
+
+  test("Test Unshredded Variant Write and Read + Validate Parquet Schema after Write") {
+    assume(HoodieSparkUtils.gteqSpark4_0, "Variant type requires Spark 4.0 or higher")
+    // Shredding disabled parquet should NOT have typed_value
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  v variant,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'cow',
+           |  preCombineField = 'ts'
+           | )
+              """.stripMargin)
+
+      spark.sql(s"set hoodie.parquet.variant.write.shredding.enabled = false")
+
+      spark.sql(
+        s"""
+           |insert into $tableName values
+           |  (1, 'row1', parse_json('{"a": 1, "b": "hello"}'), 1000)
+              """.stripMargin)
+
+      checkAnswer(s"select id, name, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "row1", "{\"a\":1,\"b\":\"hello\"}", 1000)
+      )
+
+      // Verify parquet schema does NOT have typed_value
+      val parquetFiles = listDataParquetFiles(tmp.getCanonicalPath)
+      assert(parquetFiles.nonEmpty, "Should have at least one data parquet file")
+
+      parquetFiles.foreach { filePath =>
+        val schema = readParquetSchema(filePath)
+        val variantGroup = getFieldAsGroup(schema, "v")
+        assert(!variantGroup.containsField("typed_value"),
+          s"Non-shredded variant should NOT have typed_value field. Schema:\n$variantGroup")
+        val valueField = variantGroup.getType(variantGroup.getFieldIndex("value"))
+        assert(valueField.getRepetition == Type.Repetition.REQUIRED,
+          "Non-shredded variant value field should be REQUIRED")
+      }
+
+      // Verify data can still be read back for the non-shredded case
+      checkAnswer(s"select id, name, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "row1", "{\"a\":1,\"b\":\"hello\"}", 1000)
+      )
+    })
+  }
+
+  /**
+   * Lists data parquet files in the table directory, excluding Hudi metadata files.
+   */
+  private def listDataParquetFiles(tablePath: String): Seq[String] = {
+    val conf = spark.sparkContext.hadoopConfiguration
+    val fs = FileSystem.get(new HadoopPath(tablePath).toUri, conf)
+    val iter = fs.listFiles(new HadoopPath(tablePath), true)
+    val files = scala.collection.mutable.ArrayBuffer[String]()
+    while (iter.hasNext) {
+      val file = iter.next()
+      val path = file.getPath.toString
+      if (path.endsWith(".parquet") && !path.contains(".hoodie")) {
+        files += path
+      }
+    }
+    files.toSeq
+  }
+
+  /**
+   * Reads the Parquet schema (MessageType) from a parquet file.
+   */
+  private def readParquetSchema(filePath: String): MessageType = {
+    val conf = spark.sparkContext.hadoopConfiguration
+    val inputFile = HadoopInputFile.fromPath(new HadoopPath(filePath), conf)
+    val reader = ParquetFileReader.open(inputFile)
+    try {
+      reader.getFooter.getFileMetaData.getSchema
+    } finally {
+      reader.close()
+    }
+  }
+
+  /**
+   * Gets a named field from a GroupType (MessageType) and returns it as a GroupType.
+   * Uses getFieldIndex(String) + getType(int) to avoid Scala overload resolution issues.
+   */
+  private def getFieldAsGroup(parent: GroupType, fieldName: String): GroupType = {
+    val idx: Int = parent.getFieldIndex(fieldName)
+    parent.getType(idx).asGroupType()
   }
 }

@@ -266,7 +266,7 @@ public class HoodieMetrics {
   }
 
   public Timer.Context getConflictResolutionCtx() {
-    if (config.isLockingMetricsEnabled() && conflictResolutionTimer == null) {
+    if (config.isMetricsOn() && config.isLockingMetricsEnabled() && conflictResolutionTimer == null) {
       conflictResolutionTimer = createTimer(conflictResolutionTimerName);
     }
     return conflictResolutionTimer == null ? null : conflictResolutionTimer.time();
@@ -555,6 +555,9 @@ public class HoodieMetrics {
    * Given a commit action, metrics name and value this method reports custom metrics.
    */
   public void reportMetrics(String commitAction, String metricName, long value) {
+    if (!config.isMetricsOn()) {
+      return;
+    }
     metrics.registerGauge(getMetricsName(commitAction, metricName), value);
   }
 
@@ -566,7 +569,7 @@ public class HoodieMetrics {
   }
 
   public void emitConflictResolutionSuccessful() {
-    if (config.isLockingMetricsEnabled()) {
+    if (config.isMetricsOn() && config.isLockingMetricsEnabled()) {
       log.info("Sending conflict resolution success metric");
       conflictResolutionSuccessCounter = getCounter(conflictResolutionSuccessCounter, conflictResolutionSuccessCounterName);
       conflictResolutionSuccessCounter.inc();
@@ -574,7 +577,7 @@ public class HoodieMetrics {
   }
 
   public void emitConflictResolutionFailed() {
-    if (config.isLockingMetricsEnabled()) {
+    if (config.isMetricsOn() && config.isLockingMetricsEnabled()) {
       log.info("Sending conflict resolution failure metric");
       conflictResolutionFailureCounter = getCounter(conflictResolutionFailureCounter, conflictResolutionFailureCounterName);
       conflictResolutionFailureCounter.inc();
@@ -582,7 +585,7 @@ public class HoodieMetrics {
   }
 
   public void emitConflictResolutionByCategory(HoodieWriteConflictException.ConflictCategory category) {
-    if (config.isLockingMetricsEnabled()) {
+    if (config.isMetricsOn() && config.isLockingMetricsEnabled()) {
       switch (category) {
         case INGESTION_VS_INGESTION:
           conflictResolutionIngestionVsIngestionCounter = getCounter(

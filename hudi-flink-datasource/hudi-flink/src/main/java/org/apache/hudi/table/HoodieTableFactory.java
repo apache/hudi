@@ -198,6 +198,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
             String.format("Metadata table should be enabled when %s is %s.", FlinkOptions.INDEX_TYPE.key(), HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX));
         ValidationUtils.checkArgument(conf.get(FlinkOptions.INDEX_GLOBAL_ENABLED),
             String.format("Partition level index updating is not supported for GLOBAL_RECORD_LEVEL_INDEX, please set '%s' = 'true'.", FlinkOptions.INDEX_GLOBAL_ENABLED.key()));
+        ValidationUtils.checkArgument(!OptionsResolver.isMultiWriter(conf),
+            "Flink global record level index does not support multiple writers, set hoodie.write.concurrency.mode=SINGLE_WRITER instead.");
 
         boolean deferredRLI = Boolean.parseBoolean(conf.getString(
             HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key(), HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.defaultValue().toString()));
@@ -209,6 +211,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
             "Partitioned record level index supports only Flink streaming upsert and insert overwrite.");
         ValidationUtils.checkArgument(!OptionsResolver.isNonBlockingConcurrencyControl(conf),
             "Partitioned record level index does not support non-blocking concurrency control.");
+        ValidationUtils.checkArgument(!OptionsResolver.isMultiWriter(conf),
+            "Flink record level index does not support multiple writers, set hoodie.write.concurrency.mode=SINGLE_WRITER instead.");
         break;
       default:
         break;
@@ -516,7 +520,10 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   private static void inferAvroSchema(Configuration conf, LogicalType rowType) {
     if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH).isEmpty()
         && conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA).isEmpty()) {
-      String inferredSchema = HoodieSchemaConverter.convertToSchema(rowType, HoodieSchemaUtils.getRecordQualifiedName(conf.get(FlinkOptions.TABLE_NAME))).toString();
+      String inferredSchema = HoodieSchemaConverter.convertToSchema(
+          rowType,
+          HoodieSchemaUtils.getRecordQualifiedName(conf.get(FlinkOptions.TABLE_NAME)),
+          conf.get(FlinkOptions.VECTOR_COLUMNS)).toString();
       conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, inferredSchema);
     }
   }

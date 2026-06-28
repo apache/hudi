@@ -860,6 +860,8 @@ public class ConfigUtils {
         metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES));
     props.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB.key(),
         metadataConfig.getStringOrDefault(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB));
+    props.setProperty(HoodieMetadataConfig.BLOOM_FILTER_ENABLE.key(),
+        metadataConfig.getStringOrDefault(HoodieMetadataConfig.BLOOM_FILTER_ENABLE));
     return props;
   }
 }

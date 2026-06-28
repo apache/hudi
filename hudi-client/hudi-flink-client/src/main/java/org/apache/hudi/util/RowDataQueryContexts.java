@@ -67,7 +67,7 @@ public class RowDataQueryContexts {
         contextMap.put(rowFields[i].getName(), FieldQueryContext.create(fieldType, fieldGetter, utcTimezone));
       }
       RowDataToAvroConverter rowDataToAvroConverter = RowDataToAvroConverters.createConverter(rowType, utcTimezone);
-      AvroToRowDataConverter avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(rowType, utcTimezone);
+      AvroToRowDataConverter avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(schema, rowType, utcTimezone);
       return RowDataQueryContext.create(dataType, contextMap, fieldGetters, rowDataToAvroConverter, avroToRowDataConverter);
     });
   }

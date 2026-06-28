@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieBaseRelation, HoodieDataSourceHelpers, HoodieFileIndex, HoodieSchemaConversionUtils, QuickstartUtils, ScalaAssertionSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieBaseRelation, HoodieDataSourceHelpers, HoodieFileIndex, HoodieSchemaConversionUtils, HoodieSparkUtils, QuickstartUtils, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.{INLINE_CLUSTERING_ENABLE, KEYGENERATOR_CLASS_NAME}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
@@ -1845,11 +1845,15 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   @ParameterizedTest
   @CsvSource(Array("true, 6", "false, 6", "true, 8", "false, 8", "true, 9", "false, 9"))
   def testLogicalTypesReadRepair(vectorizedReadEnabled: Boolean, tableVersion: Int): Unit = {
-    // Note: for spark 3.4 we should fall back to nonvectorized reader
+    // Note: for spark 3.3 and 3.4 we should fall back to nonvectorized reader
     // if that is not happening then this test will fail
     val prevValue = spark.conf.get("spark.sql.parquet.enableVectorizedReader")
     val prevTimezone = spark.conf.get("spark.sql.session.timeZone")
+    val propertyValue: String = System.getProperty("spark.testing")
     try {
+      if (HoodieSparkUtils.isSpark3_3) {
+        System.setProperty("spark.testing", "true")
+      }
       spark.conf.set("spark.sql.parquet.enableVectorizedReader", vectorizedReadEnabled.toString)
       spark.conf.set("spark.sql.session.timeZone", "UTC")
       val tableName = "trips_logical_types_json_cow_read_v" + tableVersion
@@ -1899,6 +1903,13 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     } finally {
       spark.conf.set("spark.sql.parquet.enableVectorizedReader", prevValue)
       spark.conf.set("spark.sql.session.timeZone", prevTimezone)
+      if (HoodieSparkUtils.isSpark3_3) {
+        if (propertyValue == null) {
+          System.clearProperty("spark.testing")
+        } else {
+          System.setProperty("spark.testing", propertyValue)
+        }
+      }
     }
   }
 
@@ -2202,6 +2213,40 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // try reading the empty table
     val count = spark.read.format("hudi").load(basePath).count()
     assertEquals(count, 0)
+  }
+
+  @Test
+  def testReadOfAnEmptyTableWithUserSuppliedSchema(): Unit = {
+    val (writeOpts, _) = getWriterReaderOpts(HoodieRecordType.AVRO)
+
+    // Insert + then delete the only completed commit so the table has no resolvable schema.
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    inputDF.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val fileStatuses = storage.listDirectEntries(
+      new StoragePath(basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME
+        + StoragePath.SEPARATOR + HoodieTableMetaClient.TIMELINEFOLDER_NAME),
+      new StoragePathFilter {
+        override def accept(path: StoragePath): Boolean = {
+          path.getName.endsWith(HoodieTimeline.COMMIT_ACTION)
+        }
+      })
+    storage.deleteFile(fileStatuses.get(0).getPath)
+
+    // spark.read.schema(...) triggers Spark's SchemaRelationProvider path which calls the
+    // 3-arg DefaultSource.createRelation overload directly. Without the catch on that
+    // overload, this would fail with HoodieSchemaNotFoundException.
+    val userSchema = inputDF.schema
+    val df = spark.read.schema(userSchema).format("hudi").load(basePath)
+    assertEquals(0, df.count())
+    // The caller-supplied schema must be preserved on the EmptyRelation so subsequent query
+    // analysis (e.g. column resolution) sees the user-known columns.
+    assertEquals(userSchema, df.schema)
   }
 
   /**

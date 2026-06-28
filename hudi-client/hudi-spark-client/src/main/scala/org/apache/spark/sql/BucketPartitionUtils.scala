@@ -25,16 +25,20 @@ import org.apache.hudi.common.util.{Functions, RemotePartitionHelper}
 import org.apache.hudi.common.util.hash.BucketIndexUtil
 import org.apache.hudi.index.bucket.BucketIdentifier
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction
+import org.apache.hudi.keygen.KeyGenUtils
 
 import org.apache.spark.Partitioner
 import org.apache.spark.sql.catalyst.InternalRow
 
 object BucketPartitionUtils extends SparkAdapterSupport {
   def createDataFrame(df: DataFrame, indexKeyFields: String, numBucketsFunction: NumBucketsFunction, partitioner: Partitioner): DataFrame = {
+    // parse the comma-separated config once outside the per-row closure; the list is a
+    // serializable java.util.List, safe to capture
+    val indexKeyFieldList = KeyGenUtils.getIndexKeyFields(indexKeyFields)
     def getPartitionKeyExtractor(): InternalRow => (String, Int) = row => {
       val partition = row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
       val kb = BucketIdentifier
-        .getBucketId(row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD), indexKeyFields, numBucketsFunction.getNumBuckets(partition))
+        .getBucketId(row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD), indexKeyFieldList, numBucketsFunction.getNumBuckets(partition))
 
       if (partition == null || partition.trim.isEmpty) {
         ("", kb)

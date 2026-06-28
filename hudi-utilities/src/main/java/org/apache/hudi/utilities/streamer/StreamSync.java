@@ -589,6 +589,14 @@ public class StreamSync implements Serializable, Closeable {
     }
   }
 
+  public void reportSuccessMetrics() {
+    metrics.emitStreamerJobSuccessMetrics();
+  }
+
+  public void reportFailureMetrics() {
+    metrics.emitStreamerJobFailedMetrics();
+  }
+
   private Option<String> getLastPendingClusteringInstant(Option<HoodieTimeline> commitTimelineOpt) {
     if (commitTimelineOpt.isPresent()) {
       Option<HoodieInstant> pendingClusteringInstant = commitTimelineOpt.get().getLastPendingClusterInstant();

@@ -374,6 +374,14 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("Source avro schema string, the parsed schema is used for deserialization");
 
+  public static final ConfigOption<String> VECTOR_COLUMNS = ConfigOptions
+      .key("hoodie.vector.columns")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Comma-separated top-level VECTOR columns in the format columnName[:dimension]. "
+          + "The dimension defaults to 128 when omitted. The element type is inferred from the Flink "
+          + "ARRAY element type: FLOAT, DOUBLE, or TINYINT.");
+
   public static final String QUERY_TYPE_SNAPSHOT = "snapshot";
   public static final String QUERY_TYPE_READ_OPTIMIZED = "read_optimized";
   public static final String QUERY_TYPE_INCREMENTAL = "incremental";

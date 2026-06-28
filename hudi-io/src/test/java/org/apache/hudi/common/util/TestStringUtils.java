@@ -102,6 +102,21 @@ public class TestStringUtils {
   }
 
   @Test
+  public void testSplitTopLevelCommas() {
+    // Commas inside parentheses must not split the segment (decimal shredding DDL + VECTOR descriptors).
+    assertEquals(Arrays.asList("a int", "b string", "c decimal(15, 1)"),
+        StringUtils.splitTopLevelCommas("a int, b string, c decimal(15, 1)"));
+    assertEquals(Arrays.asList("v1:VECTOR(128, DOUBLE)", "v2:VECTOR(64)"),
+        StringUtils.splitTopLevelCommas("v1:VECTOR(128, DOUBLE), v2:VECTOR(64)"));
+    // Segments are trimmed and empty ones dropped.
+    assertEquals(Arrays.asList("a int", "b string"),
+        StringUtils.splitTopLevelCommas(" a int ,, b string "));
+    // Null / empty / blank input yields an empty list.
+    assertEquals(Collections.emptyList(), StringUtils.splitTopLevelCommas(null));
+    assertEquals(Collections.emptyList(), StringUtils.splitTopLevelCommas(""));
+  }
+
+  @Test
   public void testStringNullToEmpty() {
     String str = "This is a test";
     assertEquals(str, StringUtils.nullToEmpty(str));

@@ -312,6 +312,10 @@ jobs:
       matrix:
         include:
           - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.3"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
+
+          - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.4"
             sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
 
@@ -364,6 +368,10 @@ jobs:
     strategy:
       matrix:
         include:
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.3"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
+
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.4"
             sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
@@ -433,6 +441,10 @@ jobs:
       matrix:
         include:
           - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.3"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
+
+          - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.4"
             sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
 
@@ -494,6 +506,10 @@ jobs:
       matrix:
         include:
           - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.3"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
+
+          - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.4"
             sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
 
@@ -554,6 +570,10 @@ jobs:
     strategy:
       matrix:
         include:
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.3"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
+
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.4"
             sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
@@ -994,9 +1014,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - flinkProfile: "flink1.17"
-            flinkAvroVersion: "1.11.4"
-            flinkParquetVersion: '1.12.3'
           - flinkProfile: "flink1.18"
             flinkAvroVersion: "1.11.4"
             flinkParquetVersion: '1.13.1'
@@ -1167,11 +1184,11 @@ jobs:
             sparkProfile: 'spark3.4'
             sparkRuntime: 'spark3.4.3'
           - scalaProfile: 'scala-2.12'
-            flinkProfile: 'flink1.17'
+            flinkProfile: 'flink1.18'
             flinkAvroVersion: '1.11.4'
-            flinkParquetVersion: '1.12.3'
-            sparkProfile: 'spark3.5'
-            sparkRuntime: 'spark3.5.1'
+            flinkParquetVersion: '1.13.1'
+            sparkProfile: 'spark3.3'
+            sparkRuntime: 'spark3.3.4'
 
     steps:
       - if: needs.changes.outputs.relevant == 'true'
@@ -1410,6 +1427,10 @@ jobs:
     strategy:
       matrix:
         include:
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.3"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
+
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.4"
             sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"

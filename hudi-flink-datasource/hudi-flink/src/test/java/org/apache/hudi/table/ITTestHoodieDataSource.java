@@ -79,6 +79,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -126,6 +128,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @ExtendWith(FlinkMiniCluster.class)
 public class ITTestHoodieDataSource {
+  private static final Logger LOG = LoggerFactory.getLogger(ITTestHoodieDataSource.class);
+
+  // A streaming read collected via CollectTableSink is terminated by a forced SuccessException once it
+  // reaches its expected row count. A benign teardown race (see isAcceptableTerminalFailure) can instead
+  // close the source stream mid-read and terminate the job before all rows are emitted, leaving an
+  // incomplete result. Re-reading from the same (already committed) table is idempotent, so retry a few
+  // times before giving up. See submitAndFetchWithRetry.
+  private static final int MAX_STREAM_READ_ATTEMPTS = 3;
+
   private TableEnvironment streamTableEnv;
   private TableEnvironment batchTableEnv;
 
@@ -560,7 +571,7 @@ public class ITTestHoodieDataSource {
         + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "',\n"
         + "  'sink-expected-row-num' = '2'"
         + ")";
-    List<Row> result = execSelectSqlWithExpectedNum(streamTableEnv, "select name, sum(age) from t1 group by name", sinkDDL);
+    List<Row> result = submitAndFetchWithRetry(streamTableEnv, "select name, sum(age) from t1 group by name", sinkDDL, 2);
     final String expected = "[+I(+I[Danny, 24]), +I(+I[Stephen, 34])]";
     assertRowsEquals(result, expected, true);
   }
@@ -601,6 +612,54 @@ public class ITTestHoodieDataSource {
         + "+I[id1, Danny, 23, 1970-01-01T00:00:01, par1], "
         + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
         + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
+  }
+
+  @ParameterizedTest
+  @MethodSource("tableTypeAndBooleanTrueFalseParams")
+  void testDataSkippingWithPartitionedRecordLevelIndex(
+      HoodieTableType tableType, boolean useSourceV2) throws Exception {
+    String writerTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name())
+        .option(FlinkOptions.TABLE_TYPE, tableType.name())
+        .end();
+    streamTableEnv.executeSql(writerTableDDL);
+    execInsertSql(streamTableEnv, TestSQL.INSERT_T1);
+
+    String readerTableDDL = sql("t1_read")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
+        .option(FlinkOptions.TABLE_TYPE, tableType.name())
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
+        .end();
+    batchTableEnv.executeSql(readerTableDDL);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> batchTableEnv.sqlQuery(
+            "select * from t1_read where `partition` = 'par1' and uuid = 'id1'").execute().collect());
+    assertRowsEquals(result, "[+I[id1, Danny, 23, 1970-01-01T00:00:01, par1]]");
+
+    List<Row> multiPartitionResult = CollectionUtil.iterableToList(
+        () -> batchTableEnv.sqlQuery(
+            "select * from t1_read where `partition` in ('par1', 'par4') and uuid in ('id1', 'id7')").execute().collect());
+    assertRowsEquals(multiPartitionResult, "["
+        + "+I[id1, Danny, 23, 1970-01-01T00:00:01, par1], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4]]");
+
+    // insert a record with id1 into the par4.
+    String insert = "insert into t1 values ('id1','Jack',23,TIMESTAMP '1970-01-01 00:00:01','par4')";
+    execInsertSql(streamTableEnv, insert);
+    // test scenario query predicate also includes a partition name which doesn't exist.
+    multiPartitionResult = CollectionUtil.iterableToList(
+        () -> batchTableEnv.sqlQuery(
+            "select * from t1_read where `partition` in ('par1', 'par4', 'par5') and uuid in ('id1', 'id7')").execute().collect());
+    assertRowsEqualsUnordered(multiPartitionResult,
+        Arrays.asList(
+            "+I[id1, Danny, 23, 1970-01-01T00:00:01, par1]",
+            "+I[id1, Jack, 23, 1970-01-01T00:00:01, par4]",
+            "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4]"));
   }
 
   @ParameterizedTest
@@ -2427,6 +2486,36 @@ public class ITTestHoodieDataSource {
 
   @ParameterizedTest
   @ValueSource(strings = {"insert", "upsert", "bulk_insert"})
+  void testParquetDeeplyNestedRepeatedTypes(String operation) {
+    // Covers a ROW containing an ARRAY of ROW that itself contains a MAP, i.e.
+    // ROW<ARRAY<ROW<INT, MAP<STRING, INT>>>>, where the MAP is a repeated field
+    // nested inside another repeated field (repetition level >= 2).
+    // See HUDI-18491 for the original bug report on this schema shape.
+    TableEnvironment tableEnv = batchTableEnv;
+
+    String hoodieTableDDL = sql("t1")
+        .field("f_int int")
+        .field("f_row row(f_nested_array array<row(f_score int, f_map map<varchar(10), int>)>)")
+        .pkField("f_int")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, operation)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, TestSQL.DEEPLY_NESTED_REPEATED_TYPE_INSERT_T1);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    List<Row> expected = Arrays.asList(
+        row(1, row((Object) array(row(11, map("a", 1, "b", 2)), row(12, map("c", 3))))),
+        row(2, row((Object) array(row(21, map("d", 4))))),
+        row(3, row((Object) array(row(31, map("e", 5)), row(32, map("f", 6, "g", 7))))));
+    assertRowsEqualsUnordered(expected, result);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"insert", "upsert", "bulk_insert"})
   void testBuiltinFunctionWithCatalog(String operation) {
     TableEnvironment tableEnv = batchTableEnv;
 
@@ -3858,15 +3947,32 @@ public class ITTestHoodieDataSource {
     } else {
       sinkDDL = TestConfigurations.getCollectSinkDDLWithExpectedNum("sink", expectedNum);
     }
-    return execSelectSqlWithExpectedNum(tEnv, select, sinkDDL);
+    return submitAndFetchWithRetry(tEnv, select, sinkDDL, expectedNum);
   }
 
   /**
-   * Use CollectTableSink to collect results with expected row number.
+   * Submits a streaming select that collects into the {@link CollectSinkTableFactory} sink and returns
+   * the collected rows.
+   *
+   * <p>The streaming job is terminated by a forced {@link CollectSinkTableFactory.SuccessException} once
+   * {@code expectedNum} rows are collected. A benign teardown race (see {@link #isAcceptableTerminalFailure})
+   * can instead end the job before all rows are emitted, leaving a short result. Re-reading the already
+   * committed table is idempotent, so retry up to {@link #MAX_STREAM_READ_ATTEMPTS} times when the result
+   * is short; this keeps the race from surfacing as a confusing row-count assertion failure.
    */
-  private List<Row> execSelectSqlWithExpectedNum(TableEnvironment tEnv, String select, String sinkDDL) {
-    TableResult tableResult = submitSelectSql(tEnv, select, sinkDDL);
-    return fetchResultWithExpectedNum(tEnv, tableResult);
+  private List<Row> submitAndFetchWithRetry(TableEnvironment tEnv, String select, String sinkDDL, int expectedNum) {
+    List<Row> rows = Collections.emptyList();
+    for (int attempt = 1; attempt <= MAX_STREAM_READ_ATTEMPTS; attempt++) {
+      TableResult tableResult = submitSelectSql(tEnv, select, sinkDDL);
+      rows = fetchResultWithExpectedNum(tEnv, tableResult);
+      if (expectedNum <= 0 || rows.size() >= expectedNum) {
+        return rows;
+      }
+      LOG.warn("Streaming read collected {} of {} expected rows on attempt {}/{}; a tolerated teardown "
+              + "race ended the job before the read completed. Retrying. select=[{}]",
+          rows.size(), expectedNum, attempt, MAX_STREAM_READ_ATTEMPTS, select);
+    }
+    return rows;
   }
 
   private TableResult submitSelectSql(TableEnvironment tEnv, String select, String sinkDDL) {
@@ -3911,8 +4017,25 @@ public class ITTestHoodieDataSource {
       //      fail the job on stream-closed-mid-read (the right behavior for real I/O
       //      failures), so this tolerance is scoped to the SuccessException-based test
       //      pattern below and is NOT mirrored in production code.
+      //   3. NullPointerException from ParquetColumnarRowSplitReader#readNextRowGroup: the
+      //      same benign teardown race as (2), observed with different timing. When the
+      //      SplitFetcher's close() fully completes first, ParquetColumnarRowSplitReader#close
+      //      nulls out its `reader` field, so the in-flight row-group read on the task thread
+      //      surfaces as a NullPointerException (reader.readNextRowGroup() on a null reader)
+      //      instead of an IOException("Stream is closed!"). Same functional outcome - the
+      //      sink has already collected the expected rows - only the error symptom differs.
+      //      Tolerated narrowly (an NPE originating from that exact frame) for the same
+      //      reason as (2), and likewise NOT mirrored in production code.
       if (!isAcceptableTerminalFailure(e)) {
         throw new AssertionError("Unexpected job failure", e);
+      }
+      // The races (2)/(3) usually fire after the sink has collected its expected rows, but can also fire
+      // before - ending the read with a short result. Log the tolerated cause so an incomplete read is
+      // diagnosable; submitAndFetchWithRetry re-reads when the collected count is below the expectation.
+      if (!isSuccessException(e)) {
+        LOG.warn("Streaming read terminated by a tolerated teardown race ({}); collected {} rows so far.",
+            describeTerminalCause(e),
+            CollectSinkTableFactory.RESULT.values().stream().mapToInt(List::size).sum());
       }
     }
     tEnv.executeSql("DROP TABLE IF EXISTS sink");
@@ -3936,8 +4059,65 @@ public class ITTestHoodieDataSource {
       if (msg != null && msg.contains("Stream is closed")) {
         return true;
       }
+      // The NPE twin of the "Stream is closed!" teardown race (cause #3 at the call site):
+      // a NullPointerException whose own stack trace originates from
+      // ParquetColumnarRowSplitReader#readNextRowGroup, i.e. reader.readNextRowGroup() ran on a
+      // null `reader` that ParquetColumnarRowSplitReader#close had just nulled out. Scoped to
+      // that exact frame so genuine NPEs - and the legitimate IOException("expecting more
+      // rows...") thrown from the same method - still fail the test.
+      if (isNullPointerException(cur) && containsReadNextRowGroupFrame(cur)) {
+        return true;
+      }
       cur = cur.getCause();
     }
     return false;
+  }
+
+  /**
+   * True for a real {@link NullPointerException} as well as one wrapped in Flink's
+   * {@code SerializedThrowable} when the failure is propagated back from the cluster (its
+   * {@code toString()} preserves the original {@code java.lang.NullPointerException} prefix).
+   */
+  private static boolean isNullPointerException(Throwable t) {
+    return t instanceof NullPointerException
+        || t.toString().startsWith(NullPointerException.class.getName());
+  }
+
+  /**
+   * Whether {@code t}'s stack trace (preserved even through {@code SerializedThrowable})
+   * contains a {@code ParquetColumnarRowSplitReader#readNextRowGroup} frame.
+   */
+  private static boolean containsReadNextRowGroupFrame(Throwable t) {
+    for (StackTraceElement frame : t.getStackTrace()) {
+      if (frame.getClassName().endsWith("ParquetColumnarRowSplitReader")
+          && "readNextRowGroup".equals(frame.getMethodName())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Whether {@code e} (or any of its causes) is the normal {@link CollectSinkTableFactory.SuccessException}
+   * terminator (the happy path), as opposed to one of the tolerated teardown-race symptoms.
+   */
+  private static boolean isSuccessException(Throwable e) {
+    for (Throwable cur = e; cur != null; cur = cur.getCause()) {
+      if (cur instanceof CollectSinkTableFactory.SuccessException) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Short description of {@code e}'s root cause, for logging which tolerated terminal failure fired.
+   */
+  private static String describeTerminalCause(Throwable e) {
+    Throwable root = e;
+    while (root.getCause() != null) {
+      root = root.getCause();
+    }
+    return root.getClass().getSimpleName() + ": " + root.getMessage();
   }
 }

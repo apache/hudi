@@ -19,7 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -30,7 +30,10 @@ import lombok.Setter;
 import lombok.ToString;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Matcher;
 
 import static org.apache.hudi.common.fs.FSUtils.LOG_FILE_PATTERN;
@@ -49,9 +52,19 @@ public class HoodieLogFile implements Serializable {
   public static final String DELTA_EXTENSION = ".log";
   public static final String LOG_FILE_PREFIX = ".";
   public static final Integer LOGFILE_BASE_VERSION = 1;
+  private static final Map<String, Integer> EXTENSION_PRECEDENCE;
 
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR = new LogFileComparator();
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR_REVERSED = new LogFileComparator().reversed();
+
+  static {
+    Map<String, Integer> extensionPrecedence = new HashMap<>();
+    extensionPrecedence.put(LogExtensions.DATA_LOG_EXTENSION, 0);
+    extensionPrecedence.put(LogExtensions.DELETE_LOG_EXTENSION, 1); // the deletes come after logs to ensure commit time sequence.
+    extensionPrecedence.put(LogExtensions.CDC_LOG_EXTENSION, 2);
+    extensionPrecedence.put(LogExtensions.ARCHIVE_LOG_EXTENSION, 3);
+    EXTENSION_PRECEDENCE = Collections.unmodifiableMap(extensionPrecedence);
+  }
 
   @Getter
   @Setter
@@ -109,6 +122,17 @@ public class HoodieLogFile implements Serializable {
   }
 
   private void parseFieldsFromPath() {
+    Option<Matcher> nativeLogMatcherOpt = FSUtils.matchNativeLogFile(getPath().getName());
+    if (nativeLogMatcherOpt.isPresent()) {
+      Matcher matcher = nativeLogMatcherOpt.get();
+      this.fileId = matcher.group(1);
+      this.deltaCommitTime = matcher.group(6);
+      this.fileExtension = matcher.group(8);
+      this.logVersion = Integer.parseInt(matcher.group(7));
+      this.logWriteToken = matcher.group(2);
+      this.suffix = matcher.group(9);
+      return;
+    }
     Matcher matcher = LOG_FILE_PATTERN.matcher(getPath().getName());
     if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path, "LogFile");
@@ -157,7 +181,7 @@ public class HoodieLogFile implements Serializable {
   }
 
   public boolean isCDC() {
-    return getSuffix().equals(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
+    return FSUtils.isCDCLogFile(getFileName());
   }
 
   public String getSuffix() {
@@ -182,6 +206,11 @@ public class HoodieLogFile implements Serializable {
     String fileId = getFileId();
     String deltaCommitTime = getDeltaCommitTime();
     StoragePath path = getPath();
+    if (FSUtils.matchNativeLogFile(path.getName()).isPresent()) {
+      return new HoodieLogFile(new StoragePath(path.getParent(),
+          FSUtils.makeNativeLogFileName(fileId, logWriteToken, deltaCommitTime, logVersion + 1,
+              fileExtension, HoodieFileFormat.fromFileExtension("." + getSuffix()))));
+    }
     String extension = "." + fileExtension;
     return new HoodieLogFile(new StoragePath(path.getParent(),
         FSUtils.makeLogFileName(fileId, extension, deltaCommitTime, logVersion + 1, logWriteToken)));
@@ -223,8 +252,13 @@ public class HoodieLogFile implements Serializable {
           int compareWriteToken = getWriteTokenComparator().compare(o1.getLogWriteToken(), o2.getLogWriteToken());
           if (compareWriteToken == 0) {
 
-            // Compare by suffix when write token is same
-            return o1.getSuffix().compareTo(o2.getSuffix());
+            int p1 = EXTENSION_PRECEDENCE.getOrDefault(o1.getFileExtension(), Integer.MAX_VALUE);
+            int p2 = EXTENSION_PRECEDENCE.getOrDefault(o2.getFileExtension(), Integer.MAX_VALUE);
+            if (p1 == p2) {
+              // Compare by suffix when file extension is same
+              return o1.getSuffix().compareTo(o2.getSuffix());
+            }
+            return Integer.compare(p1, p2);
           }
 
           // Compare by write token when delta-commit and log-version is same
