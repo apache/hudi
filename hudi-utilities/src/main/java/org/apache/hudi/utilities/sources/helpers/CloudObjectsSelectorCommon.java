@@ -67,6 +67,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
@@ -278,7 +279,7 @@ public class CloudObjectsSelectorCommon {
           cloudObjectMetadata.size(), cloudObjectMetadata.stream().map(CloudObjectMetadata::getPath).limit(10).collect(Collectors.toList()));
     }
 
-    if (cloudObjectMetadata.isEmpty()) {
+    if (isNullOrEmpty(cloudObjectMetadata)) {
       return Option.empty();
     }
     DataFrameReader reader = applyMergeSchemaOption(spark.read().format(fileFormat), fileFormat);

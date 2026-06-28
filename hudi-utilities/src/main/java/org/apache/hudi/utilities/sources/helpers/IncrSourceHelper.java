@@ -64,6 +64,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT;
 import static org.apache.spark.sql.functions.col;
+import static org.apache.spark.sql.functions.row_number;
 import static org.apache.spark.sql.functions.sum;
 
 @Slf4j
@@ -71,6 +72,7 @@ public class IncrSourceHelper {
 
   public static final String DEFAULT_START_TIMESTAMP = HoodieTimeline.INIT_INSTANT_TS;
   private static final String CUMULATIVE_COLUMN_NAME = "cumulativeSize";
+  private static final String CUMULATIVE_COUNT_COLUMN_NAME = "cumulativeCount";
 
   /**
    * When hollow commits are found while using incremental source with {@link HoodieDeltaStreamer},
@@ -262,6 +264,21 @@ public class IncrSourceHelper {
   public static Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> filterAndGenerateCheckpointBasedOnSourceLimit(Dataset<Row> sourceData,
                                                                                                                     long sourceLimit, QueryInfo queryInfo,
                                                                                                                     CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint) {
+    return filterAndGenerateCheckpointBasedOnSourceLimit(sourceData, sourceLimit, Long.MAX_VALUE, queryInfo, cloudObjectIncrCheckpoint);
+  }
+
+  /**
+   * Adjust the source dataset to size based batch based on last checkpoint key.
+   *
+   * @param sourceData    Source dataset
+   * @param sourceLimit   Max number of bytes to be read from source
+   * @param numFilesLimit Max number of files to be read from source in this batch
+   * @param queryInfo     Query Info
+   * @return end instants along with filtered rows.
+   */
+  public static Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> filterAndGenerateCheckpointBasedOnSourceLimit(Dataset<Row> sourceData,
+                                                                                                                    long sourceLimit, long numFilesLimit, QueryInfo queryInfo,
+                                                                                                                    CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint) {
     if (sourceData.isEmpty()) {
       // There is no file matching the prefix.
       CloudObjectIncrCheckpoint updatedCheckpoint =
@@ -299,19 +316,25 @@ public class IncrSourceHelper {
       }
     }
 
-    // Limit based on sourceLimit
+    // Compute cumulative size and cumulative row count over the same ordered window so that
+    // both the byte-based and files-based limits select a contiguous prefix of the ordered set.
+    // Applying both predicates in a single window pass keeps the result deterministic across
+    // executors and avoids a post-hoc limit() on an unordered dataset.
     WindowSpec windowSpec = Window.orderBy(col(queryInfo.getOrderColumn()), col(queryInfo.getKeyColumn()));
-    // Add the 'cumulativeSize' column with running sum of 'limitColumn'
-    Dataset<Row> aggregatedData = orderedDf.withColumn(CUMULATIVE_COLUMN_NAME,
-        sum(col(queryInfo.getLimitColumn())).over(windowSpec));
-    Dataset<Row> collectedRows = aggregatedData.filter(col(CUMULATIVE_COLUMN_NAME).leq(sourceLimit));
+    Dataset<Row> aggregatedData = orderedDf
+        .withColumn(CUMULATIVE_COLUMN_NAME, sum(col(queryInfo.getLimitColumn())).over(windowSpec))
+        .withColumn(CUMULATIVE_COUNT_COLUMN_NAME, row_number().over(windowSpec));
+    Dataset<Row> collectedRows = aggregatedData
+        .filter(col(CUMULATIVE_COLUMN_NAME).leq(sourceLimit).and(col(CUMULATIVE_COUNT_COLUMN_NAME).leq(numFilesLimit)));
 
-    Row row = null;
+    Row row;
     if (collectedRows.isEmpty()) {
-      // If the first element itself exceeds limits then return first element
+      // If the first element itself exceeds the byte limit then return the first element.
+      // numFilesLimit is assumed to be >= 1 (validated at config layer); we deliberately take
+      // one file even if it exceeds the byte limit, matching pre-existing behavior.
       log.info("First object exceeding source limit: {} bytes", sourceLimit);
-      row = aggregatedData.select(queryInfo.getOrderColumn(), queryInfo.getKeyColumn(), CUMULATIVE_COLUMN_NAME).first();
-      collectedRows = aggregatedData.limit(1);
+      collectedRows = aggregatedData.filter(col(CUMULATIVE_COUNT_COLUMN_NAME).equalTo(1));
+      row = collectedRows.select(queryInfo.getOrderColumn(), queryInfo.getKeyColumn(), CUMULATIVE_COLUMN_NAME).first();
     } else {
       // Get the last row and form composite key
       row = collectedRows.select(queryInfo.getOrderColumn(), queryInfo.getKeyColumn(), CUMULATIVE_COLUMN_NAME).orderBy(
@@ -319,24 +342,10 @@ public class IncrSourceHelper {
     }
     log.info("Processed batch size: {} bytes", row.get(row.fieldIndex(CUMULATIVE_COLUMN_NAME)));
     sourceData.unpersist();
-    return Pair.of(new CloudObjectIncrCheckpoint(row.getString(0), row.getString(1)), Option.of(collectedRows));
-  }
-
-  /**
-   * Extract the checkpoint (commit_time, file_key) from the last row of the given dataset,
-   * ordering by the order column and key column descending.
-   * Used to recalculate the checkpoint after a files-per-sync limit is applied.
-   *
-   * @param dataset   Dataset whose last row (by order+key) determines the checkpoint
-   * @param queryInfo Query info with column names for ordering and key extraction
-   * @return Checkpoint corresponding to the last file in the dataset
-   */
-  public static CloudObjectIncrCheckpoint getCheckpointFromLastRow(Dataset<Row> dataset, QueryInfo queryInfo) {
-    Row lastRow = dataset
-        .select(queryInfo.getOrderColumn(), queryInfo.getKeyColumn())
-        .orderBy(col(queryInfo.getOrderColumn()).desc(), col(queryInfo.getKeyColumn()).desc())
-        .first();
-    return new CloudObjectIncrCheckpoint(lastRow.getString(0), lastRow.getString(1));
+    // Drop the helper count column so returned dataset shape matches pre-existing contract
+    // (only the source columns plus cumulativeSize).
+    return Pair.of(new CloudObjectIncrCheckpoint(row.getString(0), row.getString(1)),
+        Option.of(collectedRows.drop(CUMULATIVE_COUNT_COLUMN_NAME)));
   }
 
   /**

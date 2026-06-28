@@ -33,7 +33,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.storage.StorageLevel;
 
 import java.io.Serializable;
 import java.util.List;
@@ -103,36 +102,21 @@ public class CloudDataFetcher implements Serializable {
     log.info("Adding filter string to Dataset: {}", filter);
     Dataset<Row> filteredSourceData = queryInfoDatasetPair.getRight().filter(filter);
 
-    log.info("Adjusting end checkpoint:{} based on sourceLimit :{}", queryInfo.getEndInstant(), sourceLimit);
+    long numFilesLimit = props.getLong(SOURCE_MAX_FILES_PER_SYNC.key(), SOURCE_MAX_FILES_PER_SYNC.defaultValue());
+    log.info("Adjusting end checkpoint:{} based on sourceLimit:{} and numFilesLimit:{}",
+        queryInfo.getEndInstant(), sourceLimit, numFilesLimit);
     Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> checkPointAndDataset =
         IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
-            filteredSourceData, sourceLimit, queryInfo, cloudObjectIncrCheckpoint);
+            filteredSourceData, sourceLimit, numFilesLimit, queryInfo, cloudObjectIncrCheckpoint);
     if (!checkPointAndDataset.getRight().isPresent()) {
       log.info("Empty source, returning endpoint:{}", checkPointAndDataset.getLeft());
       return Pair.of(Option.empty(), new StreamerCheckpointV1(checkPointAndDataset.getLeft().toString()));
     }
     log.info("Adjusted end checkpoint :{}", checkPointAndDataset.getLeft());
 
-    // Limit the number of files per sync to prevent driver OOM with many small files.
-    // Apply the limit at the Dataset level so the checkpoint can be recalculated accurately.
-    long numFilesLimit = props.getLong(SOURCE_MAX_FILES_PER_SYNC.key(), SOURCE_MAX_FILES_PER_SYNC.defaultValue());
-    Dataset<Row> metadataRows = checkPointAndDataset.getRight().get()
-        .limit((int) Math.min(numFilesLimit, Integer.MAX_VALUE));
-    // Persist to avoid re-triggering the DAG for both getObjectMetadata and checkpoint recalculation
-    metadataRows.persist(StorageLevel.MEMORY_AND_DISK());
-
-    CloudObjectIncrCheckpoint checkpoint = checkPointAndDataset.getLeft();
     boolean checkIfFileExists = getBooleanWithAltKeys(props, ENABLE_EXISTS_CHECK);
-    List<CloudObjectMetadata> cloudObjectMetadata = CloudObjectsSelectorCommon.getObjectMetadata(cloudType, sparkContext, metadataRows, checkIfFileExists, props);
+    List<CloudObjectMetadata> cloudObjectMetadata = CloudObjectsSelectorCommon.getObjectMetadata(cloudType, sparkContext, checkPointAndDataset.getRight().get(), checkIfFileExists, props);
     log.info("Total number of files to process :{}", cloudObjectMetadata.size());
-
-    // If the files limit was reached, recalculate the checkpoint from the actual last row
-    // processed so the next sync resumes from the right position.
-    if (cloudObjectMetadata.size() >= numFilesLimit) {
-      checkpoint = IncrSourceHelper.getCheckpointFromLastRow(metadataRows, queryInfo);
-      log.info("Files limit applied, recalculated checkpoint to: {}", checkpoint);
-    }
-    metadataRows.unpersist();
 
     long bytesPerPartition = props.containsKey(SOURCE_MAX_BYTES_PER_PARTITION.key()) ? props.getLong(SOURCE_MAX_BYTES_PER_PARTITION.key()) :
         props.getLong(PARQUET_MAX_FILE_SIZE.key(), Long.parseLong(PARQUET_MAX_FILE_SIZE.defaultValue()));
@@ -146,7 +130,7 @@ public class CloudDataFetcher implements Serializable {
       numSourcePartitions = sourceProfileSupplier.get().getSourceProfile().getSourcePartitions();
     }
     Option<Dataset<Row>> datasetOption = getCloudObjectDataDF(cloudObjectMetadata, schemaProvider, bytesPerPartition, numSourcePartitions);
-    return Pair.of(datasetOption, new StreamerCheckpointV1(checkpoint.toString()));
+    return Pair.of(datasetOption, new StreamerCheckpointV1(checkPointAndDataset.getLeft().toString()));
   }
 
   private Option<Dataset<Row>> getCloudObjectDataDF(List<CloudObjectMetadata> cloudObjectMetadata,
