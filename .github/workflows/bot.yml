@@ -933,7 +933,7 @@ jobs:
   # The full unit/functional/scala suites above run only on the latest 3.x (spark3.5)
   # and latest 4.x (spark4.2); these entries give the other versions a fast
   # critical-path signal. The core set is excluded from the full suites
-  # (excludedGroups=core, tagsToExclude=SparkSQLCoreFlow), so no test runs twice.
+  # (excludedGroups=core, tagsToExclude=SparkCoreFlow), so no test runs twice.
   # The per-entry mvnProfiles carries -Pjava17 for the Java 17 rows (empty for Java 11).
   test-spark-core-tests:
     name: test-spark-core-tests (${{ matrix.scalaProfile }}, ${{ matrix.sparkProfile }}, java${{ matrix.javaVersion }})

@@ -42,7 +42,6 @@ import java.io.File
 
 import scala.collection.JavaConverters._
 
-@SparkSQLCoreFlow
 class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
   val colsToCompare = "timestamp, _row_key, partition_path, rider, driver, begin_lat, begin_lon, end_lat, end_lon, fare.amount, fare.currency, _hoodie_is_deleted"
 
@@ -64,7 +63,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
 
   //extracts the params and runs each core flow test
   forAll(params) { (paramStr: String) =>
-    test(s"Core flow with params: $paramStr") {
+    test(s"Core flow with params: $paramStr", SparkCoreFlow) {
       val splits = paramStr.split('|')
       withTempDir { basePath =>
         testCoreFlows(basePath,
@@ -417,7 +416,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
 
   //extracts the params and runs each immutable user flow test
   forAll(paramsForImmutable) { (paramStr: String) =>
-    test(s"Immutable user flow with params: $paramStr") {
+    test(s"Immutable user flow with params: $paramStr", SparkCoreFlow) {
       val splits = paramStr.split('|')
       withTempDir { basePath =>
         val writeOp = if (splits(1).equals("insert")) {

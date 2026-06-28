@@ -213,7 +213,7 @@
     <!-- Default scalatest tag exclusion: keep the curated core-flow tag out of the
          normal unit/functional scala runs. The core-tests profile clears this and adds
          tagsToInclude so the core-flow blocks run only in the dedicated per-version core job. -->
-    <hoodie.scalatest.tagsToExclude>org.apache.hudi.functional.SparkSQLCoreFlow</hoodie.scalatest.tagsToExclude>
+    <hoodie.scalatest.tagsToExclude>org.apache.hudi.functional.SparkCoreFlow</hoodie.scalatest.tagsToExclude>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <main.basedir>${project.basedir}</main.basedir>
     <spark.bundle.hive.scope>provided</spark.bundle.hive.scope>
@@ -2277,8 +2277,8 @@
     <profile>
       <!-- Curated "core flow" subset that runs on every Spark version in CI, while the
            full unit/functional suites run only on the latest Spark major versions.
-           Runs surefire @Tag("core") JUnit5 tests and scalatest @SparkSQLCoreFlow /
-           taggedAs(CoreFlow) blocks in one pass. tagsToInclude is set ONLY here (an
+           Runs surefire @Tag("core") JUnit5 tests and scalatest taggedAs(SparkCoreFlow)
+           blocks in one pass. tagsToInclude is set ONLY here (an
            empty tagsToInclude would emit -n "" and run zero scala tests). -->
       <id>core-tests</id>
       <properties>
@@ -2307,7 +2307,7 @@
             <groupId>org.scalatest</groupId>
             <artifactId>scalatest-maven-plugin</artifactId>
             <configuration>
-              <tagsToInclude>org.apache.hudi.functional.SparkSQLCoreFlow</tagsToInclude>
+              <tagsToInclude>org.apache.hudi.functional.SparkCoreFlow</tagsToInclude>
             </configuration>
           </plugin>
           <plugin>

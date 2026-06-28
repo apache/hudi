@@ -26,7 +26,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
-import org.apache.hudi.functional.CoreFlow
+import org.apache.hudi.functional.SparkCoreFlow
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -41,7 +41,7 @@ import org.slf4j.LoggerFactory
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
   private val log = LoggerFactory.getLogger(getClass)
 
-  test("Test MergeInto Basic", CoreFlow) {
+  test("Test MergeInto Basic", SparkCoreFlow) {
     Seq(true, false).foreach { sparkSqlOptimizedWrites =>
       withRecordType()(withTempDir { tmp =>
         withSparkSqlSessionConfig("hoodie.payload.combined.schema.validate" -> "false",
@@ -475,7 +475,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
-  test("Test MergeInto for MOR table", CoreFlow) {
+  test("Test MergeInto for MOR table", SparkCoreFlow) {
     withTempDir { tmp =>
       withSQLConf("hoodie.payload.combined.schema.validate" -> "true", MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key() -> "0") {
         val tableName = generateTableName
@@ -615,7 +615,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
-  test("Test MergeInto with insert only", CoreFlow) {
+  test("Test MergeInto with insert only", SparkCoreFlow) {
     withTempDir { tmp =>
       withSQLConf("hoodie.payload.combined.schema.validate" -> "true", MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key() -> "0") {
         // Create a partitioned mor table
@@ -916,7 +916,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
-  test("Test MergeInto with combination of delete update insert", CoreFlow) {
+  test("Test MergeInto with combination of delete update insert", SparkCoreFlow) {
     withRecordType()(withTempDir { tmp =>
       withSQLConf("hoodie.payload.combined.schema.validate" -> "true") {
         val sourceTable = generateTableName
