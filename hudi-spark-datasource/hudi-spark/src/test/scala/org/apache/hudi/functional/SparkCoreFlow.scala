@@ -26,9 +26,11 @@ import org.scalatest.Tag
  * version in CI (via the {@code core-tests} Maven profile), as opposed to the
  * full suite that runs only on the latest Spark major versions.
  *
- * The tag name matches the {@link SparkSQLCoreFlow} Java {@code @TagAnnotation}
- * so that class-level {@code @SparkSQLCoreFlow} and per-test
- * {@code taggedAs(CoreFlow)} are selected by the same scalatest
- * {@code tagsToInclude}/{@code tagsToExclude} value.
+ * Covers the fundamental Spark read/write surface (DataFrame round-trips, SQL
+ * DML/DDL, native parquet/orc/InternalRow I/O), not just SQL. Apply it per test
+ * with {@code taggedAs(SparkCoreFlow)}; select it via the scalatest
+ * {@code tagsToInclude}/{@code tagsToExclude} value
+ * {@code org.apache.hudi.functional.SparkCoreFlow}. The JUnit5 side of the core
+ * set uses the surefire {@code @Tag("core")} group instead.
  */
-object CoreFlow extends Tag("org.apache.hudi.functional.SparkSQLCoreFlow")
+object SparkCoreFlow extends Tag("org.apache.hudi.functional.SparkCoreFlow")
