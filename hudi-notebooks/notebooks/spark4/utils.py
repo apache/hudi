@@ -64,6 +64,7 @@ def get_spark_session(
     app_name="Hudi-Notebooks",
     log_level="WARN",
     hudi_version=None,
+    include_lance=False,
 ):
     """
     Initialize a SparkSession (singleton).
@@ -77,6 +78,8 @@ def get_spark_session(
     - log_level (str): Log level for Spark (DEBUG, INFO, WARN, ERROR). Defaults to WARN.
     - hudi_version (str): Hudi bundle version. Defaults to the HUDI_VERSION baked into
       the image (1.1.1 on the Spark 4 image).
+    - include_lance (bool): When True, also resolve the Lance Spark bundle and add it to
+      the classpath.
 
     Returns:
     - SparkSession object
@@ -87,7 +90,7 @@ def get_spark_session(
         return _spark
 
     if hudi_version is None:
-        hudi_version = os.getenv("HUDI_VERSION", "1.1.1")
+        hudi_version = os.getenv("HUDI_VERSION")
 
     hudi_home = os.getenv("HUDI_HOME", "/opt/hudi")
     spark_version = os.getenv("SPARK_VERSION", "4.0.2")
@@ -107,20 +110,26 @@ def get_spark_session(
         )
         print(f"Hudi bundle not found at {hudi_local_jar}; downloading {hudi_jar_url} ...")
         urllib.request.urlretrieve(hudi_jar_url, hudi_local_jar)
-        
-    lance_version = "0.5.0"
-    lance_home = "/opt/lance"
-    lance_jar = f"lance-spark-bundle-{spark_minor_version}_{scala_version}-{lance_version}.jar"
-    lance_local_jar = os.path.join(lance_home, lance_version, lance_jar)
-    if not os.path.exists(lance_local_jar):
-        os.makedirs(os.path.dirname(lance_local_jar), exist_ok=True)
-        lance_jar_url = (
-            f"https://repo1.maven.org/maven2/org/lance/lance-spark-bundle-{spark_minor_version}_{scala_version}/{lance_version}/{lance_jar}"
-        )
-        print(f"Lance bundle not found at {lance_local_jar}; downloading {lance_jar_url} ...")
-        urllib.request.urlretrieve(lance_jar_url, lance_local_jar)
-    
-    extraclasspath = f"{hudi_local_jar}:{lance_local_jar}"
+
+    classpath_jars = [hudi_local_jar]
+
+    if include_lance:
+        lance_version = "0.5.0"
+        lance_home = "/opt/lance"
+        lance_bundle = f"lance-spark-bundle-{spark_minor_version}_{scala_version}"
+        lance_jar = f"{lance_bundle}-{lance_version}.jar"
+        lance_local_jar = os.path.join(lance_home, lance_version, lance_jar)
+        if not os.path.exists(lance_local_jar):
+            os.makedirs(os.path.dirname(lance_local_jar), exist_ok=True)
+            lance_jar_url = (
+                f"https://repo1.maven.org/maven2/org/lance/"
+                f"{lance_bundle}/{lance_version}/{lance_jar}"
+            )
+            print(f"Lance bundle not found at {lance_local_jar}; downloading {lance_jar_url} ...")
+            urllib.request.urlretrieve(lance_jar_url, lance_local_jar)
+        classpath_jars.append(lance_local_jar)
+
+    extraclasspath = ":".join(classpath_jars)
     _spark = (
         SparkSession.builder.appName(app_name)
         .config("spark.driver.extraClassPath", extraclasspath)
@@ -151,6 +160,13 @@ def stop_spark_session():
         print("SparkSession stopped successfully.")
 
 
+def _require_spark():
+    """Return the active SparkSession, raising a clear error if it isn't initialized yet."""
+    if _spark is None:
+        raise RuntimeError("SparkSession not initialized. Call get_spark_session() first.")
+    return _spark
+
+
 def ls(base_path):
     """
     List files or directories at the given MinIO S3 path.
@@ -158,17 +174,12 @@ def ls(base_path):
     Args:
         base_path: Path starting with 's3a://' (e.g. s3a://warehouse/hudi_table/).
     """
-    #if not base_path.startswith("s3a://"):
-    #    raise ValueError("Path must start with 's3a://'")
-
-    global _spark
-    if _spark is None:
-        raise RuntimeError("SparkSession not initialized. Call get_spark_session() first.")
+    _require_spark()
 
     try:
         hadoop_conf = _spark._jsc.hadoopConfiguration()
-        fs = _spark._jvm.org.apache.hadoop.fs.FileSystem.get(hadoop_conf)
         p = _spark._jvm.org.apache.hadoop.fs.Path(base_path)
+        fs = p.getFileSystem(hadoop_conf)
         if not fs.exists(p):
             print(f"Path does not exist: {base_path}")
             return []
@@ -181,6 +192,7 @@ def ls(base_path):
 
 
 def drop_table(table_name: str = None, table_path: str = None):
+    _require_spark()
     try:
         _spark.sql(f"DROP TABLE IF EXISTS {table_name}")
         print(f"✓ Table '{table_name}' dropped successfully.")
@@ -193,6 +205,7 @@ def drop_table(table_name: str = None, table_path: str = None):
         raise RuntimeError(f"Failed to delete a files from path '{table_path}': {e}") from e
 
 def create_table(sql_query: str, table_name: str, table_path: str = None, describe: bool = True) -> None:
+    _require_spark()
     drop_table(table_name, table_path)
     try:
         _spark.sql(sql_query)
@@ -201,18 +214,20 @@ def create_table(sql_query: str, table_name: str, table_path: str = None, descri
             desc_table(table_name)
     except Exception as e:
         raise RuntimeError(
-        f"Failed to create table '{table_name}': {e}"
-    ) from e
+            f"Failed to create table '{table_name}': {e}"
+        ) from e
 
 
 def desc_table(table_name: str) -> None:
+    _require_spark()
     print(f"\nSchema for '{table_name}':\n")
     display(
         _spark.sql(f"DESCRIBE EXTENDED {table_name}")
     )
 
 
-def get_count(table_name:str = None) -> int: 
+def get_count(table_name: str = None) -> int:
+    _require_spark()
     return (
         _spark.table(table_name)
         .count()
@@ -220,6 +235,7 @@ def get_count(table_name:str = None) -> int:
 
 
 def insert_data(insert_query: str, table_name: str, show_count: bool = True) -> None:
+    _require_spark()
     try:
         _spark.sql(insert_query)
         message = f"✓ Data inserted successfully into '{table_name}'."
@@ -230,8 +246,8 @@ def insert_data(insert_query: str, table_name: str, show_count: bool = True) -> 
         raise RuntimeError(
             f"Failed to insert data into '{table_name}': {e}"
         ) from e
-        
-    
+
+
 def display(df, num_rows=None):
     """
     Display a PySpark DataFrame as a formatted HTML table (Databricks-style).

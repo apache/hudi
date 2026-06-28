@@ -14,20 +14,20 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG SPARK_VERSION=${SPARK_VERSION:-4.0.2}
-ARG JAVA_VERSION=${JAVA_VERSION:-17}
-ARG SCALA_VERSION=${SCALA_VERSION:-2.13}
+ARG SPARK_VERSION=$SPARK_VERSION
+ARG JAVA_VERSION=$JAVA_VERSION
+ARG SCALA_VERSION=$SCALA_VERSION
 ARG PYTHON_VERSION=${PYTHON_VERSION:-3}
 FROM apache/spark:$SPARK_VERSION-scala$SCALA_VERSION-java$JAVA_VERSION-python$PYTHON_VERSION-ubuntu
 
 USER root
 
-ARG SPARK_VERSION=${SPARK_VERSION:-4.0.2} \
+ARG SPARK_VERSION=$SPARK_VERSION \
     HADOOP_VERSION=${HADOOP_VERSION:-3.4.1} \
     AWS_SDK_V2_VERSION=${AWS_SDK_V2_VERSION:-2.24.6} \
     MVN_REPO_URL=https://repo1.maven.org/maven2 \
-    HUDI_VERSION=${HUDI_VERSION:-1.1.1} \
-    SCALA_VERSION=${SCALA_VERSION:-2.13} \
+    HUDI_VERSION=$HUDI_VERSION \
+    SCALA_VERSION=$SCALA_VERSION \
     HUDI_HOME=${HUDI_HOME:-/opt/hudi} \
     NOTEBOOK_HOME=${NOTEBOOK_HOME:-/opt/notebooks}
 
@@ -50,26 +50,23 @@ RUN mkdir -p ${HUDI_HOME}/${HUDI_VERSION} $NOTEBOOK_HOME && \
     wget -O ${HUDI_HOME}/${HUDI_VERSION}/${HUDI_SPARK_BUNDLE_JAR} \
         $MVN_REPO_URL/org/apache/hudi/${HUDI_SPARK_BUNDLE}/${HUDI_VERSION}/${HUDI_SPARK_BUNDLE_JAR}
 
-COPY requirements.txt /tmp/requirements.txt
-COPY requirements-spark4.txt /tmp/requirements-spark4.txt
+COPY requirements.txt requirements-spark4.txt /tmp/
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3-pip cargo && \
+    apt-get install -y --no-install-recommends python3-pip && \
     pip3 install --upgrade pip && \
-    pip3 install --no-cache-dir -r /tmp/requirements.txt && \
-    pip3 install --no-cache-dir -r /tmp/requirements-spark4.txt && \
+    pip3 install --no-cache-dir \
+           -r /tmp/requirements.txt \
+           -r /tmp/requirements-spark4.txt && \
     ln -sf /usr/bin/python3 /usr/bin/python && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/requirements.txt /tmp/requirements-spark4.txt
+    rm -rf /var/lib/apt/lists/* /tmp/requirements*.txt
 
-COPY notebooks/common/*.ipynb $NOTEBOOK_HOME/
-COPY notebooks/common/images/ $NOTEBOOK_HOME/images/
-COPY notebooks/spark4/utils.py $NOTEBOOK_HOME/utils.py
-COPY notebooks/spark4/*.ipynb $NOTEBOOK_HOME/
+COPY notebooks/common/ $NOTEBOOK_HOME/
+COPY notebooks/spark4/ $NOTEBOOK_HOME/
 COPY conf/spark4/ $SPARK_HOME/conf/
 COPY conf/hadoop/core-site.xml $SPARK_HOME/conf/core-site.xml
 COPY entrypoint.sh $SPARK_HOME/entrypoint.sh
-RUN chmod +x /opt/spark/entrypoint.sh
+RUN chmod +x $SPARK_HOME/entrypoint.sh
 
 WORKDIR ${NOTEBOOK_HOME}
 

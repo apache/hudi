@@ -18,5 +18,6 @@
 #
 # Spark 4 image only extras (installed in addition to requirements.txt).
 # hudi-rs: native Python binding for Apache Hudi (PyPI package name "hudi").
-hudi>=0.4.0
+hudi>=0.4.0,<1.0
 Pillow
+cargo
