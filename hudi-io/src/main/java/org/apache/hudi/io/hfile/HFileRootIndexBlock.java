@@ -34,7 +34,6 @@ import static org.apache.hudi.io.util.IOUtils.decodeVarLongSizeOnDisk;
 import static org.apache.hudi.io.util.IOUtils.readInt;
 import static org.apache.hudi.io.util.IOUtils.readLong;
 import static org.apache.hudi.io.util.IOUtils.readVarLong;
-import static org.apache.hudi.io.util.IOUtils.writeVarInt;
 
 /**
  * Represents a {@link HFileBlockType#ROOT_INDEX} block.
@@ -107,10 +106,8 @@ public class HFileRootIndexBlock extends HFileIndexBlock {
       for (BlockIndexEntry entry : entries) {
         outputStream.writeLong(entry.getOffset());
         outputStream.writeInt(entry.getSize());
-
-        // Use Hadoop WritableUtils VarInt encoding to match HBase's HFile format and the reader.
         int kvKeyLength = keyValueKeyLength(entry.getFirstKey().getLength());
-        outputStream.write(writeVarInt(kvKeyLength));
+        outputStream.write(getVarIntBytes(kvKeyLength));
         Key firstKey = entry.getFirstKey();
         writeKey(outputStream, firstKey.getBytes(), firstKey.getOffset(), firstKey.getLength());
       }

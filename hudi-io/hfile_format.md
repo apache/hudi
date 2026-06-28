@@ -258,8 +258,11 @@ Each block index entry, referencing one relevant Data or Meta Block, has the fol
 - **Block Offset**: 8 bytes, long, the start offset of a data or meta block in the file.
 - **Block Size on Disk**: 4 bytes, integer, the on-disk size of the block, so the block can be skipped based on the
   size.
-- **Key Length**: [variable-length encoded](https://en.wikipedia.org/wiki/Variable-length_quantity) number representing
-  the length of the "Key" part.
+- **Key Length**: the length of the "Key" part, encoded as a Hadoop `WritableUtils` variable-length integer (VInt). A
+  value in `[-112, 127]` is a single byte; otherwise the first byte encodes the number of following big-endian value
+  bytes and the sign. This is the encoding the HBase HFile block index uses and that the reader decodes. It is **not**
+  the Protobuf varint used for the trailer and file info length prefixes (see those sections): the two are byte-identical
+  for `0..127` but diverge at `>= 128`, so they are not interchangeable.
 
 Key:
 
@@ -314,7 +317,9 @@ The "Data" part of the File Info Block has the following format:
 ```
 
 - **PBUF Magic**: 4 bytes, magic bytes `PBUF` indicating the block is using Protobuf for serde.
-- **File Info**: a small key-value map of metadata serialized in Protobuf.
+- **File Info**: a small key-value map of metadata serialized in Protobuf, length-delimited (a Protobuf varint length
+  prefix followed by the `InfoProto` message, i.e. `writeDelimitedTo` / `parseDelimitedFrom`). This Protobuf varint is a
+  different encoding from the Hadoop `WritableUtils` VInt used for the block-index Key Length above.
 
 Here's the definition of the File Info proto `InfoProto`:
 
@@ -358,7 +363,10 @@ follows:
 ```
 
 - **Block Magic**: 8 bytes, a sequence of bytes indicating the Trailer, i.e., `TRABLK"$`.
-- **Trailer Content**: the metadata fields are serialized in Protobuf, defined as follows
+- **Trailer Content**: the metadata fields are serialized in Protobuf, length-delimited (a Protobuf varint length prefix
+  followed by the `TrailerProto` message, i.e. `writeDelimitedTo` / `parseDelimitedFrom`) right after the magic. As with
+  the file info block, this Protobuf varint differs from the Hadoop `WritableUtils` VInt used for the block-index Key
+  Length. The proto is defined as follows
 
 ```
 message TrailerProto {

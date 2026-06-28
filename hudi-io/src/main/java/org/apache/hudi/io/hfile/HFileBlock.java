@@ -22,7 +22,6 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.compress.CompressionCodec;
 
-import com.google.protobuf.CodedOutputStream;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
@@ -358,19 +357,5 @@ public abstract class HFileBlock {
     out.write(0);                     // column-family length
     out.writeLong(LATEST_TIMESTAMP);  // timestamp
     out.write(KEY_TYPE_PUT);          // key type
-  }
-
-  /**
-   * Returns the bytes of the variable length encoding for an integer.
-   * @param length       an integer, normally representing a length.
-   * @return             variable length encoding.
-   * @throws IOException upon error.
-   */
-  static byte[] getVariableLengthEncodedBytes(int length) throws IOException {
-    ByteArrayOutputStream varintBuffer = new ByteArrayOutputStream();
-    CodedOutputStream varintOutput = CodedOutputStream.newInstance(varintBuffer);
-    varintOutput.writeUInt32NoTag(length);
-    varintOutput.flush();
-    return varintBuffer.toByteArray();
   }
 }
