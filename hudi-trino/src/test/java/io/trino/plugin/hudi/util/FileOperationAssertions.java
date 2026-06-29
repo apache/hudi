@@ -52,7 +52,7 @@ public final class FileOperationAssertions
         // from query N is still running while query N+1's measurement happens, spans leak
         // across the boundary and counts get scrambled. Poll until the span set is stable for
         // two consecutive reads.
-        Multiset<FileOperation> actualCacheAccesses = waitForStableSpans(() -> getFileOperations(queryRunner));
+        Multiset<FileOperation> actualCacheAccesses = waitForStableFileOperations(() -> getFileOperations(queryRunner));
         try {
             assertMultisetsEqual(actualCacheAccesses, expectedCacheAccesses);
         }
@@ -75,7 +75,7 @@ public final class FileOperationAssertions
     {
         queryRunner.executeWithPlan(queryRunner.getDefaultSession(), query);
         // See assertFileSystemAccesses for the rationale behind polling instead of a fixed sleep.
-        Multiset<FileOperation> actualCacheAccesses = waitForStableSpans(() -> getAlluxioFileOperations(queryRunner));
+        Multiset<FileOperation> actualCacheAccesses = waitForStableFileOperations(() -> getAlluxioFileOperations(queryRunner));
         try {
             assertMultisetsEqual(actualCacheAccesses, expectedCacheAccesses);
         }
@@ -86,10 +86,10 @@ public final class FileOperationAssertions
     }
 
     /**
-     * Returns the span set once two consecutive reads (200ms apart) agree. Bounded by a
+     * Returns the file-operation set once two consecutive reads (200ms apart) agree. Bounded by a
      * 30-second ceiling so a runaway test fails loudly instead of hanging.
      */
-    private static Multiset<FileOperation> waitForStableSpans(Supplier<Multiset<FileOperation>> reader)
+    private static Multiset<FileOperation> waitForStableFileOperations(Supplier<Multiset<FileOperation>> reader)
             throws InterruptedException
     {
         long deadlineMillis = System.currentTimeMillis() + 30_000L;
