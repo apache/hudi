@@ -1,0 +1,80 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements. See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1160" height="650" viewBox="0 0 1160 650" role="img" aria-labelledby="title desc">
+  <title id="title">RFC-104 MDT-native vector index architecture</title>
+  <desc id="desc">Base table stores exact vectors. Metadata table stores centroids, quantizer metadata, cluster manifests, and posting rows. Queries use MDT first and exact re-rank from base table vectors.</desc>
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-opacity="0.18"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#334155"/>
+    </marker>
+  </defs>
+
+  <rect width="1160" height="650" fill="#f8fafc"/>
+  <text x="580" y="38" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#0f172a">RFC-104: MDT-native Vector Search</text>
+  <text x="580" y="66" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" fill="#475569">Base table keeps exact VECTOR(D); MDT stores IVF + RaBitQ routing and posting metadata</text>
+
+  <g transform="translate(55,105)" filter="url(#shadow)">
+    <rect width="430" height="300" rx="14" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+    <rect width="430" height="48" rx="14" fill="#2563eb"/>
+    <text x="215" y="31" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="white">Main Hudi Table</text>
+    <g font-family="Arial, sans-serif" font-size="15" fill="#1e3a8a">
+      <text x="30" y="88" font-weight="700">Parquet / log file groups</text>
+      <text x="50" y="122">_hoodie_record_key</text>
+      <text x="50" y="152">_hoodie_partition_path</text>
+      <text x="50" y="182">user columns</text>
+      <rect x="45" y="210" width="340" height="54" rx="8" fill="#eff6ff" stroke="#60a5fa"/>
+      <text x="215" y="233" text-anchor="middle" font-weight="700">embedding VECTOR(D)</text>
+      <text x="215" y="254" text-anchor="middle" font-size="13">authoritative exact vector values</text>
+    </g>
+  </g>
+
+  <g transform="translate(675,105)" filter="url(#shadow)">
+    <rect width="430" height="300" rx="14" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+    <rect width="430" height="48" rx="14" fill="#16a34a"/>
+    <text x="215" y="31" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="white">MDT Partition: vector_index_&lt;name&gt;</text>
+    <g font-family="Arial, sans-serif" font-size="14" fill="#14532d">
+      <rect x="24" y="72" width="178" height="72" rx="8" fill="white" stroke="#86efac"/>
+      <text x="36" y="96" font-weight="700">Index metadata</text>
+      <text x="36" y="119">__manifest__</text>
+      <text x="36" y="137">__centroids__, __quantizer__</text>
+
+      <rect x="228" y="72" width="178" height="72" rx="8" fill="white" stroke="#86efac"/>
+      <text x="240" y="96" font-weight="700">Generation rows</text>
+      <text x="240" y="119">M|generation</text>
+      <text x="240" y="137">C|generation|cluster</text>
+
+      <rect x="24" y="170" width="382" height="88" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+      <text x="36" y="196" font-weight="700" fill="#92400e">Posting rows</text>
+      <text x="36" y="221" fill="#92400e">P|generation|cluster|shard|record_key</text>
+      <text x="36" y="244" fill="#92400e">fileGroupId, partitionPath, binaryCode, scalar</text>
+    </g>
+  </g>
+
+  <path d="M488 248 C555 225, 606 225, 671 248" fill="none" stroke="#334155" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="580" y="215" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#334155">bootstrap / writes create index metadata</text>
+
+  <path d="M671 309 C598 365, 556 365, 488 309" fill="none" stroke="#334155" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="580" y="386" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#334155">queries use MDT candidates, then read exact vectors</text>
+
+  <g transform="translate(80,470)" font-family="Arial, sans-serif" filter="url(#shadow)">
+    <rect width="1000" height="118" rx="14" fill="#fff7ed" stroke="#f97316" stroke-width="2"/>
+    <text x="500" y="32" text-anchor="middle" font-size="17" font-weight="700" fill="#9a3412">Query flow</text>
+    <g font-size="13" fill="#334155">
+      <circle cx="80" cy="76" r="22" fill="#2563eb"/><text x="80" y="81" text-anchor="middle" fill="white" font-weight="700">1</text>
+      <text x="120" y="80">load manifest + centroids</text>
+      <circle cx="320" cy="76" r="22" fill="#2563eb"/><text x="320" y="81" text-anchor="middle" fill="white" font-weight="700">2</text>
+      <text x="360" y="80">probe IVF clusters</text>
+      <circle cx="540" cy="76" r="22" fill="#2563eb"/><text x="540" y="81" text-anchor="middle" fill="white" font-weight="700">3</text>
+      <text x="580" y="80">scan postings + RaBitQ score</text>
+      <circle cx="800" cy="76" r="22" fill="#2563eb"/><text x="800" y="81" text-anchor="middle" fill="white" font-weight="700">4</text>
+      <text x="840" y="80">exact re-rank from base table</text>
+    </g>
+  </g>
+</svg>
