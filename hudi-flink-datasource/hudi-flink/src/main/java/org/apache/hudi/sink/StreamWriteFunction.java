@@ -38,6 +38,7 @@ import org.apache.hudi.sink.buffer.RowDataBucket;
 import org.apache.hudi.sink.buffer.TotalSizeTracer;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.RowDataKeyGens;
+import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.exception.MemoryPagesExhaustedException;
@@ -55,6 +56,10 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
+import org.apache.flink.table.planner.codegen.sort.SortCodeGenerator;
+import org.apache.flink.table.runtime.generated.GeneratedNormalizedKeyComputer;
+import org.apache.flink.table.runtime.generated.GeneratedRecordComparator;
+import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
@@ -146,6 +151,9 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   protected transient RecordConverter recordConverter;
 
+  private transient GeneratedNormalizedKeyComputer recordKeyComputer;
+  private transient GeneratedRecordComparator recordKeyComparator;
+
   /**
    * Constructs a StreamingSinkFunction.
    *
@@ -161,6 +169,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   @Override
   public void open(Configuration parameters) throws IOException {
     this.tracer = new TotalSizeTracer(this.config);
+    initRecordKeySort();
     initBuffer();
     initWriteFunction();
     initIndexProcessFunction();
@@ -201,6 +210,21 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   private void initBuffer() {
     this.buckets = new LinkedHashMap<>();
     this.memorySegmentPool = this.memorySegmentPoolFactory.createMemorySegmentPool(config, OptionsResolver.getWriteBufferSizeInBytes(config));
+  }
+
+  private void initRecordKeySort() {
+    if (!OptionsResolver.isLsmTreeStorageLayout(config)) {
+      return;
+    }
+    String[] recordKeyFields = OptionsResolver.getRecordKeys(config);
+    ValidationUtils.checkArgument(recordKeyFields.length > 0,
+        "Record key fields can't be empty for LSM storage layout stream write.");
+    SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType, recordKeyFields);
+    SortCodeGenerator codeGenerator = sortOperatorGen.createSortCodeGenerator();
+    this.recordKeyComputer = codeGenerator.generateNormalizedKeyComputer("LsmRecordKeySortComputer");
+    this.recordKeyComparator = codeGenerator.generateRecordComparator("LsmRecordKeySortComparator");
+    log.info("LSM storage layout stream write will sort buffered RowData by record keys: {}",
+        String.join(",", recordKeyFields));
   }
 
   private void initWriteFunction() {
@@ -287,7 +311,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
       RowDataBucket bucket = this.buckets.computeIfAbsent(bucketID,
           k -> new RowDataBucket(
               bucketID,
-              BufferUtils.createBuffer(rowType, memorySegmentPool),
+              createDataBuffer(),
               getBucketInfo(record),
               this.config.get(FlinkOptions.WRITE_BATCH_SIZE)));
 
@@ -436,6 +460,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
       RowDataBucket rowDataBucket) {
     writeMetrics.startFileFlush();
 
+    sortBucketIfNeeded(rowDataBucket);
     Iterator<BinaryRowData> rowItr =
         new MutableIteratorWrapperIterator<>(
             rowDataBucket.getDataIterator(), () -> new BinaryRowData(rowType.getFieldCount()));
@@ -447,6 +472,33 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     writeMetrics.endFileFlush();
     writeMetrics.increaseNumOfFilesWritten();
     return statuses;
+  }
+
+  private BinaryInMemorySortBuffer createDataBuffer() {
+    if (recordKeyComputer == null) {
+      return BufferUtils.createBuffer(rowType, memorySegmentPool);
+    }
+    try {
+      ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+      return BufferUtils.createBuffer(
+          rowType,
+          memorySegmentPool,
+          recordKeyComputer.newInstance(classLoader),
+          recordKeyComparator.newInstance(classLoader));
+    } catch (Exception e) {
+      throw new HoodieException("Failed to create RowData record-key sort buffer for LSM storage layout.", e);
+    }
+  }
+
+  private void sortBucketIfNeeded(RowDataBucket rowDataBucket) {
+    if (recordKeyComputer == null) {
+      return;
+    }
+    try {
+      rowDataBucket.sort();
+    } catch (IOException e) {
+      throw new HoodieException("Failed to sort buffered RowData records by record key.", e);
+    }
   }
 
   protected Iterator<HoodieRecord> deduplicateRecordsIfNeeded(Iterator<HoodieRecord> records) {

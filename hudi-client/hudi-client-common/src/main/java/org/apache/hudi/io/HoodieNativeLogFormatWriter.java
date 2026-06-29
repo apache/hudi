@@ -65,6 +65,7 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
   private static final String LOG_FORMAT_METADATA_FOOTER_KEY = "hudi.log.format.metadata";
 
   private final HoodieWriteConfig writeConfig;
+  private final HoodieFileFormat nativeFileFormat;
   private final HoodieSchema tableSchema;
   private final TaskContextSupplier taskContextSupplier;
   private final RecordContext recordContext;
@@ -90,6 +91,7 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
                                      LogFileCreationCallback fileCreationCallback,
                                      HoodieTableVersion tableVersion,
                                      HoodieWriteConfig writeConfig,
+                                     HoodieFileFormat nativeFileFormat,
                                      HoodieSchema tableSchema,
                                      TaskContextSupplier taskContextSupplier,
                                      RecordContext recordContext,
@@ -97,6 +99,7 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     super(bufferSize, storage, parentPath, logFileId, DATA_LOG_EXTENSION, instantTime, logVersion, logWriteToken,
         null, 0L, sizeThreshold, fileCreationCallback, tableVersion);
     this.writeConfig = writeConfig;
+    this.nativeFileFormat = nativeFileFormat;
     this.tableSchema = tableSchema;
     this.taskContextSupplier = taskContextSupplier;
     this.recordContext = recordContext;
@@ -307,7 +310,7 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
 
   private StoragePath makeNativeLogPath(int version, String logExtension) {
     return new StoragePath(parentPath, FSUtils.makeNativeLogFileName(
-        logFileId, logWriteToken, instantTime, version, logExtension, HoodieFileFormat.PARQUET));
+        logFileId, logWriteToken, instantTime, version, logExtension, nativeFileFormat));
   }
 
 }

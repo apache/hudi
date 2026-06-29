@@ -49,7 +49,6 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -65,7 +64,7 @@ import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.
 /**
  * This class encapsulates all the cdc-writing functions.
  */
-public class HoodieCDCLogger implements Closeable {
+public class HoodieCDCLogger implements HoodieCDCLogWriter<IndexedRecord> {
 
   private final String commitTime;
 
@@ -152,14 +151,8 @@ public class HoodieCDCLogger implements Closeable {
     }
   }
 
-  public void put(HoodieRecord hoodieRecord,
-                  GenericRecord oldRecord,
-                  Option<IndexedRecord> newRecord) {
-    put(hoodieRecord.getRecordKey(), oldRecord, newRecord);
-  }
-
   public void put(String recordKey,
-                  GenericRecord oldRecord,
+                  IndexedRecord oldRecord,
                   Option<IndexedRecord> newRecord) {
     GenericData.Record cdcRecord;
     if (newRecord.isPresent()) {
@@ -171,12 +164,12 @@ public class HoodieCDCLogger implements Closeable {
       } else {
         // UPDATE cdc record
         cdcRecord = this.transformer.transform(HoodieCDCOperation.UPDATE, recordKey,
-            oldRecord, record);
+            (GenericRecord) oldRecord, record);
       }
     } else {
       // DELETE cdc record
       cdcRecord = this.transformer.transform(HoodieCDCOperation.DELETE, recordKey,
-          oldRecord, null);
+          (GenericRecord) oldRecord, null);
     }
 
     flushIfNeeded(false);

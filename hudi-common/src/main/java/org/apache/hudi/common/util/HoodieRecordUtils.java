@@ -50,7 +50,10 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -218,6 +221,16 @@ public class HoodieRecordUtils {
       return record.getCurrentLocation().getInstantTime();
     }
     return null;
+  }
+
+  /**
+   * Returns an iterator over the input records sorted by record key.
+   */
+  public static <T> Iterator<HoodieRecord<T>> sortRecordsByRecordKey(Iterator<HoodieRecord<T>> records) {
+    List<HoodieRecord<T>> sortedRecords = new ArrayList<>();
+    records.forEachRemaining(sortedRecords::add);
+    sortedRecords.sort(Comparator.comparing(HoodieRecord::getRecordKey));
+    return sortedRecords.iterator();
   }
 
   public static List<String> getOrderingFieldNames(RecordMergeMode mergeMode,
