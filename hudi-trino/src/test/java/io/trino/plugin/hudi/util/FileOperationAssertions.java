@@ -57,7 +57,7 @@ public final class FileOperationAssertions
             assertMultisetsEqual(actualCacheAccesses, expectedCacheAccesses);
         }
         catch (AssertionError e) {
-            printFileAccessDebugInfo(queryRunner, actualCacheAccesses, expectedCacheAccesses);
+            logFileAccessDebugInfo(queryRunner, actualCacheAccesses, expectedCacheAccesses);
             throw e;
         }
     }
@@ -80,7 +80,7 @@ public final class FileOperationAssertions
             assertMultisetsEqual(actualCacheAccesses, expectedCacheAccesses);
         }
         catch (AssertionError e) {
-            printFileAccessDebugInfo(queryRunner, actualCacheAccesses, expectedCacheAccesses);
+            logFileAccessDebugInfo(queryRunner, actualCacheAccesses, expectedCacheAccesses);
             throw e;
         }
     }
@@ -131,7 +131,7 @@ public final class FileOperationAssertions
                 .collect(toCollection(HashMultiset::create));
     }
 
-    private static void printFileAccessDebugInfo(
+    private static void logFileAccessDebugInfo(
             QueryRunner queryRunner,
             Multiset<FileOperation> actualCacheAccesses,
             Multiset<FileOperation> expectedCacheAccesses)
