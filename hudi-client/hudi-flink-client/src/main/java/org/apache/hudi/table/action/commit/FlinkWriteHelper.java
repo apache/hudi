@@ -37,6 +37,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.time.Duration;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -100,7 +101,8 @@ public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, Iterator<HoodieRe
                                                       String[] orderingFieldNames) {
     // If index used is global, then records are expected to differ in their partitionPath
     Map<Object, List<HoodieRecord<T>>> keyedRecords = CollectionUtils.toStream(records)
-        .collect(Collectors.groupingBy(record -> record.getKey().getRecordKey()));
+        .collect(Collectors.groupingBy(
+            record -> record.getKey().getRecordKey(), LinkedHashMap::new, Collectors.toList()));
 
     // caution that the avro schema is not serializable
     final HoodieSchema schema = HoodieSchema.parse(schemaStr);
