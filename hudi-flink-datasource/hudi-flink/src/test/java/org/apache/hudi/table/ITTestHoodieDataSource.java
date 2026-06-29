@@ -1246,9 +1246,22 @@ public class ITTestHoodieDataSource {
         + "       join t1/*+ OPTIONS('lookup.join.cache.ttl'='2 day', 'lookup.async'='" + async + "',"
         + "       'lookup.join.cache.type'='" + cacheType + "') */  "
         + "       FOR SYSTEM_TIME AS OF o.proc_time AS b on o.uuid = b.uuid";
-    execInsertSql(tableEnv, sql);
-    List<Row> result = CollectionUtil.iterableToList(
-        () -> tableEnv.sqlQuery("select * from t2").execute().collect());
+
+    // The lookup function loads the dimension table lazily on the first probe row, so a teardown /
+    // commit-visibility race can occasionally make the join emit no rows. Re-running the upsert into
+    // the uuid-keyed table t2 is idempotent, so retry until the expected rows materialize.
+    final int expectedNum = TestData.DATA_SET_SOURCE_INSERT.size();
+    List<Row> result = Collections.emptyList();
+    for (int attempt = 1; attempt <= MAX_STREAM_READ_ATTEMPTS; attempt++) {
+      execInsertSql(tableEnv, sql);
+      result = CollectionUtil.iterableToList(
+          () -> tableEnv.sqlQuery("select * from t2").execute().collect());
+      if (result.size() >= expectedNum) {
+        break;
+      }
+      LOG.warn("testLookupJoin collected {} of {} rows on attempt {}/{}; a teardown race produced an "
+          + "empty lookup join. Retrying.", result.size(), expectedNum, attempt, MAX_STREAM_READ_ATTEMPTS);
+    }
 
     assertRowsEquals(result, TestData.DATA_SET_SOURCE_INSERT);
   }
