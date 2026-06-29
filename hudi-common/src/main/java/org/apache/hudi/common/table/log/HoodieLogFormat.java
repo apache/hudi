@@ -56,7 +56,12 @@ public interface HoodieLogFormat {
    * The current version of the log format. Anytime the log format changes this version needs to be bumped and
    * corresponding changes need to be made to {@link HoodieLogFormatVersion}
    */
-  int CURRENT_VERSION = 1;
+  int CURRENT_VERSION = 2;
+
+  /**
+   * The current version of the inline log format.
+   */
+  int INLINE_LOG_FORMAT_VERSION = 1;
 
   String UNKNOWN_WRITE_TOKEN = "1-0-1";
 
