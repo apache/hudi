@@ -18,6 +18,7 @@ services:
   spark-hudi:
     image: apachehudi/spark-hudi:latest
     container_name: spark-hudi
+    hostname: spark-hudi   # must match spark.master in conf/spark/spark-defaults.conf
     depends_on:
       - hive-metastore
       - minio
@@ -30,6 +31,31 @@ services:
       - "18080:18080" # Spark History Server UI
     volumes:
       - ./data/spark-events:/opt/spark/spark-events
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - AWS_ENDPOINT_URL=http://minio:9000
+      - AWS_ALLOW_HTTP=true
+    networks:
+      - hudi-datalake
+
+  spark4-hudi:
+    image: apachehudi/spark4-hudi:latest
+    container_name: spark4-hudi
+    hostname: spark4-hudi   # must match spark.master in conf/spark4/spark-defaults.conf
+    depends_on:
+      - hive-metastore
+      - minio
+    ports:
+      - "8889:8888"   # Jupyter
+      - "4041:4040"   # Spark UI
+      - "7078:7077"   # Spark Master
+      - "8090:8080"   # Spark Master UI
+      - "8091:8081"   # Spark Worker UI
+      - "18081:18080" # Spark History Server UI
+    volumes:
+      - ./data/spark4-events:/opt/spark/spark-events
     environment:
       - AWS_ACCESS_KEY_ID=admin
       - AWS_SECRET_ACCESS_KEY=password

@@ -17,14 +17,23 @@
 
 set -euo pipefail
 
-export HUDI_VERSION=${HUDI_VERSION:-1.0.2}
-export HUDI_VERSION_TAG=${HUDI_VERSION}
+export SPARK_HUDI_VERSION=${SPARK_HUDI_VERSION:-1.0.2}
+export SPARK_HUDI_VERSION_TAG=${SPARK_HUDI_VERSION}
 export SPARK_VERSION=${SPARK_VERSION:-3.4.4}
+
+# Spark 4 stack (Java 17 + Scala 2.13 + Hadoop 3.4.x + AWS SDK v2)
+export SPARK4_HUDI_VERSION=${SPARK4_HUDI_VERSION:-1.1.1}
+export SPARK4_HUDI_VERSION_TAG=${SPARK4_HUDI_VERSION}
+export SPARK4_VERSION=${SPARK4_VERSION:-4.0.2}
+export JAVA17_VERSION=${JAVA17_VERSION:-17}
+export SCALA213_VERSION=${SCALA213_VERSION:-2.13}
+export HADOOP34_VERSION=${HADOOP34_VERSION:-3.4.1}
+export AWS_SDK_V2_VERSION=${AWS_SDK_V2_VERSION:-2.24.6}
 export HIVE_VERSION=${HIVE_VERSION:-3.1.3}
 export HIVE_VERSION_TAG=${HIVE_VERSION}
-export TRINO_VERSION=${TRINO_VERSION:-477}
+export TRINO_VERSION=${TRINO_VERSION:-481}
 export TRINO_VERSION_TAG=${TRINO_VERSION}
-export PRESTO_VERSION=${PRESTO_VERSION:-0.296}
+export PRESTO_VERSION=${PRESTO_VERSION:-0.297}
 export PRESTO_VERSION_TAG=${PRESTO_VERSION}
 export JAVA_VERSION=${JAVA_VERSION:-11}
 export SCALA_VERSION=${SCALA_VERSION:-2.12}
@@ -33,18 +42,31 @@ export AWS_SDK_VERSION=${AWS_SDK_VERSION:-1.12.772}
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-echo "Building Spark Hudi Docker image using Spark version: $SPARK_VERSION and Hudi version: $HUDI_VERSION"
+echo "Building Spark Hudi Docker image using Spark version: $SPARK_VERSION and Hudi version: $SPARK_HUDI_VERSION"
 
 docker build \
-    --build-arg HUDI_VERSION="$HUDI_VERSION" \
+    --build-arg HUDI_VERSION="$SPARK_HUDI_VERSION" \
     --build-arg SPARK_VERSION="$SPARK_VERSION" \
     --build-arg JAVA_VERSION="$JAVA_VERSION" \
     --build-arg SCALA_VERSION="$SCALA_VERSION" \
     --build-arg HADOOP_VERSION="$HADOOP_VERSION" \
     --build-arg AWS_SDK_VERSION="$AWS_SDK_VERSION" \
     -t apachehudi/spark-hudi:latest \
-    -t apachehudi/spark-hudi:"$HUDI_VERSION_TAG" \
+    -t apachehudi/spark-hudi:"$SPARK_HUDI_VERSION_TAG" \
     -f "$SCRIPT_DIR"/Dockerfile.spark .
+
+echo "Building Spark 4 Hudi Docker image using Spark version: $SPARK4_VERSION and Hudi version: $SPARK4_HUDI_VERSION"
+
+docker build \
+    --build-arg HUDI_VERSION="$SPARK4_HUDI_VERSION" \
+    --build-arg SPARK_VERSION="$SPARK4_VERSION" \
+    --build-arg JAVA_VERSION="$JAVA17_VERSION" \
+    --build-arg SCALA_VERSION="$SCALA213_VERSION" \
+    --build-arg HADOOP_VERSION="$HADOOP34_VERSION" \
+    --build-arg AWS_SDK_V2_VERSION="$AWS_SDK_V2_VERSION" \
+    -t apachehudi/spark4-hudi:latest \
+    -t apachehudi/spark4-hudi:"$SPARK4_HUDI_VERSION_TAG" \
+    -f "$SCRIPT_DIR"/Dockerfile.spark4 .
 
 echo "Building Hive Docker image using Hive version: $HIVE_VERSION"
 
