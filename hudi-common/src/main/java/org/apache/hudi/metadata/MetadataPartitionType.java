@@ -82,6 +82,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_FIE
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.combineFileSystemMetadata;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.mergeColumnStatsRecords;
 
@@ -242,6 +243,28 @@ public enum MetadataPartitionType {
     @Override
     public SerializableBiFunction<String, Integer, Integer> getFileGroupMappingFunction(HoodieIndexVersion indexVersion) {
       return HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(indexVersion.greaterThanOrEquals(HoodieIndexVersion.V2));
+    }
+  },
+  VECTOR_INDEX(PARTITION_NAME_VECTOR_INDEX_PREFIX, "vector-index-", 8) {
+    @Override
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
+      return false;
+    }
+
+    @Override
+    public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
+      if (metaClient.getIndexMetadata().isPresent()) {
+        return metaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+            .anyMatch(indexDef -> indexDef.getIndexName().startsWith(PARTITION_NAME_VECTOR_INDEX_PREFIX));
+      }
+      return false;
+    }
+
+    @Override
+    public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
+      return metaClient.getIndexForMetadataPartition(indexName)
+          .map(HoodieIndexDefinition::getIndexName)
+          .orElseThrow(() -> new IllegalArgumentException("Index definition is not present for index: " + indexName));
     }
   },
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-", 6) {

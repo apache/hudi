@@ -65,6 +65,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BL
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 
 @Slf4j
@@ -95,6 +96,8 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     if (indexType.equals(PARTITION_NAME_SECONDARY_INDEX) || indexType.equals(PARTITION_NAME_BLOOM_FILTERS)
         || indexType.equals(PARTITION_NAME_COLUMN_STATS)) {
       createExpressionOrSecondaryIndex(metaClient, userIndexName, indexType, columns, options, tableProperties);
+    } else if (indexType.equals(PARTITION_NAME_VECTOR_INDEX)) {
+      createVectorIndex(metaClient, userIndexName, columns, options);
     } else {
       createRecordIndex(metaClient, userIndexName, indexType, options);
     }
@@ -182,8 +185,24 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     }
   }
 
+  private void createVectorIndex(HoodieTableMetaClient metaClient,
+                                 String userIndexName,
+                                 Map<String, Map<String, String>> columns,
+                                 Map<String, String> options) throws Exception {
+    HoodieIndexDefinition indexDefinition = HoodieIndexUtils.getVectorIndexDefinition(metaClient, userIndexName, columns, options);
+    if (!metaClient.getIndexForMetadataPartition(indexDefinition.getIndexName()).isPresent()) {
+      log.info("Registering vector index definition: {}", indexDefinition.getIndexName());
+      register(metaClient, indexDefinition);
+    }
+  }
+
   private void drop(HoodieTableMetaClient metaClient, String indexName, Option<HoodieIndexDefinition> indexDefinitionOpt) {
     log.info("Dropping index {}", indexName);
+    if (metaClient.getIndexForMetadataPartition(indexName).isPresent()
+        && !metaClient.getTableConfig().getMetadataPartitions().contains(indexName)) {
+      metaClient.deleteIndexDefinition(indexName);
+      return;
+    }
     try (SparkRDDWriteClient writeClient = getWriteClient(metaClient, indexDefinitionOpt, Option.empty(), Collections.emptyMap())) {
       writeClient.dropIndex(Collections.singletonList(indexName));
     }
@@ -195,6 +214,10 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     Option<HoodieIndexDefinition> indexDefinitionOpt = metaClient.getIndexMetadata()
         .map(HoodieIndexMetadata::getIndexDefinitions)
         .map(definition -> definition.get(indexName));
+    if (indexDefinitionOpt.isPresent() && !metaClient.getTableConfig().getMetadataPartitions().contains(indexName)) {
+      metaClient.deleteIndexDefinition(indexName);
+      return;
+    }
     try (SparkRDDWriteClient writeClient = getWriteClient(metaClient, indexDefinitionOpt, Option.empty(), Collections.emptyMap())) {
       writeClient.dropIndex(Collections.singletonList(indexName));
     }

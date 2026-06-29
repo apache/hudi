@@ -58,6 +58,7 @@ public class TestHoodieIndexVersion {
         Arguments.of("BLOOM_FILTERS", HoodieTableVersion.NINE, "secondary_index_idx1", HoodieIndexVersion.V2),
         Arguments.of("FILES", HoodieTableVersion.EIGHT, "files", HoodieIndexVersion.V1),
         Arguments.of("FILES", HoodieTableVersion.NINE, "files", HoodieIndexVersion.V1),
+        Arguments.of("VECTOR_INDEX", HoodieTableVersion.NINE, "vector_index_idx1", HoodieIndexVersion.V1),
         Arguments.of("EXPRESSION INDEX", HoodieTableVersion.EIGHT, "files", HoodieIndexVersion.V1),
         Arguments.of("EXPRESSION INDEX", HoodieTableVersion.NINE, "files", HoodieIndexVersion.V1),
         Arguments.of("PARTITION_STATS", HoodieTableVersion.EIGHT, "partition_stats", HoodieIndexVersion.V1),
@@ -79,6 +80,7 @@ public class TestHoodieIndexVersion {
         Arguments.of("COLUMN_STATS", HoodieTableVersion.EIGHT, MetadataPartitionType.COLUMN_STATS, HoodieIndexVersion.V1),
         Arguments.of("BLOOM_FILTERS", HoodieTableVersion.EIGHT, MetadataPartitionType.BLOOM_FILTERS, HoodieIndexVersion.V1),
         Arguments.of("EXPRESSION_INDEX", HoodieTableVersion.EIGHT, MetadataPartitionType.EXPRESSION_INDEX, HoodieIndexVersion.V1),
+        Arguments.of("VECTOR_INDEX", HoodieTableVersion.NINE, MetadataPartitionType.VECTOR_INDEX, HoodieIndexVersion.V1),
         Arguments.of("FILES", HoodieTableVersion.EIGHT, MetadataPartitionType.FILES, HoodieIndexVersion.V1),
         Arguments.of("PARTITION_STATS", HoodieTableVersion.EIGHT, MetadataPartitionType.PARTITION_STATS, HoodieIndexVersion.V1),
         Arguments.of("ALL_PARTITIONS", HoodieTableVersion.EIGHT, MetadataPartitionType.ALL_PARTITIONS, HoodieIndexVersion.V1)
@@ -145,6 +147,11 @@ public class TestHoodieIndexVersion {
         Arguments.of("Table version 9 with non-SI v1",
             HoodieTableVersion.NINE,
             createIndexDefinition("column_stats", HoodieIndexVersion.V1),
+            true),
+
+        Arguments.of("Table version 9 with vector index v1",
+            HoodieTableVersion.NINE,
+            createIndexDefinition("vector_index_idx_test", HoodieIndexVersion.V1),
             true),
 
         // Table version 9, non-SI with no version is not allowed

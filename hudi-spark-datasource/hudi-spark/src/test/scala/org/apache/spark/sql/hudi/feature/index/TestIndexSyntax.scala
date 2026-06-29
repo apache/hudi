@@ -188,6 +188,97 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Vector Index Syntax and Validation") {
+    withTempDir { tmp =>
+      val databaseName = "default"
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  embedding VECTOR(3),
+           |  ts long
+           |) using hudi
+           | location '$basePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'mor',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      spark.sql(
+        s"insert into $tableName values " +
+          "(1, 'a1', array(cast(0.1 as float), cast(0.2 as float), cast(0.3 as float)), 1000)")
+
+      val createVectorIndexSql =
+        s"create index idx_embedding on $tableName using vector(embedding) options(" +
+          "'vector.dimension'='3'," +
+          "'vector.metric'='cosine'," +
+          "'vector.algorithm'='ivfflat'," +
+          "'vector.quantizer'='IVF_RABITQ'," +
+          "'vector.num_clusters'='32'," +
+          "'vector.num_probes'='4'," +
+          "'vector.refine_factor'='8'," +
+          "'vector.max_iter'='12'," +
+          "'vector.rabitq.total_bits'='2'," +
+          "'vector.rabitq.random_seed'='99'," +
+          "'vector.rabitq.assume_normalized'='false')"
+
+      val sqlParser: ParserInterface = spark.sessionState.sqlParser
+      val analyzer: Analyzer = spark.sessionState.analyzer
+      val logicalPlan = sqlParser.parsePlan(createVectorIndexSql)
+      val resolvedLogicalPlan = analyzer.execute(logicalPlan)
+      assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].table, databaseName, tableName)
+      assertResult("idx_embedding")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexName)
+      assertResult("vector")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexType)
+      assertResult(Map(
+        "vector.dimension" -> "3",
+        "vector.metric" -> "cosine",
+        "vector.algorithm" -> "ivfflat",
+        "vector.quantizer" -> "IVF_RABITQ",
+        "vector.num_clusters" -> "32",
+        "vector.num_probes" -> "4",
+        "vector.refine_factor" -> "8",
+        "vector.max_iter" -> "12",
+        "vector.rabitq.total_bits" -> "2",
+        "vector.rabitq.random_seed" -> "99",
+        "vector.rabitq.assume_normalized" -> "false"))(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].options)
+
+      spark.sql(createVectorIndexSql)
+
+      var metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(HoodieTestUtils.getDefaultStorageConf)
+        .build()
+      assertTrue(metaClient.getIndexForMetadataPartition("vector_index_idx_embedding").isPresent)
+
+      val showIndexesRows = spark.sql(s"show indexes from $tableName").collect()
+      assertTrue(showIndexesRows.exists(row =>
+        row.getString(0) == "vector_index_idx_embedding"
+          && row.getString(1) == "vector_index"
+          && row.getString(2) == "embedding"))
+
+      spark.sql(s"drop index idx_embedding on $tableName")
+      metaClient = HoodieTableMetaClient.reload(metaClient)
+      assertFalse(metaClient.getIndexForMetadataPartition("vector_index_idx_embedding").isPresent)
+
+      checkExceptionContain(
+        s"create index idx_missing_dim on $tableName using vector(embedding) options('vector.algorithm'='ivfflat')")(
+        "Vector index requires 'vector.dimension' in OPTIONS")
+      checkExceptionContain(
+        s"create index idx_bad_alg on $tableName using vector(embedding) options('vector.dimension'='3', 'vector.algorithm'='nope')")(
+        "Vector index option 'vector.algorithm' must be one of")
+      checkExceptionContain(
+        s"create index idx_bad_dim on $tableName using vector(embedding) options('vector.dimension'='4')")(
+        "Column 'embedding' has VECTOR(3) but OPTIONS specifies dimension 4")
+      checkExceptionContain(
+        s"create index idx_bad_col on $tableName using vector(name) options('vector.dimension'='1')")(
+        "Vector indexes require a VECTOR column")
+    }
+  }
+
   test("Test matchesRecordKeys API") {
     val tableConfig = new HoodieTableConfig()
 
