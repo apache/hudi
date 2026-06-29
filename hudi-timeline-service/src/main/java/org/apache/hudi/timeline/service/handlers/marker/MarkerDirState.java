@@ -19,6 +19,7 @@
 package org.apache.hudi.timeline.service.handlers.marker;
 
 import org.apache.hudi.common.conflict.detection.TimelineServerBasedDetectionStrategy;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -34,7 +35,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import lombok.Getter;
+import io.javalin.http.Context;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.util.StringUtils;
 
@@ -45,11 +46,13 @@ import java.io.OutputStreamWriter;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -65,13 +68,14 @@ import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
 @Slf4j
 public class MarkerDirState implements Serializable {
 
+  private static final String NULL_REQUEST_ID = "";
   // Marker directory
   private final StoragePath markerDirPath;
   private final HoodieStorage storage;
   private final Registry metricsRegistry;
-  // A cached copy of all markers in memory
-  @Getter
-  private final Set<String> allMarkers = new HashSet<>();
+  // Marker name -> request ID (empty string sentinel when TLS recovers from crash).
+  // Enables idempotent retries: same requestId for same marker is treated as success.
+  private final Map<String, String> markerToRequestIdMap = new ConcurrentHashMap<>();
   // A cached copy of marker entries in each marker file, stored in StringBuilder
   // for efficient appending
   // Mapping: {markerFileIndex -> markers}
@@ -80,8 +84,9 @@ public class MarkerDirState implements Serializable {
   // {@code true} means the file is in use by a {@code BatchCreateMarkerRunnable}.
   // Index of the list is used for the filename, i.e., "1" -> "MARKERS1"
   private final List<Boolean> threadUseStatus;
-  // A list of pending futures from async marker creation requests
-  private final List<MarkerCreationFuture> markerCreationFutures = new ArrayList<>();
+  // Map of in-flight requests: (markerName, requestId) -> MarkerCreationFuture
+  // Used for BOTH deduplication AND batch marker creation requests queue
+  private final Map<Pair<String, String>, MarkerCreationFuture> inflightRequestMap = new HashMap<>();
   private final int parallelism;
   private final Object markerCreationProcessingLock = new Object();
   // Early conflict detection strategy if enabled
@@ -108,6 +113,13 @@ public class MarkerDirState implements Serializable {
   }
 
   /**
+   * @return all marker names in the directory (backward compatible).
+   */
+  public Set<String> getAllMarkers() {
+    return Collections.unmodifiableSet(new HashSet<>(markerToRequestIdMap.keySet()));
+  }
+
+  /**
    * @return {@code true} if the marker directory exists in the system.
    */
   public boolean exists() {
@@ -119,14 +131,23 @@ public class MarkerDirState implements Serializable {
   }
 
   /**
-   * Adds a {@code MarkerCreationCompletableFuture} instance from a marker
-   * creation request to the queue.
+   * Checks if an identical in-flight request exists and returns it, or creates a new future.
+   * This deduplicates concurrent requests with the same marker and requestId.
    *
-   * @param future  {@code MarkerCreationCompletableFuture} instance.
+   * @param context    Javalin context
+   * @param markerName Marker name
+   * @param requestId  Request ID (non-null from clients, can be null only during recovery)
+   * @return Existing future if found, otherwise a new future
    */
-  public void addMarkerCreationFuture(MarkerCreationFuture future) {
-    synchronized (markerCreationFutures) {
-      markerCreationFutures.add(future);
+  public MarkerCreationFuture getOrCreateMarkerCreationFuture(Context context, String markerName, String requestId) {
+    Pair<String, String> dedupKey = Pair.of(markerName, requestId != null ? requestId : NULL_REQUEST_ID);
+
+    synchronized (inflightRequestMap) {
+      return inflightRequestMap.computeIfAbsent(dedupKey, k -> {
+        log.debug("Creating new in-flight request for marker {} with requestId {}.",
+            markerName, requestId != null ? requestId : "null");
+        return new MarkerCreationFuture(context, markerDirPath.toString(), markerName, requestId);
+      });
     }
   }
 
@@ -174,21 +195,43 @@ public class MarkerDirState implements Serializable {
   }
 
   /**
-   * @param shouldClear Should clear the internal request list or not.
+   * @param shouldClear Should clear the internal request map or not.
    * @return futures of pending marker creation requests.
    */
   public List<MarkerCreationFuture> getPendingMarkerCreationRequests(boolean shouldClear) {
-    List<MarkerCreationFuture> pendingFutures;
-    synchronized (markerCreationFutures) {
-      if (markerCreationFutures.isEmpty()) {
-        return new ArrayList<>();
+    synchronized (inflightRequestMap) {
+      if (inflightRequestMap.isEmpty()) {
+        return Collections.emptyList();
       }
-      pendingFutures = new ArrayList<>(markerCreationFutures);
+      List<MarkerCreationFuture> pendingFutures = new ArrayList<>(inflightRequestMap.values());
       if (shouldClear) {
-        markerCreationFutures.clear();
+        inflightRequestMap.clear();
       }
+      return pendingFutures;
     }
-    return pendingFutures;
+  }
+
+  /**
+   * Returns {@code true} if the marker was created by another request (e.g. a concurrent duplicate).
+   * Used for idempotency when the same marker+requestId was already processed.
+   *
+   * @param future    The marker creation future to update with success/failure status
+   * @param markerName Marker name
+   * @param requestId  Request ID for idempotency check
+   * @return {@code true} if the marker already exists (created by another request), {@code false} otherwise
+   */
+  private boolean isMarkerAlreadySeen(MarkerCreationFuture future, String markerName, String requestId) {
+    if (!markerToRequestIdMap.containsKey(markerName)) {
+      return false;
+    }
+
+    String existingRequestId = markerToRequestIdMap.get(markerName);
+    boolean idempotentMatch = !NULL_REQUEST_ID.equals(existingRequestId)
+        && requestId != null
+        && requestId.equals(existingRequestId);
+
+    future.setIsSuccessful(idempotentMatch);
+    return true;
   }
 
   /**
@@ -207,11 +250,13 @@ public class MarkerDirState implements Serializable {
     log.debug("timeMs={} markerDirPath={} numRequests={} fileIndex={}",
         System.currentTimeMillis(), markerDirPath, pendingMarkerCreationFutures.size(), fileIndex);
     boolean shouldFlushMarkers = false;
-    
+
     synchronized (markerCreationProcessingLock) {
       for (MarkerCreationFuture future : pendingMarkerCreationFutures) {
         String markerName = future.getMarkerName();
-        boolean exists = allMarkers.contains(markerName);
+        String requestId = future.getRequestId();
+
+        boolean exists = isMarkerAlreadySeen(future, markerName, requestId);
         if (!exists) {
           if (conflictDetectionStrategy.isPresent()) {
             try {
@@ -225,16 +270,16 @@ public class MarkerDirState implements Serializable {
               log.warn("Failed to execute early conflict detection. Marker creation will continue.", e);
               // When early conflict detection fails to execute, we still allow the marker creation
               // to continue
-              addMarkerToMap(fileIndex, markerName);
+              addMarkerToMap(fileIndex, markerName, requestId);
               future.setIsSuccessful(true);
               shouldFlushMarkers = true;
               continue;
             }
           }
-          addMarkerToMap(fileIndex, markerName);
+          addMarkerToMap(fileIndex, markerName, requestId);
+          future.setIsSuccessful(true);
           shouldFlushMarkers = true;
         }
-        future.setIsSuccessful(!exists);
       }
 
       if (!isMarkerTypeWritten) {
@@ -265,13 +310,14 @@ public class MarkerDirState implements Serializable {
    */
   public boolean deleteAllMarkers() {
     boolean result = FSUtils.deleteDir(hoodieEngineContext, storage, markerDirPath, parallelism);
-    allMarkers.clear();
+    markerToRequestIdMap.clear();
     fileMarkersMap.clear();
     return result;
   }
 
   /**
    * Syncs all markers maintained in the underlying files under the marker directory in the file system.
+   * When TLS recovers from crash, we have no request IDs so store sentinel value for each marker.
    */
   private void syncMarkersFromFileSystem() {
     Map<String, Set<String>> fileMarkersSetMap = MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(
@@ -282,7 +328,9 @@ public class MarkerDirState implements Serializable {
         int index = parseMarkerFileIndex(markersFilePathStr);
         if (index >= 0) {
           fileMarkersMap.put(index, new StringBuilder(StringUtils.join(",", fileMarkers)));
-          allMarkers.addAll(fileMarkers);
+          for (String marker : fileMarkers) {
+            markerToRequestIdMap.put(marker, NULL_REQUEST_ID);
+          }
         }
       }
     }
@@ -301,9 +349,10 @@ public class MarkerDirState implements Serializable {
    *
    * @param fileIndex  Marker file index number.
    * @param markerName Marker name.
+   * @param requestId Request ID for idempotency; null for recovery.
    */
-  private void addMarkerToMap(int fileIndex, String markerName) {
-    allMarkers.add(markerName);
+  private void addMarkerToMap(int fileIndex, String markerName, String requestId) {
+    markerToRequestIdMap.put(markerName, requestId == null ? NULL_REQUEST_ID : requestId);
     StringBuilder stringBuilder = fileMarkersMap.computeIfAbsent(fileIndex, k -> new StringBuilder(16384));
     stringBuilder.append(markerName);
     stringBuilder.append('\n');
