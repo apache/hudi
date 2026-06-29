@@ -127,30 +127,10 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         clientConfig.getHoodieClientHeartbeatIntervalInMs(),
         clientConfig.getHoodieClientHeartbeatTolerableMisses());
     this.metrics = new HoodieMetrics(config, storage);
-    emitTableVersionMetric();
     this.txnManager = transactionManager;
     this.timeGenerator = timeGenerator;
     startEmbeddedServerView();
     runClientInitCallbacks();
-  }
-
-  /**
-   * Emits the current table version as a gauge metric. Best-effort: when the table has not
-   * yet been initialized (first-ever write to a new base path) the metaClient load throws
-   * and we silently skip — the gauge will surface on the next client init after the table
-   * exists.
-   */
-  private void emitTableVersionMetric() {
-    if (!config.isMetricsOn()) {
-      return;
-    }
-    try {
-      HoodieTableMetaClient metaClient = createMetaClient(false);
-      metrics.emitTableVersionMetric(
-          metaClient.getTableConfig().getTableVersion().versionCode());
-    } catch (Exception e) {
-      log.debug("Skipping table version metric emission (table may not yet exist): {}", e.getMessage());
-    }
   }
 
   /**
@@ -216,7 +196,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   }
 
   protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
-    return HoodieTableMetaClient.builder()
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(storageConf.newInstance())
         .setBasePath(config.getBasePath())
         .setLoadActiveTimelineOnLoad(loadActiveTimelineOnLoad)
@@ -224,6 +204,11 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
         .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
         .setMetaserverConfig(config.getProps()).build();
+    if (metrics != null && config.isMetricsOn()) {
+      metrics.emitTableVersionMetric(
+          metaClient.getTableConfig().getTableVersion().versionCode());
+    }
+    return metaClient;
   }
 
   /**
