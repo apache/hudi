@@ -2192,21 +2192,32 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }
     final int fileGroupCount = fileSlices.size();
     ValidationUtils.checkArgument(fileGroupCount > 0, String.format("FileGroup count for MDT partition %s should be > 0", partitionPath));
+    // Realignment of the record's partition path to the file slice's physical path is only needed
+    // under layouts that place file groups in sub-directories (e.g. SubDirBucketedMDTLayout). For
+    // the flat default, the slice's path always equals the record's partition path, so we skip the
+    // realignment entirely to preserve bit-identical behavior for tables that haven't opted in.
+    final boolean isNonFlatLayout = isNonFlatMDTLayout();
     return r -> {
       FileSlice slice = fileSlices.get(mappingFunction.apply(r.getRecordKey(), fileGroupCount));
       r.unseal();
       r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
-      // Under layouts that place file groups in sub-directories (e.g. bucketing), the file slice's
-      // physical partition path may differ from the logical MDT partition name carried on the
-      // record. Realign the record's partition path with where the file slice actually lives so
-      // downstream HoodieAppendHandle's partition-path consistency check passes.
-      String physical = slice.getPartitionPath();
-      if (physical != null && !physical.equals(r.getPartitionPath())) {
-        r.getKey().setPartitionPath(physical);
+      if (isNonFlatLayout) {
+        String physical = slice.getPartitionPath();
+        if (physical != null && !physical.equals(r.getPartitionPath())) {
+          r.getKey().setPartitionPath(physical);
+        }
       }
       r.seal();
       return r;
     };
+  }
+
+  private boolean isNonFlatMDTLayout() {
+    if (metadataMetaClient == null) {
+      return false;
+    }
+    Option<String> cls = metadataMetaClient.getTableConfig().getMetadataLayoutClass();
+    return cls.isPresent() && !cls.get().isEmpty() && !cls.get().equals(FlatMDTLayout.class.getName());
   }
 
   /**
