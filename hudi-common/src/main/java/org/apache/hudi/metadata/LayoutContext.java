@@ -27,22 +27,28 @@ import java.io.Serializable;
  * Per-file-group context handed to a {@link HoodieMetadataTableLayout}.
  *
  * <p>Carries everything a layout needs to compute the on-disk relative path
- * and fileId for a single file group: the metadata partition type, the global
- * file-group index, the total number of file groups in that partition, and
- * the data-table partition name (set only for partitioned RLI).
+ * and fileId for a single file group: the metadata partition type, the
+ * relative MDT partition path (which for secondary/expression indexes is the
+ * full partition name like {@code secondary_index_idx0}, not the static
+ * prefix on the partition type), the global file-group index, the total
+ * number of file groups in that partition, and the data-table partition name
+ * (set only for partitioned RLI).
  */
 public final class LayoutContext implements Serializable {
 
   private final MetadataPartitionType partitionType;
+  private final String relativePartitionPath;
   private final int fileGroupIndex;
   private final int fileGroupCount;
   private final Option<String> dataPartitionName;
 
   public LayoutContext(MetadataPartitionType partitionType,
+                       String relativePartitionPath,
                        int fileGroupIndex,
                        int fileGroupCount,
                        Option<String> dataPartitionName) {
     this.partitionType = partitionType;
+    this.relativePartitionPath = relativePartitionPath;
     this.fileGroupIndex = fileGroupIndex;
     this.fileGroupCount = fileGroupCount;
     this.dataPartitionName = dataPartitionName;
@@ -50,6 +56,10 @@ public final class LayoutContext implements Serializable {
 
   public MetadataPartitionType getPartitionType() {
     return partitionType;
+  }
+
+  public String getRelativePartitionPath() {
+    return relativePartitionPath;
   }
 
   public int getFileGroupIndex() {

@@ -358,15 +358,21 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       // API.  Note that for COW table, the merging logic of two slices does not happen as there
       // is no compaction, thus there is no performance impact.
       HoodieTableFileSystemView finalFileSystemView = fileSystemView;
-      // For an MDT under a non-flat layout, the FS view indexes file slices by their physical
+      // For an MDT under a *non-flat* layout, the FS view indexes file slices by their physical
       // partition (bucket sub-paths), but the partition list here uses logical partition names.
       // Resolve via HoodieTableMetadataUtil which fans out across the layout's physical sub-paths.
-      final boolean isMdt = HoodieTableMetadata.isMetadataTable(basePath);
+      // For the flat default (the only on-disk layout for tables that haven't opted in), the
+      // original direct FS-view path is used unchanged — including the time-travel branch — so
+      // existing semantics are preserved bit-for-bit.
+      final boolean isMdtWithNonFlatLayout = HoodieTableMetadata.isMetadataTable(basePath)
+          && metaClient.getTableConfig().getMetadataLayoutClass()
+              .map(c -> !c.isEmpty() && !c.equals(org.apache.hudi.metadata.FlatMDTLayout.class.getName()))
+              .orElse(false);
       return partitions.stream().collect(
           Collectors.toMap(
               Function.identity(),
               partitionPath -> {
-                if (isMdt) {
+                if (isMdtWithNonFlatLayout) {
                   return queryInstant.isPresent()
                       ? HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metaClient,
                           finalFileSystemView, partitionPath.path)

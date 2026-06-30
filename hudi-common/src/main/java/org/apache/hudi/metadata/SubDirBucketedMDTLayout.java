@@ -104,12 +104,12 @@ public final class SubDirBucketedMDTLayout implements HoodieMetadataTableLayout 
       throw new HoodieMetadataException(
           "SubDirBucketedMDTLayout does not support partitioned RLI. The MDT was opened with "
               + "a data-partition-keyed file group for partition '"
-              + ctx.getPartitionType().getPartitionPath() + "' (data partition '"
+              + ctx.getRelativePartitionPath() + "' (data partition '"
               + ctx.getDataPartitionName().get() + "'). Disable hoodie.metadata.layout.class "
               + "or switch the RLI to the global (non-partitioned) mode.");
     }
     int bucket = ctx.getFileGroupIndex() / bucketSize;
-    return bucketRelativePath(ctx.getPartitionType().getPartitionPath(), bucket);
+    return bucketRelativePath(ctx.getRelativePartitionPath(), bucket);
   }
 
   @Override
@@ -119,7 +119,7 @@ public final class SubDirBucketedMDTLayout implements HoodieMetadataTableLayout 
     return HoodieTableMetadataUtil.getFileIDForFileGroup(
         ctx.getPartitionType(),
         ctx.getFileGroupIndex(),
-        ctx.getPartitionType().getPartitionPath(),
+        ctx.getRelativePartitionPath(),
         ctx.getDataPartitionName());
   }
 

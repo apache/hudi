@@ -42,7 +42,7 @@ public final class FlatMDTLayout implements HoodieMetadataTableLayout {
 
   @Override
   public String getFileGroupRelativePath(LayoutContext ctx) {
-    return ctx.getPartitionType().getPartitionPath();
+    return ctx.getRelativePartitionPath();
   }
 
   @Override
@@ -50,7 +50,7 @@ public final class FlatMDTLayout implements HoodieMetadataTableLayout {
     return HoodieTableMetadataUtil.getFileIDForFileGroup(
         ctx.getPartitionType(),
         ctx.getFileGroupIndex(),
-        ctx.getPartitionType().getPartitionPath(),
+        ctx.getRelativePartitionPath(),
         ctx.getDataPartitionName());
   }
 

@@ -1194,7 +1194,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // Pair each file group's fileId with the relative directory it should live in, computed via the layout.
     final List<Pair<String, String>> fileGroupIdAndPath = IntStream.range(0, fileGroupCount)
         .mapToObj(i -> {
-          LayoutContext ctx = new LayoutContext(metadataPartition, i, fileGroupCount, dataPartitionName);
+          LayoutContext ctx = new LayoutContext(metadataPartition, relativePartitionPath, i, fileGroupCount, dataPartitionName);
           return Pair.of(layout.getFileId(ctx), layout.getFileGroupRelativePath(ctx));
         })
         .collect(Collectors.toList());
