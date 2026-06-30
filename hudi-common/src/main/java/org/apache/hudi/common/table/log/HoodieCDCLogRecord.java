@@ -18,33 +18,23 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.util.collection.ClosableIterator;
-
-import java.util.NoSuchElementException;
+import org.apache.avro.generic.IndexedRecord;
 
 /**
- * Record iterator for Hudi CDC log files.
+ * Normalized CDC log record that can represent inline Avro CDC records or native CDC records
+ * materialized in an engine-specific row type.
  *
  * @param <T> Engine-specific record type used by native CDC log files
  */
-public interface HoodieCDCLogRecordIterator<T> extends ClosableIterator<HoodieCDCLogRecord<T>> {
+public interface HoodieCDCLogRecord<T> {
 
-  static <T> HoodieCDCLogRecordIterator<T> empty() {
-    return new HoodieCDCLogRecordIterator<T>() {
-      @Override
-      public boolean hasNext() {
-        return false;
-      }
+  String getOperation();
 
-      @Override
-      public HoodieCDCLogRecord<T> next() {
-        throw new NoSuchElementException("No CDC log records");
-      }
+  String getRecordKey();
 
-      @Override
-      public void close() {
-        // no-op
-      }
-    };
-  }
+  IndexedRecord getAvroImage(int ordinal);
+
+  T getEngineImage(int ordinal, int imageArity);
+
+  boolean isNative();
 }

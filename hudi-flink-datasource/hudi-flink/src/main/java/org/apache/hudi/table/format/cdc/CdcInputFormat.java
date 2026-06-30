@@ -138,14 +138,14 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         switch (mode) {
           case DATA_BEFORE_AFTER:
             return new CdcIterators.BeforeAfterImageIterator(
-                hadoopConf, tablePath, tblSchema, reqSchema, tableState.getRequiredRowType(), cdcSchema, fileSplit);
+                conf, hadoopConf, tablePath, tblSchema, reqSchema, tableState.getRequiredRowType(), cdcSchema, fileSplit);
           case DATA_BEFORE:
             return new CdcIterators.BeforeImageIterator(
-                hadoopConf, tablePath, tblSchema, reqSchema, tableState.getRequiredRowType(),
+                conf, hadoopConf, tablePath, tblSchema, reqSchema, tableState.getRequiredRowType(),
                 tableState.getRequiredPositions(), maxCompactionMemoryInBytes, cdcSchema, fileSplit, imageManager);
           case OP_KEY_ONLY:
             return new CdcIterators.RecordKeyImageIterator(
-                hadoopConf, tablePath, tblSchema, reqSchema, tableState.getRequiredRowType(),
+                conf, hadoopConf, tablePath, tblSchema, reqSchema, tableState.getRequiredRowType(),
                 tableState.getRequiredPositions(), maxCompactionMemoryInBytes, cdcSchema, fileSplit, imageManager);
           default:
             throw new AssertionError("Unexpected mode: " + mode);

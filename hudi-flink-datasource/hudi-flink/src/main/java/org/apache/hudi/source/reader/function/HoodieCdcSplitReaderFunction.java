@@ -210,16 +210,16 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
         switch (mode) {
           case DATA_BEFORE_AFTER:
             return new CdcIterators.BeforeAfterImageIterator(
-                getHadoopConf(), tablePath, tableSchema, requiredSchema,
+                conf, getHadoopConf(), tablePath, tableSchema, requiredSchema,
                 tableState.getRequiredRowType(), cdcSchema, fileSplit);
           case DATA_BEFORE:
             return new CdcIterators.BeforeImageIterator(
-                getHadoopConf(), tablePath, tableSchema, requiredSchema,
+                conf, getHadoopConf(), tablePath, tableSchema, requiredSchema,
                 tableState.getRequiredRowType(), tableState.getRequiredPositions(),
                 maxCompactionMemoryInBytes, cdcSchema, fileSplit, imageManager);
           case OP_KEY_ONLY:
             return new CdcIterators.RecordKeyImageIterator(
-                getHadoopConf(), tablePath, tableSchema, requiredSchema,
+                conf, getHadoopConf(), tablePath, tableSchema, requiredSchema,
                 tableState.getRequiredRowType(), tableState.getRequiredPositions(),
                 maxCompactionMemoryInBytes, cdcSchema, fileSplit, imageManager);
           default:

@@ -18,33 +18,16 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.util.collection.ClosableIterator;
-
-import java.util.NoSuchElementException;
-
 /**
- * Record iterator for Hudi CDC log files.
+ * Accessor for CDC operation, record key, and before/after images in an engine-specific row.
  *
  * @param <T> Engine-specific record type used by native CDC log files
  */
-public interface HoodieCDCLogRecordIterator<T> extends ClosableIterator<HoodieCDCLogRecord<T>> {
+public interface HoodieCDCEngineRecordAccessor<T> {
 
-  static <T> HoodieCDCLogRecordIterator<T> empty() {
-    return new HoodieCDCLogRecordIterator<T>() {
-      @Override
-      public boolean hasNext() {
-        return false;
-      }
+  String getOperation(T record);
 
-      @Override
-      public HoodieCDCLogRecord<T> next() {
-        throw new NoSuchElementException("No CDC log records");
-      }
+  String getRecordKey(T record);
 
-      @Override
-      public void close() {
-        // no-op
-      }
-    };
-  }
+  T getImage(T record, int ordinal, int imageArity);
 }
