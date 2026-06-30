@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -732,6 +733,36 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
             "Custom merge property " + HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER + "  not expected to be set");
       }
     }
+  }
+
+  @Test
+  void testInferMergingConfigsNestedDebeziumOrderingFields() {
+    String mysqlPayload = MySqlDebeziumAvroPayload.class.getName();
+    String pgPayload = PostgresDebeziumAvroPayload.class.getName();
+
+    // MySQL, flat (default): ordering fields are the root-level binlog columns.
+    Map<String, String> mysqlFlat = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+        null, mysqlPayload, null, "ts", HoodieTableVersion.NINE, false);
+    assertEquals(DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME,
+        mysqlFlat.get(HoodieTableConfig.ORDERING_FIELDS.key()));
+
+    // MySQL, nested: the binlog columns live under the _debezium_metadata struct, so the ordering
+    // fields must be resolved against that nested path.
+    Map<String, String> mysqlNested = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+        null, mysqlPayload, null, "ts", HoodieTableVersion.NINE, true);
+    assertEquals(
+        DebeziumConstants.DEBEZIUM_METADATA_FIELD + "." + DebeziumConstants.FLATTENED_FILE_COL_NAME + ","
+            + DebeziumConstants.DEBEZIUM_METADATA_FIELD + "." + DebeziumConstants.FLATTENED_POS_COL_NAME,
+        mysqlNested.get(HoodieTableConfig.ORDERING_FIELDS.key()));
+
+    // Postgres: the ordering field (_event_lsn) is kept at the root level even when nested fields are
+    // enabled, so it is unchanged in both cases.
+    Map<String, String> pgFlat = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+        null, pgPayload, null, "ts", HoodieTableVersion.NINE, false);
+    Map<String, String> pgNested = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+        null, pgPayload, null, "ts", HoodieTableVersion.NINE, true);
+    assertEquals(DebeziumConstants.FLATTENED_LSN_COL_NAME, pgFlat.get(HoodieTableConfig.ORDERING_FIELDS.key()));
+    assertEquals(DebeziumConstants.FLATTENED_LSN_COL_NAME, pgNested.get(HoodieTableConfig.ORDERING_FIELDS.key()));
   }
 
   @Test
