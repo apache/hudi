@@ -19,14 +19,21 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.stream.Stream;
 
+import static org.apache.hudi.avro.AvroRecordContext.getFieldValueFromIndexedRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class TestAvroRecordContext {
 
@@ -43,5 +50,66 @@ class TestAvroRecordContext {
   void testConvertValueToEngineType(Comparable input, Comparable expected) {
     Comparable actual = AvroRecordContext.getFieldAccessorInstance().convertValueToEngineType(input);
     assertEquals(expected, actual);
+  }
+
+  private static final Schema RECORD_SCHEMA = new Schema.Parser().parse(
+      "{\"type\":\"record\",\"name\":\"top\",\"fields\":["
+          + "{\"name\":\"id\",\"type\":\"int\"},"
+          + "{\"name\":\"name\",\"type\":[\"null\",\"string\"],\"default\":null},"
+          + "{\"name\":\"address\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"address\",\"fields\":["
+          + "{\"name\":\"city\",\"type\":\"string\"},"
+          + "{\"name\":\"zip\",\"type\":[\"null\",\"int\"],\"default\":null}]}],\"default\":null},"
+          + "{\"name\":\"multi\",\"type\":[\"null\",\"string\",\"int\"],\"default\":null}]}");
+
+  private static GenericRecord buildRecord() {
+    GenericRecord address = new GenericData.Record(RECORD_SCHEMA.getField("address").schema().getTypes().get(1));
+    address.put("city", new Utf8("sf"));
+    address.put("zip", 94105);
+    GenericRecord record = new GenericData.Record(RECORD_SCHEMA);
+    record.put("id", 1);
+    record.put("name", new Utf8("alice"));
+    record.put("address", address);
+    return record;
+  }
+
+  @Test
+  void testGetFieldValueTopLevel() {
+    GenericRecord record = buildRecord();
+    assertEquals(1, getFieldValueFromIndexedRecord(record, "id"));
+    assertEquals(new Utf8("alice"), getFieldValueFromIndexedRecord(record, "name"));
+    assertNull(getFieldValueFromIndexedRecord(record, "multi"));
+    assertNull(getFieldValueFromIndexedRecord(record, "missing"));
+  }
+
+  @Test
+  void testGetFieldValueNested() {
+    GenericRecord record = buildRecord();
+    // intermediate segment unwraps the [null, record] union
+    assertEquals(new Utf8("sf"), getFieldValueFromIndexedRecord(record, "address.city"));
+    assertEquals(94105, getFieldValueFromIndexedRecord(record, "address.zip"));
+    assertNull(getFieldValueFromIndexedRecord(record, "address.missing"));
+    assertNull(getFieldValueFromIndexedRecord(record, "missing.nested"));
+  }
+
+  @Test
+  void testGetFieldValueErrorCases() {
+    GenericRecord record = buildRecord();
+    // a union that is not [null, T] does not support field lookups
+    assertThrows(IllegalStateException.class, () -> getFieldValueFromIndexedRecord(record, "multi.sub"));
+    assertThrows(IllegalArgumentException.class, () -> getFieldValueFromIndexedRecord(record, ""));
+  }
+
+  @Test
+  void testGetFieldValueAcrossEqualSchemaInstances() {
+    // records from different files carry equal but distinct schema instances; both must intern to
+    // the same canonical wrapper and resolve identically
+    Schema schemaCopy = new Schema.Parser().parse(RECORD_SCHEMA.toString());
+    GenericRecord record = buildRecord();
+    GenericRecord recordWithCopy = new GenericData.Record(schemaCopy);
+    for (Schema.Field field : RECORD_SCHEMA.getFields()) {
+      recordWithCopy.put(field.pos(), record.get(field.pos()));
+    }
+    assertEquals(getFieldValueFromIndexedRecord(record, "id"), getFieldValueFromIndexedRecord(recordWithCopy, "id"));
+    assertEquals(getFieldValueFromIndexedRecord(record, "address.city"), getFieldValueFromIndexedRecord(recordWithCopy, "address.city"));
   }
 }
