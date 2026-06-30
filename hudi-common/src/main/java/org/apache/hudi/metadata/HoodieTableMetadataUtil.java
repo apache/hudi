@@ -1564,6 +1564,52 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
+   * Returns true when {@code physicalPartitionPath} is a layout sub-path of an MDT partition under
+   * the bucketed layout (e.g. {@code record_index/0004}). Callers use this to distinguish a layout
+   * sub-path from a logical MDT partition root — for example, to decide whether a
+   * {@code .hoodie_partition_metadata} marker should be created there.
+   *
+   * <p>Returns false for: non-MDT tables, MDTs on the flat layout (the default that every
+   * pre-existing MDT uses), and any path that does not end in a {@code /NNNN} 4-digit suffix. The
+   * non-flat-layout gate is what keeps a 4-digit data-table partition value (e.g. {@code price=1000})
+   * from being misread as a bucket directory.
+   *
+   * @param mdtTableConfig     the MDT's persisted table config (typically reached via
+   *                           {@code hoodieTable.getMetaClient().getTableConfig()} when the table
+   *                           being written to is the MDT itself).
+   * @param isMetadataTable    whether the surrounding write is targeting an MDT — engine-agnostic
+   *                           callers pass {@code hoodieTable.isMetadataTable()}.
+   * @param physicalPartitionPath the physical partition path on disk.
+   */
+  public static boolean isMDTBucketSubPath(HoodieTableConfig mdtTableConfig,
+                                           boolean isMetadataTable,
+                                           String physicalPartitionPath) {
+    if (!isMetadataTable || physicalPartitionPath == null) {
+      return false;
+    }
+    Option<String> layoutClass = mdtTableConfig.getMetadataLayoutClass();
+    boolean nonFlatLayout = layoutClass.isPresent() && !layoutClass.get().isEmpty()
+        && !layoutClass.get().equals(FlatMDTLayout.class.getName());
+    if (!nonFlatLayout) {
+      return false;
+    }
+    int slash = physicalPartitionPath.lastIndexOf('/');
+    if (slash <= 0 || slash >= physicalPartitionPath.length() - 1) {
+      return false;
+    }
+    String last = physicalPartitionPath.substring(slash + 1);
+    if (last.length() != 4) {
+      return false;
+    }
+    for (int i = 0; i < 4; i++) {
+      if (!Character.isDigit(last.charAt(i))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
    * Get the latest file slices for a given partition including the inflight ones.
    *
    * @param metaClient     - instance of {@link HoodieTableMetaClient}

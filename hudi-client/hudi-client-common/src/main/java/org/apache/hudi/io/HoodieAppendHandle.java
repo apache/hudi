@@ -313,42 +313,9 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
     return fileSlice;
   }
 
-  /**
-   * Returns true when this append handle is writing to a layout sub-path of an MDT partition
-   * (e.g. {@code record_index/0004} under sub-directory bucketing). In that case, the
-   * {@code .hoodie_partition_metadata} marker must NOT be created at the bucket level; it is
-   * written once at the logical partition root by the MDT initialization path.
-   *
-   * <p>The heuristic only kicks in when the MDT is opened with a non-flat layout. Flat-default
-   * tables never write into bucket sub-paths, so we must not skip marker creation for them.
-   * Restricting the check to the non-flat case also sidesteps the risk of a 4-digit data-table
-   * partition value (e.g. price=1000) being misread as a bucket directory.
-   */
   private boolean isMDTLayoutSubPath(String physicalPartitionPath) {
-    if (!hoodieTable.isMetadataTable() || physicalPartitionPath == null) {
-      return false;
-    }
-    org.apache.hudi.common.util.Option<String> layoutClass =
-        hoodieTable.getMetaClient().getTableConfig().getMetadataLayoutClass();
-    boolean nonFlatLayout = layoutClass.isPresent() && !layoutClass.get().isEmpty()
-        && !layoutClass.get().equals(org.apache.hudi.metadata.FlatMDTLayout.class.getName());
-    if (!nonFlatLayout) {
-      return false;
-    }
-    int slash = physicalPartitionPath.lastIndexOf('/');
-    if (slash <= 0 || slash >= physicalPartitionPath.length() - 1) {
-      return false;
-    }
-    String last = physicalPartitionPath.substring(slash + 1);
-    if (last.length() != 4) {
-      return false;
-    }
-    for (int i = 0; i < 4; i++) {
-      if (!Character.isDigit(last.charAt(i))) {
-        return false;
-      }
-    }
-    return true;
+    return org.apache.hudi.metadata.HoodieTableMetadataUtil.isMDTBucketSubPath(
+        hoodieTable.getMetaClient().getTableConfig(), hoodieTable.isMetadataTable(), physicalPartitionPath);
   }
 
   /**

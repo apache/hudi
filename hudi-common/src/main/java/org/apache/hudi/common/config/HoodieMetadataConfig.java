@@ -711,11 +711,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "Applies only at MDT initialization; an MDT already on disk keeps its existing layout.");
 
   public static final ConfigProperty<Integer> METADATA_LAYOUT_BUCKET_SIZE = ConfigProperty
-      .key("hoodie.metadata.layout.bucket.size")
+      .key("hoodie.metadata.layout.bucketed.file.group.per.bucket")
       .defaultValue(1000)
       .markAdvanced()
       .sinceVersion("1.3.0")
-      .withDocumentation("Maximum number of file groups per bucket sub-directory when "
+      .withDocumentation("Maximum number of MDT file groups that share a single bucket sub-directory when "
           + "`hoodie.metadata.layout.class` is set to SubDirBucketedMDTLayout. Ignored for the flat layout. "
           + "Default 1000.");
 

@@ -171,4 +171,65 @@ class TestHoodieMetadataTableLayout {
   void layoutIdsAreDistinct() {
     assertTrue(!new FlatMDTLayout().getLayoutId().equals(new SubDirBucketedMDTLayout(1).getLayoutId()));
   }
+
+  // ---- HoodieTableMetadataUtil.isMDTBucketSubPath ----------------------------
+
+  @Test
+  void isMDTBucketSubPath_falseForNonMDT() {
+    org.apache.hudi.common.table.HoodieTableConfig cfg =
+        new org.apache.hudi.common.table.HoodieTableConfig();
+    cfg.setValue(org.apache.hudi.common.table.HoodieTableConfig.METADATA_LAYOUT_CLASS,
+        SubDirBucketedMDTLayout.class.getName());
+    // Non-MDT tables short-circuit regardless of any layout config.
+    assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, false, "record_index/0001"));
+  }
+
+  @Test
+  void isMDTBucketSubPath_falseForFlatLayoutMDT() {
+    // The flat default (no layout class set) must short-circuit so the heuristic never reads a
+    // 4-digit data-table partition value as a bucket sub-path on existing tables.
+    org.apache.hudi.common.table.HoodieTableConfig cfg =
+        new org.apache.hudi.common.table.HoodieTableConfig();
+    assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/0001"));
+
+    // Explicit FlatMDTLayout class also short-circuits.
+    cfg.setValue(org.apache.hudi.common.table.HoodieTableConfig.METADATA_LAYOUT_CLASS,
+        FlatMDTLayout.class.getName());
+    assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/0001"));
+  }
+
+  @Test
+  void isMDTBucketSubPath_trueForBucketedMDTWithFourDigitSuffix() {
+    org.apache.hudi.common.table.HoodieTableConfig cfg =
+        new org.apache.hudi.common.table.HoodieTableConfig();
+    cfg.setValue(org.apache.hudi.common.table.HoodieTableConfig.METADATA_LAYOUT_CLASS,
+        SubDirBucketedMDTLayout.class.getName());
+    assertTrue(HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/0000"));
+    assertTrue(HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/0042"));
+    assertTrue(HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "secondary_index_idx0/0099"));
+  }
+
+  @Test
+  void isMDTBucketSubPath_falseForLogicalPartitionRootEvenUnderBucketing() {
+    // The logical partition root (no trailing /NNNN) must NOT be treated as a bucket sub-path —
+    // that's where the .hoodie_partition_metadata marker is supposed to land.
+    org.apache.hudi.common.table.HoodieTableConfig cfg =
+        new org.apache.hudi.common.table.HoodieTableConfig();
+    cfg.setValue(org.apache.hudi.common.table.HoodieTableConfig.METADATA_LAYOUT_CLASS,
+        SubDirBucketedMDTLayout.class.getName());
+    assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index"));
+    assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "files"));
+  }
+
+  @Test
+  void isMDTBucketSubPath_falseForNonFourDigitSuffix() {
+    org.apache.hudi.common.table.HoodieTableConfig cfg =
+        new org.apache.hudi.common.table.HoodieTableConfig();
+    cfg.setValue(org.apache.hudi.common.table.HoodieTableConfig.METADATA_LAYOUT_CLASS,
+        SubDirBucketedMDTLayout.class.getName());
+    // 3-digit, 5-digit, non-digit suffixes all return false.
+    assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/000"));
+    assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/00000"));
+    assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/abcd"));
+  }
 }

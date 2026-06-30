@@ -203,6 +203,71 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @Test
+  void testMetadataLayoutFileGroupCountsRoundTrip() throws IOException {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath);
+    HoodieTableConfig config = metaClient.getTableConfig();
+
+    // First MDT partition init persists the layout class + bucket size + initial counts.
+    Map<String, Integer> initial = new HashMap<>();
+    initial.put("files", 1);
+    config.setMetadataLayout(metaClient,
+        "org.apache.hudi.metadata.SubDirBucketedMDTLayout", 1000, initial);
+    HoodieTableConfig reloaded = new HoodieTableConfig(storage, metaPath);
+    assertEquals(Option.of("org.apache.hudi.metadata.SubDirBucketedMDTLayout"),
+        reloaded.getMetadataLayoutClass());
+    assertEquals(1000, reloaded.getMetadataLayoutBucketSize());
+    assertEquals(1, reloaded.getMetadataLayoutPartitionFileGroupCounts().get("files"));
+
+    // A later MDT partition (e.g. record_index) initializes and adds its count without disturbing
+    // the existing one. This is the "writer property value can change to accommodate a new MDT
+    // partition" case.
+    Map<String, Integer> added = new HashMap<>();
+    added.put("record_index", 2500);
+    reloaded.addMetadataLayoutPartitionFileGroupCounts(metaClient, added);
+    Map<String, Integer> finalCounts =
+        new HoodieTableConfig(storage, metaPath).getMetadataLayoutPartitionFileGroupCounts();
+    assertEquals(2, finalCounts.size());
+    assertEquals(1, finalCounts.get("files"));
+    assertEquals(2500, finalCounts.get("record_index"));
+  }
+
+  @Test
+  void testMetadataLayoutFileGroupCountsIdempotentReStamp() throws IOException {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath);
+    HoodieTableConfig config = metaClient.getTableConfig();
+    config.setMetadataLayout(metaClient, "org.apache.hudi.metadata.SubDirBucketedMDTLayout", 1000,
+        Collections.singletonMap("record_index", 2500));
+
+    // Re-stamping the SAME count for an existing partition must be a no-op, not a rejection.
+    // (E.g., a retried init path can land here.)
+    HoodieTableConfig reloaded = new HoodieTableConfig(storage, metaPath);
+    reloaded.addMetadataLayoutPartitionFileGroupCounts(metaClient,
+        Collections.singletonMap("record_index", 2500));
+    assertEquals(2500,
+        new HoodieTableConfig(storage, metaPath).getMetadataLayoutPartitionFileGroupCounts().get("record_index"));
+  }
+
+  @Test
+  void testMetadataLayoutFileGroupCountsRejectsConflict() throws IOException {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath);
+    HoodieTableConfig config = metaClient.getTableConfig();
+    config.setMetadataLayout(metaClient, "org.apache.hudi.metadata.SubDirBucketedMDTLayout", 1000,
+        Collections.singletonMap("record_index", 2500));
+
+    // Once record_index has a count of 2500, no later code path can re-stamp it as a different
+    // value — the on-disk bucket layout for that partition is immutable.
+    HoodieTableConfig reloaded = new HoodieTableConfig(storage, metaPath);
+    org.apache.hudi.exception.HoodieMetadataException ex = assertThrows(
+        org.apache.hudi.exception.HoodieMetadataException.class,
+        () -> reloaded.addMetadataLayoutPartitionFileGroupCounts(metaClient,
+            Collections.singletonMap("record_index", 1500)));
+    assertTrue(ex.getMessage().contains("record_index"),
+        "rejection message should call out the conflicting partition: " + ex.getMessage());
+    assertTrue(ex.getMessage().contains("immutable"),
+        "rejection message should call out the immutability rule: " + ex.getMessage());
+  }
+
+  @Test
   void testReadsWhenPropsFileDoesNotExist() throws IOException {
     storage.deleteFile(cfgPath);
     assertThrows(HoodieIOException.class, () -> {

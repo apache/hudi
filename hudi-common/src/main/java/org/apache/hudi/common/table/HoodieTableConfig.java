@@ -396,11 +396,12 @@ public class HoodieTableConfig extends HoodieConfig {
           + "Set once at MDT initialization; immutable thereafter.");
 
   public static final ConfigProperty<Integer> METADATA_LAYOUT_BUCKET_SIZE = ConfigProperty
-      .key("hoodie.metadata.layout.bucket.size")
+      .key("hoodie.metadata.layout.bucketed.file.group.per.bucket")
       .defaultValue(1000)
       .sinceVersion("1.3.0")
-      .withDocumentation("Layout-specific: maximum number of file groups per bucket sub-directory when "
-          + "`hoodie.metadata.layout.class` is set to SubDirBucketedMDTLayout. Ignored otherwise.");
+      .withDocumentation("Layout-specific: maximum number of MDT file groups that share a single bucket "
+          + "sub-directory when `hoodie.metadata.layout.class` is set to SubDirBucketedMDTLayout. "
+          + "Ignored otherwise.");
 
   public static final ConfigProperty<String> METADATA_LAYOUT_PARTITION_FILE_GROUP_COUNTS = ConfigProperty
       .key("hoodie.metadata.layout.partition.file.group.counts")
@@ -1478,13 +1479,28 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   /**
-   * Append or update file-group counts for additional MDT partitions initialized after the first
-   * MDT bootstrap (e.g., a new index being enabled). Preserves existing entries and overwrites any
-   * key collision with the new count.
+   * Append file-group counts for additional MDT partitions initialized after the first MDT
+   * bootstrap (e.g., a new index being enabled). New partitions are added freely; any attempt to
+   * change the count of an already-persisted partition is rejected so the on-disk bucket layout
+   * for an existing MDT partition never moves under a reader's feet.
+   *
+   * @throws HoodieMetadataException if an entry in {@code additionalCounts} refers to a partition
+   *     already present in the persisted map with a different count.
    */
   public void addMetadataLayoutPartitionFileGroupCounts(HoodieTableMetaClient metaClient,
                                                        Map<String, Integer> additionalCounts) {
-    Map<String, Integer> merged = new HashMap<>(getMetadataLayoutPartitionFileGroupCounts());
+    Map<String, Integer> existing = getMetadataLayoutPartitionFileGroupCounts();
+    for (Map.Entry<String, Integer> incoming : additionalCounts.entrySet()) {
+      Integer prior = existing.get(incoming.getKey());
+      if (prior != null && !prior.equals(incoming.getValue())) {
+        throw new org.apache.hudi.exception.HoodieMetadataException(
+            "MDT layout file-group count for partition '" + incoming.getKey()
+                + "' is already set to " + prior + " and cannot be changed to "
+                + incoming.getValue() + ". The file-group count for an existing MDT partition is "
+                + "immutable so the on-disk bucket layout remains stable for readers.");
+      }
+    }
+    Map<String, Integer> merged = new HashMap<>(existing);
     merged.putAll(additionalCounts);
     String encoded = merged.entrySet().stream()
         .sorted(Map.Entry.comparingByKey())
