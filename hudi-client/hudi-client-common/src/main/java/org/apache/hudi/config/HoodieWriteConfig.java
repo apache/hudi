@@ -2268,7 +2268,9 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return {@code true} if the partition stats index is enabled, {@code false} otherwise.
    */
   public boolean isPartitionStatsIndexEnabled() {
-    return isMetadataColumnStatsIndexEnabled();
+    // Delegate to the metadata config (which already requires column stats) so the build and delete
+    // paths stay consistent.
+    return isMetadataTableEnabled() && getMetadataConfig().isPartitionStatsIndexEnabled();
   }
 
   /**

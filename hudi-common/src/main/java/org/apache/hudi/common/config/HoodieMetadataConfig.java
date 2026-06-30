@@ -240,7 +240,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".index.partition.stats.enable")
       .defaultValue(true)
       .markAdvanced()
-      .sinceVersion("1.0.0")
+      .sinceVersion("1.3.0")
       .withDocumentation("Enable aggregating the column stats index to the partition level in the metadata table, "
           + "used to prune partitions during index lookups. Partition stats requires the column stats index "
           + "(" + METADATA_PREFIX + ".index.column.stats.enable) to be enabled and has no effect when column stats "
