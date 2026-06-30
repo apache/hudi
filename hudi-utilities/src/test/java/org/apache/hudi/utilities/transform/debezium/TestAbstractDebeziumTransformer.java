@@ -26,6 +26,11 @@ import org.apache.hudi.utilities.config.DebeziumTransformerConfig;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
+import org.apache.spark.sql.functions;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -35,9 +40,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 
+import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_ENABLED;
+import static org.apache.hudi.utilities.streamer.BaseErrorTableWriter.ERROR_TABLE_CURRUPT_RECORD_COL_NAME;
 import static org.apache.hudi.utilities.transform.debezium.AbstractDebeziumTransformer.DEBEZIUM_METADATA_FIELD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -172,6 +180,69 @@ class TestAbstractDebeziumTransformer extends DebeziumTransformerTestBase {
     Dataset<Row> empty = spark.emptyDataFrame();
     Dataset<Row> result = new TestableDebeziumTransformer().apply(jsc, spark, empty, new TypedProperties());
     assertEquals(0, result.columns().length);
+  }
+
+  @Test
+  void testSchemaAsNullableFalsePreservesNonNullableSourceFields() {
+    // "id" is declared non-nullable in the source row schema; "name" is nullable.
+    StructType rowDataSchema = DataTypes.createStructType(Arrays.asList(
+        DataTypes.createStructField("id", DataTypes.LongType, false, Metadata.empty()),
+        DataTypes.createStructField("name", DataTypes.StringType, true, Metadata.empty())));
+    StructType sourceSchema = DataTypes.createStructType(Arrays.asList(
+        DataTypes.createStructField("name", DataTypes.StringType, true, Metadata.empty()),
+        DataTypes.createStructField("ts_ms", DataTypes.LongType, true, Metadata.empty())));
+    StructType envelopeSchema = DataTypes.createStructType(Arrays.asList(
+        DataTypes.createStructField("op", DataTypes.StringType, true, Metadata.empty()),
+        DataTypes.createStructField("ts_ms", DataTypes.LongType, true, Metadata.empty()),
+        DataTypes.createStructField("before", rowDataSchema, true, Metadata.empty()),
+        DataTypes.createStructField("after", rowDataSchema, true, Metadata.empty()),
+        DataTypes.createStructField("source", sourceSchema, true, Metadata.empty())));
+
+    Row afterRow = RowFactory.create(1L, "Alice");
+    Row sourceRow = RowFactory.create("pgdb", 1700000000000L);
+    Row envelopeRow = RowFactory.create("c", 1700000000500L, null, afterRow, sourceRow);
+    Dataset<Row> input = spark.createDataFrame(Collections.singletonList(envelopeRow), envelopeSchema);
+
+    TypedProperties props = new TypedProperties();
+    props.setProperty(DebeziumTransformerConfig.SCHEMA_AS_NULLABLE.key(), "false");
+
+    Dataset<Row> result = new TestableDebeziumTransformer().apply(jsc, spark, input, props);
+
+    assertFalse(result.schema().apply("id").nullable(), "id was non-nullable in the source schema");
+    assertTrue(result.schema().apply("name").nullable(), "name was nullable in the source schema");
+    long id = result.first().<Long>getAs("id");
+    assertEquals(1L, id);
+    assertEquals("Alice", result.first().getAs("name"));
+  }
+
+  @Test
+  void testErrorTableEnabledAddsNullCorruptRecordWhenMissing() {
+    // Include UPDATE_EVENT alongside so Spark's JSON inference sees a non-null `before`
+    // example and types the column as a struct rather than (incorrectly) as a string.
+    TypedProperties props = new TypedProperties();
+    props.setProperty(ERROR_TABLE_ENABLED.key(), "true");
+
+    Dataset<Row> result = new TestableDebeziumTransformer()
+        .apply(jsc, spark, jsonToDataset(INSERT_EVENT, UPDATE_EVENT), props);
+
+    assertTrue(Arrays.asList(result.columns()).contains(ERROR_TABLE_CURRUPT_RECORD_COL_NAME),
+        "_corrupt_record column added when error table is enabled");
+    Row insertRow = result.where(new Column(DebeziumConstants.FLATTENED_OP_COL_NAME).equalTo("c")).first();
+    assertNull(insertRow.getAs(ERROR_TABLE_CURRUPT_RECORD_COL_NAME), "no corrupt value was present on input");
+  }
+
+  @Test
+  void testErrorTableEnabledPreservesExistingCorruptRecordValue() {
+    Dataset<Row> input = jsonToDataset(INSERT_EVENT, UPDATE_EVENT)
+        .withColumn(ERROR_TABLE_CURRUPT_RECORD_COL_NAME, functions.lit("malformed-row"));
+    TypedProperties props = new TypedProperties();
+    props.setProperty(ERROR_TABLE_ENABLED.key(), "true");
+
+    Dataset<Row> result = new TestableDebeziumTransformer().apply(jsc, spark, input, props);
+
+    Row insertRow = result.where(new Column(DebeziumConstants.FLATTENED_OP_COL_NAME).equalTo("c")).first();
+    assertEquals("malformed-row", insertRow.getAs(ERROR_TABLE_CURRUPT_RECORD_COL_NAME),
+        "existing corrupt-record value is preserved, not overwritten");
   }
 
   /** Minimal concrete subclass to exercise the otherwise database-agnostic base. */
