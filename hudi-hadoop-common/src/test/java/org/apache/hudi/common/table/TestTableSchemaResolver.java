@@ -127,9 +127,8 @@ class TestTableSchemaResolver {
     StoragePath partitionPath = new StoragePath(testDir, "partition1");
     HoodieSchema expectedSchema = getSimpleSchema();
     StoragePath logFilePath = writeLogFile(partitionPath, expectedSchema.toAvroSchema());
-    assertEquals(expectedSchema, TableSchemaResolver.readSchemaFromLogFile(
-        HoodieStorageUtils.getStorage(new StoragePath(logFilePath.toString()), HoodieTestUtils.getDefaultStorageConf()),
-        logFilePath));
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), testDir);
+    assertEquals(expectedSchema, TableSchemaResolver.readSchemaFromLogFile(metaClient, logFilePath));
   }
 
   @Test
@@ -147,9 +146,8 @@ class TestTableSchemaResolver {
         expectedSchema,
         "100");
 
-    assertEquals(expectedSchema, TableSchemaResolver.readSchemaFromLogFile(
-        HoodieStorageUtils.getStorage(logFilePath, HoodieTestUtils.getDefaultStorageConf()),
-        logFilePath));
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), testDir);
+    assertEquals(expectedSchema, TableSchemaResolver.readSchemaFromLogFile(metaClient, logFilePath));
   }
 
   @Test
@@ -169,13 +167,16 @@ class TestTableSchemaResolver {
         tableSchema,
         "100");
 
-    assertNull(TableSchemaResolver.readSchemaFromLogFile(storage, logFilePath));
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), testDir);
+    assertNull(TableSchemaResolver.readSchemaFromLogFile(metaClient, logFilePath));
   }
 
   @Test
   void testReadSchemaFromNativeDataLogFileRequiresSchemaFooter() {
     StoragePath logFilePath = new StoragePath("/tmp/test-fileid1_1-0-1_100_1.log.parquet");
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieStorage storage = mock(HoodieStorage.class);
+    when(metaClient.getStorage()).thenReturn(storage);
     HoodieIOFactory ioFactory = mock(HoodieIOFactory.class);
     FileFormatUtils fileFormatUtils = mock(FileFormatUtils.class);
     when(ioFactory.getFileFormatUtils(HoodieFileFormat.PARQUET)).thenReturn(fileFormatUtils);
@@ -186,7 +187,7 @@ class TestTableSchemaResolver {
       ioFactoryMockedStatic.when(() -> HoodieIOFactory.getIOFactory(storage)).thenReturn(ioFactory);
 
       HoodieIOException exception = assertThrows(HoodieIOException.class,
-          () -> TableSchemaResolver.readSchemaFromLogFile(storage, logFilePath));
+          () -> TableSchemaResolver.readSchemaFromLogFile(metaClient, logFilePath));
       assertTrue(exception.getMessage().contains(HoodieLogBlock.HeaderMetadataType.SCHEMA.name()));
       assertTrue(exception.getMessage().contains(NativeLogFooterMetadata.FOOTER_METADATA_KEY));
       assertTrue(exception.getMessage().contains(logFilePath.toString()));
@@ -239,7 +240,7 @@ class TestTableSchemaResolver {
       when(fileFormatUtils.readSchema(any(), eq(parquetPath))).thenReturn(null);
       ioFactoryMockedStatic.when(() -> HoodieIOFactory.getIOFactory(any())).thenReturn(ioFactory);
       // mock log file schema reading to return the expected schema
-      tableSchemaResolverMockedStatic.when(() -> TableSchemaResolver.readSchemaFromLogFile(any(), eq(new StoragePath("/tmp/hudi_table/" + logFileWriteStat.getPath()))))
+      tableSchemaResolverMockedStatic.when(() -> TableSchemaResolver.readSchemaFromLogFile(eq(metaClient), eq(new StoragePath("/tmp/hudi_table/" + logFileWriteStat.getPath()))))
           .thenReturn(schema);
 
       assertTrue(schemaResolver.hasOperationField());

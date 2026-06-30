@@ -19,10 +19,12 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypeUtils;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
@@ -46,6 +48,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -88,6 +91,9 @@ public abstract class HoodieLogBlock {
   @Getter(AccessLevel.NONE)
   protected boolean readBlockLazily;
 
+  // Map of string schema to parsed schema.
+  private static final ConcurrentHashMap<String, HoodieSchema> SCHEMA_MAP = new ConcurrentHashMap<>();
+
   // Return the bytes representation of the data belonging to a LogBlock
   public ByteArrayOutputStream getContentBytes(HoodieStorage storage) throws IOException {
     throw new HoodieException("No implementation was provided");
@@ -101,6 +107,21 @@ public abstract class HoodieLogBlock {
 
   public boolean isDataOrDeleteBlock() {
     return getBlockType().isDataOrDeleteBlock();
+  }
+
+  protected HoodieSchema getSchemaFromHeader() {
+    String schemaStr = getLogBlockHeader().get(HeaderMetadataType.SCHEMA);
+    SCHEMA_MAP.computeIfAbsent(schemaStr,
+        schemaString -> {
+          try {
+            return HoodieSchema.parse(schemaStr);
+          } catch (HoodieAvroSchemaException e) {
+            // Archived commits from earlier hudi versions fail the schema check
+            // So we retry in this one specific instance with validation disabled
+            return HoodieSchema.parse(schemaStr, false);
+          }
+        });
+    return SCHEMA_MAP.get(schemaStr);
   }
 
   public long getLogBlockLength() {

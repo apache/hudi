@@ -301,7 +301,8 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
 
     private LogRecordIterator(FileGroupRecordBuffer<T> fileGroupRecordBuffer) {
       this.fileGroupRecordBuffer = fileGroupRecordBuffer;
-      this.logRecordIterator = fileGroupRecordBuffer.records.iterator();
+      fileGroupRecordBuffer.initializeLogRecordIterator();
+      this.logRecordIterator = fileGroupRecordBuffer.logRecordIterator;
     }
 
     @Override

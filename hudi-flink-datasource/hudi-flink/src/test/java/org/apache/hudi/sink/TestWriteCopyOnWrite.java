@@ -639,10 +639,6 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     return expected;
   }
 
-  protected Map<String, String> getExpectedBeforeCheckpointComplete() {
-    return EXPECTED2;
-  }
-
   @Test
   public void testIndexStateBootstrap() throws Exception {
     // open the function and ingest data
@@ -678,7 +674,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpoint(1)
         .assertBootstrapped()
         .assertNextEvent()
-        .checkWrittenData(getExpectedBeforeCheckpointComplete())
+        .checkWrittenData(EXPECTED1)
         .checkpointComplete(1)
         .checkWrittenData(EXPECTED2)
         .end();

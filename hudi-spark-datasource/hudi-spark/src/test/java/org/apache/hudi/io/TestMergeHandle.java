@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.avro.JoinedGenericRecord;
 import org.apache.hudi.client.SecondaryIndexStats;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -75,7 +74,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.MockedConstruction;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -98,9 +96,6 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.AssertionsKt.assertNull;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mockConstruction;
 
 /**
  * Unit tests {@link HoodieMergeHandle}.
@@ -237,32 +232,40 @@ public class TestMergeHandle extends BaseTestHandle {
 
     instantTime = client.startCommit();
     List<HoodieRecord> updates = dataGenerator.generateUniqueUpdates(instantTime, 10);
+    String recordKeyForFailure = updates.get(5).getRecordKey();
+    // Inject the failure at the base-file write boundary instead of mocking CDC record construction. The merge handle
+    // can use either inline Avro CDC or native CDC depending on the effective log format, but both paths must retract
+    // CDC and index callback state when the final file write fails for a record.
     FileGroupReaderBasedMergeHandle fileGroupReaderBasedMergeHandle = new FileGroupReaderBasedMergeHandle(
         config, instantTime, table, updates.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
-        Option.empty());
+        Option.empty()) {
+      @Override
+      protected void writeToFile(HoodieKey key, HoodieRecord record, HoodieSchema schema, Properties props,
+                                 boolean shouldPreserveRecordMetadata) throws IOException {
+        if (recordKeyForFailure.equals(key.getRecordKey())) {
+          throw new HoodieIOException("Simulated write failure for record key: " + recordKeyForFailure);
+        }
+        super.writeToFile(key, record, schema, props, shouldPreserveRecordMetadata);
+      }
+    };
     List<WriteStatus> writeStatuses;
-    String recordKeyForFailure = updates.get(5).getRecordKey();
 
-    try (MockedConstruction<JoinedGenericRecord> mocked = mockConstruction(JoinedGenericRecord.class,
-        (mock, context) -> {
-          doThrow(new HoodieIOException("Simulated write failure for record key: " + recordKeyForFailure))
-              .when(mock).put(any(), any());
-      })) {
-      fileGroupReaderBasedMergeHandle.doMerge();
-    }
+    fileGroupReaderBasedMergeHandle.doMerge();
 
     writeStatuses = fileGroupReaderBasedMergeHandle.close();
     WriteStatus writeStatus = writeStatuses.get(0);
-    assertEquals(2, writeStatus.getErrors().size());
-    // check that record and secondary index stats are non-empty
-    assertTrue(writeStatus.getWrittenRecordDelegates().isEmpty());
-    assertTrue(writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().flatMap(Collection::stream).count() == 0L);
+    assertEquals(1, writeStatus.getTotalErrorRecords());
+    // check that record and secondary index stats exclude the failed record
+    assertTrue(writeStatus.getWrittenRecordDelegates().stream()
+        .noneMatch(recordDelegate -> recordKeyForFailure.equals(recordDelegate.getRecordKey())));
+    assertTrue(writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().flatMap(Collection::stream)
+        .noneMatch(secondaryIndexStats -> recordKeyForFailure.equals(secondaryIndexStats.getRecordKey())));
 
     AtomicBoolean cdcRecordsFound = new AtomicBoolean(false);
     String cdcFilePath = metaClient.getBasePath().toString() + "/" + writeStatus.getStat().getCdcStats().keySet().stream().findFirst().get();
     HoodieSchema cdcSchema = schemaBySupplementalLoggingMode(HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY, HOODIE_SCHEMA);
     int recordKeyFieldIndex = cdcSchema.getField("record_key").get().pos();
-    try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(cdcFilePath), cdcSchema)) {
+    try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient, new HoodieLogFile(cdcFilePath), cdcSchema)) {
       while (reader.hasNext()) {
         HoodieLogBlock logBlock = reader.next();
         if (logBlock instanceof HoodieDataBlock) {

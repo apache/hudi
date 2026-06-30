@@ -165,13 +165,21 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
   }
 
   public void init(HoodieTableType tableType) throws Exception {
+    init(tableType, null);
+  }
+
+  private void init(HoodieTableType tableType, HoodieTableVersion tableVersion) throws Exception {
     initPath();
     initSparkContexts();
     initTimelineService();
     initMetaClient();
     storage = metaClient.getStorage();
     metaClient.getStorage().createDirectory(new StoragePath(basePath));
-    metaClient = HoodieTestUtils.init(storageConf, basePath, tableType);
+    Properties properties = new Properties();
+    if (tableVersion != null) {
+      properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(tableVersion.versionCode()));
+    }
+    metaClient = HoodieTestUtils.init(storageConf, basePath, tableType, properties);
   }
 
   private void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) {
@@ -222,6 +230,18 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
                                                            int minArchivalCommits,
                                                            int maxArchivalCommits,
                                                            int maxDeltaCommitsMetadataTable,
+                                                           HoodieTableType tableType,
+                                                           HoodieTableVersion tableVersion) throws Exception {
+    return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits,
+        5, maxDeltaCommitsMetadataTable, tableType, 10,
+        HoodieFailedWritesCleaningPolicy.EAGER, WriteConcurrencyMode.SINGLE_WRITER,
+        ARCHIVE_BEYOND_SAVEPOINT.defaultValue(), tableVersion);
+  }
+
+  private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata,
+                                                           int minArchivalCommits,
+                                                           int maxArchivalCommits,
+                                                           int maxDeltaCommitsMetadataTable,
                                                            int archiveFilesBatch) throws Exception {
     return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits, 5,
         maxDeltaCommitsMetadataTable, HoodieTableType.COPY_ON_WRITE, archiveFilesBatch,
@@ -260,8 +280,24 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
                                                            HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                            WriteConcurrencyMode writeConcurrencyMode,
                                                            boolean archiveProceedBeyondSavepoints) throws Exception {
-    init(tableType);
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
+    return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits, maxDeltaCommits,
+        maxDeltaCommitsMetadataTable, tableType, archiveFilesBatch, failedWritesCleaningPolicy, writeConcurrencyMode,
+        archiveProceedBeyondSavepoints, null);
+  }
+
+  private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata,
+                                                           int minArchivalCommits,
+                                                           int maxArchivalCommits,
+                                                           int maxDeltaCommits,
+                                                           int maxDeltaCommitsMetadataTable,
+                                                           HoodieTableType tableType,
+                                                           int archiveFilesBatch,
+                                                           HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                                           WriteConcurrencyMode writeConcurrencyMode,
+                                                           boolean archiveProceedBeyondSavepoints,
+                                                           HoodieTableVersion tableVersion) throws Exception {
+    init(tableType, tableVersion);
+    HoodieWriteConfig.Builder writeConfigBuilder = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).withFailedWritesCleaningPolicy(failedWritesCleaningPolicy).build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
@@ -279,7 +315,11 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         .withWriteConcurrencyMode(writeConcurrencyMode)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
             .build())
-        .forTable("test-trip-table").build();
+        .forTable("test-trip-table");
+    if (tableVersion != null) {
+      writeConfigBuilder.withWriteTableVersion(tableVersion.versionCode());
+    }
+    HoodieWriteConfig writeConfig = writeConfigBuilder.build();
     initWriteConfigAndMetatableWriter(writeConfig, enableMetadata);
     return writeConfig;
   }
@@ -788,7 +828,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
   @Test
   public void testDowngradeArchivedTimeline() throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(false, 1, 2, 5, HoodieTableType.MERGE_ON_READ);
+    // downgrade from 10 to 9 is not supported yet.
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(false, 1, 2, 5, HoodieTableType.MERGE_ON_READ, HoodieTableVersion.NINE);
 
     // do ingestion and trigger archive actions here.
     Map<String, Integer> cleanStats = new HashMap<>();
@@ -2397,7 +2438,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     addCleanCommitWithECTR(testTable, "00000006", "00000003", "00000005");
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    assertEquals(HoodieTableVersion.NINE, metaClient.getTableConfig().getTableVersion(),
+    assertEquals(HoodieTableVersion.TEN, metaClient.getTableConfig().getTableVersion(),
         "Table should be version 9");
 
     // When: trigger archival using TimelineArchiverV2

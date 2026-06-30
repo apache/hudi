@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -56,10 +55,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.common.fs.FSUtils.LOG_FILE_PATTERN;
 
 /**
  * Utility functions related to accessing the file storage on Hadoop.
@@ -397,22 +393,14 @@ public class HadoopFSUtils {
    * the file name.
    */
   public static String getFileIdFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.matches()) {
-      throw new InvalidHoodiePathException(path.toString(), "LogFile");
-    }
-    return matcher.group(1);
+    return FSUtils.getFileIdFromLogPath(new StoragePath(path.toUri()));
   }
 
   /**
    * Get the second part of the file name in the log file. That will be the delta commit time.
    */
   public static String getDeltaCommitTimeFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.matches()) {
-      throw new InvalidHoodiePathException(path.toString(), "LogFile");
-    }
-    return matcher.group(2);
+    return FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(path.toUri()));
   }
 
   /**
@@ -426,8 +414,7 @@ public class HadoopFSUtils {
   }
 
   public static boolean isBaseFile(Path path) {
-    String extension = FSUtils.getFileExtension(path.getName());
-    return HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(extension);
+    return FSUtils.isBaseFile(new StoragePath(path.toUri()));
   }
 
   public static boolean isLogFile(Path logPath) {

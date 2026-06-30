@@ -265,6 +265,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
           withSQLConf("hoodie.embed.timeline.server" -> "false",
+            "hoodie.write.table.version" -> "8",
             "hoodie.spark.sql.insert.into.operation" -> "upsert") {
 
             // Create table with version 8
@@ -311,6 +312,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
             ))
 
             // Upgrade table to version 9 and verify secondary indexes are dropped
+            // todo remove this option after https://github.com/apache/hudi/issues/19090 resolved.
             withSparkSqlSessionConfig(s"hoodie.write.table.version" -> "9") {
               // Update a record to trigger version upgrade
               spark.sql(s"insert into $tableName values(1, 'a1', 11, 1001)")
@@ -399,91 +401,94 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
   test("Test Secondary Index With Updates Compaction Clustering Deletes") {
     withTempDir { tmp =>
-      val tableName = generateTableName
-      val basePath = s"${tmp.getCanonicalPath}/$tableName"
-      // Step 1: Initial Insertion of Records
-      val dataGen = new HoodieTestDataGenerator()
-      val hudiOpts: Map[String, String] = loadInitialBatchAndCreateSecondaryIndex(tableName, basePath, dataGen)
+      // todo remove this option after https://github.com/apache/hudi/issues/19090 resolved.
+      withSparkSqlSessionConfig(s"hoodie.write.table.version" -> "9") {
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        // Step 1: Initial Insertion of Records
+        val dataGen = new HoodieTestDataGenerator()
+        val hudiOpts: Map[String, String] = loadInitialBatchAndCreateSecondaryIndex(tableName, basePath, dataGen)
 
-      // Verify initial state of secondary index
-      val initialKeys = spark.sql(s"select _row_key from $tableName limit 5").collect().map(_.getString(0))
-      validateSecondaryIndex(basePath, tableName, initialKeys)
-      val initialRecordsCount = spark.sql(s"select _row_key from $tableName").count()
+        // Verify initial state of secondary index
+        val initialKeys = spark.sql(s"select _row_key from $tableName limit 5").collect().map(_.getString(0))
+        validateSecondaryIndex(basePath, tableName, initialKeys)
+        val initialRecordsCount = spark.sql(s"select _row_key from $tableName").count()
 
-      // Step 3: Perform Update Operations on Subset of Records
-      var updateRecords = recordsToStrings(dataGen.generateUniqueUpdates(getInstantTime, 10, HoodieTestDataGenerator.TRIP_FLATTENED_SCHEMA)).asScala
-      var updateDf = spark.read.json(spark.sparkContext.parallelize(updateRecords.toSeq, 2))
-      updateDf.write.format("hudi")
-        .options(hudiOpts)
-        .option(OPERATION.key, UPSERT_OPERATION_OPT_VAL)
-        .mode(SaveMode.Append)
-        .save(basePath)
-      // Verify secondary index after updates
-      var updateKeys = updateDf.select("_row_key").collect().map(_.getString(0))
-      validateSecondaryIndex(basePath, tableName, updateKeys)
+        // Step 3: Perform Update Operations on Subset of Records
+        var updateRecords = recordsToStrings(dataGen.generateUniqueUpdates(getInstantTime, 10, HoodieTestDataGenerator.TRIP_FLATTENED_SCHEMA)).asScala
+        var updateDf = spark.read.json(spark.sparkContext.parallelize(updateRecords.toSeq, 2))
+        updateDf.write.format("hudi")
+          .options(hudiOpts)
+          .option(OPERATION.key, UPSERT_OPERATION_OPT_VAL)
+          .mode(SaveMode.Append)
+          .save(basePath)
+        // Verify secondary index after updates
+        var updateKeys = updateDf.select("_row_key").collect().map(_.getString(0))
+        validateSecondaryIndex(basePath, tableName, updateKeys)
 
-      // Step 4: Trigger Compaction with this update as the compaction frequency is set to 3 commits
-      updateRecords = recordsToStrings(dataGen.generateUniqueUpdates(getInstantTime, 10, HoodieTestDataGenerator.TRIP_FLATTENED_SCHEMA)).asScala
-      updateDf = spark.read.json(spark.sparkContext.parallelize(updateRecords.toSeq, 2))
-      updateDf.write.format("hudi")
-        .options(hudiOpts)
-        .option(OPERATION.key, UPSERT_OPERATION_OPT_VAL)
-        .mode(SaveMode.Append)
-        .save(basePath)
-      // Verify compaction
-      var metaClient = HoodieTableMetaClient.builder()
-        .setBasePath(basePath)
-        .setConf(HoodieTestUtils.getDefaultStorageConf)
-        .build()
-      assertTrue(metaClient.getActiveTimeline.getCommitTimeline.filterCompletedInstants.lastInstant.isPresent)
-      // Verify secondary index after compaction
-      updateKeys = updateDf.select("_row_key").collect().map(_.getString(0))
-      validateSecondaryIndex(basePath, tableName, updateKeys)
-      // Verify count of records
-      assertEquals(initialRecordsCount, spark.sql(s"select _row_key from $tableName").count())
+        // Step 4: Trigger Compaction with this update as the compaction frequency is set to 3 commits
+        updateRecords = recordsToStrings(dataGen.generateUniqueUpdates(getInstantTime, 10, HoodieTestDataGenerator.TRIP_FLATTENED_SCHEMA)).asScala
+        updateDf = spark.read.json(spark.sparkContext.parallelize(updateRecords.toSeq, 2))
+        updateDf.write.format("hudi")
+          .options(hudiOpts)
+          .option(OPERATION.key, UPSERT_OPERATION_OPT_VAL)
+          .mode(SaveMode.Append)
+          .save(basePath)
+        // Verify compaction
+        var metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(basePath)
+          .setConf(HoodieTestUtils.getDefaultStorageConf)
+          .build()
+        assertTrue(metaClient.getActiveTimeline.getCommitTimeline.filterCompletedInstants.lastInstant.isPresent)
+        // Verify secondary index after compaction
+        updateKeys = updateDf.select("_row_key").collect().map(_.getString(0))
+        validateSecondaryIndex(basePath, tableName, updateKeys)
+        // Verify count of records
+        assertEquals(initialRecordsCount, spark.sql(s"select _row_key from $tableName").count())
 
-      // Step 5: Trigger Clustering with this update as the clustering frequency is set to 4 commits
-      updateRecords = recordsToStrings(dataGen.generateUniqueUpdates(getInstantTime, 10, HoodieTestDataGenerator.TRIP_FLATTENED_SCHEMA)).asScala
-      updateDf = spark.read.json(spark.sparkContext.parallelize(updateRecords.toSeq, 2))
-      updateDf.write.format("hudi")
-        .options(hudiOpts)
-        .option(OPERATION.key, UPSERT_OPERATION_OPT_VAL)
-        .mode(SaveMode.Append)
-        .save(basePath)
-      // Verify clustering
-      metaClient = HoodieTableMetaClient.reload(metaClient)
-      assertTrue(metaClient.getActiveTimeline.getCompletedReplaceTimeline.lastInstant.isPresent)
-      // Verify secondary index after clustering
-      updateKeys = updateDf.select("_row_key").collect().map(_.getString(0))
-      validateSecondaryIndex(basePath, tableName, updateKeys)
+        // Step 5: Trigger Clustering with this update as the clustering frequency is set to 4 commits
+        updateRecords = recordsToStrings(dataGen.generateUniqueUpdates(getInstantTime, 10, HoodieTestDataGenerator.TRIP_FLATTENED_SCHEMA)).asScala
+        updateDf = spark.read.json(spark.sparkContext.parallelize(updateRecords.toSeq, 2))
+        updateDf.write.format("hudi")
+          .options(hudiOpts)
+          .option(OPERATION.key, UPSERT_OPERATION_OPT_VAL)
+          .mode(SaveMode.Append)
+          .save(basePath)
+        // Verify clustering
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        assertTrue(metaClient.getActiveTimeline.getCompletedReplaceTimeline.lastInstant.isPresent)
+        // Verify secondary index after clustering
+        updateKeys = updateDf.select("_row_key").collect().map(_.getString(0))
+        validateSecondaryIndex(basePath, tableName, updateKeys)
 
-      // Step 6: Perform Deletes on Records and Validate Secondary Index
-      val deleteKeys = initialKeys.take(1) // pick a subset of keys to delete
-      val deleteDf = spark.read.format("hudi").load(basePath).filter(s"_row_key in ('${deleteKeys.mkString("','")}')")
-      deleteDf.write.format("hudi")
-        .options(hudiOpts)
-        .option(OPERATION.key, DELETE_OPERATION_OPT_VAL)
-        .mode(SaveMode.Append)
-        .save(basePath)
-      // Verify secondary index for deletes
-      validateSecondaryIndex(basePath, tableName, deleteKeys, hasDeleteKeys = true)
-      // Verify for non deleted keys
-      val nonDeletedKeys = initialKeys.diff(deleteKeys)
-      validateSecondaryIndex(basePath, tableName, nonDeletedKeys)
+        // Step 6: Perform Deletes on Records and Validate Secondary Index
+        val deleteKeys = initialKeys.take(1) // pick a subset of keys to delete
+        val deleteDf = spark.read.format("hudi").load(basePath).filter(s"_row_key in ('${deleteKeys.mkString("','")}')")
+        deleteDf.write.format("hudi")
+          .options(hudiOpts)
+          .option(OPERATION.key, DELETE_OPERATION_OPT_VAL)
+          .mode(SaveMode.Append)
+          .save(basePath)
+        // Verify secondary index for deletes
+        validateSecondaryIndex(basePath, tableName, deleteKeys, hasDeleteKeys = true)
+        // Verify for non deleted keys
+        val nonDeletedKeys = initialKeys.diff(deleteKeys)
+        validateSecondaryIndex(basePath, tableName, nonDeletedKeys)
 
-      // Step 7: Final Update and Validation
-      val finalUpdateRecords = recordsToStrings(dataGen.generateUniqueUpdates(getInstantTime, 10, HoodieTestDataGenerator.TRIP_FLATTENED_SCHEMA)).asScala
-      val finalUpdateDf = spark.read.json(spark.sparkContext.parallelize(finalUpdateRecords.toSeq, 2))
-      finalUpdateDf.write.format("hudi")
-        .options(hudiOpts)
-        .option(OPERATION.key, UPSERT_OPERATION_OPT_VAL)
-        .mode(SaveMode.Append)
-        .save(basePath)
-      // Verify secondary index after final updates
-      val finalUpdateKeys = finalUpdateDf.select("_row_key").collect().map(_.getString(0))
-      validateSecondaryIndex(basePath, tableName, nonDeletedKeys)
-      validateSecondaryIndex(basePath, tableName, finalUpdateKeys)
-      dataGen.close()
+        // Step 7: Final Update and Validation
+        val finalUpdateRecords = recordsToStrings(dataGen.generateUniqueUpdates(getInstantTime, 10, HoodieTestDataGenerator.TRIP_FLATTENED_SCHEMA)).asScala
+        val finalUpdateDf = spark.read.json(spark.sparkContext.parallelize(finalUpdateRecords.toSeq, 2))
+        finalUpdateDf.write.format("hudi")
+          .options(hudiOpts)
+          .option(OPERATION.key, UPSERT_OPERATION_OPT_VAL)
+          .mode(SaveMode.Append)
+          .save(basePath)
+        // Verify secondary index after final updates
+        val finalUpdateKeys = finalUpdateDf.select("_row_key").collect().map(_.getString(0))
+        validateSecondaryIndex(basePath, tableName, nonDeletedKeys)
+        validateSecondaryIndex(basePath, tableName, finalUpdateKeys)
+        dataGen.close()
+      }
     }
   }
 
@@ -690,7 +695,11 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
   private def loadInitialBatchAndCreateSecondaryIndex(tableName: String, basePath: String, dataGen: HoodieTestDataGenerator, numInserts: Integer = 50) = {
     val initialRecords = recordsToStrings(dataGen.generateInserts(getInstantTime, numInserts, true)).asScala
     val initialDf = spark.read.json(spark.sparkContext.parallelize(initialRecords.toSeq, 2))
-    val hudiOpts = commonOpts ++ Map(TABLE_TYPE.key -> "MERGE_ON_READ", HoodieWriteConfig.TBL_NAME.key -> tableName)
+    val hudiOpts = commonOpts ++ Map(
+      TABLE_TYPE.key -> "MERGE_ON_READ",
+      HoodieWriteConfig.TBL_NAME.key -> tableName,
+      // todo remove this option after https://github.com/apache/hudi/issues/19090 resolved.
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> "9")
     initialDf.write.format("hudi")
       .options(hudiOpts)
       .option(OPERATION.key, INSERT_OPERATION_OPT_VAL)

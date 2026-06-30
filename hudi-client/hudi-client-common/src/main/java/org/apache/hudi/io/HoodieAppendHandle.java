@@ -44,6 +44,8 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.ExceptionUtil;
+import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.storage.StoragePath;
@@ -379,7 +381,7 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
       return true;
     } catch (Exception e) {
       log.error("Error writing record {}", hoodieRecord, e);
-      if (!config.getIgnoreWriteFailed()) {
+      if (!config.getIgnoreWriteFailed() || ExceptionUtil.isCausedBy(e, HoodieEarlyConflictDetectionException.class)) {
         throw new HoodieException(e.getMessage(), e);
       }
       writeStatus.markFailure(hoodieRecord, e, recordMetadata);
@@ -439,24 +441,14 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
     return updatedHeader;
   }
 
-  /**
-   * Finalizes accounting for one flushed append.
-   *
-   * <p>Subclasses call this after they flush buffered inline blocks or native writer state. The method updates
-   * write stats, records log-file membership, collects optional column stats, resets per-flush counters, and
-   * restarts the runtime timer for the next append.
-   */
-  protected void processAppendResult(AppendResult result) {
+  protected void processAppendResult(AppendResult result, long elapsedTime) {
     HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
-    updateWriteStatus(result, stat);
+    updateWriteStatus(result, stat, elapsedTime);
     stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
-    updateLogFiles(stat);
     collectColumnStats(stat);
-    resetWriteCounts();
     assert stat.getRuntimeStats() != null;
     log.info("AppendHandle for partitionPath {} filePath {}, took {} ms.", partitionPath,
         stat.getPath(), stat.getRuntimeStats().getTotalUpsertTime());
-    timer.startTimer();
   }
 
   /**
@@ -465,23 +457,23 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
    * <p>A single handle can write multiple physical log files because of rollover. Appends to the same log file
    * accumulate into the current stat; appends to a new log file create a new write status.
    */
-  protected void updateWriteStatus(AppendResult result, HoodieDeltaWriteStat stat) {
+  protected void updateWriteStatus(AppendResult result, HoodieDeltaWriteStat stat, long elapsedTime) {
     if (stat.getPath() == null) {
       updateWriteStat(stat, result);
       updateWriteCounts(stat, result);
-      updateRuntimeStats(stat);
+      updateRuntimeStats(stat, elapsedTime);
       statuses.add(this.writeStatus);
     } else if (stat.getPath().endsWith(result.logFile().getFileName())) {
       stat.setLogOffset(Math.min(stat.getLogOffset(), result.offset()));
       stat.setFileSizeInBytes(stat.getFileSizeInBytes() + result.size());
       accumulateWriteCounts(stat, result);
-      accumulateRuntimeStats(stat);
+      accumulateRuntimeStats(stat, elapsedTime);
     } else {
       initNewStatus();
       stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
       updateWriteStat(stat, result);
       updateWriteCounts(stat, result);
-      updateRuntimeStats(stat);
+      updateRuntimeStats(stat, elapsedTime);
       statuses.add(this.writeStatus);
     }
   }
@@ -507,15 +499,6 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
   }
 
   /**
-   * Allows subclasses to add extra log file names to the current stat after a flush.
-   *
-   * <p>Inline log appends usually have a single {@link AppendResult}. Native log appends can flush both data and
-   * delete files together, so they use this hook to record every physical file written by the flush.
-   */
-  protected void updateLogFiles(HoodieDeltaWriteStat stat) {
-  }
-
-  /**
    * Allows subclasses to collect column stats after a flush.
    *
    * <p>Inline log handles may compute stats from buffered records or inline block metadata. Native log handles
@@ -534,7 +517,7 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
     stat.setFileSizeInBytes(result.size());
   }
 
-  private void updateWriteCounts(HoodieDeltaWriteStat stat, AppendResult result) {
+  protected void updateWriteCounts(HoodieDeltaWriteStat stat, AppendResult result) {
     stat.setNumWrites(recordsWritten);
     stat.setNumUpdateWrites(updatedRecordsWritten);
     stat.setNumInserts(insertRecordsWritten);
@@ -542,7 +525,7 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
     stat.setTotalWriteBytes(result.size());
   }
 
-  private void accumulateWriteCounts(HoodieDeltaWriteStat stat, AppendResult result) {
+  protected void accumulateWriteCounts(HoodieDeltaWriteStat stat, AppendResult result) {
     stat.setNumWrites(stat.getNumWrites() + recordsWritten);
     stat.setNumUpdateWrites(stat.getNumUpdateWrites() + updatedRecordsWritten);
     stat.setNumInserts(stat.getNumInserts() + insertRecordsWritten);
@@ -550,16 +533,16 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
     stat.setTotalWriteBytes(stat.getTotalWriteBytes() + result.size());
   }
 
-  private void updateRuntimeStats(HoodieDeltaWriteStat stat) {
+  private void updateRuntimeStats(HoodieDeltaWriteStat stat, long elapsedTime) {
     RuntimeStats runtimeStats = new RuntimeStats();
-    runtimeStats.setTotalUpsertTime(timer.endTimer());
+    runtimeStats.setTotalUpsertTime(elapsedTime);
     stat.setRuntimeStats(runtimeStats);
   }
 
-  private void accumulateRuntimeStats(HoodieDeltaWriteStat stat) {
+  private void accumulateRuntimeStats(HoodieDeltaWriteStat stat, long elapsedTime) {
     RuntimeStats runtimeStats = stat.getRuntimeStats();
     assert runtimeStats != null;
-    runtimeStats.setTotalUpsertTime(runtimeStats.getTotalUpsertTime() + timer.endTimer());
+    runtimeStats.setTotalUpsertTime(runtimeStats.getTotalUpsertTime() + elapsedTime);
   }
 
   private String makeFilePath(HoodieLogFile logFile) {
@@ -584,7 +567,7 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
   protected abstract void writeDelete(HoodieSchema schema, HoodieRecord<T> hoodieRecord) throws IOException;
 
   /**
-   * Flushes any pending data/delete records and calls {@link #processAppendResult(AppendResult)} for each append result.
+   * Flushes any pending data/delete records and updates write stats for the flushed append result.
    */
   protected abstract void flushAppend();
 

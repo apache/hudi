@@ -156,7 +156,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
         metaClient.getCommitActionType());
 
     // There is no base file in partition dir because there is no compaction yet.
-    assertFalse(fileExists(), "No base data files should have been created");
+    assertFalse(baseDataFileExists(), "No base data files should have been created");
 
     // do compaction
     String compactionTime = (String) client1.scheduleCompaction(Option.empty()).get();
@@ -661,8 +661,9 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     assertNotNull(partitionDirs);
     assertThat(partitionDirs.length, is(partitions));
     for (File partitionDir : partitionDirs) {
-      File[] dataFiles = partitionDir.listFiles(filter);
+      File[] dataFiles = partitionDir.listFiles(file -> FSUtils.isBaseFile(file.getName()));
       assertNotNull(dataFiles);
+      assertTrue(dataFiles.length > 0);
       File latestDataFile = Arrays.stream(dataFiles)
           .max(Comparator.comparing(f -> FSUtils.getCommitTime(f.getName())))
           .orElse(dataFiles[0]);
@@ -699,7 +700,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     }
   }
 
-  private boolean fileExists() {
+  private boolean baseDataFileExists() {
     List<File> dirsToCheck = new ArrayList<>();
     dirsToCheck.add(tempDir.toFile());
     while (!dirsToCheck.isEmpty()) {
@@ -708,7 +709,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
         if (!file.getName().startsWith(".")) {
           if (file.isDirectory()) {
             dirsToCheck.add(file);
-          } else {
+          } else if (FSUtils.isBaseFile(file.getName())) {
             return true;
           }
         }

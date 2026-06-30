@@ -153,6 +153,11 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
+  public HoodieRecord.HoodieRecordType getEngineRecordType() {
+    return HoodieRecord.HoodieRecordType.FLINK;
+  }
+
+  @Override
   public RowData mergeWithEngineRecord(HoodieSchema schema,
                                        Map<Integer, Object> updateValues,
                                        BufferedRecord<RowData> baseRecord) {

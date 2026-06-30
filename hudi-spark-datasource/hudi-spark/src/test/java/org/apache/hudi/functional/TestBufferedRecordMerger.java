@@ -959,6 +959,11 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     @Override
+    public HoodieRecord.HoodieRecordType getEngineRecordType() {
+      return HoodieRecord.HoodieRecordType.SPARK;
+    }
+
+    @Override
     public InternalRow mergeWithEngineRecord(HoodieSchema schema,
                                              Map<Integer, Object> updateValues,
                                              BufferedRecord<InternalRow> baseRecord) {

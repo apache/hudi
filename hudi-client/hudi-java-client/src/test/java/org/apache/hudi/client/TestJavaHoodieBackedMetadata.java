@@ -892,15 +892,15 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   private void verifyMetadataRawRecords(HoodieTable table, List<HoodieLogFile> logFiles, boolean enableMetaFields) throws IOException {
     for (HoodieLogFile logFile : logFiles) {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(logFile.getPath());
-      HoodieSchema writerSchema = TableSchemaResolver.readSchemaFromLogFile(storage,
+      HoodieSchema writerSchema = TableSchemaResolver.readSchemaFromLogFile(table.getMetaClient(),
           logFile.getPath());
       if (writerSchema == null) {
         // not a data block
         continue;
       }
 
-      try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(storage,
-          new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
+      try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(
+          table.getMetaClient(), new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
         while (logFileReader.hasNext()) {
           HoodieLogBlock logBlock = logFileReader.next();
           if (logBlock instanceof HoodieDataBlock) {
@@ -2913,7 +2913,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             verifyMetadataRawRecords(table, logFiles, false);
           }
           if (COLUMN_STATS.getPartitionPath().equals(partition)) {
-            verifyMetadataColumnStatsRecords(logFiles);
+            verifyMetadataColumnStatsRecords(metadataMetaClient, logFiles);
           }
         } catch (IOException e) {
           log.error("Metadata record validation failed", e);
@@ -2926,18 +2926,19 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
   }
 
-  private void verifyMetadataColumnStatsRecords(List<HoodieLogFile> logFiles) throws IOException {
+  private void verifyMetadataColumnStatsRecords(HoodieTableMetaClient metadataMetaClient,
+                                                List<HoodieLogFile> logFiles) throws IOException {
     for (HoodieLogFile logFile : logFiles) {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(logFile.getPath());
-      HoodieSchema writerSchema = TableSchemaResolver.readSchemaFromLogFile(storage,
+      HoodieSchema writerSchema = TableSchemaResolver.readSchemaFromLogFile(metadataMetaClient,
           logFile.getPath());
       if (writerSchema == null) {
         // not a data block
         continue;
       }
 
-      try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(storage,
-          new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
+      try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(
+          metadataMetaClient, new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
         while (logFileReader.hasNext()) {
           HoodieLogBlock logBlock = logFileReader.next();
           if (logBlock instanceof HoodieDataBlock) {

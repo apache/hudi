@@ -28,14 +28,12 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import java.io.IOException;
 import java.util.Properties;
 
-public interface HoodieSparkFileWriter extends HoodieFileWriter {
+public interface HoodieSparkFileWriter extends HoodieFileWriter<InternalRow> {
   boolean canWrite();
 
   void close() throws IOException;
 
   void writeRowWithMetadata(HoodieKey recordKey, InternalRow row) throws IOException;
-
-  void writeRow(String recordKey, InternalRow row) throws IOException;
 
   @Override
   default void write(String recordKey, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException {

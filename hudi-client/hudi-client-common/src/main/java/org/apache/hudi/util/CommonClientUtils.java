@@ -21,6 +21,7 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -63,6 +64,16 @@ public class CommonClientUtils {
 
     if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT) && writeConfig.isNonBlockingConcurrencyControl()) {
       throw new HoodieNotSupportedException("Non-blocking concurrency control is not supported for table versions < 8.");
+    }
+
+    // The LSM-tree storage layout depends on the native (v2) log format, which is only written for
+    // writer versions >= TEN (see #shouldWriteNativeLogFormat). Reject an LSM-tree table whose writer
+    // version is below TEN, otherwise writes would silently fall back to the inline log format.
+    if (tableConfig.isLSMTreeStorageLayout()
+        && writeConfig.getWriteVersion().lesserThan(HoodieTableVersion.TEN)) {
+      throw new HoodieNotSupportedException(String.format(
+          "LSM-tree storage layout requires writer version >= %s (found writer version %s).",
+          HoodieTableVersion.TEN, writeConfig.getWriteVersion()));
     }
   }
 
@@ -117,6 +128,41 @@ public class CommonClientUtils {
       default:
         throw new HoodieException("Base file format " + baseFileFormat
             + " does not have associated log block type");
+    }
+  }
+
+  /**
+   * Whether log blocks should be written in the native (v2) log format (standalone native
+   * files written via {@code HoodieNativeLogFormatWriter}) instead of the legacy inline
+   * log format. The native format is the default for write version &gt;= {@link HoodieTableVersion#TEN},
+   * except for Lance base files.
+   *
+   * <p>This decision is keyed on the effective write version (i.e. {@code HoodieWriteConfig#getWriteVersion()})
+   * and the effective base file format, consistent with how the inline log block layout is
+   * selected, so that the on-disk format follows what the writer is targeting during
+   * upgrade/downgrade windows. Lance remains on the legacy inline log format until native Lance log
+   * support is complete.
+   *
+   * @param writeConfig the writer configuration.
+   * @param tableConfig the persisted table configuration.
+   */
+  public static boolean shouldWriteNativeLogs(HoodieWriteConfig writeConfig, HoodieTableConfig tableConfig) {
+    if (getBaseFileFormat(writeConfig, tableConfig) == HoodieFileFormat.LANCE) {
+      return false;
+    }
+    return writeConfig.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.TEN);
+  }
+
+  public static void validateIndexSupportForNativeLogFormat(HoodieWriteConfig writeConfig, HoodieFileFormat nativeLogFileFormat) {
+    if (!writeConfig.isMetadataColumnStatsIndexEnabled()) {
+      return;
+    }
+
+    if (nativeLogFileFormat == HoodieFileFormat.ORC) {
+      throw new HoodieNotSupportedException(String.format(
+          "Column stats index is not supported for native %s log files because its HoodieFileWriter does not support file format metadata. "
+              + "Please disable %s.",
+          nativeLogFileFormat, HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key()));
     }
   }
 

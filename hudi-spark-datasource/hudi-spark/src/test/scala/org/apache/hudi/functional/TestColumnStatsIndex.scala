@@ -699,6 +699,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
     val expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
       "index/colstats/cow-bootstrap1-column-stats-index-table.json"
+    } else if (HoodieTableVersion.fromVersionCode(testCase.tableVersion).greaterThanOrEquals(HoodieTableVersion.TEN)) {
+      "index/colstats/mor-bootstrap1-column-stats-index-table-v10.json"
     } else {
       "index/colstats/mor-bootstrap1-column-stats-index-table.json"
     }
@@ -734,6 +736,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     // trigger one more upsert and compaction (w/ MOR table) and validate.
     val expectedColStatsSourcePath1 = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
       "index/colstats/cow-bootstrap2-column-stats-index-table.json"
+    } else if (HoodieTableVersion.fromVersionCode(testCase.tableVersion).greaterThanOrEquals(HoodieTableVersion.TEN)) {
+      "index/colstats/mor-bootstrap2-column-stats-index-table-v10.json"
     } else {
       "index/colstats/mor-bootstrap2-column-stats-index-table.json"
     }

@@ -126,12 +126,13 @@ public class ExportCommand {
                                    int limit,
                                    String localFolder) throws Exception {
     int copyCount = 0;
-    HoodieStorage storage = HoodieStorageUtils.getStorage(
-        HoodieCLI.getTableMetaClient().getBasePath(), HoodieCLI.conf);
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    HoodieStorage storage = metaClient.getStorage();
 
     for (StoragePathInfo pathInfo : pathInfoList) {
       // read the archived file
-      try (Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(pathInfo.getPath()), HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()))) {
+      try (Reader reader = HoodieLogFormat.newReader(metaClient, new HoodieLogFile(pathInfo.getPath()),
+          HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()))) {
 
         // read the avro blocks
         while (reader.hasNext() && copyCount++ < limit) {

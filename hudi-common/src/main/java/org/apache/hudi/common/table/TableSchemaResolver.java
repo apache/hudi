@@ -46,7 +46,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSchemaNotFoundException;
 import org.apache.hudi.exception.InvalidTableException;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
@@ -279,7 +278,7 @@ public class TableSchemaResolver {
   }
 
   private HoodieSchema readSchemaFromLogFile(StoragePath path) throws IOException {
-    return readSchemaFromLogFile(metaClient.getRawStorage(), path);
+    return readSchemaFromLogFile(metaClient, path);
   }
 
   /**
@@ -287,16 +286,16 @@ public class TableSchemaResolver {
    *
    * @return
    */
-  public static HoodieSchema readSchemaFromLogFile(HoodieStorage storage, StoragePath path) throws IOException {
+  public static HoodieSchema readSchemaFromLogFile(HoodieTableMetaClient metaClient, StoragePath path) throws IOException {
     Option<Matcher> nativeLogMatcherOpt = FSUtils.matchNativeLogFile(path.getName());
     if (nativeLogMatcherOpt.isPresent()) {
-      return NativeLogFooterMetadata.readSchemaFromNativeLogFile(storage, path, nativeLogMatcherOpt.get());
+      return NativeLogFooterMetadata.readSchemaFromNativeLogFile(metaClient.getStorage(), path, nativeLogMatcherOpt.get());
     }
 
     // We only need to read the schema from the log block header,
     // so we read the block lazily to avoid reading block content
     // containing the records
-    try (Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(path), null, false)) {
+    try (Reader reader = HoodieLogFormat.newReader(metaClient, new HoodieLogFile(path), null, false)) {
       HoodieDataBlock lastBlock = null;
       while (reader.hasNext()) {
         HoodieLogBlock block = reader.next();

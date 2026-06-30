@@ -63,7 +63,8 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
     val filter = getArgValueOrDefault(args, parameters(4)).get.asInstanceOf[String]
 
     validateFilter(filter, outputType)
-    val storage = createMetaClient(jsc, basePath).getStorage
+    val metaClient = createMetaClient(jsc, basePath)
+    val storage = metaClient.getStorage
     val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(logFilePathPattern)).iterator().asScala
       .map(_.getPath.toString).toList
     val commitCountAndMetadata =
@@ -73,8 +74,8 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
     logFilePaths.foreach {
       logFilePath => {
         val statuses = storage.listDirectEntries(new StoragePath(logFilePath))
-        val schema = TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePath))
-        val reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(statuses.get(0).getPath), schema)
+        val schema = TableSchemaResolver.readSchemaFromLogFile(metaClient, new StoragePath(logFilePath))
+        val reader = HoodieLogFormat.newReader(metaClient, new HoodieLogFile(statuses.get(0).getPath), schema)
 
         // read the avro blocks
         while (reader.hasNext) {

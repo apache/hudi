@@ -83,7 +83,7 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
         )
       case _ =>
         Map(
-          HoodieTableConfig.VERSION.key -> "9",
+          HoodieTableConfig.VERSION.key -> tableVersion,
           HoodieTableConfig.RECORD_MERGE_MODE.key -> EVENT_TIME_ORDERING.name()
         )
     }

@@ -47,6 +47,7 @@ import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.CommonClientUtils;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.IndexedRecord;
@@ -173,7 +174,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                       TaskContextSupplier taskContextSupplier) throws IOException {
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
         table.getStorageConf(), table.getMetaClient().getTableConfig(), instantRange, Option.empty(), writeConfig.getProps());
-    HoodieAppendHandle<IndexedRecord, ?, ?, ?> appendHandle = table.getMetaClient().getTableConfig().isLSMTreeStorageLayout()
+    HoodieAppendHandle<IndexedRecord, ?, ?, ?> appendHandle = CommonClientUtils.shouldWriteNativeLogs(
+        writeConfig, table.getMetaClient().getTableConfig())
         ? new FileGroupReaderBasedNativeLogAppendHandle<>(writeConfig, instantTime, table, operation, taskContextSupplier, readerContext)
         : new FileGroupReaderBasedInlineLogAppendHandle<>(writeConfig, instantTime, table, operation, taskContextSupplier, readerContext);
     appendHandle.doAppend();

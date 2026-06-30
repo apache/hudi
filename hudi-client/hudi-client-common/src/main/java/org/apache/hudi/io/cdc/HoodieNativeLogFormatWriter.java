@@ -24,17 +24,17 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemas;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.LogFileCreationCallback;
+import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
-import org.apache.hudi.common.table.read.BufferedRecord;
-import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
@@ -47,9 +47,12 @@ import org.apache.hudi.storage.StoragePath;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.apache.hudi.common.model.LogExtensions.DATA_LOG_EXTENSION;
 import static org.apache.hudi.common.model.LogExtensions.DELETE_LOG_EXTENSION;
@@ -66,12 +69,15 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
   private final RecordContext recordContext;
   private final List<String> orderingFieldNames;
   private final Properties recordProperties;
+  private final Option<String> baseFileInstantTimeOfPositions;
   private HoodieFileWriter dataFileWriter;
   private HoodieFileWriter deleteFileWriter;
   private HoodieLogFile dataLogFile;
   private HoodieLogFile deleteLogFile;
   private HoodieSchema deleteLogSchema;
   private int currentAppendVersion = -1;
+  private final List<Long> dataRecordPositions = new ArrayList<>();
+  private final List<Long> deleteRecordPositions = new ArrayList<>();
   private List<AppendResult> lastAppendResults = new ArrayList<>();
   private Option<Object> lastDataFileFormatMetadata = Option.empty();
 
@@ -90,7 +96,8 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
                                      HoodieSchema tableSchema,
                                      TaskContextSupplier taskContextSupplier,
                                      RecordContext recordContext,
-                                     List<String> orderingFieldNames) throws IOException {
+                                     List<String> orderingFieldNames,
+                                     Option<String> baseFileInstantTimeOfPositions) throws IOException {
     super(bufferSize, storage, parentPath, logFileId, DATA_LOG_EXTENSION, instantTime, logVersion, logWriteToken,
         null, 0L, sizeThreshold, fileCreationCallback, tableVersion);
     this.writeConfig = writeConfig;
@@ -102,6 +109,7 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     this.recordProperties = new Properties();
     this.recordProperties.putAll(writeConfig.getProps());
     this.logFile = new HoodieLogFile(makeNativeLogPath(this.logVersion, DATA_LOG_EXTENSION), this.fileSize);
+    this.baseFileInstantTimeOfPositions = baseFileInstantTimeOfPositions;
   }
 
   public List<AppendResult> getLastAppendResults() {
@@ -157,22 +165,25 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     ensureDataFileWriter(recordSchema);
     dataFileWriter.write(record.getRecordKey(recordSchema, keyFieldName),
         record, recordSchema, recordProperties);
+    dataRecordPositions.add(record.getCurrentPosition());
   }
 
   public void appendDeleteRecord(HoodieRecord record, HoodieSchema recordSchema, String keyFieldName) throws IOException {
     ensureDeleteFileWriter();
     String recordKey = record.getRecordKey(recordSchema, keyFieldName);
-    Comparable orderingValue = record.getOrderingValue(
-        recordSchema, recordProperties, orderingFieldNames.toArray(new String[0]));
+    Comparable orderingValue = getDeleteOrderingValue(record, recordSchema);
     Object deleteEngineRecord = recordContext.constructEngineRecord(
         deleteLogSchema, createDeleteLogFieldValues(recordKey, orderingValue));
-    // Keep isDelete=false here so RecordContext constructs a data-bearing HoodieRecord
-    // with the native delete-log row. The delete semantics come from the delete log file
-    // itself; setting isDelete=true would create a HoodieEmptyRecord and lose the row.
-    BufferedRecord deleteRecord = BufferedRecords.fromEngineRecord(
-        deleteEngineRecord, deleteLogSchema, recordContext, orderingValue, recordKey, false);
-    deleteFileWriter.write(recordKey, recordContext.constructHoodieRecord(deleteRecord, record.getPartitionPath()),
-        deleteLogSchema, recordProperties);
+    deleteFileWriter.writeRow(recordKey, deleteEngineRecord);
+    long recordPosition = baseFileInstantTimeOfPositions.isPresent() ? record.getCurrentPosition() : -1L;
+    deleteRecordPositions.add(recordPosition);
+  }
+
+  private Comparable getDeleteOrderingValue(HoodieRecord record, HoodieSchema recordSchema) {
+    if (orderingFieldNames.isEmpty()) {
+      return OrderingValues.getDefault();
+    }
+    return record.getOrderingValue(recordSchema, recordProperties, orderingFieldNames.toArray(new String[0]));
   }
 
   private Object[] createDeleteLogFieldValues(String recordKey, Comparable orderingValue) {
@@ -211,8 +222,40 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
 
   private void addFooterMetadata(Map<HeaderMetadataType, String> header) throws IOException {
     if (dataFileWriter != null) {
-      dataFileWriter.addFooterMetadata(NativeLogFooterMetadata.toFooterMetadata(header));
+      dataFileWriter.addFooterMetadata(NativeLogFooterMetadata.toFooterMetadata(
+          addRecordPositionsIfRequired(header, dataRecordPositions)));
     }
+    if (deleteFileWriter != null) {
+      deleteFileWriter.addFooterMetadata(NativeLogFooterMetadata.toFooterMetadata(
+          addRecordPositionsIfRequired(header, deleteRecordPositions)));
+    }
+  }
+
+  private Map<HeaderMetadataType, String> addRecordPositionsIfRequired(
+      Map<HeaderMetadataType, String> header, List<Long> recordPositions) throws IOException {
+    if (!header.containsKey(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS)) {
+      return header;
+    }
+
+    Set<Long> positionSet = new HashSet<>(recordPositions.size());
+    long previousPosition = Long.MIN_VALUE;
+    for (Long position : recordPositions) {
+      // RECORD_POSITIONS is encoded as a bitmap and decoded in ascending order. Native log records
+      // are read back in file write order, so only publish positions when both orders match.
+      if (!HoodieRecordLocation.isPositionValid(position) || position <= previousPosition) {
+        Map<HeaderMetadataType, String> updatedHeader = new HashMap<>(header);
+        updatedHeader.remove(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
+        return updatedHeader;
+      }
+      previousPosition = position;
+      positionSet.add(position);
+    }
+
+    Map<HeaderMetadataType, String> updatedHeader = new HashMap<>(header);
+    if (positionSet.size() == recordPositions.size()) {
+      updatedHeader.put(HeaderMetadataType.RECORD_POSITIONS, LogReaderUtils.encodePositions(positionSet));
+    }
+    return updatedHeader;
   }
 
   private void ensureDataFileWriter(HoodieSchema recordSchema) throws IOException {
@@ -230,9 +273,13 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     if (deleteFileWriter == null) {
       deleteLogFile = createNativeLogFile(currentAppendVersion, DELETE_LOG_EXTENSION);
       deleteLogSchema = HoodieSchemas.createDeleteLogSchema(tableSchema, orderingFieldNames);
+      // The delete records are built through recordContext#constructEngineRecord (see #appendDeleteRecord), so the
+      // writer must match the record context's engine type rather than the merger's record type: on Spark executors
+      // the reader context for write degrades to Avro (no engine context available), and using the merger record
+      // type here (e.g. SPARK) would create an engine-native writer that fails on the Avro delete records.
       deleteFileWriter = HoodieFileWriterFactory.getFileWriter(
           instantTime, deleteLogFile.getPath(), storage, writeConfig, deleteLogSchema, taskContextSupplier,
-          writeConfig.getRecordMerger().getRecordType());
+          recordContext.getEngineRecordType());
     }
   }
 
@@ -245,13 +292,16 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
   private void closeFileWriters() throws IOException {
     if (dataFileWriter != null) {
       dataFileWriter.close();
-      lastDataFileFormatMetadata = Option.ofNullable(dataFileWriter.getFileFormatMetadata());
+      lastDataFileFormatMetadata = writeConfig.isMetadataColumnStatsIndexEnabled()
+          ? Option.ofNullable(dataFileWriter.getFileFormatMetadata()) : Option.empty();
       dataFileWriter = null;
     }
     if (deleteFileWriter != null) {
       deleteFileWriter.close();
       deleteFileWriter = null;
     }
+    dataRecordPositions.clear();
+    deleteRecordPositions.clear();
   }
 
   private HoodieLogFile createNativeLogFile(int version, String logExtension) throws IOException {
@@ -272,10 +322,11 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
       return new AppendResult(logFile, 0, 0);
     }
 
-    long totalSize = lastAppendResults.stream().mapToLong(AppendResult::size).sum();
+    // The returned result preserves the legacy single-result writer contract. Native append handles consume
+    // lastAppendResults directly so every physical data/delete file gets its own write stat.
     AppendResult firstResult = lastAppendResults.get(0);
     this.logFile = firstResult.logFile();
-    return new AppendResult(firstResult.logFile(), 0, totalSize);
+    return firstResult;
   }
 
   private int nextAvailableVersion() throws IOException {

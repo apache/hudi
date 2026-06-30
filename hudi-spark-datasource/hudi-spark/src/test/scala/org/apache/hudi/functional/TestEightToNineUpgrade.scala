@@ -169,6 +169,8 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
     update.write.format("hudi").
       option(OPERATION.key(), "upsert").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      // todo remove this option after https://github.com/apache/hudi/issues/19090 resolved.
+      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9").
       mode(SaveMode.Append).
       save(basePath)
     orderingValue = DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME

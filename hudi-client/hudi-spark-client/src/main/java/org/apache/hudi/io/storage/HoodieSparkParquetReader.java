@@ -52,10 +52,10 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.catalyst.util.RebaseDateTime;
+import org.apache.spark.sql.execution.datasources.parquet.HoodieParquetFileFormatHelper$;
 import org.apache.spark.sql.execution.datasources.parquet.HoodieParquetReadSupport;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFilters;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetReadSupport;
-import org.apache.spark.sql.execution.datasources.parquet.ParquetToSparkSchemaConverter;
 import org.apache.spark.sql.execution.datasources.parquet.SparkBasicSchemaEvolution;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.sources.Filter;
@@ -158,7 +158,8 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
     Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(nonNullSchema));
     boolean enableTimestampFieldRepair = storage.getConf().getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true);
-    StructType dataStructType = convertToStruct(enableTimestampFieldRepair ? SchemaRepair.repairLogicalTypes(getFileSchema(), messageSchema) : getFileSchema());
+    MessageType dataMessageType = enableTimestampFieldRepair ? SchemaRepair.repairLogicalTypes(getFileSchema(), messageSchema) : getFileSchema();
+    StructType dataStructType = convertToStruct(dataMessageType);
     SparkBasicSchemaEvolution evolution = new SparkBasicSchemaEvolution(dataStructType, readStructSchema, SQLConf.get().sessionLocalTimeZone());
     String readSchemaJson = evolution.getRequestSchema().json();
     SQLConf sqlConf = SQLConf.get();
@@ -248,7 +249,8 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   }
 
   private StructType convertToStruct(MessageType messageType) {
-    return new ParquetToSparkSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(messageType);
+    return HoodieParquetFileFormatHelper$.MODULE$.convertParquetSchemaToSparkSchema(
+        storage.getConf().unwrapAs(Configuration.class), messageType);
   }
 
   @Override

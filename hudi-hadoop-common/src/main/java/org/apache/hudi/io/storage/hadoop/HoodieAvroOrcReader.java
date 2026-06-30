@@ -51,7 +51,6 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -87,10 +86,6 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReader {
 
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema, Map<String, String> renamedColumns) {
-    if (!Objects.equals(readerSchema, requestedSchema)) {
-      throw new UnsupportedOperationException("Schema projections are not supported in HFile reader");
-    }
-
     Configuration hadoopConf = storage.getConf().unwrapCopyAs(Configuration.class);
     try (Reader reader = OrcFile.createReader(new Path(path.toUri()), OrcFile.readerOptions(hadoopConf))) {
       // Limit the ORC schema to requested fields only

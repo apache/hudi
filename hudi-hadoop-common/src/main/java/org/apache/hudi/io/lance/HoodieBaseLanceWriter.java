@@ -38,6 +38,8 @@ import javax.annotation.concurrent.NotThreadSafe;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -68,6 +70,7 @@ public abstract class HoodieBaseLanceWriter<R, K extends Comparable<K>> implemen
   private VectorSchemaRoot root;
   private ArrowWriter<R> arrowWriter;
   protected final Option<HoodieBloomFilterWriteSupport<K>> bloomFilterWriteSupportOpt;
+  private final Map<String, String> footerMetadata = new LinkedHashMap<>();
 
   private LanceFileWriter writer;
 
@@ -122,6 +125,19 @@ public abstract class HoodieBaseLanceWriter<R, K extends Comparable<K>> implemen
    */
   protected Map<String, String> additionalSchemaMetadata() {
     return Collections.emptyMap();
+  }
+
+  /**
+   * Add Hudi file footer metadata to the Lance schema custom metadata.
+   *
+   * <p>Lance exposes file-level key-value metadata through the Arrow schema custom metadata
+   * returned by {@code LanceFileReader.schema()}. The metadata is flushed to the file footer
+   * when the underlying {@link LanceFileWriter} is closed.
+   */
+  public void addFooterMetadata(Map<String, String> footerMetadata) {
+    if (footerMetadata != null && !footerMetadata.isEmpty()) {
+      this.footerMetadata.putAll(footerMetadata);
+    }
   }
 
   /**
@@ -215,6 +231,10 @@ public abstract class HoodieBaseLanceWriter<R, K extends Comparable<K>> implemen
         Map<String, String> extra = additionalSchemaMetadata();
         if (extra != null && !extra.isEmpty()) {
           writer.addSchemaMetadata(extra);
+        }
+
+        if (!footerMetadata.isEmpty()) {
+          writer.addSchemaMetadata(new HashMap<>(footerMetadata));
         }
       }
     } catch (Exception e) {

@@ -360,7 +360,7 @@ public class MergeOnReadInputFormat
     protected Configuration conf;
     protected MergeOnReadTableState tableState;
     protected List<DataType> fieldTypes;
-    protected List<Predicate> predicates;
+    protected List<Predicate> predicates = Collections.emptyList();
     protected long limit = -1;
     protected boolean emitDelete = false;
     protected InternalSchemaManager internalSchemaManager = InternalSchemaManager.DISABLED;

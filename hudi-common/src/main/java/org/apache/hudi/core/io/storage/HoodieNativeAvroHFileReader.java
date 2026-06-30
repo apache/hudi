@@ -57,7 +57,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -101,13 +100,16 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
                                                                   HoodieSchema requestedSchema,
                                                                   Map<String, String> renamedColumns)
       throws IOException {
-    if (!Objects.equals(readerSchema, requestedSchema) || !renamedColumns.isEmpty()) {
+    // GenericDatumReader natively supports Avro projection from the stored writer schema
+    // to the requested read schema. Column rename rewriting still needs file-level schema
+    // handling that this reader does not implement.
+    if (!renamedColumns.isEmpty()) {
       throw new UnsupportedOperationException(
-          "Schema projections are not supported in HFile reader");
+          "Column renames are not supported in HFile reader");
     }
 
     HFileReader reader = readerFactory.createHFileReader();
-    return new RecordIterator(reader, getSchema(), readerSchema);
+    return new RecordIterator(reader, getSchema(), requestedSchema);
   }
 
   @Override

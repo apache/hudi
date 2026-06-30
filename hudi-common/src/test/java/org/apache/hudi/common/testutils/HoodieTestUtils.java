@@ -20,6 +20,7 @@ package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -151,6 +152,24 @@ public class HoodieTestUtils {
 
   public static HoodieStorage getStorage(StoragePath path) {
     return HoodieStorageUtils.getStorage(path, getDefaultStorageConf());
+  }
+
+  /**
+   * Lists all native (v2) log files (e.g. {@code *.log.parquet} / {@code *.deletes.parquet}) under
+   * the given base path, scanning recursively.
+   */
+  public static List<StoragePath> listNativeLogFiles(HoodieStorage storage, String basePath) throws IOException {
+    return storage.listFiles(new StoragePath(basePath)).stream()
+        .map(StoragePathInfo::getPath)
+        .filter(path -> FSUtils.matchNativeLogFile(path.getName()).isPresent())
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Whether the table at the given base path contains any native (v2) log files.
+   */
+  public static boolean hasNativeLogFiles(HoodieStorage storage, String basePath) throws IOException {
+    return !listNativeLogFiles(storage, basePath).isEmpty();
   }
 
   public static HoodieTableMetaClient init(String basePath) throws IOException {

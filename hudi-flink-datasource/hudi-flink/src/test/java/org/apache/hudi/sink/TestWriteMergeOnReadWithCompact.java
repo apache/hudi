@@ -107,11 +107,6 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     // insert async clustering is only valid for cow table.
   }
 
-  @Override
-  protected Map<String, String> getExpectedBeforeCheckpointComplete() {
-    return EXPECTED1;
-  }
-
   protected Map<String, String> getMiniBatchExpected() {
     Map<String, String> expected = new HashMap<>();
     // MOR mode merges the messages with the same key.

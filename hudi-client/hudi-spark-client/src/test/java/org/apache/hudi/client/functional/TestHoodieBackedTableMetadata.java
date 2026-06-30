@@ -520,14 +520,14 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     for (HoodieLogFile logFile : logFiles) {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(logFile.getPath());
       HoodieSchema writerSchema  =
-          TableSchemaResolver.readSchemaFromLogFile(storage, logFile.getPath());
+          TableSchemaResolver.readSchemaFromLogFile(table.getMetaClient(), logFile.getPath());
       if (writerSchema == null) {
         // not a data block
         continue;
       }
 
-      try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(storage,
-          new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
+      try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(
+          table.getMetaClient(), new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
         while (logFileReader.hasNext()) {
           HoodieLogBlock logBlock = logFileReader.next();
           if (logBlock instanceof HoodieDataBlock) {

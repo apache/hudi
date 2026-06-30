@@ -359,6 +359,11 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
+        public HoodieRecord.HoodieRecordType getEngineRecordType() {
+          return HoodieRecord.HoodieRecordType.AVRO;
+        }
+
+        @Override
         public String seal(String record) {
           return "";
         }

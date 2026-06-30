@@ -51,7 +51,6 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 
@@ -446,7 +445,7 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
   @ValueSource(strings = {"hudi_0_13_0_archive", "hudi_0_8_0_archive"})
   void shouldReadArchivedFileAndValidateContent(String archivePath) {
     String path = this.getClass().getClassLoader().getResource(archivePath).getPath() + "/.commits_.archive.1_1-0-1";
-    assertDoesNotThrow(() -> readAndValidateArchivedFile(path, metaClient.getStorage()));
+    assertDoesNotThrow(() -> readAndValidateArchivedFile(path));
   }
 
   @Test
@@ -525,9 +524,9 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
     assertTrue(archivedTimeline.getInstantDetails(commit05).isPresent(), "commit metadata for ts=05 must be loaded");
   }
 
-  private void readAndValidateArchivedFile(String path, HoodieStorage storage) throws IOException {
+  private void readAndValidateArchivedFile(String path) throws IOException {
     try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(
-        storage, new HoodieLogFile(path), HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()))) {
+        metaClient, new HoodieLogFile(path), HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()))) {
 
       while (reader.hasNext()) {
         HoodieLogBlock block = reader.next();

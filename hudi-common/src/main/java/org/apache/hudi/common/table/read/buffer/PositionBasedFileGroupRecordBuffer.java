@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
 
 import lombok.extern.slf4j.Slf4j;
@@ -146,6 +147,13 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(projectedNextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
         processNextDataRecord(bufferedRecord, recordPosition);
       }
+      if (recordIndex != recordPositions.size()) {
+        throw new HoodieException(String.format(
+            "Data block yields %d records but its header has %d record positions. Position based "
+                + "merging pairs records with positions by index, so records must not be dropped from "
+                + "log file reads (e.g. by filter pushdown into the scan).",
+            recordIndex, recordPositions.size()));
+      }
     }
   }
 
@@ -184,10 +192,18 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       return;
     }
 
+    List<BufferedRecord<T>> deleteRecords = deleteBlock.getRecordsToDelete(readerContext);
+    if (deleteRecords.size() != recordPositions.size()) {
+      throw new HoodieException(String.format(
+          "Delete block yields %d records but its header has %d record positions. Position based "
+              + "merging pairs records with positions by index, so records must not be dropped from "
+              + "log file reads (e.g. by filter pushdown into the scan).",
+          deleteRecords.size(), recordPositions.size()));
+    }
+
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
         int commitTimeBasedRecordIndex = 0;
-        List<BufferedRecord<T>> deleteRecords = deleteBlock.getRecordsToDelete(readerContext.getRecordContext());
         for (Long recordPosition : recordPositions) {
           // IMPORTANT:
           // use #put for log files with regular order(see HoodieLogFile.LOG_FILE_COMPARATOR);
@@ -205,7 +221,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       case CUSTOM:
       default:
         int recordIndex = 0;
-        for (BufferedRecord<T> record : deleteBlock.getRecordsToDelete(readerContext.getRecordContext())) {
+        for (BufferedRecord<T> record : deleteRecords) {
           long recordPosition = recordPositions.get(recordIndex++);
           processNextDataRecord(record, recordPosition);
         }

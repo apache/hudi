@@ -157,6 +157,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
       // create table
+      // todo remove option 'hoodie.write.table.version' after https://github.com/apache/hudi/issues/19090 resolved.
       spark.sql(
         s"""
            |create table $tableName (
@@ -169,7 +170,8 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
            | options (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  preCombineField = 'ts',
+           |  hoodie.write.table.version = '9'
            | )
        """.stripMargin)
       withSQLConf(

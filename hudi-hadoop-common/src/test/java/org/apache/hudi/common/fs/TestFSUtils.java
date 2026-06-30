@@ -281,6 +281,27 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testNativeParquetLogFileName() {
+    String partitionPath = "2022/11/04/";
+    String fileName = UUID.randomUUID().toString();
+    String logFile = String.format("%s_1-0-1_100_2.log.parquet", fileName);
+    StoragePath storagePath = new StoragePath(new StoragePath(partitionPath), logFile);
+    Path hadoopPath = new Path(storagePath.toString());
+
+    assertTrue(FSUtils.isLogFile(storagePath));
+    assertEquals("log", FSUtils.getFileExtensionFromLog(storagePath));
+    assertEquals(fileName, FSUtils.getFileIdFromLogPath(storagePath));
+    assertEquals("100", FSUtils.getDeltaCommitTimeFromLogPath(storagePath));
+    assertEquals(fileName, HadoopFSUtils.getFileIdFromLogPath(hadoopPath));
+    assertEquals("100", HadoopFSUtils.getDeltaCommitTimeFromLogPath(hadoopPath));
+    assertEquals(1, FSUtils.getTaskPartitionIdFromLogPath(storagePath));
+    assertEquals("1-0-1", FSUtils.getWriteTokenFromLogPath(storagePath));
+    assertEquals(0, FSUtils.getStageIdFromLogPath(storagePath));
+    assertEquals(1, FSUtils.getTaskAttemptIdFromLogPath(storagePath));
+    assertEquals(2, FSUtils.getFileVersionFromLog(storagePath));
+  }
+
+  @Test
   public void testArchiveLogFileName() {
     String partitionPath = "2022/11/04/";
     String fileName = "commits";

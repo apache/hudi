@@ -59,7 +59,10 @@ class TestLsmFileGroupRecordIterator {
         .map(HoodieSchemaField::name)
         .collect(Collectors.toList()));
     assertEquals(HoodieSchemaType.STRING, deleteLogSchema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD).get().schema().getType());
-    assertEquals(HoodieSchemaType.LONG, deleteLogSchema.getField("ts").get().schema().getType());
+    HoodieSchemaField orderingField = deleteLogSchema.getField("ts").get();
+    assertTrue(orderingField.schema().isNullable());
+    assertEquals(HoodieSchemaType.LONG, orderingField.getNonNullSchema().getType());
+    assertEquals(HoodieSchema.NULL_VALUE, orderingField.defaultVal().get());
   }
 
   @Test

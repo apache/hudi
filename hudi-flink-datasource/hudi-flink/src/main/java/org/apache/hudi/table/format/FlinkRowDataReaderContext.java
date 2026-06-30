@@ -27,6 +27,7 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -38,6 +39,7 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieException;
@@ -53,6 +55,7 @@ import org.apache.hudi.util.RowDataQueryContexts;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.types.RowKind;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -98,22 +101,37 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       HoodieSchema dataSchema,
       HoodieSchema requiredSchema,
       HoodieStorage storage) throws IOException {
-    boolean isLogFile = FSUtils.isLogFile(filePath);
     // disable schema evolution in fileReader if it's log file, since schema evolution for log file is handled in `FileGroupRecordBuffer`
-    InternalSchemaManager schemaManager = isLogFile ? InternalSchemaManager.DISABLED : internalSchemaManager.get();
+    InternalSchemaManager schemaManager = FSUtils.isLogFile(filePath) ? InternalSchemaManager.DISABLED : internalSchemaManager.get();
 
     // Log files only reach this method for parquet data blocks; base files are resolved by their extension.
     // Format-specific handling lives in the readers themselves, so this method stays format-agnostic.
-    HoodieFileFormat format = isLogFile ? HoodieFileFormat.PARQUET : HoodieFileFormat.fromFileExtension(filePath.getFileExtension());
+    boolean isInlineLogFile = FSUtils.isLogFile(filePath) && FSUtils.matchNativeLogFile(filePath.getName()).isEmpty();
+    HoodieFileFormat format = isInlineLogFile ? HoodieFileFormat.PARQUET : HoodieFileFormat.fromFileExtension(filePath.getFileExtension());
     HoodieRowDataFileReader reader = (HoodieRowDataFileReader) HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
         .getFileReader(tableConfig, filePath, format, Option.empty());
     try {
-      return reader.getRowDataIterator(dataSchema, requiredSchema, schemaManager, getSafePredicates(requiredSchema));
+      ClosableIterator<RowData> rowDataIterator =
+          reader.getRowDataIterator(dataSchema, requiredSchema, schemaManager, getSafePredicates(requiredSchema));
+      return resolveRowKind(rowDataIterator, requiredSchema);
     } catch (Throwable e) {
       reader.close();
       throw new HoodieException("Failed to get record iterator for: " + filePath, e);
     }
+  }
+
+  private ClosableIterator<RowData> resolveRowKind(ClosableIterator<RowData> rowDataIterator, HoodieSchema requiredSchema) {
+    Option<HoodieSchemaField> operationField = requiredSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD);
+    if (!operationField.isPresent()) {
+      return rowDataIterator;
+    }
+    int operationPos = operationField.get().pos();
+    return new CloseableMappingIterator<>(rowDataIterator, rowData -> {
+      HoodieOperation operation = HoodieOperation.fromName(rowData.getString(operationPos).toString());
+      rowData.setRowKind(RowKind.fromByteValue(operation.getValue()));
+      return rowData;
+    });
   }
 
   @Override

@@ -29,7 +29,7 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.IOException;
 import java.util.Properties;
 
-public interface HoodieAvroFileWriter extends HoodieFileWriter {
+public interface HoodieAvroFileWriter extends HoodieFileWriter<IndexedRecord> {
 
   boolean canWrite();
 
@@ -49,6 +49,11 @@ public interface HoodieAvroFileWriter extends HoodieFileWriter {
   default void write(String recordKey, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException {
     IndexedRecord avroPayload = record.toIndexedRecord(schema, props).get().getData();
     writeAvro(recordKey, avroPayload);
+  }
+
+  @Override
+  default void writeRow(String recordKey, IndexedRecord record) throws IOException {
+    writeAvro(recordKey, record);
   }
 
   default void prepRecordWithMetadata(HoodieKey key, IndexedRecord avroRecord, String instantTime, Integer partitionId, long recordIndex, String fileName) {

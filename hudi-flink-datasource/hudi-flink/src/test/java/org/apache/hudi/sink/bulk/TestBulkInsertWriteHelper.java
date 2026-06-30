@@ -60,7 +60,7 @@ public class TestBulkInsertWriteHelper {
 
   @BeforeEach
   public void before() throws IOException {
-    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath(), TestConfigurations.ROW_DATA_TYPE);
     StreamerUtil.initTableIfNotExists(conf);
   }
 

@@ -21,6 +21,7 @@ package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.HFileUtils;
+import org.apache.hudi.common.util.LanceUtils;
 import org.apache.hudi.common.util.OrcUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
@@ -51,6 +52,7 @@ public class TestHoodieHadoopIOFactory {
       assertTrue(ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.parquet")) instanceof ParquetUtils);
       assertTrue(ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.orc")) instanceof OrcUtils);
       assertTrue(ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.hfile")) instanceof HFileUtils);
+      assertTrue(ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.lance")) instanceof LanceUtils);
       assertThrows(
           UnsupportedOperationException.class,
           () -> ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.log")));
@@ -58,6 +60,7 @@ public class TestHoodieHadoopIOFactory {
       assertTrue(ioFactory.getFileFormatUtils(HoodieFileFormat.PARQUET) instanceof ParquetUtils);
       assertTrue(ioFactory.getFileFormatUtils(HoodieFileFormat.ORC) instanceof OrcUtils);
       assertTrue(ioFactory.getFileFormatUtils(HoodieFileFormat.HFILE) instanceof HFileUtils);
+      assertTrue(ioFactory.getFileFormatUtils(HoodieFileFormat.LANCE) instanceof LanceUtils);
       assertThrows(
           UnsupportedOperationException.class,
           () -> ioFactory.getFileFormatUtils(HoodieFileFormat.HOODIE_LOG));

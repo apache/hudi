@@ -45,6 +45,7 @@ import java.util.Set;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -60,7 +61,7 @@ public class TestHoodieSparkTable extends HoodieCommonTestHarness {
     HoodieStorage localStorage = HoodieStorageUtils.getStorage(basePath, CONF);
     WriteMarkers writeMarkers = mock(WriteMarkers.class);
     String partitionPath = "p1";
-    List<String> datafiles = Arrays.asList("file1", "file2", "file3");
+    List<String> datafiles = Arrays.asList("file1", "file2", "file3", ".file_1.log.parquet", ".file_1.deletes.parquet");
     List<org.apache.hudi.common.model.HoodieWriteStat> writeStatList = new ArrayList<>();
     Set<String> markerList = new HashSet<>();
     datafiles.forEach(fileName -> {
@@ -125,6 +126,12 @@ public class TestHoodieSparkTable extends HoodieCommonTestHarness {
           throw new HoodieException("Failed to validate that file exists " + fileName);
         }
       });
+      try {
+        verify(storage, never()).deleteFile(new StoragePath(basePath + "/" + partitionPath + "/.file_1.log.parquet"));
+        verify(storage, never()).deleteFile(new StoragePath(basePath + "/" + partitionPath + "/.file_1.deletes.parquet"));
+      } catch (IOException e) {
+        throw new HoodieException("Failed to validate native log files were not deleted", e);
+      }
     }
   }
 

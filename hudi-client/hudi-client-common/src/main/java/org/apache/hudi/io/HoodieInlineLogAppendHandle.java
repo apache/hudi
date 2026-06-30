@@ -164,6 +164,16 @@ public class HoodieInlineLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
     numberOfRecords = 0;
   }
 
+  /**
+   * Finalizes accounting for one flushed inline-log append.
+   */
+  protected void processAppendResult(AppendResult result) {
+    long elapsedTime = timer.endTimer();
+    processAppendResult(result, elapsedTime);
+    resetWriteCounts();
+    timer.startTimer();
+  }
+
   @Override
   protected void collectColumnStats(HoodieDeltaWriteStat stat) {
     if (config.isMetadataColumnStatsIndexEnabled()) {

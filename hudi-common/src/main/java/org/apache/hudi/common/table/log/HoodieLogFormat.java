@@ -21,8 +21,10 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -240,12 +242,24 @@ public interface HoodieLogFormat {
     HoodieLogBlock prev() throws IOException;
   }
 
-  static HoodieLogFormat.Reader newReader(HoodieStorage storage, HoodieLogFile logFile, HoodieSchema readerSchema)
-      throws IOException {
-    return new HoodieLogFileReader(storage, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE);
+  static HoodieLogFormat.Reader newReader(HoodieTableMetaClient metaClient, HoodieLogFile logFile,
+                                          HoodieSchema readerSchema) throws IOException {
+    return newReader(metaClient, logFile, readerSchema, false);
   }
 
-  static HoodieLogFormat.Reader newReader(HoodieStorage storage, HoodieLogFile logFile, HoodieSchema readerSchema, boolean reverseReader) throws IOException {
+  static HoodieLogFormat.Reader newReader(HoodieTableMetaClient metaClient, HoodieLogFile logFile,
+                                          HoodieSchema readerSchema, boolean reverseReader) throws IOException {
+    HoodieStorage storage = metaClient.getStorage();
+    if (FSUtils.matchNativeLogFile(logFile.getFileName()).isPresent()) {
+      StoragePath logFileParent = logFile.getPath().getParent();
+      return new HoodieNativeLogFileReader(
+          storage,
+          logFile,
+          readerSchema,
+          HoodieRecordUtils.getOrderingFieldNames(metaClient.getTableConfig().getRecordMergeMode(), metaClient),
+          FSUtils.getRelativePartitionPath(metaClient.getBasePath(), logFileParent),
+          metaClient.getTableConfig().getProps());
+    }
     return new HoodieLogFileReader(storage, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, reverseReader);
   }
 

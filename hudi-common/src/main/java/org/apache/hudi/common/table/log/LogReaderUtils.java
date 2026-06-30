@@ -93,7 +93,7 @@ public class LogReaderUtils {
     Map<HoodieLogFile, List<String>> logFilesWithMaxCommit = engineContext.mapToPair(logFiles, logFile -> {
       // read all blocks within the log file and find the commit associated with each log block
       List<String> blocksWithinLogFile = new ArrayList<>();
-      try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getStorage(), logFile, null)) {
+      try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient, logFile, null)) {
         while (reader.hasNext()) {
           HoodieLogBlock block = reader.next();
           String logBlockInstantTime = block.getLogBlockHeader().get(INSTANT_TIME);

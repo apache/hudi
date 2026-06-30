@@ -90,7 +90,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // all the data is new-coming, it will write out cdc log files.
     assertFalse(hasCDCLogFile(instant1))
     val commitTime1 = instant1.requestedTime
-    val cdcDataOnly1 = cdcDataFrame((commitTime1.toLong - 1).toString)
+    val cdcDataOnly1 = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(cdcDataOnly1, 100, 0, 0)
 
     // Upsert Operation
@@ -118,7 +118,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // at the last commit, 100 records are inserted.
     val insertedCnt2 = currentSnapshotData.count() - 100
     val updatedCnt2 = 50 - insertedCnt2
-    val cdcDataOnly2 = cdcDataFrame((commitTime2.toLong - 1).toString)
+    val cdcDataOnly2 = cdcDataFrame(instantBefore(commitTime2))
     assertCDCOpCnt(cdcDataOnly2, insertedCnt2, updatedCnt2, 0)
     totalUpdatedCnt += updatedCnt2
     totalInsertedCnt += insertedCnt2
@@ -145,7 +145,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     totalDeletedCnt += 20
 
     // all the change data  in the range [commitTime1, commitTime3]
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // check both starting and ending are provided
@@ -166,15 +166,15 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // it will NOT write out cdc log files
     assertFalse(hasCDCLogFile(instant4))
     val commitTime4 = instant4.requestedTime
-    val cdcDataOnly4 = cdcDataFrame((commitTime4.toLong - 1).toString)
+    val cdcDataOnly4 = cdcDataFrame(instantBefore(commitTime4))
     val insertedCnt4 = 50
     val deletedCnt4 = currentSnapshotData.count()
     assertCDCOpCnt(cdcDataOnly4, insertedCnt4, 0, deletedCnt4)
     totalInsertedCnt += insertedCnt4
     totalDeletedCnt += deletedCnt4
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
-    val cdcDataOrdered = cdcDataFrame((commitTime1.toLong - 1).toString).orderBy("ts_ms")
+    val cdcDataOrdered = cdcDataFrame(instantBefore(commitTime1)).orderBy("ts_ms")
     assertCDCOpCnt(cdcDataOrdered, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
     assertEquals(allVisibleCDCData.collect().length, cdcDataOrdered.collect().length)
 
@@ -205,7 +205,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .save(basePath)
     val instant7 = metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant().get()
     // part of data are updated, it will write out cdc log files.
-    val cdcDataOnly7 = cdcDataFrame((instant7.requestedTime.toLong - 1).toString)
+    val cdcDataOnly7 = cdcDataFrame(instantBefore(instant7.requestedTime))
     val currentData = spark.read.format("hudi").load(basePath)
     val insertedCnt7 = currentData.count() - 60
     val updatedCnt7 = 30 - insertedCnt7
@@ -216,7 +216,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     totalInsertedCnt = 60 + insertedCnt7
     totalUpdatedCnt = updatedCnt7
     totalDeletedCnt = 0
-    allVisibleCDCData = cdcDataFrame((commitTime4.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime4))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // Bulk_Insert Operation With Clean Operation
@@ -233,15 +233,15 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // it will NOT write out cdc log files
     assertFalse(hasCDCLogFile(instant8))
     val commitTime8 = instant8.requestedTime
-    val cdcDataOnly8 = cdcDataFrame((commitTime8.toLong - 1).toString)
+    val cdcDataOnly8 = cdcDataFrame(instantBefore(commitTime8))
     assertCDCOpCnt(cdcDataOnly8, 20, 0, 0)
     totalInsertedCnt += 20
-    allVisibleCDCData = cdcDataFrame((commitTime4.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime4))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // test start commit time in archived timeline. cdc query should fail
     assertThrows(classOf[HoodieException], () => {
-      cdcDataFrame((commitTime1.toLong - 1).toString)
+      cdcDataFrame(instantBefore(commitTime1))
     })
   }
 
@@ -287,7 +287,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // all the data is new-coming, it will write out cdc log files.
     assertFalse(hasCDCLogFile(instant1))
     val commitTime1 = instant1.requestedTime
-    val cdcDataOnly1 = cdcDataFrame((commitTime1.toLong - 1).toString)
+    val cdcDataOnly1 = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(cdcDataOnly1, 100, 0, 0)
 
     // 2. Upsert Operation
@@ -314,7 +314,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // at the last commit, 100 records are inserted.
     val insertedCnt2 = currentSnapshotData.count() - 100
     val updatedCnt2 = 50 - insertedCnt2
-    val cdcDataOnly2 = cdcDataFrame((commitTime2.toLong - 1).toString)
+    val cdcDataOnly2 = cdcDataFrame(instantBefore(commitTime2))
     assertCDCOpCnt(cdcDataOnly2, insertedCnt2, updatedCnt2, 0)
     totalUpdatedCnt += updatedCnt2
     totalInsertedCnt += insertedCnt2
@@ -341,7 +341,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     totalDeletedCnt += 20
     // all the change data  in the range [commitTime1, commitTime3]
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // 4. Bulk_Insert Operation
@@ -359,14 +359,14 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertFalse(hasCDCLogFile(instant4))
     val commitTime4 = instant4.requestedTime
     val cntForInstant4 = spark.read.format("hudi").load(basePath).count()
-    val cdcDataOnly4 = cdcDataFrame((commitTime4.toLong - 1).toString)
+    val cdcDataOnly4 = cdcDataFrame(instantBefore(commitTime4))
     val insertedCnt4 = 100
     assertCDCOpCnt(cdcDataOnly4, insertedCnt4, 0, 0)
 
     totalInsertedCnt += insertedCnt4
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
-    val cdcDataOrdered = cdcDataFrame((commitTime1.toLong - 1).toString).orderBy("ts_ms")
+    val cdcDataOrdered = cdcDataFrame(instantBefore(commitTime1)).orderBy("ts_ms")
     assertCDCOpCnt(cdcDataOrdered, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
     assertEquals(allVisibleCDCData.collect().length, cdcDataOrdered.collect().length)
 
@@ -394,7 +394,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     totalInsertedCnt += insertedCnt5
     totalUpdatedCnt += updatedCnt5
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // check both starting and ending are provided
@@ -417,11 +417,11 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertFalse(hasCDCLogFile(instant6))
     val commitTime6 = instant6.requestedTime
     val cntForInstant6 = spark.read.format("hudi").load(basePath).count()
-    val cdcDataOnly6 = cdcDataFrame((commitTime6.toLong - 1).toString)
+    val cdcDataOnly6 = cdcDataFrame(instantBefore(commitTime6))
     assertCDCOpCnt(cdcDataOnly6, 70, 0, cntForInstant5)
     totalInsertedCnt += 70
     totalDeletedCnt += cntForInstant5
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // 7,8. insert 10 records
@@ -467,7 +467,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val updatedCnt9 = 30 - insertedCnt9
     assertCDCOpCnt(cdcDataOnly9, insertedCnt9, updatedCnt9, 0)
 
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt + 30, totalDeletedCnt)
   }
 
@@ -515,7 +515,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // all the data is new-coming, it will write out cdc log files.
     assertFalse(hasCDCLogFile(instant1))
     val commitTime1 = instant1.requestedTime
-    val cdcDataOnly1 = cdcDataFrame((commitTime1.toLong - 1).toString)
+    val cdcDataOnly1 = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(cdcDataOnly1, 100, 0, 0)
 
     // Insert Overwrite Partition Operation
@@ -534,12 +534,12 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val commitTime2 = instant2.requestedTime
     val insertedCnt2 = 30
     val deletedCnt2 = partitionToCnt(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
-    val cdcDataOnly2 = cdcDataFrame((commitTime2.toLong - 1).toString)
+    val cdcDataOnly2 = cdcDataFrame(instantBefore(commitTime2))
     assertCDCOpCnt(cdcDataOnly2, insertedCnt2, 0, deletedCnt2)
 
     totalInsertedCnt += insertedCnt2
     totalDeletedCnt += deletedCnt2
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // Drop Partition
@@ -557,13 +557,13 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val cntForInstant3 = spark.read.format("hudi").load(basePath).count()
     // here we use `commitTime2` to query the change data in commit 3.
     // because `commitTime3` is the ts of the clustering operation, not the delete operation.
-    val cdcDataOnly3 = cdcDataFrame((commitTime3.toLong - 1).toString)
+    val cdcDataOnly3 = cdcDataFrame(instantBefore(commitTime3))
     val deletedCnt3 = partitionToCnt(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
     assertCDCOpCnt(cdcDataOnly3, 0, 0, deletedCnt3)
 
     totalDeletedCnt += deletedCnt3
     // all the change data  in the range [commitTime1, commitTime3]
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // Upsert Operation
@@ -576,18 +576,18 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val instant4 = metaClient.reloadActiveTimeline.lastInstant().get()
     val commitTime4 = instant4.requestedTime
     val cntForInstant4 = spark.read.format("hudi").load(basePath).count()
-    val cdcDataOnly4 = cdcDataFrame((commitTime4.toLong - 1).toString)
+    val cdcDataOnly4 = cdcDataFrame(instantBefore(commitTime4))
     val insertedCnt4 = cntForInstant4 - cntForInstant3
     val updatedCnt4 = 50 - insertedCnt4
     assertCDCOpCnt(cdcDataOnly4, insertedCnt4, updatedCnt4, 0)
 
     totalInsertedCnt += insertedCnt4
     totalUpdatedCnt += updatedCnt4
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // check both starting and ending are provided
-    val cdcDataFrom2To3 = cdcDataFrame((commitTime2.toLong - 1).toString, commitTime3)
+    val cdcDataFrom2To3 = cdcDataFrame(instantBefore(commitTime2), commitTime3)
     assertCDCOpCnt(cdcDataFrom2To3, insertedCnt2, 0, deletedCnt2 + deletedCnt3)
   }
 
@@ -646,7 +646,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // at the last commit, 100 records are inserted.
     val insertedCnt2 = currentSnapshotData.count() - 100
     val updatedCnt2 = 50 - insertedCnt2
-    val cdcDataOnly2 = cdcDataFrame((commitTime2.toLong - 1).toString)
+    val cdcDataOnly2 = cdcDataFrame(instantBefore(commitTime2))
     assertCDCOpCnt(cdcDataOnly2, insertedCnt2, updatedCnt2, 0)
   }
 
@@ -893,7 +893,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val commitTime1 = instant1.requestedTime
 
     // Verify initial CDC data
-    val cdcData1 = cdcDataFrame((commitTime1.toLong - 1).toString)
+    val cdcData1 = cdcDataFrame(instantBefore(commitTime1))
     assertEquals(2, cdcData1.count())
     assertCDCOpCnt(cdcData1, 2, 0, 0)
 
@@ -937,7 +937,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertTrue(insertedCnt >= 1, s"Expected at least 1 insert operation, got $insertedCnt")
 
     // Verify that CDC data contains properly formatted complex data types
-    val allCDCData = cdcDataFrame((commitTime2.toLong - 1).toString)
+    val allCDCData = cdcDataFrame(instantBefore(commitTime2))
     val allRows = allCDCData.collect()
 
     // Look for the updated record in CDC
@@ -1006,7 +1006,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // check the actual meta-column names rather than the "_hoodie_" prefix: _hoodie_is_deleted is a
     // business/payload field (the soft-delete marker carried in the record schema), not a meta
     // column, so it is expected to remain in the image.
-    val allCDCData = cdcDataFrame((commitTime1.toLong - 1).toString).collect()
+    val allCDCData = cdcDataFrame(instantBefore(commitTime1)).collect()
     assertTrue(allCDCData.nonEmpty, "Expected some CDC rows")
     allCDCData.foreach { row =>
       Seq("before", "after").foreach { col =>

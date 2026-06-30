@@ -463,6 +463,39 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     }
   }
 
+  @Test
+  public void testReaderGetRecordIteratorWithProjectedSchema() throws Exception {
+    writeFileWithSimpleSchema();
+    HoodieSchema dataSchema =
+        getHoodieSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
+    // Mirrors metadata-table reads where Spark pushes a subset of columns to the HFile reader.
+    HoodieSchema projectedSchema = new HoodieSchema.Parser().parse(
+        "{"
+            + "\"namespace\":\"example.schema\","
+            + "\"type\":\"record\","
+            + "\"name\":\"trip\","
+            + "\"fields\":["
+            + "{\"name\":\"time\",\"type\":\"string\"},"
+            + "{\"name\":\"number\",\"type\":[\"int\",\"null\"]}"
+            + "]"
+            + "}");
+
+    try (HoodieAvroHFileReaderImplBase hfileReader =
+             createReader(HoodieTestUtils.getStorage(getFilePath()), true);
+         ClosableIterator<HoodieRecord<IndexedRecord>> iterator =
+             hfileReader.getRecordIterator(dataSchema, projectedSchema)) {
+      int index = 0;
+      while (iterator.hasNext()) {
+        GenericRecord record = (GenericRecord) iterator.next().getData();
+        assertNull(record.getSchema().getField("_row_key"));
+        assertEquals(Integer.toString(index), record.get("time").toString());
+        assertEquals(index, record.get("number"));
+        index++;
+      }
+      assertEquals(NUM_RECORDS, index);
+    }
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testReaderGetRecordIteratorByKeys(boolean useBloomFilter) throws Exception {

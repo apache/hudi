@@ -106,10 +106,10 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
       numCopied = copyNonArchivedInstants(metaClient, nonArchivedInstants, numExports, localFolder)
       if (numCopied < numExports) {
         Collections.reverse(archivedStatuses)
-        numCopied += copyArchivedInstants(basePath, archivedStatuses, actionSet, numExports - numCopied, localFolder)
+        numCopied += copyArchivedInstants(metaClient, archivedStatuses, actionSet, numExports - numCopied, localFolder)
       }
     } else {
-      numCopied = copyArchivedInstants(basePath, archivedStatuses, actionSet, numExports, localFolder)
+      numCopied = copyArchivedInstants(metaClient, archivedStatuses, actionSet, numExports, localFolder)
       if (numCopied < numExports) numCopied += copyNonArchivedInstants(metaClient, nonArchivedInstants, numExports - numCopied, localFolder)
     }
 
@@ -117,13 +117,13 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
   }
 
   @throws[Exception]
-  private def copyArchivedInstants(basePath: String, statuses: util.List[FileStatus], actionSet: util.Set[String], limit: Int, localFolder: String) = {
+  private def copyArchivedInstants(metaClient: HoodieTableMetaClient, statuses: util.List[FileStatus], actionSet: util.Set[String], limit: Int, localFolder: String) = {
     var copyCount = 0
-    val storage = HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()))
+    val storage = metaClient.getStorage
     for (fs <- statuses.asScala) {
       // read the archived file
       val reader = HoodieLogFormat.newReader(
-        storage, new HoodieLogFile(convertToStoragePath(fs.getPath)), HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema))
+        metaClient, new HoodieLogFile(convertToStoragePath(fs.getPath)), HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema))
       // read the avro blocks
       while ( {
         reader.hasNext && copyCount < limit

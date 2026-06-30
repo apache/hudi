@@ -1654,13 +1654,13 @@ public class HoodieMetadataTableValidator implements Serializable {
     for (String logFilePathStr : logFilePathSet) {
       HoodieLogFormat.Reader reader = null;
       try {
-        HoodieSchema readerSchema = TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePathStr));
+        HoodieSchema readerSchema = TableSchemaResolver.readSchemaFromLogFile(metaClient, new StoragePath(logFilePathStr));
         if (readerSchema == null) {
           log.warn("Cannot read schema from log file {}. Skip the check as it's likely being written by an inflight instant.", logFilePathStr);
           continue;
         }
         reader =
-            HoodieLogFormat.newReader(storage, new HoodieLogFile(logFilePathStr), readerSchema, false);
+            HoodieLogFormat.newReader(metaClient, new HoodieLogFile(logFilePathStr), readerSchema, false);
         // read the avro blocks
         if (reader.hasNext()) {
           HoodieLogBlock block = reader.next();

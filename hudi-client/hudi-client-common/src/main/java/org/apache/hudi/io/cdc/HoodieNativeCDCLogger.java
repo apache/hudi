@@ -50,8 +50,6 @@ public class HoodieNativeCDCLogger<T> implements HoodieCDCLogWriter<BufferedReco
 
   /** Instant time used for naming and writing native CDC log files. */
   private final String commitTime;
-  /** Partition path whose records are being merged. */
-  private final String partitionPath;
   /** Table data schema without Hudi metadata fields. */
   private final HoodieSchema dataSchema;
   /** CDC record schema derived from the table CDC supplemental logging mode. */
@@ -63,7 +61,7 @@ public class HoodieNativeCDCLogger<T> implements HoodieCDCLogWriter<BufferedReco
   /** Engine-specific record context for row construction, projection, and conversion. */
   private final RecordContext<T> recordContext;
   /** Manages native CDC file creation, rolling, writing, and stats. */
-  private final HoodieNativeCDCFileWriter nativeCDCFileWriter;
+  private final HoodieNativeCDCFileWriter<T> nativeCDCFileWriter;
   /** Last CDC record staged for write so it can be retracted if the merge later fails. */
   private PendingCDCRecord<T> pendingRecord;
 
@@ -82,13 +80,12 @@ public class HoodieNativeCDCLogger<T> implements HoodieCDCLogWriter<BufferedReco
       RecordContext<T> recordContext,
       HoodieRecord.HoodieRecordType recordType) {
     this.commitTime = commitTime;
-    this.partitionPath = partitionPath;
     this.dataSchema = HoodieSchemaCache.intern(HoodieSchemaUtils.removeMetadataFields(schema));
     this.cdcSupplementalLoggingMode = tableConfig.cdcSupplementalLoggingMode();
     this.cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(cdcSupplementalLoggingMode, dataSchema);
     this.recordContext = recordContext;
     this.cdcSchemaId = recordContext.encodeSchema(cdcSchema);
-    this.nativeCDCFileWriter = new HoodieNativeCDCFileWriter(
+    this.nativeCDCFileWriter = new HoodieNativeCDCFileWriter<>(
         commitTime,
         partitionPath,
         storage,
@@ -186,9 +183,9 @@ public class HoodieNativeCDCLogger<T> implements HoodieCDCLogWriter<BufferedReco
       return;
     }
     try {
-      nativeCDCFileWriter.write(
-          pendingRecord.recordKey,
-          recordContext.constructHoodieRecord(pendingRecord.record, partitionPath));
+      // Write the engine-native CDC record directly; wrapping it into a payload-based HoodieRecord
+      // would let the payload (e.g., ExpressionPayload) re-interpret the CDC record with a wrong schema.
+      nativeCDCFileWriter.write(pendingRecord.recordKey, pendingRecord.record.getRecord());
       pendingRecord = null;
     } catch (IOException e) {
       throw new HoodieException("Failed to write the cdc data to native cdc log file", e);

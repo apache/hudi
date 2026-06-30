@@ -22,6 +22,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.CommonClientUtils;
 
 import java.util.Iterator;
 
@@ -33,7 +34,7 @@ public class AppendHandleFactory<T, I, K, O> extends WriteHandleFactory<T, I, K,
                                                final String fileIdPrefix, final TaskContextSupplier sparkTaskContextSupplier) {
 
     String fileId = getNextFileId(fileIdPrefix);
-    if (hoodieTable.getMetaClient().getTableConfig().isLSMTreeStorageLayout()) {
+    if (CommonClientUtils.shouldWriteNativeLogs(hoodieConfig, hoodieTable.getMetaClient().getTableConfig())) {
       return new HoodieNativeLogAppendHandle<>(hoodieConfig, commitTime, hoodieTable, partitionPath,
           fileId, sparkTaskContextSupplier);
     }
@@ -45,7 +46,7 @@ public class AppendHandleFactory<T, I, K, O> extends WriteHandleFactory<T, I, K,
                                                final HoodieTable<T, I, K, O> hoodieTable, final String partitionPath,
                                                final String fileId, final Iterator<HoodieRecord<T>> recordItr,
                                                final TaskContextSupplier sparkTaskContextSupplier) {
-    if (hoodieTable.getMetaClient().getTableConfig().isLSMTreeStorageLayout()) {
+    if (CommonClientUtils.shouldWriteNativeLogs(hoodieConfig, hoodieTable.getMetaClient().getTableConfig())) {
       return new HoodieNativeLogAppendHandle<>(hoodieConfig, commitTime, hoodieTable, partitionPath,
           fileId, recordItr, sparkTaskContextSupplier);
     }

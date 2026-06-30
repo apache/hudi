@@ -226,7 +226,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     HoodieLogFormatReader logFormatReaderWrapper = null;
     try {
       // Iterate over the paths
-      logFormatReaderWrapper = new HoodieLogFormatReader(storage, readerContext, hoodieTableMetaClient, logFiles,
+      logFormatReaderWrapper = new HoodieLogFormatReader(storage, hoodieTableMetaClient, logFiles,
           readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
       /**

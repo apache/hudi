@@ -44,6 +44,7 @@ import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
 import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
+import org.apache.hudi.util.CommonClientUtils;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -141,7 +142,7 @@ public class HoodieFlinkMergeOnReadTable<T>
   public Iterator<List<WriteStatus>> handleInsertsForLogCompaction(String instantTime, String partitionPath, String fileId,
                                                                    Map<String, HoodieRecord<?>> recordMap,
                                                                    Map<HoodieLogBlock.HeaderMetadataType, String> header) {
-    HoodieWriteHandle appendHandle = getMetaClient().getTableConfig().isLSMTreeStorageLayout()
+    HoodieWriteHandle appendHandle = CommonClientUtils.shouldWriteNativeLogs(config, getMetaClient().getTableConfig())
         ? new HoodieNativeLogAppendHandle(config, instantTime, this,
             partitionPath, fileId, recordMap.values().iterator(), taskContextSupplier, header)
         : new HoodieInlineLogAppendHandle(config, instantTime, this,

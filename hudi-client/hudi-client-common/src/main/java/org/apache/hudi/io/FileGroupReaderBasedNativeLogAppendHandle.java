@@ -45,7 +45,6 @@ import org.apache.hudi.table.HoodieTable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -111,24 +110,36 @@ public class FileGroupReaderBasedNativeLogAppendHandle<T, I, K, O> extends Hoodi
   @Override
   public List<WriteStatus> close() {
     try {
-      super.close();
-      writeStatus.getStat().setPartitionPath(operation.getPartitionPath());
-      writeStatus.getStat().setTotalLogReadTimeMs(readStats.getTotalLogReadTimeMs());
-      writeStatus.getStat().setTotalUpdatedRecordsCompacted(readStats.getTotalUpdatedRecordsCompacted());
-      writeStatus.getStat().setTotalLogFilesCompacted(readStats.getTotalLogFilesCompacted());
-      writeStatus.getStat().setTotalLogRecords(readStats.getTotalLogRecords());
-      writeStatus.getStat().setTotalLogBlocks(readStats.getTotalLogBlocks());
-      writeStatus.getStat().setTotalCorruptLogBlock(readStats.getTotalCorruptLogBlock());
-      writeStatus.getStat().setTotalRollbackBlocks(readStats.getTotalRollbackBlocks());
-      writeStatus.getStat().setTotalLogSizeCompacted(readStats.getTotalLogSizeCompacted());
-
-      if (writeStatus.getStat().getRuntimeStats() != null) {
-        writeStatus.getStat().getRuntimeStats().setTotalScanTime(readStats.getTotalLogReadTimeMs());
+      List<WriteStatus> writeStatuses = super.close();
+      // Native log compaction can produce more than one physical output file, for example a data log
+      // and a delete log, so keep all write statuses and annotate each output file with compaction identity.
+      for (WriteStatus status : writeStatuses) {
+        status.getStat().setPartitionPath(operation.getPartitionPath());
+        status.getStat().setPrevCommit(operation.getBaseInstantTime());
       }
-      writeStatus.getStat().setPrevCommit(operation.getBaseInstantTime());
-      return Collections.singletonList(writeStatus);
+      // The read stats describe the source file group scanned for this compaction, not each native
+      // output file. Set them once so commit-level compaction metrics are not double-counted.
+      if (!writeStatuses.isEmpty()) {
+        updateCompactionReadStats(writeStatuses.get(0));
+      }
+      return writeStatuses;
     } catch (Exception e) {
       throw new HoodieUpsertException("Failed to close " + this.getClass().getSimpleName(), e);
+    }
+  }
+
+  private void updateCompactionReadStats(WriteStatus status) {
+    status.getStat().setTotalLogReadTimeMs(readStats.getTotalLogReadTimeMs());
+    status.getStat().setTotalUpdatedRecordsCompacted(readStats.getTotalUpdatedRecordsCompacted());
+    status.getStat().setTotalLogFilesCompacted(readStats.getTotalLogFilesCompacted());
+    status.getStat().setTotalLogRecords(readStats.getTotalLogRecords());
+    status.getStat().setTotalLogBlocks(readStats.getTotalLogBlocks());
+    status.getStat().setTotalCorruptLogBlock(readStats.getTotalCorruptLogBlock());
+    status.getStat().setTotalRollbackBlocks(readStats.getTotalRollbackBlocks());
+    status.getStat().setTotalLogSizeCompacted(readStats.getTotalLogSizeCompacted());
+
+    if (status.getStat().getRuntimeStats() != null) {
+      status.getStat().getRuntimeStats().setTotalScanTime(readStats.getTotalLogReadTimeMs());
     }
   }
 }

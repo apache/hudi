@@ -47,6 +47,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
+import org.apache.hudi.core.io.storage.HoodieSeekingFileReader;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -186,6 +187,29 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     });
 
     return getFileRecordIterator(reader, filePath, isLogFile, dataSchema, requiredSchema);
+  }
+
+  @Override
+  public ClosableIterator<IndexedRecord> lookupRecords(
+      StoragePath filePath,
+      HoodieFileFormat fileFormat,
+      HoodieSchema readerSchema,
+      HoodieStorage storage,
+      List<String> keys,
+      boolean fullKey) throws IOException {
+    try (HoodieAvroFileReader avroFileReader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
+        .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+        .getFileReader(hoodieReaderConfig, filePath, fileFormat, Option.empty())) {
+      if (avroFileReader instanceof HoodieSeekingFileReader) {
+        HoodieSeekingFileReader<IndexedRecord> seekingFileReader = (HoodieSeekingFileReader<IndexedRecord>) avroFileReader;
+        if (fullKey && avroFileReader.supportKeyPredicate()) {
+          return seekingFileReader.getEngineRecordsByKeysIterator(keys, readerSchema);
+        } else if (!fullKey && avroFileReader.supportKeyPrefixPredicate()) {
+          return seekingFileReader.getEngineRecordsByKeyPrefixIterator(keys, readerSchema);
+        }
+      }
+    }
+    return super.lookupRecords(filePath, fileFormat, readerSchema, storage, keys, fullKey);
   }
 
   private HoodieAvroFileReader getOrCreateFileReader(

@@ -28,6 +28,7 @@ import org.apache.hudi.common.expression.Predicates;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -107,11 +108,50 @@ public class TestHoodieFileGroupReaderNativeLogs extends HoodieFileGroupReaderTe
   }
 
   @Test
+  public void testNativeHFileLogFile() throws IOException {
+    metaClient.getTableConfig().setValue(HoodieTableConfig.BASE_FILE_FORMAT, HoodieFileFormat.HFILE.name());
+    readerContext = new HoodieAvroReaderContext(
+        storageConf, metaClient.getTableConfig(), Option.empty(), Option.empty());
+    preparePartitionPath();
+
+    HoodieLogFile nativeDataLog = createNativeDataLogFile(
+        "001", 1, records(Arrays.asList("1", "2", "3"), 2L, false), ".log.hfile");
+    FileSlice fileSlice = createFileSlice(null, nativeDataLog);
+
+    assertFileGroupRecords(fileSlice,
+        Arrays.asList("1", "2", "3"),
+        Arrays.asList(2L, 2L, 2L));
+  }
+
+  @Test
   public void testNativeLogFilesWithKeyFilters() throws IOException {
     preparePartitionPath();
 
     HoodieLogFile nativeDataLog1 = createNativeDataLogFile("001", 1, records(Arrays.asList("1", "2", "30"), 2L, false));
     HoodieLogFile nativeDataLog2 = createNativeDataLogFile("002", 2, records(Arrays.asList("1", "4", "31"), 4L, false));
+    FileSlice fileSlice = createFileSlice(null, nativeDataLog1, nativeDataLog2);
+
+    Predicate inPredicate = Predicates.in(
+        Literal.from(ROW_KEY),
+        Arrays.asList(Literal.from("1"), Literal.from("31")));
+    assertFileGroupRecords(fileSlice, inPredicate,
+        Arrays.asList("1", "31"),
+        Arrays.asList(4L, 4L));
+
+    Predicate prefixPredicate = Predicates.startsWithAny(
+        Literal.from(ROW_KEY),
+        Arrays.asList(Literal.from("3")));
+    assertFileGroupRecords(fileSlice, prefixPredicate,
+        Arrays.asList("30", "31"),
+        Arrays.asList(2L, 4L));
+  }
+
+  @Test
+  public void testNativeHFileLogFilesWithKeyFilters() throws IOException {
+    preparePartitionPath();
+
+    HoodieLogFile nativeDataLog1 = createNativeHFileDataLogFile("001", 1, records(Arrays.asList("1", "2", "30"), 2L, false));
+    HoodieLogFile nativeDataLog2 = createNativeHFileDataLogFile("002", 2, records(Arrays.asList("1", "4", "31"), 4L, false));
     FileSlice fileSlice = createFileSlice(null, nativeDataLog1, nativeDataLog2);
 
     Predicate inPredicate = Predicates.in(
@@ -262,8 +302,22 @@ public class TestHoodieFileGroupReaderNativeLogs extends HoodieFileGroupReaderTe
 
   private HoodieLogFile createNativeDataLogFile(String instantTime, int version, List<IndexedRecord> records)
       throws IOException {
+    return createNativeDataLogFile(instantTime, version, records, ".log.parquet");
+  }
+
+  private HoodieLogFile createNativeDataLogFile(String instantTime, int version, List<IndexedRecord> records, String extension)
+      throws IOException {
     return HoodieFileSliceTestUtils.createNativeDataLogFile(
-        partitionBasePath() + "/" + nativeLogFileName(instantTime, version, ".log.parquet"),
+        partitionBasePath() + "/" + nativeLogFileName(instantTime, version, extension),
+        records,
+        HOODIE_SCHEMA,
+        instantTime);
+  }
+
+  private HoodieLogFile createNativeHFileDataLogFile(String instantTime, int version, List<IndexedRecord> records)
+      throws IOException {
+    return HoodieFileSliceTestUtils.createNativeHFileDataLogFile(
+        partitionBasePath() + "/" + nativeLogFileName(instantTime, version, ".log.hfile"),
         records,
         HOODIE_SCHEMA,
         instantTime);

@@ -93,9 +93,9 @@ public class BaseTestFileGroupRecordBuffer {
   protected static void mockDeleteRecords(HoodieDeleteBlock deleteBlock, DeleteRecord... deleteRecords) {
     when(deleteBlock.getRecordsToDelete()).thenReturn(deleteRecords);
     when(deleteBlock.getRecordsToDelete(any())).thenAnswer(invocation -> {
-      RecordContext recordContext = invocation.getArgument(0);
+      HoodieReaderContext readerContext = invocation.getArgument(0);
       return Arrays.stream(deleteRecords)
-          .map(deleteRecord -> BufferedRecords.fromDeleteRecord(deleteRecord, recordContext))
+          .map(deleteRecord -> BufferedRecords.fromDeleteRecord(deleteRecord, readerContext.getRecordContext()))
           .collect(Collectors.toList());
     });
   }

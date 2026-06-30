@@ -379,11 +379,6 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
     assertEquals(firstInstant.requestedTime(), secondWriteStats.get(0).getPrevCommit());
   }
 
-  @Override
-  protected Map<String, String> getExpectedBeforeCheckpointComplete() {
-    return EXPECTED1;
-  }
-
   protected Map<String, String> getMiniBatchExpected() {
     Map<String, String> expected = new HashMap<>();
     // MOR mode merges the messages with the same key.

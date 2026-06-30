@@ -39,7 +39,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -116,7 +115,7 @@ public class ArchivedCommitsCommand {
     List<Comparable[]> allStats = new ArrayList<>();
     for (StoragePathInfo pathInfo : pathInfoList) {
       // read the archived file
-      try (Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(pathInfo.getPath()),
+      try (Reader reader = HoodieLogFormat.newReader(metaClient, new HoodieLogFile(pathInfo.getPath()),
           HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()))) {
         List<IndexedRecord> readRecords = new ArrayList<>();
         // read the avro blocks
@@ -182,15 +181,14 @@ public class ArchivedCommitsCommand {
 
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
-    StoragePath basePath = metaClient.getBasePath();
     StoragePath archivePath =
         new StoragePath(metaClient.getArchivePath(), ".commits_.archive*");
-    List<StoragePathInfo> pathInfoList =
-        HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf).globEntries(archivePath);
+    HoodieStorage storage = metaClient.getStorage();
+    List<StoragePathInfo> pathInfoList = storage.globEntries(archivePath);
     List<Comparable[]> allCommits = new ArrayList<>();
     for (StoragePathInfo pathInfo : pathInfoList) {
       // read the archived file
-      try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf),
+      try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient,
           new HoodieLogFile(pathInfo.getPath()), HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()))) {
         List<IndexedRecord> readRecords = new ArrayList<>();
         // read the avro blocks

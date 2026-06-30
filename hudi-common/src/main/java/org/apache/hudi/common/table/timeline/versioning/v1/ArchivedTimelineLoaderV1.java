@@ -122,8 +122,8 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
           continue;
         }
         // Read the archived file
-        try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getStorage(),
-            new HoodieLogFile(fs.getPath()), HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()))) {
+        try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient, new HoodieLogFile(fs.getPath()),
+            HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()))) {
           int instantsInPreviousFile = instantsInRange.size();
           // Read the avro blocks
           while (reader.hasNext() && (!hasLimit || loadedCount.get() < limit.get())) {

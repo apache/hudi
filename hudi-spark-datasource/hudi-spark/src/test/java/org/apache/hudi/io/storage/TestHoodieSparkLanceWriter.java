@@ -22,13 +22,16 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.io.memory.HoodieArrowAllocator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -47,6 +50,9 @@ import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.MetadataBuilder;
+import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.AfterEach;
@@ -63,8 +69,13 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import static org.apache.hudi.avro.HoodieBloomFilterWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY;
+import static org.apache.hudi.avro.HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER;
+import static org.apache.hudi.avro.HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER;
 import static org.apache.hudi.common.bloom.BloomFilterTypeCode.SIMPLE;
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.COMMIT_TIME_METADATA_FIELD;
@@ -87,6 +98,8 @@ public class TestHoodieSparkLanceWriter {
 
   private static final long TEST_LANCE_DATA_ALLOCATOR_SIZE =
       Long.parseLong(HoodieStorageConfig.LANCE_READ_ALLOCATOR_SIZE_BYTES.defaultValue());
+  private static final String CUSTOM_FOOTER_KEY = "custom.footer.key";
+  private static final String CUSTOM_FOOTER_VALUE = "custom-footer-value";
 
   @TempDir
   File tempDir;
@@ -245,6 +258,50 @@ public class TestHoodieSparkLanceWriter {
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
       assertEquals(1, reader.numRows());
     }
+  }
+
+  @Test
+  public void testFooterMetadataIsWrittenToLanceSchemaMetadata() throws Exception {
+    Metadata vectorFieldMetadata = new MetadataBuilder()
+        .putString(HoodieSchema.TYPE_METADATA_FIELD, "VECTOR(4)")
+        .build();
+    StructType schema = new StructType()
+        .add(new StructField("id", DataTypes.IntegerType, false, Metadata.empty()))
+        .add(new StructField(
+            "embedding",
+            DataTypes.createArrayType(DataTypes.FloatType, false),
+            false,
+            vectorFieldMetadata));
+
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_footer_metadata.lance");
+    try (HoodieSparkLanceWriter writer = HoodieSparkLanceWriter.builder()
+        .file(path).sparkSchema(schema).instantTime(instantTime).taskContextSupplier(taskContextSupplier)
+        .storage(storage).bloomFilterOpt(Option.of(simpleBloomFilter)).build()) {
+      Map<String, String> footerMetadata = new HashMap<>();
+      footerMetadata.put(CUSTOM_FOOTER_KEY, CUSTOM_FOOTER_VALUE);
+      writer.addFooterMetadata(footerMetadata);
+      writer.writeRow("key1", createRow(1, new Object[] {1.0f, 2.0f, 3.0f, 4.0f}));
+    }
+
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             "testFooterMetadataIsWrittenToLanceSchemaMetadata", TEST_LANCE_DATA_ALLOCATOR_SIZE);
+         LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
+      Map<String, String> schemaMetadata = reader.schema().getCustomMetadata();
+      assertEquals(CUSTOM_FOOTER_VALUE, schemaMetadata.get(CUSTOM_FOOTER_KEY));
+      assertTrue(schemaMetadata.containsKey(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY));
+      assertEquals("key1", schemaMetadata.get(HOODIE_MIN_RECORD_KEY_FOOTER));
+      assertEquals("key1", schemaMetadata.get(HOODIE_MAX_RECORD_KEY_FOOTER));
+      assertTrue(schemaMetadata.containsKey(HoodieSchema.VECTOR_COLUMNS_METADATA_KEY));
+    }
+
+    Map<String, String> footer = HoodieIOFactory.getIOFactory(storage)
+        .getFileFormatUtils(HoodieFileFormat.LANCE)
+        .readFooter(storage, false, path, CUSTOM_FOOTER_KEY, "missing.footer.key");
+    assertEquals(Collections.singletonMap(CUSTOM_FOOTER_KEY, CUSTOM_FOOTER_VALUE), footer);
+
+    assertThrows(MetadataNotFoundException.class, () -> HoodieIOFactory.getIOFactory(storage)
+        .getFileFormatUtils(HoodieFileFormat.LANCE)
+        .readFooter(storage, true, path, "missing.footer.key"));
   }
 
   @Test

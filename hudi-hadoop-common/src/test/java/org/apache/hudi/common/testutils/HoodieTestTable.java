@@ -976,6 +976,8 @@ public class HoodieTestTable implements AutoCloseable {
 
   public List<StoragePathInfo> listAllBaseFiles(String fileExtension) throws IOException {
     return listRecursive(storage, new StoragePath(basePath)).stream()
+        .filter(fileInfo -> FSUtils.isBaseFile(fileInfo.getPath().getName()))
+        // filter out MDT base files.
         .filter(fileInfo -> fileInfo.getPath().getName().endsWith(fileExtension))
         .collect(Collectors.toList());
   }

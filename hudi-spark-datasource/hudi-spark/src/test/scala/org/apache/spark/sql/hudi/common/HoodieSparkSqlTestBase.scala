@@ -25,7 +25,7 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecordMerger, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.log.HoodieLogFileReader
+import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock
 import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
@@ -455,16 +455,18 @@ object HoodieSparkSqlTestBase {
     var deleteLogBlockFound = false
     val schema = new TableSchemaResolver(metaClient).getTableSchema
     for (i <- 0 until logFilePathList.size()) {
-      val logReader = new HoodieLogFileReader(
-        metaClient.getStorage, new HoodieLogFile(logFilePathList.get(i)),
-        schema, 1024 * 1024, false, false,
-        "id", null)
-      assertTrue(logReader.hasNext)
-      val logBlock = logReader.next()
-      if (logBlock.isInstanceOf[HoodieDeleteBlock]) {
-        val deleteLogBlock = logBlock.asInstanceOf[HoodieDeleteBlock]
-        assertTrue(deleteLogBlock.getRecordsToDelete.forall(i => i.getOrderingValue().equals(OrderingValues.getDefault) || i.getOrderingValue() == null))
-        deleteLogBlockFound = true
+      val logReader = HoodieLogFormat.newReader(
+        metaClient, new HoodieLogFile(logFilePathList.get(i)), schema)
+      try {
+        assertTrue(logReader.hasNext)
+        val logBlock = logReader.next()
+        if (logBlock.isInstanceOf[HoodieDeleteBlock]) {
+          val deleteLogBlock = logBlock.asInstanceOf[HoodieDeleteBlock]
+          assertTrue(deleteLogBlock.getRecordsToDelete.forall(i => i.getOrderingValue() == null || i.getOrderingValue().equals(OrderingValues.getDefault)))
+          deleteLogBlockFound = true
+        }
+      } finally {
+        logReader.close()
       }
     }
     assertTrue(deleteLogBlockFound)

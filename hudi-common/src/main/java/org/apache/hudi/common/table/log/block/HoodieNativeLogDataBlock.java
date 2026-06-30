@@ -34,7 +34,6 @@ import org.apache.hudi.storage.StoragePath;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -43,18 +42,18 @@ import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_RE
 /**
  * Data block backed by a native log file.
  */
-public class HoodieNativeDataBlock extends HoodieDataBlock {
+public class HoodieNativeLogDataBlock extends HoodieDataBlock {
 
   private final HoodieStorage storage;
   private final HoodieLogFile logFile;
   private final HoodieFileFormat fileFormat;
 
-  public HoodieNativeDataBlock(HoodieStorage storage,
-                               HoodieLogFile logFile,
-                               HoodieFileFormat fileFormat,
-                               Option<HoodieSchema> readerSchema,
-                               Map<HeaderMetadataType, String> header,
-                               Map<FooterMetadataType, String> footer) {
+  public HoodieNativeLogDataBlock(HoodieStorage storage,
+                                  HoodieLogFile logFile,
+                                  HoodieFileFormat fileFormat,
+                                  Option<HoodieSchema> readerSchema,
+                                  Map<HeaderMetadataType, String> header,
+                                  Map<FooterMetadataType, String> footer) {
     super(Option.empty(), null, true, getContentLocation(storage, logFile), readerSchema,
         header, footer, HoodieRecord.RECORD_KEY_METADATA_FIELD, false);
     this.storage = storage;
@@ -95,11 +94,7 @@ public class HoodieNativeDataBlock extends HoodieDataBlock {
 
   @Override
   protected <T> ClosableIterator<T> lookupEngineRecords(HoodieReaderContext<T> readerContext, List<String> keys, boolean fullKey) throws IOException {
-    return FilteringEngineRecordIterator.getInstance(
-        readRecordsFromBlockPayload(readerContext),
-        new HashSet<>(keys),
-        fullKey,
-        record -> Option.ofNullable(readerContext.getRecordContext().getRecordKey(record, readerSchema)));
+    return readerContext.lookupRecords(logFile.getPath(), fileFormat, readerSchema, storage, keys, fullKey);
   }
 
   @Override

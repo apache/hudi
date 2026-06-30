@@ -21,7 +21,6 @@ package org.apache.hudi.utils;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
@@ -840,27 +839,54 @@ public class TestData {
       Map<String, String> expected,
       int partitions,
       Function<GenericRecord, String> extractor) throws IOException {
-    assert baseFile.isDirectory();
-    FileFilter filter = file -> !file.getName().startsWith(".");
-    File[] partitionDirs = baseFile.listFiles(filter);
+    assert baseFile.isDirectory() : "Base path should be a directory";
+    String basePath = baseFile.getAbsolutePath();
+    File[] partitionDirs = baseFile.listFiles(file -> !file.getName().startsWith(".") && file.isDirectory());
     assertNotNull(partitionDirs);
-    assertThat(partitionDirs.length, is(partitions));
-    for (File partitionDir : partitionDirs) {
-      File[] dataFiles = partitionDir.listFiles(filter);
-      assertNotNull(dataFiles);
-      File latestDataFile = Arrays.stream(dataFiles)
-          .max(Comparator.comparing(f -> FSUtils.getCommitTime(f.getName())))
-          .orElse(dataFiles[0]);
-      ParquetReader<GenericRecord> reader = AvroParquetReader
-          .<GenericRecord>builder(new Path(latestDataFile.getAbsolutePath())).build();
+    assertThat("The partitions number should be: " + partitions, partitionDirs.length, is(partitions));
+
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath(baseFile.toURI().toString())
+        .withMemoryConfig(getReaderMemoryConfig())
+        .build();
+    HoodieTableMetaClient metaClient = createMetaClient(basePath);
+    HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
+    boolean hasCompletedInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent();
+    Map<String, List<FileSlice>> partitionToFileSlices = new HashMap<>();
+    for (Map.Entry<String, String> partitionAndExpected : expected.entrySet()) {
+      List<FileSlice> fileSlices = (hasCompletedInstant
+          ? table.getSliceView().getLatestFileSlices(partitionAndExpected.getKey())
+          : table.getSliceView().getLatestFileSlicesIncludingInflight(partitionAndExpected.getKey()))
+          .filter(fileSlice -> fileSlice.getBaseFile().isPresent())
+          .map(fileSlice -> fileSlice.withLogFiles(false))
+          .collect(Collectors.toList());
+      partitionToFileSlices.put(partitionAndExpected.getKey(), fileSlices);
+    }
+
+    HoodieSchema schema = getTableSchema(metaClient, basePath);
+    RowDataQueryContexts.RowDataQueryContext queryContext = RowDataQueryContexts.fromSchema(schema);
+
+    for (Map.Entry<String, String> partitionAndExpected : expected.entrySet()) {
       List<String> readBuffer = new ArrayList<>();
-      GenericRecord nextRecord = reader.read();
-      while (nextRecord != null) {
-        readBuffer.add(extractor.apply(nextRecord));
-        nextRecord = reader.read();
+      List<FileSlice> fileSlices = partitionToFileSlices.get(partitionAndExpected.getKey());
+      for (FileSlice fileSlice : fileSlices) {
+        try (ClosableIterator<RowData> rowIterator = getRecordIterator(fileSlice, schema, metaClient, config)) {
+          while (rowIterator.hasNext()) {
+            RowData rowData = rowIterator.next();
+            readBuffer.add(extractor.apply((GenericRecord) queryContext.getRowDataToAvroConverter().convert(schema, rowData)));
+          }
+        }
       }
       readBuffer.sort(Comparator.naturalOrder());
-      assertThat(readBuffer.toString(), is(expected.get(partitionDir.getName())));
+      assertThat(readBuffer.toString(), is(partitionAndExpected.getValue()));
+    }
+  }
+
+  private static HoodieSchema getTableSchema(HoodieTableMetaClient metaClient, String basePath) throws IOException {
+    try {
+      return new TableSchemaResolver(metaClient).getTableSchema();
+    } catch (Exception e) {
+      throw new IOException("Failed to resolve table schema under table path " + basePath, e);
     }
   }
 
@@ -1015,26 +1041,8 @@ public class TestData {
       int partitions) throws Exception {
     assert baseFile.isDirectory() : "Base path should be a directory";
     String basePath = baseFile.getAbsolutePath();
-    File hoodiePropertiesFile = new File(baseFile + "/" + METAFOLDER_NAME + "/" + HOODIE_PROPERTIES_FILE);
-    assert hoodiePropertiesFile.exists();
     // 1. init flink table
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
-        .fromFile(hoodiePropertiesFile)
-        .withMemoryConfig(
-            HoodieMemoryConfig.newBuilder()
-                .withMaxMemoryMaxSize(
-                    FlinkOptions.WRITE_MERGE_MAX_MEMORY.defaultValue() * 1024 * 1024L,
-                    FlinkOptions.COMPACTION_MAX_MEMORY.defaultValue() * 1024 * 1024L)
-                .build())
-        .withPath(basePath)
-        .build();
-    // deal with partial update merger
-    if (config.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME).contains(PartialUpdateAvroPayload.class.getSimpleName())
-        || (config.getString(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID) != null
-        && config.getString(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID).equalsIgnoreCase(HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID))) {
-      config.setValue(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), PartialUpdateFlinkRecordMerger.class.getName());
-    }
-
+    HoodieWriteConfig config = getMORWriteConfig(baseFile);
     HoodieTableMetaClient metaClient = createMetaClient(basePath);
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
     HoodieSchema schema = new TableSchemaResolver(metaClient).getTableSchema();
@@ -1090,6 +1098,31 @@ public class TestData {
         FormatUtils.createFileGroupReader(metaClient, writeConfig, InternalSchemaManager.DISABLED, fileSlice, tableSchema, tableSchema,
             fileSlice.getLatestInstantTime(), FlinkOptions.REALTIME_PAYLOAD_COMBINE, false, Collections.emptyList(), Option.empty());
     return fileGroupReader.getClosableIterator();
+  }
+
+  private static HoodieWriteConfig getMORWriteConfig(File baseFile) throws IOException {
+    String basePath = baseFile.getAbsolutePath();
+    File hoodiePropertiesFile = new File(baseFile + "/" + METAFOLDER_NAME + "/" + HOODIE_PROPERTIES_FILE);
+    assert hoodiePropertiesFile.exists();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .fromFile(hoodiePropertiesFile)
+        .withMemoryConfig(getReaderMemoryConfig())
+        .withPath(basePath)
+        .build();
+    if (config.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME).contains(PartialUpdateAvroPayload.class.getSimpleName())
+        || (config.getString(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID) != null
+        && config.getString(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID).equalsIgnoreCase(HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID))) {
+      config.setValue(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), PartialUpdateFlinkRecordMerger.class.getName());
+    }
+    return config;
+  }
+
+  private static HoodieMemoryConfig getReaderMemoryConfig() {
+    return HoodieMemoryConfig.newBuilder()
+        .withMaxMemoryMaxSize(
+            FlinkOptions.WRITE_MERGE_MAX_MEMORY.defaultValue() * 1024 * 1024L,
+            FlinkOptions.COMPACTION_MAX_MEMORY.defaultValue() * 1024 * 1024L)
+        .build();
   }
 
   /**

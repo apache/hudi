@@ -504,7 +504,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Step 5: Verify column stats log files contain valid column stats records
     List<HoodieLogFile> colStatsLogFiles = colStatsSlicesAfter.get(0)
         .getLogFiles().collect(Collectors.toList());
-    verifyMetadataColumnStatsRecords(storage, colStatsLogFiles);
+    verifyMetadataColumnStatsRecords(metadataMetaClient, colStatsLogFiles);
   }
 
   @Test
@@ -1612,14 +1612,14 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     for (HoodieLogFile logFile : logFiles) {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(logFile.getPath());
       HoodieSchema writerSchema  =
-          TableSchemaResolver.readSchemaFromLogFile(storage, logFile.getPath());
+          TableSchemaResolver.readSchemaFromLogFile(table.getMetaClient(), logFile.getPath());
       if (writerSchema == null) {
         // not a data block
         continue;
       }
 
-      try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(storage,
-          new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
+      try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(
+          table.getMetaClient(), new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
         while (logFileReader.hasNext()) {
           HoodieLogBlock logBlock = logFileReader.next();
           if (logBlock instanceof HoodieDataBlock) {
@@ -4119,7 +4119,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
           verifyMetadataRawRecords(table, logFiles, false);
         }
         if (COLUMN_STATS.getPartitionPath().equals(partition)) {
-          verifyMetadataColumnStatsRecords(storage, logFiles);
+          verifyMetadataColumnStatsRecords(metadataMetaClient, logFiles);
         }
       } catch (IOException e) {
         log.error("Metadata record validation failed", e);
@@ -4285,7 +4285,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             verifyMetadataRawRecords(table, logFiles, false);
           }
           if (COLUMN_STATS.getPartitionPath().equals(partition)) {
-            verifyMetadataColumnStatsRecords(storage, logFiles);
+            verifyMetadataColumnStatsRecords(metadataMetaClient, logFiles);
           }
         } catch (Exception e) {
           log.error("Metadata record validation failed", e);
@@ -4298,18 +4298,20 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
   }
 
-  private static void verifyMetadataColumnStatsRecords(HoodieStorage storage, List<HoodieLogFile> logFiles) throws IOException {
+  private static void verifyMetadataColumnStatsRecords(HoodieTableMetaClient metadataMetaClient,
+                                                       List<HoodieLogFile> logFiles) throws IOException {
+    HoodieStorage storage = metadataMetaClient.getStorage();
     for (HoodieLogFile logFile : logFiles) {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(logFile.getPath());
       HoodieSchema writerSchema =
-          TableSchemaResolver.readSchemaFromLogFile(storage, logFile.getPath());
+          TableSchemaResolver.readSchemaFromLogFile(metadataMetaClient, logFile.getPath());
       if (writerSchema == null) {
         // not a data block
         continue;
       }
 
-      try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(storage,
-          new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
+      try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(
+          metadataMetaClient, new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
         while (logFileReader.hasNext()) {
           HoodieLogBlock logBlock = logFileReader.next();
           if (logBlock instanceof HoodieDataBlock) {

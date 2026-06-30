@@ -63,7 +63,9 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       "hoodie.metadata.enable" -> "false",
       // "OverwriteWithLatestAvroPayload" is used to trigger merge mode upgrade/downgrade.
       PAYLOAD_CLASS_NAME.key -> classOf[OverwriteWithLatestAvroPayload].getName,
-      RECORD_MERGE_MODE.key -> RecordMergeMode.COMMIT_TIME_ORDERING.name)
+      RECORD_MERGE_MODE.key -> RecordMergeMode.COMMIT_TIME_ORDERING.name,
+      // todo remove this option after https://github.com/apache/hudi/issues/19090 resolved.
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.NINE.versionCode().toString)
 
     var hudiOpts = if (!lockProviderClass.equals("null")) {
       hudiOptsWithoutLockConfigs ++ Map(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> lockProviderClass)
@@ -77,8 +79,8 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       validate = false)
     metaClient = getLatestMetaClient(true)
 
-    // assert table version is current (9) and the partition fields in table config has partition type
-    assertEquals(HoodieTableVersion.current(), metaClient.getTableConfig.getTableVersion)
+    // assert table version is 9 and the partition fields in table config has partition type
+    assertEquals(HoodieTableVersion.NINE, metaClient.getTableConfig.getTableVersion)
     assertEquals(partitionFields, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
     assertEquals(classOf[OverwriteWithLatestAvroPayload].getName, metaClient.getTableConfig.getPayloadClass)
 
@@ -144,6 +146,8 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
       HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "price",
       HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true",
+      // todo remove this option after https://github.com/apache/hudi/issues/19090 resolved.
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.EIGHT.versionCode().toString,
       // Ensure MDT compaction does not run before downgrade.
       HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "100"
     )
@@ -340,7 +344,8 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
         .build()
 
       val hudiOptsUpgrade = hudiOptsV6 ++ Map(
-        HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.current().versionCode().toString,
+        // todo remove this option after https://github.com/apache/hudi/issues/19090 resolved.
+        HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.NINE.versionCode().toString,
         HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key -> "org.apache.hudi.client.transaction.lock.InProcessLockProvider",
         HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> "OPTIMISTIC_CONCURRENCY_CONTROL"
       ) - HoodieWriteConfig.AUTO_UPGRADE_VERSION.key
@@ -355,7 +360,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
         .setConf(storage.getConf())
         .build()
 
-      assertEquals(HoodieTableVersion.current(), metaClient.getTableConfig.getTableVersion)
+      assertEquals(HoodieTableVersion.NINE, metaClient.getTableConfig.getTableVersion)
       assertEquals(partitionFields, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
 
       val archivedFilesAfterUpgrade = metaClient.getStorage.globEntries(archivePath)

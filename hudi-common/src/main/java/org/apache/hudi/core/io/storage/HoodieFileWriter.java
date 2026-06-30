@@ -27,12 +27,14 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 
-public interface HoodieFileWriter extends AutoCloseable {
+public interface HoodieFileWriter<T> extends AutoCloseable {
   boolean canWrite();
 
   void writeWithMetadata(HoodieKey key, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException;
 
   void write(String recordKey, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException;
+
+  void writeRow(String recordKey, T record) throws IOException;
 
   void close() throws IOException;
 

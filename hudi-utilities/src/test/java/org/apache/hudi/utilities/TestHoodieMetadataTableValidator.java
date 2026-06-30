@@ -918,6 +918,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     HoodieTimeline timeline = new ActiveTimelineV2();
     timeline.setInstants(instantList);
     when(metaClient.getCommitsTimeline()).thenReturn(timeline);
+    when(metaClient.getStorage()).thenReturn(storage);
     assertEquals(expected,
         validator.hasCommittedLogFiles(
             storage, new HashSet<>(Collections.singletonList(logFile.getPath().toString())),

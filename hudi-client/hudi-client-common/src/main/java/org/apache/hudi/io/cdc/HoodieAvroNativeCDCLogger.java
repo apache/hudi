@@ -20,8 +20,6 @@ package org.apache.hudi.io.cdc;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
@@ -54,12 +52,11 @@ import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.
 public class HoodieAvroNativeCDCLogger implements HoodieCDCLogWriter<IndexedRecord> {
 
   private final String commitTime;
-  private final String partitionPath;
   private final HoodieSchema dataSchema;
   private final HoodieSchema cdcSchema;
   private final HoodieCDCSupplementalLoggingMode cdcSupplementalLoggingMode;
   private final CDCTransformer transformer;
-  private final HoodieNativeCDCFileWriter nativeCDCFileWriter;
+  private final HoodieNativeCDCFileWriter<IndexedRecord> nativeCDCFileWriter;
   private PendingCDCRecord pendingRecord;
 
   public HoodieAvroNativeCDCLogger(
@@ -75,12 +72,11 @@ public class HoodieAvroNativeCDCLogger implements HoodieCDCLogWriter<IndexedReco
       LogFileCreationCallback fileCreationCallback,
       TaskContextSupplier taskContextSupplier) {
     this.commitTime = commitTime;
-    this.partitionPath = partitionPath;
     this.dataSchema = HoodieSchemaCache.intern(HoodieSchemaUtils.removeMetadataFields(schema));
     this.cdcSupplementalLoggingMode = tableConfig.cdcSupplementalLoggingMode();
     this.cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(cdcSupplementalLoggingMode, dataSchema);
     this.transformer = getTransformer();
-    this.nativeCDCFileWriter = new HoodieNativeCDCFileWriter(
+    this.nativeCDCFileWriter = new HoodieNativeCDCFileWriter<>(
         commitTime,
         partitionPath,
         storage,
@@ -139,9 +135,7 @@ public class HoodieAvroNativeCDCLogger implements HoodieCDCLogWriter<IndexedReco
       return;
     }
     try {
-      nativeCDCFileWriter.write(
-          pendingRecord.recordKey,
-          new HoodieAvroIndexedRecord(new HoodieKey(pendingRecord.recordKey, partitionPath), pendingRecord.record));
+      nativeCDCFileWriter.write(pendingRecord.recordKey, pendingRecord.record);
       pendingRecord = null;
     } catch (IOException e) {
       throw new HoodieException("Failed to write the cdc data to native cdc log file", e);

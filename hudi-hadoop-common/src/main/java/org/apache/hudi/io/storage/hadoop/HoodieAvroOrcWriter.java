@@ -48,7 +48,9 @@ import org.apache.orc.Writer;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -68,6 +70,7 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   private final Option<HoodieWrapperFileSystem> wrapperFs;
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
+  private final Map<String, String> footerMetadata = new LinkedHashMap<>();
 
   private final HoodieOrcConfig orcConfig;
   private String minRecordKey;
@@ -152,6 +155,11 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   }
 
   @Override
+  public void addFooterMetadata(Map<String, String> footerMetadata) {
+    this.footerMetadata.putAll(footerMetadata);
+  }
+
+  @Override
   public void close() throws IOException {
     if (batch.size != 0) {
       writer.addRowBatch(batch);
@@ -170,6 +178,9 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
       }
     }
     writer.addUserMetadata(HoodieOrcConfig.AVRO_SCHEMA_METADATA_KEY, ByteBuffer.wrap(getUTF8Bytes(schema.toString())));
+    for (Map.Entry<String, String> entry : footerMetadata.entrySet()) {
+      writer.addUserMetadata(entry.getKey(), ByteBuffer.wrap(getUTF8Bytes(entry.getValue())));
+    }
 
     writer.close();
   }

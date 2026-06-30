@@ -42,6 +42,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -55,13 +56,13 @@ import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.cdc.HoodieCDCLogWriter;
-import org.apache.hudi.io.cdc.HoodieCDCLogWriterFactory;
 import org.apache.hudi.io.cdc.HoodieCDCLogger;
 import org.apache.hudi.io.cdc.HoodieNativeCDCLogger;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
+import org.apache.hudi.util.CommonClientUtils;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
@@ -141,7 +142,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     TypedProperties properties = config.getProps();
     properties.putAll(hoodieTable.getMetaClient().getTableConfig().getProps());
     this.maxInstantTime = instantTime;
-    initRecordTypeAndCdcLogger(hoodieTable.getConfig().getRecordMerger().getRecordType());
+    initRecordType(hoodieTable.getConfig().getRecordMerger().getRecordType());
     this.props = TypedProperties.copy(config.getProps());
     this.incomingRecordsItr = recordItr;
   }
@@ -168,28 +169,24 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     this.keyToNewRecords = Collections.emptyMap();
     this.readerContext = readerContext;
     this.compactionOperation = Option.of(compactionOperation);
-    initRecordTypeAndCdcLogger(enginRecordType);
+    initRecordType(enginRecordType);
     init(compactionOperation, this.partitionPath);
     this.props = TypedProperties.copy(config.getProps());
     this.incomingRecordsItr = null;
   }
 
-  private void initRecordTypeAndCdcLogger(HoodieRecord.HoodieRecordType enginRecordType) {
+  private void initRecordType(HoodieRecord.HoodieRecordType enginRecordType) {
     // If the table is a metadata table or the base file is an HFile, we use AVRO record type, otherwise we use the engine record type.
     this.recordType = hoodieTable.isMetadataTable() || HFILE.getFileExtension().equals(hoodieTable.getBaseFileExtension()) ? HoodieRecord.HoodieRecordType.AVRO : enginRecordType;
-    if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
-      this.cdcLogger = Option.of(createCDCLogWriter());
-    } else {
-      this.cdcLogger = Option.empty();
-    }
   }
 
   private HoodieCDCLogWriter<?> createCDCLogWriter() {
-    if (HoodieCDCLogWriterFactory.shouldWriteNativeCDCLogs(hoodieTable.getMetaClient().getTableConfig())) {
+    HoodieTableConfig tableConfig = hoodieTable.getMetaClient().getTableConfig();
+    if (CommonClientUtils.shouldWriteNativeLogs(config, tableConfig)) {
       return new HoodieNativeCDCLogger(
           instantTime,
           config,
-          hoodieTable.getMetaClient().getTableConfig(),
+          tableConfig,
           partitionPath,
           storage,
           getWriterSchema(),
@@ -204,7 +201,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     return new HoodieCDCLogger(
         instantTime,
         config,
-        hoodieTable.getMetaClient().getTableConfig(),
+        tableConfig,
         partitionPath,
         storage,
         getWriterSchema(),
@@ -395,6 +392,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   protected Option<BaseFileUpdateCallback<T>> createCallback() {
     List<BaseFileUpdateCallback<T>> callbacks = new ArrayList<>();
     // Handle CDC workflow.
+    Option<HoodieCDCLogWriter<?>> cdcLogger = getOrCreateCDCLogWriter();
     if (cdcLogger.isPresent()) {
       HoodieCDCLogWriter<?> logger = cdcLogger.get();
       if (logger instanceof HoodieNativeCDCLogger) {
@@ -426,6 +424,18 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       }
     }
     return callbacks.isEmpty() ? Option.empty() : Option.of(CompositeCallback.of(callbacks));
+  }
+
+  private Option<HoodieCDCLogWriter<?>> getOrCreateCDCLogWriter() {
+    if (cdcLogger != null) {
+      return cdcLogger;
+    }
+    if (!hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
+      this.cdcLogger = Option.empty();
+    } else {
+      cdcLogger = Option.of(createCDCLogWriter());
+    }
+    return cdcLogger;
   }
 
   private static class CDCCallback<T> implements BaseFileUpdateCallback<T> {

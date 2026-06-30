@@ -101,6 +101,11 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
   }
 
   @Override
+  public HoodieRecord.HoodieRecordType getEngineRecordType() {
+    return HoodieRecord.HoodieRecordType.HIVE;
+  }
+
+  @Override
   public ArrayWritable mergeWithEngineRecord(HoodieSchema schema,
                                              Map<Integer, Object> updateValues,
                                              BufferedRecord<ArrayWritable> baseRecord) {

@@ -127,7 +127,7 @@ public class ITTestFlinkConsistentHashingClustering {
     TimeUnit.SECONDS.sleep(3);
 
     // Validate the insertion
-    TestData.checkWrittenData(tempFile, EXPECTED_AFTER_INITIAL_INSERT, 0);
+    TestData.checkWrittenDataMOR(tempFile, EXPECTED_AFTER_INITIAL_INSERT, 0);
   }
 
   private TableEnvironment setupTableEnv() {

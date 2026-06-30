@@ -25,7 +25,7 @@ import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig, R
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
-import org.apache.hudi.common.table.log.HoodieLogFileReader
+import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.testutils.HoodieTestUtils
@@ -745,23 +745,25 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
     val schema = new TableSchemaResolver(metaClient).getTableSchema
     for (i <- 0 until expectedNumLogFile) {
-      val logReader = new HoodieLogFileReader(
-        metaClient.getStorage, new HoodieLogFile(logFilePathList.get(i)),
-        schema, 1024 * 1024, false, false,
-        "id", null)
-      assertTrue(logReader.hasNext)
-      val logBlockHeader = logReader.next().getLogBlockHeader
-      assertTrue(logBlockHeader.containsKey(HeaderMetadataType.SCHEMA))
-      if (isPartial) {
-        assertTrue(logBlockHeader.containsKey(HeaderMetadataType.IS_PARTIAL))
-        assertTrue(logBlockHeader.get(HeaderMetadataType.IS_PARTIAL).toBoolean)
-      } else {
-        assertFalse(logBlockHeader.containsKey(HeaderMetadataType.IS_PARTIAL))
+      val logReader = HoodieLogFormat.newReader(
+        metaClient, new HoodieLogFile(logFilePathList.get(i)), schema)
+      try {
+        assertTrue(logReader.hasNext)
+        val logBlockHeader = logReader.next().getLogBlockHeader
+        assertTrue(logBlockHeader.containsKey(HeaderMetadataType.SCHEMA))
+        if (isPartial) {
+          assertTrue(logBlockHeader.containsKey(HeaderMetadataType.IS_PARTIAL))
+          assertTrue(logBlockHeader.get(HeaderMetadataType.IS_PARTIAL).toBoolean)
+        } else {
+          assertFalse(logBlockHeader.containsKey(HeaderMetadataType.IS_PARTIAL))
+        }
+        val actualSchema = HoodieSchema.parse(logBlockHeader.get(HeaderMetadataType.SCHEMA))
+        val expectedSchema = HoodieSchemaUtils.addMetadataFields(HoodieSchemaUtils.generateProjectionSchema(
+          schema, changedFields(i).asJava), false)
+        assertEquals(expectedSchema, actualSchema)
+      } finally {
+        logReader.close()
       }
-      val actualSchema = HoodieSchema.parse(logBlockHeader.get(HeaderMetadataType.SCHEMA))
-      val expectedSchema = HoodieSchemaUtils.addMetadataFields(HoodieSchemaUtils.generateProjectionSchema(
-        schema, changedFields(i).asJava), false)
-      assertEquals(expectedSchema, actualSchema)
     }
   }
 
