@@ -75,7 +75,7 @@ import static org.apache.hudi.utilities.streamer.BaseErrorTableWriter.ERROR_TABL
  */
 public class AbstractDebeziumTransformer implements Transformer {
 
-  public static final String DEBEZIUM_METADATA_FIELD = "_debezium_metadata";
+  public static final String DEBEZIUM_METADATA_FIELD = DebeziumConstants.DEBEZIUM_METADATA_FIELD;
   private static final String DATA_FIELD = "__data";
 
   private static final List<Column> DEFAULT_ROOT_LEVEL_METADATA_COLUMNS = Arrays.asList(

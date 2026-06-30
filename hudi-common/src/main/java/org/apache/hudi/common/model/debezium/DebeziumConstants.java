@@ -69,6 +69,9 @@ public class DebeziumConstants {
   // Other Constants
   public static final String DELETE_OP = "d";
 
+  // Struct column under which the Debezium metadata columns are grouped when nested fields are enabled.
+  public static final String DEBEZIUM_METADATA_FIELD = "_debezium_metadata";
+
   // List of meta data columns
   public static List<String> META_COLUMNS = Collections.unmodifiableList(Arrays.asList(
       FLATTENED_OP_COL_NAME,

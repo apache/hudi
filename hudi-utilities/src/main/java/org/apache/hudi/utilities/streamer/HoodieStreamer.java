@@ -66,6 +66,7 @@ import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
+import org.apache.hudi.utilities.config.DebeziumTransformerConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionService;
@@ -158,7 +159,8 @@ public class HoodieStreamer implements Serializable {
     Triple<RecordMergeMode, String, String> mergingConfigs =
         HoodieTableConfig.inferMergingConfigsForWrites(
             cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingFields,
-            HoodieTableVersion.fromVersionCode(ConfigUtils.getIntWithAltKeys(this.properties, HoodieWriteConfig.WRITE_TABLE_VERSION)));
+            HoodieTableVersion.fromVersionCode(ConfigUtils.getIntWithAltKeys(this.properties, HoodieWriteConfig.WRITE_TABLE_VERSION)),
+            ConfigUtils.getBooleanWithAltKeys(this.properties, DebeziumTransformerConfig.ENABLE_NESTED_FIELDS));
     cfg.recordMergeMode = mergingConfigs.getLeft();
     cfg.recordMergeStrategyId = mergingConfigs.getRight();
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
