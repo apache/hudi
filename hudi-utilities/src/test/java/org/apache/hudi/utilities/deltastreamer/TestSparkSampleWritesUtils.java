@@ -106,15 +106,10 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
         .build();
 
     String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(1);
-    // dataGen round-robins across the three DEFAULT_PARTITION_PATHS, so the input spans
-    // multiple source partitions. The sample-writes table must still write non-partitioned.
+    // Input spans multiple source partitions; the sample-writes table must still be non-partitioned.
     JavaRDD<HoodieRecord> records = jsc().parallelize(dataGen.generateInserts(commitTime, 2000), 2);
     Option<HoodieWriteConfig> writeConfigOpt = SparkSampleWritesUtils.getWriteConfigWithRecordSizeEstimate(jsc(), Option.of(records), originalWriteConfig);
     assertTrue(writeConfigOpt.isPresent());
-    // The 2000 records now land in a single non-partitioned file instead of being diluted
-    // across the three source partitions, so the per-record estimate is lower and more
-    // accurate (one parquet footer/dictionary amortized over all records) than the previous
-    // multi-file value of ~779.
     assertEquals(337.0, writeConfigOpt.get().getCopyOnWriteRecordSizeEstimate(), 10.0);
     assertSampleWritesNonPartitioned();
   }
@@ -149,10 +144,8 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
   }
 
   /**
-   * Walks the sample-writes folder and fails if any data files were placed under a
-   * source-partition subdirectory. A non-partitioned sample-writes table places its data
-   * files directly under each run directory; a partitioned write would fan them out across
-   * subdirectories named after the source partition paths.
+   * Fails if the sample-writes folder contains any source-partition subdirectory, i.e. the
+   * sample write was not flattened into a single non-partitioned file.
    */
   private void assertSampleWritesNonPartitioned() throws IOException {
     Path sampleWritesPath = new Path(basePath(), ".hoodie/.aux/.sample_writes");

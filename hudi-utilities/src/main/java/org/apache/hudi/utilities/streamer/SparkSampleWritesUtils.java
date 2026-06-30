@@ -110,11 +110,8 @@ public class SparkSampleWritesUtils {
     try (SparkRDDWriteClient sampleWriteClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), sampleWriteConfig, Option.empty())) {
       int size = writeConfig.getIntOrDefault(SAMPLE_WRITES_SIZE);
       return recordsOpt.map(records -> {
-        // Rewrite each record with an empty partition path so the sample-writes table is
-        // effectively non-partitioned. The bulk-insert writer routes records to files by
-        // HoodieRecord.getPartitionPath(); without this, an input that spans many source
-        // partitions fans out into many tiny files even though parallelism is 1, slowing
-        // the sample write and inflating per-file metadata in the size estimate.
+        // Empty partition path so all sampled records write to a single non-partitioned file,
+        // instead of fanning out into one tiny file per source partition and skewing the estimate.
         List<HoodieRecord> samples = records.coalesce(1).take(size).stream()
             .map(r -> r.newInstance(new HoodieKey(r.getRecordKey(), "")))
             .collect(Collectors.toList());
