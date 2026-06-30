@@ -210,9 +210,12 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       }
       originalVectorTypes.map {
         o: Seq[String] => o.zipWithIndex.map(a => {
-          if (a._2 >= requiredSchema.length
-            && mandatoryFields.contains(partitionSchema.fields(a._2 - requiredSchema.length).name)
-            && !isNestedPartitionField(partitionSchema.fields(a._2 - requiredSchema.length).name)) {
+          val isPartitionField = a._2 >= requiredSchema.length
+          if (isPartitionField
+            && {
+              val fieldName = partitionSchema.fields(a._2 - requiredSchema.length).name
+              mandatoryFields.contains(fieldName) && !isNestedPartitionField(fieldName)
+            }) {
             regularVectorType
           } else {
             a._1
