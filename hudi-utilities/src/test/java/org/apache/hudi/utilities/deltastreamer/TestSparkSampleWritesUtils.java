@@ -93,7 +93,7 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
   }
 
   @Test
-  public void overwriteRecordSizeEstimateForEmptyTable() throws IOException {
+  void overwriteRecordSizeEstimateForEmptyTable() throws IOException {
     int originalRecordSize = 100;
     TypedProperties props = new TypedProperties();
     props.put(HoodieStreamerConfig.SAMPLE_WRITES_ENABLED.key(), "true");
@@ -115,7 +115,7 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
   }
 
   @Test
-  public void sampleWritesAreNonPartitionedEvenForManyPartitionInput() throws IOException {
+  void sampleWritesAreNonPartitionedEvenForManyPartitionInput() throws IOException {
     int recordsPerPartition = 50;
     String[] partitionPaths = IntStream.range(0, 20)
         .mapToObj(i -> String.format("year=2024/month=01/day=%02d", i + 1))
