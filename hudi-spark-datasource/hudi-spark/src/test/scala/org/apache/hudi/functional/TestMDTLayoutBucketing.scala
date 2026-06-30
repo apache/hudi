@@ -21,11 +21,14 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.config.HoodieCleanConfig
 import org.apache.hudi.metadata.{FlatMDTLayout, HoodieTableMetadata, MetadataPartitionType, SubDirBucketedMDTLayout}
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -140,5 +143,95 @@ class TestMDTLayoutBucketing extends RecordLevelIndexTestBase {
     assertTrue(mdtCount > 0L,
       s"direct Spark scan on MDT path must return at least one row under layout $layoutClass; got $mdtCount")
     assertNotNull(mdtDf.schema.fieldNames, "MDT schema must resolve via Spark datasource")
+  }
+
+  /**
+   * Long-running workload validating that MDT table services (compaction + cleaning) execute
+   * cleanly when the MDT is using the sub-directory bucketing layout. With the bucketed layout,
+   * `BaseHoodieCompactionPlanGenerator` and the cleaner's full-listing path go through the file
+   * system view under the logical MDT partition name — earlier reviews flagged that this could
+   * skip bucketed file groups entirely. This test forces both services to fire repeatedly so any
+   * regression in that area surfaces as either zero compaction/clean instants or an exception.
+   *
+   * Workload: 25 upsert commits with MDT compaction set to fire every 5 delta commits and a tight
+   * cleaner-commits-retained so cleaning has work to do early.
+   */
+  @Test
+  def testMDTTableServicesWithBucketing(): Unit = {
+    val opts = commonOpts ++
+      layoutOpts(classOf[SubDirBucketedMDTLayout].getName, bucketSize = 2) ++
+      Map(
+        // MDT compaction every 5 delta commits, so a 25-commit run triggers it multiple times.
+        HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "5",
+        // Tight cleaner so cleaning has work to do on the data table; the MDT cleaner is driven by
+        // the data table's cleaner policy.
+        HoodieCleanConfig.AUTO_CLEAN.key -> "true",
+        HoodieCleanConfig.ASYNC_CLEAN.key -> "false",
+        HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key -> "3")
+
+    // Bootstrap.
+    doWriteAndValidateDataAndRecordIndex(opts, INSERT_OPERATION_OPT_VAL, SaveMode.Overwrite)
+    // 24 more commits → 25 commits total. Validate RLI after each so a stale slice surfaces fast.
+    (1 to 24).foreach { _ =>
+      doWriteAndValidateDataAndRecordIndex(opts, UPSERT_OPERATION_OPT_VAL, SaveMode.Append)
+    }
+
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
+    val mdtBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath)
+    val mdtMetaClient = HoodieTableMetaClient.builder()
+      .setBasePath(mdtBasePath).setConf(storageConf).build()
+
+    // Layout must still report itself as bucketed after the long run.
+    assertEquals(classOf[SubDirBucketedMDTLayout].getName,
+      mdtMetaClient.getTableConfig.getMetadataLayoutClass.get,
+      "MDT must still be on the bucketed layout after a long workload")
+
+    // -------- MDT compaction must have fired at least once. --------
+    val mdtTimeline = mdtMetaClient.reloadActiveTimeline()
+    val mdtCompactionInstants = mdtTimeline.filterCompletedInstants().getInstants.asScala
+      .count(_.getAction == HoodieTimeline.COMMIT_ACTION)
+    // With max.delta.commits=5 and ~25 delta commits on the MDT, expect at least one compaction.
+    assertTrue(mdtCompactionInstants >= 1,
+      s"expected >= 1 completed MDT compaction (COMMIT_ACTION) after the run; got $mdtCompactionInstants " +
+        s"on timeline ${mdtTimeline.getInstants.asScala.toList}")
+
+    // -------- Data table cleaning must have fired at least once. --------
+    val dataTimeline = metaClient.reloadActiveTimeline()
+    val dataCleanInstants = dataTimeline.getCleanerTimeline.filterCompletedInstants().countInstants()
+    assertTrue(dataCleanInstants >= 1,
+      s"expected >= 1 completed data table cleaner instant after the run; got $dataCleanInstants")
+
+    // -------- Bucket sub-dirs still present (compaction did not delete them). --------
+    val recordIndexDir = new StoragePath(mdtBasePath, MetadataPartitionType.RECORD_INDEX.getPartitionPath)
+    val bucketDirs = mdtMetaClient.getStorage.listDirectEntries(recordIndexDir).asScala
+      .filter(_.isDirectory)
+    assertTrue(bucketDirs.nonEmpty,
+      "bucket sub-directories under record_index must still exist after compaction + cleaning")
+    bucketDirs.foreach { d =>
+      val name = d.getPath.getName
+      assertTrue(name.matches("[0-9]{4}"),
+        s"bucket sub-directory name must be %04d-formatted, got: $name")
+      // After compaction, each bucket should contain at least one base file (HFile) — otherwise
+      // compaction silently skipped this bucket, which is the regression cshuo / hudi-agent flagged.
+      val bucketEntries = mdtMetaClient.getStorage.listDirectEntries(d.getPath).asScala
+      val hfiles = bucketEntries.filter(e => e.getPath.getName.endsWith(".hfile"))
+      assertTrue(hfiles.nonEmpty,
+        s"bucket ${d.getPath.getName} contains no HFile after compaction; entries=${bucketEntries.map(_.getPath.getName)}")
+    }
+
+    // -------- The marker invariant must still hold post-compaction. --------
+    bucketDirs.foreach { d =>
+      val markerInsideBucket = new StoragePath(d.getPath, ".hoodie_partition_metadata")
+      assertFalse(mdtMetaClient.getStorage.exists(markerInsideBucket),
+        s"compaction must not introduce a .hoodie_partition_metadata inside ${d.getPath}")
+    }
+    val markerAtRoot = new StoragePath(recordIndexDir, ".hoodie_partition_metadata")
+    assertTrue(mdtMetaClient.getStorage.exists(markerAtRoot),
+      "logical-root marker must still exist after compaction + cleaning")
+
+    // -------- Direct Spark scan on the MDT path still returns rows. --------
+    val mdtDf = spark.read.format("hudi").load(mdtBasePath)
+    assertTrue(mdtDf.count() > 0L,
+      "direct Spark scan on MDT must still return rows after compaction + cleaning")
   }
 }
