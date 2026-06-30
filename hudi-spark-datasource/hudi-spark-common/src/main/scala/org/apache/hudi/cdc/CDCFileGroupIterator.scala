@@ -39,7 +39,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
 import org.apache.hudi.common.table.log.{HoodieCDCEngineRecordAccessor, HoodieCDCInlineLogRecordIterator, HoodieCDCLogRecord, HoodieCDCLogRecordIterator, HoodieCDCNativeLogRecordIterator, HoodieMergedLogRecordReader}
 import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecordMerger, BufferedRecordMergerFactory, BufferedRecords, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, IteratorMode, UpdateProcessor}
 import org.apache.hudi.common.table.read.buffer.KeyBasedFileGroupRecordBuffer
-import org.apache.hudi.common.util.{DefaultSizeEstimator, HoodieRecordUtils, Option}
+import org.apache.hudi.common.util.{DefaultSizeEstimator, HoodieRecordUtils, Option, ValidationUtils}
 import org.apache.hudi.common.util.collection.{ClosableIterator, ExternalSpillableMap}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.CloseableIteratorListener
@@ -228,7 +228,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   private lazy val cdcDataSparkSchema: StructType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(
     HoodieSchemaUtils.removeMetadataFields(schema))
 
-  private lazy val nativeCdcTableSchemaOpt = {
+  private lazy val nativeCdcParquetSchemaOpt = {
     val hadoopConf = storage.getConf.unwrapAs(classOf[Configuration])
     val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(cdcHoodieSchema)
     org.apache.hudi.common.util.Option.of(parquetSchema)
@@ -523,7 +523,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     val pf = sparkPartitionedFileUtils.createPartitionedFile(
       InternalRow.empty, absCDCPath, 0, fileStatus.getLength)
     baseFileReader.read(pf, cdcSparkSchema, new StructType(),
-      org.apache.hudi.common.util.Option.empty(), Seq.empty, conf, nativeCdcTableSchemaOpt)
+      org.apache.hudi.common.util.Option.empty(), Seq.empty, conf, nativeCdcParquetSchemaOpt)
   }
 
   private val nativeCdcRecordAccessor = new HoodieCDCEngineRecordAccessor[InternalRow] {
@@ -535,7 +535,9 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   }
 
   private def createCdcRecordIterator(fileSplit: HoodieCDCFileSplit): HoodieCDCLogRecordIterator[_] = {
-    if (isNativeCdcFileSplit(fileSplit)) {
+    if (fileSplit.getCdcFiles == null || fileSplit.getCdcFiles.isEmpty) {
+      HoodieCDCLogRecordIterator.empty()
+    } else if (isNativeCdcFileSplit(fileSplit)) {
       new HoodieCDCNativeLogRecordIterator[InternalRow](
         fileSplit.getCdcFiles.iterator(),
         cdcFile => ClosableIterator.wrap(readNativeCdcFile(cdcFile).asJava),
@@ -550,7 +552,8 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
   private def isNativeCdcFileSplit(fileSplit: HoodieCDCFileSplit): Boolean = {
     val nativeFlags = fileSplit.getCdcFiles.asScala.map(path => FSUtils.matchNativeLogFile(path).isPresent)
-    assert(nativeFlags.forall(_ == nativeFlags.head), "CDC file split cannot mix inline and native CDC log files")
+    ValidationUtils.checkState(nativeFlags.forall(_ == nativeFlags.head),
+      "CDC file split cannot mix inline and native CDC log files")
     nativeFlags.head
   }
 

@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -52,25 +53,25 @@ import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.format.FlinkReaderContextFactory;
 import org.apache.hudi.table.format.FormatUtils;
+import org.apache.hudi.table.format.HoodieRowDataFileReader;
 import org.apache.hudi.table.format.InternalSchemaManager;
-import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.AvroToRowDataConverters;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.RowDataProjection;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
 
@@ -78,11 +79,9 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
 
@@ -433,6 +432,9 @@ public final class CdcIterators {
         String tablePath,
         HoodieSchema cdcSchema,
         HoodieCDCFileSplit fileSplit) {
+      if (fileSplit.getCdcFiles() == null || fileSplit.getCdcFiles().isEmpty()) {
+        return HoodieCDCLogRecordIterator.empty();
+      }
       if (isNativeCdcFileSplit(fileSplit)) {
         return new HoodieCDCNativeLogRecordIterator<>(
             fileSplit.getCdcFiles().iterator(),
@@ -461,26 +463,55 @@ public final class CdcIterators {
         String tablePath,
         String cdcFile,
         HoodieSchema cdcSchema) {
+      HoodieRowDataFileReader reader = null;
       try {
-        DataType cdcDataType = HoodieSchemaConverter.convertToDataType(cdcSchema);
-        RowType cdcRowType = (RowType) cdcDataType.getLogicalType();
-        return RecordIterators.getParquetRecordIterator(
-            InternalSchemaManager.DISABLED,
-            conf.get(FlinkOptions.READ_UTC_TIMEZONE),
-            true,
-            HadoopConfigurations.getParquetConf(conf, hadoopConf),
-            cdcRowType.getFieldNames().toArray(new String[0]),
-            cdcDataType.getChildren().toArray(new DataType[0]),
-            new LinkedHashMap<>(),
-            IntStream.range(0, cdcRowType.getFieldCount()).toArray(),
-            2048,
-            new org.apache.flink.core.fs.Path(new StoragePath(tablePath, cdcFile).toString()),
-            0,
-            Long.MAX_VALUE,
-            Collections.emptyList());
+        StoragePath cdcFilePath = new StoragePath(tablePath, cdcFile);
+        HoodieStorage storage = HoodieStorageUtils.getStorage(
+            tablePath, HadoopFSUtils.getStorageConf(hadoopConf));
+        HoodieFileFormat cdcFileFormat = HoodieFileFormat.fromFileExtension(cdcFilePath.getFileExtension());
+        reader = (HoodieRowDataFileReader) HoodieIOFactory.getIOFactory(storage)
+            .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
+            .getFileReader(
+                FlinkWriteClients.getHoodieClientConfig(conf), cdcFilePath, cdcFileFormat, Option.empty());
+        return closeReaderWithIterator(
+            reader,
+            reader.getRowDataIterator(cdcSchema, cdcSchema, InternalSchemaManager.DISABLED, Collections.emptyList()));
       } catch (IOException e) {
+        if (reader != null) {
+          reader.close();
+        }
         throw new HoodieIOException("Failed to create native CDC record iterator for file: " + cdcFile, e);
+      } catch (RuntimeException e) {
+        if (reader != null) {
+          reader.close();
+        }
+        throw e;
       }
+    }
+
+    private static ClosableIterator<RowData> closeReaderWithIterator(
+        HoodieRowDataFileReader reader,
+        ClosableIterator<RowData> iterator) {
+      return new ClosableIterator<RowData>() {
+        @Override
+        public boolean hasNext() {
+          return iterator.hasNext();
+        }
+
+        @Override
+        public RowData next() {
+          return iterator.next();
+        }
+
+        @Override
+        public void close() {
+          try {
+            iterator.close();
+          } finally {
+            reader.close();
+          }
+        }
+      };
     }
 
     private static int[] computeRequiredPos(HoodieSchema tableSchema, HoodieSchema requiredSchema) {

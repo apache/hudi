@@ -96,6 +96,7 @@ public class HoodieCDCInlineLogRecordIterator implements HoodieCDCLogRecordItera
     closeItr();
     itr = new CloseableMappingIterator<>(
         dataBlock.getRecordIterator(HoodieRecordType.AVRO),
+        // Cast via Object to avoid an unchecked-cast warning; AVRO record iterators yield HoodieAvroIndexedRecord.
         record -> new InlineCDCLogRecord(((HoodieAvroIndexedRecord) (Object) record).getData()));
     return itr.hasNext();
   }
