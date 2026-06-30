@@ -61,7 +61,6 @@ import static org.apache.hudi.common.model.LogExtensions.DELETE_LOG_EXTENSION;
  */
 public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
 
-  private static final int NATIVE_LOG_FORMAT_VERSION = 2;
   private static final String LOG_FORMAT_METADATA_FOOTER_KEY = "hudi.log.format.metadata";
 
   private final HoodieWriteConfig writeConfig;
@@ -222,7 +221,7 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
 
   private Map<String, String> getFooterMetadata(Map<HeaderMetadataType, String> header) throws IOException {
     Map<String, String> logFormatMetadata = new LinkedHashMap<>();
-    logFormatMetadata.put(HeaderMetadataType.VERSION.name(), String.valueOf(NATIVE_LOG_FORMAT_VERSION));
+    logFormatMetadata.put(HeaderMetadataType.VERSION.name(), String.valueOf(HoodieLogFormat.CURRENT_VERSION));
     header.forEach((key, value) -> {
       if (value != null) {
         logFormatMetadata.put(key.name(), value);

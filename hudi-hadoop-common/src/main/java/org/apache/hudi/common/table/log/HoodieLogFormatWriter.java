@@ -127,9 +127,8 @@ public class HoodieLogFormatWriter extends HoodieLogFormat.Writer {
   @Override
   public AppendResult appendBlocks(List<HoodieLogBlock> blocks) throws IOException {
     try {
-      // Find current version
-      HoodieLogFormat.LogFormatVersion currentLogFormatVersion =
-          new HoodieLogFormatVersion(HoodieLogFormat.CURRENT_VERSION);
+      HoodieLogFormat.LogFormatVersion inlineLogFormatVersion =
+          new HoodieLogFormatVersion(HoodieLogFormat.INLINE_LOG_FORMAT_VERSION);
 
       FSDataOutputStream originalOutputStream = getOutputStream();
       long startPos = originalOutputStream.getPos();
@@ -153,7 +152,7 @@ public class HoodieLogFormatWriter extends HoodieLogFormat.Writer {
         outputStream.writeLong(getLogBlockLength(content.size(), headerBytes.length, footerBytes.length));
 
         // 3. Write the version of this log block
-        outputStream.writeInt(currentLogFormatVersion.getVersion());
+        outputStream.writeInt(inlineLogFormatVersion.getVersion());
         // 4. Write the block type
         outputStream.writeInt(block.getBlockType().ordinal());
 
