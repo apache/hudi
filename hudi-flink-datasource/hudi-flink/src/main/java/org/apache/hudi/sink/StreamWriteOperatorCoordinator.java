@@ -35,6 +35,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.metrics.FlinkWriteCoordinatorMetrics;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -166,6 +167,11 @@ public class StreamWriteOperatorCoordinator
   private transient EventBuffers eventBuffers;
 
   /**
+   * Metrics for the coordinator.
+   */
+  private transient FlinkWriteCoordinatorMetrics metrics;
+
+  /**
    * Task number of the operator.
    */
   private final int parallelism;
@@ -221,6 +227,8 @@ public class StreamWriteOperatorCoordinator
     // reference: https://stackoverflow.com/questions/1771679/difference-between-threads-context-class-loader-and-normal-classloader
     Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
     initEventBufferIfNecessary();
+    this.metrics = new FlinkWriteCoordinatorMetrics(context.metricGroup(), this::getPendingCommitInstantCount);
+    this.metrics.registerMetrics();
     this.tableState = TableState.create(conf);
     this.gateways = new SubtaskGateway[this.parallelism];
     try {
@@ -505,6 +513,11 @@ public class StreamWriteOperatorCoordinator
     }
     // initialize event buffer
     this.eventBuffers = EventBuffers.getInstance(conf, this.parallelism);
+  }
+
+  @VisibleForTesting
+  int getPendingCommitInstantCount() {
+    return this.eventBuffers == null ? 0 : this.eventBuffers.getAllCompletedEvents().size();
   }
 
   private String startInstant() {

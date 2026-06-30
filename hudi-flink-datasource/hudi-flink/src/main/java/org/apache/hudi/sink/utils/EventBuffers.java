@@ -171,7 +171,7 @@ public class EventBuffers implements Serializable {
    */
   public Map<Long, Pair<String, EventBuffer>> getAllCompletedEvents() {
     return this.eventBuffers.entrySet().stream()
-        .filter(entry -> entry.getValue().getRight().allEventsCompleted())
+        .filter(entry -> entry.getValue().getRight().allEventsCompleted() && !entry.getValue().getRight().isEmptyDataWriteBuffer())
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   }
 
