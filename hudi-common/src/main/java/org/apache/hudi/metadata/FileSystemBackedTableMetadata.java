@@ -86,13 +86,10 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
     this.tableName = tableConfig.getTableName();
     this.hiveStylePartitioningEnabled = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled = Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
-    if (HoodieTableMetadata.isMetadataTable(datasetBasePath)) {
-      this.mdtLayout = HoodieMetadataTableLayouts.load(tableConfig);
-      this.mdtLayoutPartitionFileGroupCounts = tableConfig.getMetadataLayoutPartitionFileGroupCounts();
-    } else {
-      this.mdtLayout = null;
-      this.mdtLayoutPartitionFileGroupCounts = Collections.emptyMap();
-    }
+    boolean isMdt = HoodieTableMetadata.isMetadataTable(datasetBasePath);
+    this.mdtLayout = isMdt ? HoodieMetadataTableLayouts.load(tableConfig) : null;
+    this.mdtLayoutPartitionFileGroupCounts = isMdt
+        ? tableConfig.getMetadataLayoutPartitionFileGroupCounts() : Collections.emptyMap();
   }
 
   public FileSystemBackedTableMetadata(HoodieEngineContext engineContext,
@@ -109,13 +106,10 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
         Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled =
         Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
-    if (HoodieTableMetadata.isMetadataTable(datasetBasePath)) {
-      this.mdtLayout = HoodieMetadataTableLayouts.load(tableConfig);
-      this.mdtLayoutPartitionFileGroupCounts = tableConfig.getMetadataLayoutPartitionFileGroupCounts();
-    } else {
-      this.mdtLayout = null;
-      this.mdtLayoutPartitionFileGroupCounts = Collections.emptyMap();
-    }
+    boolean isMdt = HoodieTableMetadata.isMetadataTable(datasetBasePath);
+    this.mdtLayout = isMdt ? HoodieMetadataTableLayouts.load(tableConfig) : null;
+    this.mdtLayoutPartitionFileGroupCounts = isMdt
+        ? tableConfig.getMetadataLayoutPartitionFileGroupCounts() : Collections.emptyMap();
   }
 
   @Override
