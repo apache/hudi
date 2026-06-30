@@ -133,11 +133,16 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
             FILE_ID
         );
 
+    FileSlice fileSlice = fileSliceOpt.orElseThrow(() -> new IllegalArgumentException("FileSlice is not present"));
+    return getFileGroupIterator(fileSlice, shouldReadPositions, allowInflightCommits);
+  }
+
+  protected ClosableIterator<IndexedRecord> getFileGroupIterator(FileSlice fileSlice, boolean shouldReadPositions, boolean allowInflightCommits)
+      throws IOException {
     properties.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(),String.valueOf(1024 * 1024 * 1000));
     properties.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(),  basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME);
     properties.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
     properties.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), "false");
-    FileSlice fileSlice = fileSliceOpt.orElseThrow(() -> new IllegalArgumentException("FileSlice is not present"));
     HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>builder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)

@@ -22,7 +22,6 @@ package org.apache.hudi.common.table.read.buffer;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -47,7 +46,6 @@ import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -189,7 +187,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
         int commitTimeBasedRecordIndex = 0;
-        DeleteRecord[] deleteRecords = deleteBlock.getRecordsToDelete();
+        List<BufferedRecord<T>> deleteRecords = deleteBlock.getRecordsToDelete(readerContext.getRecordContext());
         for (Long recordPosition : recordPositions) {
           // IMPORTANT:
           // use #put for log files with regular order(see HoodieLogFile.LOG_FILE_COMPARATOR);
@@ -200,20 +198,16 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           // because under hybrid strategy in #doHasNextFallbackBaseRecord, if the record keys are not set up,
           // this delete-vector could be kept in the records cache(see the check in #fallbackToKeyBasedBuffer),
           // and these keys would be deleted no matter whether there are following-up inserts/updates.
-          DeleteRecord deleteRecord = deleteRecords[commitTimeBasedRecordIndex++];
-          BufferedRecord<T> record = BufferedRecords.fromDeleteRecord(deleteRecord, readerContext.getRecordContext());
-          records.put(recordPosition, record);
+          records.put(recordPosition, deleteRecords.get(commitTimeBasedRecordIndex++));
         }
         return;
       case EVENT_TIME_ORDERING:
       case CUSTOM:
       default:
         int recordIndex = 0;
-        Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
-        while (it.hasNext()) {
-          DeleteRecord record = it.next();
+        for (BufferedRecord<T> record : deleteBlock.getRecordsToDelete(readerContext.getRecordContext())) {
           long recordPosition = recordPositions.get(recordIndex++);
-          processNextDeletedRecord(record, recordPosition);
+          processNextDataRecord(record, recordPosition);
         }
     }
   }

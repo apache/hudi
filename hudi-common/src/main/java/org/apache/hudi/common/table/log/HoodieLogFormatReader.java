@@ -18,10 +18,15 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 
@@ -37,10 +42,12 @@ import java.util.List;
 public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   private final List<HoodieLogFile> logFiles;
-  private HoodieLogFileReader currentReader;
+  private HoodieLogFormat.Reader currentReader;
   private final HoodieStorage storage;
   private final HoodieSchema readerSchema;
   private final InternalSchema internalSchema;
+  private final HoodieReaderContext<?> readerContext;
+  private final HoodieTableMetaClient metaClient;
   private final String recordKeyField;
   private final boolean enableInlineReading;
   private final int bufferSize;
@@ -48,8 +55,18 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   HoodieLogFormatReader(HoodieStorage storage, List<HoodieLogFile> logFiles, HoodieSchema readerSchema,
                         boolean reverseLogReader, int bufferSize, boolean enableRecordLookups,
                         String recordKeyField, InternalSchema internalSchema) throws IOException {
+    this(storage, null, null, logFiles, readerSchema, reverseLogReader, bufferSize, enableRecordLookups,
+        recordKeyField, internalSchema);
+  }
+
+  HoodieLogFormatReader(HoodieStorage storage, HoodieReaderContext<?> readerContext, HoodieTableMetaClient metaClient,
+                        List<HoodieLogFile> logFiles, HoodieSchema readerSchema,
+                        boolean reverseLogReader, int bufferSize, boolean enableRecordLookups,
+                        String recordKeyField, InternalSchema internalSchema) throws IOException {
     this.logFiles = logFiles;
     this.storage = storage;
+    this.readerContext = readerContext;
+    this.metaClient = metaClient;
     this.readerSchema = readerSchema;
     this.bufferSize = bufferSize;
     this.recordKeyField = recordKeyField;
@@ -57,8 +74,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
     if (!logFiles.isEmpty()) {
       HoodieLogFile nextLogFile = logFiles.remove(0);
-      this.currentReader = new HoodieLogFileReader(storage, nextLogFile, readerSchema, bufferSize, false,
-          enableRecordLookups, recordKeyField, internalSchema);
+      this.currentReader = createReader(nextLogFile, reverseLogReader);
     }
   }
 
@@ -84,8 +100,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
       try {
         HoodieLogFile nextLogFile = logFiles.remove(0);
         this.currentReader.close();
-        this.currentReader = new HoodieLogFileReader(storage, nextLogFile, readerSchema, bufferSize, false,
-            enableInlineReading, recordKeyField, internalSchema);
+        this.currentReader = createReader(nextLogFile, false);
       } catch (IOException io) {
         throw new HoodieIOException("unable to initialize read with log file ", io);
       }
@@ -117,5 +132,17 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   @Override
   public HoodieLogBlock prev() throws IOException {
     return this.currentReader.prev();
+  }
+
+  private HoodieLogFormat.Reader createReader(HoodieLogFile logFile, boolean reverseLogReader) throws IOException {
+    if (FSUtils.matchNativeLogFile(logFile.getFileName()).isPresent()) {
+      if (readerContext == null || metaClient == null) {
+        throw new HoodieNotSupportedException("Native log files require HoodieFileGroupReader based reader context");
+      }
+      return new HoodieNativeLogFileReader(storage, logFile, readerContext, readerSchema,
+          HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), metaClient));
+    }
+    return new HoodieLogFileReader(storage, logFile, readerSchema, bufferSize, reverseLogReader,
+        enableInlineReading, recordKeyField, internalSchema);
   }
 }

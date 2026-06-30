@@ -21,9 +21,12 @@ package org.apache.hudi.common.table.log.block;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieDeleteRecord;
 import org.apache.hudi.avro.model.HoodieDeleteRecordList;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -129,6 +132,15 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     } catch (IOException io) {
       throw new HoodieIOException("Unable to generate keys to delete from block content", io);
     }
+  }
+
+  /**
+   * Returns delete records in the same representation used by the file-group record buffer.
+   */
+  public <T> List<BufferedRecord<T>> getRecordsToDelete(RecordContext<T> recordContext) {
+    return Arrays.stream(getRecordsToDelete())
+        .map(deleteRecord -> BufferedRecords.fromDeleteRecord(deleteRecord, recordContext))
+        .collect(Collectors.toList());
   }
 
   private byte[] serializeV2() throws IOException {

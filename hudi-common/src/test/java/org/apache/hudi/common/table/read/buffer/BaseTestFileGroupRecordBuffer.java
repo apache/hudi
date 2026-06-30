@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.BaseAvroPayload;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -37,6 +38,7 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.DeleteContext;
@@ -67,6 +69,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -85,6 +88,16 @@ public class BaseTestFileGroupRecordBuffer {
     record.put("counter", counter);
     record.put("ts", ts);
     return record;
+  }
+
+  protected static void mockDeleteRecords(HoodieDeleteBlock deleteBlock, DeleteRecord... deleteRecords) {
+    when(deleteBlock.getRecordsToDelete()).thenReturn(deleteRecords);
+    when(deleteBlock.getRecordsToDelete(any())).thenAnswer(invocation -> {
+      RecordContext recordContext = invocation.getArgument(0);
+      return Arrays.stream(deleteRecords)
+          .map(deleteRecord -> BufferedRecords.fromDeleteRecord(deleteRecord, recordContext))
+          .collect(Collectors.toList());
+    });
   }
 
   protected static List<HoodieRecord> convertToHoodieRecordsList(List<IndexedRecord> indexedRecords) {

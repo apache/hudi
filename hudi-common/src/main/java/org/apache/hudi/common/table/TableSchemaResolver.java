@@ -29,6 +29,7 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
+import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -61,6 +62,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
 import java.util.stream.Stream;
 
 /**
@@ -286,6 +288,11 @@ public class TableSchemaResolver {
    * @return
    */
   public static HoodieSchema readSchemaFromLogFile(HoodieStorage storage, StoragePath path) throws IOException {
+    Option<Matcher> nativeLogMatcherOpt = FSUtils.matchNativeLogFile(path.getName());
+    if (nativeLogMatcherOpt.isPresent()) {
+      return NativeLogFooterMetadata.readSchemaFromNativeLogFile(storage, path, nativeLogMatcherOpt.get());
+    }
+
     // We only need to read the schema from the log block header,
     // so we read the block lazily to avoid reading block content
     // containing the records

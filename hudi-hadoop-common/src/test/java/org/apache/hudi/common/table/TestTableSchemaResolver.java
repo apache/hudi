@@ -20,6 +20,7 @@ package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -28,6 +29,7 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
+import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -36,8 +38,10 @@ import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
@@ -54,6 +58,8 @@ import org.mockito.MockedStatic;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -65,6 +71,8 @@ import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.getDataBl
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -122,6 +130,67 @@ class TestTableSchemaResolver {
     assertEquals(expectedSchema, TableSchemaResolver.readSchemaFromLogFile(
         HoodieStorageUtils.getStorage(new StoragePath(logFilePath.toString()), HoodieTestUtils.getDefaultStorageConf()),
         logFilePath));
+  }
+
+  @Test
+  void testReadSchemaFromNativeDataLogFile() throws IOException {
+    String testDir = initTestDir("read_schema_from_native_data_log_file");
+    StoragePath partitionPath = new StoragePath(testDir, "partition1");
+    Files.createDirectories(Paths.get(partitionPath.toString()));
+    HoodieSchema expectedSchema = HoodieTestDataGenerator.HOODIE_SCHEMA;
+    StoragePath logFilePath = new StoragePath(partitionPath, FSUtils.makeNativeLogFileName(
+        "test-fileid1", "1-0-1", "100", 1, "log", HoodieFileFormat.PARQUET));
+    HoodieFileSliceTestUtils.createNativeDataLogFile(
+        logFilePath.toString(),
+        Arrays.asList(HoodieFileSliceTestUtils.DATA_GEN.generateGenericRecord(
+            "1", "partition1", "rider-1", "driver-1", 1L)),
+        expectedSchema,
+        "100");
+
+    assertEquals(expectedSchema, TableSchemaResolver.readSchemaFromLogFile(
+        HoodieStorageUtils.getStorage(logFilePath, HoodieTestUtils.getDefaultStorageConf()),
+        logFilePath));
+  }
+
+  @Test
+  void testReadSchemaFromNativeDeleteLogFileReturnsNull() throws IOException {
+    String testDir = initTestDir("read_schema_from_native_delete_log_file");
+    StoragePath partitionPath = new StoragePath(testDir, "partition1");
+    Files.createDirectories(Paths.get(partitionPath.toString()));
+    HoodieSchema tableSchema = HoodieTestDataGenerator.HOODIE_SCHEMA;
+    StoragePath logFilePath = new StoragePath(partitionPath, FSUtils.makeNativeLogFileName(
+        "test-fileid1", "1-0-1", "100", 1, "deletes", HoodieFileFormat.PARQUET));
+    HoodieStorage storage = HoodieStorageUtils.getStorage(logFilePath, HoodieTestUtils.getDefaultStorageConf());
+    HoodieFileSliceTestUtils.createNativeDeleteLogFile(
+        storage,
+        logFilePath.toString(),
+        Arrays.asList(HoodieFileSliceTestUtils.DATA_GEN.generateGenericRecord(
+            "1", "partition1", "rider-1", "driver-1", 1L)),
+        tableSchema,
+        "100");
+
+    assertNull(TableSchemaResolver.readSchemaFromLogFile(storage, logFilePath));
+  }
+
+  @Test
+  void testReadSchemaFromNativeDataLogFileRequiresSchemaFooter() {
+    StoragePath logFilePath = new StoragePath("/tmp/test-fileid1_1-0-1_100_1.log.parquet");
+    HoodieStorage storage = mock(HoodieStorage.class);
+    HoodieIOFactory ioFactory = mock(HoodieIOFactory.class);
+    FileFormatUtils fileFormatUtils = mock(FileFormatUtils.class);
+    when(ioFactory.getFileFormatUtils(HoodieFileFormat.PARQUET)).thenReturn(fileFormatUtils);
+    when(fileFormatUtils.readFooter(storage, false, logFilePath, NativeLogFooterMetadata.FOOTER_METADATA_KEY))
+        .thenReturn(new HashMap<>());
+
+    try (MockedStatic<HoodieIOFactory> ioFactoryMockedStatic = mockStatic(HoodieIOFactory.class)) {
+      ioFactoryMockedStatic.when(() -> HoodieIOFactory.getIOFactory(storage)).thenReturn(ioFactory);
+
+      HoodieIOException exception = assertThrows(HoodieIOException.class,
+          () -> TableSchemaResolver.readSchemaFromLogFile(storage, logFilePath));
+      assertTrue(exception.getMessage().contains(HoodieLogBlock.HeaderMetadataType.SCHEMA.name()));
+      assertTrue(exception.getMessage().contains(NativeLogFooterMetadata.FOOTER_METADATA_KEY));
+      assertTrue(exception.getMessage().contains(logFilePath.toString()));
+    }
   }
 
   @Test

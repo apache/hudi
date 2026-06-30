@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -42,8 +41,6 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -111,20 +108,9 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   @Override
   public void processDeleteBlock(HoodieDeleteBlock deleteBlock) throws IOException {
-    Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
-    while (it.hasNext()) {
-      DeleteRecord record = it.next();
-      processNextDeletedRecord(record, record.getRecordKey());
+    for (BufferedRecord<T> record : deleteBlock.getRecordsToDelete(readerContext.getRecordContext())) {
+      processNextDataRecord(record, record.getRecordKey());
     }
-  }
-
-  @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordIdentifier) {
-    BufferedRecord<T> existingRecord = records.get(recordIdentifier);
-    totalLogRecords++;
-    Option<DeleteRecord> recordOpt = bufferedRecordMerger.deltaMerge(deleteRecord, existingRecord);
-    recordOpt.ifPresent(deleteRec ->
-        records.put(recordIdentifier, BufferedRecords.fromDeleteRecord(deleteRec, readerContext.getRecordContext())));
   }
 
   @Override

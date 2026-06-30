@@ -50,11 +50,15 @@ public interface BufferedRecordMerger<T> extends Serializable {
   /**
    * Merges incoming delete record from log file with existing record in record buffer.
    *
+   * @deprecated Delete records should be converted to {@link BufferedRecord}s and merged through
+   *             {@link #deltaMerge(BufferedRecord, BufferedRecord)}.
+   *
    * @param deleteRecord   Incoming delete record from log file
    * @param existingRecord Existing record in record buffer
    *
    * @return The merged record.
    */
+  @Deprecated
   Option<DeleteRecord> deltaMerge(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord);
 
   /**

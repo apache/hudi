@@ -123,8 +123,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     when(dataBlock2.getEngineRecordIterator(readerContext)).thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord2EarlierUpdate, testRecord3Update).iterator()));
 
     HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
-    when(deleteBlock.getRecordsToDelete()).thenReturn(new DeleteRecord[] {DeleteRecord.create("3", ""), DeleteRecord.create("2", "", -1L),
-        DeleteRecord.create("1", "", 2L)});
+    mockDeleteRecords(deleteBlock, DeleteRecord.create("3", ""), DeleteRecord.create("2", "", -1L), DeleteRecord.create("1", "", 2L));
     // process data block, then delete block, then another data block
     fileGroupRecordBuffer.processDataBlock(dataBlock, Option.empty());
     fileGroupRecordBuffer.processDeleteBlock(deleteBlock);
@@ -268,7 +267,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
         .thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Delete, testRecord4Update).iterator()));
 
     HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
-    when(deleteBlock.getRecordsToDelete()).thenReturn(new DeleteRecord[] {DeleteRecord.create("3", "")});
+    mockDeleteRecords(deleteBlock, DeleteRecord.create("3", ""));
     fileGroupRecordBuffer.processDataBlock(dataBlock1, Option.empty());
     fileGroupRecordBuffer.processDataBlock(dataBlock2, Option.empty());
     fileGroupRecordBuffer.processDeleteBlock(deleteBlock);
@@ -344,7 +343,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
         .thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord2Delete, testRecord4Update).iterator()));
 
     HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
-    when(deleteBlock.getRecordsToDelete()).thenReturn(new DeleteRecord[] {DeleteRecord.create("3", "")});
+    mockDeleteRecords(deleteBlock, DeleteRecord.create("3", ""));
     fileGroupRecordBuffer.processDataBlock(dataBlock1, Option.empty());
     fileGroupRecordBuffer.processDataBlock(dataBlock2, Option.empty());
     fileGroupRecordBuffer.processDeleteBlock(deleteBlock);
