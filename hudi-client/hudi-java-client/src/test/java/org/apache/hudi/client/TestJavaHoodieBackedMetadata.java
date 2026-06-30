@@ -1867,7 +1867,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
 
     // Write 1 (Bulk insert)
-    String newCommitTime = "0000001";
+    String newCommitTime = WriteClientTestUtils.createNewInstantTime();
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
     WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     List<WriteStatus> writeStatuses = client.insert(records, newCommitTime);
@@ -1876,7 +1876,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(client);
 
     // Write 2 (inserts)
-    newCommitTime = "0000002";
+    newCommitTime = WriteClientTestUtils.createNewInstantTime();
     WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     records = dataGen.generateInserts(newCommitTime, 20);
     writeStatuses = client.insert(records, newCommitTime);
@@ -1909,7 +1909,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             replacedFileIds.add(new HoodieFileGroupId(partitionFiles.getKey(), file))));
 
     // trigger new write to mimic other writes succeeding before re-attempt.
-    newCommitTime = "0000003";
+    newCommitTime = WriteClientTestUtils.createNewInstantTime();
     WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     records = dataGen.generateInserts(newCommitTime, 20);
     writeStatuses = client.insert(records, newCommitTime);
