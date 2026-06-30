@@ -30,6 +30,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
+import org.apache.hudi.util.CommonClientUtils;
 
 import org.apache.hadoop.fs.Path;
 
@@ -326,7 +327,7 @@ public class FlinkWriteHandleFactory {
       final String fileID = bucketInfo.getFileIdPrefix();
       final String partitionPath = bucketInfo.getPartitionPath();
       final TaskContextSupplier contextSupplier = table.getTaskContextSupplier();
-      if (table.getMetaClient().getTableConfig().isLSMTreeStorageLayout()) {
+      if (CommonClientUtils.shouldWriteNativeLogFormat(config)) {
         return new FlinkNativeLogAppendHandle<>(config, instantTime, table, partitionPath, fileID,
             bucketInfo.getBucketType(), recordItr, contextSupplier);
       }
@@ -354,7 +355,7 @@ public class FlinkWriteHandleFactory {
         String instantTime,
         HoodieTable<T, I, K, O> table,
         Iterator<HoodieRecord<T>> recordIterator) {
-      if (table.getMetaClient().getTableConfig().isLSMTreeStorageLayout()) {
+      if (CommonClientUtils.shouldWriteNativeLogFormat(config)) {
         return new RowDataNativeLogWriteHandle<>(
             config,
             instantTime,

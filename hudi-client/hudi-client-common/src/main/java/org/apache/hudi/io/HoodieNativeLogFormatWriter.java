@@ -213,6 +213,9 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     if (dataFileWriter != null) {
       dataFileWriter.addFooterMetadata(NativeLogFooterMetadata.toFooterMetadata(header));
     }
+    if (deleteFileWriter != null) {
+      deleteFileWriter.addFooterMetadata(NativeLogFooterMetadata.toFooterMetadata(header));
+    }
   }
 
   private void ensureDataFileWriter(HoodieSchema recordSchema) throws IOException {
@@ -245,7 +248,8 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
   private void closeFileWriters() throws IOException {
     if (dataFileWriter != null) {
       dataFileWriter.close();
-      lastDataFileFormatMetadata = Option.ofNullable(dataFileWriter.getFileFormatMetadata());
+      lastDataFileFormatMetadata = writeConfig.isMetadataColumnStatsIndexEnabled()
+          ? Option.ofNullable(dataFileWriter.getFileFormatMetadata()) : Option.empty();
       dataFileWriter = null;
     }
     if (deleteFileWriter != null) {

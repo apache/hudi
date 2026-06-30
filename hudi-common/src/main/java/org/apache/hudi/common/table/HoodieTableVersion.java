@@ -70,7 +70,7 @@ public enum HoodieTableVersion {
   private final TimelineLayoutVersion timelineLayoutVersion;
 
   public static HoodieTableVersion current() {
-    return NINE;
+    return TEN;
   }
 
   public static HoodieTableVersion fromVersionCode(int versionCode) {

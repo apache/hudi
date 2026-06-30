@@ -21,7 +21,7 @@ package org.apache.hudi.common.table.log.block;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieDeleteRecord;
 import org.apache.hudi.avro.model.HoodieDeleteRecordList;
-import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -137,9 +137,9 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   /**
    * Returns delete records in the same representation used by the file-group record buffer.
    */
-  public <T> List<BufferedRecord<T>> getRecordsToDelete(RecordContext<T> recordContext) {
+  public <T> List<BufferedRecord<T>> getRecordsToDelete(HoodieReaderContext<T> readerContext) {
     return Arrays.stream(getRecordsToDelete())
-        .map(deleteRecord -> BufferedRecords.fromDeleteRecord(deleteRecord, recordContext))
+        .map(deleteRecord -> BufferedRecords.fromDeleteRecord(deleteRecord, readerContext.getRecordContext()))
         .collect(Collectors.toList());
   }
 

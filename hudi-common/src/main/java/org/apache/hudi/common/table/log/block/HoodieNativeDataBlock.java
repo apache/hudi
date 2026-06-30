@@ -34,7 +34,6 @@ import org.apache.hudi.storage.StoragePath;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -95,11 +94,7 @@ public class HoodieNativeDataBlock extends HoodieDataBlock {
 
   @Override
   protected <T> ClosableIterator<T> lookupEngineRecords(HoodieReaderContext<T> readerContext, List<String> keys, boolean fullKey) throws IOException {
-    return FilteringEngineRecordIterator.getInstance(
-        readRecordsFromBlockPayload(readerContext),
-        new HashSet<>(keys),
-        fullKey,
-        record -> Option.ofNullable(readerContext.getRecordContext().getRecordKey(record, readerSchema)));
+    return readerContext.lookupRecords(logFile.getPath(), fileFormat, readerSchema, storage, keys, fullKey);
   }
 
   @Override

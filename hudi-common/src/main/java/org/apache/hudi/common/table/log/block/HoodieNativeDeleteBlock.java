@@ -20,24 +20,30 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemas;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+
+import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 
 /**
  * Delete block backed by a native delete log file.
@@ -46,51 +52,76 @@ public class HoodieNativeDeleteBlock extends HoodieDeleteBlock {
 
   private final HoodieStorage storage;
   private final HoodieLogFile logFile;
-  private final HoodieReaderContext<?> readerContext;
   private final HoodieSchema deleteLogSchema;
   private final List<String> orderingFieldNames;
+  private final String partitionPath;
+  private final Properties props;
+  private DeleteRecord[] recordsToDelete;
   private List<BufferedRecord<?>> bufferedRecordsToDelete;
 
   public HoodieNativeDeleteBlock(HoodieStorage storage,
                                  HoodieLogFile logFile,
-                                 HoodieReaderContext<?> readerContext,
-                                 HoodieSchema deleteLogSchema,
                                  List<String> orderingFieldNames,
+                                 String partitionPath,
+                                 Properties props,
                                  Map<HeaderMetadataType, String> header,
                                  Map<FooterMetadataType, String> footer) {
     super(Option.empty(), null, true, getContentLocation(storage, logFile), header, footer);
     this.storage = storage;
     this.logFile = logFile;
-    this.readerContext = readerContext;
-    this.deleteLogSchema = deleteLogSchema;
+    this.deleteLogSchema = HoodieSchemas.createDeleteLogSchema(getSchemaFromHeader(), orderingFieldNames);
     this.orderingFieldNames = orderingFieldNames;
+    this.partitionPath = partitionPath;
+    this.props = props == null ? new Properties() : props;
   }
 
   @Override
   public DeleteRecord[] getRecordsToDelete() {
-    throw new HoodieNotSupportedException("Native delete log files do not support the legacy DeleteRecord[] API. "
-        + "Use getRecordsToDelete(RecordContext) instead. Log file: " + logFile);
+    if (recordsToDelete == null) {
+      recordsToDelete = readRecordsToDelete();
+    }
+    return recordsToDelete;
   }
 
   @Override
   @SuppressWarnings({"rawtypes", "unchecked"})
-  public <T> List<BufferedRecord<T>> getRecordsToDelete(RecordContext<T> recordContext) {
+  public <T> List<BufferedRecord<T>> getRecordsToDelete(HoodieReaderContext<T> readerContext) {
     if (bufferedRecordsToDelete == null) {
-      bufferedRecordsToDelete = (List) readBufferedRecordsToDelete(recordContext);
+      bufferedRecordsToDelete = (List) readBufferedRecordsToDelete(readerContext);
     }
     return (List) bufferedRecordsToDelete;
   }
 
-  @SuppressWarnings("unchecked")
-  private <T> List<BufferedRecord<T>> readBufferedRecordsToDelete(RecordContext<T> recordContext) {
-    HoodieReaderContext<T> typedReaderContext = (HoodieReaderContext<T>) readerContext;
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private DeleteRecord[] readRecordsToDelete() {
+    List<DeleteRecord> deleteRecords = new ArrayList<>();
+    String[] orderingFields = orderingFieldNames.toArray(new String[0]);
+    StoragePath path = logFile.getPath();
+    HoodieFileFormat fileFormat = HoodieFileFormat.fromFileExtension("." + logFile.getSuffix());
+    try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
+        .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, path, fileFormat, Option.empty());
+         ClosableIterator<HoodieRecord> recordIterator = fileReader.getRecordIterator(deleteLogSchema, deleteLogSchema)) {
+      while (recordIterator.hasNext()) {
+        HoodieRecord record = recordIterator.next();
+        String recordKey = record.getRecordKey(deleteLogSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+        Comparable<?> orderingValue = record.getOrderingValue(deleteLogSchema, props, orderingFields);
+        deleteRecords.add(DeleteRecord.create(recordKey, partitionPath, orderingValue));
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read native delete log file " + logFile, e);
+    }
+    return deleteRecords.toArray(new DeleteRecord[0]);
+  }
+
+  private <T> List<BufferedRecord<T>> readBufferedRecordsToDelete(HoodieReaderContext<T> readerContext) {
     List<BufferedRecord<T>> deleteRecords = new ArrayList<>();
-    try (ClosableIterator<T> recordIterator = typedReaderContext.getFileRecordIterator(
+    try (ClosableIterator<T> recordIterator = readerContext.getFileRecordIterator(
         logFile.getPath(), 0, FSUtils.getFileSize(storage, logFile), deleteLogSchema, deleteLogSchema, storage)) {
       while (recordIterator.hasNext()) {
         T record = recordIterator.next();
-        Object recordKey = recordContext.getValue(record, deleteLogSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD);
-        Comparable orderingValue = recordContext.getOrderingValue(record, deleteLogSchema, orderingFieldNames);
+        Object recordKey = readerContext.getRecordContext().getValue(record, deleteLogSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+        Comparable orderingValue = readerContext.getRecordContext().getOrderingValue(record, deleteLogSchema, orderingFieldNames);
         deleteRecords.add(BufferedRecords.createDelete(recordKey.toString(), orderingValue));
       }
     } catch (IOException e) {

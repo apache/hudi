@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.CommonClientUtils;
 
 import org.apache.avro.generic.IndexedRecord;
 
@@ -53,7 +54,7 @@ final class HoodieCDCLogWriterFactory {
       TaskContextSupplier taskContextSupplier,
       Supplier<HoodieLogFormat.Writer> logWriterSupplier) {
     HoodieTableConfig tableConfig = hoodieTable.getMetaClient().getTableConfig();
-    if (shouldWriteNativeCDCLogs(tableConfig)) {
+    if (shouldWriteNativeCDCLogs(config)) {
       return new HoodieAvroNativeCDCLogger(
           instantTime,
           config,
@@ -78,7 +79,7 @@ final class HoodieCDCLogWriterFactory {
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 
-  static boolean shouldWriteNativeCDCLogs(HoodieTableConfig tableConfig) {
-    return tableConfig.isLSMTreeStorageLayout();
+  static boolean shouldWriteNativeCDCLogs(HoodieWriteConfig writeConfig) {
+    return CommonClientUtils.shouldWriteNativeLogFormat(writeConfig);
   }
 }

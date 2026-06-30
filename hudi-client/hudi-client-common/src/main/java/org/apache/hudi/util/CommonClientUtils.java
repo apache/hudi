@@ -64,6 +64,16 @@ public class CommonClientUtils {
     if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT) && writeConfig.isNonBlockingConcurrencyControl()) {
       throw new HoodieNotSupportedException("Non-blocking concurrency control is not supported for table versions < 8.");
     }
+
+    // The LSM-tree storage layout depends on the native (v2) log format, which is only written for
+    // writer versions >= TEN (see #shouldWriteNativeLogFormat). Reject an LSM-tree table whose writer
+    // version is below TEN, otherwise writes would silently fall back to the inline log format.
+    if (tableConfig.isLSMTreeStorageLayout()
+        && writeConfig.getWriteVersion().lesserThan(HoodieTableVersion.TEN)) {
+      throw new HoodieNotSupportedException(String.format(
+          "LSM-tree storage layout requires writer version >= %s (found writer version %s).",
+          HoodieTableVersion.TEN, writeConfig.getWriteVersion()));
+    }
   }
 
   public static boolean areTableVersionsCompatible(HoodieTableVersion tableVersion, HoodieTableVersion writeVersion) {
@@ -118,6 +128,23 @@ public class CommonClientUtils {
         throw new HoodieException("Base file format " + baseFileFormat
             + " does not have associated log block type");
     }
+  }
+
+  /**
+   * Whether log blocks should be written in the native (v2) log format (standalone native
+   * files written via {@code HoodieNativeLogFormatWriter}) instead of the legacy inline
+   * log format. The native format is the default for write version &gt;= {@link HoodieTableVersion#TEN}.
+   *
+   * <p>This decision is orthogonal to the storage layout (e.g. LSM-tree); it is keyed on the
+   * effective write version (i.e. {@code HoodieWriteConfig#getWriteVersion()}) and base file format
+   * rather than the persisted table version, consistent with how the inline log block layout is
+   * selected, so that the on-disk format follows what the writer is targeting during
+   * upgrade/downgrade windows.
+   *
+   * @param writeConfig the writer configuration.
+   */
+  public static boolean shouldWriteNativeLogFormat(HoodieWriteConfig writeConfig) {
+    return writeConfig.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.TEN);
   }
 
   public static String generateWriteToken(TaskContextSupplier taskContextSupplier) {

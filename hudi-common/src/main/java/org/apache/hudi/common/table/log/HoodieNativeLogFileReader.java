@@ -19,12 +19,10 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemas;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieNativeDataBlock;
@@ -39,6 +37,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Properties;
 
 /**
  * Reader for native log files.
@@ -47,18 +46,21 @@ public class HoodieNativeLogFileReader implements HoodieLogFormat.Reader {
 
   private final HoodieStorage storage;
   private final HoodieLogFile logFile;
-  private final HoodieReaderContext<?> readerContext;
   private final HoodieSchema readerSchema;
   private final List<String> orderingFieldNames;
+  private final String partitionPath;
+  private final Properties props;
   private boolean consumed;
 
-  HoodieNativeLogFileReader(HoodieStorage storage, HoodieLogFile logFile, HoodieReaderContext<?> readerContext,
-                            HoodieSchema readerSchema, List<String> orderingFieldNames) {
+  HoodieNativeLogFileReader(HoodieStorage storage, HoodieLogFile logFile,
+                            HoodieSchema readerSchema,
+                            List<String> orderingFieldNames, String partitionPath, Properties props) {
     this.storage = storage;
     this.logFile = logFile;
-    this.readerContext = readerContext;
     this.readerSchema = readerSchema;
     this.orderingFieldNames = orderingFieldNames;
+    this.partitionPath = partitionPath;
+    this.props = props;
   }
 
   @Override
@@ -94,13 +96,11 @@ public class HoodieNativeLogFileReader implements HoodieLogFormat.Reader {
     consumed = true;
     HoodieFileFormat fileFormat = getNativeFileFormat();
     Map<HeaderMetadataType, String> header = getLogBlockHeader(fileFormat);
-    if (FSUtils.isNativeDeleteLogFile(logFile.getFileName())) {
-      HoodieSchema deleteLogSchema = HoodieSchemas.createDeleteLogSchema(
-          readerContext.getSchemaHandler().getTableSchema(), orderingFieldNames);
-      return new HoodieNativeDeleteBlock(storage, logFile, readerContext, deleteLogSchema,
-          orderingFieldNames, header, new HashMap<>());
-    }
     validateDataBlockHeader(logFile, header);
+    if (FSUtils.isNativeDeleteLogFile(logFile.getFileName())) {
+      return new HoodieNativeDeleteBlock(storage, logFile,
+          orderingFieldNames, partitionPath, props, header, new HashMap<>());
+    }
     return new HoodieNativeDataBlock(storage, logFile, fileFormat, Option.ofNullable(readerSchema), header, new HashMap<>());
   }
 
@@ -122,7 +122,7 @@ public class HoodieNativeLogFileReader implements HoodieLogFormat.Reader {
     if (!header.containsKey(HeaderMetadataType.SCHEMA)) {
       throw new HoodieIOException("Missing required native log block header metadata '"
           + HeaderMetadataType.SCHEMA.name() + "' for " + logFile
-          + ". Native data logs must store log block metadata in footer key '"
+          + ". Native log files must store log block metadata in footer key '"
           + NativeLogFooterMetadata.FOOTER_METADATA_KEY + "'");
     }
   }

@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -70,6 +71,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -356,6 +358,30 @@ public class HoodieFileSliceTestUtils {
     return new HoodieLogFile(logFilePath);
   }
 
+  public static HoodieLogFile createNativeHFileDataLogFile(
+      String logFilePath,
+      List<IndexedRecord> records,
+      HoodieSchema schema,
+      String logInstantTime
+  ) throws IOException {
+    HoodieStorage storage = HoodieTestUtils.getStorage(logFilePath);
+    HoodieConfig config = HoodieStorageConfig.newBuilder().build();
+    config.setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true");
+    try (HoodieAvroFileWriter writer = (HoodieAvroFileWriter) HoodieFileWriterFactory.getFileWriter(
+        logInstantTime, new StoragePath(logFilePath), storage, config, schema,
+        new LocalTaskContextSupplier(), HoodieRecord.HoodieRecordType.AVRO)) {
+      writer.addFooterMetadata(NativeLogFooterMetadata.toFooterMetadata(getNativeLogBlockHeader(schema, logInstantTime)));
+      List<IndexedRecord> sortedRecords = records.stream()
+          .sorted(Comparator.comparing(record -> record.get(schema.getField(ROW_KEY).get().pos()).toString()))
+          .collect(Collectors.toList());
+      for (IndexedRecord record : sortedRecords) {
+        writer.writeAvro(
+            (String) record.get(schema.getField(ROW_KEY).get().pos()), record);
+      }
+    }
+    return new HoodieLogFile(logFilePath);
+  }
+
   public static HoodieLogFile createNativeDeleteLogFile(
       HoodieStorage storage,
       String logFilePath,
@@ -382,6 +408,21 @@ public class HoodieFileSliceTestUtils {
       HoodieSchema schema,
       String logInstantTime
   ) throws IOException {
+    if (logFilePath.endsWith(HoodieFileFormat.HFILE.getFileExtension())) {
+      Properties props = new Properties();
+      props.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), Boolean.FALSE.toString());
+      HoodieAvroFileWriter writer = (HoodieAvroFileWriter) HoodieFileWriterFactory.getFileWriter(
+          logInstantTime,
+          new StoragePath(logFilePath),
+          storage,
+          HoodieStorageConfig.newBuilder().fromProperties(props).build(),
+          schema,
+          new LocalTaskContextSupplier(),
+          HoodieRecord.HoodieRecordType.AVRO);
+      writer.addFooterMetadata(NativeLogFooterMetadata.toFooterMetadata(getNativeLogBlockHeader(schema, logInstantTime)));
+      return writer;
+    }
+
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
         getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(schema),
         schema,
