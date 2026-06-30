@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieAvroSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -204,8 +205,8 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // once presto on hudi have its own mor reader, we can remove the rewrite logical.
     GenericRecord genericRecord = HiveAvroSerializer.rewriteRecordIgnoreResultCheck(oldRecord, getLogScannerReaderSchema());
     RecordContext<IndexedRecord> recordContext = AvroRecordContext.getFieldAccessorInstance();
-    BufferedRecord record = BufferedRecords.fromEngineRecord(genericRecord, HoodieSchema.fromAvroSchema(genericRecord.getSchema()), recordContext, orderingFields, newRecord.getRecordKey(), false);
-    BufferedRecord newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, HoodieSchema.fromAvroSchema(getLogScannerReaderSchema().toAvroSchema()),
+    BufferedRecord record = BufferedRecords.fromEngineRecord(genericRecord, HoodieAvroSchemaCache.intern(genericRecord.getSchema()), recordContext, orderingFields, newRecord.getRecordKey(), false);
+    BufferedRecord newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, HoodieAvroSchemaCache.intern(getLogScannerReaderSchema().toAvroSchema()),
         recordContext, payloadProps, orderingFields, deleteContext);
     BufferedRecord mergeResult = merger.merge(record, newBufferedRecord, recordContext, payloadProps);
     if (mergeResult.isDelete()) {
