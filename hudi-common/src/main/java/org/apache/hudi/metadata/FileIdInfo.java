@@ -26,6 +26,20 @@ import java.io.Serializable;
 /**
  * Parsed representation of an MDT fileId, produced by
  * {@link HoodieMetadataTableLayout#parseFileId}.
+ *
+ * <p>Examples:
+ * <ul>
+ *   <li>Non-partitioned RLI fileId {@code "record-index-1500-0"} →
+ *       {@code FileIdInfo(fileGroupIndex=1500, dataPartitionName=Option.empty())}.</li>
+ *   <li>Files-partition fileId {@code "files-0000-0"} →
+ *       {@code FileIdInfo(fileGroupIndex=0, dataPartitionName=Option.empty())}.</li>
+ *   <li>Expression-index fileId {@code "expr-index-idx-datestr-0000-0"} →
+ *       {@code FileIdInfo(fileGroupIndex=0, dataPartitionName=Option.empty())}.</li>
+ *   <li>Partitioned RLI fileId {@code "record-index-default-0003-0"} (where {@code default} is the
+ *       data-table partition name) → {@code FileIdInfo(fileGroupIndex=3, dataPartitionName=Option.of("default"))}.
+ *       Note: built-in layouts in this patch return {@code Option.empty()} for partitioned RLI
+ *       since they fall back to the flat layout; custom layouts may choose to populate it.</li>
+ * </ul>
  */
 public final class FileIdInfo implements Serializable {
 

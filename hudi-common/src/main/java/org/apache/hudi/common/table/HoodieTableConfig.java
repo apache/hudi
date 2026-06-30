@@ -388,15 +388,19 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .sinceVersion("1.3.0")
       .withDocumentation("Fully-qualified class name of the HoodieMetadataTableLayout implementation that organizes "
-          + "MDT file groups on disk. When unset, MDT uses the flat layout (file groups directly under each metadata "
-          + "partition). Set once at MDT initialization; immutable thereafter.");
+          + "MDT file groups on disk. Out-of-the-box values: "
+          + "(1) unset / org.apache.hudi.metadata.FlatMDTLayout (default) — every file group lives directly under its "
+          + "metadata partition directory; this is the layout used by every MDT created before this config existed. "
+          + "(2) org.apache.hudi.metadata.SubDirBucketedMDTLayout — distributes file groups into 4-digit bucket "
+          + "sub-directories. Custom implementations can be plugged in via FQCN. "
+          + "Set once at MDT initialization; immutable thereafter.");
 
   public static final ConfigProperty<Integer> METADATA_LAYOUT_BUCKET_SIZE = ConfigProperty
       .key("hoodie.metadata.layout.bucket.size")
       .defaultValue(1000)
       .sinceVersion("1.3.0")
-      .withDocumentation("Layout-specific: maximum number of file groups per bucket sub-directory when the layout is "
-          + "SubDirBucketedMDTLayout. Ignored otherwise.");
+      .withDocumentation("Layout-specific: maximum number of file groups per bucket sub-directory when "
+          + "`hoodie.metadata.layout.class` is set to SubDirBucketedMDTLayout. Ignored otherwise.");
 
   public static final ConfigProperty<String> METADATA_LAYOUT_PARTITION_FILE_GROUP_COUNTS = ConfigProperty
       .key("hoodie.metadata.layout.partition.file.group.counts")

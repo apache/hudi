@@ -1519,27 +1519,26 @@ public class HoodieTableMetadataUtil {
     try {
       fsView = fileSystemView.orElseGet(() -> getFileSystemViewForMetadataTable(metaClient));
       List<String> physicalPartitions = resolvePhysicalPartitions(metaClient, partition);
-      List<FileSlice> all = new ArrayList<>();
-      boolean any = false;
-      for (String physical : physicalPartitions) {
-        Stream<FileSlice> fileSliceStream;
-        if (mergeFileSlices) {
-          if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
-            fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
-                // including pending compaction instant as the last instant so that the finished delta commits
-                // that start earlier than the compaction can be queried.
-                physical, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant().get().requestedTime());
-          } else {
-            return Collections.emptyList();
-          }
-        } else {
-          fileSliceStream = fsView.getLatestFileSlices(physical);
-        }
-        fileSliceStream.forEach(all::add);
-        any = true;
-      }
-      if (!any) {
+      if (physicalPartitions.isEmpty()) {
         return Collections.emptyList();
+      }
+      // Hoist timeline lookups out of the loop — they depend only on metaClient and stay invariant.
+      String mergedAsOfInstant = null;
+      if (mergeFileSlices) {
+        if (!metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
+          return Collections.emptyList();
+        }
+        // Including pending compaction instant as the last instant so that the finished delta
+        // commits that start earlier than the compaction can be queried.
+        mergedAsOfInstant = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants()
+            .lastInstant().get().requestedTime();
+      }
+      List<FileSlice> all = new ArrayList<>();
+      for (String physical : physicalPartitions) {
+        Stream<FileSlice> fileSliceStream = mergeFileSlices
+            ? fsView.getLatestMergedFileSlicesBeforeOrOn(physical, mergedAsOfInstant)
+            : fsView.getLatestFileSlices(physical);
+        fileSliceStream.forEach(all::add);
       }
       all.sort(Comparator.comparing(FileSlice::getFileId));
       return all;
