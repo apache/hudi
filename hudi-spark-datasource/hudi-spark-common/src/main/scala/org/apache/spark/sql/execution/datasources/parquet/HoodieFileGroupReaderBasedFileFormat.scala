@@ -210,7 +210,9 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       }
       originalVectorTypes.map {
         o: Seq[String] => o.zipWithIndex.map(a => {
-          if (a._2 >= requiredSchema.length && mandatoryFields.contains(partitionSchema.fields(a._2 - requiredSchema.length).name)) {
+          if (a._2 >= requiredSchema.length
+            && mandatoryFields.contains(partitionSchema.fields(a._2 - requiredSchema.length).name)
+            && !isNestedPartitionField(partitionSchema.fields(a._2 - requiredSchema.length).name)) {
             regularVectorType
           } else {
             a._1
@@ -253,7 +255,11 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val augmentedStorageConf = new HadoopStorageConfiguration(hadoopConf).getInline
     setSchemaEvolutionConfigs(augmentedStorageConf)
     augmentedStorageConf.set(ENABLE_LOGICAL_TIMESTAMP_REPAIR, hasTimestampMillisFieldInTableSchema.toString)
-    val (remainingPartitionSchemaArr, fixedPartitionIndexesArr) = partitionSchema.fields.toSeq.zipWithIndex.filter(p => !mandatoryFields.contains(p._1.name)).unzip
+    // Nested partition columns (e.g. "nested_record.level") are never read from the data file: the
+    // flattened dotted name is not a valid top-level field and the value is materialized from the
+    // partition path. Always keep them in the appended ("remaining") partition fields so they are
+    // not converted into a top-level Avro field below, which would fail Avro name validation.
+    val (remainingPartitionSchemaArr, fixedPartitionIndexesArr) = partitionSchema.fields.toSeq.zipWithIndex.filter(p => !mandatoryFields.contains(p._1.name) || isNestedPartitionField(p._1.name)).unzip
 
     // The schema of the partition cols we want to append the value instead of reading from the file
     val remainingPartitionSchema = StructType(remainingPartitionSchemaArr)
@@ -265,9 +271,9 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val exclusionFields = new java.util.HashSet[String]()
     exclusionFields.add("op")
     partitionSchema.fields.foreach(f => exclusionFields.add(f.name))
-    val requestedStructType = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
+    val requestedStructType = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name) && !isNestedPartitionField(f.name)))
     val requestedSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(requestedStructType, sanitizedTableName), exclusionFields)
-    val dataStructTypeWithMandatoryPartitionFields = StructType(dataStructType.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
+    val dataStructTypeWithMandatoryPartitionFields = StructType(dataStructType.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name) && !isNestedPartitionField(f.name)))
     val dataSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(dataStructTypeWithMandatoryPartitionFields, sanitizedTableName), exclusionFields)
 
     spark.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", supportVectorizedRead.toString)
@@ -547,6 +553,14 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       case cb: ColumnarBatch => batchProjection(cb)
     }.asInstanceOf[Iterator[InternalRow]]
   }
+
+  /**
+   * A partition column whose name is a nested field path (e.g. "nested_record.level") cannot be
+   * read from the data file as a flat top-level column, nor converted into a top-level Avro field
+   * (Avro rejects '.' in names). Its value is always materialized from the partition path, so such
+   * fields are treated as appended partition fields rather than read from the file.
+   */
+  private def isNestedPartitionField(name: String): Boolean = name.contains(".")
 
   private def getFixedPartitionValues(allPartitionValues: InternalRow, partitionSchema: StructType, fixedPartitionIndexes: Set[Int]): InternalRow = {
     InternalRow.fromSeq(allPartitionValues.toSeq(partitionSchema).zipWithIndex.filter(p => fixedPartitionIndexes.contains(p._2)).map(p => p._1))
