@@ -19,10 +19,12 @@
 
 package org.apache.hudi.io.storage.hadoop;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.storage.StoragePath;
@@ -49,6 +51,10 @@ public class HoodieAvroParquetWriter
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
+  // True when the writer should additionally populate _hoodie_commit_time (and seqId) even though
+  // populateMetaFields is false. This is the COMMIT_TIME_ONLY mode used to keep incremental queries
+  // functional on otherwise-minimal-meta-field tables. Ignored when populateMetaFields is true.
+  private final boolean commitTimeOnly;
   private final HoodieAvroWriteSupport writeSupport;
 
   @SuppressWarnings({"unchecked", "rawtypes"})
@@ -57,12 +63,23 @@ public class HoodieAvroParquetWriter
                                  String instantTime,
                                  TaskContextSupplier taskContextSupplier,
                                  boolean populateMetaFields) throws IOException {
+    this(file, parquetConfig, instantTime, taskContextSupplier, populateMetaFields, false);
+  }
+
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  public HoodieAvroParquetWriter(StoragePath file,
+                                 HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig,
+                                 String instantTime,
+                                 TaskContextSupplier taskContextSupplier,
+                                 boolean populateMetaFields,
+                                 boolean commitTimeOnly) throws IOException {
     super(file, (HoodieParquetConfig) parquetConfig);
     this.fileName = file.getName();
     this.writeSupport = parquetConfig.getWriteSupport();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
     this.populateMetaFields = populateMetaFields;
+    this.commitTimeOnly = commitTimeOnly && !populateMetaFields;
   }
 
   @Override
@@ -72,6 +89,16 @@ public class HoodieAvroParquetWriter
           taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName);
       super.write(avroRecord);
       writeSupport.add(key.getRecordKey());
+    } else if (commitTimeOnly) {
+      // COMMIT_TIME_ONLY: populate only _hoodie_commit_time (and seq id derived from it) so
+      // incremental queries keep working. The other four meta columns stay null on disk, which
+      // Parquet stores as definition-level flags (zero data bytes). Bloom filter / record-key
+      // index population is intentionally skipped — that requires the record-key column.
+      String seqId = HoodieRecord.generateSequenceId(instantTime,
+          taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount());
+      HoodieAvroUtils.addCommitMetadataToRecord(
+          (org.apache.avro.generic.GenericRecord) avroRecord, instantTime, seqId);
+      super.write(avroRecord);
     } else {
       super.write(avroRecord);
     }

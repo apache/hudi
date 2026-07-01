@@ -257,8 +257,9 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
         s"option ${DataSourceReadOptions.START_COMMIT.key}")
     }
 
-    if (!this.tableConfig.populateMetaFields()) {
-      throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
+    if (!this.tableConfig.isCommitTimePopulated()) {
+      throw new HoodieException("Incremental queries are not supported when _hoodie_commit_time is not populated. "
+        + "Either keep hoodie.populate.meta.fields=true or set hoodie.meta.fields.commit.time.enabled=true.")
     }
   }
 

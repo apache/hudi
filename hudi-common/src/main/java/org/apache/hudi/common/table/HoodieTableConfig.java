@@ -333,6 +333,14 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated "
           + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
 
+  public static final ConfigProperty<Boolean> META_FIELDS_COMMIT_TIME_ENABLED = ConfigProperty
+      .key("hoodie.meta.fields.commit.time.enabled")
+      .defaultValue(false)
+      .withDocumentation("Only meaningful when " + "hoodie.populate.meta.fields=false. When set to true, the writer "
+          + "additionally populates _hoodie_commit_time on every row so that incremental queries remain functional "
+          + "while the other meta columns are still skipped. Has no effect when "
+          + "hoodie.populate.meta.fields=true (all meta fields are populated unconditionally in that case).");
+
   public static final ConfigProperty<String> KEY_GENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.table.keygenerator.class")
       .noDefaultValue()
@@ -1232,6 +1240,34 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public boolean populateMetaFields() {
     return Boolean.parseBoolean(getStringOrDefault(POPULATE_META_FIELDS));
+  }
+
+  /**
+   * @return true when the writer is configured for the COMMIT_TIME_ONLY mode: i.e.,
+   * {@link #POPULATE_META_FIELDS} is {@code false} and {@link #META_FIELDS_COMMIT_TIME_ENABLED} is
+   * {@code true}. This is the additive opt-in that keeps incremental queries functional while the
+   * other four meta columns stay null on disk.
+   */
+  public boolean isCommitTimeOnlyMetaFieldsMode() {
+    return !populateMetaFields() && Boolean.parseBoolean(getStringOrDefault(META_FIELDS_COMMIT_TIME_ENABLED));
+  }
+
+  /**
+   * @return true when the {@code _hoodie_commit_time} meta column is physically populated on disk —
+   * i.e., either all meta fields are populated, or the table is in the COMMIT_TIME_ONLY mode.
+   */
+  public boolean isCommitTimePopulated() {
+    return populateMetaFields() || isCommitTimeOnlyMetaFieldsMode();
+  }
+
+  /**
+   * @return true when the {@code _hoodie_record_key} meta column is physically populated on disk.
+   * Currently this exactly mirrors {@link #populateMetaFields()} but is exposed as a separate
+   * predicate so callers that specifically care about the record-key column do not need to be
+   * updated again if the mode set is extended.
+   */
+  public boolean isRecordKeyPopulated() {
+    return populateMetaFields();
   }
 
   /**

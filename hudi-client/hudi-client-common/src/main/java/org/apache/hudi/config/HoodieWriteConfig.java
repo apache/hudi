@@ -1776,6 +1776,24 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
+   * @return true when the writer is configured to additionally populate {@code _hoodie_commit_time}
+   * even though {@link HoodieTableConfig#POPULATE_META_FIELDS} is {@code false}. Only meaningful
+   * when {@code populateMetaFields()} is {@code false}; ignored otherwise. See
+   * {@link HoodieTableConfig#isCommitTimeOnlyMetaFieldsMode()}.
+   */
+  public boolean isCommitTimeOnlyMetaFieldsMode() {
+    return !populateMetaFields()
+        && getBooleanOrDefault(HoodieTableConfig.META_FIELDS_COMMIT_TIME_ENABLED);
+  }
+
+  /**
+   * @return true when {@code _hoodie_commit_time} is physically populated on every row.
+   */
+  public boolean isCommitTimePopulated() {
+    return populateMetaFields() || isCommitTimeOnlyMetaFieldsMode();
+  }
+
+  /**
    * compaction properties.
    */
 
@@ -3586,6 +3604,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withMetaFieldsCommitTimeEnabled(boolean enabled) {
+      writeConfig.setValue(HoodieTableConfig.META_FIELDS_COMMIT_TIME_ENABLED, Boolean.toString(enabled));
+      return this;
+    }
+
     public Builder withAllowOperationMetadataField(boolean allowOperationMetadataField) {
       writeConfig.setValue(ALLOW_OPERATION_METADATA_FIELD, Boolean.toString(allowOperationMetadataField));
       return this;
@@ -3873,6 +3896,17 @@ public class HoodieWriteConfig extends HoodieConfig {
       checkArgument(lookbackCommits >= 0,
           String.format("%s must be non-negative, but was %d",
               ROLLING_METADATA_TIMELINE_LOOKBACK_COMMITS.key(), lookbackCommits));
+
+      // COMMIT_TIME_ONLY mode is an additive opt-in on top of populate.meta.fields=false. Setting
+      // both flags to true is ambiguous (the COMMIT_TIME_ONLY flag has no effect when all meta
+      // fields are already populated) so reject it explicitly rather than silently ignore.
+      boolean populateMetaFields = writeConfig.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+      boolean commitTimeEnabled = writeConfig.getBooleanOrDefault(HoodieTableConfig.META_FIELDS_COMMIT_TIME_ENABLED);
+      checkArgument(!(populateMetaFields && commitTimeEnabled),
+          String.format("%s=true is only meaningful when %s=false. Disable populate.meta.fields or "
+                  + "drop the commit-time-only opt-in.",
+              HoodieTableConfig.META_FIELDS_COMMIT_TIME_ENABLED.key(),
+              HoodieTableConfig.POPULATE_META_FIELDS.key()));
     }
 
     public HoodieWriteConfig build() {

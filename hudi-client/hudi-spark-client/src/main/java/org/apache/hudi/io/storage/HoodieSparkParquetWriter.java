@@ -45,6 +45,10 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
   private final UTF8String instantTime;
 
   private final boolean populateMetaFields;
+  // True when only _hoodie_commit_time (and seq id) should be populated even though
+  // populateMetaFields is false. Used by the COMMIT_TIME_ONLY mode so incremental queries keep
+  // working on otherwise-minimal-meta-field tables.
+  private final boolean commitTimeOnly;
 
   private final HoodieRowParquetWriteSupport writeSupport;
 
@@ -55,11 +59,21 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                   String instantTime,
                                   TaskContextSupplier taskContextSupplier,
                                   boolean populateMetaFields) throws IOException {
+    this(file, parquetConfig, instantTime, taskContextSupplier, populateMetaFields, false);
+  }
+
+  public HoodieSparkParquetWriter(StoragePath file,
+                                  HoodieRowParquetConfig parquetConfig,
+                                  String instantTime,
+                                  TaskContextSupplier taskContextSupplier,
+                                  boolean populateMetaFields,
+                                  boolean commitTimeOnly) throws IOException {
     super(file, parquetConfig);
     this.writeSupport = parquetConfig.getWriteSupport();
     this.fileName = UTF8String.fromString(file.getName());
     this.instantTime = UTF8String.fromString(instantTime);
     this.populateMetaFields = populateMetaFields;
+    this.commitTimeOnly = commitTimeOnly && !populateMetaFields;
     this.seqIdGenerator = recordIndex -> {
       Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
       return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
@@ -74,6 +88,15 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
 
       super.write(row);
       writeSupport.add(recordKey);
+    } else if (commitTimeOnly) {
+      // COMMIT_TIME_ONLY: populate only _hoodie_commit_time + seq id. The other three meta columns
+      // (record key, partition path, file name) stay at whatever their default unset state is. We
+      // do NOT register the record key with writeSupport — that would feed the parquet bloom
+      // filter, which has no meaning when the record key column is unpopulated.
+      row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), instantTime);
+      row.update(COMMIT_SEQNO_METADATA_FIELD.ordinal(),
+          UTF8String.fromString(seqIdGenerator.apply(getWrittenRecordCount())));
+      super.write(row);
     } else {
       super.write(row);
     }
