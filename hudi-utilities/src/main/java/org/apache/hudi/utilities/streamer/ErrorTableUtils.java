@@ -27,7 +27,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -77,17 +76,6 @@ public final class ErrorTableUtils {
       TypedProperties props) {
     String writeFailureStrategy = props.getString(ERROR_TABLE_WRITE_FAILURE_STRATEGY.key(), ERROR_TABLE_WRITE_FAILURE_STRATEGY.defaultValue());
     return HoodieErrorTableConfig.ErrorWriteFailureStrategy.valueOf(writeFailureStrategy);
-  }
-
-  /**
-   * validates for constraints on ErrorRecordColumn when ErrorTable enabled configs are set.
-   * @param dataset
-   */
-  public static void validate(Dataset<Row> dataset) {
-    if (!isErrorTableCorruptRecordColumnPresent(dataset)) {
-      throw new HoodieValidationException(String.format("Invalid condition, columnName=%s "
-              + "is not present in transformer " + "output schema", ERROR_TABLE_CURRUPT_RECORD_COL_NAME));
-    }
   }
 
   public static Dataset<Row> addNullValueErrorTableCorruptRecordColumn(Dataset<Row> dataset) {
