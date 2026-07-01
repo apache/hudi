@@ -2534,14 +2534,11 @@
                         <exclude>*:*_2.12</exclude>
                       </excludes>
                       <!--
-                        Flink decoupled from Scala starting 1.15; the `_2.12` suffix on
-                        flink-table-planner and its transitives (scala-xml, chill) is a
-                        legacy naming artifact, not a real Scala 2.12 binary dependency.
-                        Flink publishes no `_2.13` variant of flink-table-planner, so
-                        building with `-Dscala-2.13` together with any Flink profile
-                        (e.g. `-Dflink1.20`) would otherwise trip the blanket `*:*_2.12`
-                        ban above. Whitelist only the Flink-side transitives that
-                        actually surface here.
+                        Some Flink artifacts still carry a `_2.12` suffix even though
+                        newer Flink modules are decoupled from Scala. Building with
+                        `-Dscala-2.13` together with a Flink profile would otherwise
+                        trip the blanket `*:*_2.12` ban above. Whitelist only the
+                        Flink-side transitives that actually surface here.
                       -->
                       <includes>
                         <include>org.apache.flink:*_2.12</include>

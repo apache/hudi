@@ -46,7 +46,6 @@ import org.apache.hudi.utils.CatalogUtils;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
-import org.apache.flink.calcite.shaded.com.google.common.collect.Lists;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.api.DataTypes;
@@ -283,7 +282,7 @@ public class TestHoodieCatalog extends BaseTestHoodieCatalog {
     final ResolvedCatalogTable singleKeyMultiplePartitionTable = new ResolvedCatalogTable(
         CatalogUtils.createCatalogTable(
             Schema.newBuilder().fromResolvedSchema(CREATE_TABLE_SCHEMA).build(),
-            Lists.newArrayList("par1", "par2"),
+            Arrays.asList("par1", "par2"),
             EXPECTED_OPTIONS,
             "test"),
         CREATE_TABLE_SCHEMA
@@ -301,7 +300,7 @@ public class TestHoodieCatalog extends BaseTestHoodieCatalog {
     final ResolvedCatalogTable multipleKeySinglePartitionTable = new ResolvedCatalogTable(
         CatalogUtils.createCatalogTable(
             Schema.newBuilder().fromResolvedSchema(CREATE_MULTI_KEY_TABLE_SCHEMA).build(),
-            Lists.newArrayList("par1"),
+            Collections.singletonList("par1"),
             EXPECTED_OPTIONS,
             "test"),
         CREATE_TABLE_SCHEMA

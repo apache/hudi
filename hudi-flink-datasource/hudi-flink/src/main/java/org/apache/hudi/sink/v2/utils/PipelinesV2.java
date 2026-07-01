@@ -44,9 +44,9 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.types.logical.RowType;
 
+import static org.apache.hudi.sink.utils.FlinkTransformationUtils.setManagedMemoryWeight;
 import static org.apache.hudi.sink.utils.Pipelines.opUID;
 
 /**
@@ -227,7 +227,7 @@ public class PipelinesV2 {
             new ClusteringOperator(conf, rowType))
         .setParallelism(conf.get(FlinkOptions.CLUSTERING_TASKS));
     if (OptionsResolver.sortClusteringEnabled(conf)) {
-      ExecNodeUtil.setManagedMemoryWeight(clusteringStream.getTransformation(),
+      setManagedMemoryWeight(clusteringStream.getTransformation(),
           conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
     }
     return clusteringStream.transform(

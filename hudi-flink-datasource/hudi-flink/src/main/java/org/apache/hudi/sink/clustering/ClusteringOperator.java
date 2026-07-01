@@ -74,7 +74,6 @@ import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
-import org.apache.flink.table.planner.codegen.sort.SortCodeGenerator;
 import org.apache.flink.table.runtime.generated.NormalizedKeyComputer;
 import org.apache.flink.table.runtime.generated.RecordComparator;
 import org.apache.flink.table.runtime.operators.TableStreamOperator;
@@ -325,8 +324,9 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
 
   private BinaryExternalSorter initSorter() {
     ClassLoader cl = getContainingTask().getUserCodeClassLoader();
-    NormalizedKeyComputer computer = createSortCodeGenerator().generateNormalizedKeyComputer("SortComputer").newInstance(cl);
-    RecordComparator comparator = createSortCodeGenerator().generateRecordComparator("SortComparator").newInstance(cl);
+    SortOperatorGen sortOperatorGen = createSortOperatorGen();
+    NormalizedKeyComputer computer = sortOperatorGen.generateNormalizedKeyComputer("SortComputer").newInstance(cl);
+    RecordComparator comparator = sortOperatorGen.generateRecordComparator("SortComparator").newInstance(cl);
 
     MemoryManager memManager = getContainingTask().getEnvironment().getMemoryManager();
     BinaryExternalSorter sorter = Utils.getBinaryExternalSorter(
@@ -348,10 +348,9 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     return sorter;
   }
 
-  private SortCodeGenerator createSortCodeGenerator() {
-    SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType,
+  private SortOperatorGen createSortOperatorGen() {
+    return new SortOperatorGen(rowType,
         conf.get(FlinkOptions.CLUSTERING_SORT_COLUMNS).split(","));
-    return sortOperatorGen.createSortCodeGenerator();
   }
 
   private String getFileIds(List<ClusteringOperation> clusteringOperations) {
