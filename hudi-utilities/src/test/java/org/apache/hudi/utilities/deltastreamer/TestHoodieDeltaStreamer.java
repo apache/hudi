@@ -27,6 +27,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
@@ -79,6 +80,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -1109,8 +1111,19 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"SIX,AVRO,CLUSTER", "EIGHT,AVRO,CLUSTER", "CURRENT,AVRO,NONE", "CURRENT,AVRO,CLUSTER", "CURRENT,SPARK,NONE", "CURRENT,SPARK,CLUSTER"})
-  void testCOWLogicalRepair(String tableVersion, String recordType, String operation) throws Exception {
+  @CsvSource(value = {
+      "SIX,AVRO,CLUSTER,false,false", "EIGHT,AVRO,CLUSTER,false,false",
+      "CURRENT,AVRO,NONE,false,false", "CURRENT,AVRO,CLUSTER,false,false",
+      "CURRENT,SPARK,NONE,false,false", "CURRENT,SPARK,CLUSTER,false,false",
+      // Variants that exercise the schema-reconcile path (enabled by setNullForMissingColumns=true)
+      // together with the opt-in to permit timestamp-millis <-> timestamp-micros evolution.
+      "SIX,AVRO,CLUSTER,true,true", "EIGHT,AVRO,CLUSTER,true,true", "CURRENT,AVRO,CLUSTER,true,true",
+      // Reconcile path on, precision-evolution gate closed: the first sync must throw because
+      // the corrupt fixture's timestamp/local-timestamp columns trigger a disallowed type change.
+      "SIX,AVRO,CLUSTER,true,false"})
+  void testCOWLogicalRepair(String tableVersion, String recordType, String operation,
+                            boolean setNullForMissingColumns,
+                            boolean allowTimestampPrecisionEvolution) throws Exception {
     TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
       String dirName = "trips_logical_types_json_cow_write";
       String dataPath = basePath + "/" + dirName;
@@ -1139,8 +1152,23 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       properties.setProperty("hoodie.parquet.small.file.limit", "-1");
       properties.setProperty("hoodie.cleaner.commits.retained", "10");
       properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
+      properties.setProperty(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
+          Boolean.toString(setNullForMissingColumns));
+      properties.setProperty(HoodieCommonConfig.ALLOW_TIMESTAMP_PRECISION_EVOLUTION.key(),
+          Boolean.toString(allowTimestampPrecisionEvolution));
 
       Option<TypedProperties> propt = Option.of(properties);
+
+      if (setNullForMissingColumns && !allowTimestampPrecisionEvolution) {
+        // Reconcile path is active but the precision-evolution gate is closed.
+        // The mislabeled timestamp/local-timestamp columns must surface as a
+        // SchemaCompatibilityException on the first sync.
+        SchemaCompatibilityException thrown = assertThrows(SchemaCompatibilityException.class,
+            () -> syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "456"), propt));
+        assertEquals("Cannot update column 'ts_millis' from type 'timestamp' to incompatible type 'timestamp-millis'.",
+            thrown.getMessage());
+        return;
+      }
 
       syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "456"), propt);
 
@@ -1189,11 +1217,17 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"SIX,AVRO,CLUSTER,AVRO", "EIGHT,AVRO,CLUSTER,AVRO",
-      "CURRENT,AVRO,NONE,AVRO", "CURRENT,AVRO,CLUSTER,AVRO", "CURRENT,AVRO,COMPACT,AVRO",
-      "CURRENT,AVRO,NONE,PARQUET", "CURRENT,AVRO,CLUSTER,PARQUET", "CURRENT,AVRO,COMPACT,PARQUET",
-      "CURRENT,SPARK,NONE,PARQUET", "CURRENT,SPARK,CLUSTER,PARQUET", "CURRENT,SPARK,COMPACT,PARQUET"})
-  void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType) throws Exception {
+  @CsvSource(value = {"SIX,AVRO,CLUSTER,AVRO,false,false", "EIGHT,AVRO,CLUSTER,AVRO,false,false",
+      "CURRENT,AVRO,NONE,AVRO,false,false", "CURRENT,AVRO,CLUSTER,AVRO,false,false", "CURRENT,AVRO,COMPACT,AVRO,false,false",
+      "CURRENT,AVRO,NONE,PARQUET,false,false", "CURRENT,AVRO,CLUSTER,PARQUET,false,false", "CURRENT,AVRO,COMPACT,PARQUET,false,false",
+      "CURRENT,SPARK,NONE,PARQUET,false,false", "CURRENT,SPARK,CLUSTER,PARQUET,false,false", "CURRENT,SPARK,COMPACT,PARQUET,false,false",
+      // Variants that exercise the schema-reconcile path with the timestamp-precision opt-in.
+      "SIX,AVRO,CLUSTER,AVRO,true,true", "EIGHT,AVRO,CLUSTER,AVRO,true,true", "CURRENT,AVRO,CLUSTER,AVRO,true,true",
+      // Reconcile path on, precision-evolution gate closed: the first sync must throw.
+      "SIX,AVRO,CLUSTER,AVRO,true,false"})
+  void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType,
+                            boolean setNullForMissingColumns,
+                            boolean allowTimestampPrecisionEvolution) throws Exception {
     TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
       String tableSuffix;
       String logFormatValue;
@@ -1241,6 +1275,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       properties.setProperty("hoodie.cleaner.commits.retained", "10");
       properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
       properties.setProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logFormatValue);
+      properties.setProperty(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
+          Boolean.toString(setNullForMissingColumns));
+      properties.setProperty(HoodieCommonConfig.ALLOW_TIMESTAMP_PRECISION_EVOLUTION.key(),
+          Boolean.toString(allowTimestampPrecisionEvolution));
 
       boolean disableCompaction;
       if ("COMPACT".equals(operation)) {
@@ -1261,6 +1299,17 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
 
       Option<TypedProperties> propt = Option.of(properties);
+
+      if (setNullForMissingColumns && !allowTimestampPrecisionEvolution) {
+        // Reconcile path is active but the precision-evolution gate is closed.
+        // The mislabeled timestamp/local-timestamp columns must surface as a
+        // SchemaCompatibilityException on the first sync.
+        SchemaCompatibilityException thrown = assertThrows(SchemaCompatibilityException.class,
+            () -> syncOnce(prepCfgForMorLogicalRepair(tableBasePath, dirName, "123", disableCompaction), propt));
+        assertEquals("Cannot update column 'ts_millis' from type 'timestamp' to incompatible type 'timestamp-millis'.",
+            thrown.getMessage());
+        return;
+      }
 
       syncOnce(prepCfgForMorLogicalRepair(tableBasePath, dirName, "123", disableCompaction), propt);
 

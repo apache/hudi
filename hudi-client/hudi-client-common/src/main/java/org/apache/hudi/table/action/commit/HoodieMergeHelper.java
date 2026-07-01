@@ -171,7 +171,8 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     if (querySchemaOpt.isPresent() && !baseFile.getBootstrapBaseFile().isPresent()) {
       // check implicitly add columns, and position reorder(spark sql may change cols order)
       InternalSchema querySchema = AvroSchemaEvolutionUtils.reconcileSchema(writerSchema.toAvroSchema(),
-          querySchemaOpt.get(), writeConfig.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS));
+          querySchemaOpt.get(), writeConfig.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS),
+          writeConfig.getBooleanOrDefault(HoodieCommonConfig.ALLOW_TIMESTAMP_PRECISION_EVOLUTION));
       long commitInstantTime = Long.parseLong(baseFile.getCommitTime());
       InternalSchema fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, metaClient);
       if (fileSchema.isEmptySchema() && writeConfig.getBoolean(HoodieCommonConfig.RECONCILE_SCHEMA)) {

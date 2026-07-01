@@ -280,7 +280,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema())
         .map(internalSchema -> AvroSchemaEvolutionUtils.reconcileSchema(writeSchemaWithMetaFields.toAvroSchema(), internalSchema,
-            config.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS)));
+            config.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS),
+            config.getBooleanOrDefault(HoodieCommonConfig.ALLOW_TIMESTAMP_PRECISION_EVOLUTION)));
     long maxMemoryPerCompaction = getMaxMemoryForMerge();
     props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction));
     Option<Stream<HoodieLogFile>> logFilesStreamOpt = compactionOperation.map(op -> op.getDeltaFileNames().stream().map(logFileName ->

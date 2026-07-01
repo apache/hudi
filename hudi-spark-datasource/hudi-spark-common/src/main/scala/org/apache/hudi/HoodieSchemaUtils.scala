@@ -169,11 +169,15 @@ object HoodieSchemaUtils {
       HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.defaultValue).toBoolean
     val setNullForMissingColumns = opts.getOrElse(DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS.key(),
       DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS.defaultValue).toBoolean
+    val allowTimestampPrecisionEvolution = opts.getOrElse(HoodieCommonConfig.ALLOW_TIMESTAMP_PRECISION_EVOLUTION.key,
+      HoodieCommonConfig.ALLOW_TIMESTAMP_PRECISION_EVOLUTION.defaultValue.toString).toBoolean
 
     if (!mergeIntoWrites && !shouldValidateSchemasCompatibility && !allowAutoEvolutionColumnDrop) {
       // Default behaviour
       val reconciledSchema = if (setNullForMissingColumns) {
-        HoodieSchema.fromAvroSchema(AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema.toAvroSchema(), latestTableSchema.toAvroSchema(), setNullForMissingColumns))
+        HoodieSchema.fromAvroSchema(AvroSchemaEvolutionUtils.reconcileSchema(
+          canonicalizedSourceSchema.toAvroSchema(), latestTableSchema.toAvroSchema(),
+          setNullForMissingColumns, allowTimestampPrecisionEvolution))
       } else {
         canonicalizedSourceSchema
       }
@@ -205,7 +209,10 @@ object HoodieSchemaUtils {
         // Apply schema evolution, by auto-merging write schema and read schema
         val setNullForMissingColumns = opts.getOrElse(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
           HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.defaultValue()).toBoolean
-        val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema.toAvroSchema(), internalSchema, setNullForMissingColumns)
+        val allowTimestampPrecisionEvolution = opts.getOrElse(HoodieCommonConfig.ALLOW_TIMESTAMP_PRECISION_EVOLUTION.key,
+          HoodieCommonConfig.ALLOW_TIMESTAMP_PRECISION_EVOLUTION.defaultValue.toString).toBoolean
+        val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema.toAvroSchema(), internalSchema,
+          setNullForMissingColumns, allowTimestampPrecisionEvolution)
         val evolvedSchema = InternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
         val shouldRemoveMetaDataFromInternalSchema = sourceSchema.getFields.asScala.filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
         if (shouldRemoveMetaDataFromInternalSchema) HoodieCommonSchemaUtils.removeMetadataFields(evolvedSchema) else evolvedSchema

@@ -83,6 +83,15 @@ public class HoodieCommonConfig extends HoodieConfig {
           + " operation will fail schema compatibility check. Set this option to true will make the missing "
           + " column be filled with null values to successfully complete the write operation.");
 
+  public static final ConfigProperty<Boolean> ALLOW_TIMESTAMP_PRECISION_EVOLUTION = ConfigProperty
+      .key("hoodie.write.schema.allow.timestamp.precision.evolution")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Controls whether schema evolution may change a column between timestamp-millis and "
+          + "timestamp-micros (and between the local-timestamp variants). Default false rejects such changes. "
+          + "Set to true to permit precision-only evolution between these logical types.");
+
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")
       .defaultValue(ExternalSpillableMap.DiskMapType.BITCASK)
