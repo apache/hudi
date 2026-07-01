@@ -196,7 +196,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   }
 
   protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
-    return HoodieTableMetaClient.builder()
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(storageConf.newInstance())
         .setBasePath(config.getBasePath())
         .setLoadActiveTimelineOnLoad(loadActiveTimelineOnLoad)
@@ -204,6 +204,11 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
         .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
         .setMetaserverConfig(config.getProps()).build();
+    if (metrics != null && config.isMetricsOn()) {
+      metrics.emitTableVersionMetric(
+          metaClient.getTableConfig().getTableVersion().versionCode());
+    }
+    return metaClient;
   }
 
   /**
