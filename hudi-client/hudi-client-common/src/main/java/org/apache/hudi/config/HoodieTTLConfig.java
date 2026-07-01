@@ -93,8 +93,8 @@ public class HoodieTTLConfig extends HoodieConfig {
           + "A '/' in the pattern means the time spans multiple path segments. Examples: 'yyyy-MM-dd' (default), "
           + "'yyyyMMdd', 'yyyy-MM-dd/HH', 'yyyyMMdd/HH'.");
 
-  public static final ConfigProperty<Integer> EVENT_TIME_PARTITION_START_INDEX = ConfigProperty
-      .key(PARTITION_TTL_STRATEGY_PARAM_PREFIX + "event.time.partition.start.index")
+  public static final ConfigProperty<Integer> EVENT_TIME_SEGMENT_START_INDEX = ConfigProperty
+      .key(PARTITION_TTL_STRATEGY_PARAM_PREFIX + "event.time.segment.start.index")
       .defaultValue(0)
       .markAdvanced()
       .sinceVersion("1.3.0")
@@ -143,8 +143,8 @@ public class HoodieTTLConfig extends HoodieConfig {
       return this;
     }
 
-    public HoodieTTLConfig.Builder withEventTimePartitionStartIndex(int startIndex) {
-      ttlConfig.setValue(EVENT_TIME_PARTITION_START_INDEX, Integer.toString(startIndex));
+    public HoodieTTLConfig.Builder withEventTimeSegmentStartIndex(int timeSegStartIndex) {
+      ttlConfig.setValue(EVENT_TIME_SEGMENT_START_INDEX, Integer.toString(timeSegStartIndex));
       return this;
     }
 

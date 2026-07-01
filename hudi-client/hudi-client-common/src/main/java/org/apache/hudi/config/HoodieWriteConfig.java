@@ -3058,21 +3058,16 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieTTLConfig.MAX_PARTITION_TO_DELETE);
   }
 
-  // The three event-time TTL getters all use *OrDefault flavors so the ConfigProperty defaults
-  // are honored even on paths that bypass HoodieTTLConfig.Builder (e.g. raw properties injected
-  // straight into HoodieWriteConfig without the builder's setDefaults pass).
-  // Note: getBoolean already short-circuits to getBooleanOrDefault when a default exists, so
-  // shouldDeleteHiveDefaultPartitionForEventTimeTTL keeps the plain call.
   public String getPartitionTTLEventTimeFormat() {
     return getStringOrDefault(HoodieTTLConfig.EVENT_TIME_FORMAT);
   }
 
-  public int getPartitionTTLEventTimePartitionStartIndex() {
-    return getIntOrDefault(HoodieTTLConfig.EVENT_TIME_PARTITION_START_INDEX);
+  public int getPartitionTTLEventTimeSegmentStartIndex() {
+    return getIntOrDefault(HoodieTTLConfig.EVENT_TIME_SEGMENT_START_INDEX);
   }
 
   public boolean shouldDeleteHiveDefaultPartitionForEventTimeTTL() {
-    return getBoolean(HoodieTTLConfig.EVENT_TIME_DELETE_HIVE_DEFAULT_PARTITION);
+    return getBooleanOrDefault(HoodieTTLConfig.EVENT_TIME_DELETE_HIVE_DEFAULT_PARTITION);
   }
 
   public boolean isSecondaryIndexEnabled() {

@@ -43,40 +43,40 @@ import java.util.stream.Collectors;
  *
  * <h3>Supported path shapes</h3>
  * The first-class, tested shapes are day and hour granularity. Each example shows the partition
- * path on the left and the required {@code startIndex} on the right (see
+ * path on the left and the required {@code timeSegStartIndex} on the right (see
  * <i>Locating the time block</i> below); non-time segments may appear before and/or after the
  * time block.
  * <ul>
  *   <li>Day, {@code format=yyyy-MM-dd}
  *     <ul>
- *       <li>time only: {@code 2026-06-27}, {@code dt=2026-06-27} — startIndex {@code 0}</li>
- *       <li>prefix + time: {@code region=us/2026-06-27}, {@code region=us/dt=2026-06-27} — startIndex {@code 1}</li>
- *       <li>time + suffix: {@code 2026-06-27/source=app}, {@code dt=2026-06-27/source=app} — startIndex {@code 0}</li>
- *       <li>prefix + time + suffix: {@code region=us/dt=2026-06-27/source=app} — startIndex {@code 1}</li>
+ *       <li>time only: {@code 2026-06-27}, {@code dt=2026-06-27} — timeSegStartIndex {@code 0}</li>
+ *       <li>prefix + time: {@code region=us/2026-06-27}, {@code region=us/dt=2026-06-27} — timeSegStartIndex {@code 1}</li>
+ *       <li>time + suffix: {@code 2026-06-27/source=app}, {@code dt=2026-06-27/source=app} — timeSegStartIndex {@code 0}</li>
+ *       <li>prefix + time + suffix: {@code region=us/dt=2026-06-27/source=app} — timeSegStartIndex {@code 1}</li>
  *     </ul>
  *   </li>
  *   <li>Day, {@code format=yyyyMMdd}
  *     <ul>
- *       <li>time only: {@code 20260627}, {@code dt=20260627} — startIndex {@code 0}</li>
- *       <li>prefix + time: {@code region=us/20260627}, {@code region=us/dt=20260627} — startIndex {@code 1}</li>
- *       <li>time + suffix: {@code 20260627/source=app}, {@code dt=20260627/source=app} — startIndex {@code 0}</li>
- *       <li>prefix + time + suffix: {@code region=us/dt=20260627/source=app} — startIndex {@code 1}</li>
+ *       <li>time only: {@code 20260627}, {@code dt=20260627} — timeSegStartIndex {@code 0}</li>
+ *       <li>prefix + time: {@code region=us/20260627}, {@code region=us/dt=20260627} — timeSegStartIndex {@code 1}</li>
+ *       <li>time + suffix: {@code 20260627/source=app}, {@code dt=20260627/source=app} — timeSegStartIndex {@code 0}</li>
+ *       <li>prefix + time + suffix: {@code region=us/dt=20260627/source=app} — timeSegStartIndex {@code 1}</li>
  *     </ul>
  *   </li>
  *   <li>Hour, {@code format=yyyy-MM-dd/HH}
  *     <ul>
- *       <li>time only: {@code 2026-06-27/12}, {@code dt=2026-06-27/hh=12} — startIndex {@code 0}</li>
- *       <li>prefix + time: {@code region=us/2026-06-27/12}, {@code region=us/dt=2026-06-27/hh=12} — startIndex {@code 1}</li>
- *       <li>time + suffix: {@code 2026-06-27/12/source=app}, {@code dt=2026-06-27/hh=12/source=app} — startIndex {@code 0}</li>
- *       <li>prefix + time + suffix: {@code region=us/dt=2026-06-27/hh=12/source=app} — startIndex {@code 1}</li>
+ *       <li>time only: {@code 2026-06-27/12}, {@code dt=2026-06-27/hh=12} — timeSegStartIndex {@code 0}</li>
+ *       <li>prefix + time: {@code region=us/2026-06-27/12}, {@code region=us/dt=2026-06-27/hh=12} — timeSegStartIndex {@code 1}</li>
+ *       <li>time + suffix: {@code 2026-06-27/12/source=app}, {@code dt=2026-06-27/hh=12/source=app} — timeSegStartIndex {@code 0}</li>
+ *       <li>prefix + time + suffix: {@code region=us/dt=2026-06-27/hh=12/source=app} — timeSegStartIndex {@code 1}</li>
  *     </ul>
  *   </li>
  *   <li>Hour, {@code format=yyyyMMdd/HH}
  *     <ul>
- *       <li>time only: {@code 20260627/12}, {@code dt=20260627/hh=12} — startIndex {@code 0}</li>
- *       <li>prefix + time: {@code region=us/20260627/12}, {@code region=us/dt=20260627/hh=12} — startIndex {@code 1}</li>
- *       <li>time + suffix: {@code 20260627/12/source=app}, {@code dt=20260627/hh=12/source=app} — startIndex {@code 0}</li>
- *       <li>prefix + time + suffix: {@code region=us/dt=20260627/hh=12/source=app} — startIndex {@code 1}</li>
+ *       <li>time only: {@code 20260627/12}, {@code dt=20260627/hh=12} — timeSegStartIndex {@code 0}</li>
+ *       <li>prefix + time: {@code region=us/20260627/12}, {@code region=us/dt=20260627/hh=12} — timeSegStartIndex {@code 1}</li>
+ *       <li>time + suffix: {@code 20260627/12/source=app}, {@code dt=20260627/hh=12/source=app} — timeSegStartIndex {@code 0}</li>
+ *       <li>prefix + time + suffix: {@code region=us/dt=20260627/hh=12/source=app} — timeSegStartIndex {@code 1}</li>
  *     </ul>
  *   </li>
  * </ul>
@@ -92,7 +92,7 @@ import java.util.stream.Collectors;
  *
  * <h3>Locating the time block</h3>
  * The time block must occupy a <i>contiguous</i> segment range of the partition path. Only the
- * segments before it count toward {@code startIndex}; segments after are ignored. Interleaved
+ * segments before it count toward {@code timeSegStartIndex}; segments after are ignored. Interleaved
  * layouts such as {@code dt=20260627/source=app/hh=12} are not supported -- the time block must
  * be in one piece.
  *
@@ -109,7 +109,7 @@ import java.util.stream.Collectors;
  *   <li>{@link org.apache.hudi.config.HoodieTTLConfig#EVENT_TIME_FORMAT} — date-time pattern of
  *       the time block in the partition path. Default {@code yyyy-MM-dd}. A {@code /} in the
  *       pattern means the time block spans that many consecutive segments.</li>
- *   <li>{@link org.apache.hudi.config.HoodieTTLConfig#EVENT_TIME_PARTITION_START_INDEX} —
+ *   <li>{@link org.apache.hudi.config.HoodieTTLConfig#EVENT_TIME_SEGMENT_START_INDEX} —
  *       0-based index of the first segment that carries the time block. Default {@code 0}.
  *       Raise it when non-time segments come before the time block (see examples above).</li>
  *   <li>{@link org.apache.hudi.config.HoodieTTLConfig#EVENT_TIME_DELETE_HIVE_DEFAULT_PARTITION} —
@@ -126,23 +126,23 @@ import java.util.stream.Collectors;
 public class KeepByEventTimeStrategy extends KeepByTimeStrategy {
 
   private final String eventTimeFormat;
-  private final int startIndex;
+  private final int timeSegStartIndex;
   private final boolean deleteHiveDefaultPartition;
   private final boolean hiveStylePartitioning;
 
   public KeepByEventTimeStrategy(HoodieTable hoodieTable, String instantTime) {
     super(hoodieTable, instantTime);
-    // Defaults: format='yyyy-MM-dd', startIndex=0, deleteHiveDefaultPartition=false. The two
-    // guards below catch users who set the values explicitly to obviously-broken inputs.
+    // Defaults: format='yyyy-MM-dd', timeSegStartIndex=0, deleteHiveDefaultPartition=false. The
+    // two guards below catch users who set the values explicitly to obviously-broken inputs.
     this.eventTimeFormat = writeConfig.getPartitionTTLEventTimeFormat();
     if (eventTimeFormat == null || eventTimeFormat.isEmpty()) {
       throw new IllegalArgumentException(
           "hoodie.partition.ttl.strategy.event.time.format must not be empty.");
     }
-    this.startIndex = writeConfig.getPartitionTTLEventTimePartitionStartIndex();
-    if (startIndex < 0) {
+    this.timeSegStartIndex = writeConfig.getPartitionTTLEventTimeSegmentStartIndex();
+    if (timeSegStartIndex < 0) {
       throw new IllegalArgumentException(
-          "hoodie.partition.ttl.strategy.event.time.partition.start.index must be >= 0, got " + startIndex);
+          "hoodie.partition.ttl.strategy.event.time.segment.start.index must be >= 0, got " + timeSegStartIndex);
     }
     this.deleteHiveDefaultPartition = writeConfig.shouldDeleteHiveDefaultPartitionForEventTimeTTL();
     // Hive-style partitioning is a table-level property recorded at table creation; trust it
@@ -158,7 +158,7 @@ public class KeepByEventTimeStrategy extends KeepByTimeStrategy {
     int segCount = segmentCount(eventTimeFormat);
     return partitionPathsForTTL.stream().parallel()
         .filter(path -> isPartitionExpiredByEventTime(
-            path, formatter, startIndex, segCount, cutoffMillis, deleteHiveDefaultPartition, hiveStylePartitioning))
+            path, formatter, timeSegStartIndex, segCount, cutoffMillis, deleteHiveDefaultPartition, hiveStylePartitioning))
         .collect(Collectors.toList());
   }
 
@@ -200,24 +200,24 @@ public class KeepByEventTimeStrategy extends KeepByTimeStrategy {
    */
   static boolean isPartitionExpiredByEventTime(String partitionPath,
                                                DateTimeFormatter formatter,
-                                               int startIndex,
+                                               int timeSegStartIndex,
                                                int segCount,
                                                long cutoffMillis,
                                                boolean deleteHiveDefaultPartition,
                                                boolean hiveStylePartitioning) {
     String[] segments = partitionPath.split("/");
-    if (segments.length < startIndex + segCount) {
+    if (segments.length < timeSegStartIndex + segCount) {
       throw new IllegalArgumentException(String.format(
           "Partition '%s' has %d segment(s) but the configured event time spans %d segment(s) starting at index %d. "
-              + "Check hoodie.partition.ttl.strategy.event.time.format and event.time.partition.start.index, "
+              + "Check hoodie.partition.ttl.strategy.event.time.format and event.time.segment.start.index, "
               + "or switch to KEEP_BY_TIME / KEEP_BY_CREATION_TIME if not all partitions of this table follow an event-time shape.",
-          partitionPath, segments.length, segCount, startIndex));
+          partitionPath, segments.length, segCount, timeSegStartIndex));
     }
 
     String[] timeSegs = new String[segCount];
     boolean hasDefaultSegment = false;
     for (int i = 0; i < segCount; i++) {
-      String seg = segments[startIndex + i];
+      String seg = segments[timeSegStartIndex + i];
       if (hiveStylePartitioning) {
         int eq = seg.indexOf('=');
         if (eq < 0) {
