@@ -164,6 +164,7 @@
     <flink.connector.kafka.version>4.0.1-2.0</flink.connector.kafka.version>
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
     <flink.table.runtime.artifactId>flink-table-runtime</flink.table.runtime.artifactId>
+    <flink.table.planner.artifactId>flink-table-planner_2.12</flink.table.planner.artifactId>
     <flink.parquet.artifactId>flink-parquet</flink.parquet.artifactId>
     <flink.statebackend.rocksdb.artifactId>flink-statebackend-rocksdb</flink.statebackend.rocksdb.artifactId>
     <flink.test.utils.artifactId>flink-test-utils</flink.test.utils.artifactId>
