@@ -257,7 +257,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     refreshFsView();
 
-    BootstrapIndex index = readBootstrapIndex(fsView);
+    BootstrapIndex index = getBootstrapIndex(fsView);
     assertTrue(index instanceof NoOpBootstrapIndex,
         "Expected NoOpBootstrapIndex for non-bootstrap tables to skip storage.exists() probes, got: "
             + index.getClass().getName());
@@ -281,13 +281,13 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     refreshFsView();
 
-    BootstrapIndex index = readBootstrapIndex(fsView);
+    BootstrapIndex index = getBootstrapIndex(fsView);
     assertTrue(index instanceof HFileBootstrapIndex,
         "Expected HFileBootstrapIndex when bootstrap base path is configured and index is enabled, got: "
             + index.getClass().getName());
   }
 
-  private static BootstrapIndex readBootstrapIndex(SyncableFileSystemView view) {
+  private static BootstrapIndex getBootstrapIndex(SyncableFileSystemView view) {
     return ((AbstractTableFileSystemView) view).getBootstrapIndex();
   }
 
