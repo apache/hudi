@@ -75,13 +75,18 @@ public class TableSchemaResolver {
   protected final HoodieTableMetaClient metaClient;
 
   /**
-   * Signals whether suite of the meta-fields should have additional field designating
-   * operation particular record was added by. Note, that determining whether this meta-field
-   * should be appended to the schema requires reading out the actual schema of some data file,
-   * since it's ultimately the source of truth whether this field has to be represented in
-   * the schema
+   * Signals whether the suite of meta-fields should have an additional field designating the
+   * operation by which a particular record was added. Resolved from the table config key
+   * {@code hoodie.allow.operation.metadata.field} (defaults to {@code false}) instead of
+   * reading a data file. The data-file path walks completed commits in reverse looking for one
+   * with inserts/updates and reads each commit's metadata file along the way; for tables with
+   * a long tail of empty commits this is an expensive sequential I/O on object stores. The
+   * table config is the same key the writer consults when populating the field, so it is
+   * authoritative for tables created by Hudi.
    */
   private final Lazy<Boolean> hasOperationField;
+
+  private static final String ALLOW_OPERATION_METADATA_FIELD_KEY = "hoodie.allow.operation.metadata.field";
 
   /**
    * NOTE: {@link HoodieCommitMetadata} could be of non-trivial size for large tables (in 100s of Mbs)
@@ -101,7 +106,8 @@ public class TableSchemaResolver {
   public TableSchemaResolver(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
     this.commitMetadataCache = Lazy.lazily(() -> new ConcurrentHashMap<>(2));
-    this.hasOperationField = Lazy.lazily(this::hasOperationField);
+    this.hasOperationField = Lazy.lazily(() ->
+        metaClient.getTableConfig().getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD_KEY, false));
   }
 
   /**
