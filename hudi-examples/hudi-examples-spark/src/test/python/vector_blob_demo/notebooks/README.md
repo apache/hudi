@@ -130,6 +130,29 @@ BASE_FILE_FORMAT  = "parquet"      # "parquet" or "lance"
 N_SAMPLES         = 256
 ```
 
+### `04_vector_search_batch.ipynb` — supplemental: batch TVF certification
+
+Exercises **`hudi_vector_search_batch`** (RFC-102) — the table-to-table form
+of vector search. Builds two Hudi tables (corpus + queries) and asserts the
+TVF's top-K per query matches a **numpy ground-truth oracle** that recomputes
+the cosine distance matrix from the same embeddings. The notebook prints
+`CERTIFIED ✓` on success or fails the cell loudly on the first divergence.
+
+Toggle variables:
+
+```python
+BASE_FILE_FORMAT = "parquet"   # "parquet" or "lance"
+N_CORPUS         = 1000         # corpus row count
+N_QUERIES        = 20           # query table row count
+TOP_K            = 5
+EMBEDDING_MODEL  = "mobilenetv3_small_100"
+```
+
+A `1000 × 20 × k=5` run produces a 20,000-row cross-join intermediate inside
+`BruteForceSearchAlgorithm.buildBatchQueryPlan`, large enough to exercise
+the broadcast + window-rank machinery while still completing in under a
+minute on a 4 GB driver heap.
+
 ## How toggles work
 
 Each notebook starts with a small **toggles cell** containing plain Python
