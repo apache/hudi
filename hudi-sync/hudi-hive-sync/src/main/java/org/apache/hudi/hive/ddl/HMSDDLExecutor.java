@@ -27,6 +27,7 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.util.HivePartitionUtil;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.hive.util.IMetaStoreClientPool;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
@@ -46,13 +47,13 @@ import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.thrift.TException;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
@@ -73,11 +74,21 @@ public class HMSDDLExecutor implements DDLExecutor {
   private final String databaseName;
   private final IMetaStoreClient client;
   private final PartitionValueExtractor partitionValueExtractor;
+  // Optional. When non-null, partition-row operations fan out across this pool;
+  // table-row operations always use the session `client` field above. See
+  // IMetaStoreClientPool javadoc for the usage contract.
+  private final IMetaStoreClientPool partitionClientPool;
 
   public HMSDDLExecutor(HiveSyncConfig syncConfig, IMetaStoreClient metaStoreClient) throws HiveException, MetaException {
+    this(syncConfig, metaStoreClient, null);
+  }
+
+  public HMSDDLExecutor(HiveSyncConfig syncConfig, IMetaStoreClient metaStoreClient,
+                        IMetaStoreClientPool partitionClientPool) throws HiveException, MetaException {
     this.syncConfig = syncConfig;
     this.databaseName = syncConfig.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.client = metaStoreClient;
+    this.partitionClientPool = partitionClientPool;
     try {
       this.partitionValueExtractor =
           (PartitionValueExtractor) Class.forName(syncConfig.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS)).newInstance();
@@ -193,11 +204,14 @@ public class HMSDDLExecutor implements DDLExecutor {
     }
     log.info("Adding partitions {} to table {}", partitionsToAdd.size(), tableName);
     try {
+      // Fetch the table StorageDescriptor once on the session client. Each worker
+      // copies fields off it; the Thrift POJO is not mutated after this read.
       StorageDescriptor sd = client.getTable(databaseName, tableName).getSd();
       int batchSyncPartitionNum = syncConfig.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
-      for (List<String> batch : CollectionUtils.batches(partitionsToAdd, batchSyncPartitionNum)) {
-        List<Partition> partitionList = new ArrayList<>();
-        batch.forEach(x -> {
+      List<List<String>> batches = CollectionUtils.batches(partitionsToAdd, batchSyncPartitionNum);
+      runBatches("add", tableName, batches, (poolClient, batch) -> {
+        List<Partition> partitionList = new ArrayList<>(batch.size());
+        for (String x : batch) {
           StorageDescriptor partitionSd = new StorageDescriptor();
           partitionSd.setCols(sd.getCols());
           partitionSd.setInputFormat(sd.getInputFormat());
@@ -208,11 +222,11 @@ public class HMSDDLExecutor implements DDLExecutor {
           List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(x);
           partitionSd.setLocation(fullPartitionPath);
           partitionList.add(new Partition(partitionValues, databaseName, tableName, 0, 0, partitionSd, null));
-        });
-        client.add_partitions(partitionList, true, false);
+        }
+        poolClient.add_partitions(partitionList, true, false);
         log.info("HMSDDLExecutor add a batch partitions done: {}", partitionList.size());
-      }
-    } catch (TException e) {
+      });
+    } catch (Exception e) {
       log.error("{}.{} add partition failed", databaseName, tableName, e);
       throw new HoodieHiveSyncException(databaseName + "." + tableName + " add partition failed", e);
     }
@@ -247,15 +261,22 @@ public class HMSDDLExecutor implements DDLExecutor {
 
     log.info("Drop partitions {} on {}", partitionsToDrop.size(), tableName);
     try {
-      for (String dropPartition : partitionsToDrop) {
-        if (HivePartitionUtil.partitionExists(client, tableName, dropPartition, partitionValueExtractor, syncConfig)) {
-          String partitionClause =
-              HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, syncConfig);
-          client.dropPartition(databaseName, tableName, partitionClause, false);
+      // HMS has no batch-drop primitive that matches dropPartition's semantics, so each
+      // worker still iterates its chunk one partition at a time. The win is fanning
+      // chunks across pooled clients.
+      int batchSyncPartitionNum = syncConfig.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
+      List<List<String>> batches = CollectionUtils.batches(partitionsToDrop, batchSyncPartitionNum);
+      runBatches("drop", tableName, batches, (poolClient, batch) -> {
+        for (String dropPartition : batch) {
+          if (HivePartitionUtil.partitionExists(poolClient, tableName, dropPartition, partitionValueExtractor, syncConfig)) {
+            String partitionClause =
+                HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, syncConfig);
+            poolClient.dropPartition(databaseName, tableName, partitionClause, false);
+          }
+          log.info("Drop partition {} on {}", dropPartition, tableName);
         }
-        log.info("Drop partition {} on {}", dropPartition, tableName);
-      }
-    } catch (TException e) {
+      });
+    } catch (Exception e) {
       log.error("{}.{} drop partition failed", databaseName, tableName, e);
       throw new HoodieHiveSyncException(databaseName + "." + tableName + " drop partition failed", e);
     }
@@ -291,21 +312,71 @@ public class HMSDDLExecutor implements DDLExecutor {
 
   private void registerAlterPartitionEvent(String tableName, List<String> alteredPartitions) {
     try {
+      // Read the StorageDescriptor once on the session client; each worker deep-copies
+      // it per partition (alter_partitions semantics today).
       StorageDescriptor sd = client.getTable(databaseName, tableName).getSd();
-      List<Partition> partitionList = alteredPartitions.stream().map(partition -> {
-        Path partitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(syncConfig.getString(META_SYNC_BASE_PATH), partition);
-        String partitionScheme = partitionPath.toUri().getScheme();
-        String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
-            ? HadoopFSUtils.getDFSFullPartitionPath(syncConfig.getHadoopFileSystem(), partitionPath) : partitionPath.toString();
-        List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
-        StorageDescriptor partitionSd = sd.deepCopy();
-        partitionSd.setLocation(fullPartitionPath);
-        return new Partition(partitionValues, databaseName, tableName, 0, 0, partitionSd, null);
-      }).collect(Collectors.toList());
-      client.alter_partitions(databaseName, tableName, partitionList, null);
-    } catch (TException e) {
+      int batchSyncPartitionNum = syncConfig.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
+      List<List<String>> batches = CollectionUtils.batches(alteredPartitions, batchSyncPartitionNum);
+      runBatches("alter", tableName, batches, (poolClient, batch) -> {
+        List<Partition> partitionList = batch.stream().map(partition -> {
+          Path partitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(syncConfig.getString(META_SYNC_BASE_PATH), partition);
+          String partitionScheme = partitionPath.toUri().getScheme();
+          String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
+              ? HadoopFSUtils.getDFSFullPartitionPath(syncConfig.getHadoopFileSystem(), partitionPath) : partitionPath.toString();
+          List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
+          StorageDescriptor partitionSd = sd.deepCopy();
+          partitionSd.setLocation(fullPartitionPath);
+          return new Partition(partitionValues, databaseName, tableName, 0, 0, partitionSd, null);
+        }).collect(Collectors.toList());
+        poolClient.alter_partitions(databaseName, tableName, partitionList, null);
+      });
+    } catch (Exception e) {
       log.error("{}.{} update partition failed", databaseName, tableName, e);
       throw new HoodieHiveSyncException(databaseName + "." + tableName + " update partition failed", e);
+    }
+  }
+
+  /**
+   * Dispatches partition batches either in parallel against the client pool (if
+   * configured) or sequentially against the session client. The sequential path
+   * preserves the exact behavior we had before the pool existed, including failure
+   * semantics where batch N+1 never runs if batch N throws.
+   */
+  @FunctionalInterface
+  private interface BatchAction {
+    void apply(IMetaStoreClient client, List<String> batch) throws Exception;
+  }
+
+  private void runBatches(String opName, String tableName, List<List<String>> batches, BatchAction action) throws Exception {
+    if (partitionClientPool == null) {
+      for (List<String> batch : batches) {
+        action.apply(client, batch);
+      }
+      return;
+    }
+    List<Future<Void>> futures = new ArrayList<>(batches.size());
+    for (List<String> batch : batches) {
+      futures.add(partitionClientPool.executor().submit(() ->
+          partitionClientPool.run(poolClient -> {
+            action.apply(poolClient, batch);
+            return null;
+          })
+      ));
+    }
+    Exception firstError = null;
+    for (Future<Void> f : futures) {
+      try {
+        f.get();
+      } catch (Exception e) {
+        if (firstError == null) {
+          firstError = e;
+        } else {
+          log.warn("Additional {} batch failed on {} (suppressed in favor of first error)", opName, tableName, e);
+        }
+      }
+    }
+    if (firstError != null) {
+      throw firstError;
     }
   }
 }
