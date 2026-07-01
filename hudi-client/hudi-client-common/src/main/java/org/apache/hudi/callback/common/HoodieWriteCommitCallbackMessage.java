@@ -26,6 +26,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -69,10 +70,54 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
    */
   private final Option<Map<String, String>> extraMetadata;
 
+  /**
+   * Previous base file paths keyed by fileId. Populated by the write client
+   * using the cached FileSystemView so that callback implementations don't
+   * have to rebuild a view. Empty for inserts and for callers that don't
+   * pre-resolve.
+   */
+  private final Map<String, PrevFilePaths> prevFilePaths;
+
+  /**
+   * Free-form context that producers can attach for downstream callback consumers.
+   * The OSS write client populates this as empty; specialized callsites or wrappers
+   * may populate it with whatever context their callbacks need. Mirrors the
+   * optional shape of {@link #extraMetadata}.
+   */
+  private final Map<String, String> extraContext;
+
   public HoodieWriteCommitCallbackMessage(String commitTime,
                                           String tableName,
                                           String basePath,
                                           List<HoodieWriteStat> hoodieWriteStat) {
-    this(commitTime, tableName, basePath, hoodieWriteStat, Option.empty(), Option.empty());
+    this(commitTime, tableName, basePath, hoodieWriteStat, Option.empty(), Option.empty(),
+        Collections.emptyMap(), Collections.emptyMap());
+  }
+
+  public HoodieWriteCommitCallbackMessage(String commitTime,
+                                          String tableName,
+                                          String basePath,
+                                          List<HoodieWriteStat> hoodieWriteStat,
+                                          Option<String> commitActionType,
+                                          Option<Map<String, String>> extraMetadata) {
+    this(commitTime, tableName, basePath, hoodieWriteStat, commitActionType, extraMetadata,
+        Collections.emptyMap(), Collections.emptyMap());
+  }
+
+  /**
+   * Container for previously-existing file paths associated with a single fileId in a
+   * commit. {@link #prevBaseFilePath} is the base file the new write replaces, and
+   * {@link #bootstrapBaseFilePath} is the bootstrap-source file the previous
+   * base file referenced (null for non-bootstrap tables).
+   */
+  public static class PrevFilePaths implements Serializable {
+    private static final long serialVersionUID = 1L;
+    public final String prevBaseFilePath;
+    public final String bootstrapBaseFilePath;
+
+    public PrevFilePaths(String prevBaseFilePath, String bootstrapBaseFilePath) {
+      this.prevBaseFilePath = prevBaseFilePath;
+      this.bootstrapBaseFilePath = bootstrapBaseFilePath;
+    }
   }
 }
