@@ -80,7 +80,6 @@ import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
@@ -160,7 +159,7 @@ public class Pipelines {
         SortOperatorGen sortOperatorGen = BucketBulkInsertWriterHelper.getFileIdSorterGen(rowTypeWithFileId);
         dataStream = dataStream.transform("file_sorter", typeInfo, sortOperatorGen.createSortOperator(conf))
             .setParallelism(PARALLELISM_VALUE);
-        ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
+        FlinkTransformationUtils.setManagedMemoryWeight(dataStream.getTransformation(),
             conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
       }
     } else if (!FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.PARTITION_PATH_FIELD)) {
@@ -190,7 +189,7 @@ public class Pipelines {
             .transform(isNeededSortInput ? "sorter:(partition_key, record_key)" : "sorter:(partition_key)",
                 InternalTypeInfo.of(rowType), sortOperatorGen.createSortOperator(conf))
             .setParallelism(PARALLELISM_VALUE);
-        ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
+        FlinkTransformationUtils.setManagedMemoryWeight(dataStream.getTransformation(),
             conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
       }
     }
@@ -568,7 +567,7 @@ public class Pipelines {
             new ClusteringOperator(conf, rowType))
         .setParallelism(conf.get(FlinkOptions.CLUSTERING_TASKS));
     if (OptionsResolver.sortClusteringEnabled(conf)) {
-      ExecNodeUtil.setManagedMemoryWeight(clusteringStream.getTransformation(),
+      FlinkTransformationUtils.setManagedMemoryWeight(clusteringStream.getTransformation(),
           conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
     }
     DataStreamSink<ClusteringCommitEvent> clusteringCommitEventDataStream = clusteringStream.addSink(new ClusteringCommitSink(conf))
@@ -611,7 +610,7 @@ public class Pipelines {
 
   public static void declareManagedMemoryIfNecessary(Configuration conf, DataStream<?> dataStream, Supplier<Long> bufferSizeSupplier) {
     if (OptionsResolver.isManagedMemoryBufferEnabled(conf)) {
-      ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(), bufferSizeSupplier.get());
+      FlinkTransformationUtils.setManagedMemoryWeight(dataStream.getTransformation(), bufferSizeSupplier.get());
     }
   }
 

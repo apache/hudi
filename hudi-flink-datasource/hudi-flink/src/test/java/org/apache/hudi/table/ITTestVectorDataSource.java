@@ -58,7 +58,6 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.TableResult;
-import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.Row;
@@ -86,6 +85,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.sink.utils.FlinkTransformationUtils.setManagedMemoryWeight;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -561,7 +561,7 @@ public class ITTestVectorDataSource {
               new ClusteringOperator(conf, rowType))
           .setParallelism(clusteringPlan.getInputGroups().size());
 
-      ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
+      setManagedMemoryWeight(dataStream.getTransformation(),
           conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
 
       dataStream

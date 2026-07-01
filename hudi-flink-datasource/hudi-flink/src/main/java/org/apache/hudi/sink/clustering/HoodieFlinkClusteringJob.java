@@ -49,7 +49,6 @@ import org.apache.flink.client.deployment.application.ApplicationExecutionExcept
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.slf4j.Logger;
@@ -59,6 +58,8 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import static org.apache.hudi.sink.utils.FlinkTransformationUtils.setManagedMemoryWeight;
 
 /**
  * Flink hudi clustering program that can be executed manually.
@@ -398,7 +399,7 @@ public class HoodieFlinkClusteringJob {
           .setParallelism(clusteringParallelism);
 
       if (OptionsResolver.sortClusteringEnabled(conf)) {
-        ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
+        setManagedMemoryWeight(dataStream.getTransformation(),
             conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
       }
 

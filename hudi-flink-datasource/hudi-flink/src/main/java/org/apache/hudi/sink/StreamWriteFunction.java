@@ -56,7 +56,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
-import org.apache.flink.table.planner.codegen.sort.SortCodeGenerator;
 import org.apache.flink.table.runtime.generated.GeneratedNormalizedKeyComputer;
 import org.apache.flink.table.runtime.generated.GeneratedRecordComparator;
 import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
@@ -220,9 +219,8 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     ValidationUtils.checkArgument(recordKeyFields.length > 0,
         "Record key fields can't be empty for LSM storage layout stream write.");
     SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType, recordKeyFields);
-    SortCodeGenerator codeGenerator = sortOperatorGen.createSortCodeGenerator();
-    this.recordKeyComputer = codeGenerator.generateNormalizedKeyComputer("LsmRecordKeySortComputer");
-    this.recordKeyComparator = codeGenerator.generateRecordComparator("LsmRecordKeySortComparator");
+    this.recordKeyComputer = sortOperatorGen.generateNormalizedKeyComputer("LsmRecordKeySortComputer");
+    this.recordKeyComparator = sortOperatorGen.generateRecordComparator("LsmRecordKeySortComparator");
     log.info("LSM storage layout stream write will sort buffered RowData by record keys: {}",
         String.join(",", recordKeyFields));
   }
