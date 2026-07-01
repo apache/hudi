@@ -49,6 +49,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
@@ -126,6 +127,11 @@ public class HoodieAvroHFileWriter
   @Override
   public boolean canWrite() {
     return !isWrapperFileSystem || wrapperFs.get().getBytesWritten(file) < maxFileSize;
+  }
+
+  @Override
+  public void addFooterMetadata(Map<String, String> footerMetadata) {
+    footerMetadata.forEach((key, value) -> writer.appendFileInfo(key, getUTF8Bytes(value)));
   }
 
   @Override

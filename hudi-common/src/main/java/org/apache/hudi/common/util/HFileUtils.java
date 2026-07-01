@@ -34,10 +34,14 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.hfile.HFileContext;
+import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.HFileWriter;
 import org.apache.hudi.io.hfile.HFileWriterImpl;
+import org.apache.hudi.io.hfile.UTF8StringKey;
+import org.apache.hudi.io.storage.HFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
@@ -54,6 +58,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -66,6 +71,7 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_NUM
 import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_TYPE;
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_WITH_BLOOM_FILTER_ENABLED;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
@@ -101,7 +107,25 @@ public class HFileUtils extends FileFormatUtils {
 
   @Override
   public Map<String, String> readFooter(HoodieStorage storage, boolean required, StoragePath filePath, String... footerNames) {
-    throw new UnsupportedOperationException("HFileUtils does not support readFooter");
+    Map<String, String> footerVals = new HashMap<>();
+    try (HFileReader reader = HFileReaderFactory.builder()
+        .withStorage(storage)
+        .withPath(filePath)
+        .build()
+        .createHFileReader()) {
+      for (String footerName : footerNames) {
+        Option<byte[]> footerValue = reader.getMetaInfo(new UTF8StringKey(footerName));
+        if (footerValue.isPresent()) {
+          footerVals.put(footerName, fromUTF8Bytes(footerValue.get()));
+        } else if (required) {
+          throw new MetadataNotFoundException(
+              "Could not find index in HFile footer. Looked for key " + footerName + " in " + filePath);
+        }
+      }
+      return footerVals;
+    } catch (IOException io) {
+      throw new HoodieIOException("Unable to read footer for HFile: " + filePath, io);
+    }
   }
 
   @Override

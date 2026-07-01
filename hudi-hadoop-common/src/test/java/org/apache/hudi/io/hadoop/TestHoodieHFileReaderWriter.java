@@ -31,9 +31,12 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.HFileUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.UTF8StringKey;
@@ -199,6 +202,27 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
+  }
+
+  @Test
+  public void testReadFooterMetadata() throws Exception {
+    HoodieSchema schema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchemaWithMetaFields.avsc");
+    HoodieAvroHFileWriter writer = createWriter(schema, false);
+    Map<String, String> footerMetadata = new TreeMap<>();
+    footerMetadata.put(NativeLogFooterMetadata.FOOTER_METADATA_KEY, "{\"SCHEMA\":\"schema\"}");
+    footerMetadata.put("custom", "value");
+    writer.addFooterMetadata(footerMetadata);
+    writer.close();
+
+    HoodieStorage storage = HoodieTestUtils.getStorage(getFilePath());
+    Map<String, String> footer = new HFileUtils().readFooter(
+        storage, false, getFilePath(), NativeLogFooterMetadata.FOOTER_METADATA_KEY, "custom", "missing");
+
+    assertEquals(2, footer.size());
+    assertEquals("{\"SCHEMA\":\"schema\"}", footer.get(NativeLogFooterMetadata.FOOTER_METADATA_KEY));
+    assertEquals("value", footer.get("custom"));
+    assertThrows(MetadataNotFoundException.class,
+        () -> new HFileUtils().readFooter(storage, true, getFilePath(), "missing"));
   }
 
   @ParameterizedTest
