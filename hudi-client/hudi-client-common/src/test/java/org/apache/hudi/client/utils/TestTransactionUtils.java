@@ -89,7 +89,7 @@ class TestTransactionUtils extends HoodieCommonTestHarness {
     when(table.getMetaClient()).thenReturn(spyMetaClient);
     assertThrows(HoodieWriteConflictException.class,
         () -> TransactionUtils.resolveWriteConflictIfAny(table, currentInstant, Option.of(currentMetadata), writeConfig,
-            lastSuccessfulInstant, timelineRefreshedWithinTransaction, Collections.singleton(newInstantTime)));
+            lastSuccessfulInstant, timelineRefreshedWithinTransaction, Collections.singleton(newInstantTime), Collections.emptySet()));
     verify(spyMetaClient, times(timelineRefreshedWithinTransaction ? 0 : 1)).reloadActiveTimeline();
   }
 
@@ -128,7 +128,7 @@ class TestTransactionUtils extends HoodieCommonTestHarness {
     HoodieTableMetaClient spyMetaClient = spy(metaClient);
     when(table.getMetaClient()).thenReturn(spyMetaClient);
     Option<HoodieCommitMetadata> actualResult = TransactionUtils.resolveWriteConflictIfAny(table, currentInstant, Option.of(currentMetadata), writeConfig,
-            lastSuccessfulInstant, false, Collections.singleton(newInstantTime));
+            lastSuccessfulInstant, false, Collections.singleton(newInstantTime), Collections.emptySet());
     // since we bypass entire conflict resolution
     verify(spyMetaClient, times(0)).reloadActiveTimeline();
   }

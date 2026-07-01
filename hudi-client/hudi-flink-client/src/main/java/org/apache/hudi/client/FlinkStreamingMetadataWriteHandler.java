@@ -93,7 +93,7 @@ public class FlinkStreamingMetadataWriteHandler extends StreamingMetadataWriteHa
   public void cleanResources(String instantTime) {
     Option<HoodieTableMetadataWriter> metadataWriterOpt = this.metadataWriterMap.remove(instantTime);
     if (metadataWriterOpt == null || metadataWriterOpt.isEmpty()) {
-      log.warn("Metadata writer for {} has not been initialized, no need to stop heartbeat.", instantTime);
+      log.debug("Metadata writer for {} has not been initialized or been closed already, skip the close.", instantTime);
       return;
     }
     try {
