@@ -20,6 +20,10 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -27,12 +31,14 @@ import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
+import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
+import org.apache.hudi.utilities.sources.helpers.QueryRunner;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,18 +46,23 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -91,7 +102,7 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
     setMockQueryRunner(inputDs);
-    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
+    when(mockCloudObjectsSelectorCommon.loadAsDataset(any(), any(), any(), eq(schemaProvider), anyInt())).thenReturn(Option.empty());
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(null);
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 100L, "1#path/to/file1.json");
@@ -116,7 +127,7 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
     setMockQueryRunner(inputDs);
-    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
+    when(mockCloudObjectsSelectorCommon.loadAsDataset(any(), any(), any(), eq(schemaProvider), anyInt())).thenReturn(Option.empty());
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(null);
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 250L, "1#path/to/file2.json");
@@ -156,7 +167,7 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
     setMockQueryRunner(inputDs);
-    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
+    when(mockCloudObjectsSelectorCommon.loadAsDataset(any(), any(), any(), eq(schemaProvider), anyInt())).thenReturn(Option.empty());
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(null);
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1"), 100L,
@@ -221,7 +232,7 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
 
     setMockQueryRunner(inputDs);
     SourceProfile<Long> sourceProfile = new TestSourceProfile(50L, 0, 10L);
-    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
+    when(mockCloudObjectsSelectorCommon.loadAsDataset(any(), any(), any(), eq(schemaProvider), anyInt())).thenReturn(Option.empty());
     if (useSourceProfile) {
       when(sourceProfileSupplier.getSourceProfile()).thenReturn(sourceProfile);
     } else {
@@ -259,7 +270,7 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
     setMockQueryRunner(inputDs);
-    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
+    when(mockCloudObjectsSelectorCommon.loadAsDataset(any(), any(), any(), eq(schemaProvider), anyInt())).thenReturn(Option.empty());
     SourceProfile<Long> sourceProfile = new TestSourceProfile(50L, 0, 10L);
     if (useSourceProfile) {
       when(sourceProfileSupplier.getSourceProfile()).thenReturn(sourceProfile);
@@ -305,7 +316,7 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
     setMockQueryRunner(inputDs, Option.of(snapshotCheckPoint));
-    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
+    when(mockCloudObjectsSelectorCommon.loadAsDataset(any(), any(), any(), eq(schemaProvider), anyInt())).thenReturn(Option.empty());
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
     typedProperties.setProperty("hoodie.streamer.source.cloud.data.ignore.relpath.prefix", "path/to/skip");
     typedProperties.setProperty("hoodie.streamer.source.cloud.data.select.relative.path.regex", "path/to/file[0-9]+");
@@ -335,7 +346,7 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
     // Verify the partitions being passed in getCloudObjectDataDF are correct.
     ArgumentCaptor<Integer> argumentCaptor = ArgumentCaptor.forClass(Integer.class);
     ArgumentCaptor<Integer> argumentCaptorForMetrics = ArgumentCaptor.forClass(Integer.class);
-    verify(mockCloudObjectsSelectorCommon, atLeastOnce()).loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), argumentCaptor.capture());
+    verify(mockCloudObjectsSelectorCommon, atLeastOnce()).loadAsDataset(any(), any(), any(), eq(schemaProvider), argumentCaptor.capture());
     verify(metrics, atLeastOnce()).updateStreamerSourceParallelism(argumentCaptorForMetrics.capture());
     List<Integer> numPartitions;
     if (snapshotCheckPoint.equals("1") || snapshotCheckPoint.equals("2")) {
@@ -343,8 +354,79 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
     } else {
       numPartitions = Arrays.asList(23, sourcePartitions);
     }
-    Assertions.assertEquals(numPartitions, argumentCaptor.getAllValues());
-    Assertions.assertEquals(numPartitions, argumentCaptorForMetrics.getAllValues());
+    assertEquals(numPartitions, argumentCaptor.getAllValues());
+    assertEquals(numPartitions, argumentCaptorForMetrics.getAllValues());
+  }
+
+  /**
+   * Resume from `commit#fileKey` must re-include the start commit; runs on v6 and v8, COW and MOR
+   * source meta-tables since cloud event sources always use V1/requested-time regardless of version.
+   */
+  @ParameterizedTest
+  @CsvSource({"6,COPY_ON_WRITE", "8,COPY_ON_WRITE", "6,MERGE_ON_READ", "8,MERGE_ON_READ"})
+  void testRealQueryRunnerResumesMidCommitPagination(String sourceTableVersion, HoodieTableType tableType) throws IOException {
+    Properties tableProps = new Properties();
+    tableProps.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(true));
+    tableProps.put("hoodie.datasource.write.recordkey.field", "_row_key");
+    tableProps.put("hoodie.datasource.write.partitionpath.field", "");
+    tableProps.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
+    tableProps.put(HoodieTableConfig.PARTITION_FIELDS.key(), "");
+    tableProps.put(WRITE_TABLE_VERSION.key(), sourceTableVersion);
+    metaClient = getHoodieMetaClient(storageConf(), basePath(), tableProps, tableType);
+
+    // timestamp-format instants: the incremental read normalizes START_COMMIT/END_COMMIT
+    // through HoodieSqlCommonUtils.formatIncrementalInstant, which rejects other formats
+    String startCommit = "20260601000001";
+    String laterCommit = "20260601000002";
+    writeS3MetadataRecords(startCommit, Arrays.asList(
+        Pair.of("path/to/file-01.json", 100L),
+        Pair.of("path/to/file-02.json", 100L),
+        Pair.of("path/to/file-03.json", 100L),
+        Pair.of("path/to/file-04.json", 100L),
+        Pair.of("path/to/file-05.json", 100L)));
+    // the second commit re-writes an existing key (an S3 re-upload), landing in a log file on MOR
+    writeS3MetadataRecords(laterCommit, Arrays.asList(Pair.of("path/to/file-05.json", 100L)));
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      boolean hasLogFiles = Arrays.stream(fs().listStatus(new Path(basePath())))
+          .anyMatch(f -> f.getPath().getName().contains(".log."));
+      assertTrue(hasLogFiles, "Expected log files in the MOR source meta-table");
+    }
+
+    TypedProperties props = setProps(READ_UPTO_LATEST_COMMIT);
+    props.setProperty(CloudSourceConfig.ENABLE_EXISTS_CHECK.key(), "false");
+    when(mockCloudObjectsSelectorCommon.loadAsDataset(
+            any(), any(), any(), eq(schemaProvider), anyInt()))
+        .thenReturn(Option.empty());
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(null);
+
+    // Real QueryRunner so the actual Spark incremental read against the on-disk meta-table runs.
+    S3EventsHoodieIncrSource incrSource = new S3EventsHoodieIncrSource(
+        props, jsc(), spark(),
+        new QueryRunner(spark(), props),
+        new CloudDataFetcher(props, jsc(), spark(), metrics, mockCloudObjectsSelectorCommon),
+        new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
+
+    // Resume mid-commit at file-02; sourceLimit=250B fits file-03+file-04, file-05 would exceed.
+    Checkpoint resumeFrom = new StreamerCheckpointV1(startCommit + "#path/to/file-02.json");
+    Pair<Option<Dataset<Row>>, Checkpoint> result = incrSource.fetchNextBatch(Option.of(resumeFrom), 250L);
+
+    assertEquals(
+        new StreamerCheckpointV1(startCommit + "#path/to/file-04.json"),
+        result.getRight(),
+        "Next batch must continue within the start commit, not advance to a bare instant.");
+
+    // Filter must pass exactly file-03 and file-04 to downstream loading.
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<CloudObjectMetadata>> captor = ArgumentCaptor.forClass((Class) List.class);
+    verify(mockCloudObjectsSelectorCommon).loadAsDataset(
+        any(), captor.capture(), any(), eq(schemaProvider), anyInt());
+    List<String> selectedPaths = captor.getValue().stream()
+        .map(CloudObjectMetadata::getPath)
+        .sorted()
+        .collect(java.util.stream.Collectors.toList());
+    assertEquals(2, selectedPaths.size(), "Expected file-03 and file-04, got: " + selectedPaths);
+    assertTrue(selectedPaths.get(0).endsWith("/path/to/file-03.json"), selectedPaths.get(0));
+    assertTrue(selectedPaths.get(1).endsWith("/path/to/file-04.json"), selectedPaths.get(1));
   }
 
   @Test

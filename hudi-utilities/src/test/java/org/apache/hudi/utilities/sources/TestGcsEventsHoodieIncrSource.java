@@ -27,7 +27,9 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
@@ -48,6 +50,7 @@ import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.S3EventsHoodieIncrSourceHarness.TestSourceProfile;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
+import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
@@ -60,11 +63,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -82,14 +85,18 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.verify;
@@ -251,7 +258,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     List<Integer> numPartitions = Arrays.asList(12, 2, 1);
     ArgumentCaptor<Integer> argumentCaptor = ArgumentCaptor.forClass(Integer.class);
     verify(cloudObjectsSelectorCommon, atLeastOnce()).loadAsDataset(any(), any(), any(), eq(schemaProvider), argumentCaptor.capture());
-    Assertions.assertEquals(numPartitions, argumentCaptor.getAllValues());
+    assertEquals(numPartitions, argumentCaptor.getAllValues());
   }
 
   @ParameterizedTest
@@ -309,8 +316,78 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     } else {
       numPartitions = Arrays.asList(23, sourcePartitions);
     }
-    Assertions.assertEquals(numPartitions, argumentCaptor.getAllValues());
-    Assertions.assertEquals(numPartitions, argumentCaptorForMetrics.getAllValues());
+    assertEquals(numPartitions, argumentCaptor.getAllValues());
+    assertEquals(numPartitions, argumentCaptorForMetrics.getAllValues());
+  }
+
+  /**
+   * Resume from `commit#fileKey` must re-include the start commit; runs on v6 and v8, COW and MOR
+   * source meta-tables since cloud event sources always use V1/requested-time regardless of version.
+   */
+  @ParameterizedTest
+  @CsvSource({"6,COPY_ON_WRITE", "8,COPY_ON_WRITE", "6,MERGE_ON_READ", "8,MERGE_ON_READ"})
+  void testRealQueryRunnerResumesMidCommitPagination(String sourceTableVersion, HoodieTableType tableType) throws IOException {
+    Properties tableProps = new Properties();
+    tableProps.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(true));
+    tableProps.put("hoodie.datasource.write.recordkey.field", "_row_key");
+    tableProps.put("hoodie.datasource.write.partitionpath.field", "");
+    tableProps.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
+    tableProps.put(HoodieTableConfig.PARTITION_FIELDS.key(), "");
+    tableProps.put(WRITE_TABLE_VERSION.key(), sourceTableVersion);
+    metaClient = getHoodieMetaClient(storageConf(), basePath(), tableProps, tableType);
+
+    // timestamp-format instants: the incremental read normalizes START_COMMIT/END_COMMIT
+    // through HoodieSqlCommonUtils.formatIncrementalInstant, which rejects other formats
+    String startCommit = "20260601000001";
+    String laterCommit = "20260601000002";
+    writeGcsMetadataRecords(startCommit, Arrays.asList(
+        Pair.of("name/file-01.json", 100L),
+        Pair.of("name/file-02.json", 100L),
+        Pair.of("name/file-03.json", 100L),
+        Pair.of("name/file-04.json", 100L),
+        Pair.of("name/file-05.json", 100L)));
+    // the second commit re-writes an existing key (a re-uploaded object), landing in a log file on MOR
+    writeGcsMetadataRecords(laterCommit, Arrays.asList(Pair.of("name/file-05.json", 100L)));
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      boolean hasLogFiles = Arrays.stream(fs().listStatus(new Path(basePath())))
+          .anyMatch(f -> f.getPath().getName().contains(".log."));
+      assertTrue(hasLogFiles, "Expected log files in the MOR source meta-table");
+    }
+
+    TypedProperties props = setProps(READ_UPTO_LATEST_COMMIT);
+    props.setProperty(CloudSourceConfig.ENABLE_EXISTS_CHECK.key(), "false");
+    when(cloudObjectsSelectorCommon.loadAsDataset(any(), any(), any(), eq(schemaProvider), anyInt()))
+        .thenReturn(Option.empty());
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(null);
+
+    // Real QueryRunner so the actual Spark incremental read against the on-disk meta-table runs.
+    GcsEventsHoodieIncrSource incrSource = new GcsEventsHoodieIncrSource(
+        props, jsc(), spark(),
+        new CloudDataFetcher(props, jsc(), spark(), metrics, cloudObjectsSelectorCommon),
+        new QueryRunner(spark(), props),
+        new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
+
+    // Resume mid-commit at file-02; sourceLimit=250B fits file-03+file-04, file-05 would exceed.
+    Checkpoint resumeFrom = new StreamerCheckpointV1(startCommit + "#name/file-02.json");
+    Pair<Option<Dataset<Row>>, Checkpoint> result = incrSource.fetchNextBatch(Option.of(resumeFrom), 250L);
+
+    assertEquals(
+        new StreamerCheckpointV1(startCommit + "#name/file-04.json"),
+        result.getRight(),
+        "Next batch must continue within the start commit, not advance to a bare instant.");
+
+    // Filter must pass exactly file-03 and file-04 to downstream loading.
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<CloudObjectMetadata>> captor = ArgumentCaptor.forClass((Class) List.class);
+    verify(cloudObjectsSelectorCommon).loadAsDataset(
+        any(), captor.capture(), any(), eq(schemaProvider), anyInt());
+    List<String> selectedPaths = captor.getValue().stream()
+        .map(CloudObjectMetadata::getPath)
+        .sorted()
+        .collect(Collectors.toList());
+    assertEquals(2, selectedPaths.size(), "Expected file-03 and file-04, got: " + selectedPaths);
+    assertTrue(selectedPaths.get(0).endsWith("/name/file-03.json"), selectedPaths.get(0));
+    assertTrue(selectedPaths.get(1).endsWith("/name/file-04.json"), selectedPaths.get(1));
   }
 
   @Test
@@ -375,8 +452,8 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     Option<Dataset<Row>> datasetOpt = dataAndCheckpoint.getLeft();
     Checkpoint nextCheckPoint = dataAndCheckpoint.getRight();
 
-    Assertions.assertNotNull(nextCheckPoint);
-    Assertions.assertEquals(new StreamerCheckpointV1(expectedCheckpoint), nextCheckPoint);
+    assertNotNull(nextCheckPoint);
+    assertEquals(new StreamerCheckpointV1(expectedCheckpoint), nextCheckPoint);
   }
 
   private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy,
@@ -387,7 +464,12 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   }
 
   private HoodieRecord getGcsMetadataRecord(String commitTime, String filename, String bucketName, String generation) {
-    String partitionPath = bucketName;
+    return getGcsMetadataRecord(commitTime, filename, bucketName, generation, 370L);
+  }
+
+  private HoodieRecord getGcsMetadataRecord(String commitTime, String filename, String bucketName, String generation, long size) {
+    // partition path must match the table config, or the incremental read lists no partitions
+    String partitionPath = metaClient.getTableConfig().isTablePartitioned() ? bucketName : "";
 
     String id = "id:" + bucketName + "/" + filename + "/" + generation;
     String mediaLink = String.format("https://storage.googleapis.com/download/storage/v1/b/%s/o/%s"
@@ -412,7 +494,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     rec.put("metageneration", "1");
     rec.put("name", filename);
     rec.put("selfLink", selfLink);
-    rec.put("size", "370");
+    rec.put("size", Long.toString(size));
     rec.put("storageClass", "STANDARD");
     rec.put("timeCreated", "2022-08-29T05:52:55.869Z");
     rec.put("timeStorageClassUpdated", "2022-08-29T05:52:55.869Z");
@@ -443,7 +525,23 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
           getGcsMetadataRecord(commitTime, "data-file-4.json", "bucket-1", "1")
       );
       List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(gcsMetadataRecords, 1), commitTime).collect();
-      writeClient.commit(commitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      writeClient.commit(commitTime, jsc.parallelize(statusList), Option.empty(), metaClient.getCommitActionType(), Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
+      return Pair.of(commitTime, gcsMetadataRecords);
+    }
+  }
+
+  /** Writes one commit with one GCS event record per (objectKey, objectSize) entry. */
+  private Pair<String, List<HoodieRecord>> writeGcsMetadataRecords(String commitTime,
+                                                                   List<Pair<String, Long>> keysAndSizes) throws IOException {
+    HoodieWriteConfig writeConfig = getWriteConfig();
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
+      WriteClientTestUtils.startCommitWithTime(writeClient, commitTime);
+      List<HoodieRecord> gcsMetadataRecords = keysAndSizes.stream()
+          .map(p -> getGcsMetadataRecord(commitTime, p.getLeft(), "bucket-1", "1", p.getRight()))
+          .collect(Collectors.toList());
+      List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(gcsMetadataRecords, 1), commitTime).collect();
+      writeClient.commit(commitTime, jsc.parallelize(statusList), Option.empty(), metaClient.getCommitActionType(), Collections.emptyMap(), Option.empty());
       assertNoWriteErrors(statusList);
       return Pair.of(commitTime, gcsMetadataRecords);
     }

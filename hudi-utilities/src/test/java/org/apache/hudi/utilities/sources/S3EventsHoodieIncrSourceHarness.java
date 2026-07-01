@@ -73,14 +73,12 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.mockito.Mockito.when;
 
@@ -163,7 +161,8 @@ public class S3EventsHoodieIncrSourceHarness extends SparkClientFunctionalTestHa
   }
 
   protected HoodieRecord generateS3EventMetadata(String commitTime, String bucketName, String objectKey, Long objectSize) {
-    String partitionPath = bucketName;
+    // partition path must match the table config, or the incremental read lists no partitions
+    String partitionPath = metaClient.getTableConfig().isTablePartitioned() ? bucketName : "";
     HoodieSchema schema = S3_METADATA_SCHEMA;
     GenericRecord rec = new GenericData.Record(schema.toAvroSchema());
     HoodieSchemaField s3Field = schema.getField("s3").get();
@@ -222,15 +221,20 @@ public class S3EventsHoodieIncrSourceHarness extends SparkClientFunctionalTestHa
   }
 
   protected Pair<String, List<HoodieRecord>> writeS3MetadataRecords(String commitTime) throws IOException {
+    return writeS3MetadataRecords(commitTime, Collections.singletonList(Pair.of("data-file-1.json", 1L)));
+  }
+
+  /** Writes one commit with one S3 event record per (objectKey, objectSize) entry. */
+  protected Pair<String, List<HoodieRecord>> writeS3MetadataRecords(String commitTime,
+                                                                    List<Pair<String, Long>> keysAndSizes) throws IOException {
     HoodieWriteConfig writeConfig = getWriteConfig();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
-
       WriteClientTestUtils.startCommitWithTime(writeClient, commitTime);
-      List<HoodieRecord> s3MetadataRecords = Arrays.asList(
-          generateS3EventMetadata(commitTime, "bucket-1", "data-file-1.json", 1L)
-      );
+      List<HoodieRecord> s3MetadataRecords = keysAndSizes.stream()
+          .map(p -> generateS3EventMetadata(commitTime, "bucket-1", p.getLeft(), p.getRight()))
+          .collect(Collectors.toList());
       List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(s3MetadataRecords, 1), commitTime).collect();
-      writeClient.commit(commitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      writeClient.commit(commitTime, jsc.parallelize(statusList), Option.empty(), metaClient.getCommitActionType(), Collections.emptyMap(), Option.empty());
       assertNoWriteErrors(statusList);
       return Pair.of(commitTime, s3MetadataRecords);
     }
