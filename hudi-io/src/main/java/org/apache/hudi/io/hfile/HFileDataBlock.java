@@ -20,6 +20,7 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.util.IOUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -30,6 +31,7 @@ import java.util.List;
 
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_BYTE;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
+import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT32;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT64;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BEFORE_BLOCK_FIRST_KEY;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_FOUND;
@@ -104,15 +106,30 @@ public class HFileDataBlock extends HFileBlock {
   int seekTo(HFileCursor cursor, Key key, int blockStartOffsetInFile) {
     int relativeOffset = cursor.getOffset() - blockStartOffsetInFile;
     int lastRelativeOffset = relativeOffset;
+    // The key-value cached at the starting position, if any. It is only consulted to re-cache it
+    // in the cursor when the lookup lands "in range" on the very first comparison; entries scanned
+    // past are compared directly against the backing buffer below (no per-entry KeyValue/Key
+    // allocation), so this is emptied after the first iteration and the cursor falls back to a
+    // deferred read.
     Option<KeyValue> lastKeyValue = cursor.getKeyValue();
+    // The lookup key content is fixed across the scan; hoist it out of the loop. Note the lookup
+    // key may be a UTF8StringKey, so use the polymorphic content accessors (no 2-byte prefix).
+    byte[] lookupBytes = key.getBytes();
+    int lookupContentOffset = key.getContentOffset();
+    int lookupContentLength = key.getContentLength();
     while (relativeOffset < uncompressedContentEndRelativeOffset) {
-      // Full length is not known yet until parsing
-      KeyValue kv = readKeyValue(relativeOffset);
-      int comp = kv.getKey().compareTo(key);
+      // Compare the entry key against the lookup key directly on the buffer, without materializing
+      // a KeyValue/Key for every scanned entry. Layout at `relativeOffset`: [int keyLength]
+      // [int valueLength][short keyContentLength][key content]...; see KeyValue and Key.
+      int keyContentLength = IOUtils.readShort(byteBuff, relativeOffset + KEY_OFFSET);
+      int keyContentOffset = relativeOffset + KEY_OFFSET + KEY_LENGTH_LENGTH;
+      int comp = IOUtils.compareTo(
+          byteBuff, keyContentOffset, keyContentLength,
+          lookupBytes, lookupContentOffset, lookupContentLength);
       if (comp == 0) {
         // The lookup key equals the key `relativeOffset` points to; the key is found.
-        // Set the cursor to the current offset that points to the exact match
-        cursor.set(relativeOffset + blockStartOffsetInFile, kv);
+        // Materialize the KeyValue once and set the cursor to the exact match.
+        cursor.set(relativeOffset + blockStartOffsetInFile, readKeyValue(relativeOffset));
         return SEEK_TO_FOUND;
       } else if (comp > 0) {
         // There is no matched key (otherwise, the method should already stop there and return 0)
@@ -120,10 +137,10 @@ public class HFileDataBlock extends HFileBlock {
         // So set the cursor to the previous offset, pointing the greatest key in the file that is
         // less than the lookup key.
         if (lastKeyValue.isPresent()) {
-          // If the key-value pair is already, cache it
+          // The previous key-value was already cached (first iteration); reuse it.
           cursor.set(lastRelativeOffset + blockStartOffsetInFile, lastKeyValue.get());
         } else {
-          // Otherwise, defer the read till it's needed
+          // Otherwise, defer the read till it's needed; getKeyValue() materializes it lazily.
           cursor.setOffset(lastRelativeOffset + blockStartOffsetInFile);
         }
         // If the lookup key is lexicographically smaller than the first key pointed to by
@@ -131,12 +148,15 @@ public class HFileDataBlock extends HFileBlock {
         // know that the cursor is ahead of the lookup key in this case.
         return isAtFirstKey(relativeOffset) ? SEEK_TO_BEFORE_BLOCK_FIRST_KEY : SEEK_TO_IN_RANGE;
       }
+      int entryKeyLength = IOUtils.readInt(byteBuff, relativeOffset);
+      int entryValueLength = IOUtils.readInt(byteBuff, relativeOffset + SIZEOF_INT32);
       long increment =
-          (long) KEY_OFFSET + (long) kv.getKeyLength() + (long) kv.getValueLength()
+          (long) KEY_OFFSET + (long) entryKeyLength + (long) entryValueLength
               + ZERO_TS_VERSION_BYTE_LENGTH;
       lastRelativeOffset = relativeOffset;
       relativeOffset += increment;
-      lastKeyValue = Option.of(kv);
+      // Past entries are not materialized; clear the cache so the "in range" branch above defers.
+      lastKeyValue = Option.empty();
     }
     // We reach the end of the block. Set the cursor to the offset of last key.
     // In this case, the lookup key is greater than the last key.
