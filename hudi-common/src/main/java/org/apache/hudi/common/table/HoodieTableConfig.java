@@ -736,6 +736,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static Option<String[]> getPartitionFields(HoodieConfig config) {
     if (contains(PARTITION_FIELDS, config)) {
       return Option.of(Arrays.stream(config.getString(PARTITION_FIELDS).split(BaseKeyGenerator.FIELD_SEPARATOR))
+          .map(String::trim)
           .filter(p -> !p.isEmpty())
           .map(p -> getPartitionFieldWithoutKeyGenPartitionType(p, config))
           .collect(Collectors.toList()).toArray(new String[] {}));
