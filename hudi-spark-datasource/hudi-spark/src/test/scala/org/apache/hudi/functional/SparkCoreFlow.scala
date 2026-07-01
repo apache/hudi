@@ -17,16 +17,20 @@
  * under the License.
  */
 
-package org.apache.hudi.functional;
+package org.apache.hudi.functional
 
-import org.scalatest.TagAnnotation;
+import org.scalatest.Tag
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
-
-@TagAnnotation
-@Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.METHOD, ElementType.TYPE})
-public @interface SparkSQLCoreFlow {}
+/**
+ * ScalaTest tag for the curated "core flow" subset that runs on every Spark
+ * version in CI (via the {@code core-tests} Maven profile), as opposed to the
+ * full suite that runs only on the latest Spark major versions.
+ *
+ * Covers the fundamental Spark read/write surface (DataFrame round-trips, SQL
+ * DML/DDL, native parquet/orc/InternalRow I/O), not just SQL. Apply it per test
+ * with {@code taggedAs(SparkCoreFlow)}; select it via the scalatest
+ * {@code tagsToInclude}/{@code tagsToExclude} value
+ * {@code org.apache.hudi.functional.SparkCoreFlow}. The JUnit5 side of the core
+ * set uses the surefire {@code @Tag("core")} group instead.
+ */
+object SparkCoreFlow extends Tag("org.apache.hudi.functional.SparkCoreFlow")
