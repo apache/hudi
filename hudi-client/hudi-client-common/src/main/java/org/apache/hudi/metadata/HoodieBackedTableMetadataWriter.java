@@ -1103,6 +1103,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     StorageConfiguration<?> storageConf = dataMetaClient.getStorageConf();
     final String dirFilterRegex = dataWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
     StoragePath storageBasePath = dataMetaClient.getBasePath();
+    long totalZeroSizeFiles = 0;
 
     while (!pathsToList.isEmpty()) {
       // In each round we will list a section of directories
@@ -1122,6 +1123,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       // If the listing reveals a directory, add it to queue. If the listing reveals a hoodie partition, add it to
       // the results.
       for (DirectoryInfo dirInfo : processedDirectories) {
+        totalZeroSizeFiles += dirInfo.getZeroSizeFileCount();
         if (!dirFilterRegex.isEmpty()) {
           final String relativePath = dirInfo.getRelativePath();
           if (!relativePath.isEmpty() && relativePath.matches(dirFilterRegex)) {
@@ -1140,6 +1142,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       }
     }
 
+    final long zeroSizeCount = totalZeroSizeFiles;
+    metrics.ifPresent(m -> m.incrementMetric("bootstrap_zero_size_files", zeroSizeCount));
     return partitionsToBootstrap;
   }
 
