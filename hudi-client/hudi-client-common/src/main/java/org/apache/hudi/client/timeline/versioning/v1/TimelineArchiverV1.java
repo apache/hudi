@@ -20,7 +20,6 @@
 package org.apache.hudi.client.timeline.versioning.v1;
 
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
-import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.ArchivalMetrics;
@@ -54,7 +53,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -77,6 +75,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.client.utils.ArchivalUtils.getEarliestInstantToRetainForClean;
 import static org.apache.hudi.client.utils.ArchivalUtils.getMinAndMaxInstantsToKeep;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
@@ -278,26 +277,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
 
       // If enabled, block archival based on ECTR from the last completed clean to ensure we don't archive
       // commits that have data files that haven't been cleaned yet.
-      Option<HoodieInstant> oldestInstantToRetainForClean = Option.empty();
-      if (config.shouldBlockArchivalOnCleanECTR()) {
-        Option<HoodieInstant> lastCleanInstant = table.getCleanTimeline().filterCompletedInstants().lastInstant();
-        if (lastCleanInstant.isPresent()) {
-          try {
-            HoodieCleanMetadata cleanMetadata =
-                table.getActiveTimeline().readCleanMetadata(lastCleanInstant.get());
-            if (cleanMetadata.getEarliestCommitToRetain() != null
-                && !cleanMetadata.getEarliestCommitToRetain().trim().isEmpty()) {
-              oldestInstantToRetainForClean = commitTimeline.findInstantsAfterOrEquals(
-                  cleanMetadata.getEarliestCommitToRetain()).firstInstant();
-              log.info("Blocking archival based on earliest commit to retain {} from last clean {}. Oldest to retain is {}",
-                  cleanMetadata.getEarliestCommitToRetain(), lastCleanInstant.get().requestedTime(), oldestInstantToRetainForClean.map(instant -> instant).orElse(null));
-            }
-          } catch (IOException e) {
-            log.warn("Failed to read clean metadata for {}", lastCleanInstant.get(), e);
-            throw new HoodieIOException("Failed to read clean metadata for " + lastCleanInstant.get(), e);
-          }
-        }
-      }
+      Option<HoodieInstant> oldestInstantToRetainForClean = getEarliestInstantToRetainForClean(table, commitTimeline, config);
 
       // Actually do the commits
       Option<HoodieInstant> finalOldestInstantToRetainForClean = oldestInstantToRetainForClean;

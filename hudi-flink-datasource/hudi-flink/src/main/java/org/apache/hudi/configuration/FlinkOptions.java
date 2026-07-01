@@ -33,6 +33,8 @@ import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
@@ -1067,6 +1069,20 @@ public class FlinkOptions extends HoodieConfig {
       .withFallbackKeys("hoodie.clean.fileversions.retained")
       .withDescription("Number of file versions to retain. default 5");
 
+  public static final ConfigOption<Long> CLEAN_MAX_COMMITS_TO_CLEAN = ConfigOptions
+      .key(HoodieCleanConfig.MAX_COMMITS_TO_CLEAN.key())
+      .longType()
+      .defaultValue(Long.MAX_VALUE)
+      .withDescription("Maximum number of commits to clean in one clean commit. Applicable only when the clean policy is "
+          + "based on KEEP_LATEST_COMMITS or KEEP_LATEST_BY_HOURS.");
+
+  public static final ConfigOption<Long> CLEAN_EMPTY_INTERVAL_HOURS = ConfigOptions
+      .key(HoodieCleanConfig.INTERVAL_TO_CREATE_EMPTY_CLEAN_HOURS.key())
+      .longType()
+      .defaultValue(-1L)
+      .withDescription("Interval in hours to create an empty clean instant when incremental cleaning has no files to delete. "
+          + "Set to -1 to disable empty clean instant creation.");
+
   public static final ConfigOption<Integer> ARCHIVE_MAX_COMMITS = ConfigOptions
       .key("archive.max_commits")
       .intType()
@@ -1078,6 +1094,12 @@ public class FlinkOptions extends HoodieConfig {
       .intType()
       .defaultValue(40)// default min 40 commits
       .withDescription("Min number of commits to keep before archiving older commits into a sequential log, default 40");
+
+  public static final ConfigOption<Boolean> ARCHIVE_BLOCK_ON_CLEAN_ECTR = ConfigOptions
+      .key(HoodieArchivalConfig.BLOCK_ARCHIVAL_ON_LATEST_CLEAN_ECTR.key())
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether archival should keep commits at or after the earliest commit to retain from the latest completed clean.");
 
   // ------------------------------------------------------------------------
   //  Clustering Options

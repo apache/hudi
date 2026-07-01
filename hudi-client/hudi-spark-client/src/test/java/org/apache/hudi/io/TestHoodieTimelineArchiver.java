@@ -2380,8 +2380,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
   }
 
   /**
-   * Tests that TimelineArchiverV2 (LSM-based timeline, v9 tables) does NOT block archival on ECTR.
-   * ECTR blocking is only for v6 tables using TimelineArchiverV1.
+   * Tests that TimelineArchiverV2 also blocks archival on ECTR when the setting is enabled.
    */
   @Test
   public void testArchivalBlocksOnCleanECTRWithTimelineArchiverV2AndVersion9() throws Exception {
@@ -2405,12 +2404,12 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     TimelineArchiverV2 archiver = new TimelineArchiverV2(writeConfig, table);
     archiver.archiveIfRequired(context);
 
-    // Then: TimelineArchiverV2 should NOT respect ECTR — commit 00000003 gets archived
+    // Then: TimelineArchiverV2 should respect ECTR and retain commit 00000003 and later commits.
     metaClient = HoodieTableMetaClient.reload(metaClient);
     List<String> activeCommitTimes = getActiveCommitTimes();
 
-    assertFalse(activeCommitTimes.contains("00000003"),
-        "TimelineArchiverV2: Commit 00000003 (ECTR) should be archived");
+    assertTrue(activeCommitTimes.contains("00000003"),
+        "TimelineArchiverV2: Commit 00000003 (ECTR) should not be archived");
     assertTrue(activeCommitTimes.contains("00000004"),
         "TimelineArchiverV2: Commit 00000004 (after ECTR) should not be archived");
     assertTrue(activeCommitTimes.contains("00000005"),

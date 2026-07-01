@@ -206,9 +206,12 @@ public class FlinkWriteClients {
                 // actually Flink cleaning is always with parallelism 1 now
                 .withCleanerParallelism(20)
                 .withCleanerPolicy(HoodieCleaningPolicy.valueOf(conf.get(FlinkOptions.CLEAN_POLICY)))
+                .withMaxCommitsToClean(conf.get(FlinkOptions.CLEAN_MAX_COMMITS_TO_CLEAN))
+                .withIntervalToCreateEmptyCleanHours(conf.get(FlinkOptions.CLEAN_EMPTY_INTERVAL_HOURS))
                 .build())
             .withArchivalConfig(HoodieArchivalConfig.newBuilder()
                 .archiveCommitsWith(conf.get(FlinkOptions.ARCHIVE_MIN_COMMITS), conf.get(FlinkOptions.ARCHIVE_MAX_COMMITS))
+                .withBlockArchivalOnCleanECTR(conf.get(FlinkOptions.ARCHIVE_BLOCK_ON_CLEAN_ECTR))
                 .build())
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                 .withTargetIOPerCompactionInMB(conf.get(FlinkOptions.COMPACTION_TARGET_IO))

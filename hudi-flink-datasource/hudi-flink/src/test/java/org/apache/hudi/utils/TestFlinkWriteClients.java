@@ -30,6 +30,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
@@ -291,6 +292,24 @@ public class TestFlinkWriteClients {
     assertEquals(directMetadataConfig.isEnabled(), writeConfig.isMetadataTableEnabled());
     assertEquals(directMetadataConfig.enableBloomFilter(), writeConfig.getMetadataConfig().enableBloomFilter());
     assertEquals(directMetadataConfig.getBloomFilterType(), writeConfig.getMetadataConfig().getBloomFilterType());
+  }
+
+  @Test
+  void testCleanByTimeConfigsPropagateToWriteConfig() throws Exception {
+    conf.set(FlinkOptions.CLEAN_POLICY, HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS.name());
+    conf.set(FlinkOptions.CLEAN_RETAIN_HOURS, 48);
+    conf.set(FlinkOptions.CLEAN_MAX_COMMITS_TO_CLEAN, 7L);
+    conf.set(FlinkOptions.CLEAN_EMPTY_INTERVAL_HOURS, 2L);
+    conf.set(FlinkOptions.ARCHIVE_BLOCK_ON_CLEAN_ECTR, true);
+    StreamerUtil.initTableIfNotExists(conf);
+
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+
+    assertEquals(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS, writeConfig.getCleanerPolicy());
+    assertEquals(48, writeConfig.getCleanerHoursRetained());
+    assertEquals(7L, writeConfig.getMaxCommitsToClean());
+    assertEquals(2L, writeConfig.getIntervalToCreateEmptyCleanHours());
+    assertTrue(writeConfig.shouldBlockArchivalOnCleanECTR());
   }
 
   @Test
