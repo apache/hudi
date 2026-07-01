@@ -637,16 +637,20 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockThrottledMetric);
           // Let heartbeat retry later.
           return true;
-        case SUCCESS:
-          // Only positive outcome
-          this.setLock(currentLock.getRight().get());
+        case SUCCESS: {
+          // Only positive outcome. Source the deadline metric and log from the renewed lock file
+          // returned by the storage client (same as the acquisition path), not the locally
+          // computed expiration, so both callers agree on where the deadline comes from.
+          StorageLockFile renewedLock = currentLock.getRight().get();
+          this.setLock(renewedLock);
           hoodieLockMetrics.ifPresent(metrics -> metrics.updateLockExpirationDeadlineMetric(
-              (int) (oldExpirationMs - getCurrentEpochMs())));
-          logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}.",
-              ownerId, oldExpirationMs - getCurrentEpochMs(), lockFilePath);
+              (int) (renewedLock.getValidUntilMs() - getCurrentEpochMs())));
+          logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before old expiration. The lock will expire in {} ms for lock {}.",
+              ownerId, oldExpirationMs - getCurrentEpochMs(), renewedLock.getValidUntilMs() - getCurrentEpochMs(), lockFilePath);
           recordAuditOperation(AuditOperationState.RENEW, acquisitionTimestamp);
           // Let heartbeat continue to renew lock lease again later.
           return true;
+        }
         default:
           throw new HoodieLockException("Unexpected lock update result: " + currentLock.getLeft());
       }
