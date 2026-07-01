@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -43,6 +44,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.DATAFILE_FORMAT;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_CHECK;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.SOURCE_MAX_BYTES_PER_PARTITION;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.SOURCE_MAX_FILES_PER_SYNC;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.SOURCE_FILE_FORMAT;
 
 /**
@@ -101,10 +103,14 @@ public class CloudDataFetcher implements Serializable {
     log.info("Adding filter string to Dataset: {}", filter);
     Dataset<Row> filteredSourceData = queryInfoDatasetPair.getRight().filter(filter);
 
-    log.info("Adjusting end checkpoint:{} based on sourceLimit :{}", queryInfo.getEndInstant(), sourceLimit);
+    long numFilesLimit = props.getLong(SOURCE_MAX_FILES_PER_SYNC.key(), SOURCE_MAX_FILES_PER_SYNC.defaultValue());
+    ValidationUtils.checkArgument(numFilesLimit >= 1,
+        SOURCE_MAX_FILES_PER_SYNC.key() + " must be >= 1, got: " + numFilesLimit);
+    log.info("Adjusting end checkpoint:{} based on sourceLimit:{} and numFilesLimit:{}",
+        queryInfo.getEndInstant(), sourceLimit, numFilesLimit);
     Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> checkPointAndDataset =
         IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
-            filteredSourceData, sourceLimit, queryInfo, cloudObjectIncrCheckpoint);
+            filteredSourceData, sourceLimit, numFilesLimit, queryInfo, cloudObjectIncrCheckpoint);
     if (!checkPointAndDataset.getRight().isPresent()) {
       log.info("Empty source, returning endpoint:{}", checkPointAndDataset.getLeft());
       return Pair.of(Option.empty(), new StreamerCheckpointV1(checkPointAndDataset.getLeft().toString()));
