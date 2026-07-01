@@ -21,6 +21,7 @@ package org.apache.hudi.sink.partitioner.index;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.util.collection.RocksDBDAO;
+import org.apache.hudi.common.util.collection.RocksDBDAOFactory;
 import org.apache.hudi.metrics.FlinkRocksDBIndexMetrics;
 
 import lombok.extern.slf4j.Slf4j;
@@ -37,18 +38,21 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class RocksDBIndexBackend implements GlobalIndexBackend {
   private static final String COLUMN_FAMILY = "index_cache";
+  private static final String BASE_PATH = "hudi-index-backend";
 
   private final RocksDBDAO rocksDBDAO;
+  private final String rocksDbBasePath;
   private transient FlinkRocksDBIndexMetrics rocksDBIndexMetrics;
 
   public RocksDBIndexBackend(String rocksDbBasePath, boolean isPartitionedTable) {
+    this.rocksDbBasePath = rocksDbBasePath;
     // Register custom serializer for HoodieRecordGlobalLocation to minimize storage overhead
     ConcurrentHashMap<String, CustomSerializer<?>> serializers = new ConcurrentHashMap<>();
     serializers.put(COLUMN_FAMILY, isPartitionedTable
         ? new CodedRecordGlobalLocationSerializer()
         : new RecordGlobalLocationSerializer());
 
-    this.rocksDBDAO = new RocksDBDAO("hudi-index-backend", rocksDbBasePath, serializers, true);
+    this.rocksDBDAO = RocksDBDAOFactory.getOrCreate(BASE_PATH, rocksDbBasePath, serializers, true);
     this.rocksDBDAO.addColumnFamily(COLUMN_FAMILY);
   }
 
@@ -94,6 +98,6 @@ public class RocksDBIndexBackend implements GlobalIndexBackend {
 
   @Override
   public void close() throws IOException {
-    this.rocksDBDAO.close();
+    RocksDBDAOFactory.release(BASE_PATH, rocksDbBasePath);
   }
 }
