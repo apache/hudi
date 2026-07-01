@@ -1518,25 +1518,95 @@ public class HoodieTableMetadataUtil {
     HoodieTableFileSystemView fsView = null;
     try {
       fsView = fileSystemView.orElseGet(() -> getFileSystemViewForMetadataTable(metaClient));
-      Stream<FileSlice> fileSliceStream;
+      List<String> physicalPartitions = resolvePhysicalPartitions(metaClient, partition);
+      if (physicalPartitions.isEmpty()) {
+        return Collections.emptyList();
+      }
+      // Hoist timeline lookups out of the loop — they depend only on metaClient and stay invariant.
+      String mergedAsOfInstant = null;
       if (mergeFileSlices) {
-        if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
-          fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
-              // including pending compaction instant as the last instant so that the finished delta commits
-              // that start earlier than the compaction can be queried.
-              partition, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant().get().requestedTime());
-        } else {
+        if (!metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
           return Collections.emptyList();
         }
-      } else {
-        fileSliceStream = fsView.getLatestFileSlices(partition);
+        // Including pending compaction instant as the last instant so that the finished delta
+        // commits that start earlier than the compaction can be queried.
+        mergedAsOfInstant = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants()
+            .lastInstant().get().requestedTime();
       }
-      return fileSliceStream.sorted(Comparator.comparing(FileSlice::getFileId)).collect(Collectors.toList());
+      List<FileSlice> all = new ArrayList<>();
+      for (String physical : physicalPartitions) {
+        Stream<FileSlice> fileSliceStream = mergeFileSlices
+            ? fsView.getLatestMergedFileSlicesBeforeOrOn(physical, mergedAsOfInstant)
+            : fsView.getLatestFileSlices(physical);
+        fileSliceStream.forEach(all::add);
+      }
+      all.sort(Comparator.comparing(FileSlice::getFileId));
+      return all;
     } finally {
-      if (!fileSystemView.isPresent()) {
+      if (!fileSystemView.isPresent() && fsView != null) {
         fsView.close();
       }
     }
+  }
+
+  /**
+   * Resolve the physical sub-paths to scan for the given MDT partition under the configured
+   * layout. Layout-aware: for the flat layout this returns {@code [partition]}; for sub-directory
+   * bucketing it returns one entry per bucket directory. {@code fileGroupCount} is sourced from
+   * the MDT's persisted layout state — this method does not perform any filesystem listing.
+   */
+  private static List<String> resolvePhysicalPartitions(HoodieTableMetaClient metaClient, String partition) {
+    HoodieMetadataTableLayout layout = HoodieMetadataTableLayouts.load(metaClient.getTableConfig());
+    int fgCount = metaClient.getTableConfig()
+        .getMetadataLayoutPartitionFileGroupCounts()
+        .getOrDefault(partition, 0);
+    return layout.getPhysicalPartitions(partition, fgCount);
+  }
+
+  /**
+   * Returns true when {@code physicalPartitionPath} is a layout sub-path of an MDT partition under
+   * the bucketed layout (e.g. {@code record_index/0004}). Callers use this to distinguish a layout
+   * sub-path from a logical MDT partition root — for example, to decide whether a
+   * {@code .hoodie_partition_metadata} marker should be created there.
+   *
+   * <p>Returns false for: non-MDT tables, MDTs on the flat layout (the default that every
+   * pre-existing MDT uses), and any path that does not end in a {@code /NNNN} 4-digit suffix. The
+   * non-flat-layout gate is what keeps a 4-digit data-table partition value (e.g. {@code price=1000})
+   * from being misread as a bucket directory.
+   *
+   * @param mdtTableConfig     the MDT's persisted table config (typically reached via
+   *                           {@code hoodieTable.getMetaClient().getTableConfig()} when the table
+   *                           being written to is the MDT itself).
+   * @param isMetadataTable    whether the surrounding write is targeting an MDT — engine-agnostic
+   *                           callers pass {@code hoodieTable.isMetadataTable()}.
+   * @param physicalPartitionPath the physical partition path on disk.
+   */
+  public static boolean isMDTBucketSubPath(HoodieTableConfig mdtTableConfig,
+                                           boolean isMetadataTable,
+                                           String physicalPartitionPath) {
+    if (!isMetadataTable || physicalPartitionPath == null) {
+      return false;
+    }
+    Option<String> layoutClass = mdtTableConfig.getMetadataLayoutClass();
+    boolean nonFlatLayout = layoutClass.isPresent() && !layoutClass.get().isEmpty()
+        && !layoutClass.get().equals(FlatMDTLayout.class.getName());
+    if (!nonFlatLayout) {
+      return false;
+    }
+    int slash = physicalPartitionPath.lastIndexOf('/');
+    if (slash <= 0 || slash >= physicalPartitionPath.length() - 1) {
+      return false;
+    }
+    String last = physicalPartitionPath.substring(slash + 1);
+    if (last.length() != 4) {
+      return false;
+    }
+    for (int i = 0; i < 4; i++) {
+      if (!Character.isDigit(last.charAt(i))) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -1553,10 +1623,13 @@ public class HoodieTableMetadataUtil {
     HoodieTableFileSystemView fsView = null;
     try {
       fsView = fileSystemView.orElseGet(() -> getFileSystemViewForMetadataTable(metaClient));
-      Stream<FileSlice> fileSliceStream = fsView.getLatestFileSlicesIncludingInflight(partition);
-      return fileSliceStream
-          .sorted(Comparator.comparing(FileSlice::getFileId))
-          .collect(Collectors.toList());
+      List<String> physicalPartitions = resolvePhysicalPartitions(metaClient, partition);
+      List<FileSlice> all = new ArrayList<>();
+      for (String physical : physicalPartitions) {
+        fsView.getLatestFileSlicesIncludingInflight(physical).forEach(all::add);
+      }
+      all.sort(Comparator.comparing(FileSlice::getFileId));
+      return all;
     } finally {
       if (!fileSystemView.isPresent() && fsView != null) {
         fsView.close();

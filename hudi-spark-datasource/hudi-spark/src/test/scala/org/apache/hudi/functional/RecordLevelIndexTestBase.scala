@@ -119,8 +119,13 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
   }
 
   protected def getFileGroupCountForRecordIndex(writeConfig: HoodieWriteConfig): Long = {
+    // Route through HoodieTableMetadataUtil so we pick up bucketed sub-paths under the configured
+    // MDT layout (flat returns the partition root only; bucketed fans out across bucket dirs).
     Using(getHoodieTable(metaClient, writeConfig).getTableMetadata.asInstanceOf[HoodieBackedTableMetadata]) { metadataTable =>
-      metadataTable.getMetadataFileSystemView.getAllFileGroups(MetadataPartitionType.RECORD_INDEX.getPartitionPath).count
+      HoodieTableMetadataUtil.getPartitionLatestFileSlices(
+        metadataTable.getMetadataMetaClient,
+        org.apache.hudi.common.util.Option.of(metadataTable.getMetadataFileSystemView),
+        MetadataPartitionType.RECORD_INDEX.getPartitionPath).size.toLong
     }.get
   }
 

@@ -708,6 +708,38 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
 
+  public static final ConfigProperty<String> METADATA_LAYOUT_CLASS = ConfigProperty
+      .key("hoodie.metadata.layout.class")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Fully-qualified class name of the HoodieMetadataTableLayout implementation that organizes "
+          + "MDT file groups on disk. Out-of-the-box values: "
+          + "(1) unset / org.apache.hudi.metadata.FlatMDTLayout (default) — every file group lives directly under its "
+          + "metadata partition directory; this is the layout used by every MDT created before this config existed. "
+          + "(2) org.apache.hudi.metadata.SubDirBucketedMDTLayout — distributes file groups into 4-digit bucket "
+          + "sub-directories so a single MDT partition does not exceed per-directory file-count limits on HDFS-like "
+          + "filesystems. Custom implementations can be plugged in by providing the FQCN here. "
+          + "Applies only at MDT initialization; an MDT already on disk keeps its existing layout.");
+
+  public static final ConfigProperty<Integer> METADATA_LAYOUT_BUCKET_SIZE = ConfigProperty
+      .key("hoodie.metadata.layout.bucketed.file.group.per.bucket")
+      .defaultValue(1000)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Maximum number of MDT file groups that share a single bucket sub-directory when "
+          + "`hoodie.metadata.layout.class` is set to SubDirBucketedMDTLayout. Ignored for the flat layout. "
+          + "Default 1000.");
+
+  public Option<String> getMetadataLayoutClass() {
+    String cls = getString(METADATA_LAYOUT_CLASS);
+    return (cls == null || cls.isEmpty()) ? Option.empty() : Option.of(cls);
+  }
+
+  public int getMetadataLayoutBucketSize() {
+    return getIntOrDefault(METADATA_LAYOUT_BUCKET_SIZE);
+  }
+
   private HoodieMetadataConfig() {
     super();
   }
@@ -1385,6 +1417,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder enableDetailedMetadataMetrics(boolean enable) {
       metadataConfig.setValue(ENABLE_DETAILED_METRICS, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withMetadataLayoutClass(String layoutClass) {
+      metadataConfig.setValue(METADATA_LAYOUT_CLASS, layoutClass);
+      return this;
+    }
+
+    public Builder withMetadataLayoutBucketSize(int bucketSize) {
+      metadataConfig.setValue(METADATA_LAYOUT_BUCKET_SIZE, String.valueOf(bucketSize));
       return this;
     }
 
