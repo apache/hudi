@@ -29,7 +29,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
 
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
 import static org.apache.hudi.io.util.IOUtils.copy;
 import static org.apache.hudi.io.util.IOUtils.decodeVarLongSizeOnDisk;
 import static org.apache.hudi.io.util.IOUtils.readInt;
@@ -109,15 +108,11 @@ public class HFileRootIndexBlock extends HFileIndexBlock {
         outputStream.writeLong(entry.getOffset());
         outputStream.writeInt(entry.getSize());
 
-        // Key length + 2 (SIZEOF_INT16 for the 2-byte row key length prefix).
-        // Use Hadoop WritableUtils VarInt encoding to match HBase's HFile format.
-        byte[] keyLength = writeVarInt(
-            entry.getFirstKey().getLength() + SIZEOF_INT16);
-        outputStream.write(keyLength);
-        // Key length.
-        outputStream.writeShort((short) entry.getFirstKey().getLength());
-        // Key.
-        outputStream.write(entry.getFirstKey().getBytes());
+        // Use Hadoop WritableUtils VarInt encoding to match HBase's HFile format and the reader.
+        int kvKeyLength = keyValueKeyLength(entry.getFirstKey().getLength());
+        outputStream.write(writeVarInt(kvKeyLength));
+        Key firstKey = entry.getFirstKey();
+        writeKey(outputStream, firstKey.getBytes(), firstKey.getOffset(), firstKey.getLength());
       }
     }
 

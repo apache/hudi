@@ -28,9 +28,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_BYTE;
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT64;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BEFORE_BLOCK_FIRST_KEY;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_FOUND;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_IN_RANGE;
@@ -40,18 +37,11 @@ import static org.apache.hudi.io.hfile.KeyValue.KEY_OFFSET;
  * Represents a {@link HFileBlockType#DATA} block.
  */
 public class HFileDataBlock extends HFileBlock {
-  private static final int KEY_LENGTH_LENGTH = SIZEOF_INT16;
-  private static final int COLUMN_FAMILY_LENGTH = SIZEOF_BYTE;
-  private static final int VERSION_TIMESTAMP_LENGTH = SIZEOF_INT64;
-  private static final int KEY_TYPE_LENGTH = SIZEOF_BYTE;
   // Hudi does not use HFile MVCC timestamp version so the version
   // is always 0, thus the byte length of the version is always 1.
   // This assumption is also validated when parsing {@link HFileInfo},
   // i.e., the maximum MVCC timestamp in a HFile must be 0.
   private static final long ZERO_TS_VERSION_BYTE_LENGTH = 1;
-  // Hudi does not set version timestamp for key value pairs,
-  // so the latest timestamp is used.
-  private static final long LATEST_TIMESTAMP = Long.MAX_VALUE;
 
   // End offset of content in the block, relative to the start of the start of the block
   protected final int uncompressedContentEndRelativeOffset;
@@ -216,24 +206,11 @@ public class HFileDataBlock extends HFileBlock {
         // Length of key + length of a short variable indicating length of key.
         // Note that 10 extra bytes are required by hbase reader.
         // That is: 1 byte for column family length, 8 bytes for timestamp, 1 bytes for key type.
-        dataOutputStream.writeInt(
-            kv.key.length + KEY_LENGTH_LENGTH + COLUMN_FAMILY_LENGTH + VERSION_TIMESTAMP_LENGTH + KEY_TYPE_LENGTH);
+        dataOutputStream.writeInt(keyValueKeyLength(kv.key.length));
         // Length of value.
         dataOutputStream.writeInt(kv.value.length);
-        // Key content length.
-        dataOutputStream.writeShort((short)kv.key.length);
         // Key.
-        dataOutputStream.write(kv.key);
-        // Column family length: constant 0.
-        dataOutputStream.write(0);
-        // Column qualifier: assume 0 bits.
-        // Timestamp: using the latest.
-        dataOutputStream.writeLong(LATEST_TIMESTAMP);
-        // Key type: constant Put (4) in Hudi.
-        // Minimum((byte) 0), Put((byte) 4), Delete((byte) 8),
-        // DeleteFamilyVersion((byte) 10), DeleteColumn((byte) 12),
-        // DeleteFamily((byte) 14), Maximum((byte) 255).
-        dataOutputStream.write(4);
+        writeKey(dataOutputStream, kv.key, 0, kv.key.length);
         // Value.
         dataOutputStream.write(kv.value);
         // MVCC.
