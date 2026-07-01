@@ -24,15 +24,22 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedConstruction;
+import org.mockito.Mockito;
 
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -148,6 +155,81 @@ class TestSchemaRegistryProvider {
     assertNotNull(actual);
     assertEquals(getExpectedSchema(), actual);
     verify(mockRestService, never()).setHttpHeaders(any());
+  }
+
+  @Test
+  void testPublicConstructorForwardsConfigsToCachedSchemaRegistryClient() {
+    TypedProperties props = new TypedProperties();
+    props.put("hoodie.deltastreamer.schemaprovider.registry.url",
+        "http://localhost/subjects/test/versions/latest");
+    props.put("bearer.auth.credentials.source", "CUSTOM");
+    props.put("bearer.auth.custom.provider.class",
+        "com.example.GcpBearerAuthCredentialProvider");
+
+    List<Map<String, Object>> capturedConfigs = new ArrayList<>();
+    ParsedSchema mockParsedSchema = mock(ParsedSchema.class);
+    when(mockParsedSchema.canonicalString()).thenReturn(RAW_SCHEMA);
+
+    try (MockedConstruction<RestService> ignoredRest =
+             Mockito.mockConstruction(RestService.class);
+         MockedConstruction<CachedSchemaRegistryClient> ignored =
+             Mockito.mockConstruction(CachedSchemaRegistryClient.class, (mock, context) -> {
+               capturedConfigs.add((Map<String, Object>) context.arguments().get(3));
+               when(mock.getLatestSchemaMetadata(any())).thenReturn(new SchemaMetadata(1, 1, RAW_SCHEMA));
+               when(mock.parseSchema(any(), any(), any())).thenReturn(java.util.Optional.of(mockParsedSchema));
+             })) {
+
+      SchemaRegistryProvider provider = new SchemaRegistryProvider(props, null);
+      provider.fetchSchemaFromRegistry("http://localhost/subjects/test/versions/latest");
+
+      assertEquals(1, capturedConfigs.size());
+      assertEquals("CUSTOM", capturedConfigs.get(0).get("bearer.auth.credentials.source"));
+      assertEquals("com.example.GcpBearerAuthCredentialProvider",
+          capturedConfigs.get(0).get("bearer.auth.custom.provider.class"));
+    }
+  }
+
+  @Test
+  void testPublicConstructorFiltersNonSchemaRegistryConfigsFromCachedSchemaRegistryClient() {
+    TypedProperties props = new TypedProperties();
+    props.put("hoodie.deltastreamer.schemaprovider.registry.url",
+        "http://localhost/subjects/test/versions/latest");
+    props.put("hoodie.datasource.write.recordkey.field", "id");
+    props.put("bearer.auth.credentials.source", "CUSTOM");
+    props.put("bearer.auth.custom.provider.class", "com.example.GcpBearerAuthCredentialProvider");
+    props.put("basic.auth.credentials.source", "USER_INFO");
+    props.put("basic.auth.user.info", "key:secret");
+    props.put("schema.registry.url", "http://localhost");
+
+    List<Map<String, Object>> capturedConfigs = new ArrayList<>();
+    ParsedSchema mockParsedSchema = mock(ParsedSchema.class);
+    when(mockParsedSchema.canonicalString()).thenReturn(RAW_SCHEMA);
+
+    try (MockedConstruction<RestService> ignoredRest =
+             Mockito.mockConstruction(RestService.class);
+         MockedConstruction<CachedSchemaRegistryClient> ignored =
+             Mockito.mockConstruction(CachedSchemaRegistryClient.class, (mock, context) -> {
+               capturedConfigs.add((Map<String, Object>) context.arguments().get(3));
+               when(mock.getLatestSchemaMetadata(any())).thenReturn(new SchemaMetadata(1, 1, RAW_SCHEMA));
+               when(mock.parseSchema(any(), any(), any())).thenReturn(java.util.Optional.of(mockParsedSchema));
+             })) {
+
+      SchemaRegistryProvider provider = new SchemaRegistryProvider(props, null);
+      provider.fetchSchemaFromRegistry("http://localhost/subjects/test/versions/latest");
+
+      assertEquals(1, capturedConfigs.size());
+      Map<String, Object> forwarded = capturedConfigs.get(0);
+      // Hudi-specific configs must not be forwarded to the Confluent client
+      assertFalse(forwarded.containsKey("hoodie.deltastreamer.schemaprovider.registry.url"));
+      assertFalse(forwarded.containsKey("hoodie.datasource.write.recordkey.field"));
+      // Only bearer.auth.*, basic.auth.*, schema.registry.* should be forwarded
+      assertEquals("CUSTOM", forwarded.get("bearer.auth.credentials.source"));
+      assertEquals("com.example.GcpBearerAuthCredentialProvider",
+          forwarded.get("bearer.auth.custom.provider.class"));
+      assertEquals("USER_INFO", forwarded.get("basic.auth.credentials.source"));
+      assertEquals("key:secret", forwarded.get("basic.auth.user.info"));
+      assertEquals("http://localhost", forwarded.get("schema.registry.url"));
+    }
   }
 
   @Test
