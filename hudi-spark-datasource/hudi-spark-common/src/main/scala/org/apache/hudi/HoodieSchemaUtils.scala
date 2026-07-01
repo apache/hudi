@@ -20,9 +20,10 @@
 package org.apache.hudi
 
 import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_SCHEMA, SQL_MERGE_INTO_WRITES}
+import org.apache.hudi.avro.HoodieAvroUtils.getRootLevelFieldName
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCompatibility, HoodieSchemaUtils => HoodieCommonSchemaUtils}
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCompatibility, HoodieSchemaType, HoodieSchemaUtils => HoodieCommonSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.config.HoodieWriteConfig
@@ -32,6 +33,7 @@ import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileSchemaRequirements
 
+import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.types.StructField
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
@@ -306,6 +308,36 @@ object HoodieSchemaUtils {
     if (tableSchemaPartitionFields != partitionFields) {
       throw new IllegalArgumentException(s"Partition schema fields order does not match the table schema fields order," +
         s" tableSchemaFields: $tableSchemaPartitionFields, partitionFields: $partitionFields.")
+    }
+  }
+
+  /**
+   * Checks whether a Spark [[StructField]] represents a Hudi BLOB column. BLOB is a logical
+   * type stored as a struct, identified by the [[HoodieSchema.TYPE_METADATA_FIELD]] metadata
+   * attached to the field. Applies to both INLINE and OUT_OF_LINE (EXTERNAL) blobs.
+   */
+  def isBlobField(field: StructField): Boolean = {
+    val md = field.metadata
+    md != null &&
+      md.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
+      md.getString(HoodieSchema.TYPE_METADATA_FIELD).equalsIgnoreCase(HoodieSchemaType.BLOB.name)
+  }
+
+  /**
+   * Returns the distinct top-level field names referenced in `fieldSpec` (a comma-separated list,
+   * possibly empty/null) that resolve to a BLOB column in `schema`. Only the root segment of each
+   * field is considered (consistent with the existing existence checks that use
+   * [[getRootLevelFieldName]]), since a BLOB is always a top-level struct column. Matching honors
+   * the session's case-sensitivity via `resolver`.
+   */
+  def findBlobFields(schema: StructType, fieldSpec: String, resolver: Resolver): Seq[String] = {
+    if (fieldSpec == null || fieldSpec.trim.isEmpty) {
+      Seq.empty
+    } else {
+      fieldSpec.split(",").map(_.trim).filter(_.nonEmpty)
+        .map(getRootLevelFieldName).distinct
+        .filter(name => schema.fields.exists(f => resolver(f.name, name) && isBlobField(f)))
+        .toSeq
     }
   }
 }

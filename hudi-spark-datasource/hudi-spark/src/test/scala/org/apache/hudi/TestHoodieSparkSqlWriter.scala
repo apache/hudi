@@ -18,6 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.{DROP_INSERT_DUP_POLICY, FAIL_INSERT_DUP_POLICY, INSERT_DROP_DUPS, INSERT_DUP_POLICY}
+import org.apache.hudi.blob.BlobTestHelpers.inlineBlobStructCol
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieReplaceCommitMetadata, HoodieTableType, WriteOperationType}
@@ -37,7 +38,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.commons.io.FileUtils
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
-import org.apache.spark.sql.functions.{expr, lit}
+import org.apache.spark.sql.functions.{col, expr, lit}
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertNull, assertTrue, fail}
 import org.junit.jupiter.api.Test
@@ -191,6 +192,52 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
     val deleteCmdException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, deleteTableModifier, dataFrame2))
     assert(tableAlreadyExistException.getMessage.contains("Config conflict"))
     assert(tableAlreadyExistException.getMessage.contains(s"${HoodieWriteConfig.TBL_NAME.key}:\thoodie_bar_tbl\thoodie_foo_tbl"))
+  }
+
+  /**
+   * record key / ordering(preCombine) / partition path cannot be a BLOB column.
+   */
+  @Test
+  def testRejectBlobColumnAsKeyFields(): Unit = {
+    def blobDf: DataFrame = spark.range(0, 3).toDF("id")
+      .withColumn("ts", col("id"))
+      .withColumn("part", lit("a"))
+      .withColumn("data", inlineBlobStructCol("data", expr("cast(cast(id as string) as binary)")))
+
+    def baseModifier: Map[String, String] = Map(
+      "path" -> tempBasePath,
+      HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4")
+
+    // record key = blob -> rejected
+    val eRk = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite,
+      baseModifier ++ Map("hoodie.datasource.write.recordkey.field" -> "data"), blobDf))
+    assert(eRk.getMessage.contains("BLOB type column"))
+
+    // partition path = blob -> rejected (also covers the col:type form)
+    val ePp = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite,
+      baseModifier ++ Map("hoodie.datasource.write.recordkey.field" -> "id",
+        "hoodie.datasource.write.partitionpath.field" -> "data:SIMPLE"), blobDf))
+    assert(ePp.getMessage.contains("BLOB type column"))
+
+    // ordering(preCombine) = blob -> rejected
+    val ePc = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite,
+      baseModifier ++ Map("hoodie.datasource.write.recordkey.field" -> "id",
+        "hoodie.datasource.write.precombine.field" -> "data"), blobDf))
+    assert(ePc.getMessage.contains("BLOB type column"))
+
+    // multi-field record key including blob -> rejected
+    val eMulti = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite,
+      baseModifier ++ Map("hoodie.datasource.write.recordkey.field" -> "id,data",
+        "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.ComplexKeyGenerator"), blobDf))
+    assert(eMulti.getMessage.contains("BLOB type column"))
+
+    // blob column present but keys point at non-blob columns -> write succeeds
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite,
+      baseModifier ++ Map("hoodie.datasource.write.recordkey.field" -> "id",
+        "hoodie.datasource.write.partitionpath.field" -> "part",
+        "hoodie.datasource.write.precombine.field" -> "ts"), blobDf)
   }
 
   /**
