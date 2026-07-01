@@ -24,6 +24,8 @@ import org.apache.hudi.common.schema.HoodieSchema.TimePrecision
 import org.apache.hudi.internal.schema.HoodieSchemaException
 
 import org.apache.spark.annotation.DeveloperApi
+import org.apache.spark.sql.{Column, DataFrame}
+import org.apache.spark.sql.functions.{col, lit, struct, transform, transform_values, when}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.types.Decimal.minBytesForPrecision
@@ -81,6 +83,178 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
    */
   def validateCustomTypeStructures(structType: StructType): Unit =
     validateCustomTypeStructuresRecursive(structType)
+
+  /**
+   * Pads partial BLOB columns - anywhere they appear in the schema tree - to the canonical
+   * 3-field layout `{type, data, reference}` so the writer's row encoder always sees the
+   * full shape. Recurses through nested `StructType`, `ArrayType`, and `MapType` to mirror
+   * the validator's coverage.
+   *
+   * RFC-100 BLOB columns are physically a 3-field struct, but for INLINE writes only
+   * `{type, data}` is meaningful and for OUT_OF_LINE writes only `{type, reference}` is
+   * meaningful. This helper accepts either partial form on input and rewrites each row to
+   * the canonical 3-field shape with `lit(null)` filling in the missing field. Null blob
+   * structs (and null array elements / map values containing blobs) round-trip as null.
+   * Already-canonical blob columns pass through unchanged (idempotent).
+   *
+   * @param df the DataFrame whose BLOB columns may be partial at any nesting depth
+   * @return the input DataFrame if no partial blob columns were found, or a projected
+   *         DataFrame with each partial blob column rewritten to canonical shape
+   */
+  def padPartialBlobColumns(df: DataFrame): DataFrame = {
+    val caseSensitive = SQLConf.get.caseSensitiveAnalysis
+    if (!df.schema.fields.exists(f => fieldNeedsPad(f, caseSensitive))) {
+      df
+    } else {
+      val projected: Seq[Column] = df.schema.fields.map { f =>
+        if (fieldNeedsPad(f, caseSensitive)) {
+          padField(f, col(s"`${f.name}`"), caseSensitive).as(f.name, f.metadata)
+        } else {
+          col(s"`${f.name}`")
+        }
+      }
+      df.select(projected: _*)
+    }
+  }
+
+  /**
+   * Returns true if the field itself is a partial blob field that needs padding,
+   * or if any partial blob field exists somewhere inside its data type.
+   */
+  private def fieldNeedsPad(field: StructField, caseSensitive: Boolean): Boolean =
+    isPartialBlobField(field, caseSensitive) || typeNeedsPad(field.dataType, caseSensitive)
+
+  /**
+   * Returns true if the data type contains, anywhere within it, a BLOB-tagged StructField
+   * whose struct shape is a partial 2-field accepted layout.
+   */
+  private def typeNeedsPad(dataType: DataType, caseSensitive: Boolean): Boolean = dataType match {
+    case s: StructType => s.fields.exists(f => fieldNeedsPad(f, caseSensitive))
+    case ArrayType(elementType, _) => typeNeedsPad(elementType, caseSensitive)
+    case MapType(_, valueType, _) => typeNeedsPad(valueType, caseSensitive)
+    case _ => false
+  }
+
+  /**
+   * Returns true if `field` is tagged `hudi_type=BLOB` and its struct shape is one of the
+   * accepted partial layouts: `{type, data}` or `{type, reference}`. Canonical 3-field
+   * structs return false (no padding needed). Anything else also returns false - the strict
+   * validator will reject those downstream.
+   */
+  private def isPartialBlobField(field: StructField, caseSensitive: Boolean): Boolean = {
+    if (!field.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD)) return false
+    val descriptorType = HoodieSchema
+      .parseTypeDescriptor(field.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+      .getType
+    if (descriptorType != HoodieSchemaType.BLOB) return false
+    field.dataType match {
+      case st: StructType if !isCanonicalBlobStruct(st) => isAcceptedPartialBlobStruct(st, caseSensitive)
+      case _ => false
+    }
+  }
+
+  private def isAcceptedPartialBlobStruct(st: StructType, caseSensitive: Boolean): Boolean = {
+    if (st.length != 2) return false
+    val key: String => String =
+      if (caseSensitive) identity else (_: String).toLowerCase(Locale.ROOT)
+    val names = st.fields.map(f => key(f.name)).toSet
+    val typeKey = key(HoodieSchema.Blob.TYPE)
+    val dataKey = key(HoodieSchema.Blob.INLINE_DATA_FIELD)
+    val refKey = key(HoodieSchema.Blob.EXTERNAL_REFERENCE)
+    names == Set(typeKey, dataKey) || names == Set(typeKey, refKey)
+  }
+
+  /**
+   * Builds a Column expression that rewrites the value at `sourceCol` (which has the same
+   * shape as `field.dataType`) to its post-padding canonical shape. Used by
+   * [[padPartialBlobColumns]] and recursively by itself for nested struct fields.
+   *
+   * The caller is responsible for `.as(field.name, field.metadata)` on the returned column;
+   * this method produces an unaliased value expression so it can also be used inside
+   * `transform`/`transform_values` lambdas.
+   */
+  private def padField(field: StructField, sourceCol: Column, caseSensitive: Boolean): Column = {
+    if (isPartialBlobField(field, caseSensitive)) {
+      padBlobStructValue(sourceCol, field.dataType.asInstanceOf[StructType], caseSensitive)
+    } else {
+      padDataType(field.dataType, sourceCol, caseSensitive)
+    }
+  }
+
+  /**
+   * Builds a Column expression that rewrites a value at `sourceCol` (whose shape is
+   * `dataType`) so any partial blob structs nested anywhere inside are padded to canonical.
+   * If no padding is needed inside `dataType`, returns `sourceCol` directly.
+   */
+  private def padDataType(dataType: DataType, sourceCol: Column, caseSensitive: Boolean): Column = {
+    if (!typeNeedsPad(dataType, caseSensitive)) return sourceCol
+    dataType match {
+      case s: StructType =>
+        val rebuiltFields: Seq[Column] = s.fields.map { f =>
+          val childExpr = sourceCol.getField(f.name)
+          padField(f, childExpr, caseSensitive).as(f.name)
+        }
+        // Preserve null-struct semantics: a null source struct must round-trip as null,
+        // not as a non-null struct with all-null fields produced by `struct(...)`.
+        when(sourceCol.isNull, lit(null).cast(rebuiltType(s, caseSensitive)))
+          .otherwise(struct(rebuiltFields: _*))
+
+      case ArrayType(elementType, _) =>
+        // transform() preserves the array's null-ness; the lambda handles null elements.
+        transform(sourceCol, (x: Column) => padDataType(elementType, x, caseSensitive))
+
+      case MapType(_, valueType, _) =>
+        // transform_values() preserves the map's null-ness; lambda handles null values.
+        transform_values(sourceCol, (_: Column, v: Column) => padDataType(valueType, v, caseSensitive))
+
+      case _ => sourceCol
+    }
+  }
+
+  /**
+   * Rewrites a (possibly null) blob-struct value at `blobCol` to the canonical 3-field
+   * shape, padding the missing sibling field with `lit(null)`. Preserves null-struct
+   * semantics: a null source struct round-trips as null.
+   */
+  private def padBlobStructValue(blobCol: Column, st: StructType, caseSensitive: Boolean): Column = {
+    val key: String => String =
+      if (caseSensitive) identity else (_: String).toLowerCase(Locale.ROOT)
+    val present = st.fields.map(f => key(f.name)).toSet
+    val typeCol = blobCol.getField(HoodieSchema.Blob.TYPE).as(HoodieSchema.Blob.TYPE)
+    val dataCol = if (present.contains(key(HoodieSchema.Blob.INLINE_DATA_FIELD))) {
+      blobCol.getField(HoodieSchema.Blob.INLINE_DATA_FIELD).as(HoodieSchema.Blob.INLINE_DATA_FIELD)
+    } else {
+      lit(null).cast(BinaryType).as(HoodieSchema.Blob.INLINE_DATA_FIELD)
+    }
+    val refCol = if (present.contains(key(HoodieSchema.Blob.EXTERNAL_REFERENCE))) {
+      blobCol.getField(HoodieSchema.Blob.EXTERNAL_REFERENCE).as(HoodieSchema.Blob.EXTERNAL_REFERENCE)
+    } else {
+      lit(null).cast(expectedBlobReferenceStructType).as(HoodieSchema.Blob.EXTERNAL_REFERENCE)
+    }
+    when(blobCol.isNull, lit(null).cast(expectedBlobStructType))
+      .otherwise(struct(typeCol, dataCol, refCol))
+  }
+
+  /**
+   * Returns the post-padding DataType corresponding to `dataType`: every accepted partial
+   * blob struct is replaced by `expectedBlobStructType`; nested struct/array/map containers
+   * are rebuilt with their inner types similarly transformed. Used to provide the
+   * `lit(null).cast(...)` target type when guarding null-struct semantics.
+   */
+  private def rebuiltType(dataType: DataType, caseSensitive: Boolean): DataType = dataType match {
+    case s: StructType =>
+      StructType(s.fields.map { f =>
+        val newType =
+          if (isPartialBlobField(f, caseSensitive)) expectedBlobStructType
+          else rebuiltType(f.dataType, caseSensitive)
+        f.copy(dataType = newType)
+      })
+    case ArrayType(elementType, containsNull) =>
+      ArrayType(rebuiltType(elementType, caseSensitive), containsNull)
+    case MapType(keyType, valueType, valueContainsNull) =>
+      MapType(keyType, rebuiltType(valueType, caseSensitive), valueContainsNull)
+    case other => other
+  }
 
   private def validateCustomTypeStructuresRecursive(dataType: DataType): Unit = dataType match {
     case s: StructType =>
@@ -408,6 +582,13 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
   }
 
   private lazy val expectedBlobStructType: StructType = toSqlType(HoodieSchema.createBlob())._1.asInstanceOf[StructType]
+
+  // Spark type of the canonical reference sub-struct ({external_path, offset, length, managed}).
+  // Used by padPartialBlobColumns to construct lit(null).cast(...) for the missing reference
+  // field when a user supplies an INLINE-only `{type, data}` blob struct.
+  private lazy val expectedBlobReferenceStructType: DataType =
+    expectedBlobStructType.fields
+      .find(_.name == HoodieSchema.Blob.EXTERNAL_REFERENCE).get.dataType
 
   /**
    * Validates that a StructType matches the expected blob schema structure defined in {@link HoodieSchema.Blob}.

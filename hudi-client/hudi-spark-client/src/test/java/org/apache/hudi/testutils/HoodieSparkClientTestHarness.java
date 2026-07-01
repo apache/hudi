@@ -55,6 +55,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
@@ -237,6 +238,12 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
    * Cleanups Spark contexts ({@link JavaSparkContext} and {@link SQLContext}).
    */
   protected void cleanupSparkContexts() {
+    // HoodieInMemoryHashIndex holds a JVM-static record-location map that survives
+    // sparkSession.stop(), leaking record keys and locations across sequential tests
+    // in the same JVM. A stale entry causes tagLocation to demote a not-matched
+    // INSERT into a no-op UPDATE on a non-existent file group.
+    HoodieInMemoryHashIndex.clear();
+
     if (sparkSession != null) {
       sparkSession.stop();
       sparkSession = null;
