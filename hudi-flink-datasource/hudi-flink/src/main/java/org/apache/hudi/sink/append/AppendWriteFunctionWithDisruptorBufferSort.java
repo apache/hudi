@@ -35,7 +35,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.sort.QuickSort;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
-import org.apache.flink.table.planner.codegen.sort.SortCodeGenerator;
 import org.apache.flink.table.runtime.generated.GeneratedNormalizedKeyComputer;
 import org.apache.flink.table.runtime.generated.GeneratedRecordComparator;
 import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
@@ -95,9 +94,8 @@ public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFu
 
     // Create Flink-native sort components
     SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType, sortKeyList.toArray(new String[0]));
-    SortCodeGenerator codeGenerator = sortOperatorGen.createSortCodeGenerator();
-    this.keyComputer = codeGenerator.generateNormalizedKeyComputer("SortComputer");
-    this.recordComparator = codeGenerator.generateRecordComparator("SortComparator");
+    this.keyComputer = sortOperatorGen.generateNormalizedKeyComputer("SortComputer");
+    this.recordComparator = sortOperatorGen.generateRecordComparator("SortComparator");
     this.memorySegmentPool = this.memorySegmentPoolFactory.createMemorySegmentPool(config, OptionsResolver.getWriteBufferSizeInBytes(config));
 
     initDisruptorBuffer();

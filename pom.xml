@@ -164,7 +164,6 @@
     <flink.connector.kafka.version>4.0.1-2.0</flink.connector.kafka.version>
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
     <flink.table.runtime.artifactId>flink-table-runtime</flink.table.runtime.artifactId>
-    <flink.table.planner.artifactId>flink-table-planner_2.12</flink.table.planner.artifactId>
     <flink.parquet.artifactId>flink-parquet</flink.parquet.artifactId>
     <flink.statebackend.rocksdb.artifactId>flink-statebackend-rocksdb</flink.statebackend.rocksdb.artifactId>
     <flink.test.utils.artifactId>flink-test-utils</flink.test.utils.artifactId>
@@ -2516,14 +2515,11 @@
                         <exclude>*:*_2.12</exclude>
                       </excludes>
                       <!--
-                        Flink decoupled from Scala starting 1.15; the `_2.12` suffix on
-                        flink-table-planner and its transitives (scala-xml, chill) is a
-                        legacy naming artifact, not a real Scala 2.12 binary dependency.
-                        Flink publishes no `_2.13` variant of flink-table-planner, so
-                        building with `-Dscala-2.13` together with any Flink profile
-                        (e.g. `-Dflink1.20`) would otherwise trip the blanket `*:*_2.12`
-                        ban above. Whitelist only the Flink-side transitives that
-                        actually surface here.
+                        Some Flink artifacts still carry a `_2.12` suffix even though
+                        newer Flink modules are decoupled from Scala. Building with
+                        `-Dscala-2.13` together with a Flink profile would otherwise
+                        trip the blanket `*:*_2.12` ban above. Whitelist only the
+                        Flink-side transitives that actually surface here.
                       -->
                       <includes>
                         <include>org.apache.flink:*_2.12</include>

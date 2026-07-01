@@ -31,7 +31,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.core.memory.MemorySegmentFactory;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.planner.codegen.sort.SortCodeGenerator;
 import org.apache.flink.table.runtime.generated.GeneratedNormalizedKeyComputer;
 import org.apache.flink.table.runtime.generated.GeneratedRecordComparator;
 import org.apache.flink.table.runtime.generated.NormalizedKeyComputer;
@@ -126,9 +125,8 @@ public class AppendWriteFunctionWithContinuousSort<T> extends AppendWriteFunctio
 
     // Create sort code generator for normalized key computation and record comparison
     SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType, sortKeyList.toArray(new String[0]));
-    SortCodeGenerator codeGenerator = sortOperatorGen.createSortCodeGenerator();
-    GeneratedNormalizedKeyComputer generatedKeyComputer = codeGenerator.generateNormalizedKeyComputer("ContinuousSortKeyComputer");
-    GeneratedRecordComparator generatedComparator = codeGenerator.generateRecordComparator("ContinuousSortComparator");
+    GeneratedNormalizedKeyComputer generatedKeyComputer = sortOperatorGen.generateNormalizedKeyComputer("ContinuousSortKeyComputer");
+    GeneratedRecordComparator generatedComparator = sortOperatorGen.generateRecordComparator("ContinuousSortComparator");
 
     // Instantiate code-generated components
     ClassLoader classLoader = Thread.currentThread().getContextClassLoader();

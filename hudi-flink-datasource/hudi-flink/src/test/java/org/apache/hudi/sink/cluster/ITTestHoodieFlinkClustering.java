@@ -65,7 +65,6 @@ import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
-import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.Row;
@@ -84,6 +83,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.sink.utils.FlinkTransformationUtils.setManagedMemoryWeight;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -193,7 +193,7 @@ public class ITTestHoodieFlinkClustering {
               new ClusteringOperator(conf, rowType))
           .setParallelism(clusteringPlan.getInputGroups().size());
 
-      ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
+      setManagedMemoryWeight(dataStream.getTransformation(),
           conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
 
       dataStream
@@ -398,7 +398,7 @@ public class ITTestHoodieFlinkClustering {
                   new ClusteringOperator(conf, rowType))
               .setParallelism(clusteringPlan.getInputGroups().size());
 
-      ExecNodeUtil.setManagedMemoryWeight(
+      setManagedMemoryWeight(
           dataStream.getTransformation(),
           conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
 
@@ -661,7 +661,7 @@ public class ITTestHoodieFlinkClustering {
               new ClusteringOperator(conf, rowType))
           .setParallelism(clusteringPlan.getInputGroups().size());
 
-      ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
+      setManagedMemoryWeight(dataStream.getTransformation(),
           conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
 
       dataStream
@@ -765,7 +765,7 @@ public class ITTestHoodieFlinkClustering {
               new ClusteringOperator(conf, rowType))
           .setParallelism(clusteringPlan.getInputGroups().size());
 
-      ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
+      setManagedMemoryWeight(dataStream.getTransformation(),
           conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
 
       dataStream
