@@ -85,6 +85,7 @@ object HoodieProcedures {
       ,(RepairDeduplicateProcedure.NAME, RepairDeduplicateProcedure.builder)
       ,(RepairMigratePartitionMetaProcedure.NAME, RepairMigratePartitionMetaProcedure.builder)
       ,(RepairOverwriteHoodiePropsProcedure.NAME, RepairOverwriteHoodiePropsProcedure.builder)
+      ,(RepairOrphanFilesProcedure.NAME, RepairOrphanFilesProcedure.builder)
       ,(RunCleanProcedure.NAME, RunCleanProcedure.builder)
       ,(ValidateHoodieSyncProcedure.NAME, ValidateHoodieSyncProcedure.builder)
       ,(ShowInvalidParquetProcedure.NAME, ShowInvalidParquetProcedure.builder)
