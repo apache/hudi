@@ -18,9 +18,11 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
+import org.apache.hudi.common.util.collection.Triple;
 
 import org.junit.jupiter.api.Test;
 
@@ -61,5 +63,27 @@ class TestHoodieTableConfigDebeziumOrdering {
 
     assertEquals(DebeziumConstants.FLATTENED_LSN_COL_NAME, flat.get(HoodieTableConfig.ORDERING_FIELDS.key()));
     assertEquals(DebeziumConstants.FLATTENED_LSN_COL_NAME, nested.get(HoodieTableConfig.ORDERING_FIELDS.key()));
+  }
+
+  @Test
+  void fiveArgOverloadsDelegateToNestedFalse() {
+    // The pre-existing 5-arg inferMergingConfigsForV9TableCreation/inferMergingConfigsForWrites
+    // overloads must keep behaving exactly as if nestedDebeziumMetadataEnabled=false was passed,
+    // since existing callers (e.g. the reader path) are unaware of Debezium metadata nesting.
+    Map<String, String> viaFiveArg = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+        null, MySqlDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE);
+    Map<String, String> viaSixArgFalse = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+        null, MySqlDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE, false);
+    assertEquals(viaSixArgFalse.get(HoodieTableConfig.ORDERING_FIELDS.key()), viaFiveArg.get(HoodieTableConfig.ORDERING_FIELDS.key()));
+
+    Triple<RecordMergeMode, String, String> writesViaFiveArg = HoodieTableConfig.inferMergingConfigsForWrites(
+        null, MySqlDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE);
+    Triple<RecordMergeMode, String, String> writesViaSixArgFalse = HoodieTableConfig.inferMergingConfigsForWrites(
+        null, MySqlDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE, false);
+    // Compare components individually: the payload class (middle) is legitimately null for V9
+    // tables, and Triple#equals NPEs on a null middle rather than short-circuiting.
+    assertEquals(writesViaSixArgFalse.getLeft(), writesViaFiveArg.getLeft());
+    assertEquals(writesViaSixArgFalse.getMiddle(), writesViaFiveArg.getMiddle());
+    assertEquals(writesViaSixArgFalse.getRight(), writesViaFiveArg.getRight());
   }
 }
