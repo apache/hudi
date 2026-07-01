@@ -25,7 +25,6 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
@@ -40,7 +39,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -73,9 +71,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   private final boolean enablePointLookups;
 
   protected HoodieSchema readerSchema;
-
-  //  Map of string schema to parsed schema.
-  private static final ConcurrentHashMap<String, HoodieSchema> SCHEMA_MAP = new ConcurrentHashMap<>();
 
   /**
    * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
@@ -361,21 +356,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected Option<String> getRecordKey(HoodieRecord record) {
     return Option.ofNullable(record.getRecordKey(readerSchema, keyFieldName));
-  }
-
-  protected HoodieSchema getSchemaFromHeader() {
-    String schemaStr = getLogBlockHeader().get(HeaderMetadataType.SCHEMA);
-    SCHEMA_MAP.computeIfAbsent(schemaStr,
-        (schemaString) -> {
-          try {
-            return HoodieSchema.parse(schemaStr);
-          } catch (HoodieAvroSchemaException e) {
-            // Archived commits from earlier hudi versions fail the schema check
-            // So we retry in this one specific instance with validation disabled
-            return HoodieSchema.parse(schemaStr, false);
-          }
-        });
-    return SCHEMA_MAP.get(schemaStr);
   }
 
   /**

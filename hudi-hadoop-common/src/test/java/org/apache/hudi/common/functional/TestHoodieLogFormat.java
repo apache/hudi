@@ -19,6 +19,7 @@
 package org.apache.hudi.common.functional;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
@@ -57,9 +58,11 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HadoopMapRedUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -803,6 +806,87 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     assertEquals(sort(convertAvroToSerializableIndexedRecords(genRecords)), sort(scannedRecords),
         "Scanner records content should be the same as appended records");
     scanner.close();
+  }
+
+  @Test
+  public void testMergedLogRecordScannerReadsNativeDataAndDeleteLogFiles() throws IOException {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(basePath);
+    Properties updatedProps = new Properties();
+    updatedProps.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.EVENT_TIME_ORDERING.name());
+    updatedProps.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), updatedProps);
+
+    // Native data log file holding live records for key1, key2 and key3.
+    List<IndexedRecord> dataRecords = new ArrayList<>();
+    for (String key : Arrays.asList("key1", "key2", "key3")) {
+      IndexedRecord dataRecordWithoutMetaFields = HoodieFileSliceTestUtils.DATA_GEN.generateGenericRecord(
+          key, "partition_path", "rider-100", "driver-100", 5L);
+      GenericRecord dataRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(
+          dataRecordWithoutMetaFields, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS);
+      HoodieAvroUtils.addHoodieKeyToRecord(dataRecord, key, "partition_path", "test-fileid1");
+      HoodieAvroUtils.addCommitMetadataToRecord(dataRecord, "100", "100_0_0");
+      dataRecords.add(dataRecord);
+    }
+
+    String nativeDataLogPath = new StoragePath(partitionPath, String.format("%s_%s_%s_%d%s",
+        "test-fileid1", "1-0-1", "100", 1, ".log.parquet")).toString();
+    HoodieLogFile nativeDataLog = HoodieFileSliceTestUtils.createNativeDataLogFile(
+        nativeDataLogPath,
+        dataRecords,
+        HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS,
+        "100");
+
+    // Native delete log file removing key2 with a higher ordering value, so the delete wins.
+    IndexedRecord deleteRecord = HoodieFileSliceTestUtils.DATA_GEN.generatePayloadForTripSchema(
+        new HoodieKey("key2", "partition_path"), "100", 7L);
+    HoodieLogFile nativeDeleteLog = HoodieFileSliceTestUtils.createNativeDeleteLogFile(
+        storage,
+        new StoragePath(partitionPath, String.format("%s_%s_%s_%d%s",
+            "test-fileid1", "1-0-1", "100", 2, ".deletes.parquet")).toString(),
+        Collections.singletonList(deleteRecord),
+        HoodieTestDataGenerator.HOODIE_SCHEMA,
+        "100");
+
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
+
+    try (HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+        .withStorage(storage)
+        .withBasePath(basePath)
+        .withLogFilePaths(Arrays.asList(
+            nativeDataLog.getPath().toString(), nativeDeleteLog.getPath().toString()))
+        .withReaderSchema(HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS)
+        .withLatestInstantTime("100")
+        .withMaxMemorySizeInBytes(1024000L)
+        .withReverseReader(false)
+        .withBufferSize(BUFFER_SIZE)
+        .withSpillableMapBasePath(spillableBasePath)
+        .build()) {
+      Map<String, HoodieRecord> recordsByKey = new HashMap<>();
+      scanner.forEach(record -> recordsByKey.put(record.getRecordKey(), record));
+
+      // key1 and key3 survive as data records, key2 is retained as a delete.
+      assertEquals(3, recordsByKey.size());
+
+      for (String key : Arrays.asList("key1", "key3")) {
+        HoodieRecord dataResult = recordsByKey.get(key);
+        assertEquals("partition_path", dataResult.getPartitionPath());
+        Object data = dataResult.toIndexedRecord(
+            HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS, CollectionUtils.emptyProps()).get().getData();
+        GenericRecord scannedRecord = data instanceof SerializableIndexedRecord
+            ? (GenericRecord) ((SerializableIndexedRecord) data).getData() : (GenericRecord) data;
+        assertEquals(key, scannedRecord.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString());
+        assertEquals("partition_path", scannedRecord.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString());
+        assertEquals(5L, scannedRecord.get("timestamp"));
+      }
+
+      // key2 is removed by the delete log file and resolves to a delete.
+      HoodieRecord deleteResult = recordsByKey.get("key2");
+      assertEquals("partition_path", deleteResult.getPartitionPath());
+      assertEquals(7L, deleteResult.getOrderingValue(
+          HoodieTestDataGenerator.HOODIE_SCHEMA, updatedProps, new String[] {"timestamp"}));
+      assertFalse(((HoodieRecordPayload) deleteResult.getData())
+          .getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA).isPresent());
+    }
   }
 
   @ParameterizedTest

@@ -181,7 +181,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   }
 
   private HoodieCDCLogWriter<?> createCDCLogWriter() {
-    if (HoodieCDCLogWriterFactory.shouldWriteNativeCDCLogs(hoodieTable.getMetaClient().getTableConfig())) {
+    if (HoodieCDCLogWriterFactory.shouldWriteNativeCDCLogs(config)) {
       return new HoodieNativeCDCLogger(
           instantTime,
           config,

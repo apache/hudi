@@ -236,13 +236,15 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   private static Stream<Arguments> writeTableVersionTestCases() {
     return Stream.of(
             // Case 1: No explicit hoodie.write.table.version (uses default)
-            Arguments.of(Option.empty(), HoodieTableVersion.current(), "Default version upgrade to current version NINE"),
+            Arguments.of(Option.empty(), HoodieTableVersion.current(), "Default version upgrade to current version TEN"),
             // Case 2: hoodie.write.table.version = 6 (same as current table version)
             Arguments.of(Option.of(HoodieTableVersion.SIX), HoodieTableVersion.SIX, "No upgrade when versions match"),
             // Case 3: hoodie.write.table.version = 8
             Arguments.of(Option.of(HoodieTableVersion.EIGHT), HoodieTableVersion.EIGHT, "Upgrade to table version EIGHT"),
             // Case 4: hoodie.write.table.version = 9
-            Arguments.of(Option.of(HoodieTableVersion.NINE), HoodieTableVersion.NINE, "Upgrade to table version NINE")
+            Arguments.of(Option.of(HoodieTableVersion.NINE), HoodieTableVersion.NINE, "Upgrade to table version NINE"),
+            // Case 5: hoodie.write.table.version = 10
+            Arguments.of(Option.of(HoodieTableVersion.TEN), HoodieTableVersion.TEN, "Upgrade to table version TEN")
     );
   }
 
@@ -549,6 +551,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
       case EIGHT:
         return Option.of(HoodieTableVersion.NINE);
       case NINE:
+        return Option.of(HoodieTableVersion.TEN);
       default:
         return Option.empty();
     }

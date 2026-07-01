@@ -21,11 +21,14 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -242,11 +245,42 @@ public interface HoodieLogFormat {
 
   static HoodieLogFormat.Reader newReader(HoodieStorage storage, HoodieLogFile logFile, HoodieSchema readerSchema)
       throws IOException {
+    rejectNativeLogFileWithoutMetaClient(logFile);
     return new HoodieLogFileReader(storage, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE);
   }
 
   static HoodieLogFormat.Reader newReader(HoodieStorage storage, HoodieLogFile logFile, HoodieSchema readerSchema, boolean reverseReader) throws IOException {
+    rejectNativeLogFileWithoutMetaClient(logFile);
     return new HoodieLogFileReader(storage, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, reverseReader);
+  }
+
+  static HoodieLogFormat.Reader newReader(HoodieStorage storage, HoodieTableMetaClient metaClient,
+                                          HoodieLogFile logFile, HoodieSchema readerSchema) throws IOException {
+    return newReader(storage, metaClient, logFile, readerSchema, false);
+  }
+
+  static HoodieLogFormat.Reader newReader(HoodieStorage storage, HoodieTableMetaClient metaClient,
+                                          HoodieLogFile logFile, HoodieSchema readerSchema, boolean reverseReader) throws IOException {
+    if (FSUtils.matchNativeLogFile(logFile.getFileName()).isPresent()) {
+      ValidationUtils.checkArgument(metaClient != null, "Native log files require HoodieTableMetaClient.");
+      StoragePath logFileParent = logFile.getPath().getParent();
+      return new HoodieNativeLogFileReader(
+          storage,
+          logFile,
+          readerSchema,
+          HoodieRecordUtils.getOrderingFieldNames(metaClient.getTableConfig().getRecordMergeMode(), metaClient),
+          FSUtils.getRelativePartitionPath(metaClient.getBasePath(), logFileParent),
+          metaClient.getTableConfig().getProps());
+    }
+    return new HoodieLogFileReader(storage, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, reverseReader);
+  }
+
+  static void rejectNativeLogFileWithoutMetaClient(HoodieLogFile logFile) {
+    if (FSUtils.matchNativeLogFile(logFile.getFileName()).isPresent()) {
+      throw new HoodieNotSupportedException("Native log files require HoodieTableMetaClient. "
+          + "Use HoodieLogFormat.newReader(HoodieStorage, HoodieTableMetaClient, HoodieLogFile, HoodieSchema). "
+          + "Log file: " + logFile);
+    }
   }
 
   /**

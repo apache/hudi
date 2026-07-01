@@ -258,7 +258,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     HoodieLogFormatReader logFormatReaderWrapper = null;
     try {
       // Iterate over the paths
-      logFormatReaderWrapper = new HoodieLogFormatReader(storage,
+      logFormatReaderWrapper = new HoodieLogFormatReader(storage, hoodieTableMetaClient,
           logFilePaths.stream()
               .map(logFile -> new HoodieLogFile(new StoragePath(logFile)))
               .collect(Collectors.toList()),

@@ -187,7 +187,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
         int commitTimeBasedRecordIndex = 0;
-        List<BufferedRecord<T>> deleteRecords = deleteBlock.getRecordsToDelete(readerContext.getRecordContext());
+        List<BufferedRecord<T>> deleteRecords = deleteBlock.getRecordsToDelete(readerContext);
         for (Long recordPosition : recordPositions) {
           // IMPORTANT:
           // use #put for log files with regular order(see HoodieLogFile.LOG_FILE_COMPARATOR);
@@ -205,7 +205,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       case CUSTOM:
       default:
         int recordIndex = 0;
-        for (BufferedRecord<T> record : deleteBlock.getRecordsToDelete(readerContext.getRecordContext())) {
+        for (BufferedRecord<T> record : deleteBlock.getRecordsToDelete(readerContext)) {
           long recordPosition = recordPositions.get(recordIndex++);
           processNextDataRecord(record, recordPosition);
         }

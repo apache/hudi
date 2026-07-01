@@ -97,7 +97,7 @@ public class TestHoodieWriteConfig {
   @Test
   public void testSupportedTableWriteVersions() {
     Set<HoodieTableVersion> supportedVersions = CollectionUtils.createSet(
-        HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, HoodieTableVersion.NINE
+        HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, HoodieTableVersion.TEN
     );
     Arrays.stream(HoodieTableVersion.values())
         .filter(version -> !supportedVersions.contains(version))

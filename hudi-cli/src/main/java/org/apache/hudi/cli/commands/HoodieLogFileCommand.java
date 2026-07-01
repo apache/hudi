@@ -94,7 +94,8 @@ public class HoodieLogFileCommand {
               defaultValue = "false") final boolean headerOnly)
       throws IOException {
 
-    HoodieStorage storage = HoodieCLI.getTableMetaClient().getStorage();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    HoodieStorage storage = metaClient.getStorage();
     List<String> logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(
         storage, new StoragePath(logFilePathPattern)).stream()
         .map(status -> status.getPath().toString()).collect(Collectors.toList());
@@ -116,7 +117,7 @@ public class HoodieLogFileCommand {
         fileName = path.getName();
       }
       HoodieSchema writerSchema = TableSchemaResolver.readSchemaFromLogFile(storage, path);
-      try (Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(path), writerSchema)) {
+      try (Reader reader = HoodieLogFormat.newReader(storage, metaClient, new HoodieLogFile(path), writerSchema)) {
 
         // read the avro blocks
         while (reader.hasNext()) {
@@ -266,7 +267,7 @@ public class HoodieLogFileCommand {
         HoodieSchema writerSchema = TableSchemaResolver.readSchemaFromLogFile(
             client.getStorage(), new StoragePath(logFile));
         try (HoodieLogFormat.Reader reader =
-                 HoodieLogFormat.newReader(storage, new HoodieLogFile(new StoragePath(logFile)), writerSchema)) {
+                 HoodieLogFormat.newReader(storage, client, new HoodieLogFile(new StoragePath(logFile)), writerSchema)) {
           // read the avro blocks
           while (reader.hasNext()) {
             HoodieLogBlock n = reader.next();

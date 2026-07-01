@@ -68,6 +68,30 @@ class TestCommonClientUtils {
     assertThrows(HoodieNotSupportedException.class, () -> CommonClientUtils.validateTableVersion(tConfig, wConfig));
   }
 
+  @ParameterizedTest(name = "LSM-tree layout, writer version {0} should throw: {1}")
+  @MethodSource("provideLSMTreeVersionExpectations")
+  void testLSMTreeStorageLayoutRequiresVersionTen(HoodieTableVersion writeVersion, boolean expectThrow) {
+    HoodieWriteConfig wConfig = mock(HoodieWriteConfig.class);
+    HoodieTableConfig tConfig = mock(HoodieTableConfig.class);
+    when(wConfig.getWriteVersion()).thenReturn(writeVersion);
+    when(tConfig.getTableVersion()).thenReturn(writeVersion);
+    when(tConfig.isLSMTreeStorageLayout()).thenReturn(true);
+
+    if (expectThrow) {
+      assertThrows(HoodieNotSupportedException.class, () -> CommonClientUtils.validateTableVersion(tConfig, wConfig));
+    } else {
+      CommonClientUtils.validateTableVersion(tConfig, wConfig);
+    }
+  }
+
+  private static Stream<Arguments> provideLSMTreeVersionExpectations() {
+    return Stream.of(
+        Arguments.of(HoodieTableVersion.EIGHT, true),
+        Arguments.of(HoodieTableVersion.NINE, true),
+        Arguments.of(HoodieTableVersion.TEN, false)
+    );
+  }
+
   @Test
   void testGenerateTokenOnError() {
     // given: a task context supplies that throws errors.
@@ -76,6 +100,24 @@ class TestCommonClientUtils {
 
     // when:
     assertEquals("0-0-0", CommonClientUtils.generateWriteToken(taskContextSupplier));
+  }
+
+  @ParameterizedTest(name = "Write version {0} should write native log format: {1}")
+  @MethodSource("provideWriteVersionNativeLogExpectations")
+  void testShouldWriteNativeLogFormat(HoodieTableVersion writeVersion, boolean expected) {
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeConfig.getWriteVersion()).thenReturn(writeVersion);
+
+    assertEquals(expected, CommonClientUtils.shouldWriteNativeLogFormat(writeConfig));
+  }
+
+  private static Stream<Arguments> provideWriteVersionNativeLogExpectations() {
+    return Stream.of(
+        Arguments.of(HoodieTableVersion.SIX, false),
+        Arguments.of(HoodieTableVersion.EIGHT, false),
+        Arguments.of(HoodieTableVersion.NINE, false),
+        Arguments.of(HoodieTableVersion.TEN, true)
+    );
   }
 
   @ParameterizedTest(name = "Table version {0} with write version {1} should be valid: {2}")

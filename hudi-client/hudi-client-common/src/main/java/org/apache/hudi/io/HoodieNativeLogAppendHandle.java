@@ -89,6 +89,7 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
   @Override
   protected void createLogWriterForAppend(String instantTime, Option<FileSlice> fileSliceOpt) {
     try {
+      String[] orderingFields = ConfigUtils.getOrderingFields(recordProperties);
       this.writer = new HoodieNativeLogFormatWriter(
           storage.getDefaultBufferSize(),
           storage,
@@ -105,7 +106,7 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
           writeSchemaWithMetaFields,
           taskContextSupplier,
           hoodieTable.getReaderContextFactoryForWrite().getContext().getRecordContext(),
-          Arrays.stream(ConfigUtils.getOrderingFields(recordProperties)).collect(Collectors.toList()));
+          orderingFields == null ? Collections.emptyList() : Arrays.asList(orderingFields));
     } catch (IOException e) {
       throw new HoodieException("Creating native log writer with fileId: " + fileId + ", "
           + "delta commit time: " + instantTime + " error", e);

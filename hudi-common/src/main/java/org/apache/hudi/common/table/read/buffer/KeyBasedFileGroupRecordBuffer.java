@@ -108,7 +108,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   @Override
   public void processDeleteBlock(HoodieDeleteBlock deleteBlock) throws IOException {
-    for (BufferedRecord<T> record : deleteBlock.getRecordsToDelete(readerContext.getRecordContext())) {
+    for (BufferedRecord<T> record : deleteBlock.getRecordsToDelete(readerContext)) {
       processNextDataRecord(record, record.getRecordKey());
     }
   }
