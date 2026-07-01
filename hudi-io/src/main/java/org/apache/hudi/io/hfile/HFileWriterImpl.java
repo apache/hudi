@@ -31,8 +31,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
-import static org.apache.hudi.io.hfile.HFileBlock.getVariableLengthEncodedBytes;
 import static org.apache.hudi.io.hfile.HFileBlockType.TRAILER;
+import static org.apache.hudi.io.hfile.HFileFileInfoBlock.getProtobufVarIntBytes;
 import static org.apache.hudi.io.hfile.HFileInfo.KEY_VALUE_VERSION_WITH_MVCC_TS;
 import static org.apache.hudi.io.hfile.HFileInfo.LAST_KEY;
 import static org.apache.hudi.io.hfile.HFileInfo.MAX_MVCC_TS_KEY;
@@ -144,8 +144,8 @@ public class HFileWriterImpl implements HFileWriter {
     // 3. Create an index entry.
     rootIndexBlock.add(
         currentDataBlock.getFirstKey(), lastDataBlockOffset, blockBuffer.limit());
-    // 4. Create a new data block.
-    currentDataBlock = HFileDataBlock.createDataBlockToWrite(context, currentOffset);
+    // 4. Create a new data block whose previous-block offset points at the block just flushed.
+    currentDataBlock = HFileDataBlock.createDataBlockToWrite(context, lastDataBlockOffset);
   }
 
   // NOTE that: reader assumes that every meta info piece
@@ -200,7 +200,7 @@ public class HFileWriterImpl implements HFileWriter {
     ByteBuffer trailer = ByteBuffer.allocate(TRAILER_SIZE);
     trailer.limit(TRAILER_SIZE);
     trailer.put(TRAILER.getMagic());
-    trailer.put(getVariableLengthEncodedBytes(trailerProto.getSerializedSize()));
+    trailer.put(getProtobufVarIntBytes(trailerProto.getSerializedSize()));
     trailer.put(trailerProto.toByteArray());
     // Force trailer to have fixed length.
     trailer.position(TRAILER_SIZE - 1);
