@@ -374,7 +374,7 @@
         <!-- Required by TableEnvironmentImpl in TestHoodieFlinkQuickstart to discover ExecutorFactory. -->
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-table-planner_2.12</artifactId>
+            <artifactId>${flink.table.planner.artifactId}</artifactId>
             <version>${flink.version}</version>
             <scope>test</scope>
         </dependency>

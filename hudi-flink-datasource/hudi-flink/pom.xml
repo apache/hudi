@@ -446,6 +446,13 @@
             <scope>test</scope>
             <type>test-jar</type>
         </dependency>
+        <!-- Required by TableEnvironmentImpl in SQL tests to discover ExecutorFactory. -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>${flink.table.planner.artifactId}</artifactId>
+            <version>${flink.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-csv</artifactId>
