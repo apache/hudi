@@ -34,7 +34,7 @@
     <azure.storage.blob.version>12.26.0</azure.storage.blob.version>
     <azure.identity.version>1.12.2</azure.identity.version>
     <!-- Keep Jackson consistent for Azure SDK integration tests (Hudi core pins older Jackson versions). -->
-    <azure.jackson.version>2.13.5</azure.jackson.version>
+    <azure.jackson.version>2.18.6</azure.jackson.version>
   </properties>
 
   <dependencies>

@@ -100,7 +100,7 @@
     <kryo.shaded.version>4.0.2</kryo.shaded.version>
     <fasterxml.spark3.version>2.15.2</fasterxml.spark3.version>
     <fasterxml.spark4.version>2.17.1</fasterxml.spark4.version>
-    <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
+    <fasterxml.version>2.18.6</fasterxml.version>
     <fasterxml.jackson.annotation.version>${fasterxml.spark3.version}</fasterxml.jackson.annotation.version>
     <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
     <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
