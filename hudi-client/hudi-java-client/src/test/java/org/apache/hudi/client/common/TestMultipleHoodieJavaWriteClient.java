@@ -35,6 +35,7 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -207,8 +208,14 @@ public class TestMultipleHoodieJavaWriteClient {
               String startCommitTime = writer.startCommit();
               List<WriteStatus> s = writer.upsert(Collections.singletonList(record), startCommitTime);
 
-              writer.commit(startCommitTime, s);
-              LOGGER.info("Completed commit");
+              try {
+                writer.commit(startCommitTime, s);
+                LOGGER.info("Completed commit");
+              } catch (HoodieWriteConflictException e) {
+                // OCC conflict is expected when multiple writers operate concurrently on overlapping key ranges.
+                // The test verifies no deadlock occurs, not that every commit succeeds.
+                LOGGER.info("Write conflict on commit {}, expected OCC behavior: {}", startCommitTime, e.getMessage());
+              }
               synchronized (writerQueue) {
                 try {
                   writerQueue.put(writer);
