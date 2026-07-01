@@ -105,7 +105,7 @@ class TestAvroRecordContext {
     assertThrows(IllegalArgumentException.class, () -> getFieldValueFromIndexedRecord(record, ""));
   }
 
-  private static final Schema COMPLEX_SCHEMA = new Schema.Parser().parse(
+  private static final Schema MAP_AND_ARRAY_SCHEMA = new Schema.Parser().parse(
       "{\"type\":\"record\",\"name\":\"complex\",\"fields\":["
           + "{\"name\":\"id\",\"type\":\"int\"},"
           + "{\"name\":\"str_map\",\"type\":[\"null\",{\"type\":\"map\",\"values\":\"string\"}],\"default\":null},"
@@ -115,7 +115,7 @@ class TestAvroRecordContext {
 
   @Test
   void testGetFieldValueMapAndArrayLeavesReturnNull() {
-    GenericRecord record = new GenericData.Record(COMPLEX_SCHEMA);
+    GenericRecord record = new GenericData.Record(MAP_AND_ARRAY_SCHEMA);
     record.put("id", 7);
     Map<Utf8, Utf8> strMap = new HashMap<>();
     strMap.put(new Utf8("a"), new Utf8("v1"));
@@ -138,7 +138,7 @@ class TestAvroRecordContext {
     assertNull(getFieldValueFromIndexedRecord(record, "rec_map.key_value.value.x"));
 
     // and null when the complex field itself is absent/null
-    GenericRecord empty = new GenericData.Record(COMPLEX_SCHEMA);
+    GenericRecord empty = new GenericData.Record(MAP_AND_ARRAY_SCHEMA);
     empty.put("id", 0);
     assertNull(getFieldValueFromIndexedRecord(empty, "str_map.key_value.value"));
     assertNull(getFieldValueFromIndexedRecord(empty, "int_array.list.element"));
