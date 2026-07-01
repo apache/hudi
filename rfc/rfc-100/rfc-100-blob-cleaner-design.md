@@ -29,7 +29,7 @@
 
 ## Status
 
-Issue: <Link to GH feature issue>
+Issue: https://github.com/apache/hudi/issues/18111
 
 > Please keep the status updated in `rfc/README.md`.
 
@@ -485,14 +485,25 @@ message BlobDeleteList {
 By the time the plan is visible, the sidecar is already durable on storage. This ensures
 atomicity: if a writer sees the plan, the sidecar is guaranteed to exist.
 
-**Lifecycle:** The sidecar lives until the clean instant is **archived**. This covers writer
-conflict checks against REQUESTED, INFLIGHT, and COMPLETED clean actions. When the instant is
-archived, the sidecar is deleted as part of archival cleanup.
+**Lifecycle:** The sidecar lives until the clean instant is **archived**, covering writer conflict
+checks against REQUESTED, INFLIGHT, and COMPLETED clean actions. Deletion reuses the hook archival
+already has for an archived instant's per-instant side files, rather than a new periodic service.
+In `TimelineArchiverV2.archiveIfRequired` the archiver runs a per-archived-action callback --
+today `deleteAnyLeftOverMarkers(context, activeAction)`, which removes the instant's marker
+directory keyed on `activeAction.getInstantTime()`. Blob-sidecar cleanup extends that callback:
+for an archived `CLEAN_ACTION`, derive the sidecar path by convention from
+`activeAction.getInstantTime()` and delete it (idempotent -- a missing file is success), so no
+plan/metadata read is needed. This is added to both archiver versions (V1 and V2). A crash between
+archiving the instant and deleting its sidecar is caught by the orphan sweep below: an archived
+instant is no longer on the active timeline, so its leftover sidecar is reclaimed on the next
+cleaner run.
 
 **Orphan cleanup:** If a crash occurs after writing the sidecar but before persisting the plan,
 the sidecar is orphaned. At cleaner startup, a lightweight cleanup routine lists
-`.hoodie/.aux/clean/` and deletes any sidecar whose instant has no corresponding plan on the
-timeline.
+`.hoodie/.aux/clean/` and deletes any sidecar whose instant is not present on the active timeline
+-- i.e., never persisted, or already archived. Sidecars for REQUESTED, INFLIGHT, and
+COMPLETED-but-not-yet-archived clean instants are retained (writers may still need them), so this
+sweep never removes a sidecar a conflict check could require.
 
 **Rollback:** When a clean plan is rolled back, rollback logic reads
 `extraMetadata["blobDeletesPath"]` and deletes the sidecar.
@@ -525,15 +536,17 @@ cleaner never conflicts with writers on file slice operations. However, external
 **not** covered by MVCC: a writer's new file slice may reference an external blob that the cleaner
 is simultaneously evaluating for deletion.
 
-**Writer-side conflict check in `preCommit()`.** The gap between the cleaner's planning-time
-snapshot and its actual file deletion is closed by a commit-time conflict check:
+**Writer-side conflict check in `BaseHoodieWriteClient.preCommit()`.** The gap between the
+cleaner's planning-time snapshot and its actual file deletion is closed by a commit-time check:
 
-1. Writers track external managed blob paths in `HoodieWriteStat.externalBlobPaths` (in-memory
-   collection, no additional I/O).
-2. At commit time (in `preCommit()`, under the existing transaction lock), the writer checks all
-   three clean states -- COMPLETED, INFLIGHT, and REQUESTED -- because a REQUESTED plan can begin
-   executing at any moment (the REQUESTED->INFLIGHT transition doesn't acquire the transaction
-   lock).
+1. Writers track external managed blob paths in `HoodieWriteStat.externalBlobPaths` (transient
+   in-memory, no additional I/O -- see below). The collection is empty for non-blob writers, so
+   the check short-circuits at zero cost (R6).
+2. In `preCommit()`, under the existing transaction lock and on a table handle created *after*
+   the lock (so the timeline is current), the writer checks all three clean states -- COMPLETED,
+   INFLIGHT, and REQUESTED. All three are checked because the REQUESTED->INFLIGHT transition and
+   the blob deletes both run *outside* the transaction lock, so a REQUESTED plan may begin
+   executing at any moment.
 3. For each clean instant, the writer locates the sidecar Parquet file:
    - REQUESTED/INFLIGHT: reads `extraMetadata["blobDeletesPath"]` from the plan
    - COMPLETED: reads `blobDeletesSidecarPath` from `HoodieCleanMetadata`
@@ -544,9 +557,105 @@ snapshot and its actual file deletion is closed by a commit-time conflict check:
 The sidecar is the single source of truth across all three states -- no blob paths are stored
 inline in the plan or completed metadata.
 
-**Note:** `ConcurrentOperation` and `TransactionUtils.getInflightAndRequestedInstants()` currently
-exclude `CLEAN_ACTION`. Adding external blob cleanup requires extending conflict resolution to
-include clean actions when blob columns exist.
+**Populating `externalBlobPaths` (writer side).** The collection is filled during the normal
+write pass, not by a separate scan. As each record is written, the write handle already
+materializes the full record -- including the blob column -- to serialize it into the base or log
+file, so extracting `reference.external_path` is a field access on data already in memory. The
+"no additional I/O" claim is precise: no extra read and no extra record deserialization; the only
+added work is a per-record field navigation and a set insert. Only managed external paths
+(`type = OUT_OF_LINE`, `managed = true`) are added, and the set is deduplicated -- so its size is
+the number of *distinct* external paths in the write, not the record count.
+
+The field is **transient**. It lives on the per-file-group `HoodieWriteStat` only long enough for
+the committing writer's own `preCommit()` check, then is discarded. It must **not** be serialized
+into `HoodieCommitMetadata` -- the POJO `HoodieWriteStat` is JSON-persisted into the `.commit`
+file, and the Avro `HoodieWriteStat` is embedded in `HoodieCommitMetadata.avsc` under
+`partitionToWriteStats`, so persisting it would carry the full external-path list in every
+commit's metadata, which is exactly the "store blob references in commit metadata" anti-pattern
+the problem statement rules out (C10: does not scale, breaks at archival). It is therefore kept
+non-serialized (e.g., `@JsonIgnore` on the stat, or carried on the transient `WriteStatus` rather
+than the persisted stat).
+
+Memory is bounded and distributed. Each `HoodieWriteStat` holds only its own file group's distinct
+paths, so the collection is partitioned across write tasks rather than materialized whole on the
+driver. For extreme writes (one distinct blob per row), the `preCommit()` intersection also does
+not need the global set on the driver: the clean sidecar's path set is small and bounded, so it
+can be broadcast to executors and intersected against each task's per-FG paths, reducing only the
+conflicting paths back. The large per-FG sets stay where they were produced.
+
+**Bounding the check -- the writer does not scan all completed cleans.** Reading every COMPLETED
+clean sidecar back to archival would make the check O(completed cleans), unacceptable under
+frequent cleaning. The check is bounded to the writer's own window instead:
+
+- **REQUESTED / INFLIGHT:** at most one by default. With `hoodie.clean.multiple.enabled = false`
+  (the default), `scheduleCleaning` does not schedule a new clean while one is pending
+  (`BaseHoodieTableServiceClient.java:856`), so there is normally a single pending clean whose
+  sidecar could delete the writer's blob imminently.
+- **COMPLETED:** only cleans that completed *after the writer's start snapshot* (the
+  last-completed instant the write began from). That is the window in which a clean could have
+  deleted the writer's blob without seeing the writer's not-yet-committed reference (Scenario D
+  above). A clean that completed *before* the writer began is not a race -- its deletion predates
+  the write, so referencing that path is a stale-path user error, outside R1's scope. The writer
+  therefore filters completed clean instants by completion time greater than its snapshot before
+  reading any sidecar.
+
+Per commit this is O(cleans overlapping this write's window) -- typically zero to two sidecar
+reads -- not O(completed cleans since archival), and the whole check is skipped when the writer
+has no external blob paths (R6). Retention and read cost are decoupled: because the writer filters
+completed clean instants by completion time before opening any sidecar, a long backlog of retained
+sidecars does not inflate per-commit cost, so the sidecar can safely live until archival (covering
+a long-running writer whose window is large) without penalty.
+
+**Which operations this check covers.** `preCommit()` runs under the transaction lock on every
+commit that produces commit metadata, but only operations that introduce or copy an external
+blob reference need the blob check:
+
+| Operation                           | preCommit path                                                              | Blob check           |
+|-------------------------------------|-----------------------------------------------------------------------------|----------------------|
+| INSERT / UPSERT / DELETE            | `BaseHoodieWriteClient.preCommit` (always)                                  | Required -- new refs |
+| insert_overwrite                    | `BaseHoodieWriteClient.preCommit` (always)                                  | Required -- new refs |
+| Clustering                          | `BaseHoodieTableServiceClient.preCommit` (only if `isPreCommitRequired()`)  | Not needed           |
+| Compaction / log compaction         | `BaseHoodieTableServiceClient.preCommit`                                    | Not needed           |
+| Clean, rollback, restore, savepoint | Does not run `preCommit`                                                     | Not needed           |
+
+Only ingestion writes and `insert_overwrite` can introduce a *new* external blob reference the
+cleaner could not have seen at its planning fence, and both flow through
+`BaseHoodieWriteClient.preCommit`, so the check lives there. Clustering and compaction only
+*copy* pointers that were already committed -- and therefore already visible to the cleaner's
+Stage 1/2 -- so they are covered by the existing mechanisms in the [Concurrency
+Matrix](#concurrency-matrix): compaction by `isFileSliceNeededForPendingMajorOrMinorCompaction`
+fencing, clustering by the replaced-FG lifecycle (Stage 2 finds the copied reference in the
+target FG). This is deliberate, not incidental: clustering's `preCommit` is gated on
+`isPreCommitRequired()`, which is `false` for the default
+`SimpleConcurrentFileWritesConflictResolutionStrategy` and `true` only for
+`PreferWriterConflictResolutionStrategy` -- so a blob check placed in `preCommit` could not rely
+on the clustering path anyway. The clean action itself does not run `preCommit`, which is
+correct: the check is on the *writer* (referencing) side; the cleaner side is Stage 1/2 over the
+committed timeline.
+
+**Why a targeted `preCommit` check, not an OCC conflict-resolution extension.** The conflict axis
+here is the external blob *path* (a user-controlled string), which is orthogonal to the
+`(partition, fileId)` model Hudi's OCC conflict resolution is built on. Routing the blob check
+through `ConcurrentOperation` / `ConflictResolutionStrategy.hasConflict()` was considered and
+rejected:
+
+- A clean action has no `(partition, fileId)` set that expresses the conflict.
+  `SimpleConcurrentFileWritesConflictResolutionStrategy.hasConflict()` intersects
+  `getMutatedPartitionAndFileIds()`; the cleaned slices' fileIds are the *expired* ones, which by
+  MVCC never overlap a concurrent writer's new slices -- so the intersection is empty exactly when
+  a blob conflict is real. The useful key (the blob path) cannot be held in that field.
+- Forcing it to fit would touch the shared OCC path every writer traverses: (1) add a
+  `CLEAN_ACTION` case to both switches in `ConcurrentOperation.init()` -- which today throws
+  `IllegalArgumentException` for clean -- plus a new blob-path field populated by reading the
+  sidecar *inside* metadata construction; (2) add a blob-path branch to `hasConflict`; (3) add
+  `CLEAN_ACTION` to the whitelists in `TransactionUtils.getInflightAndRequestedInstants()` and
+  `getCandidateInstants()`, which today draw only from the commits timeline. That widens the
+  candidate set and adds sidecar I/O for *all* writers unless every site is separately gated on
+  `hasBlobColumns`, putting R6 at risk on a sensitive, widely-shared path.
+
+The targeted `preCommit` check reaches the same guarantee while touching none of that shared
+code: it is blob-scoped, gated on the writer having external blob paths, and localizes all
+blob-specific logic to the blob feature.
 
 Cost is zero for non-blob tables. For external blobs: one timeline scan + 1-3 sidecar Parquet
 reads (~50-200ms each on cloud storage), gated on the writer having external blob paths.
@@ -593,6 +702,51 @@ sequenceDiagram
     Note left of W: blob_X in sidecar → Rejection
     Note over W,CL: ✓ Safe
 ```
+
+### Ordering Argument and the Planning-Snapshot Window
+
+The four scenarios above are safe only if the cleaner's liveness snapshot and its plan+sidecar
+become visible to writers atomically. The current scheduling path does not guarantee that, and
+the gap must be stated precisely rather than assumed away.
+
+In `BaseHoodieTableServiceClient.scheduleCleaning()`, the cleaner computes the plan -- Stage 1/2
+liveness and the blob delete set -- in `createCleanerPlan()` **outside** the transaction lock,
+then persists the REQUESTED plan via `saveToCleanRequested()` **under** the lock. Execution
+(REQUESTED->INFLIGHT and the blob deletes) runs later, again **outside** the lock. This leaves a
+window between the liveness snapshot and the plan becoming visible:
+
+```
+t0  cleaner takes fence-T snapshot in createCleanerPlan (UNLOCKED); blob_X judged orphaned
+t1  writer locks, preCommit: no clean instant on timeline yet -> passes -> commits ref to blob_X
+t2  cleaner locks, saveToCleanRequested persists plan (blob_X in sidecar)
+t3  cleaner executes (UNLOCKED), deletes blob_X   -> writer's t1 commit now dangles
+```
+
+Neither side catches this interleaving: the writer's `preCommit` sees no plan (not yet
+persisted), and the cleaner's snapshot predates the writer's commit and is not re-validated
+before deletion. This hazard is unique to blobs -- the standard file-slice cleaner is immune
+because a concurrent writer only creates *newer* slices and never re-references an *older* one,
+whereas a writer can freely re-reference an existing external blob path (C2, C3).
+
+Closing the window requires the liveness check that *authorizes a delete* to run under the
+transaction lock, atomic with a timeline transition that makes the delete intent visible. The
+locked work is only a re-check of the sidecar candidates (a bounded Stage 2 index lookup), not
+full planning:
+
+- **(a) Re-validate at plan-persist.** Re-run Stage 2 for the candidate set under the lock,
+  atomic with `saveToCleanRequested` (the REQUESTED instant becoming visible). A writer
+  committing during unlocked planning is caught by the re-validation; a writer committing after
+  sees the REQUESTED plan and aborts.
+- **(b) Re-validate at execution.** Keep planning unlocked, but before deleting, re-run the Stage
+  2 lookup for the sidecar candidates against the latest timeline under the lock, transitioning
+  to INFLIGHT atomically. A writer committing before is seen by the re-validation; a writer
+  committing after sees the INFLIGHT plan in `preCommit` and aborts.
+
+Either bounds the lock hold to a candidate index lookup rather than full cross-FG verification,
+preserving C6/R4. Option (b) is preferred (it revalidates against the freshest timeline, closest
+to the irreversible act), but the choice is **open** and one of the two is required before the
+writer-side check is sufficient. This is the design's thinnest safety proof and must be resolved
+before implementation.
 
 ### Concurrency Matrix
 
