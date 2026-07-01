@@ -682,6 +682,8 @@
               <exclude>**/generated-sources/**</exclude>
               <exclude>.github/**</exclude>
               <exclude>**/banner.txt</exclude>
+              <!-- bundled third-party UI libraries (Bootstrap, renderjson, vis-timeline) ship with their own licenses -->
+              <exclude>**/resources/public/lib/**</exclude>
               <!-- local files not in version control -->
               <exclude>**/*.iml</exclude>
               <exclude>.mvn/**</exclude>
