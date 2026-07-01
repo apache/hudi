@@ -56,6 +56,12 @@ public class PartitionPathEncodeUtils {
 
     charToEscapeFilename.set('_');
     charToEscapeFilename.set('-');
+    // Escape '.' in MDT file-id encoding. A literal dot in a partition value (e.g. a
+    // partition column named fare.currency) collides with LOG_FILE_PATTERN's parser,
+    // so partitioned RLI was non-functional for such partitions prior to this change.
+    // There is no backward-compat concern: tables that needed this previously could
+    // not produce valid MDT entries at all, so no pre-existing encodings would change.
+    charToEscapeFilename.set('.');
   }
 
   static boolean needsEscaping(char c) {
