@@ -110,15 +110,22 @@ public class HoodieCDCFileSplit implements Serializable, Comparable<HoodieCDCFil
   @Override
   public int compareTo(HoodieCDCFileSplit o) {
     int cmpResult = this.instant.compareTo(o.instant);
-    if (cmpResult == 0 && this.cdcInferCase == HoodieCDCInferenceCase.LOG_FILE
-        && this.beforeFileSlice.isPresent() && o.getBeforeFileSlice().isPresent()) {
+    if (cmpResult == 0 && this.cdcInferCase == HoodieCDCInferenceCase.LOG_FILE) {
       // For mor table, multiple writes may occur for the same file group for a single instant,
       // producing multiple log files that have monotonically increasing  file version.
       //
       // A deterministic ordering between splits from the same file group is required to infer row changes for readers.
       // beforeFileSlice` includes the log files already existed before the write of the log file in this split, which can be used as the
       // tie-breaker to preserve the relative order of multiple log files.
-      return Math.toIntExact(this.beforeFileSlice.get().getLogFiles().count() - o.getBeforeFileSlice().get().getLogFiles().count());
+      int thisLogFilesCount = this.beforeFileSlice
+              .map(fs -> Math.toIntExact(fs.getLogFiles().count()))
+              .orElse(0);
+
+      int otherLogFilesCount = o.getBeforeFileSlice()
+              .map(fs -> Math.toIntExact(fs.getLogFiles().count()))
+              .orElse(0);
+
+      return Integer.compare(thisLogFilesCount, otherLogFilesCount);
     }
     return cmpResult;
   }
