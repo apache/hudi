@@ -20,6 +20,7 @@ package org.apache.hudi.hive.ddl;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -75,6 +76,20 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
    */
   public abstract void runSQL(String sql);
 
+  /**
+   * Runs a list of SQL statements. The default implementation executes them
+   * sequentially via {@link #runSQL(String)}. Subclasses that can parallelize
+   * (e.g. {@link HiveQueryDDLExecutor} with a driver pool) override this hook
+   * to fan the list out across workers. The contract requires that the list
+   * has no positional dependencies — callers must fully qualify table names
+   * with {@code `db`.`tbl`} so any statement can run on any worker.
+   */
+  protected void runSQLs(List<String> sqls) {
+    for (String sql : sqls) {
+      runSQL(sql);
+    }
+  }
+
   @Override
   public void createDatabase(String databaseName) {
     runSQL("create database if not exists " + databaseName);
@@ -120,7 +135,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     }
     log.info("Adding partitions {} to table {}", partitionsToAdd.size(), tableName);
     List<String> sqls = constructAddPartitions(tableName, partitionsToAdd);
-    sqls.stream().forEach(sql -> runSQL(sql));
+    runSQLs(sqls);
   }
 
   @Override
@@ -131,9 +146,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     }
     log.info("Changing partitions {} on {}", changedPartitions.size(), tableName);
     List<String> sqls = constructPartitionAlterStatements(tableName, changedPartitions, PartitionAlterType.SET_LOCATION);
-    for (String sql : sqls) {
-      runSQL(sql);
-    }
+    runSQLs(sqls);
   }
 
   @Override
@@ -210,29 +223,40 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     }
     log.info("Touching partitions " + touchPartitions.size() + " on " + tableName);
     List<String> sqls = constructPartitionAlterStatements(tableName, touchPartitions, PartitionAlterType.TOUCH);
-    for (String sql : sqls) {
-      runSQL(sql);
-    }
+    runSQLs(sqls);
   }
 
   /**
    * Builds SQL statements to either touch partitions or set their location.
-   * TOUCH: one ALTER TABLE ... TOUCH PARTITION (p1) PARTITION (p2) ...
-   * SET_LOCATION: one ALTER TABLE ... PARTITION (p) SET LOCATION '...' per partition.
+   *
+   * <p>The first element of the returned list is always a {@code USE database}
+   * statement. Hive 2.x's ALTER PARTITION ... SET LOCATION does not respect the
+   * {@code db.table} qualifier (silently routes to the connection's current
+   * database), so the {@code USE} is load-bearing. Parallel execution paths must
+   * run this statement on every worker before fanning out the rest.
+   *
+   * <p>TOUCH: one {@code ALTER TABLE ... TOUCH PARTITION (p1) ...} per batch of
+   * {@code HIVE_BATCH_SYNC_PARTITION_NUM} partitions.
+   *
+   * <p>SET_LOCATION: one {@code ALTER TABLE ... PARTITION (p) SET LOCATION '...'}
+   * per partition (Hive SQL does not support multi-partition SET LOCATION in one
+   * statement).
    */
   private List<String> constructPartitionAlterStatements(String tableName, List<String> partitions, PartitionAlterType alterType) {
     List<String> result = new ArrayList<>();
-    // Hive 2.x doesn't like db.table name for operations, hence we need to change to using the database first
     String useDatabase = "USE " + HIVE_ESCAPE_CHARACTER + databaseName + HIVE_ESCAPE_CHARACTER;
     result.add(useDatabase);
     String alterTablePrefix = "ALTER TABLE " + HIVE_ESCAPE_CHARACTER + tableName + HIVE_ESCAPE_CHARACTER;
+    int batchSyncPartitionNum = config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
     switch (alterType) {
       case TOUCH:
-        String alterTable = alterTablePrefix + " TOUCH";
-        for (String partition : partitions) {
-          alterTable += " PARTITION (" + getPartitionClause(partition) + ")";
+        for (List<String> batch : CollectionUtils.batches(partitions, batchSyncPartitionNum)) {
+          StringBuilder alterTable = new StringBuilder(alterTablePrefix).append(" TOUCH");
+          for (String partition : batch) {
+            alterTable.append(" PARTITION (").append(getPartitionClause(partition)).append(")");
+          }
+          result.add(alterTable.toString());
         }
-        result.add(alterTable);
         break;
       case SET_LOCATION:
         for (String partition : partitions) {
