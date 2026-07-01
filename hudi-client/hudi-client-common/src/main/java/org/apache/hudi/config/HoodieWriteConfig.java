@@ -3058,6 +3058,18 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieTTLConfig.MAX_PARTITION_TO_DELETE);
   }
 
+  public String getPartitionTTLEventTimeFormat() {
+    return getStringOrDefault(HoodieTTLConfig.EVENT_TIME_FORMAT);
+  }
+
+  public int getPartitionTTLEventTimeSegmentStartIndex() {
+    return getIntOrDefault(HoodieTTLConfig.EVENT_TIME_SEGMENT_START_INDEX);
+  }
+
+  public boolean shouldDeleteHiveDefaultPartitionForEventTimeTTL() {
+    return getBooleanOrDefault(HoodieTTLConfig.EVENT_TIME_DELETE_HIVE_DEFAULT_PARTITION);
+  }
+
   public boolean isSecondaryIndexEnabled() {
     return metadataConfig.isSecondaryIndexEnabled();
   }

@@ -84,6 +84,32 @@ public class HoodieTTLConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("max partitions to delete in partition ttl management");
 
+  public static final ConfigProperty<String> EVENT_TIME_FORMAT = ConfigProperty
+      .key(PARTITION_TTL_STRATEGY_PARAM_PREFIX + "event.time.format")
+      .defaultValue("yyyy-MM-dd")
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Used by KEEP_BY_EVENT_TIME. Date-time pattern for the event time encoded in the partition path. "
+          + "A '/' in the pattern means the time spans multiple path segments. Examples: 'yyyy-MM-dd' (default), "
+          + "'yyyyMMdd', 'yyyy-MM-dd/HH', 'yyyyMMdd/HH'.");
+
+  public static final ConfigProperty<Integer> EVENT_TIME_SEGMENT_START_INDEX = ConfigProperty
+      .key(PARTITION_TTL_STRATEGY_PARAM_PREFIX + "event.time.segment.start.index")
+      .defaultValue(0)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Used by KEEP_BY_EVENT_TIME. 0-based index of the first path segment that carries the event time. "
+          + "Defaults to 0 for pure time partitions like 'dt=2026-04-24'. Set to a higher value when non-time prefix segments exist, "
+          + "e.g. 1 for 'region=us/20260424/05'.");
+
+  public static final ConfigProperty<Boolean> EVENT_TIME_DELETE_HIVE_DEFAULT_PARTITION = ConfigProperty
+      .key(PARTITION_TTL_STRATEGY_PARAM_PREFIX + "event.time.delete.hive.default.partition")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("When true, KEEP_BY_EVENT_TIME treats partitions containing __HIVE_DEFAULT_PARTITION__ as expired and removes them. "
+          + "Defaults to false so such partitions are skipped (with a WARN log) and the user keeps explicit control over their lifecycle.");
+
   public static class Builder {
     private final HoodieTTLConfig ttlConfig = new HoodieTTLConfig();
 
@@ -109,6 +135,21 @@ public class HoodieTTLConfig extends HoodieConfig {
 
     public HoodieTTLConfig.Builder withTTLStrategyType(PartitionTTLStrategyType ttlStrategyType) {
       ttlConfig.setValue(PARTITION_TTL_STRATEGY_TYPE, ttlStrategyType.name());
+      return this;
+    }
+
+    public HoodieTTLConfig.Builder withEventTimeFormat(String format) {
+      ttlConfig.setValue(EVENT_TIME_FORMAT, format);
+      return this;
+    }
+
+    public HoodieTTLConfig.Builder withEventTimeSegmentStartIndex(int timeSegStartIndex) {
+      ttlConfig.setValue(EVENT_TIME_SEGMENT_START_INDEX, Integer.toString(timeSegStartIndex));
+      return this;
+    }
+
+    public HoodieTTLConfig.Builder withEventTimeDeleteHiveDefaultPartition(boolean enable) {
+      ttlConfig.setValue(EVENT_TIME_DELETE_HIVE_DEFAULT_PARTITION, Boolean.toString(enable));
       return this;
     }
 
