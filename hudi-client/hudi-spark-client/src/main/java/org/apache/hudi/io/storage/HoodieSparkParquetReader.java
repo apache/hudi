@@ -144,7 +144,19 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
    */
   public ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema, List<Filter> readFilters) throws IOException {
     HoodieSchema nonNullSchema = requestedSchema.getNonNullType();
-    StructType structSchema = HoodieInternalRowUtils.getCachedSchema(nonNullSchema);
+    return getUnsafeRowIterator(nonNullSchema, HoodieInternalRowUtils.getCachedSchema(nonNullSchema), readFilters);
+  }
+
+  /**
+   * Variant overload. {@code projectedStructSchema} is the requested Spark schema, which may carry
+   * a Spark 4.1 PushVariantIntoScan variant projection (per-field {@code VariantMetadata}) that
+   * {@link HoodieSchema} cannot represent. Using it as the requested schema makes parquet-mr decode
+   * variant columns into the projected struct shape natively (mirroring the base-file read path)
+   * rather than returning the full {@code VariantType}. {@code requestedSchema} is still used for
+   * vector-column detection (orthogonal to variants) and the timestamp-repair MessageType.
+   */
+  public ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema, StructType projectedStructSchema, List<Filter> readFilters) throws IOException {
+    HoodieSchema nonNullSchema = requestedSchema.getNonNullType();
 
     // Detect vector columns: ordinal → Vector schema
     Map<Integer, HoodieSchema.Vector> vectorColumnInfo = HoodieVectorUtils.detectVectorColumns(nonNullSchema);
@@ -152,8 +164,8 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     // For vector columns, replace ArrayType(FloatType) with BinaryType in the read schema
     // so SparkBasicSchemaEvolution sees matching types (file has FIXED_LEN_BYTE_ARRAY → BinaryType)
     StructType readStructSchema = vectorColumnInfo.isEmpty()
-        ? structSchema
-        : VectorConversionUtils.replaceVectorColumnsWithBinary(structSchema, vectorColumnInfo);
+        ? projectedStructSchema
+        : VectorConversionUtils.replaceVectorColumnsWithBinary(projectedStructSchema, vectorColumnInfo);
 
     Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(nonNullSchema));
     boolean enableTimestampFieldRepair = storage.getConf().getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true);
@@ -203,7 +215,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
     if (!vectorColumnInfo.isEmpty()) {
       // Post-process: convert binary VECTOR columns back to typed arrays
-      UnsafeProjection vectorProjection = UnsafeProjection.create(structSchema);
+      UnsafeProjection vectorProjection = UnsafeProjection.create(projectedStructSchema);
       Function<InternalRow, InternalRow> mapper =
           VectorConversionUtils.buildRowMapper(readStructSchema, vectorColumnInfo, vectorProjection::apply);
       CloseableMappingIterator<UnsafeRow, UnsafeRow> vectorIterator =

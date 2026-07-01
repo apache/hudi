@@ -60,7 +60,6 @@ import lombok.experimental.Accessors;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
@@ -317,12 +316,18 @@ public abstract class HoodieReaderContext<T> {
                                                             List<Pair<String, Object>> requiredPartitionFieldAndValues);
 
   /**
-   * Optional per-row transformer applied to log-block records before they reach the merger.
-   * Engines override this to align records with a projected read schema (e.g. Spark 4.1's
-   * PushVariantIntoScan). Default is no projection.
+   * Wraps a log-block record iterator to align its rows with a projected read schema before they
+   * reach the merger (e.g. Spark 4.1's PushVariantIntoScan rewrites variant columns into struct
+   * extractions on the base-file side, so avro log rows must be rewritten to match). Default is a
+   * no-op pass-through; the parquet log path projects natively via the reader, so only engines
+   * whose avro log reader needs an explicit row rewrite (currently the Spark reader context)
+   * override this.
+   *
+   * @param recordIterator the deserialized log-block records in {@code dataBlockSchema} shape
+   * @param dataBlockSchema the schema the records are in
    */
-  public Option<Function<T, T>> getLogBlockRecordProjection(HoodieSchema dataBlockSchema) {
-    return Option.empty();
+  public ClosableIterator<T> projectLogBlockRecords(ClosableIterator<T> recordIterator, HoodieSchema dataBlockSchema) {
+    return recordIterator;
   }
 
   public Option<Pair<String, String>> getPayloadClasses(TypedProperties props) {
