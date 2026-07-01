@@ -38,6 +38,7 @@ import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.VarcharType;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -49,6 +50,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 
@@ -380,8 +382,17 @@ public final class HudiUtil
             HoodieTableMetadata tableMetadata,
             HoodieTableMetaClient metaClient)
     {
+        HoodieTableMetadata effectiveMetadata = tableMetadata;
+        if (!metaClient.getTableConfig().isMetadataTableAvailable()) {
+            // Fall back to filesystem-based listing when the table has no metadata table initialized
+            effectiveMetadata = new FileSystemBackedTableMetadata(
+                    new HoodieLocalEngineContext(metaClient.getStorageConf()),
+                    metaClient.getTableConfig(),
+                    metaClient.getStorage(),
+                    metaClient.getBasePath().toString());
+        }
         return new HoodieTableFileSystemView(
-                tableMetadata, metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
+                effectiveMetadata, metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
     }
 
     public static Schema getLatestTableSchema(HoodieTableMetaClient metaClient, String tableName)

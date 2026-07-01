@@ -44,6 +44,7 @@ public class HudiSessionProperties
         implements SessionPropertiesProvider
 {
     private static final String COLUMNS_TO_HIDE = "columns_to_hide";
+    private static final String RECORD_MERGER_IMPLS = "record_merger_impls";
     static final String TABLE_STATISTICS_ENABLED = "table_statistics_enabled";
     static final String METADATA_TABLE_ENABLED = "metadata_enabled";
     private static final String USE_PARQUET_COLUMN_NAMES = "use_parquet_column_names";
@@ -75,6 +76,8 @@ public class HudiSessionProperties
     static final String RECORD_INDEX_WAIT_TIMEOUT = "record_index_wait_timeout";
     static final String SECONDARY_INDEX_WAIT_TIMEOUT = "secondary_index_wait_timeout";
     static final String METADATA_PARTITION_LISTING_ENABLED = "metadata_partition_listing_enabled";
+    static final String SCOPE_FSV_TO_PRUNED_PARTITIONS = "scope_fsv_to_pruned_partitions";
+    static final String SCOPE_COLUMN_STATS_TO_PRUNED_PARTITIONS = "scope_column_stats_to_pruned_partitions";
 
     private final List<PropertyMetadata<?>> sessionProperties;
 
@@ -91,6 +94,18 @@ public class HudiSessionProperties
                         false,
                         value -> ((Collection<?>) value).stream()
                                 .map(name -> ((String) name).toLowerCase(ENGLISH))
+                                .collect(toImmutableList()),
+                        value -> value),
+                new PropertyMetadata<>(
+                        RECORD_MERGER_IMPLS,
+                        "Fully qualified HoodieRecordMerger implementation class names used to resolve a custom record " +
+                                "merger for Merge-On-Read tables whose record merge mode is CUSTOM",
+                        new ArrayType(VARCHAR),
+                        List.class,
+                        hudiConfig.getRecordMergerImpls(),
+                        false,
+                        value -> ((Collection<?>) value).stream()
+                                .map(String.class::cast)
                                 .collect(toImmutableList()),
                         value -> value),
                 booleanProperty(
@@ -247,6 +262,16 @@ public class HudiSessionProperties
                         hudiConfig.isMetadataPartitionListingEnabled(),
                         false),
                 booleanProperty(
+                        SCOPE_FSV_TO_PRUNED_PARTITIONS,
+                        "Load only pruned partitions into the Hudi file system view instead of all partitions",
+                        hudiConfig.isScopeFsvToPrunedPartitions(),
+                        false),
+                booleanProperty(
+                        SCOPE_COLUMN_STATS_TO_PRUNED_PARTITIONS,
+                        "Restrict Hudi column stats index lookups to the pruned set of partitions",
+                        hudiConfig.isScopeColumnStatsToPrunedPartitions(),
+                        false),
+                booleanProperty(
                         RESOLVE_COLUMN_NAME_CASING_ENABLED,
                         "Enable resolve column name casing",
                         hudiConfig.isResolveColumnNameCasingEnabled(),
@@ -263,6 +288,12 @@ public class HudiSessionProperties
     public static List<String> getColumnsToHide(ConnectorSession session)
     {
         return (List<String>) session.getProperty(COLUMNS_TO_HIDE, List.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static List<String> getRecordMergerImpls(ConnectorSession session)
+    {
+        return (List<String>) session.getProperty(RECORD_MERGER_IMPLS, List.class);
     }
 
     public static boolean isTableStatisticsEnabled(ConnectorSession session)
@@ -413,5 +444,15 @@ public class HudiSessionProperties
     public static boolean isMetadataPartitionListingEnabled(ConnectorSession session)
     {
         return session.getProperty(METADATA_PARTITION_LISTING_ENABLED, Boolean.class);
+    }
+
+    public static boolean isScopeFsvToPrunedPartitions(ConnectorSession session)
+    {
+        return session.getProperty(SCOPE_FSV_TO_PRUNED_PARTITIONS, Boolean.class);
+    }
+
+    public static boolean isScopeColumnStatsToPrunedPartitions(ConnectorSession session)
+    {
+        return session.getProperty(SCOPE_COLUMN_STATS_TO_PRUNED_PARTITIONS, Boolean.class);
     }
 }

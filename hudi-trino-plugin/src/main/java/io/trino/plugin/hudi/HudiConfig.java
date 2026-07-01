@@ -38,6 +38,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 public class HudiConfig
 {
     private List<String> columnsToHide = ImmutableList.of();
+    private List<String> recordMergerImpls = ImmutableList.of();
     private boolean tableStatisticsEnabled = true;
     private int tableStatisticsExecutorParallelism = 4;
     private boolean metadataEnabled = true;
@@ -67,6 +68,8 @@ public class HudiConfig
     private Duration secondaryIndexWaitTimeout = new Duration(2, SECONDS);
     private boolean metadataCacheEnabled = true;
     private boolean metadataPartitionListingEnabled = true;
+    private boolean scopeFsvToPrunedPartitions;
+    private boolean scopeColumnStatsToPrunedPartitions;
 
     public List<String> getColumnsToHide()
     {
@@ -81,6 +84,21 @@ public class HudiConfig
         this.columnsToHide = columnsToHide.stream()
                 .map(s -> s.toLowerCase(ENGLISH))
                 .collect(toImmutableList());
+        return this;
+    }
+
+    public List<String> getRecordMergerImpls()
+    {
+        return recordMergerImpls;
+    }
+
+    @Config("hudi.record-merger-impls")
+    @ConfigDescription("Comma-separated list of fully qualified HoodieRecordMerger implementation class names used to " +
+            "resolve a custom record merger for Merge-On-Read tables whose record merge mode is CUSTOM. " +
+            "The merger must produce Avro records (HoodieRecordType.AVRO). By default, no custom mergers are registered.")
+    public HudiConfig setRecordMergerImpls(List<String> recordMergerImpls)
+    {
+        this.recordMergerImpls = ImmutableList.copyOf(recordMergerImpls);
         return this;
     }
 
@@ -434,6 +452,35 @@ public class HudiConfig
     public HudiConfig setMetadataPartitionListingEnabled(boolean metadataPartitionListingEnabled)
     {
         this.metadataPartitionListingEnabled = metadataPartitionListingEnabled;
+        return this;
+    }
+
+    public boolean isScopeFsvToPrunedPartitions()
+    {
+        return scopeFsvToPrunedPartitions;
+    }
+
+    @Config("hudi.metadata.scope-fsv-to-pruned-partitions")
+    @ConfigDescription("Load only the pruned set of partitions into the file system view instead of all partitions. " +
+            "Reduces split generation latency for queries that touch a small fraction of partitions.")
+    public HudiConfig setScopeFsvToPrunedPartitions(boolean scopeFsvToPrunedPartitions)
+    {
+        this.scopeFsvToPrunedPartitions = scopeFsvToPrunedPartitions;
+        return this;
+    }
+
+    public boolean isScopeColumnStatsToPrunedPartitions()
+    {
+        return scopeColumnStatsToPrunedPartitions;
+    }
+
+    @Config("hudi.metadata.scope-column-stats-to-pruned-partitions")
+    @ConfigDescription("Restrict column stats index lookups to the pruned set of partitions. " +
+            "Defers the column stats fetch until partition pruning has run, then issues prefix " +
+            "lookups keyed by (column, partition) instead of column-only.")
+    public HudiConfig setScopeColumnStatsToPrunedPartitions(boolean scopeColumnStatsToPrunedPartitions)
+    {
+        this.scopeColumnStatsToPrunedPartitions = scopeColumnStatsToPrunedPartitions;
         return this;
     }
 

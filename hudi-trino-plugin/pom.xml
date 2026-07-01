@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.trino</groupId>
         <artifactId>trino-root</artifactId>
-        <version>472</version>
+        <version>480</version>
         <!-- Stop looking for the parent on local file system -->
         <relativePath />
     </parent>
@@ -16,8 +16,7 @@
 
     <properties>
         <air.compiler.fail-warnings>true</air.compiler.fail-warnings>
-        <dep.hudi.version>1.0.2</dep.hudi.version>
-        <trino.parquet.version>1.15.2</trino.parquet.version>
+        <dep.hudi.version>1.1.1</dep.hudi.version>
     </properties>
 
     <dependencies>
@@ -42,6 +41,7 @@
         <dependency>
             <groupId>com.google.inject</groupId>
             <artifactId>guice</artifactId>
+            <classifier>classes</classifier>
         </dependency>
 
         <dependency>
@@ -169,7 +169,13 @@
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-io</artifactId>
             <version>${dep.hudi.version}</version>
+            <classifier>shaded</classifier>
             <exclusions>
+                <exclusion>
+                    <!-- Conflicts with org.lz4:lz4-java already on the classpath -->
+                    <groupId>at.yawk.lz4</groupId>
+                    <artifactId>lz4-java</artifactId>
+                </exclusion>
                 <exclusion>
                     <groupId>com.google.protobuf</groupId>
                     <artifactId>protobuf-java</artifactId>
@@ -225,6 +231,12 @@
 
         <dependency>
             <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-common</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-context</artifactId>
             <scope>provided</scope>
         </dependency>
@@ -232,12 +244,6 @@
         <dependency>
             <groupId>io.trino</groupId>
             <artifactId>trino-spi</artifactId>
-            <scope>provided</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.openjdk.jol</groupId>
-            <artifactId>jol-core</artifactId>
             <scope>provided</scope>
         </dependency>
 
@@ -278,6 +284,21 @@
         </dependency>
 
         <dependency>
+            <!-- Required at runtime by Hudi (HoodieAvroUtils uses GraphLayout).
+                 Was provided by Trino 472 but removed from Trino 480's classpath. -->
+            <groupId>org.openjdk.jol</groupId>
+            <artifactId>jol-core</artifactId>
+            <version>0.17</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.airlift</groupId>
+            <artifactId>configuration-testing</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
             <groupId>io.airlift</groupId>
             <artifactId>junit-extensions</artifactId>
             <scope>test</scope>
@@ -310,6 +331,13 @@
 
         <dependency>
             <groupId>io.trino</groupId>
+            <artifactId>trino-hdfs</artifactId>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.trino</groupId>
             <artifactId>trino-hive</artifactId>
             <type>test-jar</type>
             <scope>test</scope>
@@ -331,13 +359,6 @@
         <dependency>
             <groupId>io.trino</groupId>
             <artifactId>trino-parser</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>io.trino</groupId>
-            <artifactId>trino-spi</artifactId>
-            <type>test-jar</type>
             <scope>test</scope>
         </dependency>
 
@@ -419,7 +440,6 @@
         <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-avro</artifactId>
-            <version>${trino.parquet.version}</version>
             <scope>test</scope>
         </dependency>
 
@@ -463,6 +483,20 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <configuration>
+                    <rules>
+                        <bannedDependencies>
+                            <includes combine.children="append">
+                                <!-- Legacy HDFS file system uses AWS S3 SDK v1 -->
+                                <include>com.amazonaws:*:*</include>
+                            </includes>
+                        </bannedDependencies>
+                    </rules>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.basepom.maven</groupId>
                 <artifactId>duplicate-finder-maven-plugin</artifactId>
                 <configuration>
@@ -470,12 +504,42 @@
                         <!-- org.apache.hudi:hudi-client-common and org.apache.hudi:hudi-java-client log4j.properties duplicates -->
                         <ignoredResourcePattern>log4j.properties</ignoredResourcePattern>
                         <ignoredResourcePattern>log4j-surefire.properties</ignoredResourcePattern>
+                        <!-- about.html is an Eclipse license file bundled by both org.eclipse.jetty and org.glassfish.jersey artifacts -->
+                        <ignoredResourcePattern>about.html</ignoredResourcePattern>
                     </ignoredResourcePatterns>
+
+                    <ignoredClassPatterns>
+                        <ignoredClassPattern>org.apache.parquet.conf.ParquetConfiguration</ignoredClassPattern>
+                    </ignoredClassPatterns>
+
+                    <ignoredDependencies>
+                        <!-- hudi-io:shaded is an uber-jar that physically bundles protobuf .proto resources
+                             inside the jar itself; these cannot be excluded as transitive dependencies -->
+                        <dependency>
+                            <groupId>org.apache.hudi</groupId>
+                            <artifactId>hudi-io</artifactId>
+                            <classifier>shaded</classifier>
+                        </dependency>
+                        <!-- at.yawk.lz4:lz4-java (from trino-hive-formats) and org.lz4:lz4-java (from hudi-common)
+                             are different group IDs providing the same net.jpountz.* package -->
+                        <dependency>
+                            <groupId>at.yawk.lz4</groupId>
+                            <artifactId>lz4-java</artifactId>
+                        </dependency>
+                    </ignoredDependencies>
                 </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <configuration>
+                    <ignoredUnusedDeclaredDependencies>
+                        <!-- Kryo is not directly used but required for compilation:
+                             HoodieRecord implements KryoSerializable, so the compiler
+                             needs Kryo to verify the class hierarchy -->
+                        <ignoredUnusedDeclaredDependency>com.esotericsoftware:kryo</ignoredUnusedDeclaredDependency>
+                    </ignoredUnusedDeclaredDependencies>
+                </configuration>
             </plugin>
         </plugins>
     </build>
