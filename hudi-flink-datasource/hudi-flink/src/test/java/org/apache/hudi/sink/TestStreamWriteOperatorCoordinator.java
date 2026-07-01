@@ -106,7 +106,7 @@ public class TestStreamWriteOperatorCoordinator {
 
   @BeforeEach
   public void before() throws Exception {
-    coordinator = createCoordinator(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), 2);
+    coordinator = createCoordinator(TestConfigurations.getDefaultConf("file://" + tempFile.getAbsolutePath()), 2);
   }
 
   @AfterEach
@@ -131,6 +131,25 @@ public class TestStreamWriteOperatorCoordinator {
     assertThat("Instant should be complete", lastCompleted, is(instant));
     assertNotEquals("", inflight, "Should start a new instant");
     assertNotEquals(instant, inflight, "Should start a new instant");
+  }
+
+  @Test
+  void testPendingCommitInstantCount() {
+    requestInstantTime(-1);
+    String instant = coordinator.getInstant();
+
+    // no event received, no pending commit instants
+    assertEquals(0, coordinator.getPendingCommitInstantCount());
+
+    OperatorEvent event0 = createOperatorEvent(0, instant, "par1", true, 0.1);
+    OperatorEvent event1 = createOperatorEvent(1, instant, "par2", true, 0.2);
+    coordinator.handleEventFromOperator(0, event0);
+    coordinator.handleEventFromOperator(1, event1);
+
+    assertEquals(1, coordinator.getPendingCommitInstantCount());
+
+    coordinator.notifyCheckpointComplete(1);
+    assertEquals(0, coordinator.getPendingCommitInstantCount());
   }
 
   @Test
