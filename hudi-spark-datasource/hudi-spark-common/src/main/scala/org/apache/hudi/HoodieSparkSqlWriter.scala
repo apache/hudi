@@ -24,7 +24,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieSchemaConversionUtils.{convertStructTypeToHoodieSchema, getRecordNameAndNamespace}
 import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
-import org.apache.hudi.HoodieSparkSqlWriterInternal.{handleInsertDuplicates, shouldDropDuplicatesForInserts, shouldFailWhenDuplicatesFound}
+import org.apache.hudi.HoodieSparkSqlWriterInternal.{handleInsertDuplicates, refreshSparkCatalogTableCache, shouldDropDuplicatesForInserts, shouldFailWhenDuplicatesFound}
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -81,6 +81,7 @@ import java.util.function.BiConsumer
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
+import scala.util.control.NonFatal
 
 object HoodieSparkSqlWriter {
 
@@ -947,13 +948,7 @@ class HoodieSparkSqlWriterInternal {
     // Since Hive tables are now synced as Spark data source tables which are cached after Spark SQL queries
     // we must invalidate this table in the cache so writes are reflected in later queries
     if (metaSyncEnabled) {
-      getHiveTableNames(hoodieConfig).foreach(name => {
-        val syncDb = hoodieConfig.getStringOrDefault(HIVE_DATABASE)
-        val qualifiedTableName = String.join(".", syncDb, name)
-        if (spark.catalog.databaseExists(syncDb) && spark.catalog.tableExists(qualifiedTableName)) {
-          spark.catalog.refreshTable(qualifiedTableName)
-        }
-      })
+      refreshSparkCatalogTableCache(spark, hoodieConfig.getStringOrDefault(HIVE_DATABASE), getHiveTableNames(hoodieConfig))
     }
     true
   }
@@ -1184,6 +1179,45 @@ class HoodieSparkSqlWriterInternal {
 }
 
 object HoodieSparkSqlWriterInternal {
+  private val log = LoggerFactory.getLogger(classOf[HoodieSparkSqlWriterInternal])
+
+  /**
+   * Best-effort invalidation of the Spark catalog relation cache for the just-synced table(s), so
+   * subsequent reads in the same Spark session reflect the new write.
+   *
+   * The table name is always qualified with the sync database ([[HIVE_DATABASE]] /
+   * `hoodie.datasource.hive_sync.database`) so a same-named table in another database - in
+   * particular the session's current/`default` database - is never resolved and refreshed by
+   * mistake (HUDI-18139).
+   *
+   * Any failure is logged and swallowed: by this point the data has already been committed and
+   * meta-synced successfully, so a cache-invalidation problem (a transient catalog error, or a
+   * same-named table backed by storage the writer cannot access) must never fail the write.
+   */
+  def refreshSparkCatalogTableCache(spark: SparkSession, syncDb: String, tableNames: Seq[String]): Unit = {
+    try {
+      if (spark.catalog.databaseExists(syncDb)) {
+        tableNames.foreach { name =>
+          val qualifiedTableName = String.join(".", syncDb, name)
+          try {
+            if (spark.catalog.tableExists(qualifiedTableName)) {
+              spark.catalog.refreshTable(qualifiedTableName)
+            }
+          } catch {
+            case NonFatal(e) =>
+              log.warn(s"Failed to refresh Spark catalog cache for table '$qualifiedTableName' after a " +
+                s"successful write and meta-sync; the write is already committed. Skipping cache " +
+                s"invalidation for this table.", e)
+          }
+        }
+      }
+    } catch {
+      case NonFatal(e) =>
+        log.warn(s"Failed to refresh Spark catalog cache for database '$syncDb' after a successful write " +
+          s"and meta-sync; the write is already committed. Skipping cache invalidation.", e)
+    }
+  }
+
   // Check if duplicates should be dropped.
   def shouldDropDuplicatesForInserts(hoodieConfig: HoodieConfig): Boolean = {
     hoodieConfig.contains(INSERT_DUP_POLICY) &&
