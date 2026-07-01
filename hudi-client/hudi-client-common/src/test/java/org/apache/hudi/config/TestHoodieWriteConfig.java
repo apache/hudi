@@ -234,6 +234,77 @@ public class TestHoodieWriteConfig {
     assertEquals(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS, writeConfig.getCleanerPolicy());
   }
 
+  @Test
+  public void testParquetSmallFileFractionDerivation() {
+    final long defaultSmallFileLimit = 104857600L;  // 100 MB — matches PARQUET_SMALL_FILE_LIMIT default
+    final long defaultMaxFileSize = 125829120L;     // 120 MB — matches PARQUET_MAX_FILE_SIZE default
+
+    // 1. Default behavior — neither config set. Effective threshold must match today's byte-limit
+    //    default so existing tables see no behavior change.
+    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath("/tmp").build();
+    assertEquals(defaultSmallFileLimit, cfg.getParquetSmallFileLimit(),
+        "back-compat: default fraction (inferred) must reproduce the legacy 100MB threshold");
+
+    // 2. Only the byte-limit is set — infer function must derive fraction from user's byte value.
+    cfg = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .compactionSmallFileSize(50 * 1024 * 1024)  // 50 MB
+            .build())
+        .build();
+    long expectedBytesForByteOnly = (long) ((50.0 * 1024 * 1024) / (double) defaultMaxFileSize * defaultMaxFileSize);
+    assertEquals(expectedBytesForByteOnly, cfg.getParquetSmallFileLimit(),
+        "byte-limit-only path: effective threshold must round-trip to the user's byte value (~50MB)");
+
+    // 3. Only the fraction is set explicitly — must be honored, byte config ignored.
+    cfg = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withParquetSmallFileFractionOfMaxFileSize(0.5)
+            .build())
+        .build();
+    assertEquals(defaultMaxFileSize / 2, cfg.getParquetSmallFileLimit(),
+        "fraction-only path: 0.5 * 120MB max must produce 60MB threshold");
+
+    // 4. Both set — fraction wins (infer is skipped because the fraction key is explicitly present).
+    cfg = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .compactionSmallFileSize(90 * 1024 * 1024)  // 90 MB — should be ignored
+            .withParquetSmallFileFractionOfMaxFileSize(0.25)
+            .build())
+        .build();
+    assertEquals(defaultMaxFileSize / 4, cfg.getParquetSmallFileLimit(),
+        "both-set path: fraction (0.25) wins over the byte limit (90MB); expect 30MB");
+
+    // 5. Disable sentinel — user sets small.file.limit=0 to disable small-file bin-packing today.
+    //    Under the fraction scheme, infer returns 0/max = 0.0, so the accessor returns 0 and every
+    //    `<= 0` disable check at the call site continues to trip.
+    cfg = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .compactionSmallFileSize(0)
+            .build())
+        .build();
+    assertEquals(0L, cfg.getParquetSmallFileLimit(),
+        "disable sentinel: small.file.limit=0 must produce fraction=0.0 and an effective threshold of 0");
+
+    // 6. Custom max — when only the max file size is bumped (e.g. to 1 GB), the byte-limit default
+    //    (100 MB) drives the fraction (100/1024 ≈ 0.0977). The effective threshold ends up back at
+    //    ~100 MB because the byte-limit is unchanged, which is the correct back-compat outcome for
+    //    a user who only tunes the max size.
+    long oneGiB = 1024L * 1024 * 1024;
+    cfg = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withStorageConfig(HoodieStorageConfig.newBuilder()
+            .parquetMaxFileSize(oneGiB)
+            .build())
+        .build();
+    long expectedBytesForCustomMax = (long) ((double) defaultSmallFileLimit / (double) oneGiB * oneGiB);
+    assertEquals(expectedBytesForCustomMax, cfg.getParquetSmallFileLimit(),
+        "custom-max path: with only max.file.size=1GB, effective threshold should stay near 100MB");
+  }
+
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   public void testAutoConcurrencyConfigAdjustmentWithTableServices(HoodieTableType tableType) {

@@ -1827,8 +1827,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieArchivalConfig.TIMELINE_MANIFEST_RETAINED_VERSIONS);
   }
 
-  public int getParquetSmallFileLimit() {
-    return getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT);
+  public long getParquetSmallFileLimit() {
+    // Effective threshold is fraction * max.file.size. The fraction config is the single source of
+    // truth at runtime; it is either user-set or derived by its infer function from the byte-based
+    // `hoodie.parquet.small.file.limit` at build time. See HoodieCompactionConfig.
+    double fraction = getDouble(HoodieCompactionConfig.PARQUET_SMALL_FILE_FRACTION_MAX_FILE_SIZE);
+    return (long) (fraction * getParquetMaxFileSize());
   }
 
   public double getRecordSizeEstimationThreshold() {
