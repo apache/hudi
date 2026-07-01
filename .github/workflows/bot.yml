@@ -1404,7 +1404,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run:
-          mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
+          mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS -Djacoco.skip=false
       - name: 'IT'
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -1419,7 +1419,18 @@ jobs:
           SPARK_ARCHIVE_BASENAME=$(basename $SPARK_ARCHIVE)
           export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE_BASENAME%.*}
           rm -f $GITHUB_WORKSPACE/$SPARK_ARCHIVE
-          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS
+          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
+      - name: Generate merged coverage report
+        if: always() && needs.changes.outputs.relevant == 'true'
+        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
+      - name: Upload coverage to Codecov
+        if: always() && needs.changes.outputs.relevant == 'true'
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        with:
+          files: ./jacoco-report.xml
+          disable_search: true
+          flags: integration-tests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   build-spark-java17:
     runs-on: ubuntu-latest
