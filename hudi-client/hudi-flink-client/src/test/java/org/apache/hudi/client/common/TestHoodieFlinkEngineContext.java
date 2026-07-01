@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.common;
 
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 
 import org.junit.jupiter.api.Assertions;
@@ -29,6 +30,10 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Unit test against HoodieFlinkEngineContext.
@@ -47,8 +52,8 @@ public class TestHoodieFlinkEngineContext {
     List<Integer> result = context.map(mapList, x -> x + 1, 2);
     result.removeAll(mapList);
 
-    Assertions.assertEquals(1, result.size());
-    Assertions.assertEquals(11, result.get(0));
+    assertEquals(1, result.size());
+    assertEquals(11, result.get(0));
   }
 
   @Test
@@ -64,7 +69,7 @@ public class TestHoodieFlinkEngineContext {
 
     List<String> result = context.flatMap(inputList, Collection::stream, 2);
 
-    Assertions.assertEquals(9, result.size());
+    assertEquals(9, result.size());
   }
 
   @Test
@@ -73,7 +78,7 @@ public class TestHoodieFlinkEngineContext {
     List<Integer> result = new ArrayList<>(10);
     context.foreach(mapList, result::add, 2);
 
-    Assertions.assertEquals(result.size(), mapList.size());
+    assertEquals(result.size(), mapList.size());
     Assertions.assertTrue(result.containsAll(mapList));
   }
 
@@ -86,7 +91,21 @@ public class TestHoodieFlinkEngineContext {
       return new ImmutablePair<>(splits[0], splits[1]);
     }, 2);
 
-    Assertions.assertEquals(resultMap.get("spark"), resultMap.get("flink"));
+    assertEquals(resultMap.get("spark"), resultMap.get("flink"));
   }
 
+  @Test
+  public void testUnion() {
+    List<HoodieData<Integer>> dataList = new ArrayList<>();
+    for (int i = 0;i < 50;i++) {
+      dataList.add(context.parallelize(
+          IntStream.rangeClosed(i * 100, (i * 100) + 99).boxed().collect(Collectors.toList()), 6));
+    }
+
+    List<Integer> expected = context.parallelize(
+        IntStream.rangeClosed(0, 50 * 100 - 1).boxed().collect(Collectors.toList()), 6).collectAsList();
+
+    List<Integer> actual = context.union(dataList).collectAsList();
+    assertEquals(expected, actual);
+  }
 }
