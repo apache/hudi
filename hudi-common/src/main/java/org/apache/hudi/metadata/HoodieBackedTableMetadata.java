@@ -50,6 +50,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ClosableSortedDedupingIterator;
@@ -231,9 +232,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       boolean shouldLoadInMemory) {
     // Apply key encoding
     List<String> sortedKeyPrefixes = new ArrayList<>(rawKeys.map(key -> key.encode()).collectAsList());
-    // Sort the prefixes so that keys are looked up in order
-    // Sort must come after encoding.
-    Collections.sort(sortedKeyPrefixes);
+    // Sort the prefixes so that keys are looked up in order. Sort must come after encoding.
+    // Sort by UTF-8 bytes to match the HFile order; the reader seeks forward without rewinding.
+    sortedKeyPrefixes.sort(StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR);
 
     // NOTE: Since we partition records to a particular file-group by full key, we will have
     //       to scan all file-groups for all key-prefixes as each of these might contain some
@@ -258,7 +259,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   private static TreeSet<String> getDistinctSortedKeysForSingleSlice(HoodieData<String> keys) {
     List<String> keysList = keys.collectAsList();
-    return new TreeSet<>(keysList);
+    // Order by UTF-8 bytes to match the HFile order used for point lookups.
+    TreeSet<String> sortedKeys = new TreeSet<>(StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR);
+    sortedKeys.addAll(keysList);
+    return sortedKeys;
   }
 
   /**

@@ -40,6 +40,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -1942,6 +1943,88 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     init(COPY_ON_WRITE, writeConfig);
     testTableOperationsForMetaIndexImpl(writeConfig);
+  }
+
+  /**
+   * Record index bootstrap over binary / non-ASCII record keys must succeed. The RI HFile orders
+   * keys by their raw UTF-8 bytes, so the bulk-insert partitioner must sort by UTF-8 bytes too;
+   * sorting by {@link String#compareTo(String)} (UTF-16) fails with
+   * "Added a key not lexically larger than previous".
+   */
+  @Test
+  public void testRecordIndexBootstrapWithBinaryRecordKeys() throws Exception {
+    init(COPY_ON_WRITE, true);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    // First commit with the record index disabled: write base files with binary record keys.
+    List<HoodieRecord> records = generateRecordsWithBinaryKeys(WriteClientTestUtils.createNewInstantTime(), 0, 200);
+    HoodieWriteConfig firstConfig = getWriteConfigBuilder(true, true, false).build();
+    String firstCommitTime = WriteClientTestUtils.createNewInstantTime();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, firstConfig)) {
+      WriteClientTestUtils.startCommitWithTime(client, firstCommitTime);
+      List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), firstCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      client.commit(firstCommitTime, jsc.parallelize(writeStatuses));
+    }
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertFalse(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
+
+    // Enable the record index. The next commit triggers the bootstrap, reading the binary keys from
+    // the base files above. Pinning to 1 file group puts all keys in one HFile, sorted together.
+    HoodieWriteConfig riConfig = getWriteConfigBuilder(false, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withEnableGlobalRecordLevelIndex(true)
+            .withRecordIndexFileGroupCount(1, 1)
+            .build())
+        .build();
+
+    String secondCommitTime = WriteClientTestUtils.createNewInstantTime();
+    // Disjoint key range so the bootstrapped keys are not mutated.
+    List<HoodieRecord> secondBatch = generateRecordsWithBinaryKeys(secondCommitTime, 1000, 20);
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, riConfig)) {
+      WriteClientTestUtils.startCommitWithTime(client, secondCommitTime);
+      // Without the fix, the record-index HFile write throws "Added a key not lexically larger than previous".
+      assertDoesNotThrow(() -> {
+        JavaRDD<WriteStatus> writeStatuses = client.insert(jsc.parallelize(secondBatch, 1), secondCommitTime);
+        client.commit(secondCommitTime, writeStatuses);
+      });
+    }
+
+    // The record index partition should exist and resolve every bootstrapped binary key.
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertTrue(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
+    HoodieTableMetadata metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
+        context, storage, riConfig.getMetadataConfig(), riConfig.getBasePath());
+    List<String> bootstrappedKeys = records.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList());
+    HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData = metadataReader
+        .readRecordIndexLocationsWithKeys(HoodieListData.eager(bootstrappedKeys));
+    try {
+      Map<String, HoodieRecordGlobalLocation> result = HoodieDataUtils.dedupeAndCollectAsMap(recordIndexData);
+      assertEquals(bootstrappedKeys.size(), result.size(),
+          "Record index should resolve every binary key bootstrapped from the base files.");
+    } finally {
+      recordIndexData.unpersistWithDependencies();
+    }
+  }
+
+  /**
+   * Generates {@code count} records with binary record keys interleaving U+E000 (BMP) and U+20000
+   * (supplementary) prefixes, whose UTF-16 char order is the reverse of their UTF-8 byte order.
+   */
+  private List<HoodieRecord> generateRecordsWithBinaryKeys(String commitTime, int startIndex, int count) {
+    List<HoodieRecord> baseRecords = dataGen.generateInserts(commitTime, count);
+    String[] binaryPrefixes = {new String(Character.toChars(0xE000)), new String(Character.toChars(0x20000))};
+    List<HoodieRecord> binaryRecords = new ArrayList<>(count);
+    for (int i = 0; i < count; i++) {
+      HoodieRecord baseRecord = baseRecords.get(i);
+      int index = startIndex + i;
+      String binaryKey = binaryPrefixes[index % binaryPrefixes.length] + String.format("%08d", index);
+      binaryRecords.add(new HoodieAvroIndexedRecord(
+          new HoodieKey(binaryKey, baseRecord.getPartitionPath()),
+          (IndexedRecord) baseRecord.getData()));
+    }
+    return binaryRecords;
   }
 
   /**
