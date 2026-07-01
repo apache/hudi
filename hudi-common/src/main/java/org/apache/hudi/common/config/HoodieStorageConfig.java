@@ -261,6 +261,20 @@ public class HoodieStorageConfig extends HoodieConfig {
           + "The provider parses variant binary data and populates typed_value columns. "
           + "When not set, the provider is auto-detected from the classpath.");
 
+  public static final ConfigProperty<Boolean> PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED = ConfigProperty
+      .key("hoodie.parquet.variant.shredding.schema.inference.enabled")
+      .defaultValue(false)
+      .sinceVersion("1.3.0")
+      .withDocumentation("When enabled, the shredding schema for variant columns without an explicit "
+          + "typed_value in the write schema is inferred automatically per base file from a sample of "
+          + "the records written to that file, mirroring Spark 4.1's "
+          + "spark.sql.variant.inferShreddingSchema. Requires Spark 4.1+ on the writer classpath; "
+          + "writes stay unshredded otherwise (Spark 4.0, Flink, Java engines). Applies to parquet "
+          + "base files only: MOR log files are always written unshredded and shredding materializes "
+          + "at compaction time. Ignored when "
+          + "hoodie.parquet.variant.force.shredding.schema.for.test is set or when write shredding "
+          + "is disabled.");
+
   public static final ConfigProperty<Boolean> WRITE_UTC_TIMEZONE = ConfigProperty
       .key("hoodie.parquet.write.utc-timezone.enabled")
       .defaultValue(true)
@@ -609,6 +623,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder parquetVariantAllowReadingShredded(boolean allowed) {
       storageConfig.setValue(PARQUET_VARIANT_ALLOW_READING_SHREDDED, String.valueOf(allowed));
+      return this;
+    }
+
+    public Builder parquetVariantShreddingSchemaInferenceEnabled(boolean enabled) {
+      storageConfig.setValue(PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED, String.valueOf(enabled));
       return this;
     }
 

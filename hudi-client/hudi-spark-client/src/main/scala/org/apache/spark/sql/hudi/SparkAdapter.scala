@@ -19,6 +19,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping}
+import org.apache.hudi.avro.VariantShreddingSchemaInferrer
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.schema.HoodieSchema
@@ -28,7 +29,7 @@ import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.parquet.schema.{MessageType, Type}
+import org.apache.parquet.schema.{GroupType, MessageType, Type, Types}
 import org.apache.parquet.schema.Type.Repetition
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
@@ -471,6 +472,14 @@ trait SparkAdapter extends Serializable {
   ): Type
 
   /**
+   * Applies the Parquet VARIANT logical type annotation to a shredded variant group builder so
+   * external readers recognize the column as a Variant. Only meaningful on parquet 1.16+
+   * (Spark 4.1+); the default leaves the builder unchanged because the annotation type does not
+   * exist on earlier parquet (Spark 3.x never shreds variants, Spark 4.0 ships parquet 1.15.2).
+   */
+  def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = builder
+
+  /**
    * Checks if a StructType represents a shredded Variant schema (has special shredding metadata).
    * This is used during writing to identify columns that need special shredding handling.
    *
@@ -532,6 +541,14 @@ trait SparkAdapter extends Serializable {
     shreddedStructType: StructType,
     writeStruct: Consumer[InternalRow]
   ): BiConsumer[SpecializedGetters, Integer]
+
+  /**
+   * Extracts the raw binaries of a variant column value from a row, as defensive copies.
+   * Used to sample variant binaries for shredding-schema inference.
+   *
+   * Returns null when the value is null or the Spark version has no variant support (3.x).
+   */
+  def extractVariantBinary(row: SpecializedGetters, ordinal: Int): VariantShreddingSchemaInferrer.VariantSample = null
 
   /**
    * Creates a [[HoodieMemoryStream]] wrapper around Spark's MemoryStream.

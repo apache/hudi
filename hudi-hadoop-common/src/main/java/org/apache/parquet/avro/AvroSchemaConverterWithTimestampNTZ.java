@@ -128,6 +128,20 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
     return new MessageType(schema.getFullName(), convertFields(schema.getFields(), ""));
   }
 
+  /**
+   * Returns the parquet VARIANT logical type annotation, or null when the running parquet version
+   * predates it (1.16 / Spark 4.1). Resolved reflectively because this engine-agnostic module also
+   * compiles and runs against parquet 1.15.2 on Spark 4.0, where {@code variantType} does not exist.
+   */
+  private static LogicalTypeAnnotation variantLogicalType() {
+    try {
+      return (LogicalTypeAnnotation) LogicalTypeAnnotation.class
+          .getMethod("variantType", byte.class).invoke(null, (byte) 1);
+    } catch (ReflectiveOperationException e) {
+      return null;
+    }
+  }
+
   private List<Type> convertFields(List<HoodieSchemaField> fields, String schemaPath) {
     List<Type> types = new ArrayList<Type>(fields.size());
     for (HoodieSchemaField field : fields) {
@@ -266,9 +280,21 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
       case UNION:
         return convertUnion(fieldName, schema, repetition, schemaPath);
       case VARIANT:
-        // Variant is represented as a record with value and metadata binary fields
-        // Convert the variant schema's fields to Parquet types
-        return new GroupType(repetition, fieldName, convertFields(schema.getFields(), schemaPath));
+        // Variant is a group of value/metadata (plus typed_value when shredded). Tag it with the
+        // VARIANT logical type so external readers recognize the column as a Variant, matching
+        // Spark's native parquet schema and the row-writer path. The annotation only exists in
+        // parquet 1.16+ (Spark 4.1+); on older parquet (Spark 4.0/3.x) variantLogicalType() returns
+        // null and the group stays unannotated. Built via the Types builder because the
+        // annotation-bearing GroupType constructor is not public outside org.apache.parquet.schema.
+        Types.GroupBuilder<GroupType> variantBuilder = Types.buildGroup(repetition);
+        LogicalTypeAnnotation variantAnnotation = variantLogicalType();
+        if (variantAnnotation != null) {
+          variantBuilder.as(variantAnnotation);
+        }
+        for (Type variantFieldType : convertFields(schema.getFields(), schemaPath)) {
+          variantBuilder.addField(variantFieldType);
+        }
+        return variantBuilder.named(fieldName);
       default:
         throw new UnsupportedOperationException("Cannot convert Avro type " + type);
     }
