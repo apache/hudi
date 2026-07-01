@@ -192,6 +192,9 @@ Output: local_orphan_candidates -- external blobs needing cross-FG verification
 for each file_group being cleaned:
 
     // Collect expired blob refs (base files + log files)
+    // The managed==true filter here is the ELIGIBILITY gate: only blobs Hudi was
+    // asked to manage become deletion candidates. (Liveness, in retained_refs and
+    // Stage 2 below, is managed-agnostic.)
     // Must read log files: blob refs introduced and superseded within the log
     // chain before compaction would otherwise become permanent orphans.
     expired_refs = Set<external_path>()
@@ -210,10 +213,13 @@ for each file_group being cleaned:
     // Cleaning is fenced on compaction: retained base files contain the merged
     // state. Log reads are unnecessary -- any shadowed base ref causes safe
     // over-retention, cleaned after the next compaction cycle.
+    // NOTE: no managed filter here. Liveness is managed-AGNOSTIC -- ANY retained
+    // reference to a path (managed=true OR managed=false) keeps the blob alive
+    // (R1). A managed->unmanaged transition must not make the blob deletable.
     retained_refs = Set<external_path>()
     for slice in retained_slices:
         for ref in extractBlobRefs(slice.baseFile):   // columnar projection only
-            if ref.type == OUT_OF_LINE and ref.managed == true:
+            if ref.type == OUT_OF_LINE:               // NOT ref.managed -- see note above
                 retained_refs.add(ref.external_path)
 
     // Compute local orphans by set difference
@@ -235,6 +241,18 @@ for each file_group being cleaned:
 - **Replaced FGs (replace commits):** `retained_slices` is empty, so all blob refs become
   candidates. For external blobs, clustering copies the pointer to the target FG, so Stage 2
   finds the reference in the target FG and retains the blob.
+- **`managed` flag -- eligibility vs liveness (R1).** The flag has two distinct roles and the
+  design must not conflate them. *Eligibility:* only paths referenced as `managed=true` in the
+  expired set become deletion candidates (the `expired_refs` filter) -- Hudi never deletes a blob
+  it was not asked to manage. *Liveness:* whether a path is still referenced is managed-agnostic --
+  `retained_refs` (and Stage 2's cross-FG check) count references regardless of `managed`, per the
+  problem statement's rule that "if any retained reference to the same `external_path` exists
+  (regardless of the `managed` flag), the blob must not be deleted." This is what makes a
+  managed->unmanaged transition safe: at t1 a record references `video.mp4` with `managed=true`
+  (eligible); at t2 an update sets `managed=false` for the same path (user says "stop managing
+  this"). The t2 reference lands in a retained slice; because `retained_refs` does not filter on
+  `managed`, `video.mp4` stays out of `local_orphans` and survives. The Stage 2 dependency this
+  implies (the secondary index must index unmanaged references too) is stated in Stage 2 below.
 
 ### Stage 2: Cross-File-Group Verification
 
@@ -304,6 +322,17 @@ sequential throughput, 64-256KB HFile blocks. Pending benchmarking.*
 `sourceFields = ["<blob_col>", "reference", "external_path"]`. The nested field path is supported
 by `HoodieSchemaUtils.projectSchema()` and `SecondaryIndexRecordGenerationUtils`. No new index
 infrastructure is needed.
+
+**Managed-agnostic indexing (R1).** The secondary index keys on `reference.external_path` for every
+record whose blob reference is `OUT_OF_LINE`, *regardless of the `managed` flag*: the index
+definition carries no `managed` predicate, and standard SI record generation indexes each record's
+field value without filtering. So the index contains entries for `managed=false` references, and
+Stage 2's lookup finds an unmanaged retained reference exactly as it finds a managed one, keeping
+the blob alive. This is what makes the managed->unmanaged transition safe (Stage 1 note above): the
+`managed=true` filter is applied only when selecting *candidates* from the expired set, never when
+checking *liveness*. The fallback table scan is managed-agnostic for the same reason -- it matches
+candidate paths against every live `external_path`, not only managed ones. A future optimization
+must not add a `managed` filter to the index or the scan, or it breaks R1.
 
 **Index staleness and consistency.** Stage 2 deletes a blob when the index reports no live
 reference, so the only dangerous error is a *false negative* -- the index missing a reference that
