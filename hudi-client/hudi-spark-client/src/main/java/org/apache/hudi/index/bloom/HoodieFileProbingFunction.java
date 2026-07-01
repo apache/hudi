@@ -20,6 +20,7 @@ package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -58,11 +59,14 @@ public class HoodieFileProbingFunction implements
 
   private final Broadcast<HoodieTableFileSystemView> baseFileOnlyViewBroadcast;
   private final StorageConfiguration<?> storageConf;
+  private final HoodieRecord.HoodieRecordType recordType;
 
   public HoodieFileProbingFunction(Broadcast<HoodieTableFileSystemView> baseFileOnlyViewBroadcast,
-                                   StorageConfiguration<?> storageConf) {
+                                   StorageConfiguration<?> storageConf,
+                                   HoodieRecord.HoodieRecordType recordType) {
     this.baseFileOnlyViewBroadcast = baseFileOnlyViewBroadcast;
     this.storageConf = storageConf;
+    this.recordType = recordType;
   }
 
   @Override
@@ -138,7 +142,8 @@ public class HoodieFileProbingFunction implements
 
             final HoodieBaseFile dataFile = fileIDBaseFileMap.get(fileId);
             Collection<Pair<String, Long>> matchingKeysAndPositions = HoodieIndexUtils.filterKeysFromFile(
-                dataFile.getStoragePath(), candidateRecordKeys, HoodieStorageUtils.getStorage(dataFile.getStoragePath(), storageConf));
+                dataFile.getStoragePath(), candidateRecordKeys,
+                HoodieStorageUtils.getStorage(dataFile.getStoragePath(), storageConf), recordType);
 
             log.debug(
                 "Bloom filter candidates ({}) / false positives ({}), actual matches ({})",
