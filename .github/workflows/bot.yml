@@ -1515,30 +1515,3 @@ jobs:
         run:
           mvn test -Punit-tests -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
 
-  test-hudi-trino-plugin:
-    runs-on: ubuntu-latest
-    needs: changes
-    steps:
-      - name: Checkout repository
-        if: needs.changes.outputs.relevant == 'true'
-        uses: actions/checkout@v5
-      - name: Set up JDK 23
-        if: needs.changes.outputs.relevant == 'true'
-        uses: actions/setup-java@v5
-        with:
-          # Note: We are not caching here again, as we want to use the .m2 repository populated by
-          # the previous step
-          java-version: '23'
-          distribution: 'temurin'
-          architecture: x64
-          cache: maven
-      - name: Build hudi-trino-plugin with JDK 23
-        if: needs.changes.outputs.relevant == 'true'
-        working-directory: ./hudi-trino-plugin
-        run:
-          mvn clean install -DskipTests
-      - name: Test hudi-trino-plugin with JDK 23
-        if: needs.changes.outputs.relevant == 'true'
-        working-directory: ./hudi-trino-plugin
-        run:
-          mvn test -Dapi.version=1.44

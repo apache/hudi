@@ -59,7 +59,6 @@
     <module>packaging/hudi-utilities-bundle</module>
     <module>packaging/hudi-utilities-slim-bundle</module>
     <module>packaging/hudi-timeline-server-bundle</module>
-    <module>packaging/hudi-trino-bundle</module>
     <module>hudi-examples</module>
     <module>hudi-flink-datasource</module>
     <module>hudi-kafka-connect</module>
@@ -87,7 +86,7 @@
     <maven-surefire-plugin.version>3.5.4</maven-surefire-plugin.version>
     <maven-failsafe-plugin.version>3.5.4</maven-failsafe-plugin.version>
     <!-- bump to 3.5.3 to fix MSHADE-461 -->
-    <maven-shade-plugin.version>3.5.3</maven-shade-plugin.version>
+    <maven-shade-plugin.version>3.6.2</maven-shade-plugin.version>
     <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
     <maven-compiler-plugin.version>3.14.1</maven-compiler-plugin.version>
     <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
@@ -685,7 +684,6 @@
               <!-- local files not in version control -->
               <exclude>**/*.iml</exclude>
               <exclude>.mvn/**</exclude>
-              <exclude>hudi-trino-plugin/**</exclude>
             </excludes>
           </configuration>
           <executions>
@@ -2278,6 +2276,13 @@
       <modules>
         <module>hudi-platform-service</module>
         <module>packaging/hudi-metaserver-server-bundle</module>
+      </modules>
+    </profile>
+    <profile>
+      <!-- RFC-105: non-shaded Trino connector. JDK 25 + Trino SPI; off by default. -->
+      <id>hudi-trino</id>
+      <modules>
+        <module>hudi-trino</module>
       </modules>
     </profile>
     <profile>

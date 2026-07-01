@@ -39,9 +39,6 @@
     <module>sparkworker</module>
     <module>sparkadhoc</module>
     <module>prestobase</module>
-    <module>trinobase</module>
-    <module>trinocoordinator</module>
-    <module>trinoworker</module>
   </modules>
 
   <dependencies>
