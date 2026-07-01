@@ -842,6 +842,41 @@ public class FSUtils {
     return s3aUrl.replaceFirst("(?i)^s3a://", "s3://");
   }
 
+  /**
+   * Canonicalize a Hudi table base path for use as the input to implicit lock-key derivation.
+   *
+   * <p>Implicit lock providers (DynamoDB and Zookeeper variants) hash this string to choose the
+   * lock row / znode for a table. Two callers writing to the same table must produce the same
+   * hash, so any benign formatting drift in the basePath has to be eliminated before hashing.
+   * This method trims surrounding whitespace, normalizes s3a:// to s3://, then forces exactly
+   * one trailing slash. Inner double slashes are intentionally preserved.
+   *
+   * <p>Scheme-only inputs (e.g. {@code "s3://"}, {@code "s3a:///"}) and all-slash inputs
+   * (e.g. {@code "///"}) are rejected — stripping the trailing slashes from those leaves
+   * nothing meaningful to lock against.
+   */
+  public static String normalizeBasePathForLocking(String basePath) {
+    if (basePath == null) {
+      throw new IllegalArgumentException("Hudi table base path cannot be null");
+    }
+    String trimmed = basePath.trim();
+    if (trimmed.isEmpty()) {
+      throw new IllegalArgumentException("Hudi table base path cannot be empty");
+    }
+    String schemeNormalized = s3aToS3(trimmed);
+    int end = schemeNormalized.length();
+    while (end > 0 && schemeNormalized.charAt(end - 1) == '/') {
+      end--;
+    }
+    // Reject "///"-style inputs (nothing left) and "s3://"/"s3a:///"-style scheme-only
+    // inputs (stripping the slashes leaves only the scheme prefix ending in ':').
+    if (end == 0 || schemeNormalized.charAt(end - 1) == ':') {
+      throw new IllegalArgumentException(
+          "Hudi table base path is not a valid lockable path: '" + basePath + "'");
+    }
+    return schemeNormalized.substring(0, end) + "/";
+  }
+
   public static StoragePathInfo toStoragePathInfo(HoodieFileStatus fileStatus) {
     if (null == fileStatus) {
       return null;

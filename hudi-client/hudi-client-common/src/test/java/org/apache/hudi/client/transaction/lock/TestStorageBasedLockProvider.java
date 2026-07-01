@@ -1070,4 +1070,53 @@ class TestStorageBasedLockProvider {
     }
   }
 
+  // -----------------------------------------
+  // lockFilePath invariance
+  // -----------------------------------------
+  //
+  // The basePath is canonicalized via FSUtils.normalizeBasePathForLocking before lockFilePath is
+  // derived. The normalization helper itself is covered by TestFSUtils; these tests prove the
+  // end-to-end invariant in this LP — two writers passing benignly-different basePath strings
+  // must end up at the SAME lockFilePath, or they lose mutual exclusion. lockFilePath is captured
+  // by intercepting the storageLockClientLoader (which receives lockFilePath as its 2nd arg).
+
+  private static String captureLockFilePath(String basePath) {
+    TypedProperties props = new TypedProperties();
+    props.put(BASE_PATH.key(), basePath);
+    String[] captured = new String[1];
+    new StorageBasedLockProvider(
+        UUID.randomUUID().toString(),
+        props,
+        (ownerId, ms, supplier) -> mock(HeartbeatManager.class),
+        (ownerId, lockFilePath, properties) -> {
+          captured[0] = lockFilePath;
+          return mock(StorageLockClient.class);
+        },
+        mock(Logger.class),
+        null);
+    return captured[0];
+  }
+
+  @Test
+  void lockFilePathIsInvariantUnderSchemeDrift() {
+    assertEquals(
+        captureLockFilePath("s3://my-bucket/my_lake/my_table"),
+        captureLockFilePath("s3a://my-bucket/my_lake/my_table"));
+  }
+
+  @Test
+  void lockFilePathIsInvariantUnderSurroundingWhitespace() {
+    assertEquals(
+        captureLockFilePath("s3://my-bucket/my_lake/my_table"),
+        captureLockFilePath("  s3://my-bucket/my_lake/my_table  "));
+  }
+
+  @Test
+  void lockFilePathIsInvariantUnderTrailingSlash() {
+    // Already guaranteed by StoragePath; regression-protect it so a future refactor doesn't
+    // drop that guarantee silently.
+    assertEquals(
+        captureLockFilePath("s3://my-bucket/my_lake/my_table"),
+        captureLockFilePath("s3://my-bucket/my_lake/my_table/"));
+  }
 }
