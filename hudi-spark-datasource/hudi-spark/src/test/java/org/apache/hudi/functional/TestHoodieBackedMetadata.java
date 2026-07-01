@@ -80,6 +80,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -4394,5 +4395,115 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     Properties properties = new Properties();
     properties.setProperty("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
     return properties;
+  }
+
+  /**
+   * Verifies that {@code deleteMdtIfNecessaryBeforeRestore} returns true and deletes the MDT when
+   * the restore target is older than the oldest completed MDT compaction.
+   */
+  @Test
+  public void testDeleteMdtIfNecessaryBeforeRestoreDeletesMdtForOlderTimestamp() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieWriteConfig cfg = getWriteConfigBuilder(true, true, false)
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+                    .enable(true)
+                    .enableMetrics(false)
+                    .build())
+            .build();
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      String firstCommitTime = WriteClientTestUtils.createNewInstantTime();
+      List<HoodieRecord> records = dataGen.generateInserts(firstCommitTime, 100);
+      WriteClientTestUtils.startCommitWithTime(client, firstCommitTime);
+      assertNoWriteErrors(client.insert(jsc.parallelize(records, 1), firstCommitTime).collect());
+
+      String secondCommitTime = WriteClientTestUtils.createNewInstantTime();
+      records = dataGen.generateInserts(secondCommitTime, 100);
+      WriteClientTestUtils.startCommitWithTime(client, secondCommitTime);
+      assertNoWriteErrors(client.insert(jsc.parallelize(records, 1), secondCommitTime).collect());
+
+      // Explicitly compact the MDT so there is at least one completed compaction.
+      metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, cfg, context);
+      Properties mdtProps = ((SparkHoodieBackedTableMetadataWriter) metadataWriter).getWriteConfig().getProps();
+      mdtProps.setProperty(INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1");
+      HoodieWriteConfig mdtWriteConfig = HoodieWriteConfig.newBuilder().withProperties(mdtProps).build();
+      try (SparkRDDWriteClient mdtClient = new SparkRDDWriteClient(context, mdtWriteConfig, Option.empty())) {
+        Option<String> compactionInstOpt = mdtClient.scheduleCompaction(Option.empty());
+        assertTrue(compactionInstOpt.isPresent(), "MDT compaction should schedule after 2 data commits");
+        mdtClient.commitCompaction(compactionInstOpt.get(), mdtClient.compact(compactionInstOpt.get()), Option.empty());
+      }
+
+      HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder().setConf(storageConf)
+              .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())).build();
+      assertTrue(mdtMetaClient.getActiveTimeline()
+              .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION)).countInstants() >= 1,
+          "Expected at least 1 MDT compaction");
+
+      // firstCommitTime is before any MDT compaction — deleteMdtIfNecessaryBeforeRestore must
+      // detect the inconsistency, delete the MDT, and return true.
+      boolean mdtDeleted = client.deleteMdtIfNecessaryBeforeRestore(firstCommitTime);
+      assertTrue(mdtDeleted, "Expected MDT to be deleted because restore target is older than oldest MDT compaction");
+      assertFalse(storage.exists(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())),
+          "MDT directory should no longer exist after deletion");
+    }
+  }
+
+  /**
+   * Verifies that {@code deleteMdtIfNecessaryBeforeRestore} returns false (MDT preserved) when the
+   * restore target is newer than the oldest MDT compaction, and that restore then succeeds.
+   */
+  @Test
+  public void testDeleteMdtIfNecessaryBeforeRestorePreservesMdtForNewerTimestamp() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    // Set threshold=2 so inline MDT compaction fires automatically after commit1+commit2,
+    // guaranteeing the MDT has a completed base file before commit3 is written.
+    HoodieWriteConfig cfg = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .enableMetrics(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(2)
+            .build())
+        .build();
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      String commit1 = WriteClientTestUtils.createNewInstantTime();
+      List<HoodieRecord> records = dataGen.generateInserts(commit1, 100);
+      WriteClientTestUtils.startCommitWithTime(client, commit1);
+      assertNoWriteErrors(client.insert(jsc.parallelize(records, 1), commit1).collect());
+
+      // After commit2 the inline MDT compaction threshold (2) is reached; a completed MDT
+      // compaction base file is created with a timestamp between commit2 and commit3.
+      String commit2 = WriteClientTestUtils.createNewInstantTime();
+      records = dataGen.generateInserts(commit2, 100);
+      WriteClientTestUtils.startCommitWithTime(client, commit2);
+      assertNoWriteErrors(client.insert(jsc.parallelize(records, 1), commit2).collect());
+
+      // Verify MDT has at least one completed compaction before writing commit3.
+      HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder().setConf(storageConf)
+          .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())).build();
+      assertTrue(mdtMetaClient.getActiveTimeline()
+              .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION)).countInstants() >= 1,
+          "Expected at least 1 MDT compaction before commit3");
+
+      // Write commit3 *after* the MDT compaction — this is the restore target.
+      String commit3 = WriteClientTestUtils.createNewInstantTime();
+      records = dataGen.generateInserts(commit3, 50);
+      WriteClientTestUtils.startCommitWithTime(client, commit3);
+      assertNoWriteErrors(client.insert(jsc.parallelize(records, 1), commit3).collect());
+
+      String commit4 = WriteClientTestUtils.createNewInstantTime();
+      records = dataGen.generateUpdates(commit4, 50);
+      WriteClientTestUtils.startCommitWithTime(client, commit4);
+      assertNoWriteErrors(client.insert(jsc.parallelize(records, 1), commit4).collect());
+
+      // commit3 is after the MDT compaction — MDT should NOT be deleted.
+      assertFalse(client.deleteMdtIfNecessaryBeforeRestore(commit3),
+          "MDT should not be deleted when restore target is newer than oldest MDT compaction");
+      assertTrue(storage.exists(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())),
+          "MDT directory should still exist");
+      client.savepoint(commit3, "user1", "test");
+      client.restoreToSavepoint(commit3);
+      validateMetadata(client);
+    }
   }
 }
