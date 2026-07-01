@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -103,6 +104,8 @@ public class CloudDataFetcher implements Serializable {
     Dataset<Row> filteredSourceData = queryInfoDatasetPair.getRight().filter(filter);
 
     long numFilesLimit = props.getLong(SOURCE_MAX_FILES_PER_SYNC.key(), SOURCE_MAX_FILES_PER_SYNC.defaultValue());
+    ValidationUtils.checkArgument(numFilesLimit >= 1,
+        SOURCE_MAX_FILES_PER_SYNC.key() + " must be >= 1, got: " + numFilesLimit);
     log.info("Adjusting end checkpoint:{} based on sourceLimit:{} and numFilesLimit:{}",
         queryInfo.getEndInstant(), sourceLimit, numFilesLimit);
     Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> checkPointAndDataset =

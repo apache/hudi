@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
@@ -261,7 +262,8 @@ public class IncrSourceHelper {
    * @param queryInfo   Query Info
    * @return end instants along with filtered rows.
    */
-  public static Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> filterAndGenerateCheckpointBasedOnSourceLimit(Dataset<Row> sourceData,
+  @VisibleForTesting
+  static Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> filterAndGenerateCheckpointBasedOnSourceLimit(Dataset<Row> sourceData,
                                                                                                                     long sourceLimit, QueryInfo queryInfo,
                                                                                                                     CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint) {
     return filterAndGenerateCheckpointBasedOnSourceLimit(sourceData, sourceLimit, Long.MAX_VALUE, queryInfo, cloudObjectIncrCheckpoint);
@@ -325,7 +327,8 @@ public class IncrSourceHelper {
         .withColumn(CUMULATIVE_COLUMN_NAME, sum(col(queryInfo.getLimitColumn())).over(windowSpec))
         .withColumn(CUMULATIVE_COUNT_COLUMN_NAME, row_number().over(windowSpec));
     Dataset<Row> collectedRows = aggregatedData
-        .filter(col(CUMULATIVE_COLUMN_NAME).leq(sourceLimit).and(col(CUMULATIVE_COUNT_COLUMN_NAME).leq(numFilesLimit)));
+        .filter(col(CUMULATIVE_COLUMN_NAME).leq(sourceLimit)
+            .and(col(CUMULATIVE_COUNT_COLUMN_NAME).leq(numFilesLimit)));
 
     Row row;
     if (collectedRows.isEmpty()) {
