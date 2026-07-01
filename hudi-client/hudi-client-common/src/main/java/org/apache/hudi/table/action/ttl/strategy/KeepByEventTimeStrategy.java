@@ -20,6 +20,8 @@ package org.apache.hudi.table.action.ttl.strategy;
 
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
+import org.apache.hudi.config.HoodieTTLConfig;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
@@ -137,12 +139,12 @@ public class KeepByEventTimeStrategy extends KeepByTimeStrategy {
     this.eventTimeFormat = writeConfig.getPartitionTTLEventTimeFormat();
     if (eventTimeFormat == null || eventTimeFormat.isEmpty()) {
       throw new IllegalArgumentException(
-          "hoodie.partition.ttl.strategy.event.time.format must not be empty.");
+          HoodieTTLConfig.EVENT_TIME_FORMAT.key() + " must not be empty.");
     }
     this.timeSegStartIndex = writeConfig.getPartitionTTLEventTimeSegmentStartIndex();
     if (timeSegStartIndex < 0) {
       throw new IllegalArgumentException(
-          "hoodie.partition.ttl.strategy.event.time.segment.start.index must be >= 0, got " + timeSegStartIndex);
+          HoodieTTLConfig.EVENT_TIME_SEGMENT_START_INDEX.key() + " must be >= 0, got " + timeSegStartIndex);
     }
     this.deleteHiveDefaultPartition = writeConfig.shouldDeleteHiveDefaultPartitionForEventTimeTTL();
     // Hive-style partitioning is a table-level property recorded at table creation; trust it
@@ -209,9 +211,10 @@ public class KeepByEventTimeStrategy extends KeepByTimeStrategy {
     if (segments.length < timeSegStartIndex + segCount) {
       throw new IllegalArgumentException(String.format(
           "Partition '%s' has %d segment(s) but the configured event time spans %d segment(s) starting at index %d. "
-              + "Check hoodie.partition.ttl.strategy.event.time.format and event.time.segment.start.index, "
+              + "Check %s and %s, "
               + "or switch to KEEP_BY_TIME / KEEP_BY_CREATION_TIME if not all partitions of this table follow an event-time shape.",
-          partitionPath, segments.length, segCount, timeSegStartIndex));
+          partitionPath, segments.length, segCount, timeSegStartIndex,
+          HoodieTTLConfig.EVENT_TIME_FORMAT.key(), HoodieTTLConfig.EVENT_TIME_SEGMENT_START_INDEX.key()));
     }
 
     String[] timeSegs = new String[segCount];
@@ -223,9 +226,9 @@ public class KeepByEventTimeStrategy extends KeepByTimeStrategy {
         if (eq < 0) {
           throw new IllegalArgumentException(String.format(
               "Partition '%s' segment '%s' has no hive-style 'field=value' prefix but "
-                  + "hoodie.datasource.write.hive_style_partitioning=true on the table. "
+                  + "%s=true on the table. "
                   + "Switch to KEEP_BY_TIME / KEEP_BY_CREATION_TIME if such legacy partitions must coexist.",
-              partitionPath, seg));
+              partitionPath, seg, KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key()));
         }
         timeSegs[i] = seg.substring(eq + 1);
       } else {
@@ -249,8 +252,9 @@ public class KeepByEventTimeStrategy extends KeepByTimeStrategy {
         return true;
       }
       log.warn("Skipping partition '{}': time block contains {} (event time undefined; set "
-              + "hoodie.partition.ttl.strategy.event.time.delete.hive.default.partition=true to delete)",
-          partitionPath, PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH);
+              + "{}=true to delete)",
+          partitionPath, PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH,
+          HoodieTTLConfig.EVENT_TIME_DELETE_HIVE_DEFAULT_PARTITION.key());
       return false;
     }
 
@@ -259,9 +263,9 @@ public class KeepByEventTimeStrategy extends KeepByTimeStrategy {
     if (eventMillis == null) {
       throw new IllegalArgumentException(String.format(
           "Partition '%s': cannot parse '%s' with pattern '%s'. "
-              + "Fix hoodie.partition.ttl.strategy.event.time.format, or switch to "
+              + "Fix %s, or switch to "
               + "KEEP_BY_TIME / KEEP_BY_CREATION_TIME if such partitions must remain in the table.",
-          partitionPath, timeStr, formatter));
+          partitionPath, timeStr, formatter, HoodieTTLConfig.EVENT_TIME_FORMAT.key()));
     }
     return eventMillis < cutoffMillis;
   }
