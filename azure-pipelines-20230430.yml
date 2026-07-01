@@ -515,17 +515,21 @@ stages:
               containerRegistry: 'apachehudi-docker-hub'
               repository: 'apachehudi/hudi-ci-bundle-validation-base'
               command: 'run'
-              # UT_FT_10 builds the full reactor with `clean install`. Under the
-              # shared MVN_OPTS_INSTALL `-T 3`, concurrent module builds (notably
-              # parallel maven-shade of large bundles) can spike heap past the 8g
-              # ceiling and flakily OOM. Prepend `-T 2` below so Maven (first -T
-              # wins) caps concurrency for THIS job's install only; other jobs
-              # keep the shared -T 3.
+              # UT_FT_10 builds the full reactor with `clean install`. javac runs
+              # in-process in this job's single MAVEN_OPTS='-Xmx8g' JVM, so concurrent
+              # module builds (parallel maven-shade of large bundles + javac reading
+              # huge classpaths via zipfs) do heavy native zip work. That work holds
+              # JNI-critical sections which block the GC (see the "Retried waiting for
+              # GCLocker too often" warnings preceding the OOM): garbage piles up
+              # uncollected and the heap is exhausted even though the live set is small.
+              # A prior `-T 2` cap reduced but did not eliminate this (it recurred while
+              # compiling hudi-cli-bundle). Prepend `-T 1` below so Maven (first -T wins)
+              # serializes THIS job's install only; other jobs keep the shared -T 3.
               arguments: >
                 -v $(Build.SourcesDirectory):/hudi
                 -v /var/run/docker.sock:/var/run/docker.sock
                 -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
-                /bin/bash -c "MAVEN_OPTS='-Xmx8g' mvn clean install -T 2 $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source
+                /bin/bash -c "MAVEN_OPTS='-Xmx8g' mvn clean install -T 1 $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source
                 && mvn test  $(MVN_OPTS_TEST) -Punit-tests -Dsurefire.failIfNoSpecifiedTests=false $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB10_UT_MODULES)
                 && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE2_ARG) -Dtest="!TestHoodie*" -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities
                 && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -Dsurefire.failIfNoSpecifiedTests=false  $(JACOCO_AGENT_DESTFILE3_ARG) -pl $(JOB10_FT_MODULES)"
