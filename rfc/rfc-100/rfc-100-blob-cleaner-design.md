@@ -305,25 +305,90 @@ sequential throughput, 64-256KB HFile blocks. Pending benchmarking.*
 by `HoodieSchemaUtils.projectSchema()` and `SecondaryIndexRecordGenerationUtils`. No new index
 infrastructure is needed.
 
-**Safety check.** The cleaner verifies the index is fully built before using it via
-`getMetadataPartitions()` and `getMetadataPartitionsInflight()`. A partially-built index falls
-back to the table scan path.
+**Index staleness and consistency.** Stage 2 deletes a blob when the index reports no live
+reference, so the only dangerous error is a *false negative* -- the index missing a reference that
+exists (premature deletion, R1). A *false positive* only over-retains (R2, safe). For a table whose
+secondary index partition is **available (built)**, a false negative from steady-state staleness
+cannot occur, because three MDT mechanisms compose:
 
-#### Fallback path: table scan with circuit breaker
+1. **Same-commit, same-instant maintenance.** SI records are written in the *same* MDT delta-commit
+   as the data commit, at the data commit's instant time (`HoodieBackedTableMetadataWriter.update`
+   -> `processAndCommit`, SI in the same `partitionToRecordMap`). It is not a lazily-maintained
+   cache that can drift out of band.
+2. **Hard failure coupling.** The MDT commit runs *before* the data instant is completed
+   (`BaseHoodieWriteClient.commit`: `writeToMetadataTable`, then `saveAsComplete`). If the MDT
+   update fails, the exception propagates before completion and the data instant stays inflight --
+   so a *completed* data commit implies its SI entries exist.
+3. **Reader consistency watermark.** Every SI read filters MDT records to those whose data instant
+   is completed (`getValidInstantTimestamps`, applied as an `InstantRange` EXACT_MATCH in
+   `HoodieBackedTableMetadata.readSliceWithFilter`). Entries from an uncommitted or failed commit --
+   e.g. a crash after the MDT commit but before `saveAsComplete` -- are hidden; entries from every
+   completed commit are exposed.
+
+Composed, the index cannot miss a reference from a completed commit nor surface one from a failed
+commit. Reading the current index reflects every completed data commit -- a superset of the
+cleaner's planning fence -- so index staleness cannot produce a false negative. (A *new* reference
+committed by a concurrent writer after the fence is a separate concern, handled by the writer-side
+`preCommit` check and the planning-snapshot window above, not by the index.)
+
+**The one unsafe window is bootstrap, and the safety check gates exactly it.** While a secondary
+index is being built or backfilled (async `HoodieIndexer` / `RunIndexActionExecutor`), its
+partition is *inflight*, not *available*. Here the reader watermark does **not** help: a completed
+historical instant can be within `getValidInstantTimestamps` yet still lack the SI entries the
+catch-up task has not reconciled -- a genuine false negative. So the cleaner treats the index as
+authoritative only when the partition is available **and not** inflight
+(`isMetadataPartitionAvailable(SECONDARY_INDEX)` is true and it is absent from
+`getMetadataPartitionsInflight()`); otherwise it falls back to the ground-truth table scan, which
+reads actual file slices and is immune to index state. MDT disable/rebuild and restore either flip
+this availability flag or are reconciled into the watermark, so the same gate covers them.
+
+**One-sided trust (backstop).** The index may authorize *retention* freely, but authorizes
+*deletion* only under the availability guarantee above; any uncertainty resolves to the
+ground-truth scan or to deferral, never to deletion. This keeps R1 intact even if a future
+index-maintenance mode weakened one of the three steady-state mechanisms.
+
+#### Fallback path: table scan, with a durable deferred queue
 
 When the MDT secondary index is unavailable, Stage 2 falls back to a parallelized table scan
-across all partitions. A circuit breaker (`hoodie.cleaner.blob.external.scan.max.candidates`,
-default 1000) defers cleanup if candidates exceed the threshold, preventing the scan from becoming
-a bottleneck on large tables. The operator is warned to enable the MDT secondary index.
+across all partitions. Because that scan is O(candidates * table), a per-cycle cap
+(`hoodie.cleaner.blob.external.scan.max.candidates`, default 1000) limits how many candidates are
+verified in a single clean cycle.
+
+**The cap must not silently drop candidates (R2).** Stage 1 derives candidate paths by reading the
+*expired* file slices' blob refs, and the existing cleaner deletes those slices later in the *same*
+cycle. If the cap simply skipped the overflow, the deleted slices would take the only copy of those
+refs with them -- the candidates could never be re-derived, leaving permanent orphans (a direct R2
+violation). So the cap is a **rate limit backed by a durable queue**, not an all-or-nothing skip:
+
+1. At plan time (before execution deletes any slice), Stage 1's candidate *paths* are already in
+   hand. Up to `max.candidates` are verified this cycle; the overflow is written to a durable
+   deferred-candidates artifact under `.hoodie/.aux/clean/` -- a running queue, separate from a
+   delete sidecar since no deletes are planned for the overflow.
+2. Each subsequent clean cycle loads the deferred queue, merges it with that cycle's new local
+   orphans, verifies up to `max.candidates`, and re-defers the rest. The backlog drains at a
+   bounded rate per cycle.
+3. Because the candidate paths are durable *before* any slice is deleted, deleting the expired
+   slices no longer loses them. Deferred candidates are re-verified against the *current* index or
+   scan when processed -- a point-in-time liveness check that can only over-retain, never wrongly
+   delete -- so they never depend on the now-deleted slices.
+
+This keeps R2 intact regardless of the index: with the index the queue drains quickly; without it
+the scan drains it at `max.candidates` per cycle (bounded, just slower). A growing deferred backlog
+is surfaced as a metric and a warning so operators enable the MDT secondary index.
+
+*Considered and rejected:* gating file-slice deletion on blob planning (refusing to clean slices
+when the cap fires). It preserves the source slices but couples blob cleanup to core cleaning,
+blocks file-slice reclamation, and changes existing cleaner semantics. The durable queue reaches R2
+without touching the file-slice path.
 
 #### Decision matrix
 
-| Condition                   | Path used     | Cost                  | Suitable for              |
-|-----------------------------|---------------|-----------------------|---------------------------|
-| No local orphan candidates  | Skip Stage 2  | Zero                  | No blob work this cycle   |
-| MDT secondary index enabled | Index lookup  | O(candidates)         | Any scale                 |
-| No index, few candidates    | Table scan    | O(candidates * table) | Small tables              |
-| No index, many candidates   | Circuit break | Zero (deferred)       | Large tables need index   |
+| Condition                   | Path used                          | Cost                             | Suitable for                  |
+|-----------------------------|------------------------------------|----------------------------------|-------------------------------|
+| No local orphan candidates  | Skip Stage 2                       | Zero                             | No blob work this cycle       |
+| MDT secondary index enabled | Index lookup                       | O(candidates)                    | Any scale                     |
+| No index, few candidates    | Table scan                         | O(candidates * table)            | Small tables                  |
+| No index, many candidates   | Rate-limited scan + durable defer  | O(max.candidates * table)/cycle  | Drains over cycles; add index |
 
 ```mermaid
 sequenceDiagram
@@ -775,6 +840,49 @@ cleaning. The sidecar Parquet file ensures the blob delete list survives crashes
 | After execution, before COMPLETED             | INFLIGHT re-executed. All deletes are no-ops. Metadata written, instant transitions to COMPLETED.      |
 | Plan rolled back                              | Rollback reads `extraMetadata["blobDeletesPath"]` and deletes the sidecar.                             |
 
+### Premature Deletion: Prevention, Detection, Recovery (Q6)
+
+Problem-statement Q6 (what happens if a blob is prematurely deleted) is left open there by design;
+the design answers it here. Because a hard-deleted external blob is unrecoverable by default (R1),
+the answer is layered -- prevention first, then detection, then recovery as an opt-in.
+
+**Prevention (primary).** This is where the design spends its safety budget: Stage 1 over-retains
+on the MOR side; Stage 2 does cross-FG verification before any deletion; the index is trusted only
+when available and not inflight, else a ground-truth scan ("Index staleness and consistency"); the
+writer-side `preCommit` check plus plan-time durability close the writer-cleaner race (subject to
+the open planning-snapshot window above); and one-sided trust means every uncertain verdict
+resolves to *retain*. Premature deletion therefore requires a genuine defect, not a routine race.
+
+**Detection.** Two signals, which also answer Q6's "distinguish correctly-absent from
+incorrectly-deleted":
+
+- *Query-time.* A dangling `BlobReference` -- a live record whose `external_path` was deleted --
+  produces a blob-fetch failure (`FileNotFoundException` / 404) when that record is read. The
+  reader should surface this as a distinct, catchable error (supporting R9), not a silent null.
+- *Audit trail.* Every deleted path is recorded in the clean's `HoodieCleanMetadata`
+  (`blobCleanStats`) and its sidecar, both retained until archival. On a missing-blob error the
+  path is matched against that history: present in a clean's delete list => the cleaner deleted it
+  (candidate premature deletion, to investigate); absent => it was never a cleaner-managed blob
+  (a user stale-path error, outside R1). This is what tells the two cases apart.
+- *Proactive.* `hoodie.cleaner.blob.dry.run` computes the delete set without deleting, so it can be
+  diffed against a ground-truth scan (shadow mode) to catch a wrong decision before any I/O.
+
+**Recovery.** Once a blob is hard-deleted the bytes are gone, so recoverability is a deliberate
+choice, not a free property:
+
+- *Default -- rely on correctness.* Hard delete; the layered prevention above is the guarantee.
+  Any recovery is out-of-band (the user's own object-store versioning or backups); the table does
+  not promise recovery.
+- *Optional -- quarantine with a grace window.* Instead of hard-deleting, the cleaner moves blobs
+  to a managed trash prefix and hard-deletes only after a grace window, so a premature deletion
+  detected within the window is restorable from trash. This converts R1 from unrecoverable to
+  recoverable-within-window, at the cost of blob-sized data movement and a trash-GC lifecycle
+  (a pure time-based sweep, no liveness logic). Config-gated and off by default; recommended for
+  workloads that cannot tolerate an unrecoverable R1.
+
+Net: the design answers Q6 as "prevention-first, with a durable detection trail, and recovery as an
+opt-in quarantine mode," rather than leaving it open or asserting a bare "no recovery."
+
 ---
 
 ## Performance
@@ -785,7 +893,7 @@ cleaning. The sidecar Parquet file ensures the blob delete list survives crashes
 |------------------------------|---------------------------------|----------------------------|--------------------------------|
 | Non-blob table               | Zero (`hasBlobColumns` gate)    | N/A                        | **Zero**                       |
 | External blobs (index)       | ~6 Parquet reads per cleaned FG | O(C * R_avg)               | O(cleaned_FGs + C * R_avg)     |
-| External blobs (scan)        | ~6 Parquet reads per cleaned FG | O(candidates * table_size) | Circuit breaker limits this    |
+| External blobs (scan)        | ~6 Parquet reads per cleaned FG | O(candidates * table_size) | Rate-limited per cycle; overflow deferred |
 
 ### Back-of-Envelope: Example 6 (50K FGs, 2K External Candidates)
 
@@ -824,7 +932,7 @@ contribute row-level blob refs as candidates. These are backed by engine-context
 | `hoodie.cleaner.blob.enabled`                      | `true`  | Enable blob cleanup during clean action                                           |
 | `hoodie.cleaner.blob.dry.run`                      | `false` | Compute blob cleanup plan and log results but do not execute                      |
 | `hoodie.cleaner.blob.external.scan.parallelism`    | `10`    | Parallelism for Stage 2 fallback table scan                                       |
-| `hoodie.cleaner.blob.external.scan.max.candidates` | `1000`  | Circuit breaker for Stage 2 fallback scan; exceeding defers blob cleanup          |
+| `hoodie.cleaner.blob.external.scan.max.candidates` | `1000`  | Per-cycle cap on candidates verified via the fallback scan; overflow is deferred to a durable queue and drained over subsequent cycles |
 | `hoodie.metadata.index.secondary.column`           | (none)  | Set to `<blob_col>.reference.external_path` for cross-FG verification             |
 
 ---
