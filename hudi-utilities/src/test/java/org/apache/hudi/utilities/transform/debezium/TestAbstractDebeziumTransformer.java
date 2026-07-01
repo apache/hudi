@@ -42,7 +42,6 @@ import java.util.function.Function;
 
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_ENABLED;
 import static org.apache.hudi.utilities.streamer.BaseErrorTableWriter.ERROR_TABLE_CURRUPT_RECORD_COL_NAME;
-import static org.apache.hudi.utilities.transform.debezium.AbstractDebeziumTransformer.DEBEZIUM_METADATA_FIELD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -109,7 +108,7 @@ class TestAbstractDebeziumTransformer extends DebeziumTransformerTestBase {
     assertTrue(columns.contains(DebeziumConstants.UPSTREAM_PROCESSING_TS_COL_NAME));
     assertTrue(columns.contains(DebeziumConstants.FLATTENED_SHARD_NAME));
     assertTrue(columns.contains(DebeziumConstants.FLATTENED_TS_COL_NAME));
-    assertFalse(columns.contains(DEBEZIUM_METADATA_FIELD), "no nested struct when flat");
+    assertFalse(columns.contains(DebeziumConstants.DEBEZIUM_METADATA_FIELD), "no nested struct when flat");
 
     // shard name comes from source.name
     assertEquals("pgdb", result.orderBy("id").collectAsList().get(0).getAs(DebeziumConstants.FLATTENED_SHARD_NAME));
@@ -128,12 +127,12 @@ class TestAbstractDebeziumTransformer extends DebeziumTransformerTestBase {
     Dataset<Row> result = transformer.apply(jsc, spark, jsonToDataset(INSERT_EVENT, UPDATE_EVENT, DELETE_EVENT), props);
     List<String> columns = Arrays.asList(result.columns());
 
-    assertTrue(columns.contains(DEBEZIUM_METADATA_FIELD), "metadata grouped under a struct");
+    assertTrue(columns.contains(DebeziumConstants.DEBEZIUM_METADATA_FIELD), "metadata grouped under a struct");
     assertTrue(columns.contains(DebeziumConstants.FLATTENED_OP_COL_NAME), "op stays at root");
     assertTrue(columns.contains(DebeziumConstants.FLATTENED_LSN_COL_NAME), "LSN stays at root");
     assertFalse(columns.contains(DebeziumConstants.FLATTENED_SHARD_NAME), "shard moved into the nested struct");
 
-    Row metadata = result.first().getAs(DEBEZIUM_METADATA_FIELD);
+    Row metadata = result.first().getAs(DebeziumConstants.DEBEZIUM_METADATA_FIELD);
     List<String> nested = Arrays.asList(metadata.schema().fieldNames());
     assertTrue(nested.contains(DebeziumConstants.FLATTENED_SHARD_NAME));
     assertTrue(nested.contains(DebeziumConstants.FLATTENED_SCHEMA_NAME), "source.schema present -> nested schema col added");
@@ -148,7 +147,7 @@ class TestAbstractDebeziumTransformer extends DebeziumTransformerTestBase {
 
     // property NOT set -> subclass default decides
     Dataset<Row> result = transformer.apply(jsc, spark, jsonToDataset(INSERT_EVENT, UPDATE_EVENT, DELETE_EVENT), new TypedProperties());
-    assertEquals(subclassDefault, Arrays.asList(result.columns()).contains(DEBEZIUM_METADATA_FIELD));
+    assertEquals(subclassDefault, Arrays.asList(result.columns()).contains(DebeziumConstants.DEBEZIUM_METADATA_FIELD));
   }
 
   @Test
@@ -160,7 +159,7 @@ class TestAbstractDebeziumTransformer extends DebeziumTransformerTestBase {
     props.setProperty(DebeziumTransformerConfig.ENABLE_NESTED_FIELDS.key(), "false");
 
     Dataset<Row> result = transformer.apply(jsc, spark, jsonToDataset(INSERT_EVENT, UPDATE_EVENT, DELETE_EVENT), props);
-    assertFalse(Arrays.asList(result.columns()).contains(DEBEZIUM_METADATA_FIELD));
+    assertFalse(Arrays.asList(result.columns()).contains(DebeziumConstants.DEBEZIUM_METADATA_FIELD));
   }
 
   @Test
@@ -213,6 +212,40 @@ class TestAbstractDebeziumTransformer extends DebeziumTransformerTestBase {
     long id = result.first().<Long>getAs("id");
     assertEquals(1L, id);
     assertEquals("Alice", result.first().getAs("name"));
+  }
+
+  @Test
+  void testSchemaAsNullableFalseMakesMetadataColumnsNullableEvenIfSourceDeclaredNonNullable() {
+    // "op" is declared non-nullable at the envelope level, but it is a Debezium metadata column
+    // (not a __data-derived business column), so it must NOT be treated as a "known non-nullable
+    // source column" -- it should end up nullable in the output regardless of its declared
+    // nullability in the raw envelope schema.
+    StructType rowDataSchema = DataTypes.createStructType(Arrays.asList(
+        DataTypes.createStructField("id", DataTypes.LongType, false, Metadata.empty()),
+        DataTypes.createStructField("name", DataTypes.StringType, true, Metadata.empty())));
+    StructType sourceSchema = DataTypes.createStructType(Arrays.asList(
+        DataTypes.createStructField("name", DataTypes.StringType, true, Metadata.empty()),
+        DataTypes.createStructField("ts_ms", DataTypes.LongType, true, Metadata.empty())));
+    StructType envelopeSchema = DataTypes.createStructType(Arrays.asList(
+        DataTypes.createStructField("op", DataTypes.StringType, false, Metadata.empty()),
+        DataTypes.createStructField("ts_ms", DataTypes.LongType, true, Metadata.empty()),
+        DataTypes.createStructField("before", rowDataSchema, true, Metadata.empty()),
+        DataTypes.createStructField("after", rowDataSchema, true, Metadata.empty()),
+        DataTypes.createStructField("source", sourceSchema, true, Metadata.empty())));
+
+    Row afterRow = RowFactory.create(1L, "Alice");
+    Row sourceRow = RowFactory.create("pgdb", 1700000000000L);
+    Row envelopeRow = RowFactory.create("c", 1700000000500L, null, afterRow, sourceRow);
+    Dataset<Row> input = spark.createDataFrame(Collections.singletonList(envelopeRow), envelopeSchema);
+
+    TypedProperties props = new TypedProperties();
+    props.setProperty(DebeziumTransformerConfig.SCHEMA_AS_NULLABLE.key(), "false");
+
+    Dataset<Row> result = new TestableDebeziumTransformer().apply(jsc, spark, input, props);
+
+    assertTrue(result.schema().apply(DebeziumConstants.FLATTENED_OP_COL_NAME).nullable(),
+        "op is a Debezium metadata column, not a known non-nullable source column, so it must be nullable");
+    assertFalse(result.schema().apply("id").nullable(), "id remains non-nullable as a known source column");
   }
 
   @Test

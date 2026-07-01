@@ -75,7 +75,6 @@ import static org.apache.hudi.utilities.streamer.BaseErrorTableWriter.ERROR_TABL
  */
 public class AbstractDebeziumTransformer implements Transformer {
 
-  public static final String DEBEZIUM_METADATA_FIELD = DebeziumConstants.DEBEZIUM_METADATA_FIELD;
   private static final String DATA_FIELD = "__data";
 
   private static final List<Column> DEFAULT_ROOT_LEVEL_METADATA_COLUMNS = Arrays.asList(
@@ -155,9 +154,9 @@ public class AbstractDebeziumTransformer implements Transformer {
         nestedMetadataFields.add(new Column(DebeziumConstants.INCOMING_SOURCE_SCHEMA_FIELD).alias(DebeziumConstants.FLATTENED_SCHEMA_NAME));
       }
 
-      rowDataset = rowDataset.withColumn(DEBEZIUM_METADATA_FIELD,
+      rowDataset = rowDataset.withColumn(DebeziumConstants.DEBEZIUM_METADATA_FIELD,
           functions.struct(nestedMetadataFields.toArray(new Column[]{})));
-      allColumns.add(new Column(DEBEZIUM_METADATA_FIELD));
+      allColumns.add(new Column(DebeziumConstants.DEBEZIUM_METADATA_FIELD));
 
       allColumns.addAll(DEFAULT_ROOT_LEVEL_METADATA_COLUMNS);
       if (lsnColumn != null) {
@@ -198,11 +197,12 @@ public class AbstractDebeziumTransformer implements Transformer {
       }
     }
 
-    // Apply correct nullability to the transformed schema
+    // Apply correct nullability to the transformed schema: a column stays non-nullable only if it
+    // was a non-nullable source column; every other column (including Debezium metadata columns) is nullable.
     StructField[] updatedStructFields = Arrays.stream(debeziumDataset.schema().fields())
-        .map(field -> field.nullable() && !nonNullableColumns.contains(field.name())
-          ? new StructField(field.name(), field.dataType(), true, field.metadata())
-          : new StructField(field.name(), field.dataType(), false, field.metadata()))
+        .map(field -> nonNullableColumns.contains(field.name())
+          ? new StructField(field.name(), field.dataType(), false, field.metadata())
+          : new StructField(field.name(), field.dataType(), true, field.metadata()))
         .toArray(StructField[]::new);
 
     return sparkSession.createDataFrame(debeziumDataset.rdd(), new StructType(updatedStructFields));
