@@ -64,14 +64,14 @@ public class MysqlDebeziumTransformer extends AbstractDebeziumTransformer {
    * @return dataset with the {@code _event_seq} column added.
    */
   private static Dataset<Row> applySeqNo(Dataset<Row> dataset) {
-    boolean isNested = Arrays.asList(dataset.columns()).contains(DEBEZIUM_METADATA_FIELD);
+    boolean isNested = Arrays.asList(dataset.columns()).contains(DebeziumConstants.DEBEZIUM_METADATA_FIELD);
 
     Column fileCol = isNested
-        ? dataset.col(DEBEZIUM_METADATA_FIELD + "." + DebeziumConstants.FLATTENED_FILE_COL_NAME)
+        ? dataset.col(DebeziumConstants.DEBEZIUM_METADATA_FIELD + "." + DebeziumConstants.FLATTENED_FILE_COL_NAME)
         : dataset.col(DebeziumConstants.FLATTENED_FILE_COL_NAME);
 
     Column posCol = isNested
-        ? dataset.col(DEBEZIUM_METADATA_FIELD + "." + DebeziumConstants.FLATTENED_POS_COL_NAME)
+        ? dataset.col(DebeziumConstants.DEBEZIUM_METADATA_FIELD + "." + DebeziumConstants.FLATTENED_POS_COL_NAME)
         : dataset.col(DebeziumConstants.FLATTENED_POS_COL_NAME);
 
     return dataset.withColumn(DebeziumConstants.ADDED_SEQ_COL_NAME, functions.concat(

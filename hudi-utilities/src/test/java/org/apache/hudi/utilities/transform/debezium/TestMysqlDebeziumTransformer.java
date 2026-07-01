@@ -78,7 +78,7 @@ class TestMysqlDebeziumTransformer extends DebeziumTransformerTestBase {
         .apply(jsc, spark, jsonToDataset(mysqlEvent("c", 1, "mysql-bin.000001", 100)), new TypedProperties());
 
     List<String> columns = Arrays.asList(result.columns());
-    assertFalse(columns.contains(AbstractDebeziumTransformer.DEBEZIUM_METADATA_FIELD),
+    assertFalse(columns.contains(DebeziumConstants.DEBEZIUM_METADATA_FIELD),
         "MySQL should be flat by default");
     assertTrue(columns.contains(DebeziumConstants.FLATTENED_FILE_COL_NAME), "_event_bin_file at root");
   }
@@ -92,12 +92,12 @@ class TestMysqlDebeziumTransformer extends DebeziumTransformerTestBase {
         .apply(jsc, spark, jsonToDataset(mysqlEvent("c", 1, "mysql-bin.000001", 100)), props);
 
     List<String> columns = Arrays.asList(result.columns());
-    assertTrue(columns.contains(AbstractDebeziumTransformer.DEBEZIUM_METADATA_FIELD), "metadata nested");
+    assertTrue(columns.contains(DebeziumConstants.DEBEZIUM_METADATA_FIELD), "metadata nested");
     assertTrue(columns.contains(DebeziumConstants.FLATTENED_OP_COL_NAME), "op at root");
     assertTrue(columns.contains(DebeziumConstants.ADDED_SEQ_COL_NAME), "_event_seq at root");
     assertFalse(columns.contains(DebeziumConstants.FLATTENED_FILE_COL_NAME), "binlog file is nested, not root");
 
-    Row metadata = result.first().getAs(AbstractDebeziumTransformer.DEBEZIUM_METADATA_FIELD);
+    Row metadata = result.first().getAs(DebeziumConstants.DEBEZIUM_METADATA_FIELD);
     List<String> nested = Arrays.asList(metadata.schema().fieldNames());
     assertTrue(nested.contains(DebeziumConstants.FLATTENED_FILE_COL_NAME));
     assertTrue(nested.contains(DebeziumConstants.FLATTENED_POS_COL_NAME));

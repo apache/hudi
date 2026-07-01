@@ -80,12 +80,12 @@ class TestPostgresDebeziumTransformer extends DebeziumTransformerTestBase {
         .apply(jsc, spark, jsonToDataset(pgEvent("c", 1, 1001, false)), new TypedProperties());
 
     List<String> columns = Arrays.asList(result.columns());
-    assertTrue(columns.contains(AbstractDebeziumTransformer.DEBEZIUM_METADATA_FIELD), "nested by default for Postgres");
+    assertTrue(columns.contains(DebeziumConstants.DEBEZIUM_METADATA_FIELD), "nested by default for Postgres");
     assertTrue(columns.contains(DebeziumConstants.FLATTENED_OP_COL_NAME), "op at root");
     assertTrue(columns.contains(DebeziumConstants.FLATTENED_LSN_COL_NAME), "LSN at root (payload ordering field)");
     assertFalse(columns.contains(DebeziumConstants.FLATTENED_TX_ID_COL_NAME), "tx id is nested, not at root");
 
-    Row metadata = result.first().getAs(AbstractDebeziumTransformer.DEBEZIUM_METADATA_FIELD);
+    Row metadata = result.first().getAs(DebeziumConstants.DEBEZIUM_METADATA_FIELD);
     assertTrue(Arrays.asList(metadata.schema().fieldNames()).contains(DebeziumConstants.FLATTENED_TX_ID_COL_NAME));
   }
 
