@@ -119,7 +119,7 @@ public class HFileUtils extends FileFormatUtils {
           footerVals.put(footerName, fromUTF8Bytes(footerValue.get()));
         } else if (required) {
           throw new MetadataNotFoundException(
-              "Could not find index in HFile footer. Looked for key " + footerName + " in " + filePath);
+              "Could not find metadata key in HFile footer. Key " + footerName + ", file: " + filePath);
         }
       }
       return footerVals;
