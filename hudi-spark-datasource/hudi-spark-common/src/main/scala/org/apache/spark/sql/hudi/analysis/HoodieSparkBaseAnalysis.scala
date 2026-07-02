@@ -25,7 +25,7 @@ import org.apache.spark.sql.BaseHoodieCatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.Origin
@@ -61,6 +61,9 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
     case TimeTravelRelation(ResolvesToHudiTable(table), timestamp, version) =>
       if (timestamp.isEmpty && version.nonEmpty) {
         throw new HoodieAnalysisException("Version expression is not supported for time travel")
+      }
+      if (timestamp.exists(_.references.nonEmpty) || timestamp.exists(SubqueryExpression.hasSubquery)) {
+        throw new HoodieAnalysisException("timestamp expression cannot refer to any columns or contain subqueries")
       }
 
       val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))

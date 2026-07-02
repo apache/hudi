@@ -338,4 +338,40 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
       }
     })
   }
+
+  test("Test time travel with SQL:2011 temporal clause spellings") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+           | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+      val metaClient = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName")
+      val instant1 = metaClient.getActiveTimeline.getAllCommitsTimeline
+        .lastInstant().get().requestedTime
+
+      spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
+
+      Seq(
+        s"select id, name, price, ts from $tableName SYSTEM_TIME AS OF '$instant1'",
+        s"select id, name, price, ts from $tableName FOR SYSTEM_TIME AS OF '$instant1'",
+        s"select id, name, price, ts from $tableName FOR TIMESTAMP AS OF '$instant1'"
+      ).foreach { sql =>
+        checkAnswer(sql)(Seq(1, "a1", 10.0, 1000))
+      }
+    }
+  }
 }
