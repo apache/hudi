@@ -36,21 +36,21 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate, SpecializedGetters}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, SpecializedGetters}
 import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface}
-import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, LogicalPlan}
 import org.apache.spark.sql.catalyst.trees.Origin
-import org.apache.spark.sql.catalyst.util.DateFormatter
+import org.apache.spark.sql.catalyst.util.{DateFormatter, METADATA_COL_ATTR_KEY}
 import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
-import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetReadSupport, ParquetFileFormat, ParquetFilters}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
-import org.apache.spark.sql.types.{DataType, Metadata, StructType}
-import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
+import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchRow, ColumnVector}
 import org.apache.spark.storage.StorageLevel
+import org.apache.spark.storage.StorageLevel._
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.{Locale, TimeZone}
@@ -64,18 +64,21 @@ trait SparkAdapter extends Serializable {
   /**
    * Checks whether provided instance of [[InternalRow]] is actually an instance of [[ColumnarBatchRow]]
    */
-  def isColumnarBatchRow(r: InternalRow): Boolean
+  def isColumnarBatchRow(r: InternalRow): Boolean = r.isInstanceOf[ColumnarBatchRow]
 
   /**
    * Creates Catalyst [[Metadata]] for Hudi's meta-fields (designating these w/
    * [[METADATA_COL_ATTR_KEY]] if available (available in Spark >= 3.2)
    */
-  def createCatalystMetadataForMetaField: Metadata
+  def createCatalystMetadataForMetaField: Metadata =
+    new MetadataBuilder()
+      .putBoolean(METADATA_COL_ATTR_KEY, value = true)
+      .build()
 
   /**
    * Inject table-valued functions to SparkSessionExtensions
    */
-  def injectTableFunctions(extensions: SparkSessionExtensions): Unit = {}
+  def injectTableFunctions(extensions: SparkSessionExtensions): Unit
 
   /**
    * Inject scalar functions into Spark SQL function registry.
@@ -169,13 +172,6 @@ trait SparkAdapter extends Serializable {
   def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch
 
   /**
-   * Create instance of [[InterpretedPredicate]]
-   *
-   * TODO move to HoodieCatalystExpressionUtils
-   */
-  def createInterpretedPredicate(e: Expression): InterpretedPredicate
-
-  /**
    * Create Hoodie relation based on globPaths, otherwise use tablePath if it's empty
    */
   def createRelation(sqlContext: SQLContext,
@@ -197,12 +193,29 @@ trait SparkAdapter extends Serializable {
    * Extract condition in [[DeleteFromTable]]
    * SPARK-38626 condition is no longer Option in Spark 3.3
    */
-  def extractDeleteCondition(deleteFromTable: Command): Expression
+  def extractDeleteCondition(deleteFromTable: Command): Expression = {
+    deleteFromTable.asInstanceOf[DeleteFromTable].condition
+  }
 
   /**
    * Converts instance of [[StorageLevel]] to a corresponding string
    */
-  def convertStorageLevelToString(level: StorageLevel): String
+  def convertStorageLevelToString(level: StorageLevel): String = level match {
+    case NONE => "NONE"
+    case DISK_ONLY => "DISK_ONLY"
+    case DISK_ONLY_2 => "DISK_ONLY_2"
+    case DISK_ONLY_3 => "DISK_ONLY_3"
+    case MEMORY_ONLY => "MEMORY_ONLY"
+    case MEMORY_ONLY_2 => "MEMORY_ONLY_2"
+    case MEMORY_ONLY_SER => "MEMORY_ONLY_SER"
+    case MEMORY_ONLY_SER_2 => "MEMORY_ONLY_SER_2"
+    case MEMORY_AND_DISK => "MEMORY_AND_DISK"
+    case MEMORY_AND_DISK_2 => "MEMORY_AND_DISK_2"
+    case MEMORY_AND_DISK_SER => "MEMORY_AND_DISK_SER"
+    case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
+    case OFF_HEAP => "OFF_HEAP"
+    case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
+  }
 
   /**
    * Tries to translate a Catalyst Expression into data source Filter
@@ -271,14 +284,6 @@ trait SparkAdapter extends Serializable {
     new HoodieParquetReadSupport(convertTz, enableVectorizedReader, enableTimestampFieldRepair,
       datetimeRebaseSpec, getRebaseSpec("LEGACY"), tableSchemaOpt)
   }
-
-  /**
-   * use new qe execute
-   */
-  def sqlExecutionWithNewExecutionId[T](sparkSession: SparkSession,
-                                        queryExecution: QueryExecution,
-                                        name: Option[String] = None)(body: => T): T
-
 
   /**
    * Stop spark context with exit code
