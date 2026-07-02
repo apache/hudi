@@ -138,6 +138,8 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   private static final int MAX_PARTITIONS_PER_CHANGE_REQUEST = 100;
   private static final int MAX_PARTITIONS_PER_READ_REQUEST = 1000;
   private static final int MAX_DELETE_PARTITIONS_PER_REQUEST = 25;
+  // Glue reports a missing partition using the EntityNotFoundException class name as the error code.
+  private static final String ENTITY_NOT_FOUND_ERROR_CODE = EntityNotFoundException.class.getSimpleName();
   protected final GlueAsyncClient awsGlue;
   private static final String GLUE_PARTITION_INDEX_ENABLE = "partition_filtering.enabled";
   private static final int PARTITION_INDEX_MAX_NUMBER = 3;
@@ -442,12 +444,12 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         // ignore EntityNotFoundException errors and only fail on other (e.g. permission/throttling) errors.
         Map<Boolean, List<PartitionError>> errorsByIgnorable = response.errors().stream()
             .collect(Collectors.partitioningBy(
-                error -> EntityNotFoundException.class.getSimpleName().equals(error.errorDetail().errorCode())));
-        List<PartitionError> ignoredErrors = errorsByIgnorable.get(true);
-        if (!ignoredErrors.isEmpty()) {
-          log.info("Ignored dropping {} non-existent partition(s) from table {}: {}", ignoredErrors.size(),
+                error -> ENTITY_NOT_FOUND_ERROR_CODE.equals(error.errorDetail().errorCode())));
+        List<PartitionError> ignorableErrors = errorsByIgnorable.get(true);
+        if (!ignorableErrors.isEmpty()) {
+          log.info("Ignored dropping {} non-existent partition(s) from table {}: {}", ignorableErrors.size(),
               tableId(databaseName, tableName),
-              ignoredErrors.stream().map(PartitionError::partitionValues).collect(Collectors.toList()));
+              ignorableErrors.stream().map(PartitionError::partitionValues).collect(Collectors.toList()));
         }
         List<PartitionError> realErrors = errorsByIgnorable.get(false);
         if (!realErrors.isEmpty()) {
