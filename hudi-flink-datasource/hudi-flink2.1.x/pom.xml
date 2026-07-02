@@ -121,12 +121,6 @@
             <version>${flink2.1.version}</version>
             <scope>provided</scope>
         </dependency>
-        <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>flink-table-planner_2.12</artifactId>
-            <version>${flink2.1.version}</version>
-            <scope>provided</scope>
-        </dependency>
 
         <!-- Test dependencies -->
         <dependency>
