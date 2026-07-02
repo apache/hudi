@@ -48,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -3086,5 +3087,32 @@ public class TestHoodieSchema {
     // Unshredded variant
     HoodieSchema.Variant unshreddedVariant = HoodieSchema.createVariant();
     assertFalse(unshreddedVariant.getPlainTypedValueSchema().isPresent());
+  }
+
+  @Test
+  public void testFromAvroSchemaReturnsCanonicalInstance() {
+    Schema avroSchema = new Schema.Parser().parse(SAMPLE_RECORD_SCHEMA);
+
+    // Same Avro instance resolves to the same wrapper (identity fast path)
+    assertSame(HoodieSchema.fromAvroSchema(avroSchema), HoodieSchema.fromAvroSchema(avroSchema));
+
+    // Equal but distinct Avro instances converge on one canonical wrapper (value interning)
+    Schema reparsed = new Schema.Parser().parse(SAMPLE_RECORD_SCHEMA);
+    assertNotSame(avroSchema, reparsed);
+    assertSame(HoodieSchema.fromAvroSchema(avroSchema), HoodieSchema.fromAvroSchema(reparsed));
+  }
+
+  @Test
+  public void testSubSchemaNavigationReturnsCanonicalInstances() {
+    HoodieSchema record = HoodieSchema.parse(SAMPLE_RECORD_SCHEMA);
+    HoodieSchema arraySchema = record.getField("tip_history").get().schema();
+
+    // Repeated navigation yields the same wrapper instead of fresh wrappers per call
+    assertSame(arraySchema.getElementType(), arraySchema.getElementType());
+    HoodieSchema unionSchema = record.getField("email").get().schema();
+    assertSame(unionSchema.getTypes().get(1), unionSchema.getTypes().get(1));
+
+    // Navigated subschemas converge with independently converted equal schemas
+    assertSame(unionSchema.getTypes().get(1), HoodieSchema.fromAvroSchema(Schema.create(Schema.Type.STRING)));
   }
 }

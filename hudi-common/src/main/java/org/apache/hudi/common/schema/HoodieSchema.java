@@ -27,6 +27,8 @@ import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.Getter;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
@@ -93,6 +95,12 @@ import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 @Getter
 public class HoodieSchema implements Serializable {
   private static final long serialVersionUID = 1L;
+
+  // Avro-identity fast path onto the value-keyed HoodieSchemaCache, backing fromAvroSchema:
+  // records of one file share the same live Schema instance, so the per-record hot path is a
+  // single weak-identity hit with no wrapper allocation or type dispatch.
+  private static final Cache<Schema, HoodieSchema> AVRO_SCHEMA_CACHE =
+      Caffeine.newBuilder().weakKeys().maximumSize(1024).build();
 
   /**
    * Constant representing a null JSON value, equivalent to JsonProperties.NULL_VALUE.
@@ -338,13 +346,36 @@ public class HoodieSchema implements Serializable {
   /**
    * Factory method to create HoodieSchema from an Avro schema.
    *
+   * <p>Returns the canonical instance for the given schema, converting and interning it on
+   * first use: equal but distinct Avro schema instances converge on one shared wrapper, keyed
+   * on value equality through {@link HoodieSchemaCache}, with a weak identity fast path for
+   * the per-record hot path where all records of a file share the same live {@link Schema}
+   * instance.
+   *
+   * <p>Because the canonical wrapper may have been created from an equal but different Avro
+   * schema instance, {@code fromAvroSchema(s).getAvroSchema()} does not necessarily return
+   * {@code s} itself. Canonical instances are shared: neither the wrapper nor its underlying
+   * Avro schema may be mutated.
+   *
    * @param avroSchema the Avro schema to wrap
-   * @return new HoodieSchema instance
+   * @return the canonical HoodieSchema instance, or null if avroSchema is null
    */
   public static HoodieSchema fromAvroSchema(Schema avroSchema) {
     if (avroSchema == null) {
       return null;
     }
+    HoodieSchema canonical = AVRO_SCHEMA_CACHE.getIfPresent(avroSchema);
+    if (canonical == null) {
+      // getIfPresent/put rather than a computing get: construction may re-enter fromAvroSchema
+      // for subschemas (e.g. Variant validation), which a Caffeine loader must not do. A racy
+      // duplicate build converges on one instance through the value-keyed intern.
+      canonical = HoodieSchemaCache.intern(buildFromAvroSchema(avroSchema));
+      AVRO_SCHEMA_CACHE.put(avroSchema, canonical);
+    }
+    return canonical;
+  }
+
+  private static HoodieSchema buildFromAvroSchema(Schema avroSchema) {
     LogicalType logicalType = avroSchema.getLogicalType();
     if (logicalType != null) {
       if (logicalType instanceof LogicalTypes.Decimal) {

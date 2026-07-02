@@ -28,6 +28,10 @@ import com.github.benmanes.caffeine.cache.LoadingCache;
  * <p>This is a global cache which works for a JVM lifecycle.
  * A collection of schema instances are maintained.
  *
+ * <p>This value-keyed pool is the canonicalization mechanism behind
+ * {@link HoodieSchema#fromAvroSchema}, and can also be used directly to intern schemas
+ * produced without an Avro source (builders, converters).
+ *
  * <p>NOTE: The schema which is used frequently should be cached through this cache.
  */
 public class HoodieSchemaCache {
