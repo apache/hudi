@@ -71,6 +71,7 @@ import software.amazon.awssdk.services.glue.model.GetPartitionsRequest;
 import software.amazon.awssdk.services.glue.model.GetPartitionsResponse;
 import software.amazon.awssdk.services.glue.model.GetTableRequest;
 import software.amazon.awssdk.services.glue.model.KeySchemaElement;
+import software.amazon.awssdk.services.glue.model.PartitionError;
 import software.amazon.awssdk.services.glue.model.PartitionIndex;
 import software.amazon.awssdk.services.glue.model.PartitionIndexDescriptor;
 import software.amazon.awssdk.services.glue.model.PartitionInput;
@@ -437,8 +438,22 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
       BatchDeletePartitionResponse response = future.get();
       if (CollectionUtils.nonEmpty(response.errors())) {
-        throw new HoodieGlueSyncException("Fail to drop partitions to " + tableId(databaseName, tableName)
-            + " with error(s): " + response.errors());
+        // Dropping a partition that no longer exists is a no-op for an idempotent cleanup, so
+        // ignore EntityNotFoundException errors and only fail on other (e.g. permission/throttling) errors.
+        Map<Boolean, List<PartitionError>> errorsByIgnorable = response.errors().stream()
+            .collect(Collectors.partitioningBy(
+                error -> EntityNotFoundException.class.getSimpleName().equals(error.errorDetail().errorCode())));
+        List<PartitionError> ignoredErrors = errorsByIgnorable.get(true);
+        if (!ignoredErrors.isEmpty()) {
+          log.info("Ignored dropping {} non-existent partition(s) from table {}: {}", ignoredErrors.size(),
+              tableId(databaseName, tableName),
+              ignoredErrors.stream().map(PartitionError::partitionValues).collect(Collectors.toList()));
+        }
+        List<PartitionError> realErrors = errorsByIgnorable.get(false);
+        if (!realErrors.isEmpty()) {
+          throw new HoodieGlueSyncException("Fail to drop partitions to " + tableId(databaseName, tableName)
+              + " with error(s): " + realErrors);
+        }
       }
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to drop partitions to " + tableId(databaseName, tableName), e);
