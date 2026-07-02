@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -71,7 +72,8 @@ class TestSortOperatorGen {
     assertTrue(comparator.compare(row1, row2) < 0);
     assertTrue(comparator.compare(row2, row3) < 0);
     assertTrue(comparator.compare(row3, row4) < 0);
-    assertTrue(comparator.compare(nullRow, row1) < 0);
+    assertTrue(comparator.compare(nullRow, row1) > 0);
+    assertTrue(comparator.compare(row1, nullRow) < 0);
     assertEquals(0, comparator.compare(row4, row4));
   }
 
@@ -87,6 +89,41 @@ class TestSortOperatorGen {
     computer.putKey(GenericRowData.of(1), segment1, 0);
     computer.putKey(GenericRowData.of(2), segment2, 0);
 
+    assertTrue(computer.getNumKeyBytes() > 1);
+    assertTrue(computer.isKeyFullyDetermines());
+    assertTrue(computer.compareKey(segment1, 0, segment2, 0) < 0);
+  }
+
+  @Test
+  void testGeneratedNormalizedKeyComputerWithNullsLast() {
+    RowType rowType = RowType.of(new LogicalType[] {new IntType()}, new String[] {"id"});
+    NormalizedKeyComputer computer = new SortOperatorGen(rowType, new String[] {"id"})
+        .generateNormalizedKeyComputer("TestSortComputer")
+        .newInstance(Thread.currentThread().getContextClassLoader());
+    MemorySegment segment1 = MemorySegmentFactory.wrap(new byte[computer.getNumKeyBytes()]);
+    MemorySegment segment2 = MemorySegmentFactory.wrap(new byte[computer.getNumKeyBytes()]);
+
+    computer.putKey(GenericRowData.of(1), segment1, 0);
+    computer.putKey(GenericRowData.of((Object) null), segment2, 0);
+
+    assertTrue(computer.compareKey(segment1, 0, segment2, 0) < 0);
+  }
+
+  @Test
+  void testGeneratedNormalizedKeyComputerStopsAfterVariableLengthPrefix() {
+    RowType rowType = RowType.of(
+        new LogicalType[] {new VarCharType(), new IntType()},
+        new String[] {"name", "id"});
+    NormalizedKeyComputer computer = new SortOperatorGen(rowType, new String[] {"name", "id"})
+        .generateNormalizedKeyComputer("TestSortComputer")
+        .newInstance(Thread.currentThread().getContextClassLoader());
+    MemorySegment segment1 = MemorySegmentFactory.wrap(new byte[computer.getNumKeyBytes()]);
+    MemorySegment segment2 = MemorySegmentFactory.wrap(new byte[computer.getNumKeyBytes()]);
+
+    computer.putKey(GenericRowData.of(StringData.fromString("abcdefghx"), 2), segment1, 0);
+    computer.putKey(GenericRowData.of(StringData.fromString("abcdefghy"), 1), segment2, 0);
+
+    assertFalse(computer.isKeyFullyDetermines());
     assertEquals(0, computer.compareKey(segment1, 0, segment2, 0));
   }
 

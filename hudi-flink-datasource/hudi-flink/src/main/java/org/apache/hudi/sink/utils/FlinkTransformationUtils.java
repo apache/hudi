@@ -32,7 +32,7 @@ public final class FlinkTransformationUtils {
     if (memoryBytes <= 0) {
       return;
     }
-    int weight = Math.max(1, (int) (memoryBytes >> 20));
+    int weight = Math.max(1, (int) (memoryBytes >> 20)); // bytes to MiB
     transformation.declareManagedMemoryUseCaseAtOperatorScope(ManagedMemoryUseCase.OPERATOR, weight)
         .ifPresent(previousWeight -> {
           throw new IllegalStateException("Managed memory weight has been set, this should not happen.");
