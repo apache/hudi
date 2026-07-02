@@ -34,6 +34,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.schema.TestHoodieSchemaUtils.EVOLVED_SCHEMA;
@@ -949,5 +951,59 @@ public class TestHoodieSchemaCompatibility {
 
     assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(writerRecord, readerRecord, true, false));
     assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(readerRecord, writerRecord, true, false));
+  }
+
+  // Checker memoization must not depend on schema instance identity: recursion is detected on
+  // value-equal pairs, and incompatibilities are reported once per occurrence path even when
+  // subschema instances are shared.
+
+  private static final String RECURSIVE_NODE_SCHEMA = "{\"type\": \"record\", \"name\": \"Node\", \"fields\": ["
+      + "{\"name\": \"value\", \"type\": \"int\"},"
+      + "{\"name\": \"next\", \"type\": [\"null\", \"Node\"], \"default\": null}]}";
+
+  @Test
+  public void testRecursiveSchemaCompatibility() {
+    // Reader and writer are parsed independently, so no schema instances are shared between
+    // them; recursion must be detected by value, not by instance identity.
+    HoodieSchema reader = HoodieSchema.fromAvroSchema(new Schema.Parser().parse(RECURSIVE_NODE_SCHEMA));
+    HoodieSchema writer = HoodieSchema.fromAvroSchema(new Schema.Parser().parse(RECURSIVE_NODE_SCHEMA));
+    HoodieSchemaCompatibilityChecker.SchemaPairCompatibility result =
+        HoodieSchemaCompatibilityChecker.checkReaderWriterCompatibility(reader, writer, true);
+    assertEquals(HoodieSchemaCompatibilityChecker.SchemaCompatibilityType.COMPATIBLE, result.getType());
+  }
+
+  @Test
+  public void testRecursiveSchemaIncompatibilityReported() {
+    HoodieSchema reader = HoodieSchema.fromAvroSchema(new Schema.Parser().parse(RECURSIVE_NODE_SCHEMA));
+    HoodieSchema writer = HoodieSchema.fromAvroSchema(new Schema.Parser().parse(
+        RECURSIVE_NODE_SCHEMA.replace("\"type\": \"int\"", "\"type\": \"string\"")));
+    HoodieSchemaCompatibilityChecker.SchemaPairCompatibility result =
+        HoodieSchemaCompatibilityChecker.checkReaderWriterCompatibility(reader, writer, true);
+    assertEquals(HoodieSchemaCompatibilityChecker.SchemaCompatibilityType.INCOMPATIBLE, result.getType());
+    assertEquals(Collections.singletonList("/value"), incompatibilityLocations(result));
+  }
+
+  @Test
+  public void testSharedSubschemaIncompatibilityReportedAtEveryPath() {
+    // The named type Inner is referenced at two field paths, so in the parsed Avro schema both
+    // fields share one Schema instance. Each path must report its own incompatibility even when
+    // subschema instances (or future interned wrappers) collide.
+    String readerJson = "{\"type\": \"record\", \"name\": \"rec\", \"fields\": ["
+        + "{\"name\": \"f1\", \"type\": {\"type\": \"record\", \"name\": \"Inner\", \"fields\": ["
+        + "{\"name\": \"leaf\", \"type\": \"int\"}]}},"
+        + "{\"name\": \"f2\", \"type\": \"Inner\"}]}";
+    String writerJson = readerJson.replace("\"type\": \"int\"", "\"type\": \"string\"");
+    HoodieSchema reader = HoodieSchema.fromAvroSchema(new Schema.Parser().parse(readerJson));
+    HoodieSchema writer = HoodieSchema.fromAvroSchema(new Schema.Parser().parse(writerJson));
+    HoodieSchemaCompatibilityChecker.SchemaPairCompatibility result =
+        HoodieSchemaCompatibilityChecker.checkReaderWriterCompatibility(reader, writer, true);
+    assertEquals(HoodieSchemaCompatibilityChecker.SchemaCompatibilityType.INCOMPATIBLE, result.getType());
+    assertEquals(Arrays.asList("/f1/leaf", "/f2/leaf"), incompatibilityLocations(result));
+  }
+
+  private static List<String> incompatibilityLocations(HoodieSchemaCompatibilityChecker.SchemaPairCompatibility result) {
+    return result.getResult().getIncompatibilities().stream()
+        .map(HoodieSchemaCompatibilityChecker.Incompatibility::getLocation)
+        .collect(Collectors.toList());
   }
 }

@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +57,13 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * <ol>
  *   <li>Compatibility checks ignore schema name, unless schema is held inside
  *   a union</li>
+ *   <li>Memoization does not depend on schema instance identity. Avro keys its memo on
+ *   identity, assuming each subschema occurrence is a distinct instance; that assumption
+ *   does not hold for {@link HoodieSchema}, whose navigation returns fresh (or, in the
+ *   future, canonical interned) wrappers. Instead, recursion is detected with an
+ *   in-progress set keyed on value-equal schema pairs, and only compatible results are
+ *   memoized so every occurrence of an incompatible subschema reports its own field
+ *   path.</li>
  * </ol>
  */
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
@@ -136,8 +144,9 @@ public class HoodieSchemaCompatibilityChecker {
   /**
    * Reader/writer schema pair that can be used as a key in a hash map.
    * <p>
-   * This reader/writer pair differentiates Schema objects based on their system
-   * hash code.
+   * Schemas are compared by value equality, never by instance identity: {@link HoodieSchema}
+   * wrappers may be freshly allocated per navigation call or interned to canonical instances,
+   * so instance identity carries no meaning for the checker.
    */
   @RequiredArgsConstructor
   private static final class ReaderWriter {
@@ -149,7 +158,7 @@ public class HoodieSchemaCompatibilityChecker {
      */
     @Override
     public int hashCode() {
-      return System.identityHashCode(mReader) ^ System.identityHashCode(mWriter);
+      return Objects.hash(mReader, mWriter);
     }
 
     /**
@@ -161,8 +170,7 @@ public class HoodieSchemaCompatibilityChecker {
         return false;
       }
       final ReaderWriter that = (ReaderWriter) obj;
-      // Use pointer comparison here:
-      return (this.mReader == that.mReader) && (this.mWriter == that.mWriter);
+      return this.mReader.equals(that.mReader) && this.mWriter.equals(that.mWriter);
     }
 
     /**
@@ -182,7 +190,12 @@ public class HoodieSchemaCompatibilityChecker {
    * </p>
    */
   private static final class ReaderWriterCompatibilityChecker {
-    private final Map<ReaderWriter, SchemaCompatibilityResult> mMemoizeMap = new HashMap<>();
+    // Compatible results only: they carry no location state, so they are safe to reuse
+    // when the same value pair recurs at a different field path.
+    private final Map<ReaderWriter, SchemaCompatibilityResult> memoizedCompatibleResults = new HashMap<>();
+    // Value pairs currently being computed; re-entering one means a named type was reached
+    // through itself, i.e. genuine recursion.
+    private final Set<ReaderWriter> inProgressPairs = new HashSet<>();
     private final boolean checkNaming;
 
     public ReaderWriterCompatibilityChecker(boolean checkNaming) {
@@ -210,7 +223,7 @@ public class HoodieSchemaCompatibilityChecker {
     /**
      * Reports the compatibility of a reader/writer schema pair.
      * <p>
-     * Memorizes the compatibility results.
+     * Memoizes compatible results and breaks recursion on value-equal pairs.
      * </p>
      *
      * @param reader    Reader schema to test.
@@ -224,18 +237,21 @@ public class HoodieSchemaCompatibilityChecker {
                                                        final Deque<LocationInfo> locations) {
       log.debug("Checking compatibility of reader {} with writer {}", reader, writer);
       final ReaderWriter pair = new ReaderWriter(reader, writer);
-      SchemaCompatibilityResult result = mMemoizeMap.get(pair);
-      if (result != null) {
-        if (result.getCompatibilityType() == SchemaCompatibilityType.RECURSION_IN_PROGRESS) {
-          // Break the recursion here.
-          // schemas are compatible unless proven incompatible:
-          result = SchemaCompatibilityResult.compatible();
-        }
-      } else {
-        // Mark this reader/writer pair as "in progress":
-        mMemoizeMap.put(pair, SchemaCompatibilityResult.recursionInProgress());
-        result = calculateCompatibility(reader, writer, locations);
-        mMemoizeMap.put(pair, result);
+      final SchemaCompatibilityResult memoized = memoizedCompatibleResults.get(pair);
+      if (memoized != null) {
+        return memoized;
+      }
+      if (!inProgressPairs.add(pair)) {
+        // Break the recursion here.
+        // schemas are compatible unless proven incompatible:
+        return SchemaCompatibilityResult.compatible();
+      }
+      SchemaCompatibilityResult result = calculateCompatibility(reader, writer, locations);
+      inProgressPairs.remove(pair);
+      if (result.getCompatibilityType() == SchemaCompatibilityType.COMPATIBLE) {
+        // Incompatible results embed the field path they were found at, so they are
+        // recomputed per occurrence; memoizing them would report only the first path.
+        memoizedCompatibleResults.put(pair, result);
       }
       return result;
     }
@@ -590,12 +606,7 @@ public class HoodieSchemaCompatibilityChecker {
    * Identifies the type of schema compatibility result.
    */
   public enum SchemaCompatibilityType {
-    COMPATIBLE, INCOMPATIBLE,
-
-    /**
-     * Used internally to tag a reader/writer schema pair and prevent recursion.
-     */
-    RECURSION_IN_PROGRESS
+    COMPATIBLE, INCOMPATIBLE
   }
 
   public enum SchemaIncompatibilityType {
@@ -634,11 +645,9 @@ public class HoodieSchemaCompatibilityChecker {
     SchemaCompatibilityType compatibilityType;
     // the below fields are only valid if INCOMPATIBLE
     List<Incompatibility> incompatibilities;
-    // cached objects for stateless details
+    // cached object for stateless details
     private static final SchemaCompatibilityResult COMPATIBLE = new SchemaCompatibilityResult(
         SchemaCompatibilityType.COMPATIBLE, Collections.emptyList());
-    private static final SchemaCompatibilityResult RECURSION_IN_PROGRESS = new SchemaCompatibilityResult(
-        SchemaCompatibilityType.RECURSION_IN_PROGRESS, Collections.emptyList());
 
     /**
      * Returns a details object representing a compatible schema pair.
@@ -648,17 +657,6 @@ public class HoodieSchemaCompatibilityChecker {
      */
     public static SchemaCompatibilityResult compatible() {
       return COMPATIBLE;
-    }
-
-    /**
-     * Returns a details object representing a state indicating that recursion is in
-     * progress.
-     *
-     * @return a SchemaCompatibilityDetails object with RECURSION_IN_PROGRESS
-     * SchemaCompatibilityType, and no other state.
-     */
-    public static SchemaCompatibilityResult recursionInProgress() {
-      return RECURSION_IN_PROGRESS;
     }
 
     /**
