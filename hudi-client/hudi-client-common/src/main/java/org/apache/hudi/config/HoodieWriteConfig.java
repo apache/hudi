@@ -3058,6 +3058,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieTTLConfig.MAX_PARTITION_TO_DELETE);
   }
 
+  public Integer getPartitionTTLStatsMaxParallelism() {
+    return getInt(HoodieTTLConfig.STATS_MAX_PARALLELISM);
+  }
+
   public boolean isSecondaryIndexEnabled() {
     return metadataConfig.isSecondaryIndexEnabled();
   }
@@ -3873,6 +3877,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       checkArgument(lookbackCommits >= 0,
           String.format("%s must be non-negative, but was %d",
               ROLLING_METADATA_TIMELINE_LOOKBACK_COMMITS.key(), lookbackCommits));
+
+      int ttlStatsMaxParallelism = writeConfig.getInt(HoodieTTLConfig.STATS_MAX_PARALLELISM);
+      checkArgument(ttlStatsMaxParallelism > 0,
+          String.format("%s must be positive, but was %d",
+              HoodieTTLConfig.STATS_MAX_PARALLELISM.key(), ttlStatsMaxParallelism));
     }
 
     public HoodieWriteConfig build() {

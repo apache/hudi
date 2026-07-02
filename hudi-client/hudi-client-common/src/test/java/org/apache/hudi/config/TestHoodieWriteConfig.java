@@ -50,6 +50,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -122,6 +123,27 @@ public class TestHoodieWriteConfig {
           assertEquals(version, HoodieWriteConfig.newBuilder()
               .withPath("/tmp").withProperties(props).build().getWriteVersion());
         });
+  }
+
+  @Test
+  public void testPartitionTTLStatsMaxParallelismMustBePositive() {
+    // A non-positive value (0 or negative) is a misconfiguration and must fail fast at build time,
+    // rather than being silently coerced when TTL stats collection runs.
+    for (int invalid : new int[] {0, -5}) {
+      IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+          () -> HoodieWriteConfig.newBuilder().withPath("/tmp")
+              .withProps(Collections.singletonMap(
+                  HoodieTTLConfig.STATS_MAX_PARALLELISM.key(), String.valueOf(invalid)))
+              .build());
+      assertTrue(e.getMessage().contains(HoodieTTLConfig.STATS_MAX_PARALLELISM.key()),
+          "Validation error should mention the offending config key");
+    }
+
+    // A positive value builds successfully.
+    assertEquals(8, HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withProps(java.util.Collections.singletonMap(
+            HoodieTTLConfig.STATS_MAX_PARALLELISM.key(), "8"))
+        .build().getPartitionTTLStatsMaxParallelism());
   }
 
   @Test

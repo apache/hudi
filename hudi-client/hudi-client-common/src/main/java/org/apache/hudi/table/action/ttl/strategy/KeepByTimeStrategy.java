@@ -85,7 +85,7 @@ public class KeepByTimeStrategy extends PartitionTTLStrategy {
       log.info("Candidate partition paths list is empty, skip TTL stats collection");
       return Collections.emptyMap();
     }
-    int statsParallelism = Math.min(partitionPaths.size(), 200);
+    int statsParallelism = Math.min(partitionPaths.size(), writeConfig.getPartitionTTLStatsMaxParallelism());
     return hoodieTable.getContext().map(partitionPaths, partitionPath -> {
       Option<String> partitionLastModifiedTime = hoodieTable.getHoodieView()
           .getLatestFileSlicesBeforeOrOn(partitionPath, instantTime, true)
