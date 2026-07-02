@@ -15,7 +15,28 @@
   limitations under the License.
 -->
 
-# RFC-100 Part 2: External Blob Cleanup for Unstructured Data
+# RFC-100 Part 2: External Blob Cleanup for Unstructured Data [ABANDONED -- superseded by design v2]
+
+> **This design (SI+RLI) is ABANDONED (2026-07-02)** in favor of
+> [rfc-100-blob-cleaner-design-v2.md](rfc-100-blob-cleaner-design-v2.md) -- a file-granularity
+> blob reference registry with two-phase deletion. The decision was driven by code-verified
+> defects, all structural to the record-granular, snapshot-semantics secondary-index approach
+> this document uses for Stage 2:
+>
+> 1. A secondary index makes `insert_overwrite` / `insert_overwrite_table` / `delete_partition`
+>    throw table-wide (`HoodieBackedTableMetadataWriter.updateSecondaryIndexIfPresent:1648`),
+>    contradicting this document's own operation-coverage claims (C7, R7).
+> 2. SI reads reflect only the latest snapshot, so the problem statement's retained-slice
+>    liveness rule cannot be implemented: a blob referenced only by a superseded-but-retained
+>    slice gets deleted, breaking time-travel and incremental reads inside the retention
+>    window (R1).
+> 3. The Stage 2 `cleaned_fg_ids` discount deletes blobs still referenced by the retained
+>    slices of partially-cleaned file groups -- and partial cleans are the norm (R1).
+>
+> See the v2 document's Motivation section (M1-M3) for the full analysis. Carried forward from
+> this document: the `CleanPlanner`/`FileGroupCleanResult` refactoring, the `hasBlobColumns()`
+> gate, the sidecar-artifact convention, and the writer `preCommit` veto (reduced in scope in
+> v2). The rest is retained for historical context only.
 
 ## Proposers
 
@@ -28,6 +49,8 @@
 - @yihua
 
 ## Status
+
+ABANDONED (2026-07-02) -- superseded by [design v2](rfc-100-blob-cleaner-design-v2.md).
 
 Issue: https://github.com/apache/hudi/issues/18111
 
