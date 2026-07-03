@@ -185,6 +185,15 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
       Assertions.assertEquals(Sets.newHashSet(partitions[0], partitions[1]),
           result.getPartitionToReplaceFileIds().keySet());
       Assertions.assertEquals(10, readRecords(partitions).size());
+
+      // Idempotency: the partitions we just replaced still linger in getAllPartitionPaths() until
+      // the cleaner runs, and their event time is derived from the (unchanged) path. Without the
+      // live-file-slice guard they would be re-selected here, producing an endless stream of empty
+      // replace commits. A second run must find nothing to delete.
+      String instantTime2 = client.startDeletePartitionCommit(metaClient);
+      HoodieWriteResult result2 = client.managePartitionTTL(instantTime2);
+      Assertions.assertTrue(result2.getPartitionToReplaceFileIds().isEmpty(),
+          "Already-deleted partitions must not be re-selected on the next TTL batch");
     }
   }
 

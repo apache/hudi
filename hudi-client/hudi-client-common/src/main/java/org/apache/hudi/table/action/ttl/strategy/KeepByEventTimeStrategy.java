@@ -161,7 +161,27 @@ public class KeepByEventTimeStrategy extends KeepByTimeStrategy {
     return partitionPathsForTTL.stream().parallel()
         .filter(path -> isPartitionExpiredByEventTime(
             path, formatter, timeSegStartIndex, segCount, cutoffMillis, shouldDeleteHiveDefaultPartition, hiveStylePartitioning))
+        // A partition emptied by a previous TTL replace commit keeps showing up in
+        // getAllPartitionPaths() until the cleaner physically removes it, and its event time is
+        // derived from the (unchanged) path, so it would be re-selected on every batch -- issuing
+        // an empty replace commit each time and never converging. Keep only partitions that still
+        // have a live file slice so the strategy is idempotent, mirroring KeepByTimeStrategy which
+        // keys off the surviving slices' last commit time and thus naturally skips deleted ones.
+        .filter(this::hasLiveFileSlice)
         .collect(Collectors.toList());
+  }
+
+  /**
+   * Whether the partition still has at least one live file slice as of {@code instantTime}.
+   * File groups replaced by an earlier TTL delete are excluded by the file system view, so an
+   * already-deleted partition returns {@code false} here even while its directory lingers on
+   * storage awaiting the cleaner.
+   */
+  private boolean hasLiveFileSlice(String partitionPath) {
+    return hoodieTable.getHoodieView()
+        .getLatestFileSlicesBeforeOrOn(partitionPath, instantTime, true)
+        .findAny()
+        .isPresent();
   }
 
   /**
