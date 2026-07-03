@@ -1689,7 +1689,10 @@ public class HoodieSchema implements Serializable {
 
       try {
         Schema avroSchema = avroParser.parse(jsonSchema);
-        return fromAvroSchema(avroSchema);
+        // Return a fresh, owned instance rather than the interned canonical one: parsed schemas
+        // are frequently mutated by callers (e.g. addProp in client-init callbacks), and mutating
+        // a shared interned instance would corrupt it for every other holder of the same schema.
+        return buildFromAvroSchema(avroSchema);
       } catch (IllegalArgumentException e) {
         throw new HoodieAvroSchemaException("Invalid schema string format", e);
       } catch (Exception e) {
@@ -1709,7 +1712,8 @@ public class HoodieSchema implements Serializable {
 
       try {
         Schema avroSchema = avroParser.parse(inputStream);
-        return fromAvroSchema(avroSchema);
+        // See parse(String): return an owned, mutable instance, not the interned canonical one.
+        return buildFromAvroSchema(avroSchema);
       } catch (IOException e) {
         throw new HoodieIOException("Failed to parse schema from InputStream", e);
       } catch (IllegalArgumentException e) {

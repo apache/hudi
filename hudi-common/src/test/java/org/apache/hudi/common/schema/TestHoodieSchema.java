@@ -3171,4 +3171,21 @@ public class TestHoodieSchema {
     assertNotNull(wrapped);
     assertEquals(HoodieSchemaType.RECORD, wrapped.getType());
   }
+
+  @Test
+  public void testParseReturnsOwnedMutableInstance() {
+    // parse() must return a fresh, owned instance: callers (e.g. client-init callbacks) mutate the
+    // parsed schema via addProp, and if parse returned the shared interned instance that mutation
+    // would leak to every other holder of the same schema string.
+    String json = "{\"type\": \"record\", \"name\": \"OwnedRec\", \"fields\": ["
+        + "{\"name\": \"f\", \"type\": \"int\"}]}";
+    HoodieSchema first = HoodieSchema.parse(json);
+    first.addProp("custom.prop", "v");
+    assertTrue(first.getObjectProps().containsKey("custom.prop"));
+
+    // A subsequent parse of the same string must not observe the mutation.
+    HoodieSchema second = HoodieSchema.parse(json);
+    assertNotSame(first, second);
+    assertFalse(second.getObjectProps().containsKey("custom.prop"));
+  }
 }
