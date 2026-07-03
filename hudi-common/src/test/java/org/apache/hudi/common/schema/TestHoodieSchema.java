@@ -3150,9 +3150,11 @@ public class TestHoodieSchema {
 
   @Test
   public void testInterningToleratesNonSerializableSchema() {
-    // Two distinct nested records that share the name "record": valid in memory, but
-    // avroSchema.toString() throws "Can't redefine: record". Projection/reader paths build such
-    // schemas, so interning must tolerate them rather than fail on the content-key toString.
+    // Two distinct nested records that share the name "record" -- valid in memory, but not always
+    // serializable to JSON: some Avro versions (e.g. 1.11.x) throw SchemaParseException
+    // ("Can't redefine: record") from toString(), others (1.12.x) do not. Projection/reader paths
+    // build such schemas, so interning -- which derives its content key from toString() -- must
+    // tolerate them on any Avro version rather than propagate the failure.
     Schema inner1 = Schema.createRecord("record", null, null, false);
     inner1.setFields(Collections.singletonList(
         new Schema.Field("a", Schema.create(Schema.Type.INT), null, (Object) null)));
@@ -3163,10 +3165,9 @@ public class TestHoodieSchema {
     parent.setFields(Arrays.asList(
         new Schema.Field("f1", inner1, null, (Object) null),
         new Schema.Field("f2", inner2, null, (Object) null)));
-    // Precondition: this schema cannot be serialized to JSON.
-    assertThrows(org.apache.avro.SchemaParseException.class, parent::toString);
 
-    // Interning must not propagate that failure; it returns the schema uncached.
+    // Interning must not propagate a toString() failure; it returns the schema (uncached when the
+    // content key cannot be computed).
     HoodieSchema wrapped = HoodieSchema.fromAvroSchema(parent);
     assertNotNull(wrapped);
     assertEquals(HoodieSchemaType.RECORD, wrapped.getType());
