@@ -20,6 +20,7 @@ package org.apache.hudi.common.schema;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
+import org.apache.avro.AvroRuntimeException;
 
 /**
  * A global cache for HoodieSchema instances to ensure that there is only one
@@ -53,11 +54,23 @@ public class HoodieSchemaCache {
    * <p>Two schemas converge on one canonical instance only when their full serialized form
    * (including doc strings and aliases) is identical; see the class javadoc.
    *
+   * <p>A schema that is valid in memory but cannot be serialized to JSON -- e.g. two distinct
+   * nested records that share a name, as some projection/reader paths produce -- has no content
+   * key, so it is returned uncached instead of interned. Canonicalization is only a
+   * de-duplication optimization, so skipping it stays correct.
+   *
    * @param schema schema to get
    * @return if found, return the exist schema variable, otherwise return the param itself.
    */
   public static HoodieSchema intern(HoodieSchema schema) {
-    return SCHEMA_CACHE.get(new SchemaContentKey(schema));
+    SchemaContentKey key;
+    try {
+      key = new SchemaContentKey(schema);
+    } catch (AvroRuntimeException e) {
+      // Not serializable -> no content key derivable; skip interning rather than fail the caller.
+      return schema;
+    }
+    return SCHEMA_CACHE.get(key);
   }
 
   /**
