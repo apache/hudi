@@ -72,7 +72,11 @@ class TestBulkInsertRowWriterCommitCoverage extends HoodieSparkSqlTestBase {
   }
 
   test("Test row-writer insert overwrite with dynamic partitions") {
-    withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert") {
+    // Dynamic overwrite mode is required so that only the partitions present in the
+    // incoming data are replaced; the default (static) mode overwrites the whole table.
+    withSQLConf(
+      "hoodie.spark.sql.insert.into.operation" -> "bulk_insert",
+      "hoodie.datasource.overwrite.mode" -> "dynamic") {
       withTempDir { tmp =>
         val tableName = generateTableName
         spark.sql(

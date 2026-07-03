@@ -129,10 +129,15 @@ class TestMergeIntoWriteCoverage extends HoodieSparkSqlTestBase {
            | (2, 'a2', 1, 'p1')
          """.stripMargin)
 
+      // The source must expose the ordering field (ts) so MERGE can resolve the
+      // table's ordering-field association, and the partition field (pt) so the
+      // delete can be routed to the record's partition. The delete also carries a
+      // higher ordering value than the stored record so event-time ordering applies
+      // the delete rather than discarding it as stale.
       spark.sql(
         s"""
            | merge into $tableName t
-           | using (select 1 as id) s
+           | using (select 1 as id, 'a1' as name, 2 as ts, 'p1' as pt) s
            | on t.id = s.id
            | when matched then delete
          """.stripMargin)
