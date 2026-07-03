@@ -18,6 +18,9 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.avro.VariantSchemaUtils;
+import org.apache.hudi.avro.VariantShreddingRuntime;
+import org.apache.hudi.avro.VariantShreddingSchemaInferrer;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -42,6 +45,7 @@ import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.List;
 
 public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
 
@@ -51,6 +55,30 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
 
   @Override
   protected HoodieFileWriter newParquetFileWriter(
+      String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
+      TaskContextSupplier taskContextSupplier) throws IOException {
+    List<String> inferableColumns = VariantSchemaUtils.getInferableVariantColumns(config, schema);
+    if (!inferableColumns.isEmpty()) {
+      Option<VariantShreddingSchemaInferrer> inferrer = VariantShreddingRuntime.lookupInferrer();
+      if (inferrer.isPresent()) {
+        // The row write support resolves its HoodieSchema from the config (hoodie.write.schema /
+        // hoodie.avro.schema), not the schema argument, so the deferred creation splices a copied
+        // config. The schema argument stays original: it flows through the global schema cache
+        // (getCachedSchema), which must never see per-file spliced schemas, and its StructType is
+        // identical either way (the variant column remains VariantType).
+        return new VariantShreddingInferenceFileWriter(
+            inferableColumns,
+            new SparkVariantSampleExtractor(inferableColumns, HoodieInternalRowUtils.getCachedSchema(schema)),
+            inferrer.get(),
+            inferred -> createParquetFileWriter(instantTime, path,
+                VariantSchemaUtils.applyInferredShreddingToConfig(config, inferred), schema, taskContextSupplier),
+            config.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE));
+      }
+    }
+    return createParquetFileWriter(instantTime, path, config, schema, taskContextSupplier);
+  }
+
+  private HoodieFileWriter createParquetFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);

@@ -239,10 +239,16 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
           .flatMap(s -> s.hasFields() ? s.getField(field.name()) : Option.empty())
           .map(HoodieSchemaField::schema)
           .orElse(null);
+      // Unwrap the field's own nullable union too (e.g. ["null", variant] -> variant), like
+      // processNestedDataType does; otherwise nullable variant columns fail the VARIANT check
+      // below and emit a false schema-mismatch warning (shredding still happens via the
+      // processNestedDataType fallthrough, so this only affects which branch handles it).
+      HoodieSchema resolvedFieldSchema = fieldHoodieSchema != null && fieldHoodieSchema.isNullable()
+          ? fieldHoodieSchema.getNonNullType() : fieldHoodieSchema;
 
       if (SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantType(dataType)) {
-        if (fieldHoodieSchema != null && fieldHoodieSchema.getType() == HoodieSchemaType.VARIANT) {
-          HoodieSchema.Variant variantSchema = (HoodieSchema.Variant) fieldHoodieSchema;
+        if (resolvedFieldSchema != null && resolvedFieldSchema.getType() == HoodieSchemaType.VARIANT) {
+          HoodieSchema.Variant variantSchema = (HoodieSchema.Variant) resolvedFieldSchema;
           // If typed_value field exists, the variant is shredded
           if (variantSchema.getTypedValueField().isPresent()) {
             // Use plain types for SparkShreddingUtils (unwraps nested {value, typed_value} structs if present)
@@ -881,8 +887,9 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
                   .named(MAP_REPEATED_NAME))
           .named(structField.name());
     } else if (dataType instanceof StructType) {
+      StructType nestedStruct = (StructType) dataType;
       Types.GroupBuilder<GroupType> groupBuilder = Types.buildGroup(repetition);
-      Arrays.stream(((StructType) dataType).fields()).forEach(field -> {
+      Arrays.stream(nestedStruct.fields()).forEach(field -> {
         // Note: Cannot use HoodieSchemaField::schema method reference due to Java 17 compilation ambiguity
         HoodieSchema nestedFieldSchema = Option.ofNullable(resolvedSchema)
             .flatMap(s -> s.getField(field.name()))
@@ -890,7 +897,15 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
             .orElse(null);
         groupBuilder.addField(convertField(nestedFieldSchema, field));
       });
-      return groupBuilder.named(structField.name());
+      // A shredded variant column reaches here as a marked struct (the VariantType was replaced by
+      // its {metadata, value, typed_value} shredding schema). Tag the parquet group with the VARIANT
+      // logical type so external readers recognize it as a Variant, matching Spark's native shredded
+      // parquet schema. No-op on Spark 4.0/3.x (the annotation only exists in parquet 1.16+).
+      Types.GroupBuilder<GroupType> taggedBuilder =
+          SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantShreddingStruct(nestedStruct)
+              ? SparkAdapterSupport$.MODULE$.sparkAdapter().applyVariantLogicalType(groupBuilder)
+              : groupBuilder;
+      return taggedBuilder.named(structField.name());
     } else {
       throw new UnsupportedOperationException("Unsupported type: " + dataType);
     }

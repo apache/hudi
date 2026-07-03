@@ -21,10 +21,12 @@ package org.apache.hudi.io.storage.hadoop;
 
 import org.apache.hudi.avro.VariantSchemaUtils;
 import org.apache.hudi.avro.VariantShreddingProvider;
+import org.apache.hudi.avro.VariantShreddingRuntime;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -98,16 +100,14 @@ final class HoodieVariantReconstruction {
     for (int i = 0; i < requestedFields.size(); i++) {
       HoodieSchemaField requestedField = requestedFields.get(i);
       Option<HoodieSchemaField> fileField = fileSchema.getField(requestedField.name());
-      if (fileField.isPresent() && isShreddedVariant(fileField.get().schema())) {
+      if (fileField.isPresent() && isShreddedVariantTarget(requestedField.schema(), fileField.get().schema())) {
         isTarget[i] = true;
         anyTarget = true;
-        // Read this column in its on-disk shredded shape.
-        intermediateFields.add(requestedField.withSchema(fileField.get().schema()));
+        // Read this column in its on-disk shredded shape. createNewSchemaField: the requested
+        // schema's avro fields are position-attached and cannot be reused in a new record.
+        intermediateFields.add(HoodieSchemaUtils.createNewSchemaField(requestedField.withSchema(fileField.get().schema())));
       } else {
-        // Copy non-target fields too (withSchema makes a fresh Avro Field): reusing the requested
-        // field's Avro Field, already bound to the requested record, would fail Schema.setFields with
-        // "Field already used" when building the intermediate record below.
-        intermediateFields.add(requestedField.withSchema(requestedField.schema()));
+        intermediateFields.add(HoodieSchemaUtils.createNewSchemaField(requestedField));
       }
     }
     if (!anyTarget) {
@@ -173,10 +173,21 @@ final class HoodieVariantReconstruction {
     return out;
   }
 
-  private static boolean isShreddedVariant(HoodieSchema schema) {
-    HoodieSchema unwrapped = unwrapNullable(schema);
-    return unwrapped.getType() == HoodieSchemaType.VARIANT
-        && ((HoodieSchema.Variant) unwrapped).isShredded();
+  /**
+   * Whether this column must be read in its on-disk shredded shape and reconstructed. The file
+   * schema comes from converting the parquet footer MessageType, which loses the variant
+   * logical type (variant groups come back as plain records), so the on-disk side is detected
+   * by SHAPE, anchored by the requested side: the requested column (from the table schema,
+   * logical type intact) must be a variant for the shape match to count.
+   */
+  private static boolean isShreddedVariantTarget(HoodieSchema requestedFieldSchema, HoodieSchema fileFieldSchema) {
+    HoodieSchema file = unwrapNullable(fileFieldSchema);
+    if (file.getType() == HoodieSchemaType.VARIANT && ((HoodieSchema.Variant) file).isShredded()) {
+      return true;
+    }
+    HoodieSchema requested = unwrapNullable(requestedFieldSchema);
+    return requested.getType() == HoodieSchemaType.VARIANT
+        && VariantSchemaUtils.isShreddedVariantShape(file);
   }
 
   private static HoodieSchema unwrapNullable(HoodieSchema schema) {
@@ -187,7 +198,7 @@ final class HoodieVariantReconstruction {
     String providerClass = storage.getConf()
         .getString(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key()).orElse(null);
     if (providerClass == null || providerClass.isEmpty()) {
-      providerClass = VariantShreddingProvider.detectProviderClassOnClasspath();
+      providerClass = VariantShreddingRuntime.getProviderClass().orElse(null);
     }
     return providerClass == null ? null : (VariantShreddingProvider) ReflectionUtils.loadClass(providerClass);
   }
