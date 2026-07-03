@@ -486,7 +486,7 @@ public class TestAvroSchemaEvolutionUtils {
     );
     evolvedRecord = (Types.RecordType)InternalSchemaBuilder.getBuilder().refreshNewId(evolvedRecord, new AtomicInteger(0));
     HoodieSchema evolvedSchema = InternalSchemaConverter.convert(evolvedRecord, "test1");
-    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(evolvedSchema.getAvroSchema(), oldSchema, false);
+    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(evolvedSchema, oldSchema, false);
     Types.RecordType checkedRecord = Types.RecordType.get(
         Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),
@@ -541,7 +541,7 @@ public class TestAvroSchemaEvolutionUtils {
         + "{\"name\":\"d2\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null}]}");
 
     HoodieSchema simpleReconcileSchema = InternalSchemaConverter.convert(AvroSchemaEvolutionUtils
-        .reconcileSchema(incomingSchema.getAvroSchema(), InternalSchemaConverter.convert(schema), false), "schemaNameFallback");
+        .reconcileSchema(incomingSchema, InternalSchemaConverter.convert(schema), false), "schemaNameFallback");
     Assertions.assertEquals(simpleCheckSchema, simpleReconcileSchema);
   }
 
@@ -563,7 +563,7 @@ public class TestAvroSchemaEvolutionUtils {
     InternalSchema oldInternalSchema = InternalSchemaConverter.convert(oldSchema);
     // set a non-default schema id for old table schema, e.g., 2.
     oldInternalSchema.setSchemaId(2);
-    InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(incomingSchema.getAvroSchema(), oldInternalSchema, false);
+    InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(incomingSchema, oldInternalSchema, false);
     // the evolved schema should be the old table schema, since there is no type change at all.
     Assertions.assertEquals(oldInternalSchema, evolvedSchema);
   }
