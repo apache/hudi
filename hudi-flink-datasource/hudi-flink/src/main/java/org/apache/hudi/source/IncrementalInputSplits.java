@@ -147,7 +147,7 @@ public class IncrementalInputSplits implements Serializable {
     IncrementalQueryAnalyzer.QueryContext analyzingResult = analyzer.analyze();
 
     if (analyzingResult.isEmpty()) {
-      log.info("No new instant found for the table under path " + path + ", skip reading");
+      log.info("No new instant found for the table under path {}, skip reading", path);
       return Result.EMPTY;
     }
     final HoodieTimeline commitTimeline = analyzingResult.getActiveTimeline();
@@ -276,7 +276,7 @@ public class IncrementalInputSplits implements Serializable {
     IncrementalQueryAnalyzer.QueryContext queryContext = analyzer.analyze();
 
     if (queryContext.isEmpty()) {
-      log.info("No new instant found for the table under path " + path + ", skip reading");
+      log.info("No new instant found for the table under path {}, skip reading", path);
       return Result.EMPTY;
     }
 
@@ -501,8 +501,7 @@ public class IncrementalInputSplits implements Serializable {
       double total = partitions.size();
       double selectedNum = selectedPartitions.size();
       double percentPruned = total == 0 ? 0 : (1 - selectedNum / total) * 100;
-      log.info("Selected " + selectedNum + " partitions out of " + total
-          + ", pruned " + percentPruned + "% partitions.");
+      log.info("Selected {} partitions out of {}, pruned {}% partitions.", selectedNum, total, percentPruned);
       return selectedPartitions;
     }
     return partitions;

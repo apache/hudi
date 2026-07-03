@@ -471,7 +471,7 @@ public class HoodieTableSource extends FileIndexReader implements
     }
     StringJoiner joiner = new StringJoiner(" and ");
     partitionFilters.forEach(f -> joiner.add(f.asSummaryString()));
-    log.info("Partition pruner for hoodie source, condition is:\n" + joiner);
+    log.info("Partition pruner for hoodie source, condition is:\n{}", joiner);
     List<ExpressionEvaluators.Evaluator> evaluators = ExpressionEvaluators.fromExpression(partitionFilters);
     List<DataType> partitionTypes = this.partitionKeys.stream().map(name ->
             this.schema.getColumn(name).orElseThrow(() -> new HoodieValidationException("Field " + name + " does not exist")))

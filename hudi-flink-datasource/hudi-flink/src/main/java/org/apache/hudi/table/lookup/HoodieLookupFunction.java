@@ -145,7 +145,7 @@ public class HoodieLookupFunction extends LookupFunction implements Serializable
     // Determine whether to reload data by comparing instant
     if (latestCommitInstant.get().equals(currentCommit)) {
       scheduleNextLoad();
-      log.info("Ignore loading data because the commit instant " + currentCommit + " has not changed.");
+      log.info("Ignore loading data because the commit instant {} has not changed.", currentCommit);
       return;
     }
 

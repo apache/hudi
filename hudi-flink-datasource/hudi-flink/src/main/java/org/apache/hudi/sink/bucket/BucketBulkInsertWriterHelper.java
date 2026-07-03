@@ -64,7 +64,7 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
       String partitionPath = keyGen.getPartitionPath(record);
       String fileId = tuple.getString(0).toString();
       if ((lastFileId == null) || !lastFileId.equals(fileId)) {
-        log.info("Creating new file for partition path " + partitionPath);
+        log.info("Creating new file for partition path {}", partitionPath);
         handle = getRowCreateHandle(partitionPath, fileId);
         lastFileId = fileId;
       }

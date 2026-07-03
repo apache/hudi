@@ -149,8 +149,7 @@ public class OptionsInference {
         conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS, hashingConfig.getExpressions());
         conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_RULE, hashingConfig.getRule());
         conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, hashingConfig.getDefaultBucketNumber());
-        log.info("Loaded Latest Hashing Config " + hashingConfig
-            + ". Reset hoodie.bucket.index.num.buckets to " + hashingConfig.getDefaultBucketNumber());
+        log.info("Loaded Latest Hashing Config {}. Reset hoodie.bucket.index.num.buckets to {}", hashingConfig, hashingConfig.getDefaultBucketNumber());
       }
     }
   }
