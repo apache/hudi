@@ -37,11 +37,8 @@ import org.apache.spark.sql.util.SchemaUtils.restoreOriginalOutputNames
  * NOTE: This class is borrowed from Spark 3.2.1, with modifications adapting it to handle [[HoodieBaseRelation]],
  *       instead of [[HadoopFsRelation]]
  */
-abstract class BaseHoodieNestedSchemaPruning extends Rule[LogicalPlan] {
+class HoodieNestedSchemaPruning extends Rule[LogicalPlan] {
   import org.apache.spark.sql.catalyst.expressions.SchemaPruning._
-
-  // Prune the given output to make it consistent with `requiredSchema`.
-  protected def getPrunedOutput(output: Seq[AttributeReference], requiredSchema: StructType): Seq[AttributeReference]
 
   override def apply(plan: LogicalPlan): LogicalPlan =
     if (conf.nestedSchemaPruningEnabled) {
@@ -50,13 +47,51 @@ abstract class BaseHoodieNestedSchemaPruning extends Rule[LogicalPlan] {
       plan
     }
 
-  protected def apply0(plan: LogicalPlan): LogicalPlan
+  private def apply0(plan: LogicalPlan): LogicalPlan =
+    plan transformDown {
+      // NOTE: The relation is matched by type rather than by destructuring [[LogicalRelation]],
+      //       since the arity of its unapply differs across the Spark versions this module
+      //       compiles against. This is modified to accommodate for Hudi's custom relations,
+      //       given that original [[NestedSchemaPruning]] rule is tightly coupled w/
+      //       [[HadoopFsRelation]]
+      // TODO generalize to any file-based relation
+      case op @ PhysicalOperation(projects, filters, l: LogicalRelation) =>
+        l.relation match {
+          case relation: HoodieBaseRelation if relation.canPruneRelationSchema =>
+            prunePhysicalColumns(l.output, projects, filters, relation.dataSchema,
+              prunedDataSchema => {
+                val prunedRelation =
+                  relation.updatePrunedDataSchema(prunedSchema = prunedDataSchema)
+                buildPrunedRelation(l, prunedRelation)
+              }).getOrElse(op)
+          case _ => op
+        }
+    }
+
+  // Prune the given output to make it consistent with `requiredSchema`.
+  private def getPrunedOutput(output: Seq[AttributeReference],
+                              requiredSchema: StructType): Seq[AttributeReference] = {
+    // We need to replace the expression ids of the pruned relation output attributes
+    // with the expression ids of the original relation output attributes so that
+    // references to the original relation's output are not broken
+    val outputIdMap = output.map(att => (att.name, att.exprId)).toMap
+    // NOTE: The attributes are constructed inline (equivalent to StructType#toAttributes before
+    //       Spark 3.5 and DataTypeUtils#toAttributes since, see SPARK-44353) so that this code
+    //       compiles against every supported Spark version
+    requiredSchema
+      .map(f => AttributeReference(f.name, f.dataType, f.nullable, f.metadata)())
+      .map {
+        case att if outputIdMap.contains(att.name) =>
+          att.withExprId(outputIdMap(att.name))
+        case att => att
+      }
+  }
 
   /**
    * This method returns optional logical plan. `None` is returned if no nested field is required or
    * all nested fields are required.
    */
-  protected def prunePhysicalColumns(output: Seq[AttributeReference],
+  private def prunePhysicalColumns(output: Seq[AttributeReference],
                                    projects: Seq[NamedExpression],
                                    filters: Seq[Expression],
                                    dataSchema: StructType,
@@ -148,7 +183,7 @@ abstract class BaseHoodieNestedSchemaPruning extends Rule[LogicalPlan] {
    * Builds a pruned logical relation from the output of the output relation and the schema of the
    * pruned base relation.
    */
-  protected def buildPrunedRelation(outputRelation: LogicalRelation,
+  private def buildPrunedRelation(outputRelation: LogicalRelation,
                                   prunedBaseRelation: BaseRelation): LogicalRelation = {
     val prunedOutput = getPrunedOutput(outputRelation.output, prunedBaseRelation.schema)
     outputRelation.copy(relation = prunedBaseRelation, output = prunedOutput)

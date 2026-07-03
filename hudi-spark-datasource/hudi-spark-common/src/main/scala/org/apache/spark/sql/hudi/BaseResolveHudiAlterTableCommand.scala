@@ -30,32 +30,38 @@ import org.apache.spark.sql.hudi.command.{AlterTableCommand => HudiAlterTableCom
   * Rule to mostly resolve, normalize and rewrite column names based on case sensitivity.
   * for alter table column commands.
   */
-class Spark34ResolveHudiAlterTableCommand(sparkSession: SparkSession) extends Rule[LogicalPlan] {
+abstract class BaseResolveHudiAlterTableCommand(sparkSession: SparkSession) extends Rule[LogicalPlan] {
 
   def apply(plan: LogicalPlan): LogicalPlan = {
     if (ProvidesHoodieConfig.isSchemaEvolutionEnabled(sparkSession)) {
-      plan.resolveOperatorsUp {
-        case set@SetTableProperties(ResolvedHoodieV2TablePlan(t), _) if set.resolved =>
-          HudiAlterTableCommand(t.v1Table, set.changes, ColumnChangeID.PROPERTY_CHANGE)
-        case unSet@UnsetTableProperties(ResolvedHoodieV2TablePlan(t), _, _) if unSet.resolved =>
-          HudiAlterTableCommand(t.v1Table, unSet.changes, ColumnChangeID.PROPERTY_CHANGE)
-        case drop@DropColumns(ResolvedHoodieV2TablePlan(t), _, _) if drop.resolved =>
-          HudiAlterTableCommand(t.v1Table, drop.changes, ColumnChangeID.DELETE)
-        case add@AddColumns(ResolvedHoodieV2TablePlan(t), _) if add.resolved =>
-          HudiAlterTableCommand(t.v1Table, add.changes, ColumnChangeID.ADD)
-        case renameColumn@RenameColumn(ResolvedHoodieV2TablePlan(t), _, _) if renameColumn.resolved =>
-          HudiAlterTableCommand(t.v1Table, renameColumn.changes, ColumnChangeID.UPDATE)
-        case alter@AlterColumn(ResolvedHoodieV2TablePlan(t), _, _, _, _, _, _) if alter.resolved =>
-          HudiAlterTableCommand(t.v1Table, alter.changes, ColumnChangeID.UPDATE)
-        case replace@ReplaceColumns(ResolvedHoodieV2TablePlan(t), _) if replace.resolved =>
-          HudiAlterTableCommand(t.v1Table, replace.changes, ColumnChangeID.REPLACE)
-      }
+      plan.resolveOperatorsUp(resolveCommonCommand.orElse(resolveAlterColumnCommand))
     } else {
       plan
     }
   }
 
-  object ResolvedHoodieV2TablePlan {
+  private def resolveCommonCommand: PartialFunction[LogicalPlan, LogicalPlan] = {
+    case set@SetTableProperties(ResolvedHoodieV2TablePlan(t), _) if set.resolved =>
+      HudiAlterTableCommand(t.v1Table, set.changes, ColumnChangeID.PROPERTY_CHANGE)
+    case unSet@UnsetTableProperties(ResolvedHoodieV2TablePlan(t), _, _) if unSet.resolved =>
+      HudiAlterTableCommand(t.v1Table, unSet.changes, ColumnChangeID.PROPERTY_CHANGE)
+    case drop@DropColumns(ResolvedHoodieV2TablePlan(t), _, _) if drop.resolved =>
+      HudiAlterTableCommand(t.v1Table, drop.changes, ColumnChangeID.DELETE)
+    case add@AddColumns(ResolvedHoodieV2TablePlan(t), _) if add.resolved =>
+      HudiAlterTableCommand(t.v1Table, add.changes, ColumnChangeID.ADD)
+    case renameColumn@RenameColumn(ResolvedHoodieV2TablePlan(t), _, _) if renameColumn.resolved =>
+      HudiAlterTableCommand(t.v1Table, renameColumn.changes, ColumnChangeID.UPDATE)
+    case replace@ReplaceColumns(ResolvedHoodieV2TablePlan(t), _) if replace.resolved =>
+      HudiAlterTableCommand(t.v1Table, replace.changes, ColumnChangeID.REPLACE)
+  }
+
+  /**
+   * Resolves the ALTER TABLE ... ALTER COLUMN command, whose logical plan differs between
+   * the Spark 3.x (AlterColumn) and Spark 4.x (AlterColumns) branches.
+   */
+  protected def resolveAlterColumnCommand: PartialFunction[LogicalPlan, LogicalPlan]
+
+  protected object ResolvedHoodieV2TablePlan {
     def unapply(plan: LogicalPlan): Option[HoodieInternalV2Table] = {
       plan match {
         case ResolvedTable(_, _, v2Table: HoodieInternalV2Table, _) => Some(v2Table)
@@ -64,4 +70,3 @@ class Spark34ResolveHudiAlterTableCommand(sparkSession: SparkSession) extends Ru
     }
   }
 }
-

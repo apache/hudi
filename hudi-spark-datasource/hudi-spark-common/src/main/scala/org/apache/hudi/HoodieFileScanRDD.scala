@@ -24,11 +24,11 @@ import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
 import org.apache.spark.sql.types.StructType
 
-class Spark41HoodieFileScanRDD(@transient private val sparkSession: SparkSession,
-                               read: PartitionedFile => Iterator[InternalRow],
-                               @transient filePartitions: Seq[FilePartition],
-                               readDataSchema: StructType,
-                               metadataColumns: Seq[AttributeReference] = Seq.empty)
+class HoodieFileScanRDD(@transient private val sparkSession: SparkSession,
+                        read: PartitionedFile => Iterator[InternalRow],
+                        @transient filePartitions: Seq[FilePartition],
+                        readDataSchema: StructType,
+                        metadataColumns: Seq[AttributeReference] = Seq.empty)
   extends FileScanRDD(sparkSession, read, filePartitions, readDataSchema, metadataColumns)
     with HoodieUnsafeRDD {
 

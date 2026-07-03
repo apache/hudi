@@ -27,9 +27,9 @@ import org.apache.spark.paths.SparkPath
 import org.apache.spark.sql.catalyst.InternalRow
 
 /**
- * Utils on Spark [[PartitionedFile]] and [[PartitionDirectory]] for Spark 4.0.
+ * Utils on Spark [[PartitionedFile]] and [[PartitionDirectory]] for Spark 4.x.
  */
-object HoodieSpark40PartitionedFileUtils extends HoodieSparkPartitionedFileUtils {
+object HoodieSpark4PartitionedFileUtils extends HoodieSparkPartitionedFileUtils {
   override def getPathFromPartitionedFile(partitionedFile: PartitionedFile): StoragePath = {
     new StoragePath(partitionedFile.filePath.toUri)
   }

@@ -18,8 +18,8 @@
 package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.{HoodieSchemaUtils, HoodieSparkUtils, SparkAdapterSupport}
-import org.apache.hudi.common.util.{ReflectionUtils, ValidationUtils}
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
+import org.apache.hudi.common.util.ValidationUtils
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -30,7 +30,7 @@ import org.apache.spark.sql.catalyst.optimizer.ReplaceExpressions
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
-import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
+import org.apache.spark.sql.execution.datasources.{CreateTable, HoodieNestedSchemaPruning, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{sparkAdapter, MatchCreateIndex, MatchCreateTableLike, MatchDropIndex, MatchInsertIntoStatement, MatchMergeIntoTable, MatchRefreshIndex, MatchShowIndexes, ResolvesToHudiTable}
 import org.apache.spark.sql.hudi.blob.ReadBlobRule
@@ -95,16 +95,10 @@ object HoodieAnalysis extends SparkAdapterSupport {
     }
 
     val resolveAlterTableCommandsClass =
-      if (HoodieSparkUtils.isSpark4_1) {
-        "org.apache.spark.sql.hudi.Spark41ResolveHudiAlterTableCommand"
-      } else if (HoodieSparkUtils.isSpark4_0) {
-        "org.apache.spark.sql.hudi.Spark40ResolveHudiAlterTableCommand"
-      } else if (HoodieSparkUtils.gteqSpark3_5) {
-        "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
-      } else if (HoodieSparkUtils.isSpark3_4) {
-        "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
-      } else if (HoodieSparkUtils.isSpark3_3) {
-        "org.apache.spark.sql.hudi.Spark33ResolveHudiAlterTableCommand"
+      if (HoodieSparkUtils.isSpark4) {
+        "org.apache.spark.sql.hudi.Spark4ResolveHudiAlterTableCommand"
+      } else if (HoodieSparkUtils.isSpark3) {
+        "org.apache.spark.sql.hudi.Spark3ResolveHudiAlterTableCommand"
       } else {
         throw new IllegalStateException("Unsupported Spark version")
       }
@@ -143,21 +137,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
       // Default rules
     )
 
-    val nestedSchemaPruningClass =
-      if (HoodieSparkUtils.isSpark4_1) {
-        "org.apache.spark.sql.execution.datasources.Spark41NestedSchemaPruning"
-      } else if (HoodieSparkUtils.isSpark4_0) {
-        "org.apache.spark.sql.execution.datasources.Spark40NestedSchemaPruning"
-      } else if (HoodieSparkUtils.gteqSpark3_5) {
-        "org.apache.spark.sql.execution.datasources.Spark35NestedSchemaPruning"
-      } else if (HoodieSparkUtils.gteqSpark3_4) {
-        "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"
-      } else {
-        // spark 3.3
-        "org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning"
-      }
-
-    val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]
+    val nestedSchemaPruningRule = new HoodieNestedSchemaPruning
     rules += (_ => nestedSchemaPruningRule)
 
     // NOTE: [[HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's
