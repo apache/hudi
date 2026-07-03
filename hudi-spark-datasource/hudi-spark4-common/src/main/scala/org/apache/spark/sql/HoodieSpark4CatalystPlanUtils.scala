@@ -25,11 +25,15 @@ import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable}
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
 
-object HoodieSpark33CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
+/**
+ * Implementation of [[HoodieCatalystPlansUtils]] carrying the method bodies shared by all
+ * supported Spark 4.x versions
+ */
+abstract class HoodieSpark4CatalystPlanUtils extends BaseHoodieCatalystPlanUtils {
 
   override def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)] = {
     plan match {
-      case MergeIntoTable(targetTable, sourceTable, mergeCondition, _, _) =>
+      case MergeIntoTable(targetTable, sourceTable, mergeCondition, _, _, _, _) =>
         Some((targetTable, sourceTable, mergeCondition))
       case _ => None
     }
@@ -37,8 +41,8 @@ object HoodieSpark33CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
 
   override def maybeApplyForNewFileFormat(plan: LogicalPlan): LogicalPlan = {
     plan match {
-      case s@ScanOperation(_, _,
-      l@LogicalRelation(fs: HadoopFsRelation, _, _, _))
+      case s@ScanOperation(_, _, _,
+      l@LogicalRelation(fs: HadoopFsRelation, _, _, _, _))
         if fs.fileFormat.isInstanceOf[ParquetFileFormat with HoodieFormatTrait]
           && !fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait].isProjected =>
         FileFormatUtilsForFileGroupReader.applyNewFileFormatChanges(s, l, fs)
@@ -47,10 +51,16 @@ object HoodieSpark33CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
   }
 
   override def failAnalysisForMIT(a: Attribute, cols: String): Unit = {
-    a.failAnalysis(s"cannot resolve ${a.sql} in MERGE command given columns [$cols]")
+    a.failAnalysis(
+      errorClass = "UNRESOLVED_COLUMN.WITH_SUGGESTION",
+      messageParameters = Map(
+        "objectName" -> a.sql,
+        "proposal" -> cols))
   }
 
   override def failTableNotFound(tableName: String): Unit = {
-    throw new AnalysisException(s"Table or view not found: $tableName")
+    throw new AnalysisException(
+      errorClass = "TABLE_OR_VIEW_NOT_FOUND",
+      messageParameters = Map("relationName" -> s"`$tableName`"))
   }
 }

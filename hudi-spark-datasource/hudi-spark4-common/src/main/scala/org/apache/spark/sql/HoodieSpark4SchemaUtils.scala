@@ -21,13 +21,17 @@ package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
+import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils
+import org.apache.spark.sql.jdbc.JdbcDialect
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.SchemaUtils
 
+import java.sql.{Connection, ResultSet}
+
 /**
- * Utils on schema for Spark 3.5.
+ * Utils on schema shared by all supported Spark 4.x versions.
  */
-object HoodieSpark35SchemaUtils extends HoodieSpark3SchemaUtils {
+abstract class HoodieSpark4SchemaUtils extends HoodieSchemaUtils {
   override def checkColumnNameDuplication(columnNames: Seq[String],
                                           colType: String,
                                           caseSensitiveAnalysis: Boolean): Unit = {
@@ -36,5 +40,13 @@ object HoodieSpark35SchemaUtils extends HoodieSpark3SchemaUtils {
 
   override def toAttributes(struct: StructType): Seq[Attribute] = {
     DataTypeUtils.toAttributes(struct)
+  }
+
+  override def getSchema(conn: Connection,
+                         resultSet: ResultSet,
+                         dialect: JdbcDialect,
+                         alwaysNullable: Boolean = false,
+                         isTimestampNTZ: Boolean = false): StructType = {
+    JdbcUtils.getSchema(conn, resultSet, dialect, alwaysNullable)
   }
 }

@@ -19,7 +19,21 @@
 
 package org.apache.spark.sql
 
+import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils
+import org.apache.spark.sql.jdbc.JdbcDialect
+import org.apache.spark.sql.types.StructType
+
+import java.sql.{Connection, ResultSet}
+
 /**
- * Utils on schema for Spark 4.1.
+ * Utils on schema shared by all supported Spark 3.x versions.
  */
-object HoodieSpark41SchemaUtils extends HoodieSpark4SchemaUtils
+abstract class HoodieSpark3SchemaUtils extends HoodieSchemaUtils {
+  override def getSchema(conn: Connection,
+                         resultSet: ResultSet,
+                         dialect: JdbcDialect,
+                         alwaysNullable: Boolean = false,
+                         isTimestampNTZ: Boolean = false): StructType = {
+    JdbcUtils.getSchema(resultSet, dialect, alwaysNullable)
+  }
+}

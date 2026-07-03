@@ -20,13 +20,17 @@ package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, UpdateAction}
-import org.apache.spark.sql.execution.streaming.runtime.SerializedOffset
+import org.apache.spark.sql.execution.streaming.SerializedOffset
 
-object HoodieSpark41CatalystPlanUtils extends HoodieSpark4CatalystPlanUtils {
+/**
+ * Implementation of [[HoodieCatalystPlansUtils]] carrying the method bodies shared by all
+ * supported Spark 3.x versions
+ */
+abstract class HoodieSpark3CatalystPlanUtils extends BaseHoodieCatalystPlanUtils {
 
   override def unapplyUpdateAction(mergeAction: Any): Option[(Option[Expression], Seq[Assignment])] = {
     mergeAction match {
-      case UpdateAction(condition, assignments, _) => Some((condition, assignments))
+      case UpdateAction(condition, assignments) => Some((condition, assignments))
       case _ => None
     }
   }
