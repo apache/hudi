@@ -139,7 +139,7 @@ public class HoodieAvroHFileWriter
     if (!this.hfileConfig.isAllowDuplicatesOnHfileWrites()) {
       // When allowDuplicatesOnHfileWrites is true, allow duplicates to be written to hFile.
       if (prevRecordKey.equals(recordKey)) {
-        LOG.info("Duplicate recordKey " + recordKey + " found while writing to HFile. Record payload " + record);
+        LOG.info("Duplicate recordKey {} found while writing to HFile. Record payload {}", recordKey, record);
         throw new HoodieDuplicateKeyException("Duplicate recordKey " + recordKey + " found while writing to HFile.");
       }
     }

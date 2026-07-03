@@ -194,7 +194,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
       visitedFilePaths.add(filePath.toString());
       addPropsFromStream(reader, filePath);
     } catch (IOException ioe) {
-      log.error("Error reading in properties from dfs from file " + filePath);
+      log.error("Error reading in properties from dfs from file {}", filePath);
       throw new HoodieIOException("Cannot read properties from dfs from file " + filePath, ioe);
     }
   }
@@ -279,7 +279,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   private static Option<StoragePath> getConfPathFromEnv() {
     String confDir = System.getenv(CONF_FILE_DIR_ENV_NAME);
     if (confDir == null) {
-      log.debug("Environment variable " + CONF_FILE_DIR_ENV_NAME + ", not set. If desired, set it to the folder containing: " + DEFAULT_PROPERTIES_FILE);
+      log.debug("Environment variable {}, not set. If desired, set it to the folder containing: {}", CONF_FILE_DIR_ENV_NAME, DEFAULT_PROPERTIES_FILE);
       return Option.empty();
     }
     if (StringUtils.isNullOrEmpty(URI.create(confDir).getScheme())) {
