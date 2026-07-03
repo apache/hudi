@@ -1001,6 +1001,24 @@ public class TestHoodieSchemaCompatibility {
     assertEquals(Arrays.asList("/f1/leaf", "/f2/leaf"), incompatibilityLocations(result));
   }
 
+  @Test
+  public void testMemoizedCompatibleResultDoesNotMaskUnionNameMismatch() {
+    // The named pair (InnerR, InnerW) is first checked at plain field a, where names are not
+    // validated, and memoized COMPATIBLE. Its second occurrence inside field b's union must
+    // still run the union-scope name check instead of reusing that verdict.
+    String readerJson = "{\"type\": \"record\", \"name\": \"rec\", \"fields\": ["
+        + "{\"name\": \"a\", \"type\": {\"type\": \"record\", \"name\": \"InnerR\", \"fields\": ["
+        + "{\"name\": \"leaf\", \"type\": \"int\"}]}},"
+        + "{\"name\": \"b\", \"type\": [\"null\", \"InnerR\"], \"default\": null}]}";
+    String writerJson = readerJson.replace("InnerR", "InnerW");
+    HoodieSchema reader = HoodieSchema.fromAvroSchema(new Schema.Parser().parse(readerJson));
+    HoodieSchema writer = HoodieSchema.fromAvroSchema(new Schema.Parser().parse(writerJson));
+    HoodieSchemaCompatibilityChecker.SchemaPairCompatibility result =
+        HoodieSchemaCompatibilityChecker.checkReaderWriterCompatibility(reader, writer, true);
+    assertEquals(HoodieSchemaCompatibilityChecker.SchemaCompatibilityType.INCOMPATIBLE, result.getType());
+    assertEquals(Collections.singletonList("/b"), incompatibilityLocations(result));
+  }
+
   private static List<String> incompatibilityLocations(HoodieSchemaCompatibilityChecker.SchemaPairCompatibility result) {
     return result.getResult().getIncompatibilities().stream()
         .map(HoodieSchemaCompatibilityChecker.Incompatibility::getLocation)

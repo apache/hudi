@@ -63,7 +63,8 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  *   future, canonical interned) wrappers. Instead, recursion is detected with an
  *   in-progress set keyed on value-equal schema pairs, and only compatible results are
  *   memoized so every occurrence of an incompatible subschema reports its own field
- *   path.</li>
+ *   path. Keys also carry whether names are validated at the location (top level or
+ *   under a union), since that can flip a pair's verdict.</li>
  * </ol>
  */
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
@@ -147,18 +148,24 @@ public class HoodieSchemaCompatibilityChecker {
    * Schemas are compared by value equality, never by instance identity: {@link HoodieSchema}
    * wrappers may be freshly allocated per navigation call or interned to canonical instances,
    * so instance identity carries no meaning for the checker.
+   * <p>
+   * The key also carries whether schema names are validated at the occurrence's location
+   * (see {@code checkSchemaNames}): the same pair can be compatible at a plain field path yet
+   * a name mismatch at a top-level or union location, so a verdict is only reusable within
+   * the same naming context.
    */
   @RequiredArgsConstructor
   private static final class ReaderWriter {
     private final HoodieSchema mReader;
     private final HoodieSchema mWriter;
+    private final boolean mNamesValidated;
 
     /**
      * {@inheritDoc}
      */
     @Override
     public int hashCode() {
-      return Objects.hash(mReader, mWriter);
+      return Objects.hash(mReader, mWriter, mNamesValidated);
     }
 
     /**
@@ -170,7 +177,8 @@ public class HoodieSchemaCompatibilityChecker {
         return false;
       }
       final ReaderWriter that = (ReaderWriter) obj;
-      return this.mReader.equals(that.mReader) && this.mWriter.equals(that.mWriter);
+      return this.mNamesValidated == that.mNamesValidated
+          && this.mReader.equals(that.mReader) && this.mWriter.equals(that.mWriter);
     }
 
     /**
@@ -178,7 +186,7 @@ public class HoodieSchemaCompatibilityChecker {
      */
     @Override
     public String toString() {
-      return String.format("ReaderWriter{reader:%s, writer:%s}", mReader, mWriter);
+      return String.format("ReaderWriter{reader:%s, writer:%s, namesValidated:%s}", mReader, mWriter, mNamesValidated);
     }
   }
 
@@ -191,7 +199,7 @@ public class HoodieSchemaCompatibilityChecker {
    */
   private static final class ReaderWriterCompatibilityChecker {
     // Compatible results only: they carry no location state, so they are safe to reuse
-    // when the same value pair recurs at a different field path.
+    // when the same value pair recurs at a different field path in the same naming context.
     private final Map<ReaderWriter, SchemaCompatibilityResult> memoizedCompatibleResults = new HashMap<>();
     // Value pairs currently being computed; re-entering one means a named type was reached
     // through itself, i.e. genuine recursion.
@@ -236,7 +244,7 @@ public class HoodieSchemaCompatibilityChecker {
                                                        final HoodieSchema writer,
                                                        final Deque<LocationInfo> locations) {
       log.debug("Checking compatibility of reader {} with writer {}", reader, writer);
-      final ReaderWriter pair = new ReaderWriter(reader, writer);
+      final ReaderWriter pair = new ReaderWriter(reader, writer, namesValidatedAt(locations));
       final SchemaCompatibilityResult memoized = memoizedCompatibleResults.get(pair);
       if (memoized != null) {
         return memoized;
@@ -564,16 +572,23 @@ public class HoodieSchemaCompatibilityChecker {
       return SchemaCompatibilityResult.compatible();
     }
 
-    private SchemaCompatibilityResult checkSchemaNames(final HoodieSchema reader, final HoodieSchema writer,
-                                                       final Deque<LocationInfo> locations) {
+    /**
+     * Whether fully-qualified schema names are validated at the current location. Feeds both
+     * {@link #checkSchemaNames} and the memo key, which must agree on the naming context.
+     */
+    private boolean namesValidatedAt(final Deque<LocationInfo> locations) {
       checkState(!locations.isEmpty());
       // NOTE: We're only going to validate schema names in following cases
       //          - This is a top-level schema (ie enclosing one)
       //          - This is a schema enclosed w/in a union (since in that case schemas could be
       //          reverse-looked up by their fully-qualified names)
-      boolean shouldCheckNames = checkNaming && (locations.size() == 1 || locations.peekLast().type == HoodieSchemaType.UNION);
+      return checkNaming && (locations.size() == 1 || locations.peekLast().type == HoodieSchemaType.UNION);
+    }
+
+    private SchemaCompatibilityResult checkSchemaNames(final HoodieSchema reader, final HoodieSchema writer,
+                                                       final Deque<LocationInfo> locations) {
       SchemaCompatibilityResult result = SchemaCompatibilityResult.compatible();
-      if (shouldCheckNames && !Objects.equals(reader.getFullName(), writer.getFullName())) {
+      if (namesValidatedAt(locations) && !Objects.equals(reader.getFullName(), writer.getFullName())) {
         String message = String.format("Reader schema name: '%s' is not compatible with writer schema name: '%s'", reader.getFullName(), writer.getFullName());
         result = SchemaCompatibilityResult.incompatible(SchemaIncompatibilityType.NAME_MISMATCH, reader, writer,
             message, asList(locations));
