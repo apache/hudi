@@ -20,13 +20,13 @@ package org.apache.hudi.expression;
 
 import org.apache.hudi.internal.schema.Type;
 
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -180,6 +180,7 @@ public class Predicates {
     }
   }
 
+  @EqualsAndHashCode(callSuper = true)
   public static class And extends BinaryExpression implements Predicate {
 
     public And(Expression left, Expression right) {
@@ -213,25 +214,9 @@ public class Predicates {
     public String toString() {
       return "(" + getLeft() + " " + getOperator().symbol + " " + getRight() + ")";
     }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      And and = (And) o;
-      return Objects.equals(getLeft(), and.getLeft()) && Objects.equals(getRight(), and.getRight());
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(getLeft(), getRight(), getOperator());
-    }
   }
 
+  @EqualsAndHashCode(callSuper = true)
   public static class Or extends BinaryExpression implements Predicate {
 
     public Or(Expression left, Expression right) {
@@ -267,25 +252,9 @@ public class Predicates {
     public String toString() {
       return "(" + getLeft() + " " + getOperator().symbol + " " + getRight() + ")";
     }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      Or or = (Or) o;
-      return Objects.equals(getLeft(), or.getLeft()) && Objects.equals(getRight(), or.getRight());
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(getLeft(), getRight(), getOperator());
-    }
   }
 
+  @EqualsAndHashCode(callSuper = true)
   public static class StringStartsWith extends BinaryExpression implements Predicate {
 
     StringStartsWith(Expression left, Expression right) {
@@ -301,26 +270,9 @@ public class Predicates {
     public Object eval(StructLike data) {
       return getLeft().eval(data).toString().startsWith(getRight().eval(data).toString());
     }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      StringStartsWith that = (StringStartsWith) o;
-      return Objects.equals(getLeft(), that.getLeft()) && Objects.equals(getRight(),
-          that.getRight());
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(getLeft(), getRight(), getOperator());
-    }
   }
 
+  @EqualsAndHashCode(callSuper = true)
   public static class StringContains extends BinaryExpression implements Predicate {
 
     StringContains(Expression left, Expression right) {
@@ -336,26 +288,9 @@ public class Predicates {
     public Object eval(StructLike data) {
       return getLeft().eval(data).toString().contains(getRight().eval(data).toString());
     }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      StringContains that = (StringContains) o;
-      return Objects.equals(getLeft(), that.getLeft()) && Objects.equals(getRight(),
-          that.getRight());
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(getLeft(), getRight(), getOperator());
-    }
   }
 
+  @EqualsAndHashCode
   public static class In implements Predicate {
 
     protected final Expression value;
@@ -396,25 +331,9 @@ public class Predicates {
     public List<Expression> getRightChildren() {
       return validValues;
     }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      In in = (In) o;
-      return Objects.equals(value, in.value) && Objects.equals(validValues, in.validValues);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(value, validValues);
-    }
   }
 
+  @EqualsAndHashCode
   public static class IsNull implements Predicate {
 
     protected final Expression child;
@@ -442,25 +361,9 @@ public class Predicates {
     public String toString() {
       return child.toString() + " IS NULL";
     }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      IsNull isNull = (IsNull) o;
-      return Objects.equals(child, isNull.child);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(child);
-    }
   }
 
+  @EqualsAndHashCode
   public static class IsNotNull implements Predicate {
 
     protected final Expression child;
@@ -488,25 +391,9 @@ public class Predicates {
     public String toString() {
       return child.toString() + " IS NOT NULL";
     }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      IsNotNull isNotNull = (IsNotNull) o;
-      return Objects.equals(child, isNotNull.child);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(child);
-    }
   }
 
+  @EqualsAndHashCode
   public static class Not implements Predicate {
 
     Expression child;
@@ -534,25 +421,9 @@ public class Predicates {
     public String toString() {
       return "NOT " + child;
     }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      Not not = (Not) o;
-      return Objects.equals(child, not.child);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(child);
-    }
   }
 
+  @EqualsAndHashCode(callSuper = true)
   public static class BinaryComparison extends BinaryExpression implements Predicate {
 
     public BinaryComparison(Expression left, Operator operator, Expression right) {
@@ -580,26 +451,9 @@ public class Predicates {
           throw new IllegalArgumentException("The operation " + getOperator() + " doesn't support binary comparison");
       }
     }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      BinaryComparison that = (BinaryComparison) o;
-      return getOperator() == that.getOperator() && Objects.equals(getLeft(), that.getLeft())
-          && Objects.equals(getRight(), that.getRight());
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(getLeft(), getRight(), getOperator());
-    }
   }
 
+  @EqualsAndHashCode
   public static class StringStartsWithAny implements Predicate {
 
     @Getter
@@ -632,26 +486,8 @@ public class Predicates {
       return false;
     }
 
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      StringStartsWithAny that = (StringStartsWithAny) o;
-      return operator == that.operator && Objects.equals(left, that.left)
-          && Objects.equals(right, that.right);
-    }
-
     public List<Expression> getRightChildren() {
       return right;
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(operator, left, right);
     }
   }
 }

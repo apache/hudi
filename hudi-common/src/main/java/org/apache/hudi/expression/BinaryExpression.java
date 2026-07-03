@@ -20,6 +20,7 @@ package org.apache.hudi.expression;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 import java.util.Arrays;
@@ -30,6 +31,7 @@ import java.util.List;
  */
 @AllArgsConstructor(access = AccessLevel.PACKAGE)
 @Getter
+@EqualsAndHashCode
 public abstract class BinaryExpression implements Expression {
 
   private final Expression left;
