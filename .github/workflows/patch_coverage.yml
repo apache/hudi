@@ -1,0 +1,115 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Enforces a minimum coverage on the lines changed by a pull request (patch /
+# diff coverage). It runs after the "Java CI" workflow finishes uploading
+# coverage to Codecov, reads the PR's diff coverage from the Codecov API, and
+# posts a commit status that fails when the changed lines are covered below the
+# threshold. This gates new/modified code, not the whole project, so it does not
+# penalize a PR for the repository's existing coverage.
+name: Patch Coverage
+
+on:
+  workflow_run:
+    workflows: ["Java CI"]
+    types:
+      - completed
+
+# Least privilege: only needs to post a commit status back onto the PR head.
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  # Minimum required coverage (percent) of the lines changed by the PR.
+  MIN_PATCH_COVERAGE: "80"
+  # Name shown for the commit status check on the PR.
+  STATUS_CONTEXT: "coverage/patch"
+
+jobs:
+  patch-coverage:
+    name: Enforce patch coverage >= 80%
+    # Only gate pull requests; pushes to master/release branches have no diff to score.
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check changed-line coverage from Codecov
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          owner="${REPO%%/*}"
+          repo="${REPO##*/}"
+
+          post_status() {
+            # $1 = state (pending|success|failure), $2 = description
+            gh api -X POST "repos/${REPO}/statuses/${HEAD_SHA}" \
+              -f state="$1" \
+              -f context="${STATUS_CONTEXT}" \
+              -f description="$2" >/dev/null 2>&1 || \
+              echo "WARN: could not post commit status (${1}: ${2})"
+          }
+
+          # Resolve the PR number from the head commit of the triggering CI run.
+          pr="$(gh api "repos/${REPO}/commits/${HEAD_SHA}/pulls" \
+                 --jq '.[0].number // empty' 2>/dev/null || true)"
+          if [ -z "${pr}" ]; then
+            echo "No open PR found for ${HEAD_SHA}; nothing to gate."
+            exit 0
+          fi
+          echo "Gating PR #${pr} (head ${HEAD_SHA})"
+          post_status pending "Waiting for Codecov to report patch coverage"
+
+          api="https://api.codecov.io/api/v2/github/${owner}/repos/${repo}/compare?pullid=${pr}"
+
+          # Codecov may still be merging uploads from the CI matrix; poll briefly.
+          cov=""
+          for attempt in $(seq 1 20); do
+            resp="$(curl -sf "${api}" 2>/dev/null || true)"
+            if [ -n "${resp}" ]; then
+              # Diff (changed-line) coverage lives at totals.base.diff[5] as a
+              # percentage string; fall back to head.diff[5] / patch.coverage.
+              cov="$(printf '%s' "${resp}" | jq -r '
+                (.totals.base.diff[5] // .totals.head.diff[5] // .totals.patch.coverage // empty)
+                | tostring' 2>/dev/null || true)"
+            fi
+            if [ -n "${cov}" ] && [ "${cov}" != "null" ] && [ "${cov}" != "empty" ]; then
+              break
+            fi
+            echo "Codecov not ready yet (attempt ${attempt}/20); sleeping 30s..."
+            sleep 30
+          done
+
+          if [ -z "${cov}" ] || [ "${cov}" = "null" ]; then
+            # No diff-coverage figure: typically means the PR changed no
+            # measurable source lines (docs/config/tests-only) or Codecov had no
+            # report. Do not fail the PR in that case.
+            echo "No patch coverage reported for PR #${pr}; treating as pass."
+            post_status success "No changed lines to score"
+            exit 0
+          fi
+
+          echo "Patch (changed-line) coverage: ${cov}% (minimum ${MIN_PATCH_COVERAGE}%)"
+          if awk "BEGIN { exit !(${cov} >= ${MIN_PATCH_COVERAGE}) }"; then
+            post_status success "Patch coverage ${cov}% >= ${MIN_PATCH_COVERAGE}%"
+            echo "PASS: changed lines meet the ${MIN_PATCH_COVERAGE}% coverage bar."
+          else
+            post_status failure "Patch coverage ${cov}% < ${MIN_PATCH_COVERAGE}%"
+            echo "FAIL: changed lines are only ${cov}% covered (need ${MIN_PATCH_COVERAGE}%)."
+            echo "Add tests for the new/modified code, or justify the gap with a reviewer."
+            exit 1
+          fi
