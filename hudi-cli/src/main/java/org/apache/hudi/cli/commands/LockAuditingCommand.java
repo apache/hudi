@@ -503,7 +503,7 @@ public class LockAuditingCommand {
             deletedCount++;
           } catch (Exception e) {
             failedCount++;
-            log.warn("Failed to delete audit file: " + pathInfo.getPath(), e);
+            log.warn("Failed to delete audit file: {}", pathInfo.getPath(), e);
           }
         }
         
@@ -543,7 +543,7 @@ public class LockAuditingCommand {
             AuditRecord entry = OBJECT_MAPPER.readValue(line, AuditRecord.class);
             entries.add(entry);
           } catch (Exception e) {
-            log.warn("Failed to parse JSON line in file " + filename + ": " + line, e);
+            log.warn("Failed to parse JSON line in file {}: {}", filename, line, e);
           }
         }
       }
@@ -592,7 +592,7 @@ public class LockAuditingCommand {
           filename
       ));
     } catch (Exception e) {
-      log.warn("Failed to parse audit file: " + filename, e);
+      log.warn("Failed to parse audit file: {}", filename, e);
       return Option.empty();
     }
   }
