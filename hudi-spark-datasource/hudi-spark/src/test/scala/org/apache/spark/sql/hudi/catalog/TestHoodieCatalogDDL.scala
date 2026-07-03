@@ -22,6 +22,7 @@ import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.connector.catalog.{Identifier, TableCapability, TableChange}
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.hudi.command.ShowHoodieCreateTableCommand
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -77,11 +78,15 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
       val commented = catalog.loadTable(ident).schema().fields.find(_.name == "name").get
       assertEquals("the name column", commented.getComment().getOrElse(""))
 
-      // alterTable: widen a column type (int -> long) under schema evolution.
-      withSQLConf("hoodie.schema.on.read.enable" -> "true") {
+      // alterTable: changing a column type is rejected by the V2 alter path, which routes to
+      // AlterHoodieTableChangeColumnCommand and does not support column type changes.
+      val typeChange = intercept[HoodieAnalysisException] {
         catalog.alterTable(ident, TableChange.updateColumnType(Array("age"), LongType))
       }
-      assertEquals(LongType,
+      assertTrue(typeChange.getMessage.contains(
+        "ALTER TABLE CHANGE COLUMN is not supported for changing column 'age'"),
+        typeChange.getMessage)
+      assertEquals(IntegerType,
         catalog.loadTable(ident).schema().fields.find(_.name == "age").get.dataType)
 
       // renameTable moves the catalog entry.
@@ -149,8 +154,10 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
          |tblproperties (primaryKey = 'id', preCombineField = 'ts')
          |""".stripMargin)
 
+    // SHOW CREATE TABLE resolves through Spark's native command for the Hudi V2 table, which
+    // emits `CREATE TABLE <catalog>.<db>.<table>` (no IF NOT EXISTS) with a USING/TBLPROPERTIES body.
     val ddl = spark.sql(s"show create table $tableName").head().getString(0)
-    assertTrue(ddl.contains("CREATE TABLE IF NOT EXISTS"), ddl)
+    assertTrue(ddl.contains(s"CREATE TABLE spark_catalog.default.$tableName"), ddl)
     assertTrue(ddl.contains("USING hudi"), ddl)
     assertTrue(ddl.contains("PARTITIONED BY (dt)"), ddl)
     assertTrue(ddl.contains("COMMENT 'a hudi table'"), ddl)
@@ -185,14 +192,15 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
            |""".stripMargin)
       assertEquals(Seq("id", "name", "ts"), userFields(spark.table(reuse).schema.fieldNames))
 
-      // A conflicting primaryKey against the on-disk table config is rejected.
+      // A conflicting primaryKey against the on-disk table config is rejected with a config-conflict
+      // error surfaced from the write-path validation (HoodieWriterUtils).
       val conflicting = generateTableName
       checkExceptionContain(
         s"""
            |create table $conflicting (id int, name string, ts long) using hudi
            |tblproperties (primaryKey = 'name', preCombineField = 'ts')
            |location '$basePath'
-           |""".stripMargin)("Please keep the same")
+           |""".stripMargin)("hoodie.table.recordkey.fields")
     }
   }
 
@@ -218,7 +226,7 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
         assertTrue(v2.schema().fieldNames.contains("id"))
         assertTrue(v2.partitioning().isEmpty)
         assertFalse(v2.properties().isEmpty)
-        assertEquals(s"default.$tableName", v2.name())
+        assertEquals(s"spark_catalog.default.$tableName", v2.name())
 
         // Append then overwrite through the V1-fallback write builder.
         spark.sql(s"insert into $tableName values (1, 'a1', 1000), (2, 'a2', 2000)")
