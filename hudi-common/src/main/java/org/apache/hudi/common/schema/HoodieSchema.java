@@ -347,15 +347,21 @@ public class HoodieSchema implements Serializable {
    * Factory method to create HoodieSchema from an Avro schema.
    *
    * <p>Returns the canonical instance for the given schema, converting and interning it on
-   * first use: equal but distinct Avro schema instances converge on one shared wrapper, keyed
-   * on value equality through {@link HoodieSchemaCache}, with a weak identity fast path for
+   * first use: distinct Avro schema instances with identical serialized content converge on
+   * one shared wrapper through {@link HoodieSchemaCache}, with a weak identity fast path for
    * the per-record hot path where all records of a file share the same live {@link Schema}
    * instance.
    *
-   * <p>Because the canonical wrapper may have been created from an equal but different Avro
-   * schema instance, {@code fromAvroSchema(s).getAvroSchema()} does not necessarily return
-   * {@code s} itself. Canonical instances are shared: neither the wrapper nor its underlying
-   * Avro schema may be mutated.
+   * <p>Interning is never lossy: the canonicalization key covers the schema's full content,
+   * including doc strings and aliases, which Avro equality ignores. Schemas that differ only
+   * in docs or aliases stay distinct wrappers (even though they are {@code equals()}), so
+   * metadata consumed downstream (e.g. catalog sync column comments, alias-based field
+   * matching) is always preserved.
+   *
+   * <p>Because the canonical wrapper may have been created from a content-identical but
+   * different Avro schema instance, {@code fromAvroSchema(s).getAvroSchema()} does not
+   * necessarily return {@code s} itself. Canonical instances are shared: neither the wrapper
+   * nor its underlying Avro schema may be mutated.
    *
    * @param avroSchema the Avro schema to wrap
    * @return the canonical HoodieSchema instance, or null if avroSchema is null
@@ -1617,6 +1623,14 @@ public class HoodieSchema implements Serializable {
     return avroSchema.toString(pretty);
   }
 
+  /**
+   * Equality delegates to Avro {@link Schema#equals}, which IGNORES doc strings and aliases:
+   * two schemas differing only in that metadata are equal. Consumers that care about docs or
+   * aliases (e.g. catalog sync comments, alias-based field matching) must not rely on
+   * equality or value-keyed maps to tell such schemas apart. Canonicalization in
+   * {@link HoodieSchemaCache} deliberately keys on the full serialized content instead, so
+   * interning never conflates them.
+   */
   @Override
   public boolean equals(Object obj) {
     if (this == obj) {

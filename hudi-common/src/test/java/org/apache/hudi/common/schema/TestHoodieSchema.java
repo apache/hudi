@@ -3115,4 +3115,36 @@ public class TestHoodieSchema {
     // Navigated subschemas converge with independently converted equal schemas
     assertSame(unionSchema.getTypes().get(1), HoodieSchema.fromAvroSchema(Schema.create(Schema.Type.STRING)));
   }
+
+  @Test
+  public void testInterningPreservesDocsAndAliases() {
+    String plain = "{\"type\": \"record\", \"name\": \"InternedRec\", \"fields\": ["
+        + "{\"name\": \"f\", \"type\": \"int\"}]}";
+    String commented = "{\"type\": \"record\", \"name\": \"InternedRec\", \"doc\": \"record doc\", \"fields\": ["
+        + "{\"name\": \"f\", \"type\": \"int\", \"doc\": \"field doc\"}]}";
+    String aliased = "{\"type\": \"record\", \"name\": \"InternedRec\", \"fields\": ["
+        + "{\"name\": \"f\", \"type\": \"int\", \"aliases\": [\"oldF\"]}]}";
+
+    Schema plainAvro = new Schema.Parser().parse(plain);
+    Schema commentedAvro = new Schema.Parser().parse(commented);
+    Schema aliasedAvro = new Schema.Parser().parse(aliased);
+    // Avro equality ignores docs and aliases, so all three variants are "equal"...
+    assertEquals(plainAvro, commentedAvro);
+    assertEquals(plainAvro, aliasedAvro);
+
+    // ...but canonicalization must not collapse them: docs drive catalog sync column comments
+    // and aliases drive schema-evolution field matching. The plain variant is interned first
+    // to make a lossy collapse observable.
+    HoodieSchema plainWrapper = HoodieSchema.fromAvroSchema(plainAvro);
+    HoodieSchema commentedWrapper = HoodieSchema.fromAvroSchema(commentedAvro);
+    HoodieSchema aliasedWrapper = HoodieSchema.fromAvroSchema(aliasedAvro);
+    assertNotSame(plainWrapper, commentedWrapper);
+    assertEquals("record doc", commentedWrapper.getDoc().get());
+    assertEquals("field doc", commentedWrapper.getFields().get(0).doc().get());
+    assertNotSame(plainWrapper, aliasedWrapper);
+    assertTrue(aliasedWrapper.getFields().get(0).aliases().contains("oldF"));
+
+    // Identical content (docs included) still converges on one canonical instance
+    assertSame(commentedWrapper, HoodieSchema.fromAvroSchema(new Schema.Parser().parse(commented)));
+  }
 }
