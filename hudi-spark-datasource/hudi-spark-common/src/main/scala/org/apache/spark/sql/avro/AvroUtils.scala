@@ -18,10 +18,7 @@
 package org.apache.spark.sql.avro
 
 import org.apache.avro.Schema
-import org.apache.avro.file.FileReader
-import org.apache.avro.generic.GenericRecord
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 
@@ -33,6 +30,9 @@ import scala.collection.JavaConverters._
  * NOTE: This code is borrowed from Spark 3.3.0
  *       This code is borrowed, so that we can better control compatibility w/in Spark minor
  *       branches (3.2.x, 3.1.x, etc)
+ *
+ *       This copy omits the upstream `RowReader` trait: it is unused in Hudi and references
+ *       the version-specific vendored `AvroDeserializer`, which is not visible to this module.
  *
  *       PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
@@ -53,45 +53,6 @@ private[sql] object AvroUtils extends Logging {
     case _: NullType => true
 
     case _ => false
-  }
-
-  // The trait provides iterator-like interface for reading records from an Avro file,
-  // deserializing and returning them as internal rows.
-  trait RowReader {
-    protected val fileReader: FileReader[GenericRecord]
-    protected val deserializer: AvroDeserializer
-    protected val stopPosition: Long
-
-    private[this] var completed = false
-    private[this] var currentRow: Option[InternalRow] = None
-
-    def hasNextRow: Boolean = {
-      while (!completed && currentRow.isEmpty) {
-        val r = fileReader.hasNext && !fileReader.pastSync(stopPosition)
-        if (!r) {
-          fileReader.close()
-          completed = true
-          currentRow = None
-        } else {
-          val record = fileReader.next()
-          // the row must be deserialized in hasNextRow, because AvroDeserializer#deserialize
-          // potentially filters rows
-          currentRow = deserializer.deserialize(record).asInstanceOf[Option[InternalRow]]
-        }
-      }
-      currentRow.isDefined
-    }
-
-    def nextRow: InternalRow = {
-      if (currentRow.isEmpty) {
-        hasNextRow
-      }
-      val returnRow = currentRow
-      currentRow = None // free up hasNextRow to consume more Avro records, if not exhausted
-      returnRow.getOrElse {
-        throw new NoSuchElementException("next on empty iterator")
-      }
-    }
   }
 
   /** Wrapper for a pair of matched fields, one Catalyst and one corresponding Avro field. */
