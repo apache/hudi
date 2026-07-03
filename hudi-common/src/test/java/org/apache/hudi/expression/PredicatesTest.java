@@ -236,4 +236,30 @@ class PredicatesTest {
     assertNotEquals(p1, p4, "StringStartsWithAny with different list order should not be equal");
     assertNotEquals(p1, p5, "StringStartsWithAny with different list content should not be equal");
   }
+
+  @Test
+  void testEqualsWithDistinctButEqualOperands() {
+    // Operands are built independently (distinct instances) but are value-equal. This is the
+    // independently-built-tree case the Trino Expression Index comparison relies on: it only holds
+    // if the leaf operands (Literal, NameReference) compare by value rather than by identity.
+    Expression lit1 = new Literal<>("a", Types.StringType.get());
+    Expression lit2 = new Literal<>("a", Types.StringType.get());
+    Expression col1 = new NameReference("col");
+    Expression col2 = new NameReference("col");
+
+    // Leaf predicate over distinct-but-equal literals.
+    assertEquals(isNull(lit1), isNull(lit2), "IsNull over value-equal literals should be equal");
+    assertEquals(isNull(lit1).hashCode(), isNull(lit2).hashCode());
+
+    // Nested tree built from distinct-but-equal Literal and NameReference operands.
+    assertEquals(and(eq(col1, lit1), isNotNull(col1)), and(eq(col2, lit2), isNotNull(col2)),
+        "Independently built predicate trees with value-equal operands should be equal");
+    assertEquals(and(eq(col1, lit1), isNotNull(col1)).hashCode(),
+        and(eq(col2, lit2), isNotNull(col2)).hashCode());
+
+    // Value still distinguishes: a different literal value or column name is not equal.
+    assertNotEquals(isNull(new Literal<>("a", Types.StringType.get())),
+        isNull(new Literal<>("b", Types.StringType.get())));
+    assertNotEquals(isNull(new NameReference("col")), isNull(new NameReference("other")));
+  }
 }

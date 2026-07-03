@@ -21,10 +21,12 @@ package org.apache.hudi.expression;
 import org.apache.hudi.internal.schema.Type;
 
 import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 @AllArgsConstructor
 @Getter
+@EqualsAndHashCode
 public class NameReference extends LeafExpression {
 
   private final String name;

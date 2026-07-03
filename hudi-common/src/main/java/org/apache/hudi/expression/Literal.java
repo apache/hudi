@@ -22,6 +22,7 @@ import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 
 import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 import javax.xml.bind.DatatypeConverter;
@@ -32,6 +33,7 @@ import java.util.UUID;
 
 @AllArgsConstructor
 @Getter
+@EqualsAndHashCode
 public class Literal<T> extends LeafExpression {
 
   public static <V> Literal from(V value) {
