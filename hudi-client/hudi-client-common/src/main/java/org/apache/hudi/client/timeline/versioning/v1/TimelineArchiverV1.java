@@ -463,7 +463,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
   public void archive(HoodieEngineContext context, List<HoodieInstant> instants) throws HoodieCommitException {
     try {
       Schema wrapperSchema = HoodieArchivedMetaEntry.getClassSchema();
-      log.info("Wrapper schema {}", wrapperSchema.toString());
+      log.info("Wrapper schema {}", wrapperSchema);
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
         try {
