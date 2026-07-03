@@ -19,11 +19,19 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
-
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.unsafe.types.VariantVal
 
-class Spark40HoodiePartitionCDCFileGroupMapping(partitionValues: InternalRow,
-                                                protected val fileSplits: List[HoodieCDCFileSplit])
-  extends Spark40HoodiePartitionValues(partitionValues)
-  with Spark4HoodiePartitionCDCFileGroupMapping
+/**
+ * Base class for Spark 4.x HoodiePartitionValues implementations.
+ * Adds the delegation logic available in all Spark 4.x versions on top of
+ * [[BaseHoodiePartitionValues]]. Version-specific subclasses only implement
+ * `copy()` and the getters introduced by a newer Spark version.
+ */
+abstract class Spark4HoodiePartitionValues(values: InternalRow)
+  extends BaseHoodiePartitionValues(values) {
+
+  override def getVariant(ordinal: Int): VariantVal = {
+    values.getVariant(ordinal)
+  }
+}

@@ -21,9 +21,15 @@ package org.apache.hudi
 
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 
-import org.apache.spark.sql.catalyst.InternalRow
+/**
+ * Implementation of [[HoodiePartitionCDCFileGroupMapping]] shared by all Spark 4.x
+ * versions, mixed into the version-specific partition values classes.
+ */
+trait Spark4HoodiePartitionCDCFileGroupMapping extends HoodiePartitionCDCFileGroupMapping {
 
-class Spark40HoodiePartitionCDCFileGroupMapping(partitionValues: InternalRow,
-                                                protected val fileSplits: List[HoodieCDCFileSplit])
-  extends Spark40HoodiePartitionValues(partitionValues)
-  with Spark4HoodiePartitionCDCFileGroupMapping
+  protected def fileSplits: List[HoodieCDCFileSplit]
+
+  override def getFileSplits(): List[HoodieCDCFileSplit] = {
+    fileSplits
+  }
+}
