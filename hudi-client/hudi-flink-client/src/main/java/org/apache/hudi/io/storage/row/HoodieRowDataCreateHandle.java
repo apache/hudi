@@ -130,7 +130,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize file writer for path " + path, e);
     }
-    log.info("New handle created for partition :" + partitionPath + " with fileId " + fileId);
+    log.info("New handle created for partition :{} with fileId {}", partitionPath, fileId);
   }
 
   /**
@@ -170,7 +170,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
             ? HoodieRecordDelegate.create(recordKey, partitionPath, null, newRecordLocation) : null;
         writeStatus.markSuccess(recordDelegate, recordMetadata);
       } catch (Throwable t) {
-        log.error("Error writing record " + record, t);
+        log.error("Error writing record {}", record, t);
         if (!writeConfig.getIgnoreWriteFailed()) {
           throw new HoodieException(t.getMessage(), t);
         }

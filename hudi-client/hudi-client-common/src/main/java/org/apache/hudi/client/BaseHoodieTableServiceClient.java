@@ -1431,7 +1431,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       case CLEAN:
         return tableServiceManagerClient.executeClean();
       default:
-        log.info("Not supported delegate to table service manager, tableServiceType : " + tableServiceType.getAction());
+        log.info("Not supported delegate to table service manager, tableServiceType : {}", tableServiceType.getAction());
         return Option.empty();
     }
   }

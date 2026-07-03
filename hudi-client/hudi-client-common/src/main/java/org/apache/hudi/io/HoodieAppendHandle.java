@@ -255,7 +255,7 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
           ? getInstantTimeForLogFile(record) : deltaWriteStat.getPrevCommit();
       createLogWriterForAppend(logInstantTime, fileSliceOpt);
     } catch (Exception e) {
-      log.error("Error in update task at commit " + instantTime, e);
+      log.error("Error in update task at commit {}", instantTime, e);
       writeStatus.setGlobalError(e);
       throw new HoodieUpsertException("Failed to initialize HoodieAppendHandle for FileId: " + fileId
           + " on commit " + instantTime + " on storage path " + hoodieTable.getMetaClient().getBasePath() + "/" + partitionPath, e);
@@ -378,7 +378,7 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
       hoodieRecord.deflate();
       return true;
     } catch (Exception e) {
-      log.error("Error writing record " + hoodieRecord, e);
+      log.error("Error writing record {}", hoodieRecord, e);
       if (!config.getIgnoreWriteFailed()) {
         throw new HoodieException(e.getMessage(), e);
       }

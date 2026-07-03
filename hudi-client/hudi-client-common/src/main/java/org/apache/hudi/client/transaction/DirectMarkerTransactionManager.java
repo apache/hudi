@@ -48,22 +48,20 @@ public class DirectMarkerTransactionManager extends TransactionManager {
 
   public void beginTransaction(String newTxnOwnerInstantTime, InstantGenerator instantGenerator) {
     if (isLockRequired) {
-      LOG.info("Transaction starting for " + newTxnOwnerInstantTime + " and " + filePath);
+      LOG.info("Transaction starting for {} and {}", newTxnOwnerInstantTime, filePath);
       lockManager.lock();
 
       reset(changeActionInstant, Option.of(getInstant(newTxnOwnerInstantTime, instantGenerator)), Option.empty());
-      LOG.info("Transaction started for " + newTxnOwnerInstantTime + " and " + filePath);
+      LOG.info("Transaction started for {} and {}", newTxnOwnerInstantTime, filePath);
     }
   }
 
   public void endTransaction(String currentTxnOwnerInstantTime, InstantGenerator instantGenerator) {
     if (isLockRequired) {
-      LOG.info("Transaction ending with transaction owner " + currentTxnOwnerInstantTime
-          + " for " + filePath);
+      LOG.info("Transaction ending with transaction owner {} for {}", currentTxnOwnerInstantTime, filePath);
       if (reset(Option.of(getInstant(currentTxnOwnerInstantTime, instantGenerator)), Option.empty(), Option.empty())) {
         lockManager.unlock();
-        LOG.info("Transaction ended with transaction owner " + currentTxnOwnerInstantTime
-            + " for " + filePath);
+        LOG.info("Transaction ended with transaction owner {} for {}", currentTxnOwnerInstantTime, filePath);
       }
     }
   }

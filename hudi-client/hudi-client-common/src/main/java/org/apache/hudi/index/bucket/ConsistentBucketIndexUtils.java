@@ -175,7 +175,7 @@ public class ConsistentBucketIndexUtils {
     } catch (FileNotFoundException e) {
       return Option.empty();
     } catch (IOException e) {
-      log.error("Error when loading hashing metadata, partition: " + partition, e);
+      log.error("Error when loading hashing metadata, partition: {}", partition, e);
       throw new HoodieIndexException("Error while loading hashing metadata", e);
     }
   }
@@ -258,7 +258,7 @@ public class ConsistentBucketIndexUtils {
     } catch (FileNotFoundException e) {
       return Option.empty();
     } catch (IOException e) {
-      log.error("Error when loading hashing metadata, for path: " + metaFile.getPath().getName(), e);
+      log.error("Error when loading hashing metadata, for path: {}", metaFile.getPath().getName(), e);
       throw new HoodieIndexException("Error while loading hashing metadata", e);
     }
   }

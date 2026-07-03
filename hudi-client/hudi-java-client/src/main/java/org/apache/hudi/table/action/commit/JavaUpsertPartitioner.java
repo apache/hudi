@@ -93,9 +93,8 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
     assignUpdates(workloadProfile);
     assignInserts(workloadProfile, context);
 
-    log.info("Total Buckets :" + totalBuckets + ", buckets info => " + bucketInfoMap + ", \n"
-        + "Partition to insert buckets => " + partitionPathToInsertBucketInfos + ", \n"
-        + "UpdateLocations mapped to buckets =>" + updateLocationToBucket);
+    log.info("Total Buckets :{}, buckets info => {}, \nPartition to insert buckets => {}, \nUpdateLocations mapped to buckets =>{}",
+        totalBuckets, bucketInfoMap, partitionPathToInsertBucketInfos, updateLocationToBucket);
   }
 
   private void assignUpdates(WorkloadProfile profile) {
@@ -132,7 +131,7 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
     long averageRecordSize =
         averageBytesPerRecord(table.getMetaClient().getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants(),
             config);
-    log.info("AvgRecordSize => " + averageRecordSize);
+    log.info("AvgRecordSize => {}", averageRecordSize);
 
     Map<String, List<SmallFile>> partitionSmallFilesMap =
         getSmallFilesForPartitions(new ArrayList<String>(partitionPaths), context);
@@ -145,7 +144,7 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
         List<SmallFile> smallFiles = partitionSmallFilesMap.getOrDefault(partitionPath, new ArrayList<>());
         this.smallFiles.addAll(smallFiles);
 
-        log.info("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
+        log.info("For partitionPath : {} Small Files => {}", partitionPath, smallFiles);
 
         long totalUnassignedInserts = pStat.getNumInserts();
         List<Integer> bucketNumbers = new ArrayList<>();
@@ -160,10 +159,10 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
             int bucket;
             if (updateLocationToBucket.containsKey(smallFile.location.getFileId())) {
               bucket = updateLocationToBucket.get(smallFile.location.getFileId());
-              log.info("Assigning " + recordsToAppend + " inserts to existing update bucket " + bucket);
+              log.info("Assigning {} inserts to existing update bucket {}", recordsToAppend, bucket);
             } else {
               bucket = addUpdateBucket(partitionPath, smallFile.location.getFileId());
-              log.info("Assigning " + recordsToAppend + " inserts to new update bucket " + bucket);
+              log.info("Assigning {} inserts to new update bucket {}", recordsToAppend, bucket);
             }
             if (profile.hasOutputWorkLoadStats()) {
               outputWorkloadStats.addInserts(smallFile.location, recordsToAppend);
@@ -182,8 +181,7 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
           }
 
           int insertBuckets = (int) Math.ceil((1.0 * totalUnassignedInserts) / insertRecordsPerBucket);
-          log.info("After small file assignment: unassignedInserts => " + totalUnassignedInserts
-              + ", totalInsertBuckets => " + insertBuckets + ", recordsPerBucket => " + insertRecordsPerBucket);
+          log.info("After small file assignment: unassignedInserts => {}, totalInsertBuckets => {}, recordsPerBucket => {}", totalUnassignedInserts, insertBuckets, insertRecordsPerBucket);
           for (int b = 0; b < insertBuckets; b++) {
             bucketNumbers.add(totalBuckets);
             if (b < insertBuckets - 1) {
@@ -210,7 +208,7 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
           currentCumulativeWeight += bkt.weight;
           insertBuckets.add(new InsertBucketCumulativeWeightPair(bkt, currentCumulativeWeight));
         }
-        log.info("Total insert buckets for partition path " + partitionPath + " => " + insertBuckets);
+        log.info("Total insert buckets for partition path {} => {}", partitionPath, insertBuckets);
         partitionPathToInsertBucketInfos.put(partitionPath, insertBuckets);
       }
       if (profile.hasOutputWorkLoadStats()) {

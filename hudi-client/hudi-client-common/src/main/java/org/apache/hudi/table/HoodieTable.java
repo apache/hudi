@@ -757,7 +757,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
             .collect(Collectors.toList()),
         partitionFilePair -> {
           final HoodieStorage storage = metaClient.getStorage();
-          log.info("Deleting invalid data file=" + partitionFilePair);
+          log.info("Deleting invalid data file={}", partitionFilePair);
           // Delete
           try {
             StoragePath pathToDelete = new StoragePath(partitionFilePair.getValue());
@@ -828,7 +828,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
           throw new HoodieDuplicateDataFileDetectedException("Duplicate data files detected " + invalidDataPaths);
         }
 
-        log.info("Removing duplicate files created due to task retries before committing. Paths=" + invalidDataPaths);
+        log.info("Removing duplicate files created due to task retries before committing. Paths={}", invalidDataPaths);
         Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
             .map(dp ->
                 Pair.of(new StoragePath(basePath, dp).getParent().toString(),
@@ -1147,7 +1147,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     Stream.of(MetadataPartitionType.getValidValues()).forEach(partitionType -> {
       if (shouldDeleteMetadataPartition(partitionType)) {
         try {
-          log.info("Deleting metadata partition because it is disabled in writer: " + partitionType.name());
+          log.info("Deleting metadata partition because it is disabled in writer: {}", partitionType.name());
           if (metadataPartitionExists(metaClient.getBasePath(), context, partitionType.getPartitionPath())) {
             deleteMetadataPartition(metaClient.getBasePath(), context, partitionType.getPartitionPath());
           }

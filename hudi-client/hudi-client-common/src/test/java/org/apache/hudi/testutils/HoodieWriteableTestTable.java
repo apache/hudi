@@ -111,7 +111,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
 
     StoragePath baseFilePath = new StoragePath(Paths.get(basePath, partition, fileName).toString());
     if (storage.exists(baseFilePath)) {
-      log.warn("Deleting the existing base file " + baseFilePath);
+      log.warn("Deleting the existing base file {}", baseFilePath);
       storage.deleteFile(baseFilePath);
     }
 
