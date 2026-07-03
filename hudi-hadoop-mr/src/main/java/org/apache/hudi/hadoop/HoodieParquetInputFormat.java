@@ -208,7 +208,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     List<Pair<String, String>> colNamesWithTypesForExternal = colNameWithTypes.stream()
         .filter(p -> !HoodieRecord.HOODIE_META_COLUMNS.contains(p.getKey())).collect(Collectors.toList());
 
-    LOG.info("colNameWithTypes =" + colNameWithTypes + ", Num Entries =" + colNameWithTypes.size());
+    LOG.info("colNameWithTypes ={}, Num Entries ={}", colNameWithTypes, colNameWithTypes.size());
 
     if (hoodieColsProjected.isEmpty()) {
       return getRecordReaderInternal(eSplit.getBootstrapFileSplit(), job, reporter);
@@ -225,7 +225,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       jobConfCopy.unset(TableScanDesc.FILTER_EXPR_CONF_STR);
       jobConfCopy.unset(ConvertAstToSearchArg.SARG_PUSHDOWN);
 
-      LOG.info("Generating column stitching reader for " + eSplit.getPath() + " and " + rightSplit.getPath());
+      LOG.info("Generating column stitching reader for {} and {}", eSplit.getPath(), rightSplit.getPath());
       return new BootstrapColumnStichingRecordReader(getRecordReaderInternal(eSplit, jobConfCopy, reporter),
           HoodieRecord.HOODIE_META_COLUMNS.size(),
           getRecordReaderInternal(rightSplit, jobConfCopy, reporter),
