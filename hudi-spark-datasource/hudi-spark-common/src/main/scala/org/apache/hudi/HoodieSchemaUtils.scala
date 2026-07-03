@@ -173,7 +173,7 @@ object HoodieSchemaUtils {
     if (!mergeIntoWrites && !shouldValidateSchemasCompatibility && !allowAutoEvolutionColumnDrop) {
       // Default behaviour
       val reconciledSchema = if (setNullForMissingColumns) {
-        HoodieSchema.fromAvroSchema(AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema.toAvroSchema(), latestTableSchema.toAvroSchema(), setNullForMissingColumns))
+        AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, latestTableSchema, setNullForMissingColumns)
       } else {
         canonicalizedSourceSchema
       }
@@ -205,7 +205,7 @@ object HoodieSchemaUtils {
         // Apply schema evolution, by auto-merging write schema and read schema
         val setNullForMissingColumns = opts.getOrElse(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
           HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.defaultValue()).toBoolean
-        val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema.toAvroSchema(), internalSchema, setNullForMissingColumns)
+        val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, internalSchema, setNullForMissingColumns)
         val evolvedSchema = InternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
         val shouldRemoveMetaDataFromInternalSchema = sourceSchema.getFields.asScala.filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
         if (shouldRemoveMetaDataFromInternalSchema) HoodieCommonSchemaUtils.removeMetadataFields(evolvedSchema) else evolvedSchema
@@ -257,9 +257,7 @@ object HoodieSchemaUtils {
    */
   private def canonicalizeSchema(sourceSchema: HoodieSchema, latestTableSchema: HoodieSchema, opts : Map[String, String],
                                  shouldReorderColumns: Boolean): HoodieSchema = {
-    HoodieSchema.fromAvroSchema(
-      reconcileSchemaRequirements(sourceSchema.toAvroSchema(), latestTableSchema.toAvroSchema(), shouldReorderColumns)
-    )
+    reconcileSchemaRequirements(sourceSchema, latestTableSchema, shouldReorderColumns)
   }
 
 

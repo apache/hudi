@@ -24,8 +24,6 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
 import org.apache.hudi.internal.schema.action.TableChangesHelper;
 
-import org.apache.avro.Schema;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -64,12 +62,12 @@ public class AvroSchemaEvolutionUtils {
    *                                  nullable in the result. Otherwise, no updates will be made to those fields.
    * @return reconcile Schema
    */
-  public static InternalSchema reconcileSchema(Schema incomingSchema, InternalSchema oldTableSchema, boolean makeMissingFieldsNullable) {
+  public static InternalSchema reconcileSchema(HoodieSchema incomingSchema, InternalSchema oldTableSchema, boolean makeMissingFieldsNullable) {
     /* If incoming schema is null, we fall back on table schema. */
-    if (incomingSchema.getType() == Schema.Type.NULL) {
+    if (incomingSchema.isSchemaNull()) {
       return oldTableSchema;
     }
-    InternalSchema inComingInternalSchema = convert(HoodieSchema.fromAvroSchema(incomingSchema), oldTableSchema.getNameToPosition());
+    InternalSchema inComingInternalSchema = convert(incomingSchema, oldTableSchema.getNameToPosition());
     // check column add/missing
     List<String> colNamesFromIncoming = inComingInternalSchema.getAllColsFullName();
     List<String> colNamesFromOldSchema = oldTableSchema.getAllColsFullName();
@@ -149,8 +147,8 @@ public class AvroSchemaEvolutionUtils {
     return evolvedSchema;
   }
 
-  public static Schema reconcileSchema(Schema incomingSchema, Schema oldTableSchema, boolean makeMissingFieldsNullable) {
-    return convert(reconcileSchema(incomingSchema, convert(HoodieSchema.fromAvroSchema(oldTableSchema)), makeMissingFieldsNullable), oldTableSchema.getFullName()).toAvroSchema();
+  public static HoodieSchema reconcileSchema(HoodieSchema incomingSchema, HoodieSchema oldTableSchema, boolean makeMissingFieldsNullable) {
+    return convert(reconcileSchema(incomingSchema, convert(oldTableSchema), makeMissingFieldsNullable), oldTableSchema.getFullName());
   }
 
   /**
@@ -169,18 +167,18 @@ public class AvroSchemaEvolutionUtils {
    * @param targetSchema target schema that source schema will be reconciled against
    * @return schema (based off {@code source} one) that has nullability constraints and datatypes reconciled
    */
-  public static Schema reconcileSchemaRequirements(Schema sourceSchema, Schema targetSchema, boolean shouldReorderColumns) {
-    if (targetSchema.getType() == Schema.Type.NULL || targetSchema.getFields().isEmpty()) {
+  public static HoodieSchema reconcileSchemaRequirements(HoodieSchema sourceSchema, HoodieSchema targetSchema, boolean shouldReorderColumns) {
+    if (targetSchema.isSchemaNull() || targetSchema.getFields().isEmpty()) {
       return sourceSchema;
     }
 
-    if (sourceSchema == null || sourceSchema.getType() == Schema.Type.NULL || sourceSchema.getFields().isEmpty()) {
+    if (sourceSchema == null || sourceSchema.isSchemaNull() || sourceSchema.getFields().isEmpty()) {
       return targetSchema;
     }
 
-    InternalSchema targetInternalSchema = convert(HoodieSchema.fromAvroSchema(targetSchema));
+    InternalSchema targetInternalSchema = convert(targetSchema);
     // Use existing fieldIds for consistent field ordering between commits when shouldReorderColumns is true
-    InternalSchema sourceInternalSchema = convert(HoodieSchema.fromAvroSchema(sourceSchema), shouldReorderColumns ? targetInternalSchema.getNameToPosition() : Collections.emptyMap());
+    InternalSchema sourceInternalSchema = convert(sourceSchema, shouldReorderColumns ? targetInternalSchema.getNameToPosition() : Collections.emptyMap());
 
     List<String> colNamesSourceSchema = sourceInternalSchema.getAllColsFullName();
     List<String> colNamesTargetSchema = targetInternalSchema.getAllColsFullName();
@@ -200,7 +198,7 @@ public class AvroSchemaEvolutionUtils {
 
     if (nullableUpdateColsInSource.isEmpty() && typeUpdateColsInSource.isEmpty()) {
       //standardize order of unions
-      return convert(sourceInternalSchema, sourceSchema.getFullName()).toAvroSchema();
+      return convert(sourceInternalSchema, sourceSchema.getFullName());
     }
 
     TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(sourceInternalSchema);
@@ -218,7 +216,7 @@ public class AvroSchemaEvolutionUtils {
     }
 
 
-    return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternalSchema, schemaChange), sourceSchema.getFullName()).toAvroSchema();
+    return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternalSchema, schemaChange), sourceSchema.getFullName());
   }
 }
 
