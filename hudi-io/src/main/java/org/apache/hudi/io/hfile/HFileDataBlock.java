@@ -53,7 +53,9 @@ public class HFileDataBlock extends HFileBlock {
   // so the latest timestamp is used.
   private static final long LATEST_TIMESTAMP = Long.MAX_VALUE;
 
-  // End offset of content in the block, relative to the start of the start of the block
+  // End offset of content in the block, relative to the start of the block. The key-values
+  // occupy exactly uncompressedSizeWithoutHeader bytes after the header; the checksum trails
+  // the content and is not part of it, so it must not be subtracted here.
   protected final int uncompressedContentEndRelativeOffset;
   private final List<KeyValueEntry> entriesToWrite = new ArrayList<>();
 
@@ -64,7 +66,7 @@ public class HFileDataBlock extends HFileBlock {
     super(context, HFileBlockType.DATA, byteBuff, startOffsetInBuff);
 
     this.uncompressedContentEndRelativeOffset =
-        this.uncompressedEndOffset - this.sizeCheckSum - this.startOffsetInBuff;
+        this.uncompressedEndOffset - this.startOffsetInBuff;
   }
 
   // For write purpose.
