@@ -32,6 +32,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -99,8 +101,8 @@ public class TestBaseHoodieClient {
         Collections.singletonList(stat("f0", PARTITION, PREV_COMMIT)), view);
 
     assertEquals(1, resolved.size());
-    assertEquals(prevBase.getPath(), resolved.get("f0").prevBaseFilePath);
-    assertNull(resolved.get("f0").bootstrapBaseFilePath, "non-bootstrap update has no bootstrap path");
+    assertEquals(prevBase.getPath(), resolved.get("f0").getPrevBaseFilePath());
+    assertNull(resolved.get("f0").getBootstrapBaseFilePath(), "non-bootstrap update has no bootstrap path");
   }
 
   @Test
@@ -113,8 +115,8 @@ public class TestBaseHoodieClient {
     Map<String, PrevFilePaths> resolved = BaseHoodieClient.resolvePrevFilePaths(
         Collections.singletonList(stat("f0", PARTITION, PREV_COMMIT)), view);
 
-    assertEquals(prevBase.getPath(), resolved.get("f0").prevBaseFilePath);
-    assertEquals(bootstrap.getPath(), resolved.get("f0").bootstrapBaseFilePath,
+    assertEquals(prevBase.getPath(), resolved.get("f0").getPrevBaseFilePath());
+    assertEquals(bootstrap.getPath(), resolved.get("f0").getBootstrapBaseFilePath(),
         "bootstrap source path must be carried through for bootstrapped file groups");
   }
 
@@ -142,7 +144,7 @@ public class TestBaseHoodieClient {
 
     // The failing file group is dropped; resolution continues for the rest (must not fail the commit).
     assertFalse(resolved.containsKey("boom"));
-    assertEquals(prevBase.getPath(), resolved.get("ok").prevBaseFilePath);
+    assertEquals(prevBase.getPath(), resolved.get("ok").getPrevBaseFilePath());
   }
 
   @Test
@@ -164,10 +166,34 @@ public class TestBaseHoodieClient {
 
     HoodieWriteCommitCallbackMessage message = new HoodieWriteCommitCallbackMessage(
         PREV_COMMIT, "table", "/base", Collections.emptyList(),
-        Option.of("commit"), Option.empty(), prevFilePaths, extraContext);
+        Option.of("commit"), Option.empty(), () -> prevFilePaths, extraContext);
 
     assertEquals("commit", message.getCommitActionType().get());
     assertEquals(prevFilePaths, message.getPrevFilePaths());
     assertEquals(extraContext, message.getExtraContext());
+  }
+
+  @Test
+  public void prevFilePathsAreResolvedLazilyAndMemoized() {
+    AtomicInteger resolveCalls = new AtomicInteger();
+    Map<String, PrevFilePaths> resolved =
+        Collections.singletonMap("f0", new PrevFilePaths("/tbl/prev.parquet", null));
+    Supplier<Map<String, PrevFilePaths>> supplier = () -> {
+      resolveCalls.incrementAndGet();
+      return resolved;
+    };
+
+    HoodieWriteCommitCallbackMessage message = new HoodieWriteCommitCallbackMessage(
+        PREV_COMMIT, "table", "/base", Collections.emptyList(),
+        Option.empty(), Option.empty(), supplier, Collections.emptyMap());
+
+    // Constructing the message must not resolve prev file paths (no FileSystemView access).
+    assertEquals(0, resolveCalls.get(),
+        "prevFilePaths must not be resolved until a consumer reads them");
+
+    assertEquals(resolved, message.getPrevFilePaths());
+    // A second read must reuse the memoized result rather than resolve again.
+    assertEquals(resolved, message.getPrevFilePaths());
+    assertEquals(1, resolveCalls.get(), "prevFilePaths must be resolved at most once and memoized");
   }
 }

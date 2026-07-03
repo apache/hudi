@@ -30,6 +30,7 @@ import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.transaction.TransactionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -502,7 +503,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
       commitCallback.call(new HoodieWriteCommitCallbackMessage(
           commitTime, config.getTableName(), config.getBasePath(),
           stats, Option.of(commitActionType), extraMetadata,
-          resolvePrevFilePaths(stats, fsViewSupplier.get()),
+          () -> resolvePrevFilePaths(stats, fsViewSupplier.get()),
           Collections.emptyMap()));
     } catch (Exception e) {
       log.warn("HoodieWriteCommitCallback failed for commit {} ({}); ignoring",
@@ -544,10 +545,10 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
       if (!prev.isPresent()) {
         continue;
       }
-      String prevPath = prev.get().getPath();
-      String bootstrapPath = prev.get().getBootstrapBaseFile().isPresent()
-          ? prev.get().getBootstrapBaseFile().get().getPath()
-          : null;
+      HoodieBaseFile prevBaseFile = prev.get();
+      Option<BaseFile> bootstrapBaseFile = prevBaseFile.getBootstrapBaseFile();
+      String prevPath = prevBaseFile.getPath();
+      String bootstrapPath = bootstrapBaseFile.isPresent() ? bootstrapBaseFile.get().getPath() : null;
       out.put(stat.getFileId(), new PrevFilePaths(prevPath, bootstrapPath));
     }
     return out;

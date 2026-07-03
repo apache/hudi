@@ -100,6 +100,9 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
         }
       }
       log.info("Compacted successfully on commit {}", compactionCommitTime);
+      log.info("Compacted successfully on commit " + compactionCommitTime);
+      fireCommitCallbackIfNecessary(compactionCommitTime, HoodieActiveTimeline.COMMIT_ACTION,
+          metadata.getWriteStats(), table::getBaseFileOnlyView, Option.empty());
     } finally {
       if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
         this.heartbeatClient.stop(compactionCommitTime);
@@ -160,6 +163,9 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       }
     }
     log.info("Clustering successfully on commit {}", clusteringCommitTime);
+    log.info("Clustering successfully on commit " + clusteringCommitTime);
+    fireCommitCallbackIfNecessary(clusteringCommitTime, clusteringInstant.getAction(),
+        writeStats, table::getBaseFileOnlyView, Option.empty());
   }
 
   @Override

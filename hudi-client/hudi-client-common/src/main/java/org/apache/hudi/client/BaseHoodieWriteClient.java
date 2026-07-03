@@ -632,8 +632,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       boolean postCommitStatus = true;
       HoodieTimer postCommitTimer = HoodieTimer.start();
       try {
+        String commitActionType = CommitUtils.getCommitActionType(operationType, hoodieTable.getMetaClient().getTableType());
         postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime,
-            hoodieTable.getMetaClient().getCommitActionType(), Option.empty());
+            commitActionType, Option.empty());
         mayBeCleanAndArchive(hoodieTable);
       } catch (Exception e) {
         postCommitStatus = false;

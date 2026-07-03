@@ -22,18 +22,20 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 
-import lombok.AllArgsConstructor;
+import lombok.AccessLevel;
 import lombok.Getter;
 
+import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * Base callback message, which contains commitTime and tableName only for now.
  */
-@AllArgsConstructor
 @Getter
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public class HoodieWriteCommitCallbackMessage implements Serializable {
@@ -71,27 +73,57 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
   private final Option<Map<String, String>> extraMetadata;
 
   /**
-   * Previous base file paths keyed by fileId. Populated by the write client
-   * using the cached FileSystemView so that callback implementations don't
-   * have to rebuild a view. Empty for inserts and for callers that don't
-   * pre-resolve.
+   * Previous base file paths keyed by fileId, resolved lazily. Populated by the write
+   * client from the cached FileSystemView so that callback implementations don't have to
+   * rebuild a view. Empty for inserts and for callers that don't pre-resolve.
+   *
+   * <p>Resolution is deferred to the {@code prevFilePathsSupplier} and only triggered on the
+   * first {@link #getPrevFilePaths()} call: a callback that never reads the previous paths
+   * pays nothing (no FileSystemView access). The resolved value is memoized here and is the
+   * form that gets serialized (see {@link #writeObject}).
    */
-  private final Map<String, PrevFilePaths> prevFilePaths;
+  private Map<String, PrevFilePaths> prevFilePaths;
+
+  /**
+   * Lazily resolves {@link #prevFilePaths}. Transient because it may capture a
+   * FileSystemView (not serializable); excluded from the generated getters so it never
+   * leaks into JSON/Java serialization. The resolved map is memoized into
+   * {@link #prevFilePaths}.
+   */
+  @Getter(AccessLevel.NONE)
+  private final transient Supplier<Map<String, PrevFilePaths>> prevFilePathsSupplier;
 
   /**
    * Free-form context that producers can attach for downstream callback consumers.
    * The OSS write client populates this as empty; specialized callsites or wrappers
-   * may populate it with whatever context their callbacks need. Mirrors the
-   * optional shape of {@link #extraMetadata}.
+   * may populate it with whatever context their callbacks need.
    */
   private final Map<String, String> extraContext;
 
   public HoodieWriteCommitCallbackMessage(String commitTime,
                                           String tableName,
                                           String basePath,
+                                          List<HoodieWriteStat> hoodieWriteStat,
+                                          Option<String> commitActionType,
+                                          Option<Map<String, String>> extraMetadata,
+                                          Supplier<Map<String, PrevFilePaths>> prevFilePathsSupplier,
+                                          Map<String, String> extraContext) {
+    this.commitTime = commitTime;
+    this.tableName = tableName;
+    this.basePath = basePath;
+    this.hoodieWriteStat = hoodieWriteStat;
+    this.commitActionType = commitActionType;
+    this.extraMetadata = extraMetadata;
+    this.prevFilePathsSupplier = prevFilePathsSupplier;
+    this.extraContext = extraContext;
+  }
+
+  public HoodieWriteCommitCallbackMessage(String commitTime,
+                                          String tableName,
+                                          String basePath,
                                           List<HoodieWriteStat> hoodieWriteStat) {
     this(commitTime, tableName, basePath, hoodieWriteStat, Option.empty(), Option.empty(),
-        Collections.emptyMap(), Collections.emptyMap());
+        Collections::emptyMap, Collections.emptyMap());
   }
 
   public HoodieWriteCommitCallbackMessage(String commitTime,
@@ -101,7 +133,28 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
                                           Option<String> commitActionType,
                                           Option<Map<String, String>> extraMetadata) {
     this(commitTime, tableName, basePath, hoodieWriteStat, commitActionType, extraMetadata,
-        Collections.emptyMap(), Collections.emptyMap());
+        Collections::emptyMap, Collections.emptyMap());
+  }
+
+  /**
+   * Returns the previous base file paths keyed by fileId, resolving them on first access.
+   * A consumer that never calls this triggers no FileSystemView lookup. Never null.
+   */
+  public Map<String, PrevFilePaths> getPrevFilePaths() {
+    if (prevFilePaths == null) {
+      prevFilePaths = prevFilePathsSupplier != null
+          ? prevFilePathsSupplier.get() : Collections.emptyMap();
+    }
+    return prevFilePaths;
+  }
+
+  /**
+   * Force lazy resolution before serialization so the resolved map (not the transient
+   * supplier) is what gets written.
+   */
+  private void writeObject(ObjectOutputStream out) throws IOException {
+    getPrevFilePaths();
+    out.defaultWriteObject();
   }
 
   /**
@@ -110,10 +163,11 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
    * {@link #bootstrapBaseFilePath} is the bootstrap-source file the previous
    * base file referenced (null for non-bootstrap tables).
    */
+  @Getter
   public static class PrevFilePaths implements Serializable {
     private static final long serialVersionUID = 1L;
-    public final String prevBaseFilePath;
-    public final String bootstrapBaseFilePath;
+    private final String prevBaseFilePath;
+    private final String bootstrapBaseFilePath;
 
     public PrevFilePaths(String prevBaseFilePath, String bootstrapBaseFilePath) {
       this.prevBaseFilePath = prevBaseFilePath;
