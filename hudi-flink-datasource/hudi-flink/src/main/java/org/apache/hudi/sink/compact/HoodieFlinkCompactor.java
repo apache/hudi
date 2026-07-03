@@ -367,7 +367,7 @@ public class HoodieFlinkCompactor {
      * Shutdown async services like compaction/clustering as DeltaSync is shutdown.
      */
     public void shutdownAsyncService(boolean error) {
-      LOG.info("Gracefully shutting down compactor. Error ?{}", error);
+      LOG.info("Gracefully shutting down compactor. Error: {}", error);
       executor.shutdown();
       writeClient.close();
     }

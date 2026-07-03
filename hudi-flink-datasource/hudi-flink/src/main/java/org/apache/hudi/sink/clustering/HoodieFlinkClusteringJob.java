@@ -418,7 +418,7 @@ public class HoodieFlinkClusteringJob {
      * Shutdown async services like compaction/clustering as DeltaSync is shutdown.
      */
     public void shutdownAsyncService(boolean error) {
-      LOG.info("Gracefully shutting down clustering job. Error ?{}", error);
+      LOG.info("Gracefully shutting down clustering job. Error: {}", error);
       executor.shutdown();
       writeClient.close();
     }
