@@ -55,7 +55,7 @@ File Groups. Updates are captured in log files tied to these File Groups, ensuri
 - **Timeline** : Hudi's [timeline](timeline.md), stored in the `/.hoodie/timeline` folder, is a crucial event log recording all table actions in an ordered manner,
   with events kept for a specified period. Hudi uniquely designs each File Group as a self-contained log, enabling record state reconstruction through delta logs, even after archival of historical actions. This approach effectively limits metadata size based on table activity frequency, essential for managing tables with frequent updates.
 
-- **File Group and File Slice** : Within each partition the data is physically stored as base and Log Files and organized into logical concepts as [File groups](https://hudi.apache.org/tech-specs-1point0/#storage-layout) and
+- **File Group and File Slice** : Within each partition the data is physically stored as base and Log Files and organized into logical concepts as [File groups](https://hudi.apache.org/tech-specs/#storage-layout) and
 File Slices. File groups contain multiple versions of File Slices and are split into multiple File Slices. A File Slice comprises the Base and Log File. Each File Slice within
 the file-group is uniquely identified by the write that created its base file or the first log file, which helps order the File Slices.
 

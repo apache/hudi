@@ -69,7 +69,7 @@ Here is how the secondary index works in Hudi.
 
 Hudi supports hash-based secondary indexes, which are horizontally scalable by distributing keys across shards for fast writes and lookups.
 
-If you are interested in the implementation details of secondary indexes, you can read more [here](https://hudi.apache.org/tech-specs-1point0/#secondary-index).
+If you are interested in the implementation details of secondary indexes, you can read more [here](https://hudi.apache.org/tech-specs/#secondary-index).
 
 ### Creating a Secondary Index in Hudi
 
