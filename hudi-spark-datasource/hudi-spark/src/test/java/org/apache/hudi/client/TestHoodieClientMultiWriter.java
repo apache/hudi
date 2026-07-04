@@ -1030,7 +1030,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         writer1Succeeded.set(true);
       } catch (Exception e) {
         // Expected - one writer may fail due to concurrent execution
-        LOG.info("Writer 1 failed with exception: " + e.getMessage());
+        LOG.info("Writer 1 failed with exception: {}", e.getMessage());
         writer1Succeeded.set(false);
       }
     });
@@ -1045,7 +1045,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         writer2Succeeded.set(true);
       } catch (Exception e) {
         // Expected - one writer may fail due to concurrent execution
-        LOG.info("Writer 2 failed with exception: " + e.getMessage());
+        LOG.info("Writer 2 failed with exception: {}", e.getMessage());
         writer2Succeeded.set(false);
       }
     });
@@ -1528,9 +1528,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
           try {
             ingestBatch(writeFn, client1, newCommitTime1, writeRecords1, runCountDownLatch);
           } catch (IOException e) {
-            LOG.error("IOException thrown " + e.getMessage());
+            LOG.error("IOException thrown {}", e.getMessage());
           } catch (InterruptedException e) {
-            LOG.error("Interrupted Exception thrown " + e.getMessage());
+            LOG.error("Interrupted Exception thrown {}", e.getMessage());
           } catch (Exception e) {
             client1Succeeded.set(false);
           }
@@ -1541,9 +1541,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
           try {
             ingestBatch(writeFn, client2, newCommitTime2, writeRecords2, runCountDownLatch);
           } catch (IOException e) {
-            LOG.error("IOException thrown " + e.getMessage());
+            LOG.error("IOException thrown {}", e.getMessage());
           } catch (InterruptedException e) {
-            LOG.error("Interrupted Exception thrown " + e.getMessage());
+            LOG.error("Interrupted Exception thrown {}", e.getMessage());
           } catch (Exception e) {
             client2Succeeded.set(false);
           }
