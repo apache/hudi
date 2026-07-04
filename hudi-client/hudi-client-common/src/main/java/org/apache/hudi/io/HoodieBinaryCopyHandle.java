@@ -109,7 +109,8 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
   }
 
   public void write() {
-    log.info("Start to merge source files {} into target file: {}. Please pay attention that we will not rolling files based on max-file-size config during binary copy.", this.inputFiles, this.path);
+    log.info("Start to merge source files {} into target file: {}. Please pay attention that we will not rolling files based on max-file-size config during binary copy.",
+        this.inputFiles, this.path);
     HoodieTimer timer = HoodieTimer.start();
     long records = 0;
     try {
