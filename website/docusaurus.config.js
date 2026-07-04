@@ -121,8 +121,12 @@ module.exports = {
             to: "/learn/tech-specs",
           },
           {
-            from: "/tech-specs-1point0",
-            to: "/learn/tech-specs-1point0",
+            from: ["/tech-specs-1point0", "/learn/tech-specs-1point0"],
+            to: "/learn/tech-specs",
+          },
+          {
+            from: "/tech-specs-0-point-x",
+            to: "/learn/tech-specs-0-point-x",
           },
           {
             from: [
@@ -249,8 +253,8 @@ module.exports = {
               to: "/learn/tech-specs",
             },
             {
-              label: "Tech Specs 1.0",
-              to: "/learn/tech-specs-1point0",
+              label: "Tech Specs (pre-1.0)",
+              to: "/learn/tech-specs-0-point-x",
             },
           ],
         },
@@ -596,7 +600,7 @@ module.exports = {
       "data-project-name": "Apache Hudi",
       "data-project-color": "#FFFFFF",
       "data-project-logo": "/assets/images/logo-big.png",
-      "data-modal-disclaimer": "This AI assistant answers Apache Hudi questions using your [documentation](https://hudi.apache.org/docs/quick-start-guide/), [dev setup](https://hudi.apache.org/contribute/developer-setup/), the [tech specs](https://hudi.apache.org/tech-specs-1point0/) and [open GitHub Issues](https://github.com/apache/hudi/issues/) from the last year.",
+      "data-modal-disclaimer": "This AI assistant answers Apache Hudi questions using your [documentation](https://hudi.apache.org/docs/quick-start-guide/), [dev setup](https://hudi.apache.org/contribute/developer-setup/), the [tech specs](https://hudi.apache.org/learn/tech-specs/) and [open GitHub Issues](https://github.com/apache/hudi/issues/) from the last year.",
       "data-modal-title": "Apache Hudi AI Assistant",
       "data-modal-example-questions-title": "Try asking me...",
       "data-modal-example-questions": "How can I convert an existing COW table to MOR?,How do I set up incremental queries with Hudi tables?",

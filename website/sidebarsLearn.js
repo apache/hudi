@@ -39,12 +39,12 @@ module.exports = {
     {
       type: 'doc',
       id: 'tech-specs',
-      label: 'Tech Specs',
+      label: 'Tech Specs (current)',
     },
     {
       type: 'doc',
-      id: 'tech-specs-1point0',
-      label: 'Tech Specs 1.0',
+      id: 'tech-specs-0-point-x',
+      label: 'Tech Specs (pre-1.0)',
     },
   ],
 };

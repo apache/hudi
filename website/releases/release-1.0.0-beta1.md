@@ -29,7 +29,7 @@ rolling upgrades from older versions to this release.
 ### Format changes
 
 [This GitHub issue](https://github.com/apache/hudi/issues/15964) is the main epic covering all the format changes proposals,
-which are also partly covered in the [Hudi 1.0 tech specification](/learn/tech-specs-1point0). The following are the main
+which are also partly covered in the [Hudi 1.0 tech specification](/learn/tech-specs). The following are the main
 changes in this release:
 
 #### Timeline
@@ -49,7 +49,7 @@ changes in this release:
 #### Log File Format
 
 - In addition to the fields in the log file header, we also store record positions. Refer to the
-  latest [spec](/learn/tech-specs-1point0#log-format) for more details. This allows us to do
+  latest [spec](/learn/tech-specs#log-format) for more details. This allows us to do
   position-based merging (apart from key-based merging) and skip pages based on positions.
 - Log file name will now have the deltacommit instant time instead of base commit instant time.
 
