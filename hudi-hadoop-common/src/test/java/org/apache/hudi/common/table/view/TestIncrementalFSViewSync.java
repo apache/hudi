@@ -527,7 +527,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     final int netFilesAddedPerInstant = numFilesAddedPerInstant - numFilesReplacedPerInstant;
     assertEquals(newCleanerInstants.size(), cleanedInstants.size());
     long exp = PARTITIONS.stream().mapToLong(p1 -> view.getAllFileSlices(p1).count()).findAny().getAsLong();
-    log.info("Initial File Slices :" + exp);
+    log.info("Initial File Slices :{}", exp);
     for (int idx = 0; idx < newCleanerInstants.size(); idx++) {
       String instant = cleanedInstants.get(idx);
       try {
@@ -544,8 +544,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         assertEquals(State.COMPLETED, view.getLastInstant().get().getState());
         assertEquals(HoodieTimeline.CLEAN_ACTION, view.getLastInstant().get().getAction());
         PARTITIONS.forEach(p -> {
-          log.info("PARTITION : " + p);
-          log.info("\tFileSlices :" + view.getAllFileSlices(p).collect(Collectors.toList()));
+          log.info("PARTITION : {}", p);
+          log.info("\tFileSlices :{}", view.getAllFileSlices(p).collect(Collectors.toList()));
         });
 
         final int instantIdx = newCleanerInstants.size() - idx;
@@ -593,7 +593,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
             isDeltaCommit ? initialFileSlices : initialFileSlices - ((idx + 1) * (FILE_IDS_PER_PARTITION.size() - totalReplacedFileSlicesPerPartition));
         view.sync();
         assertTrue(view.getLastInstant().isPresent());
-        log.info("Last Instant is :" + view.getLastInstant().get());
+        log.info("Last Instant is :{}", view.getLastInstant().get());
         if (isRestore) {
           assertEquals(newRestoreInstants.get(idx), view.getLastInstant().get().requestedTime());
           assertEquals(HoodieTimeline.RESTORE_ACTION, view.getLastInstant().get().getAction());
@@ -881,7 +881,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     int multiple = begin;
     for (int idx = 0; idx < instants.size(); idx++) {
       String instant = instants.get(idx);
-      log.info("Adding instant=" + instant);
+      log.info("Adding instant={}", instant);
       HoodieInstant lastInstant = lastInstants.get(idx);
       // Add a non-empty ingestion to COW table
       List<String> filePaths = addInstant(metaClient, instant, deltaCommit);

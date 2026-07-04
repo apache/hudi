@@ -1198,7 +1198,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     roView.getAllBaseFiles(partitionPath);
 
     fileSliceList = rtView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
-    log.info("FILESLICE LIST=" + fileSliceList);
+    log.info("FILESLICE LIST={}", fileSliceList);
     dataFiles = fileSliceList.stream().map(FileSlice::getBaseFile).filter(Option::isPresent).map(Option::get)
         .collect(Collectors.toList());
     assertEquals(1, dataFiles.size(), "Expect only one data-files in latest view as there is only one file-group");
