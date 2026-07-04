@@ -155,9 +155,10 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
          |""".stripMargin)
 
     // SHOW CREATE TABLE resolves through Spark's native command for the Hudi V2 table, which
-    // emits `CREATE TABLE <catalog>.<db>.<table>` (no IF NOT EXISTS) with a USING/TBLPROPERTIES body.
+    // emits `CREATE TABLE <table>` with a USING/TBLPROPERTIES body. The catalog qualifier differs
+    // by Spark version (`spark_catalog.default.` on 3.5+, `default.` on 3.4/3.3), so match either.
     val ddl = spark.sql(s"show create table $tableName").head().getString(0)
-    assertTrue(ddl.contains(s"CREATE TABLE spark_catalog.default.$tableName"), ddl)
+    assertTrue(ddl.contains("CREATE TABLE") && ddl.contains(s"default.$tableName"), ddl)
     assertTrue(ddl.contains("USING hudi"), ddl)
     assertTrue(ddl.contains("PARTITIONED BY (dt)"), ddl)
     assertTrue(ddl.contains("COMMENT 'a hudi table'"), ddl)
