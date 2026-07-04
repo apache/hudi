@@ -252,7 +252,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public List<Partition> getPartitionsFromList(String tableName, List<String> partitionList) {
     if (partitionList.isEmpty()) {
-      log.info("No partitions to read for " + tableId(this.databaseName, tableName));
+      log.info("No partitions to read for {}", tableId(this.databaseName, tableName));
       return Collections.emptyList();
     }
     HoodieTimer timer = HoodieTimer.start();
@@ -310,7 +310,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     HoodieTimer timer = HoodieTimer.start();
     try {
       if (partitionsToAdd.isEmpty()) {
-        log.info("No partitions to add for " + tableId(this.databaseName, tableName));
+        log.info("No partitions to add for {}", tableId(this.databaseName, tableName));
         return;
       }
       Table table = getTable(awsGlue, databaseName, tableName);
@@ -373,7 +373,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     HoodieTimer timer = HoodieTimer.start();
     try {
       if (changedPartitions.isEmpty()) {
-        log.info("No partitions to update for " + tableId(this.databaseName, tableName));
+        log.info("No partitions to update for {}", tableId(this.databaseName, tableName));
         return;
       }
       Table table = getTable(awsGlue, databaseName, tableName);
@@ -413,7 +413,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     HoodieTimer timer = HoodieTimer.start();
     try {
       if (partitionsToDrop.isEmpty()) {
-        log.info("No partitions to drop for " + tableId(this.databaseName, tableName));
+        log.info("No partitions to drop for {}", tableId(this.databaseName, tableName));
         return;
       }
       parallelizeChange(partitionsToDrop, this.changeParallelism, partitions -> this.dropPartitionsInternal(tableName, partitions), MAX_DELETE_PARTITIONS_PER_REQUEST);
