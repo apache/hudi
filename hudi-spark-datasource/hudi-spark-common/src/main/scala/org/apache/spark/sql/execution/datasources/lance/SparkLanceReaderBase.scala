@@ -137,7 +137,6 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
         // the option regardless.
         val blobMode = resolveBlobReadMode(storageConf)
         val readOpts = FileReadOptions.builder().blobReadMode(blobMode).build()
-        val arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE, readOpts)
 
         // Compose the DESCRIPTOR-aware blob transform only when the user opted into that mode
         // AND the request actually has BLOB columns (otherwise the rewrite has nothing to do).
@@ -148,8 +147,18 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
         } else {
           null
         }
-        lanceIterator = new LanceRecordIterator(
-          allocator, lanceReader, arrowReader, iteratorSchema, filePath, blobTransform)
+        // lance-core 4.0.0 aborts the JVM when a single readAll stream crosses Lance's internal
+        // BLOB page boundary (512 rows). For BLOB-containing reads, drain the file in <=512-row
+        // range chunks (one fresh readAll each); non-BLOB reads keep the single streamed reader.
+        lanceIterator = if (!blobFieldNames.isEmpty) {
+          LanceRecordIterator.chunkedBlobReader(
+            allocator, lanceReader, columnNames, readOpts, lanceReader.numRows(),
+            iteratorSchema, filePath, blobTransform)
+        } else {
+          val arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE, readOpts)
+          new LanceRecordIterator(
+            allocator, lanceReader, arrowReader, iteratorSchema, filePath, blobTransform)
+        }
 
         // Register cleanup listener
         Option(TaskContext.get()).foreach { ctx =>
