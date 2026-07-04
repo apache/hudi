@@ -40,14 +40,16 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
   pull-requests: write
 
 env:
   # Minimum required coverage (percent) of the lines changed by the PR.
   MIN_PATCH_COVERAGE: "80"
-  # Max minutes to wait for the CI matrix to finish uploading and for Codecov to
-  # aggregate the report for this PR head, before giving up (fail open).
-  MAX_WAIT_MINUTES: "90"
+  # Max minutes to wait for Java CI to finish AND for Codecov to aggregate the
+  # report for this PR head, before giving up (fail open). Covers the full CI
+  # matrix (~75m) plus Codecov merge time.
+  MAX_WAIT_MINUTES: "120"
 
 jobs:
   patch-coverage:
@@ -87,29 +89,51 @@ jobs:
           commit_api="https://api.codecov.io/api/v2/github/${owner}/repos/${repo}/commits/${HEAD_SHA}"
           compare_api="https://api.codecov.io/api/v2/github/${owner}/repos/${repo}/compare?pullid=${PR}"
 
-          # Wait for the CI matrix to finish uploading and for Codecov to finish
-          # MERGING those uploads for this PR head. Reading diff coverage before
-          # aggregation completes would undercount lines covered by not-yet-merged
-          # sessions and fail the PR spuriously, so wait until the commit reaches
-          # state="complete" and its session count stops growing.
           deadline=$(( SECONDS + MAX_WAIT_MINUTES * 60 ))
+
+          # STEP 1: wait until the Java CI run for this exact head SHA has COMPLETED.
+          # This gate runs concurrently with Java CI, and Codecov reports state="complete"
+          # after every single upload (it re-aggregates incrementally). Scoring before the
+          # whole matrix has uploaded would read a partial report and fail spuriously, so
+          # first block on Java CI finishing: only then are all coverage sessions submitted.
+          ci_done=0
+          while [ "${SECONDS}" -lt "${deadline}" ]; do
+            ci_status="$(gh api "repos/${REPO}/actions/runs?head_sha=${HEAD_SHA}&per_page=100" \
+              --jq '[.workflow_runs[] | select(.name=="Java CI")] | sort_by(.run_number) | last | .status' 2>/dev/null || true)"
+            echo "waiting for Java CI to finish: status=${ci_status:-unknown}"
+            if [ "${ci_status}" = "completed" ]; then ci_done=1; break; fi
+            sleep 60
+          done
+          if [ "${ci_done}" != "1" ]; then
+            echo "WARN: Java CI did not complete within ${MAX_WAIT_MINUTES}m; skipping the gate (fail open)."
+            report "$(printf '### Patch coverage: skipped ⚠️\nJava CI did not finish within %s minutes, so patch coverage could not be scored. Re-run after CI completes to enforce it.' "${MAX_WAIT_MINUTES}")"
+            exit 0
+          fi
+
+          # STEP 2: Java CI is done, so all uploads are submitted; now wait for Codecov to
+          # finish MERGING them. Require state="complete" AND the session count to hold
+          # steady across 3 consecutive polls (90s apart) so we do not score mid-merge.
           prev_sessions="-1"
+          stable_count=0
           settled=0
           while [ "${SECONDS}" -lt "${deadline}" ]; do
             cresp="$(curl -sf "${commit_api}" 2>/dev/null || true)"
             state="$(printf '%s' "${cresp}" | jq -r '.state // empty' 2>/dev/null || true)"
             sessions="$(printf '%s' "${cresp}" | jq -r '.totals.sessions // 0' 2>/dev/null || echo 0)"
-            echo "waiting for Codecov: state=${state:-none} sessions=${sessions}"
+            echo "waiting for Codecov merge: state=${state:-none} sessions=${sessions} stable=${stable_count}"
             if [ "${state}" = "complete" ] && [ "${sessions}" = "${prev_sessions}" ] && [ "${sessions}" != "0" ]; then
-              settled=1; break
+              stable_count=$(( stable_count + 1 ))
+              if [ "${stable_count}" -ge 2 ]; then settled=1; break; fi
+            else
+              stable_count=0
             fi
             prev_sessions="${sessions}"
-            sleep 60
+            sleep 90
           done
 
           if [ "${settled}" != "1" ]; then
-            echo "WARN: Codecov did not reach a stable 'complete' state within ${MAX_WAIT_MINUTES}m; skipping the gate (fail open)."
-            report "$(printf '### Patch coverage: skipped ⚠️\nCodecov did not finish aggregating coverage for this PR within %s minutes, so the gate was skipped. Re-run after CI completes to enforce it.' "${MAX_WAIT_MINUTES}")"
+            echo "WARN: Codecov did not reach a stable 'complete' state within the budget; skipping the gate (fail open)."
+            report "$(printf '### Patch coverage: skipped ⚠️\nCodecov did not finish aggregating coverage for this PR in time, so the gate was skipped. Re-run to enforce it.')"
             exit 0
           fi
 
