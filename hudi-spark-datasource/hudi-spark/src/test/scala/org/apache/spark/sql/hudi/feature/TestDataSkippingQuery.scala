@@ -208,4 +208,66 @@ class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test column stats data skipping across multiple files with range, IN and equality predicates") {
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf(
+          "hoodie.metadata.enable" -> "true",
+          "hoodie.metadata.index.column.stats.enable" -> "true",
+          "hoodie.enable.data.skipping" -> "true",
+          "hoodie.metadata.index.column.stats.column.list" -> "id,price",
+          // keep every commit in its own base file so column-stats pruning has multiple files to skip
+          "hoodie.parquet.small.file.limit" -> "0"
+        ) {
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | tblproperties (primaryKey = 'id', orderingFields = 'ts', type = '$tableType')
+               | location '${tmp.getCanonicalPath}'
+                  """.stripMargin)
+          // Three separate commits, each landing in its own base file with disjoint id / price ranges.
+          spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000), (2, 'a2', 20, 1000)")
+          spark.sql(s"insert into $tableName values (11, 'b1', 110, 2000), (12, 'b2', 120, 2000)")
+          spark.sql(s"insert into $tableName values (21, 'c1', 210, 3000), (22, 'c2', 220, 3000)")
+
+          // Equality on the indexed key column -> only the first file qualifies.
+          checkAnswer(s"select id, name, price from $tableName where id = 1")(
+            Seq(1, "a1", 10.0)
+          )
+          // Range predicate that only the last file can satisfy.
+          checkAnswer(s"select id, name, price from $tableName where id > 20")(
+            Seq(21, "c1", 210.0),
+            Seq(22, "c2", 220.0)
+          )
+          // IN predicate touching the first and last files, skipping the middle one.
+          checkAnswer(s"select id, name, price from $tableName where id in (2, 22)")(
+            Seq(2, "a2", 20.0),
+            Seq(22, "c2", 220.0)
+          )
+          // Range on a second indexed column keeps only the middle file.
+          checkAnswer(s"select id, name, price from $tableName where price >= 110 and price < 210")(
+            Seq(11, "b1", 110.0),
+            Seq(12, "b2", 120.0)
+          )
+          // Predicate that matches nothing -> all files pruned, empty result.
+          checkAnswer(s"select id, name, price from $tableName where id = 999")()
+
+          // Data skipping must not change results compared to a full scan.
+          withSQLConf("hoodie.enable.data.skipping" -> "false") {
+            checkAnswer(s"select id, name, price from $tableName where id in (2, 22)")(
+              Seq(2, "a2", 20.0),
+              Seq(22, "c2", 220.0)
+            )
+          }
+        }
+      }
+    }
+  }
 }
