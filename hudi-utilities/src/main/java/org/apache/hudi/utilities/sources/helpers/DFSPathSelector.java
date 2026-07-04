@@ -91,7 +91,7 @@ public class DFSPathSelector implements Serializable {
           new Class<?>[] {TypedProperties.class, Configuration.class},
           props, conf);
 
-      log.info("Using path selector " + selector.getClass().getName());
+      log.info("Using path selector {}", selector.getClass().getName());
       return selector;
     } catch (Exception e) {
       throw new HoodieException("Could not load source selector class " + sourceSelectorClass, e);
@@ -125,8 +125,7 @@ public class DFSPathSelector implements Serializable {
                                                                                  long sourceLimit) {
     try {
       // obtain all eligible files under root folder.
-      log.info("Root path => " + getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH)
-          + " source limit => " + sourceLimit);
+      log.info("Root path => {} source limit => {}", getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH), sourceLimit);
       long lastCheckpointTime = lastCheckpointStr.map(e -> Long.parseLong(e.getCheckpointKey())).orElse(Long.MIN_VALUE);
       List<FileStatus> eligibleFiles = listEligibleFiles(
           fs, new Path(getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH)), lastCheckpointTime);

@@ -73,7 +73,7 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
               ReflectionUtils.loadClass(
                   sourceSelectorClass, new Class<?>[] {TypedProperties.class}, props);
 
-      log.info("Using path selector " + selector.getClass().getName());
+      log.info("Using path selector {}", selector.getClass().getName());
       return selector;
     } catch (Exception e) {
       throw new HoodieException("Could not load source selector class " + sourceSelectorClass, e);
