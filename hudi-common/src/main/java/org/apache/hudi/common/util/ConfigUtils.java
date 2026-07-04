@@ -682,7 +682,7 @@ public class ConfigUtils {
           return props;
         } catch (IOException e) {
           if (HoodieExceptionUtil.isPermissionDeniedException(e)) {
-            log.error("Permission denied for " + path.toString() + " file.", e);
+            log.error("Permission denied for {} file.", path, e);
             throw new HoodieIOException("Permission denied for " + path + " file path. User does not have read access on the dataset.", e);
           } else {
             log.warn("Could not read properties from {}: {}", path, e);

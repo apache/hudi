@@ -94,7 +94,7 @@ public class MetricsReporterFactory {
         reporter = new Slf4jMetricsReporter(registry);
         break;
       default:
-        log.error("Reporter type[" + type + "] is not supported.");
+        log.error("Reporter type[{}] is not supported.", type);
         break;
     }
     return Option.ofNullable(reporter);

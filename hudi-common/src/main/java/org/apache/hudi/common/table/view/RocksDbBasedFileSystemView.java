@@ -207,8 +207,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   @Override
   void resetFileGroupsInPendingClustering(Map<HoodieFileGroupId, HoodieInstant> fgIdToInstantMap) {
-    log.info("Resetting file groups in pending clustering to ROCKSDB based file-system view at "
-        + config.getRocksdbBasePath() + ", Total file-groups=" + fgIdToInstantMap.size());
+    log.info("Resetting file groups in pending clustering to ROCKSDB based file-system view at {}, Total file-groups={}", config.getRocksdbBasePath(), fgIdToInstantMap.size());
 
     // Delete all replaced file groups
     rocksDB.prefixDelete(schemaHelper.getColFamilyForFileGroupsInPendingClustering(), "part=");
@@ -517,8 +516,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   @Override
   protected void resetReplacedFileGroups(final Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups) {
-    log.info("Resetting replacedFileGroups to ROCKSDB based file-system view at "
-        + config.getRocksdbBasePath() + ", Total file-groups=" + replacedFileGroups.size());
+    log.info("Resetting replacedFileGroups to ROCKSDB based file-system view at {}, Total file-groups={}", config.getRocksdbBasePath(), replacedFileGroups.size());
 
     // Delete all replaced file groups
     rocksDB.prefixDelete(schemaHelper.getColFamilyForReplacedFileGroups(), "part=");
@@ -543,8 +541,8 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
           })
       );
 
-      log.info("Finished adding replaced file groups to  partition (" + partitionPath + ") to ROCKSDB based view at "
-          + config.getRocksdbBasePath() + ", Total file-groups=" + partitionToReplacedFileGroupsEntry.getValue().size());
+      log.info("Finished adding replaced file groups to  partition ({}) to ROCKSDB based view at {}, Total file-groups={}",
+          partitionPath, config.getRocksdbBasePath(), partitionToReplacedFileGroupsEntry.getValue().size());
     });
   }
 
