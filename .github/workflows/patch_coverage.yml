@@ -27,10 +27,11 @@ on:
     types:
       - completed
 
-# Least privilege: only needs to post a commit status back onto the PR head.
+# Least privilege: post a commit status on the PR head and a report comment on the PR.
 permissions:
   contents: read
   statuses: write
+  pull-requests: write
 
 env:
   # Minimum required coverage (percent) of the lines changed by the PR.
@@ -64,6 +65,25 @@ jobs:
               echo "WARN: could not post commit status (${1}: ${2})"
           }
 
+          # Post (or update in place) the patch-coverage report comment on the open
+          # PR, so the result is visible on the PR before merging. The marker lets
+          # this update the same comment on re-runs instead of stacking new ones.
+          MARKER="<!-- hudi-patch-coverage-report -->"
+          upsert_comment() {
+            # $1 = markdown body (without the marker)
+            local body existing
+            body="${MARKER}"$'\n'"$1"
+            existing="$(gh api "repos/${REPO}/issues/${pr}/comments" --paginate \
+              --jq "map(select(.body | startswith(\"${MARKER}\"))) | .[0].id // empty" 2>/dev/null || true)"
+            if [ -n "${existing}" ]; then
+              gh api -X PATCH "repos/${REPO}/issues/comments/${existing}" -f body="${body}" >/dev/null 2>&1 \
+                || echo "WARN: could not update PR comment"
+            else
+              gh api -X POST "repos/${REPO}/issues/${pr}/comments" -f body="${body}" >/dev/null 2>&1 \
+                || echo "WARN: could not create PR comment"
+            fi
+          }
+
           # Resolve the PR number from the head commit of the triggering CI run.
           pr="$(gh api "repos/${REPO}/commits/${HEAD_SHA}/pulls" \
                  --jq '.[0].number // empty' 2>/dev/null || true)"
@@ -72,43 +92,65 @@ jobs:
             exit 0
           fi
           echo "Gating PR #${pr} (head ${HEAD_SHA})"
-          post_status pending "Waiting for Codecov to report patch coverage"
+          post_status pending "Waiting for Codecov to finish aggregating coverage"
 
-          api="https://api.codecov.io/api/v2/github/${owner}/repos/${repo}/compare?pullid=${pr}"
+          commit_api="https://api.codecov.io/api/v2/github/${owner}/repos/${repo}/commits/${HEAD_SHA}"
+          compare_api="https://api.codecov.io/api/v2/github/${owner}/repos/${repo}/compare?pullid=${pr}"
 
-          # Codecov may still be merging uploads from the CI matrix; poll briefly.
-          cov=""
-          for attempt in $(seq 1 20); do
-            resp="$(curl -sf "${api}" 2>/dev/null || true)"
-            if [ -n "${resp}" ]; then
-              # Diff (changed-line) coverage lives at totals.base.diff[5] as a
-              # percentage string; fall back to head.diff[5] / patch.coverage.
-              cov="$(printf '%s' "${resp}" | jq -r '
-                (.totals.base.diff[5] // .totals.head.diff[5] // .totals.patch.coverage // empty)
-                | tostring' 2>/dev/null || true)"
+          # This job runs via workflow_run, i.e. only AFTER every Java CI job has
+          # finished, so all matrix uploads have already been submitted to Codecov.
+          # The remaining wait is for Codecov to finish MERGING those sessions.
+          # Reading diff coverage before merging completes would undercount lines
+          # covered by not-yet-merged sessions and fail PRs spuriously, so wait for
+          # the commit to reach state="complete" (and its session count to stop
+          # growing) before trusting the number. Budget ~20 min.
+          state=""
+          prev_sessions="-1"
+          stable=0
+          for attempt in $(seq 1 40); do
+            cresp="$(curl -sf "${commit_api}" 2>/dev/null || true)"
+            state="$(printf '%s' "${cresp}" | jq -r '.state // empty' 2>/dev/null || true)"
+            sessions="$(printf '%s' "${cresp}" | jq -r '.totals.sessions // 0' 2>/dev/null || echo 0)"
+            echo "attempt ${attempt}/40: state=${state:-none} sessions=${sessions}"
+            if [ "${state}" = "complete" ] && [ "${sessions}" = "${prev_sessions}" ]; then
+              stable=1; break   # complete and session count unchanged since last poll
             fi
-            if [ -n "${cov}" ] && [ "${cov}" != "null" ] && [ "${cov}" != "empty" ]; then
-              break
-            fi
-            echo "Codecov not ready yet (attempt ${attempt}/20); sleeping 30s..."
+            prev_sessions="${sessions}"
             sleep 30
           done
 
-          if [ -z "${cov}" ] || [ "${cov}" = "null" ]; then
-            # No diff-coverage figure: typically means the PR changed no
-            # measurable source lines (docs/config/tests-only) or Codecov had no
-            # report. Do not fail the PR in that case.
-            echo "No patch coverage reported for PR #${pr}; treating as pass."
-            post_status success "No changed lines to score"
+          if [ "${stable}" != "1" ]; then
+            # Codecov never settled within the budget (slow/outage). Fail open: do
+            # not block the PR on Codecov infrastructure; log loudly instead.
+            echo "WARN: Codecov did not reach a stable 'complete' state in time; skipping the gate."
+            post_status success "Skipped: Codecov did not finish aggregating in time"
             exit 0
           fi
 
+          # Codecov has merged all sessions; read the changed-line (diff) coverage.
+          resp="$(curl -sf "${compare_api}" 2>/dev/null || true)"
+          cov="$(printf '%s' "${resp}" | jq -r '
+            (.totals.base.diff[5] // .totals.head.diff[5] // .totals.patch.coverage // empty)
+            | tostring' 2>/dev/null || true)"
+
+          if [ -z "${cov}" ] || [ "${cov}" = "null" ] || [ "${cov}" = "empty" ]; then
+            # No diff-coverage figure even though aggregation is complete: the PR
+            # changed no measurable source lines (docs/config/tests-only). Pass.
+            echo "No patch coverage reported for PR #${pr} (no measurable changed lines); treating as pass."
+            post_status success "No changed lines to score"
+            upsert_comment "$(printf '### Patch coverage: not applicable ✅\n\nThis PR changed no measurable source lines (docs / config / test-only), so there is nothing to gate.')"
+            exit 0
+          fi
+
+          report_url="https://app.codecov.io/gh/${owner}/${repo}/pull/${pr}"
           echo "Patch (changed-line) coverage: ${cov}% (minimum ${MIN_PATCH_COVERAGE}%)"
           if awk "BEGIN { exit !(${cov} >= ${MIN_PATCH_COVERAGE}) }"; then
             post_status success "Patch coverage ${cov}% >= ${MIN_PATCH_COVERAGE}%"
+            upsert_comment "$(printf '### Patch coverage: `%s%%` ✅\n\nCoverage of the lines this PR changed is **%s%%**, at or above the required **%s%%**.\n\n[View the coverage report on Codecov](%s).' "${cov}" "${cov}" "${MIN_PATCH_COVERAGE}" "${report_url}")"
             echo "PASS: changed lines meet the ${MIN_PATCH_COVERAGE}% coverage bar."
           else
             post_status failure "Patch coverage ${cov}% < ${MIN_PATCH_COVERAGE}%"
+            upsert_comment "$(printf '### Patch coverage: `%s%%` ❌\n\nCoverage of the lines this PR changed is **%s%%**, below the required **%s%%**. Please add tests for the new or modified code, or discuss the gap with a reviewer.\n\n[View which changed lines are uncovered on Codecov](%s).' "${cov}" "${cov}" "${MIN_PATCH_COVERAGE}" "${report_url}")"
             echo "FAIL: changed lines are only ${cov}% covered (need ${MIN_PATCH_COVERAGE}%)."
             echo "Add tests for the new/modified code, or justify the gap with a reviewer."
             exit 1
