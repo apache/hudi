@@ -187,8 +187,8 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
       arrayWritable.set(originalValue);
     } catch (RuntimeException re) {
       LOG.error("Got exception when doing array copy", re);
-      LOG.error("Base record :" + HoodieRealtimeRecordReaderUtils.arrayWritableToString(arrayWritable));
-      LOG.error("Log record :" + HoodieRealtimeRecordReaderUtils.arrayWritableToString(aWritable));
+      LOG.error("Base record :{}", HoodieRealtimeRecordReaderUtils.arrayWritableToString(arrayWritable));
+      LOG.error("Log record :{}", HoodieRealtimeRecordReaderUtils.arrayWritableToString(aWritable));
       String errMsg = "Base-record :" + HoodieRealtimeRecordReaderUtils.arrayWritableToString(arrayWritable)
           + " ,Log-record :" + HoodieRealtimeRecordReaderUtils.arrayWritableToString(aWritable) + " ,Error :" + re.getMessage();
       throw new RuntimeException(errMsg, re);
