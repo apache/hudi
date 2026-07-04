@@ -252,7 +252,7 @@ public class HoodieDataTableValidator implements Serializable {
     try {
       validator.run();
     } catch (Throwable throwable) {
-      log.error("Fail to do hoodie Data table validation for " + validator.cfg, throwable);
+      log.error("Fail to do hoodie Data table validation for {}", validator.cfg, throwable);
     } finally {
       jsc.stop();
     }
@@ -320,7 +320,7 @@ public class HoodieDataTableValidator implements Serializable {
 
         if (!danglingFilePaths.isEmpty() && danglingFilePaths.size() > 0) {
           log.error("Data table validation failed due to dangling files count {}, found before active timeline", danglingFilePaths.size());
-          danglingFilePaths.forEach(entry -> log.error("Dangling file: " + entry.toString()));
+          danglingFilePaths.forEach(entry -> log.error("Dangling file: {}", entry));
           finalResult = false;
           if (!cfg.ignoreFailed) {
             throw new HoodieValidationException(
