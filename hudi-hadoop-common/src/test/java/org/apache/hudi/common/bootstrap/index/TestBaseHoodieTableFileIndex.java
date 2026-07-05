@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.bootstrap.index;
 
-import org.apache.hudi.BaseHoodieTableFileIndex;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -27,6 +26,7 @@ import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Assertions;

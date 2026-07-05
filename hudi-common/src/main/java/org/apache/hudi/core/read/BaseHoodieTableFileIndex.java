@@ -16,12 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.core.read;
 
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.expression.Expression;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
@@ -47,7 +48,6 @@ import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.expression.Expression;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -223,7 +223,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   /**
    * Returns all partition paths matching the ones explicitly provided by the query (if any)
    */
-  protected List<PartitionPath> getAllQueryPartitionPaths() {
+  public List<PartitionPath> getAllQueryPartitionPaths() {
     if (cachedAllPartitionPaths == null) {
       List<String> queryRelativePartitionPaths = queryPaths.stream()
           .map(path -> FSUtils.getRelativePartitionPath(basePath, path))
@@ -620,7 +620,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         && cachedAllPartitionPaths.stream().allMatch(p -> cachedAllInputFileSlices.containsKey(p));
   }
 
-  protected boolean areAllPartitionPathsCached() {
+  public boolean areAllPartitionPathsCached() {
     // If the partition paths is not fully initialized yet, then the file slices are also not fully initialized.
     return cachedAllPartitionPaths != null;
   }

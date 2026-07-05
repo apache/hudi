@@ -23,6 +23,7 @@ import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 
 import org.apache.spark.sql.SparkSession

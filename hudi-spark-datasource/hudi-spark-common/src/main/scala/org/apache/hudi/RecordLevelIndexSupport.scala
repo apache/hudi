@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.InstantComparison
 import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
 import org.apache.hudi.common.util.HoodieDataUtils
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex
 import org.apache.hudi.keygen.KeyGenerator
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath

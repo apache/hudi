@@ -16,11 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.core.read;
 
-import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex.PartitionPath;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 

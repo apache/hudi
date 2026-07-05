@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.config.HoodieIndexConfig
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.index.bucket.BucketIdentifier
