@@ -383,6 +383,34 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.1.0")
       .withDocumentation("This property when set, will define how two versions of the record will be merged together when records are partially formed");
 
+  public static final ConfigProperty<String> METADATA_LAYOUT_CLASS = ConfigProperty
+      .key("hoodie.metadata.layout.class")
+      .noDefaultValue()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Fully-qualified class name of the HoodieMetadataTableLayout implementation that organizes "
+          + "MDT file groups on disk. Out-of-the-box values: "
+          + "(1) unset / org.apache.hudi.metadata.FlatMDTLayout (default) — every file group lives directly under its "
+          + "metadata partition directory; this is the layout used by every MDT created before this config existed. "
+          + "(2) org.apache.hudi.metadata.SubDirBucketedMDTLayout — distributes file groups into 4-digit bucket "
+          + "sub-directories. Custom implementations can be plugged in via FQCN. "
+          + "Set once at MDT initialization; immutable thereafter.");
+
+  public static final ConfigProperty<Integer> METADATA_LAYOUT_BUCKET_SIZE = ConfigProperty
+      .key("hoodie.metadata.layout.bucketed.file.group.per.bucket")
+      .defaultValue(1000)
+      .sinceVersion("1.3.0")
+      .withDocumentation("Layout-specific: maximum number of MDT file groups that share a single bucket "
+          + "sub-directory when `hoodie.metadata.layout.class` is set to SubDirBucketedMDTLayout. "
+          + "Ignored otherwise.");
+
+  public static final ConfigProperty<String> METADATA_LAYOUT_PARTITION_FILE_GROUP_COUNTS = ConfigProperty
+      .key("hoodie.metadata.layout.partition.file.group.counts")
+      .noDefaultValue()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Comma-separated map of MDT partition name to file-group count, e.g. "
+          + "\"record_index=2500,files=1,col_stats=10\". Persisted on the MDT at initialization so readers can "
+          + "compute physical sub-paths without performing a filesystem listing.");
+
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
   public static final ConfigProperty<String> SLASH_SEPARATED_DATE_PARTITIONING = KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING;
@@ -1394,6 +1422,92 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public void clearMetadataPartitions(HoodieTableMetaClient metaClient) {
     setMetadataPartitionState(metaClient, MetadataPartitionType.FILES.getPartitionPath(), false);
+  }
+
+  /**
+   * @return the FQCN of the configured MDT layout class, or empty if no layout was set
+   *     (in which case the flat layout is the implicit default).
+   */
+  public Option<String> getMetadataLayoutClass() {
+    return Option.ofNullable(getString(METADATA_LAYOUT_CLASS));
+  }
+
+  /**
+   * @return the configured layout bucket size; only meaningful when the layout class is a
+   *     sub-directory bucketing implementation.
+   */
+  public int getMetadataLayoutBucketSize() {
+    return getIntOrDefault(METADATA_LAYOUT_BUCKET_SIZE);
+  }
+
+  /**
+   * @return the persisted per-MDT-partition file-group counts, decoded from
+   *     {@link #METADATA_LAYOUT_PARTITION_FILE_GROUP_COUNTS}. Empty when not set.
+   */
+  public Map<String, Integer> getMetadataLayoutPartitionFileGroupCounts() {
+    String raw = getString(METADATA_LAYOUT_PARTITION_FILE_GROUP_COUNTS);
+    if (raw == null || raw.isEmpty()) {
+      return Collections.emptyMap();
+    }
+    Map<String, Integer> result = new HashMap<>();
+    for (String entry : raw.split(CONFIG_VALUES_DELIMITER)) {
+      int eq = entry.indexOf('=');
+      if (eq <= 0) {
+        continue;
+      }
+      result.put(entry.substring(0, eq), Integer.parseInt(entry.substring(eq + 1)));
+    }
+    return result;
+  }
+
+  /**
+   * Persist the layout class and its per-partition file-group counts on this (MDT) table config.
+   * Intended to be called once at MDT initialization; the layout is immutable thereafter.
+   */
+  public void setMetadataLayout(HoodieTableMetaClient metaClient,
+                                String layoutClass,
+                                int bucketSize,
+                                Map<String, Integer> partitionFileGroupCounts) {
+    setValue(METADATA_LAYOUT_CLASS, layoutClass);
+    setValue(METADATA_LAYOUT_BUCKET_SIZE, String.valueOf(bucketSize));
+    String encoded = partitionFileGroupCounts.entrySet().stream()
+        .sorted(Map.Entry.comparingByKey())
+        .map(e -> e.getKey() + "=" + e.getValue())
+        .collect(Collectors.joining(CONFIG_VALUES_DELIMITER));
+    setValue(METADATA_LAYOUT_PARTITION_FILE_GROUP_COUNTS, encoded);
+    update(metaClient.getStorage(), metaClient.getMetaPath(), getProps());
+  }
+
+  /**
+   * Append file-group counts for additional MDT partitions initialized after the first MDT
+   * bootstrap (e.g., a new index being enabled). New partitions are added freely; any attempt to
+   * change the count of an already-persisted partition is rejected so the on-disk bucket layout
+   * for an existing MDT partition never moves under a reader's feet.
+   *
+   * @throws HoodieMetadataException if an entry in {@code additionalCounts} refers to a partition
+   *     already present in the persisted map with a different count.
+   */
+  public void addMetadataLayoutPartitionFileGroupCounts(HoodieTableMetaClient metaClient,
+                                                       Map<String, Integer> additionalCounts) {
+    Map<String, Integer> existing = getMetadataLayoutPartitionFileGroupCounts();
+    for (Map.Entry<String, Integer> incoming : additionalCounts.entrySet()) {
+      Integer prior = existing.get(incoming.getKey());
+      if (prior != null && !prior.equals(incoming.getValue())) {
+        throw new org.apache.hudi.exception.HoodieMetadataException(
+            "MDT layout file-group count for partition '" + incoming.getKey()
+                + "' is already set to " + prior + " and cannot be changed to "
+                + incoming.getValue() + ". The file-group count for an existing MDT partition is "
+                + "immutable so the on-disk bucket layout remains stable for readers.");
+      }
+    }
+    Map<String, Integer> merged = new HashMap<>(existing);
+    merged.putAll(additionalCounts);
+    String encoded = merged.entrySet().stream()
+        .sorted(Map.Entry.comparingByKey())
+        .map(e -> e.getKey() + "=" + e.getValue())
+        .collect(Collectors.joining(CONFIG_VALUES_DELIMITER));
+    setValue(METADATA_LAYOUT_PARTITION_FILE_GROUP_COUNTS, encoded);
+    update(metaClient.getStorage(), metaClient.getMetaPath(), getProps());
   }
 
   /**

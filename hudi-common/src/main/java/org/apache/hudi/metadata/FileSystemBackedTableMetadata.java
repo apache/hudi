@@ -72,6 +72,12 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   private final String tableName;
   private final boolean hiveStylePartitioningEnabled;
   private final boolean urlEncodePartitioningEnabled;
+  // If this base path is an MDT, this is the MDT's configured layout. Resolves to FlatMDTLayout
+  // for every MDT that did not opt in. Null when the base path is not an MDT.
+  private final HoodieMetadataTableLayout mdtLayout;
+  // Per-MDT-partition file-group counts (sourced from the MDT's hoodie.properties). Empty for
+  // non-MDT base paths and for MDTs on the default flat layout.
+  private final Map<String, Integer> mdtLayoutPartitionFileGroupCounts;
 
   public FileSystemBackedTableMetadata(HoodieEngineContext engineContext, HoodieTableConfig tableConfig,
                                        HoodieStorage storage, String datasetBasePath) {
@@ -80,6 +86,10 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
     this.tableName = tableConfig.getTableName();
     this.hiveStylePartitioningEnabled = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled = Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
+    boolean isMdt = HoodieTableMetadata.isMetadataTable(datasetBasePath);
+    this.mdtLayout = isMdt ? HoodieMetadataTableLayouts.load(tableConfig) : null;
+    this.mdtLayoutPartitionFileGroupCounts = isMdt
+        ? tableConfig.getMetadataLayoutPartitionFileGroupCounts() : Collections.emptyMap();
   }
 
   public FileSystemBackedTableMetadata(HoodieEngineContext engineContext,
@@ -96,11 +106,39 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
         Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled =
         Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
+    boolean isMdt = HoodieTableMetadata.isMetadataTable(datasetBasePath);
+    this.mdtLayout = isMdt ? HoodieMetadataTableLayouts.load(tableConfig) : null;
+    this.mdtLayoutPartitionFileGroupCounts = isMdt
+        ? tableConfig.getMetadataLayoutPartitionFileGroupCounts() : Collections.emptyMap();
   }
 
   @Override
   public List<StoragePathInfo> getAllFilesInPartition(StoragePath partitionPath) throws IOException {
+    // For an MDT under a non-flat layout, the logical partition (e.g., "record_index") contains
+    // bucket sub-directories rather than file groups directly. Fan out the listing across the
+    // layout-supplied sub-paths so direct Spark queries (and any caller that goes through
+    // FileSystemBackedTableMetadata) see the file groups under the partition.
+    if (mdtLayout != null) {
+      String logicalPartition = FSUtils.getRelativePartitionPath(dataBasePath, partitionPath);
+      List<String> physicalSubPaths = expandPhysicalSubPaths(logicalPartition);
+      if (physicalSubPaths.size() > 1 || (physicalSubPaths.size() == 1 && !physicalSubPaths.get(0).equals(logicalPartition))) {
+        List<StoragePathInfo> all = new ArrayList<>();
+        for (String sub : physicalSubPaths) {
+          StoragePath subPath = new StoragePath(dataBasePath, sub);
+          all.addAll(FSUtils.getAllDataFilesInPartition(getStorage(), subPath));
+        }
+        return all;
+      }
+    }
     return FSUtils.getAllDataFilesInPartition(getStorage(), partitionPath);
+  }
+
+  private List<String> expandPhysicalSubPaths(String logicalPartition) {
+    if (mdtLayout == null) {
+      return Collections.singletonList(logicalPartition);
+    }
+    int fgCount = mdtLayoutPartitionFileGroupCounts.getOrDefault(logicalPartition, 0);
+    return mdtLayout.getPhysicalPartitions(logicalPartition, fgCount);
   }
 
   @Override
@@ -269,10 +307,29 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
         "Listing all files in " + partitionPaths.size() + " partitions from "
             + this.tableName);
     // Need to use serializable file status here, see HUDI-5936
+    // Snapshot layout state once to avoid recomputing per partition during the map closure and to
+    // keep the closure safely serializable.
+    final HoodieMetadataTableLayout layoutSnapshot = mdtLayout;
+    final Map<String, Integer> layoutCountsSnapshot = mdtLayoutPartitionFileGroupCounts;
+    final String basePathStr = dataBasePath.toString();
     List<Pair<String, List<StoragePathInfo>>> partitionToFiles =
         engineContext.map(new ArrayList<>(partitionPaths),
             partitionPathStr -> {
               StoragePath partitionPath = new StoragePath(partitionPathStr);
+              if (layoutSnapshot != null) {
+                String logicalPartition = FSUtils.getRelativePartitionPath(new StoragePath(basePathStr), partitionPath);
+                int fgCount = layoutCountsSnapshot.getOrDefault(logicalPartition, 0);
+                List<String> physicalSubPaths = layoutSnapshot.getPhysicalPartitions(logicalPartition, fgCount);
+                if (physicalSubPaths.size() > 1
+                    || (physicalSubPaths.size() == 1 && !physicalSubPaths.get(0).equals(logicalPartition))) {
+                  List<StoragePathInfo> aggregated = new ArrayList<>();
+                  for (String sub : physicalSubPaths) {
+                    StoragePath subPath = new StoragePath(basePathStr, sub);
+                    aggregated.addAll(FSUtils.getAllDataFilesInPartitionByPathFilter(getStorage(), subPath, pathFilterOption));
+                  }
+                  return Pair.of(partitionPathStr, aggregated);
+                }
+              }
               return Pair.of(partitionPathStr,
                   FSUtils.getAllDataFilesInPartitionByPathFilter(getStorage(), partitionPath, pathFilterOption));
             }, parallelism);

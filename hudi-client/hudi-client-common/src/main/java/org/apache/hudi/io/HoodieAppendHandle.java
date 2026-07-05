@@ -245,11 +245,19 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
     deltaWriteStat.setFileId(fileId);
     Option<FileSlice> fileSliceOpt = populateWriteStatAndFetchFileSlice(record, deltaWriteStat);
     try {
-      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
-          new StoragePath(config.getBasePath()),
-          FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath),
-          hoodieTable.getPartitionMetafileFormat());
-      partitionMetadata.trySave();
+      // For MDT writes under a non-flat layout (e.g., sub-directory bucketing), the physical
+      // partitionPath here is a layout sub-path (e.g. "record_index/0004") and the marker must
+      // live at the logical partition root instead. The marker at the logical root is written
+      // once at MDT initialization in HoodieBackedTableMetadataWriter.initializeFileGroups;
+      // skipping here keeps partition discovery returning logical names rather than per-bucket
+      // sub-paths. For the flat default and the data table this guard is a no-op.
+      if (!isMDTLayoutSubPath(partitionPath)) {
+        HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
+            new StoragePath(config.getBasePath()),
+            FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath),
+            hoodieTable.getPartitionMetafileFormat());
+        partitionMetadata.trySave();
+      }
 
       String logInstantTime = config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)
           ? getInstantTimeForLogFile(record) : deltaWriteStat.getPrevCommit();
@@ -303,6 +311,11 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
     deltaWriteStat.setBaseFile(baseFile);
     deltaWriteStat.setLogFiles(logFiles);
     return fileSlice;
+  }
+
+  private boolean isMDTLayoutSubPath(String physicalPartitionPath) {
+    return org.apache.hudi.metadata.HoodieTableMetadataUtil.isMDTBucketSubPath(
+        hoodieTable.getMetaClient().getTableConfig(), hoodieTable.isMetadataTable(), physicalPartitionPath);
   }
 
   /**
