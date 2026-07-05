@@ -20,7 +20,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.DummyActiveAction;
-import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter;
+import org.apache.hudi.client.timeline.LSMTimelineWriter;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;

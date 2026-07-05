@@ -20,7 +20,7 @@
 package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.SparkAdapterSupport$;
-import org.apache.hudi.client.utils.OperationConverter;
+import org.apache.hudi.util.OperationConverter;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;

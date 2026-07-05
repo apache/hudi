@@ -20,7 +20,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.client.utils.TransactionUtils;
+import org.apache.hudi.client.transaction.TransactionUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;

@@ -17,10 +17,8 @@
  * under the License.
  */
 
-package org.apache.hudi.client.utils;
+package org.apache.hudi.client;
 
-import org.apache.hudi.client.MarkerBasedCommitMetadataResolver;
-import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;

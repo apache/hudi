@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,26 +16,19 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.utils;
+package org.apache.hudi.util;
 
-import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.model.WriteOperationType;
 
-import java.util.function.BiFunction;
+import com.beust.jcommander.IStringConverter;
+import com.beust.jcommander.ParameterException;
 
 /**
- * Closeable counterpart of {@link MergingIterator}
+ * Converter that converts a string into enum WriteOperationType.
  */
-public class ClosableMergingIterator<T1, T2, R> extends MergingIterator<T1, T2, R> implements ClosableIterator<R> {
-
-  public ClosableMergingIterator(ClosableIterator<T1> leftIterator,
-                                 ClosableIterator<T2> rightIterator,
-                                 BiFunction<T1, T2, R> mergeFunction) {
-    super(leftIterator, rightIterator, mergeFunction);
-  }
-
+public class OperationConverter implements IStringConverter<WriteOperationType> {
   @Override
-  public void close() {
-    ((ClosableIterator<T1>) leftIterator).close();
-    ((ClosableIterator<T2>) rightIterator).close();
+  public WriteOperationType convert(String value) throws ParameterException {
+    return WriteOperationType.valueOf(value);
   }
 }

@@ -16,19 +16,27 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.utils;
+package org.apache.hudi.util;
 
-import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 
-import com.beust.jcommander.IStringConverter;
-import com.beust.jcommander.ParameterException;
+import java.util.Iterator;
+import java.util.List;
 
 /**
- * Converter that converts a string into enum WriteOperationType.
+ * Provides closeable iterator interface over list of iterators. Consumes all records from first iterator element
+ * before moving to next iterator in the list. That is concatenating elements across multiple iterators.
  */
-public class OperationConverter implements IStringConverter<WriteOperationType> {
+public class CloseableConcatenatingIterator<T> extends ConcatenatingIterator<T> {
+
+  public CloseableConcatenatingIterator(List<ClosableIterator<T>> iterators) {
+    super(iterators);
+  }
+
   @Override
-  public WriteOperationType convert(String value) throws ParameterException {
-    return WriteOperationType.valueOf(value);
+  protected Iterator<T> advanceIterator() {
+    ClosableIterator<T> previous = (ClosableIterator<T>) super.advanceIterator();
+    previous.close();
+    return previous;
   }
 }

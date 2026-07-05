@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utils;
 
-import org.apache.hudi.client.utils.ConcatenatingIterator;
+import org.apache.hudi.util.ConcatenatingIterator;
 
 import org.junit.jupiter.api.Test;
 

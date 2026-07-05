@@ -18,7 +18,7 @@
  *
  */
 
-package org.apache.hudi.client.utils;
+package org.apache.hudi.client.timeline;
 
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;

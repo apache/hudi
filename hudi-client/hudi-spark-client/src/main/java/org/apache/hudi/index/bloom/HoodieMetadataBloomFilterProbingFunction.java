@@ -18,7 +18,7 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.hudi.client.utils.LazyIterableIterator;
+import org.apache.hudi.util.LazyIterableIterator;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;

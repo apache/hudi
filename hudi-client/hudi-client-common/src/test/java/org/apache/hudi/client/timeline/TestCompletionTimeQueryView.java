@@ -19,7 +19,6 @@
 package org.apache.hudi.client.timeline;
 
 import org.apache.hudi.DummyActiveAction;
-import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;

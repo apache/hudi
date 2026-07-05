@@ -19,7 +19,6 @@
 package org.apache.hudi.client.transaction;
 
 import org.apache.hudi.client.WriteClientTestUtils;
-import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;

@@ -20,7 +20,7 @@ package org.apache.hudi.table.action.cluster.strategy;
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieSliceInfo;
-import org.apache.hudi.client.utils.FileSliceMetricUtils;
+import org.apache.hudi.table.action.FileSliceMetricUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;

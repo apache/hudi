@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter
+import org.apache.hudi.client.timeline.LSMTimelineWriter
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.table.HoodieSparkTable

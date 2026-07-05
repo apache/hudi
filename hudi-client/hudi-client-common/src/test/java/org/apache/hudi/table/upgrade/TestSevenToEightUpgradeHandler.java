@@ -19,8 +19,8 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter;
-import org.apache.hudi.client.utils.LegacyArchivedMetaEntryReader;
+import org.apache.hudi.client.timeline.LSMTimelineWriter;
+import org.apache.hudi.client.timeline.LegacyArchivedMetaEntryReader;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;

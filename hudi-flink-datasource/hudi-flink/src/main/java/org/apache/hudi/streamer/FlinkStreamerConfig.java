@@ -19,7 +19,7 @@
 package org.apache.hudi.streamer;
 
 import org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy;
-import org.apache.hudi.client.utils.OperationConverter;
+import org.apache.hudi.util.OperationConverter;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecordMerger;
