@@ -19,7 +19,6 @@
 
 package org.apache.hudi.stats;
 
-import org.apache.hudi.ParquetAdapter;
 import org.apache.hudi.avro.HoodieAvroWrapperUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;

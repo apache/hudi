@@ -17,10 +17,9 @@
  * under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.stats;
 
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.stats.ValueType;
 
 import org.apache.parquet.schema.LogicalTypeParquetAdapter;
 import org.apache.parquet.schema.OriginalTypeParquetAdapter;
