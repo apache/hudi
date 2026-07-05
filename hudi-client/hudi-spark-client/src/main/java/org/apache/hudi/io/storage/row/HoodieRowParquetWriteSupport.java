@@ -30,11 +30,11 @@ import org.apache.hudi.common.schema.HoodieSchema.TimePrecision;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
+import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
 
 import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;

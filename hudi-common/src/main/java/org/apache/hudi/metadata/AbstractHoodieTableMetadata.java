@@ -20,10 +20,10 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.expression.ArrayData;
+import org.apache.hudi.common.schema.internal.Type;
+import org.apache.hudi.common.schema.internal.Types;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;

@@ -20,7 +20,7 @@ package org.apache.hudi.cdc
 
 import org.apache.hudi.HoodieTableSchema
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.common.schema.internal.InternalSchema
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData}

@@ -21,7 +21,7 @@ package org.apache.spark.sql.avro
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.common.schema.{HoodieJsonProperties, HoodieSchema, HoodieSchemaField, HoodieSchemaType}
 import org.apache.hudi.common.schema.HoodieSchema.TimePrecision
-import org.apache.hudi.internal.schema.HoodieSchemaException
+import org.apache.hudi.common.schema.internal.HoodieSchemaException
 
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.sql.internal.SQLConf

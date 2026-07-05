@@ -18,7 +18,7 @@
 
 package org.apache.hudi.exception;
 
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 
 /**
  * An exception thrown when schema has compatibility problems.

@@ -19,13 +19,13 @@
 package org.apache.hudi.common.schema;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import lombok.Getter;
 import org.apache.avro.JsonProperties;

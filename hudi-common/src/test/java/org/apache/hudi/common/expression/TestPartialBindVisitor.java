@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.expression;
 
-import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.common.schema.internal.Types;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;

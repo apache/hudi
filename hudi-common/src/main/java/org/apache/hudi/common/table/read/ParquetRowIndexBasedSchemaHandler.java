@@ -24,14 +24,14 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.Types;
+import org.apache.hudi.common.schema.internal.action.TableChanges;
+import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.internal.schema.action.TableChanges;
-import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 
 import java.util.Collections;
 import java.util.List;

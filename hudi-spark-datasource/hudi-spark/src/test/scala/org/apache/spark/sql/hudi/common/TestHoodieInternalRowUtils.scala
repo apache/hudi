@@ -22,10 +22,10 @@ import org.apache.hudi.{AvroConversionUtils, SparkRowSerDe}
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.internal.schema.Types
-import org.apache.hudi.internal.schema.action.TableChanges
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
-import org.apache.hudi.internal.schema.utils.SchemaChangeUtils
+import org.apache.hudi.common.schema.internal.Types
+import org.apache.hudi.common.schema.internal.action.TableChanges
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
+import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils
 
 import org.apache.avro.generic.GenericData

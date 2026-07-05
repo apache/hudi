@@ -19,10 +19,10 @@
 package org.apache.hudi.avro;
 
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.action.TableChanges;
+import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.action.TableChanges;
-import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -34,9 +34,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter.convert;
 import static org.apache.hudi.common.util.CollectionUtils.reduce;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
-import static org.apache.hudi.internal.schema.convert.InternalSchemaConverter.convert;
 
 /**
  * Utils for Avro Schema.

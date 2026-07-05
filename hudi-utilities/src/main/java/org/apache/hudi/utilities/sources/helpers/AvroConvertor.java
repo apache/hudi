@@ -20,8 +20,8 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import com.google.protobuf.Message;
 import com.twitter.bijection.Injection;

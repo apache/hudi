@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
@@ -43,7 +44,6 @@ import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -298,11 +298,11 @@ class TestTableSchemaResolver {
     HoodieCommitMetadata insertMetadata = new HoodieCommitMetadata();
     insertMetadata.setOperationType(org.apache.hudi.common.model.WriteOperationType.INSERT);
     // Create a valid InternalSchema
-    org.apache.hudi.internal.schema.InternalSchema internalSchema = new org.apache.hudi.internal.schema.InternalSchema(
-        org.apache.hudi.internal.schema.Types.RecordType.get(
-            org.apache.hudi.internal.schema.Types.Field.get(0, false, "id", org.apache.hudi.internal.schema.Types.IntType.get())));
-    insertMetadata.addMetadata(org.apache.hudi.internal.schema.utils.SerDeHelper.LATEST_SCHEMA,
-        org.apache.hudi.internal.schema.utils.SerDeHelper.toJson(internalSchema));
+    org.apache.hudi.common.schema.internal.InternalSchema internalSchema = new org.apache.hudi.common.schema.internal.InternalSchema(
+        org.apache.hudi.common.schema.internal.Types.RecordType.get(
+            org.apache.hudi.common.schema.internal.Types.Field.get(0, false, "id", org.apache.hudi.common.schema.internal.Types.IntType.get())));
+    insertMetadata.addMetadata(org.apache.hudi.common.schema.internal.utils.SerDeHelper.LATEST_SCHEMA,
+        org.apache.hudi.common.schema.internal.utils.SerDeHelper.toJson(internalSchema));
 
     HoodieCommitMetadata compactMetadata = new HoodieCommitMetadata();
     compactMetadata.setOperationType(org.apache.hudi.common.model.WriteOperationType.COMPACT);
@@ -316,7 +316,7 @@ class TestTableSchemaResolver {
     when(timeline.readCommitMetadata(clusterInstant)).thenReturn(clusterMetadata);
 
     // When: Get internal schema from commit metadata
-    Option<org.apache.hudi.internal.schema.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
+    Option<org.apache.hudi.common.schema.internal.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
 
     // Then: Should find the insert instant (002) which is the most recent schema-updating operation
     assertTrue(result.isPresent());
@@ -344,7 +344,7 @@ class TestTableSchemaResolver {
     when(timeline.readCommitMetadata(clusterInstant)).thenReturn(clusterMetadata);
 
     // When: Get internal schema from commit metadata
-    Option<org.apache.hudi.internal.schema.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
+    Option<org.apache.hudi.common.schema.internal.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
 
     // Then: Should return empty since no schema-updating operations exist
     assertTrue(result.isEmpty());
@@ -361,7 +361,7 @@ class TestTableSchemaResolver {
     when(timeline.getReverseOrderedInstants()).thenReturn(Stream.empty());
 
     // When: Get internal schema from commit metadata
-    Option<org.apache.hudi.internal.schema.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
+    Option<org.apache.hudi.common.schema.internal.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
 
     // Then: Should return empty for empty timeline
     assertTrue(result.isEmpty());
@@ -381,11 +381,11 @@ class TestTableSchemaResolver {
     HoodieCommitMetadata insertMetadata1 = new HoodieCommitMetadata();
     insertMetadata1.setOperationType(org.apache.hudi.common.model.WriteOperationType.INSERT);
     // Create a valid InternalSchema
-    org.apache.hudi.internal.schema.InternalSchema internalSchema = new org.apache.hudi.internal.schema.InternalSchema(
-        org.apache.hudi.internal.schema.Types.RecordType.get(
-            org.apache.hudi.internal.schema.Types.Field.get(0, false, "id", org.apache.hudi.internal.schema.Types.IntType.get())));
-    insertMetadata1.addMetadata(org.apache.hudi.internal.schema.utils.SerDeHelper.LATEST_SCHEMA,
-        org.apache.hudi.internal.schema.utils.SerDeHelper.toJson(internalSchema));
+    org.apache.hudi.common.schema.internal.InternalSchema internalSchema = new org.apache.hudi.common.schema.internal.InternalSchema(
+        org.apache.hudi.common.schema.internal.Types.RecordType.get(
+            org.apache.hudi.common.schema.internal.Types.Field.get(0, false, "id", org.apache.hudi.common.schema.internal.Types.IntType.get())));
+    insertMetadata1.addMetadata(org.apache.hudi.common.schema.internal.utils.SerDeHelper.LATEST_SCHEMA,
+        org.apache.hudi.common.schema.internal.utils.SerDeHelper.toJson(internalSchema));
 
     HoodieCommitMetadata insertMetadata2 = new HoodieCommitMetadata();
     insertMetadata2.setOperationType(org.apache.hudi.common.model.WriteOperationType.INSERT);
@@ -399,7 +399,7 @@ class TestTableSchemaResolver {
     // Should not call readCommitMetadata for insertInstant3 due to findFirst() short-circuit
 
     // When: Get internal schema from commit metadata
-    Option<org.apache.hudi.internal.schema.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
+    Option<org.apache.hudi.common.schema.internal.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
 
     // Then: Should find the first (most recent) schema-updating operation and stop
     assertTrue(result.isPresent());

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.expression;
 
-import org.apache.hudi.internal.schema.Type;
+import org.apache.hudi.common.schema.internal.Type;
 
 public class BoundReference extends LeafExpression {
 

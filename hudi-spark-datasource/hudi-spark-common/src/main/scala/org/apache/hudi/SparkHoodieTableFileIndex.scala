@@ -26,6 +26,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.internal.Types.RecordType
+import org.apache.hudi.common.schema.internal.utils.Conversions
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.ReflectionUtils
@@ -35,8 +37,6 @@ import org.apache.hudi.core.read.BaseHoodieTableFileIndex
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.hadoop.HoodieLatestBaseFilesPathFilter
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.internal.schema.Types.RecordType
-import org.apache.hudi.internal.schema.utils.Conversions
 import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metadata.{CatalogBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}

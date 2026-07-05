@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.expression;
 
-import org.apache.hudi.internal.schema.Type;
+import org.apache.hudi.common.schema.internal.Type;
 
 import java.io.Serializable;
 import java.util.List;

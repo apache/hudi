@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.expression;
 
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.common.schema.internal.Type;
+import org.apache.hudi.common.schema.internal.Types;
 
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;

@@ -28,7 +28,7 @@ import org.apache.hudi.common.expression.Predicates.Or;
 import org.apache.hudi.common.expression.Predicates.StringContains;
 import org.apache.hudi.common.expression.Predicates.StringStartsWith;
 import org.apache.hudi.common.expression.Predicates.StringStartsWithAny;
-import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.common.schema.internal.Types;
 
 import org.junit.jupiter.api.Test;
 

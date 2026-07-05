@@ -18,12 +18,12 @@
 
 package org.apache.hudi.client.utils;
 
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.Type;
+import org.apache.hudi.common.schema.internal.Types;
+import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger;
+import org.apache.hudi.common.schema.internal.utils.InternalSchemaUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;

@@ -20,8 +20,8 @@
 package org.apache.spark.sql.execution.datasources.orc
 
 import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.util
-import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.hadoop.conf.Configuration

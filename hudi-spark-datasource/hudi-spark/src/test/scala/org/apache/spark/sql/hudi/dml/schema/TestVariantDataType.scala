@@ -21,9 +21,9 @@ package org.apache.spark.sql.hudi.dml.schema
 
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.internal.HoodieSchemaException
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.internal.schema.HoodieSchemaException
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 

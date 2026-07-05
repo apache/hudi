@@ -21,7 +21,7 @@ import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
-import org.apache.hudi.internal.schema.HoodieSchemaException
+import org.apache.hudi.common.schema.internal.HoodieSchemaException
 
 import org.apache.avro.JsonProperties
 import org.apache.spark.sql.types.{ArrayType, DataTypes, FloatType, MetadataBuilder, StructField, StructType}

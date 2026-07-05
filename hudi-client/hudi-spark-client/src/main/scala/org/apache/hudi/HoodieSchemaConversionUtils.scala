@@ -21,7 +21,7 @@ package org.apache.hudi
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType, HoodieSchemaUtils}
-import org.apache.hudi.internal.schema.HoodieSchemaException
+import org.apache.hudi.common.schema.internal.HoodieSchemaException
 
 import org.apache.avro.{AvroRuntimeException, Schema}
 import org.apache.spark.rdd.RDD

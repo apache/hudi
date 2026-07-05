@@ -21,9 +21,9 @@ package org.apache.hudi.core.io.storage;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
