@@ -341,7 +341,7 @@ class TestRollbackHelper extends HoodieRollbackTestBase {
       fail("Should not have reached here");
     } catch (HoodieException e) {
       if (!(e.getCause() instanceof HoodieIOException)) {
-        log.error("Expected HoodieIOException to be thrown, but found " + e.getCause() + ", w/ error msg " + e.getCause().getMessage());
+        log.error("Expected HoodieIOException to be thrown, but found {}, w/ error msg {}", e.getCause(), e.getCause().getMessage());
       }
       assertTrue(e.getCause() instanceof HoodieIOException);
       assertTrue(e.getCause().getMessage().contains("Failing to delete file during rollback execution failed : " + expectedFileToFailOnDeletion));

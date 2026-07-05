@@ -169,7 +169,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
         return true;
       }
     } catch (IOException | HoodieIOException e) {
-      log.error(generateLogStatement(LockState.ALREADY_RELEASED) + " failed to get lockFile's modification time", e);
+      log.error("{} failed to get lockFile's modification time", generateLogStatement(LockState.ALREADY_RELEASED), e);
     }
     return false;
   }

@@ -940,7 +940,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       int finalCounter = counter;
       curFuture.exceptionally(ex -> {
         if (!jobFailed.getAndSet(true)) {
-          log.warn("One of the job failed. Cancelling all other futures. " + ex.getCause() + ", " + ex.getMessage());
+          log.warn("One of the job failed. Cancelling all other futures. {}, {}", ex.getCause(), ex.getMessage());
           int secondCounter = 0;
           while (secondCounter < futures.size()) {
             if (secondCounter != finalCounter) {

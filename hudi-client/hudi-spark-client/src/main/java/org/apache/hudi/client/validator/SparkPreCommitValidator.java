@@ -96,7 +96,7 @@ public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<Writ
       throw new RuntimeException(e);
     } finally {
       long duration = timer.endTimer();
-      log.info(getClass() + " validator took " + duration + " ms" + ", metrics on? " + getWriteConfig().isMetricsOn());
+      log.info("{} validator took {} ms, metrics on? {}", getClass(), duration, getWriteConfig().isMetricsOn());
       publishRunStats(instantTime, duration);
     }
   }

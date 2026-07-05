@@ -58,7 +58,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
 
     this.numBuckets = config.getBucketIndexNumBuckets();
     this.indexKeyFields = KeyGenUtils.getIndexKeyFields(config.getBucketIndexHashField());
-    log.info("Use bucket index, numBuckets = " + numBuckets + ", indexFields: " + indexKeyFields);
+    log.info("Use bucket index, numBuckets = {}, indexFields: {}", numBuckets, indexKeyFields);
   }
 
   @Override

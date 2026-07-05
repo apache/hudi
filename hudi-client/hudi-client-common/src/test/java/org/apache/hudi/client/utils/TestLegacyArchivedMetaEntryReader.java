@@ -117,13 +117,13 @@ public class TestLegacyArchivedMetaEntryReader {
   public void archive(HoodieTableMetaClient metaClient, List<HoodieInstant> instants) throws HoodieCommitException {
     try (HoodieLogFormat.Writer writer = openWriter(metaClient)) {
       Schema wrapperSchema = HoodieArchivedMetaEntry.getClassSchema();
-      log.info("Wrapper schema " + wrapperSchema.toString());
+      log.info("Wrapper schema {}", wrapperSchema);
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
         try {
           records.add(convertToAvroRecord(hoodieInstant, metaClient));
         } catch (Exception e) {
-          log.error("Failed to archive commits, .commit file: " + INSTANT_FILE_NAME_GENERATOR.getFileName(hoodieInstant), e);
+          log.error("Failed to archive commits, .commit file: {}", INSTANT_FILE_NAME_GENERATOR.getFileName(hoodieInstant), e);
           throw e;
         }
       }

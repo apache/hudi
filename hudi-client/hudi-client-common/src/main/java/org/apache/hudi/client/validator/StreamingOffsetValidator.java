@@ -210,7 +210,7 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
           previousCheckpoint, currentCheckpoint);
 
       if (failurePolicy == ValidationFailurePolicy.WARN_LOG) {
-        log.warn(errorMsg + " (failure policy is WARN_LOG, commit will proceed)");
+        log.warn("{} (failure policy is WARN_LOG, commit will proceed)", errorMsg);
       } else {
         throw new HoodieValidationException(errorMsg);
       }

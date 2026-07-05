@@ -133,8 +133,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
 
     Map<String, String> paramsMap = getConfigMap(partitionPath, markerFileName, false);
     boolean success = executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
-    log.info("[timeline-server-based] Created marker file " + partitionPath + "/" + markerFileName
-        + " in " + timer.endTimer() + " ms");
+    log.info("[timeline-server-based] Created marker file {}/{} in {} ms", partitionPath, markerFileName, timer.endTimer());
     if (success) {
       return Option.of(new StoragePath(FSUtils.constructAbsolutePath(markerDirPath, partitionPath), markerFileName));
     } else {
@@ -151,8 +150,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
 
     boolean success = executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
 
-    log.info("[timeline-server-based] Created marker file with early conflict detection " + partitionPath + "/" + markerFileName
-        + " in " + timer.endTimer() + " ms");
+    log.info("[timeline-server-based] Created marker file with early conflict detection {}/{} in {} ms", partitionPath, markerFileName, timer.endTimer());
 
     if (success) {
       return Option.of(new StoragePath(FSUtils.constructAbsolutePath(markerDirPath, partitionPath), markerFileName));

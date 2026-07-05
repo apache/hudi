@@ -99,7 +99,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
               + config.getBasePath() + " at time " + compactionCommitTime, e);
         }
       }
-      log.info("Compacted successfully on commit " + compactionCommitTime);
+      log.info("Compacted successfully on commit {}", compactionCommitTime);
     } finally {
       if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
         this.heartbeatClient.stop(compactionCommitTime);
@@ -159,7 +159,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
             + config.getBasePath() + " at time " + clusteringCommitTime, e);
       }
     }
-    log.info("Clustering successfully on commit " + clusteringCommitTime);
+    log.info("Clustering successfully on commit {}", clusteringCommitTime);
   }
 
   @Override

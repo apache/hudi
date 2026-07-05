@@ -117,7 +117,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
       // record successful.
       record.deflate();
     } catch (Throwable t) {
-      log.error("Error writing record " + record, t);
+      log.error("Error writing record {}", record, t);
       if (!config.getIgnoreWriteFailed()) {
         throw new HoodieException(t.getMessage(), t);
       }
@@ -178,7 +178,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
    */
   @Override
   public List<WriteStatus> close() {
-    log.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
+    log.info("Closing the file {} as we are done with all the records {}", writeStatus.getFileId(), recordsWritten);
     try {
       if (isClosed()) {
         // Handle has already been closed

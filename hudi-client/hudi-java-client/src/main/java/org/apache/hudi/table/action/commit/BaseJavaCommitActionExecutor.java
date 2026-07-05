@@ -94,7 +94,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
     WorkloadProfile workloadProfile =
         new WorkloadProfile(buildProfile(inputRecords), table.getIndex().canIndexLogFiles());
-    log.info("Input workload profile :" + workloadProfile);
+    log.info("Input workload profile :{}", workloadProfile);
     final Partitioner partitioner = getPartitioner(workloadProfile);
     try {
       saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
@@ -236,7 +236,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       throws IOException {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
-      log.info("Empty partition with fileId => " + fileId);
+      log.info("Empty partition with fileId => {}", fileId);
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     // these are updates

@@ -260,7 +260,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           ? getInstantTimeForLogFile(record) : deltaWriteStat.getPrevCommit();
       this.writer = createLogWriter(instantTime, fileSliceOpt);
     } catch (Exception e) {
-      log.error("Error in update task at commit " + instantTime, e);
+      log.error("Error in update task at commit {}", instantTime, e);
       writeStatus.setGlobalError(e);
       throw new HoodieUpsertException("Failed to initialize HoodieAppendHandle for FileId: " + fileId + " on commit "
           + instantTime + " on storage path " + hoodieTable.getMetaClient().getBasePath() + "/" + partitionPath, e);

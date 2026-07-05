@@ -142,8 +142,7 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
     Set<Pair<String, String>> intersection = new HashSet<>(partitionAndFileIdsSetForFirstInstant);
     intersection.retainAll(partitionAndFileIdsSetForSecondInstant);
     if (!intersection.isEmpty()) {
-      log.info("Found conflicting writes between first operation = " + thisOperation
-          + ", second operation = " + otherOperation + " , intersecting file ids " + intersection);
+      log.info("Found conflicting writes between first operation = {}, second operation = {} , intersecting file ids {}", thisOperation, otherOperation, intersection);
       return true;
     }
     return false;
@@ -163,8 +162,7 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
       String rolledbackCommit = otherOperation.getRolledbackCommit();
       String thisCommitTimestamp = thisOperation.getInstantTimestamp();
       if (rolledbackCommit != null && rolledbackCommit.equals(thisCommitTimestamp)) {
-        log.error("Found rollback conflict: rollback operation " + otherOperation
-            + " is rolling back commit " + thisCommitTimestamp + " created by operation " + thisOperation);
+        log.error("Found rollback conflict: rollback operation {} is rolling back commit {} created by operation {}", otherOperation, thisCommitTimestamp, thisOperation);
         return true;
       }
     }

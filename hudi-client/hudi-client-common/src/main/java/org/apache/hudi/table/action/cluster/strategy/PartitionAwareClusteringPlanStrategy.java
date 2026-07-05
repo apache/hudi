@@ -82,15 +82,15 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
       // check if max size is reached and create new group, if needed.
       if (totalSizeSoFar + currentSize > writeConfig.getClusteringMaxBytesInGroup() && !currentGroup.isEmpty()) {
         int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
-        log.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
-            + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+        log.info("Adding one clustering group {} max bytes: {} num input slices: {} output groups: {}",
+            totalSizeSoFar, writeConfig.getClusteringMaxBytesInGroup(), currentGroup.size(), numOutputGroups);
         fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
         currentGroup = new ArrayList<>();
         totalSizeSoFar = 0;
 
         // if fileSliceGroups's size reach the max group, stop loop
         if (fileSliceGroups.size() >= writeConfig.getClusteringMaxNumGroups()) {
-          log.info("Having generated the maximum number of groups : " + writeConfig.getClusteringMaxNumGroups());
+          log.info("Having generated the maximum number of groups : {}", writeConfig.getClusteringMaxNumGroups());
           partialScheduled = true;
           break;
         }
@@ -104,8 +104,8 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
 
     if (!currentGroup.isEmpty()) {
       int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
-      log.info("Adding final clustering group " + totalSizeSoFar + " max bytes: "
-          + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+      log.info("Adding final clustering group {} max bytes: {} num input slices: {} output groups: {}",
+          totalSizeSoFar, writeConfig.getClusteringMaxBytesInGroup(), currentGroup.size(), numOutputGroups);
       fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
     }
 
