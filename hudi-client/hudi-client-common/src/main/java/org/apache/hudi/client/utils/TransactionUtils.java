@@ -52,14 +52,16 @@ public class TransactionUtils {
   /**
    * Resolve any write conflicts when committing data.
    *
-   * @param table
-   * @param currentTxnOwnerInstant
-   * @param thisCommitMetadata
-   * @param config
-   * @param lastCompletedTxnOwnerInstant
-   * @param pendingInstants
-   * @return
-   * @throws HoodieWriteConflictException
+   * @param table hoodie table instance to resolve conflicts against
+   * @param currentTxnOwnerInstant current transaction owner instant
+   * @param thisCommitMetadata commit metadata for the current transaction
+   * @param config write config
+   * @param lastCompletedTxnOwnerInstant last completed transaction observed before this write
+   * @param timelineRefreshedWithinTransaction whether the table timeline has already been refreshed within this transaction
+   * @param pendingInstants instants that were inflight or requested before the current write started
+   * @param conflictResolutionExclusionInstants instant requested times to exclude from conflict resolution candidates
+   * @return metadata for the resolved commit when conflict resolution succeeds
+   * @throws HoodieWriteConflictException when a write conflict cannot be resolved
    */
   public static Option<HoodieCommitMetadata> resolveWriteConflictIfAny(
       final HoodieTable table,
@@ -68,7 +70,8 @@ public class TransactionUtils {
       final HoodieWriteConfig config,
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
       boolean timelineRefreshedWithinTransaction,
-      Set<String> pendingInstants) throws HoodieWriteConflictException {
+      Set<String> pendingInstants,
+      Set<String> conflictResolutionExclusionInstants) throws HoodieWriteConflictException {
     WriteOperationType operationType = thisCommitMetadata.map(HoodieCommitMetadata::getOperationType).orElse(null);
     if (config.needResolveWriteConflict(operationType, table.isMetadataTable(), config, table.getMetaClient().getTableConfig())) {
       // deal with pendingInstants
@@ -82,7 +85,8 @@ public class TransactionUtils {
 
       Stream<HoodieInstant> instantStream = Stream.concat(resolutionStrategy.getCandidateInstants(
               table.getMetaClient(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant, Option.of(config)),
-          completedInstantsDuringCurrentWriteOperation);
+          completedInstantsDuringCurrentWriteOperation)
+          .filter(instant -> !conflictResolutionExclusionInstants.contains(instant.requestedTime()));
 
       final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.orElseGet(HoodieCommitMetadata::new));
       instantStream.forEach(instant -> {

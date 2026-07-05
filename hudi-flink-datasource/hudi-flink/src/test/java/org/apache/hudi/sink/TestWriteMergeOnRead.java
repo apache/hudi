@@ -25,10 +25,12 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
@@ -377,6 +379,22 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
     List<HoodieWriteStat> secondWriteStats = secondCommitMetadata.getWriteStats();
     assertEquals(1, secondWriteStats.size());
     assertEquals(firstInstant.requestedTime(), secondWriteStats.get(0).getPrevCommit());
+  }
+
+  @Test
+  public void testCommittingMultipleInstantsWithOCC() throws Exception {
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
+        WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+    preparePipeline(conf)
+        .consume(TestData.DATA_SET_INSERT)
+        .checkpoint(1)
+        .assertNextEvent(4, "par1,par2,par3,par4")
+        .consume(TestData.DATA_SET_UPDATE_INSERT)
+        .checkpoint(2)
+        .assertNextEvent(4, "par1,par2,par3,par4")
+        .checkpointComplete(2)
+        .checkWrittenData(EXPECTED2)
+        .end();
   }
 
   @Override
