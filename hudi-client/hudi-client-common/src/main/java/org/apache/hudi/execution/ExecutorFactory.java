@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.util;
+package org.apache.hudi.execution;
 
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;

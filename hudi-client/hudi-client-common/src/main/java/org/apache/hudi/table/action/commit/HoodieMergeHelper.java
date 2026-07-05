@@ -43,7 +43,7 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.ExecutorFactory;
+import org.apache.hudi.execution.ExecutorFactory;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;

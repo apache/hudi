@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.util;
+package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;

@@ -46,7 +46,7 @@ import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucketClusteringPlanStrategy;
-import org.apache.hudi.util.ExecutorFactory;
+import org.apache.hudi.execution.ExecutorFactory;
 import org.apache.hudi.util.LazyConcatenatingIterator;
 
 import lombok.extern.slf4j.Slf4j;

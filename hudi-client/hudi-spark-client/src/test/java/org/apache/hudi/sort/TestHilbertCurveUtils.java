@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.optimize;
+package org.apache.hudi.sort;
 
 import org.davidmoten.hilbert.HilbertCurve;
 import org.junit.jupiter.api.Test;

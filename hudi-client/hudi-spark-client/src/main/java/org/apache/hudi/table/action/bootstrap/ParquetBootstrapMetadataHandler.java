@@ -34,7 +34,7 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.ExecutorFactory;
+import org.apache.hudi.execution.ExecutorFactory;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;

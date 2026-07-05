@@ -27,7 +27,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.ExecutorFactory;
 
 import java.util.Iterator;
 import java.util.List;

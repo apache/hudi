@@ -21,7 +21,6 @@ package org.apache.hudi.sort;
 import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
-import org.apache.hudi.optimize.HilbertCurveUtils;
 import org.apache.hudi.util.JavaScalaConverters;
 
 import lombok.extern.slf4j.Slf4j;

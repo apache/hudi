@@ -115,7 +115,6 @@
 
                   <include>com.lmax:disruptor</include>
                   <include>com.github.davidmoten:guava-mini</include>
-                  <include>com.github.davidmoten:hilbert-curve</include>
                   <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>

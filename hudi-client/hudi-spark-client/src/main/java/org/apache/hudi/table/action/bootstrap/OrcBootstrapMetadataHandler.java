@@ -33,7 +33,7 @@ import org.apache.hudi.io.hadoop.OrcReaderIterator;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.ExecutorFactory;
+import org.apache.hudi.execution.ExecutorFactory;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericData;
