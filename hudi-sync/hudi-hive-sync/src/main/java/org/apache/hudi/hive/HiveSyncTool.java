@@ -555,7 +555,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
     List<String> touchPartitions = config.getBoolean(META_SYNC_TOUCH_PARTITIONS_ENABLED) ? filterPartitions(partitionEventList, PartitionEventType.TOUCH) : Collections.emptyList();
     if (!touchPartitions.isEmpty()) {
-      log.info("Touch Partitions " + touchPartitions);
+      log.info("Touch Partitions {}", touchPartitions);
       syncClient.touchPartitionsToTable(tableName, touchPartitions);
     }
 
