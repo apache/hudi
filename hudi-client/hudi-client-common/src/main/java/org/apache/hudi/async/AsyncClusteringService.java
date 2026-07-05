@@ -19,7 +19,6 @@
 
 package org.apache.hudi.async;
 
-import org.apache.hudi.client.BaseClusterer;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;

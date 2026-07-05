@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.client;
+package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -26,15 +26,23 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 
 /**
- * No-op implementation
+ * Provides reconciliation between the commit metadata and files on storage
  */
-public class NoOpCommitMetadataResolver implements CommitMetadataResolver {
-  @Override
-  public HoodieCommitMetadata reconcileMetadataForMissingFiles(HoodieWriteConfig config,
-                                                               HoodieEngineContext context,
-                                                               HoodieTable table,
-                                                               String instantTime,
-                                                               HoodieCommitMetadata commitMetadata) throws HoodieIOException {
-    return commitMetadata;
-  }
+public interface CommitMetadataResolver {
+  /**
+   * Reconcile the commit metadata against the files on storage to add missing files
+   *
+   * @param config         the write config
+   * @param context        {@link HoodieEngineContext} instance
+   * @param table          {@link HoodieTable} instance
+   * @param instantTime    instant time of the transaction
+   * @param commitMetadata input commit metadata
+   * @return reconciled commit metadata with all files
+   * @throws HoodieIOException upon I/O errors
+   */
+  HoodieCommitMetadata reconcileMetadataForMissingFiles(HoodieWriteConfig config,
+                                                        HoodieEngineContext context,
+                                                        HoodieTable table,
+                                                        String instantTime,
+                                                        HoodieCommitMetadata commitMetadata) throws HoodieIOException;
 }

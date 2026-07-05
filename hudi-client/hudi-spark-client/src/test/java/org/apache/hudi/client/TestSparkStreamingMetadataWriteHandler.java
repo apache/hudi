@@ -100,7 +100,7 @@ public class TestSparkStreamingMetadataWriteHandler extends SparkClientFunctiona
     }
 
     @Override
-    synchronized Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstant, HoodieTable table) {
+    protected synchronized Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstant, HoodieTable table) {
       return Option.of(mdtWriter);
     }
   }

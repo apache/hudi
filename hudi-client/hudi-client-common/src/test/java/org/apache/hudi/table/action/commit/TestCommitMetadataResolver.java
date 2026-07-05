@@ -17,8 +17,9 @@
  * under the License.
  */
 
-package org.apache.hudi.client;
+package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;

@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.async.BaseCompactor;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;

@@ -103,6 +103,7 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.SupportsUpgradeDowngrade;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.util.CommonClientUtils;
+import org.apache.hudi.table.action.commit.CommitMetadataResolverFactory;
 
 import com.codahale.metrics.Timer;
 import lombok.Getter;

@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.metadata.StreamingMetadataWriteHandler;
 
 import lombok.extern.slf4j.Slf4j;
 

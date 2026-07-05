@@ -16,7 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client;
+package org.apache.hudi.async;
+
+import org.apache.hudi.client.BaseHoodieWriteClient;
 
 import java.io.IOException;
 import java.io.Serializable;

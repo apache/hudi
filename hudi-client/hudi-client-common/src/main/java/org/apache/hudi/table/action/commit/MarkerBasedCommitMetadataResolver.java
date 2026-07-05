@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.client;
+package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
