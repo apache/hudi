@@ -16,24 +16,20 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.core.io.storage;
 
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 
-import org.apache.avro.generic.IndexedRecord;
+import java.util.Map;
 
-import java.util.Objects;
+/**
+ * A provider that used to collect column statistics like column range metadata.
+ */
+public interface ColumnRangeMetadataProvider {
 
-public class HoodieAvroBootstrapFileReader extends HoodieBootstrapFileReader<IndexedRecord> {
-
-  public HoodieAvroBootstrapFileReader(HoodieFileReader<IndexedRecord> skeletonFileReader, HoodieFileReader<IndexedRecord> dataFileReader, Option<String[]> partitionFields, Object[] partitionValues) {
-    super(skeletonFileReader, dataFileReader, partitionFields, partitionValues);
-  }
-
-  @Override
-  protected void setPartitionField(int position, Object fieldValue, IndexedRecord row) {
-    if (Objects.isNull(row.get(position))) {
-      row.put(position, String.valueOf(fieldValue));
-    }
-  }
+  /**
+   * Get the column statistics, key is column name, value is the statistic for the column.
+   */
+  Map<String, HoodieColumnRangeMetadata<Comparable>> getColumnRangeMeta(String filePath, HoodieIndexVersion indexVersion);
 }

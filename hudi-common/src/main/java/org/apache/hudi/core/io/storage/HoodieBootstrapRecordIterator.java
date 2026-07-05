@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.core.io.storage;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;

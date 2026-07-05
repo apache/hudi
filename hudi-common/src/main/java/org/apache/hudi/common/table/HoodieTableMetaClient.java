@@ -106,7 +106,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
-import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
+import static org.apache.hudi.core.io.storage.HoodieIOFactory.getIOFactory;
 import static org.apache.hudi.keygen.constant.KeyGeneratorType.USER_PROVIDED;
 import static org.apache.hudi.metadata.HoodieIndexVersion.isValidIndexDefinition;
 

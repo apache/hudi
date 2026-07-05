@@ -30,9 +30,9 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieNativeDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieNativeDeleteBlock;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 
 import java.util.HashMap;

@@ -20,7 +20,7 @@ package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.core.io.storage.HoodieFileReader;
 import org.apache.hudi.source.ExpressionPredicates;
 
 import org.apache.flink.table.data.RowData;

@@ -369,7 +369,7 @@ public class HoodieStorageConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.15.0")
       .withDocumentation("The fully-qualified class name of the factory class to return readers and writers of files used "
-          + "by Hudi. The provided class should implement `org.apache.hudi.io.storage.HoodieIOFactory`.");
+          + "by Hudi. The provided class should implement `org.apache.hudi.core.io.storage.HoodieIOFactory`.");
 
   public static final ConfigProperty<String> HOODIE_PARQUET_CONFIG_INJECTOR_CLASS = ConfigProperty
       .key("hoodie.parquet.write.config.injector.class")

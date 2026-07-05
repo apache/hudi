@@ -25,13 +25,13 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.io.hfile.UTF8StringKey;
-import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;

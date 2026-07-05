@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.core.io.storage;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;

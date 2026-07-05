@@ -27,8 +27,8 @@ import org.apache.hudi.common.table.{HoodieTableConfig, ParquetTableSchemaResolv
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.io.storage.HoodieIOFactory
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.io.storage.HoodieIOFactory
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}

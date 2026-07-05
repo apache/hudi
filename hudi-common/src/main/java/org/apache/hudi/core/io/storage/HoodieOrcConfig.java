@@ -16,20 +16,29 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.core.io.storage;
 
-import org.apache.hudi.metadata.HoodieIndexVersion;
-import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.storage.StorageConfiguration;
 
-import java.util.Map;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import org.apache.orc.CompressionKind;
 
-/**
- * A provider that used to collect column statistics like column range metadata.
- */
-public interface ColumnRangeMetadataProvider {
+@AllArgsConstructor
+@Getter
+public class HoodieOrcConfig {
 
-  /**
-   * Get the column statistics, key is column name, value is the statistic for the column.
-   */
-  Map<String, HoodieColumnRangeMetadata<Comparable>> getColumnRangeMeta(String filePath, HoodieIndexVersion indexVersion);
+  public static final String AVRO_SCHEMA_METADATA_KEY = "orc.avro.schema";
+
+  private final StorageConfiguration<?> storageConf;
+  private final CompressionKind compressionKind;
+  private final int stripeSize;
+  private final int blockSize;
+  private final long maxFileSize;
+  private final BloomFilter bloomFilter;
+
+  public boolean useBloomFilter() {
+    return bloomFilter != null;
+  }
 }

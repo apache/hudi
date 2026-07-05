@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io;
+package org.apache.hudi.core.io;
 
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;

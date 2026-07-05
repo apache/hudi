@@ -21,7 +21,7 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.core.io.storage.HoodieFileWriter;
 
 import org.apache.flink.table.data.RowData;
 

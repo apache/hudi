@@ -22,6 +22,8 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieFileWriter;
+import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.io.storage.hadoop.HoodieAvroHFileWriter;
 import org.apache.hudi.io.storage.hadoop.HoodieAvroOrcWriter;

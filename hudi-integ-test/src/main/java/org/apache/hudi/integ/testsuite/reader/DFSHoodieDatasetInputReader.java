@@ -41,9 +41,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.core.io.storage.HoodieAvroFileReader;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.io.storage.HoodieAvroFileReader;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.io.util.FileIOUtils;
 
 import lombok.extern.slf4j.Slf4j;

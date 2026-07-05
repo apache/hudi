@@ -16,10 +16,10 @@ package io.trino.plugin.hudi.io;
 import org.apache.avro.Schema;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.io.storage.HoodieAvroBootstrapFileReader;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-import org.apache.hudi.io.storage.HoodieNativeAvroHFileReader;
+import org.apache.hudi.core.io.storage.HoodieAvroBootstrapFileReader;
+import org.apache.hudi.core.io.storage.HoodieFileReader;
+import org.apache.hudi.core.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.core.io.storage.HoodieNativeAvroHFileReader;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 

@@ -16,29 +16,24 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.core.io.storage;
 
-import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.common.util.Option;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import org.apache.orc.CompressionKind;
+import org.apache.avro.generic.IndexedRecord;
 
-@AllArgsConstructor
-@Getter
-public class HoodieOrcConfig {
+import java.util.Objects;
 
-  public static final String AVRO_SCHEMA_METADATA_KEY = "orc.avro.schema";
+public class HoodieAvroBootstrapFileReader extends HoodieBootstrapFileReader<IndexedRecord> {
 
-  private final StorageConfiguration<?> storageConf;
-  private final CompressionKind compressionKind;
-  private final int stripeSize;
-  private final int blockSize;
-  private final long maxFileSize;
-  private final BloomFilter bloomFilter;
+  public HoodieAvroBootstrapFileReader(HoodieFileReader<IndexedRecord> skeletonFileReader, HoodieFileReader<IndexedRecord> dataFileReader, Option<String[]> partitionFields, Object[] partitionValues) {
+    super(skeletonFileReader, dataFileReader, partitionFields, partitionValues);
+  }
 
-  public boolean useBloomFilter() {
-    return bloomFilter != null;
+  @Override
+  protected void setPartitionField(int position, Object fieldValue, IndexedRecord row) {
+    if (Objects.isNull(row.get(position))) {
+      row.put(position, String.valueOf(fieldValue));
+    }
   }
 }

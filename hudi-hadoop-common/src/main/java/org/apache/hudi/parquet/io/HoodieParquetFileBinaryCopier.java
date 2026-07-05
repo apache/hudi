@@ -18,7 +18,7 @@
 
 package org.apache.hudi.parquet.io;
 
-import org.apache.hudi.io.storage.HoodieFileBinaryCopier;
+import org.apache.hudi.core.io.storage.HoodieFileBinaryCopier;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.HoodieFileMetadataMerger;
 

@@ -28,10 +28,10 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.io.storage.HoodieAvroFileWriter;
+import org.apache.hudi.core.io.storage.HoodieOrcConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.io.storage.HoodieAvroFileWriter;
-import org.apache.hudi.io.storage.HoodieOrcConfig;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.generic.GenericRecord;

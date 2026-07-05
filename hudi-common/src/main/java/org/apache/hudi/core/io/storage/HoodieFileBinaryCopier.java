@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.core.io.storage;
 
 import org.apache.hudi.storage.StoragePath;
 

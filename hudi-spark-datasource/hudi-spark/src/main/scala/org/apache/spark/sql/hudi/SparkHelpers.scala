@@ -25,7 +25,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig.{BLOOM_FILTER_DYNAMIC_M
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.util.Option
-import org.apache.hudi.io.storage.HoodieIOFactory
+import org.apache.hudi.core.io.storage.HoodieIOFactory
 import org.apache.hudi.io.storage.hadoop.HoodieAvroParquetWriter
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 
