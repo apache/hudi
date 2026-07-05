@@ -20,10 +20,10 @@
 package org.apache.hudi.core.io.storage;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.expression.Expression;
+import org.apache.hudi.common.expression.Predicate;
+import org.apache.hudi.common.expression.Predicates;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.expression.Expression;
-import org.apache.hudi.expression.Predicate;
-import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 

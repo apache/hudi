@@ -16,33 +16,38 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.expression;
+package org.apache.hudi.common.expression;
 
 import org.apache.hudi.internal.schema.Type;
 
-import lombok.AllArgsConstructor;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
+public class BoundReference extends LeafExpression {
 
-@AllArgsConstructor
-@Getter
-@EqualsAndHashCode
-public class NameReference extends LeafExpression {
+  private final int ordinal;
+  private final Type type;
 
-  private final String name;
+  public BoundReference(int ordinal, Type type) {
+    this.ordinal = ordinal;
+    this.type = type;
+  }
 
   @Override
   public Type getDataType() {
-    throw new UnsupportedOperationException("NameReference is not bound yet");
+    return type;
+  }
+
+  @Override
+  public Object eval(StructLike data) {
+    return data.get(ordinal, this.type.typeId().getClassTag());
   }
 
   @Override
   public <T> T accept(ExpressionVisitor<T> exprVisitor) {
-    return exprVisitor.visitNameReference(this);
+    return exprVisitor.visitBoundReference(this);
   }
 
   @Override
   public String toString() {
-    return "NameReference(name=" + name + ")";
+    return "boundReference[ordinal: " + ordinal + ", type: "
+        + type.typeId().getName() + "]";
   }
 }

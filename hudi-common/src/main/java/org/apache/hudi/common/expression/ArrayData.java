@@ -16,17 +16,25 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.expression;
+package org.apache.hudi.common.expression;
 
 import java.util.List;
 
-/**
- * Expression that without any child expressions.
- */
-public abstract class LeafExpression implements Expression {
+public class ArrayData implements StructLike {
+
+  private final List<Object> data;
+
+  public ArrayData(List<Object> data) {
+    this.data = data;
+  }
 
   @Override
-  public List<Expression> getChildren() {
-    return null;
+  public int numFields() {
+    return data.size();
+  }
+
+  @Override
+  public <T> T get(int pos, Class<T> classTag) {
+    return classTag.cast(data.get(pos));
   }
 }

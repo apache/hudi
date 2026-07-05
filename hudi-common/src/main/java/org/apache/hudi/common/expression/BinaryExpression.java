@@ -16,11 +16,35 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.expression;
+package org.apache.hudi.common.expression;
 
-public interface StructLike {
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 
-  int numFields();
+import java.util.Arrays;
+import java.util.List;
 
-  <T> T get(int pos, Class<T> classTag);
+/**
+ * The expression that accept two child expressions.
+ */
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
+@Getter
+@EqualsAndHashCode
+public abstract class BinaryExpression implements Expression {
+
+  private final Expression left;
+  private final Operator operator;
+  private final Expression right;
+
+  @Override
+  public List<Expression> getChildren() {
+    return Arrays.asList(left, right);
+  }
+
+  @Override
+  public String toString() {
+    return left.toString() + " " + operator.symbol + " " + right.toString();
+  }
 }

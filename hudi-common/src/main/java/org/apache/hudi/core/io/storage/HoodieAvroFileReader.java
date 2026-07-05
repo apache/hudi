@@ -18,13 +18,13 @@
 
 package org.apache.hudi.core.io.storage;
 
+import org.apache.hudi.common.expression.Predicate;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
-import org.apache.hudi.expression.Predicate;
 
 import org.apache.avro.generic.IndexedRecord;
 

@@ -91,7 +91,7 @@ class CatalogBackedTableMetadata(engineContext: HoodieEngineContext,
 
   override def getPartitionPathWithPathPrefixUsingFilterExpression(relativePathPrefix: util.List[String],
                                                                    partitionFields: Types.RecordType,
-                                                                   pushedExpr: org.apache.hudi.expression.Expression,
+                                                                   pushedExpr: org.apache.hudi.common.expression.Expression,
                                                                    partitionPredicateExpressions: util.List[Object]):
   util.List[String] = {
     if (!isPartitionedTable) {

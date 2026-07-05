@@ -16,25 +16,26 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.expression;
+package org.apache.hudi.common.expression;
 
-import java.util.List;
+/**
+ * Visitor used to travers the expression.
+ */
+public interface ExpressionVisitor<T> {
 
-public class ArrayData implements StructLike {
+  T alwaysTrue();
 
-  private final List<Object> data;
+  T alwaysFalse();
 
-  public ArrayData(List<Object> data) {
-    this.data = data;
-  }
+  T visitLiteral(Literal literal);
 
-  @Override
-  public int numFields() {
-    return data.size();
-  }
+  T visitNameReference(NameReference attribute);
 
-  @Override
-  public <T> T get(int pos, Class<T> classTag) {
-    return classTag.cast(data.get(pos));
-  }
+  T visitBoundReference(BoundReference boundReference);
+
+  T visitAnd(Predicates.And and);
+
+  T visitOr(Predicates.Or or);
+
+  T visitPredicate(Predicate predicate);
 }

@@ -16,18 +16,18 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.expression;
+package org.apache.hudi.common.expression;
 
-import org.apache.hudi.expression.Predicates.And;
-import org.apache.hudi.expression.Predicates.BinaryComparison;
-import org.apache.hudi.expression.Predicates.In;
-import org.apache.hudi.expression.Predicates.IsNotNull;
-import org.apache.hudi.expression.Predicates.IsNull;
-import org.apache.hudi.expression.Predicates.Not;
-import org.apache.hudi.expression.Predicates.Or;
-import org.apache.hudi.expression.Predicates.StringContains;
-import org.apache.hudi.expression.Predicates.StringStartsWith;
-import org.apache.hudi.expression.Predicates.StringStartsWithAny;
+import org.apache.hudi.common.expression.Predicates.And;
+import org.apache.hudi.common.expression.Predicates.BinaryComparison;
+import org.apache.hudi.common.expression.Predicates.In;
+import org.apache.hudi.common.expression.Predicates.IsNotNull;
+import org.apache.hudi.common.expression.Predicates.IsNull;
+import org.apache.hudi.common.expression.Predicates.Not;
+import org.apache.hudi.common.expression.Predicates.Or;
+import org.apache.hudi.common.expression.Predicates.StringContains;
+import org.apache.hudi.common.expression.Predicates.StringStartsWith;
+import org.apache.hudi.common.expression.Predicates.StringStartsWithAny;
 import org.apache.hudi.internal.schema.Types;
 
 import org.junit.jupiter.api.Test;
@@ -36,21 +36,21 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.apache.hudi.expression.Predicates.alwaysFalse;
-import static org.apache.hudi.expression.Predicates.alwaysTrue;
-import static org.apache.hudi.expression.Predicates.and;
-import static org.apache.hudi.expression.Predicates.contains;
-import static org.apache.hudi.expression.Predicates.eq;
-import static org.apache.hudi.expression.Predicates.gt;
-import static org.apache.hudi.expression.Predicates.gteq;
-import static org.apache.hudi.expression.Predicates.in;
-import static org.apache.hudi.expression.Predicates.isNotNull;
-import static org.apache.hudi.expression.Predicates.isNull;
-import static org.apache.hudi.expression.Predicates.lteq;
-import static org.apache.hudi.expression.Predicates.not;
-import static org.apache.hudi.expression.Predicates.or;
-import static org.apache.hudi.expression.Predicates.startsWith;
-import static org.apache.hudi.expression.Predicates.startsWithAny;
+import static org.apache.hudi.common.expression.Predicates.alwaysFalse;
+import static org.apache.hudi.common.expression.Predicates.alwaysTrue;
+import static org.apache.hudi.common.expression.Predicates.and;
+import static org.apache.hudi.common.expression.Predicates.contains;
+import static org.apache.hudi.common.expression.Predicates.eq;
+import static org.apache.hudi.common.expression.Predicates.gt;
+import static org.apache.hudi.common.expression.Predicates.gteq;
+import static org.apache.hudi.common.expression.Predicates.in;
+import static org.apache.hudi.common.expression.Predicates.isNotNull;
+import static org.apache.hudi.common.expression.Predicates.isNull;
+import static org.apache.hudi.common.expression.Predicates.lteq;
+import static org.apache.hudi.common.expression.Predicates.not;
+import static org.apache.hudi.common.expression.Predicates.or;
+import static org.apache.hudi.common.expression.Predicates.startsWith;
+import static org.apache.hudi.common.expression.Predicates.startsWithAny;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 

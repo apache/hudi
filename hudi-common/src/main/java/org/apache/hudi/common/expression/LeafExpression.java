@@ -16,38 +16,17 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.expression;
+package org.apache.hudi.common.expression;
 
-import org.apache.hudi.internal.schema.Type;
+import java.util.List;
 
-public class BoundReference extends LeafExpression {
-
-  private final int ordinal;
-  private final Type type;
-
-  public BoundReference(int ordinal, Type type) {
-    this.ordinal = ordinal;
-    this.type = type;
-  }
+/**
+ * Expression that without any child expressions.
+ */
+public abstract class LeafExpression implements Expression {
 
   @Override
-  public Type getDataType() {
-    return type;
-  }
-
-  @Override
-  public Object eval(StructLike data) {
-    return data.get(ordinal, this.type.typeId().getClassTag());
-  }
-
-  @Override
-  public <T> T accept(ExpressionVisitor<T> exprVisitor) {
-    return exprVisitor.visitBoundReference(this);
-  }
-
-  @Override
-  public String toString() {
-    return "boundReference[ordinal: " + ordinal + ", type: "
-        + type.typeId().getName() + "]";
+  public List<Expression> getChildren() {
+    return null;
   }
 }

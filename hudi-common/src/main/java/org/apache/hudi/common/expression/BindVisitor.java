@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.expression;
+package org.apache.hudi.common.expression;
 
 import org.apache.hudi.internal.schema.Types;
 

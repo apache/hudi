@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.expression;
+package org.apache.hudi.common.expression;
 
 import org.junit.jupiter.api.Test;
 

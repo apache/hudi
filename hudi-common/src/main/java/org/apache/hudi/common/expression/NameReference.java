@@ -16,26 +16,33 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.expression;
+package org.apache.hudi.common.expression;
 
-/**
- * Visitor used to travers the expression.
- */
-public interface ExpressionVisitor<T> {
+import org.apache.hudi.internal.schema.Type;
 
-  T alwaysTrue();
+import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 
-  T alwaysFalse();
+@AllArgsConstructor
+@Getter
+@EqualsAndHashCode
+public class NameReference extends LeafExpression {
 
-  T visitLiteral(Literal literal);
+  private final String name;
 
-  T visitNameReference(NameReference attribute);
+  @Override
+  public Type getDataType() {
+    throw new UnsupportedOperationException("NameReference is not bound yet");
+  }
 
-  T visitBoundReference(BoundReference boundReference);
+  @Override
+  public <T> T accept(ExpressionVisitor<T> exprVisitor) {
+    return exprVisitor.visitNameReference(this);
+  }
 
-  T visitAnd(Predicates.And and);
-
-  T visitOr(Predicates.Or or);
-
-  T visitPredicate(Predicate predicate);
+  @Override
+  public String toString() {
+    return "NameReference(name=" + name + ")";
+  }
 }
