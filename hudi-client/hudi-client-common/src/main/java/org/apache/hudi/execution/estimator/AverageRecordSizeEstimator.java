@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.estimator;
+package org.apache.hudi.execution.estimator;
 
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.fs.FSUtils;

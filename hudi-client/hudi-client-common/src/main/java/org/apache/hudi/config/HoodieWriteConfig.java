@@ -68,7 +68,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsM3Config;
-import org.apache.hudi.estimator.AverageRecordSizeEstimator;
+import org.apache.hudi.execution.estimator.AverageRecordSizeEstimator;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
@@ -228,7 +228,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("Class that estimates the size of records written by implementing "
-          + "`org.apache.hudi.estimator.RecordSizeEstimator`. Default implementation is `org.apache.hudi.estimator.AverageRecordSizeEstimator`");
+          + "`org.apache.hudi.execution.estimator.RecordSizeEstimator`. Default implementation is `org.apache.hudi.execution.estimator.AverageRecordSizeEstimator`");
 
   public static final ConfigProperty<Integer> RECORD_SIZE_ESTIMATOR_MAX_COMMITS = ConfigProperty
       .key("_hoodie.record.size.estimator.max.commits")

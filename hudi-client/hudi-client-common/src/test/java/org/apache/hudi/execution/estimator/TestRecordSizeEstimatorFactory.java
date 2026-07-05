@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.estimator;
+package org.apache.hudi.execution.estimator;
 
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -55,7 +55,7 @@ public class TestRecordSizeEstimatorFactory {
     // Not configured
     arguments.add(Arguments.of(null, AverageRecordSizeEstimator.class));
     // Incorrectly configured
-    arguments.add(Arguments.of("org.apache.hudi.estimator.IncorrectRecordEstimator", AverageRecordSizeEstimator.class));
+    arguments.add(Arguments.of("org.apache.hudi.execution.estimator.IncorrectRecordEstimator", AverageRecordSizeEstimator.class));
     return arguments.stream();
   }
 

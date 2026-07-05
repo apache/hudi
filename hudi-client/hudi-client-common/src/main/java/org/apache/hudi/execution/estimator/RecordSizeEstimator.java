@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.estimator;
+package org.apache.hudi.execution.estimator;
 
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
