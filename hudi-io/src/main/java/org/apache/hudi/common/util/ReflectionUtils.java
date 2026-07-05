@@ -136,7 +136,7 @@ public class ReflectionUtils {
     try {
       resources = classLoader.getResources(path);
     } catch (IOException e) {
-      log.error("Unable to fetch Resources in package " + e.getMessage());
+      log.error("Unable to fetch Resources in package {}", packageName, e);
     }
     List<File> directories = new ArrayList<>();
     while (Objects.requireNonNull(resources).hasMoreElements()) {
@@ -144,7 +144,7 @@ public class ReflectionUtils {
       try {
         directories.add(new File(resource.toURI()));
       } catch (URISyntaxException e) {
-        log.error("Unable to get " + e.getMessage());
+        log.error("Unable to get URI for {}", resource, e);
       }
     }
     List<String> classes = new ArrayList<>();
