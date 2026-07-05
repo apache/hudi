@@ -19,13 +19,13 @@
 
 package org.apache.hudi.utilities.streamer.validator;
 
-import org.apache.hudi.client.validator.ValidationContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.validator.ValidationContext;
 
 import java.util.List;
 

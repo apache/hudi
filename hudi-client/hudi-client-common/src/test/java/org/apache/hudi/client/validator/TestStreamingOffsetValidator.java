@@ -29,6 +29,8 @@ import org.apache.hudi.common.util.CheckpointUtils.CheckpointFormat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig.ValidationFailurePolicy;
+import org.apache.hudi.core.validator.BasePreCommitValidator;
+import org.apache.hudi.core.validator.ValidationContext;
 import org.apache.hudi.exception.HoodieValidationException;
 
 import org.junit.jupiter.api.Test;
@@ -57,6 +59,11 @@ public class TestStreamingOffsetValidator {
   private static class MockOffsetValidator extends StreamingOffsetValidator {
     public MockOffsetValidator(TypedProperties config) {
       super(config, CHECKPOINT_KEY, CheckpointFormat.SPARK_KAFKA);
+    }
+
+    // config is protected in BasePreCommitValidator (now in another package); expose for asserts
+    TypedProperties getConfig() {
+      return config;
     }
 
     // Expose protected method for testing
@@ -508,8 +515,8 @@ public class TestStreamingOffsetValidator {
 
     MockOffsetValidator validator = new MockOffsetValidator(config);
     // config is a protected field accessible from subclasses
-    assertNotNull(validator.config);
-    assertEquals("test.value", validator.config.getString("test.key"));
+    assertNotNull(validator.getConfig());
+    assertEquals("test.value", validator.getConfig().getString("test.key"));
   }
 
   @Test

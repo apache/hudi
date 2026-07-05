@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.client.validator;
+package org.apache.hudi.core.validator;
 
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;

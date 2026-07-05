@@ -20,8 +20,6 @@
 package org.apache.hudi.sink.validator;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.validator.BasePreCommitValidator;
-import org.apache.hudi.client.validator.ValidationContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -29,6 +27,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
+import org.apache.hudi.core.validator.BasePreCommitValidator;
+import org.apache.hudi.core.validator.ValidationContext;
 import org.apache.hudi.exception.HoodieValidationException;
 
 import lombok.extern.slf4j.Slf4j;
