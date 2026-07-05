@@ -20,7 +20,6 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieLogFile, HoodieTableType, WriteConcurrencyMode}
@@ -31,6 +30,7 @@ import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtil
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieLockConfig, HoodieWriteConfig}
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.HoodieIndex.IndexType.{BUCKET, SIMPLE}
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator

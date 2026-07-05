@@ -90,7 +90,7 @@ public class TableCommand {
       @ShellOption(value = {"--maxExpectedClockSkewMs"}, defaultValue = "200",
           help = "The max expected clock skew time for WaitBasedTimeGenerator in ms") final Long maxExpectedClockSkewMs,
       @ShellOption(value = {"--useDefaultLockProvider"}, defaultValue = "false",
-          help = "Use org.apache.hudi.client.transaction.lock.InProcessLockProvider") final boolean useDefaultLockProvider)
+          help = "Use org.apache.hudi.core.transaction.lock.InProcessLockProvider") final boolean useDefaultLockProvider)
       throws IOException {
     HoodieCLI
         .setConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(eventuallyConsistent)

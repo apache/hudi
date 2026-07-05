@@ -20,7 +20,6 @@ package org.apache.hudi.functional
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.DataSourceWriteOptions.{STREAMING_CHECKPOINT_IDENTIFIER, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
@@ -29,6 +28,7 @@ import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTabl
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider
 import org.apache.hudi.exception.TableNotFoundException
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase, HoodieSparkDeleteRecordMerger}

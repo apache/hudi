@@ -19,8 +19,6 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
-import org.apache.hudi.client.transaction.lock.NoopLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -37,6 +35,8 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.core.transaction.lock.NoopLockProvider;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;

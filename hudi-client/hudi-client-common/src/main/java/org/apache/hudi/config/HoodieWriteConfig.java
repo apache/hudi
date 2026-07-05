@@ -21,7 +21,6 @@ package org.apache.hudi.config;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
@@ -68,6 +67,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsM3Config;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.execution.estimator.AverageRecordSizeEstimator;
@@ -3785,7 +3785,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     private void autoAdjustConfigsForConcurrencyMode(boolean isLockProviderPropertySet) {
       // for a single writer scenario, with all table services inline, lets set InProcessLockProvider
       if (writeConfig.isAutoAdjustLockConfigs() && writeConfig.getWriteConcurrencyMode() == WriteConcurrencyMode.SINGLE_WRITER && !writeConfig.areAnyTableServicesAsync()) {
-        if (writeConfig.getLockProviderClass() != null && !writeConfig.getLockProviderClass().equals(InProcessLockProvider.class.getCanonicalName())) {
+        if (writeConfig.getLockProviderClass() != null && !InProcessLockProvider.isInProcessLockProvider(writeConfig.getLockProviderClass())) {
           // add logs only when explicitly overridden by the user.
           log.warn("For a single writer mode, overriding lock provider class ({}) to {}. So, user configured lock provider {} may not take effect",
               HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName(), writeConfig.getLockProviderClass());

@@ -16,11 +16,12 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.transaction.lock;
+package org.apache.hudi.core.transaction.lock;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -51,6 +52,19 @@ public class TestInProcessLockProvider {
     lockConfiguration1 = new LockConfiguration(properties);
     properties.put(HoodieCommonConfig.BASE_PATH.key(), "table2");
     lockConfiguration2 = new LockConfiguration(properties);
+  }
+
+  @Test
+  public void testLegacyClassNameResolvesViaCompatAlias() {
+    // Mirrors LockManager's reflective load path for configs still carrying the pre-1.3.0 FQN.
+    Object provider = ReflectionUtils.loadClass(InProcessLockProvider.LEGACY_CLASS_NAME,
+        new Class<?>[] {LockConfiguration.class, StorageConfiguration.class},
+        lockConfiguration1, storageConf);
+    Assertions.assertTrue(provider instanceof InProcessLockProvider);
+    Assertions.assertTrue(InProcessLockProvider.isInProcessLockProvider(InProcessLockProvider.LEGACY_CLASS_NAME));
+    Assertions.assertTrue(InProcessLockProvider.isInProcessLockProvider(InProcessLockProvider.class.getName()));
+    Assertions.assertFalse(InProcessLockProvider.isInProcessLockProvider(NoopLockProvider.class.getName()));
+    ((InProcessLockProvider) provider).close();
   }
 
   @Test

@@ -19,7 +19,6 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.client.transaction.lock.StorageBasedLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedImplicitBasePathLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
@@ -33,6 +32,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieException;
 
 import org.junit.jupiter.api.Test;

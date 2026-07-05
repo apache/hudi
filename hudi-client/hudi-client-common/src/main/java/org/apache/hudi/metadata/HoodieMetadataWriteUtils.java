@@ -20,7 +20,6 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.FailOnFirstErrorWriteStatus;
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -72,6 +71,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsM3Config;
 import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
@@ -163,7 +163,7 @@ public class HoodieMetadataWriteUtils {
       String lockProviderClass = writeConfig.getLockProviderClass();
       checkState(lockProviderClass != null,
           "Lock provider class must be set for data table to enable async executions of table services in metadata table");
-      checkState(!InProcessLockProvider.class.getCanonicalName().equals(lockProviderClass),
+      checkState(!InProcessLockProvider.isInProcessLockProvider(lockProviderClass),
           "InProcessLockProvider cannot be used for metadata table multi-writer mode as it does not support cross-process locking. "
               + "Configure a distributed lock provider on the data table.");
       concurrencyMode = metadataWriteConcurrencyMode;

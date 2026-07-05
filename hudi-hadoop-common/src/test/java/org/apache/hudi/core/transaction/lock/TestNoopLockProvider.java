@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.transaction.lock;
+package org.apache.hudi.core.transaction.lock;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;

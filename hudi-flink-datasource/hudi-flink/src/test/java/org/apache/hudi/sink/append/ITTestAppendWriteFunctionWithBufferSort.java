@@ -18,12 +18,12 @@
 
 package org.apache.hudi.sink.append;
 
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsInference;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.sink.buffer.BufferType;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.HoodieSchemaConverter;
