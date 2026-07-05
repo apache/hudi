@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.config.metrics;
+package org.apache.hudi.common.config.metrics;
 
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;

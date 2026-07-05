@@ -19,7 +19,7 @@
 
 package org.apache.hudi.utilities.streamer;
 
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.storage.HoodieStorageUtils;
 
 import com.codahale.metrics.MetricRegistry;

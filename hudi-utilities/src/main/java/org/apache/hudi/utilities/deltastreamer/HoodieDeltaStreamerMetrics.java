@@ -19,8 +19,8 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.utilities.streamer.HoodieStreamerMetrics;
 

@@ -19,9 +19,9 @@
 
 package org.apache.hudi.utilities.streamer;
 
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
