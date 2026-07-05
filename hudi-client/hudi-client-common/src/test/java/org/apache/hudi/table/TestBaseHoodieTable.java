@@ -38,7 +38,7 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.simple.HoodieSimpleIndex;
+import org.apache.hudi.index.HoodieSimpleIndex;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 

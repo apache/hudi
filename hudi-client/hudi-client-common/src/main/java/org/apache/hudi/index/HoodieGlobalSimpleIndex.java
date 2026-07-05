@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.index.simple;
+package org.apache.hudi.index;
 
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;

@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.index.inmemory;
+package org.apache.hudi.index;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
@@ -30,8 +30,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.ArrayList;

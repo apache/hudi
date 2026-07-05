@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.index.simple;
+package org.apache.hudi.index;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
@@ -31,7 +31,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.HoodieKeyLocationFetchHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;

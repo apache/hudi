@@ -32,7 +32,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.OrderingValues
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
+import org.apache.hudi.index.HoodieInMemoryHashIndex
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
 

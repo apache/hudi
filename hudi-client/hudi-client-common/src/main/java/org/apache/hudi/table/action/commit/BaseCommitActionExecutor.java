@@ -21,7 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.CommitMetadataResolverFactory;
-import org.apache.hudi.client.HoodieColumnStatsIndexUtils;
+import org.apache.hudi.metadata.HoodieColumnStatsIndexUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.transaction.TransactionUtils;
