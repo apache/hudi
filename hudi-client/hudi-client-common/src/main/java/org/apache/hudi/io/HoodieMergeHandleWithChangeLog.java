@@ -31,6 +31,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.io.cdc.HoodieCDCLogWriter;
+import org.apache.hudi.io.cdc.HoodieCDCLogWriterFactory;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;

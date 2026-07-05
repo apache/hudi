@@ -16,10 +16,12 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io;
+package org.apache.hudi.io.cdc;
 
-import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
@@ -29,13 +31,16 @@ import org.apache.hudi.common.table.cdc.HoodieCDCOperation;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.LogFileCreationCallback;
-import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.Map;
@@ -44,30 +49,20 @@ import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.
 import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER;
 
 /**
- * Writes CDC records as native CDC log files, for example {@code .cdc.parquet}.
+ * Writes CDC records as native CDC log files from Avro input records.
  */
-public class HoodieNativeCDCLogger<T> implements HoodieCDCLogWriter<BufferedRecord<T>> {
+public class HoodieAvroNativeCDCLogger implements HoodieCDCLogWriter<IndexedRecord> {
 
-  /** Instant time used for naming and writing native CDC log files. */
   private final String commitTime;
-  /** Partition path whose records are being merged. */
   private final String partitionPath;
-  /** Table data schema without Hudi metadata fields. */
   private final HoodieSchema dataSchema;
-  /** CDC record schema derived from the table CDC supplemental logging mode. */
   private final HoodieSchema cdcSchema;
-  /** Cached encoded CDC schema id reused for every buffered CDC record. */
-  private final Integer cdcSchemaId;
-  /** Supplemental logging mode determining which fields are emitted in CDC records. */
   private final HoodieCDCSupplementalLoggingMode cdcSupplementalLoggingMode;
-  /** Engine-specific record context for row construction, projection, and conversion. */
-  private final RecordContext<T> recordContext;
-  /** Manages native CDC file creation, rolling, writing, and stats. */
+  private final CDCTransformer transformer;
   private final HoodieNativeCDCFileWriter nativeCDCFileWriter;
-  /** Last CDC record staged for write so it can be retracted if the merge later fails. */
-  private PendingCDCRecord<T> pendingRecord;
+  private PendingCDCRecord pendingRecord;
 
-  public HoodieNativeCDCLogger(
+  public HoodieAvroNativeCDCLogger(
       String commitTime,
       HoodieWriteConfig config,
       HoodieTableConfig tableConfig,
@@ -78,16 +73,13 @@ public class HoodieNativeCDCLogger<T> implements HoodieCDCLogWriter<BufferedReco
       String fileId,
       String writeToken,
       LogFileCreationCallback fileCreationCallback,
-      TaskContextSupplier taskContextSupplier,
-      RecordContext<T> recordContext,
-      HoodieRecord.HoodieRecordType recordType) {
+      TaskContextSupplier taskContextSupplier) {
     this.commitTime = commitTime;
     this.partitionPath = partitionPath;
     this.dataSchema = HoodieSchemaCache.intern(HoodieSchemaUtils.removeMetadataFields(schema));
     this.cdcSupplementalLoggingMode = tableConfig.cdcSupplementalLoggingMode();
     this.cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(cdcSupplementalLoggingMode, dataSchema);
-    this.recordContext = recordContext;
-    this.cdcSchemaId = recordContext.encodeSchema(cdcSchema);
+    this.transformer = getTransformer();
     this.nativeCDCFileWriter = new HoodieNativeCDCFileWriter(
         commitTime,
         partitionPath,
@@ -100,19 +92,24 @@ public class HoodieNativeCDCLogger<T> implements HoodieCDCLogWriter<BufferedReco
         writeToken,
         fileCreationCallback,
         taskContextSupplier,
-        recordType);
+        HoodieRecord.HoodieRecordType.AVRO);
   }
 
   @Override
-  public void put(String recordKey, BufferedRecord<T> oldRecord, Option<BufferedRecord<T>> newRecord) {
-    flushPendingRecord();
-    HoodieCDCOperation operation;
+  public void put(String recordKey, IndexedRecord oldRecord, Option<IndexedRecord> newRecord) {
+    GenericData.Record cdcRecord;
     if (newRecord.isPresent()) {
-      operation = oldRecord == null ? HoodieCDCOperation.INSERT : HoodieCDCOperation.UPDATE;
+      if (oldRecord == null) {
+        cdcRecord = transformer.transform(HoodieCDCOperation.INSERT, recordKey, null, (GenericRecord) newRecord.get());
+      } else {
+        cdcRecord = transformer.transform(HoodieCDCOperation.UPDATE, recordKey, (GenericRecord) oldRecord, (GenericRecord) newRecord.get());
+      }
     } else {
-      operation = HoodieCDCOperation.DELETE;
+      cdcRecord = transformer.transform(HoodieCDCOperation.DELETE, recordKey, (GenericRecord) oldRecord, null);
     }
-    this.pendingRecord = new PendingCDCRecord<>(recordKey, createCDCRecord(recordKey, operation, oldRecord, newRecord.orElse(null)));
+
+    flushPendingRecord();
+    pendingRecord = new PendingCDCRecord(recordKey, cdcRecord);
   }
 
   @Override
@@ -133,52 +130,8 @@ public class HoodieNativeCDCLogger<T> implements HoodieCDCLogWriter<BufferedReco
       flushPendingRecord();
       nativeCDCFileWriter.close();
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to close HoodieNativeCDCLogger", e);
+      throw new HoodieIOException("Failed to close HoodieAvroNativeCDCLogger", e);
     }
-  }
-
-  private BufferedRecord<T> createCDCRecord(
-      String recordKey,
-      HoodieCDCOperation operation,
-      BufferedRecord<T> oldRecord,
-      BufferedRecord<T> newRecord) {
-    Object[] fieldValues = new Object[cdcSchema.getFields().size()];
-    if (cdcSupplementalLoggingMode == DATA_BEFORE_AFTER) {
-      fieldValues[0] = convertString(operation.getValue());
-      fieldValues[1] = convertString(commitTime);
-      fieldValues[2] = projectDataRecord(oldRecord);
-      fieldValues[3] = projectDataRecord(newRecord);
-    } else if (cdcSupplementalLoggingMode == DATA_BEFORE) {
-      fieldValues[0] = convertString(operation.getValue());
-      fieldValues[1] = convertString(recordKey);
-      fieldValues[2] = projectDataRecord(oldRecord);
-    } else {
-      fieldValues[0] = convertString(operation.getValue());
-      fieldValues[1] = convertString(recordKey);
-    }
-    T cdcRecord = recordContext.constructEngineRecord(cdcSchema, fieldValues);
-    return new BufferedRecord<>(recordKey, null, cdcRecord, cdcSchemaId, null);
-  }
-
-  private Object convertString(String value) {
-    return recordContext.convertValueToEngineType(value);
-  }
-
-  private T projectDataRecord(BufferedRecord<T> record) {
-    if (record == null || record.getRecord() == null) {
-      return null;
-    }
-    HoodieSchema recordSchema = recordContext.getSchemaFromBufferRecord(record);
-    T dataRecord = record.getRecord();
-    if (needsProjection(recordSchema)) {
-      dataRecord = recordContext.projectRecord(recordSchema, dataSchema).apply(dataRecord);
-    }
-    return recordContext.seal(dataRecord);
-  }
-
-  private boolean needsProjection(HoodieSchema recordSchema) {
-    return recordSchema != null
-        && (recordSchema.getFields().size() != dataSchema.getFields().size() || !recordSchema.equals(dataSchema));
   }
 
   private void flushPendingRecord() {
@@ -188,20 +141,47 @@ public class HoodieNativeCDCLogger<T> implements HoodieCDCLogWriter<BufferedReco
     try {
       nativeCDCFileWriter.write(
           pendingRecord.recordKey,
-          recordContext.constructHoodieRecord(pendingRecord.record, partitionPath));
+          new HoodieAvroIndexedRecord(new HoodieKey(pendingRecord.recordKey, partitionPath), pendingRecord.record));
       pendingRecord = null;
     } catch (IOException e) {
       throw new HoodieException("Failed to write the cdc data to native cdc log file", e);
     }
   }
 
-  private static class PendingCDCRecord<T> {
-    private final String recordKey;
-    private final BufferedRecord<T> record;
+  private CDCTransformer getTransformer() {
+    if (cdcSupplementalLoggingMode == DATA_BEFORE_AFTER) {
+      return (operation, recordKey, oldRecord, newRecord) ->
+          HoodieCDCUtils.cdcRecord(cdcSchema, operation.getValue(), commitTime, removeCommitMetadata(oldRecord), removeCommitMetadata(newRecord));
+    } else if (cdcSupplementalLoggingMode == DATA_BEFORE) {
+      return (operation, recordKey, oldRecord, newRecord) ->
+          HoodieCDCUtils.cdcRecord(cdcSchema, operation.getValue(), recordKey, removeCommitMetadata(oldRecord));
+    } else {
+      return (operation, recordKey, oldRecord, newRecord) ->
+          HoodieCDCUtils.cdcRecord(cdcSchema, operation.getValue(), recordKey);
+    }
+  }
 
-    private PendingCDCRecord(String recordKey, BufferedRecord<T> record) {
+  private GenericRecord removeCommitMetadata(GenericRecord record) {
+    return record == null ? null : HoodieAvroUtils.projectRecordToNewSchemaShallow(record, dataSchema.getAvroSchema());
+  }
+
+  private static class PendingCDCRecord {
+    private final String recordKey;
+    private final IndexedRecord record;
+
+    private PendingCDCRecord(String recordKey, IndexedRecord record) {
       this.recordKey = recordKey;
       this.record = record;
     }
+  }
+
+  /**
+   * A transformer that transforms normal Avro records into CDC records.
+   */
+  private interface CDCTransformer {
+    GenericData.Record transform(HoodieCDCOperation operation,
+                                 String recordKey,
+                                 GenericRecord oldRecord,
+                                 GenericRecord newRecord);
   }
 }

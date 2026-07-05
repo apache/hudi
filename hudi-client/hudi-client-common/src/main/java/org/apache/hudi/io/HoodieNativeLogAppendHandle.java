@@ -38,6 +38,7 @@ import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.Lazy;
+import org.apache.hudi.io.cdc.HoodieNativeLogFormatWriter;
 
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io;
+package org.apache.hudi.io.cdc;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.io.IOUtils;
 
 import org.apache.avro.generic.IndexedRecord;
 
@@ -35,12 +36,12 @@ import java.util.function.Supplier;
 /**
  * Creates CDC log writers for Avro merge handles.
  */
-final class HoodieCDCLogWriterFactory {
+public final class HoodieCDCLogWriterFactory {
 
   private HoodieCDCLogWriterFactory() {
   }
 
-  static <T, I, K, O> HoodieCDCLogWriter<IndexedRecord> createAvroCDCLogWriter(
+  public static <T, I, K, O> HoodieCDCLogWriter<IndexedRecord> createAvroCDCLogWriter(
       String instantTime,
       HoodieWriteConfig config,
       HoodieTable<T, I, K, O> hoodieTable,
@@ -78,7 +79,7 @@ final class HoodieCDCLogWriterFactory {
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 
-  static boolean shouldWriteNativeCDCLogs(HoodieTableConfig tableConfig) {
+  public static boolean shouldWriteNativeCDCLogs(HoodieTableConfig tableConfig) {
     return tableConfig.isLSMTreeStorageLayout();
   }
 }

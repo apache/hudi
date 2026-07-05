@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io;
+package org.apache.hudi.io.cdc;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
