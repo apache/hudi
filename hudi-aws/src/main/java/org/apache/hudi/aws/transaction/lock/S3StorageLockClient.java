@@ -21,9 +21,9 @@
 package org.apache.hudi.aws.transaction.lock;
 
 import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
-import org.apache.hudi.client.transaction.lock.StorageLockClient;
 import org.apache.hudi.client.transaction.lock.LockGetResult;
 import org.apache.hudi.client.transaction.lock.LockUpsertResult;
+import org.apache.hudi.client.transaction.lock.StorageLockClient;
 import org.apache.hudi.client.transaction.lock.StorageLockData;
 import org.apache.hudi.client.transaction.lock.StorageLockFile;
 import org.apache.hudi.common.util.Functions;

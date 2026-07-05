@@ -25,9 +25,9 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.io.IOUtils;
 
 import org.apache.avro.generic.IndexedRecord;
 

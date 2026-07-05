@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
+import org.apache.hudi.execution.ExecutorFactory;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieWriteHandle;
@@ -46,7 +47,6 @@ import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucketClusteringPlanStrategy;
-import org.apache.hudi.execution.ExecutorFactory;
 import org.apache.hudi.util.LazyConcatenatingIterator;
 
 import lombok.extern.slf4j.Slf4j;

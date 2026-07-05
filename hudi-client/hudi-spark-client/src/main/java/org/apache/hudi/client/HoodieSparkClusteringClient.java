@@ -19,12 +19,12 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.async.BaseClusterer;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.async.BaseClusterer;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;

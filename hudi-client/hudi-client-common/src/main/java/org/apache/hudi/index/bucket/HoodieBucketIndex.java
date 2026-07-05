@@ -19,7 +19,6 @@
 package org.apache.hudi.index.bucket;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.util.LazyIterableIterator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -31,6 +30,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.LazyIterableIterator;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;

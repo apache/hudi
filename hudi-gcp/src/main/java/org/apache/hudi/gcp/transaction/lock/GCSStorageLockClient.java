@@ -18,9 +18,9 @@
 
 package org.apache.hudi.gcp.transaction.lock;
 
-import org.apache.hudi.client.transaction.lock.StorageLockClient;
 import org.apache.hudi.client.transaction.lock.LockGetResult;
 import org.apache.hudi.client.transaction.lock.LockUpsertResult;
+import org.apache.hudi.client.transaction.lock.StorageLockClient;
 import org.apache.hudi.client.transaction.lock.StorageLockData;
 import org.apache.hudi.client.transaction.lock.StorageLockFile;
 import org.apache.hudi.common.util.Functions;
