@@ -16,9 +16,8 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.transaction.lock.models;
+package org.apache.hudi.client.transaction.lock;
 
-import org.apache.hudi.client.transaction.lock.StorageLockClient;
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService;
 import org.apache.hudi.exception.HoodieIOException;
 

@@ -20,10 +20,10 @@
 
 package org.apache.hudi.aws.transaction.lock;
 
-import org.apache.hudi.client.transaction.lock.models.LockGetResult;
-import org.apache.hudi.client.transaction.lock.models.LockUpsertResult;
-import org.apache.hudi.client.transaction.lock.models.StorageLockData;
-import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
+import org.apache.hudi.client.transaction.lock.LockGetResult;
+import org.apache.hudi.client.transaction.lock.LockUpsertResult;
+import org.apache.hudi.client.transaction.lock.StorageLockData;
+import org.apache.hudi.client.transaction.lock.StorageLockFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
@@ -49,8 +49,8 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Properties;
 
-import static org.apache.hudi.client.transaction.lock.models.LockUpsertResult.THROTTLED;
-import static org.apache.hudi.client.transaction.lock.models.LockUpsertResult.UNKNOWN_ERROR;
+import static org.apache.hudi.client.transaction.lock.LockUpsertResult.THROTTLED;
+import static org.apache.hudi.client.transaction.lock.LockUpsertResult.UNKNOWN_ERROR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;

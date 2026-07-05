@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.transaction.lock.models;
+package org.apache.hudi.client.transaction.lock;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,7 +33,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
-import static org.apache.hudi.client.transaction.lock.models.LockProviderHeartbeatManager.DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS;
+import static org.apache.hudi.client.transaction.lock.LockProviderHeartbeatManager.DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.transaction.lock.models;
+package org.apache.hudi.client.transaction.lock;
 
 import org.apache.hudi.common.util.VisibleForTesting;
 

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.callback.util;
+package org.apache.hudi.callback;
 
 import org.apache.hudi.exception.HoodieCommitCallbackException;
 

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.transaction.lock.models;
+package org.apache.hudi.client.transaction.lock;
 
 /**
  * The heartbeat manager interface is meant to manage the lifecycle of heartbeat tasks.

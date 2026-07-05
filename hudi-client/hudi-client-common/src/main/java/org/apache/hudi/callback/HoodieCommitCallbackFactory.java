@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.callback.util;
+package org.apache.hudi.callback;
 
-import org.apache.hudi.callback.HoodieWriteCommitCallback;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteCommitCallbackConfig;

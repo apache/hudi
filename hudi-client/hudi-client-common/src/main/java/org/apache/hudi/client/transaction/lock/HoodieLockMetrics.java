@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.transaction.lock.metrics;
+package org.apache.hudi.client.transaction.lock;
 
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;

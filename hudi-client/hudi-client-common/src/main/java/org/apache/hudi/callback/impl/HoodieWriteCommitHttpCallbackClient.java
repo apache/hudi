@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.callback.client.http;
+package org.apache.hudi.callback.impl;
 
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
