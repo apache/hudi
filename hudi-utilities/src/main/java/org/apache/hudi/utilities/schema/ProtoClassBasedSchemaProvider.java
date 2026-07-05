@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
@@ -64,7 +65,7 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
   /**
    * To be lazily initiated on executors.
    */
-  private transient Schema schema;
+  private transient HoodieSchema schema;
 
   public ProtoClassBasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
@@ -79,21 +80,26 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getSourceSchema() {
+  public HoodieSchema getSourceHoodieSchema() {
     if (schema == null) {
       try {
-        Schema.Parser parser = new Schema.Parser();
+        HoodieSchema.Parser parser = new HoodieSchema.Parser();
         schema = parser.parse(schemaString);
       } catch (Exception e) {
         throw new HoodieSchemaException("Failed to parse schema: " + schemaString, e);
       }
-
     }
     return schema;
   }
 
   @Override
-  public Schema getTargetSchema() {
-    return getSourceSchema();
+  @Deprecated
+  public Schema getSourceSchema() {
+    return getSourceHoodieSchema().toAvroSchema();
+  }
+
+  @Override
+  public HoodieSchema getTargetHoodieSchema() {
+    return getSourceHoodieSchema();
   }
 }

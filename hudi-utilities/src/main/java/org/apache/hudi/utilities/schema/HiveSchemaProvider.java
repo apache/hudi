@@ -25,7 +25,6 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.utilities.config.HiveSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 
-import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -43,7 +42,6 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 /**
  * A schema provider to get data schema through user specified hive table.
  */
-@Getter
 public class HiveSchemaProvider extends SchemaProvider {
 
   private final HoodieSchema sourceHoodieSchema;
@@ -86,18 +84,24 @@ public class HiveSchemaProvider extends SchemaProvider {
   }
 
   @Override
+  public HoodieSchema getSourceHoodieSchema() {
+    return sourceHoodieSchema;
+  }
+
+  @Override
   @Deprecated
   public Schema getSourceSchema() {
     return getSourceHoodieSchema().toAvroSchema();
   }
 
   @Override
+  public HoodieSchema getTargetHoodieSchema() {
+    return targetHoodieSchema != null ? targetHoodieSchema : getSourceHoodieSchema();
+  }
+
+  @Override
   @Deprecated
   public Schema getTargetSchema() {
-    if (getTargetHoodieSchema() != null) {
-      return getTargetHoodieSchema().toAvroSchema();
-    } else {
-      return super.getTargetSchema();
-    }
+    return getTargetHoodieSchema().toAvroSchema();
   }
 }

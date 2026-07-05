@@ -21,25 +21,17 @@ package org.apache.hudi.utilities.schema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 
-import org.apache.avro.Schema;
-import org.apache.spark.api.java.JavaSparkContext;
+import org.junit.jupiter.api.Test;
 
-public class SimpleSchemaProvider extends SchemaProvider {
-  private final HoodieSchema sourceSchema;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-  public SimpleSchemaProvider(JavaSparkContext jssc, HoodieSchema sourceSchema, TypedProperties props) {
-    super(props, jssc);
-    this.sourceSchema = sourceSchema;
-  }
+class TestSimpleSchemaProvider {
 
-  @Override
-  public HoodieSchema getSourceHoodieSchema() {
-    return sourceSchema;
-  }
+  @Test
+  void testGetSourceHoodieSchema() {
+    HoodieSchema sourceSchema = HoodieSchema.parse("{\"type\": \"record\", \"name\": \"example\", \"fields\": [{\"name\": \"id\", \"type\": \"string\"}]}");
+    SimpleSchemaProvider simpleSchemaProvider = new SimpleSchemaProvider(null, sourceSchema, new TypedProperties());
 
-  @Override
-  @Deprecated
-  public Schema getSourceSchema() {
-    return getSourceHoodieSchema().toAvroSchema();
+    assertEquals(sourceSchema, simpleSchemaProvider.getSourceHoodieSchema());
   }
 }
