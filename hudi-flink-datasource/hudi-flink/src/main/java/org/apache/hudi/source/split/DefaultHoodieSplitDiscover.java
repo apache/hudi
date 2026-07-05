@@ -24,19 +24,17 @@ import org.apache.hudi.source.HoodieScanContext;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.core.fs.Path;
 import org.apache.hadoop.conf.Configuration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
 /**
  * Default implementation of HoodieContinuousSplitDiscover.
  */
+@Slf4j
 public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover {
-  private static final Logger LOG = LoggerFactory.getLogger(DefaultHoodieSplitDiscover.class);
-
   private final HoodieScanContext scanContext;
   private final IncrementalInputSplits incrementalInputSplits;
   private final Configuration hadoopConf;

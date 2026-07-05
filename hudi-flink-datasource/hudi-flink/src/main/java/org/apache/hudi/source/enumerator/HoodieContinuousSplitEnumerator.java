@@ -26,18 +26,16 @@ import org.apache.hudi.source.split.HoodieContinuousSplitDiscover;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.HoodieSplitProvider;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Continuous Hoodie enumerator that discovers Hoodie splits from new Hoodie commits of upstream Hoodie table.
  */
+@Slf4j
 public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerator {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieContinuousSplitEnumerator.class);
-
   private final SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext;
   private final HoodieSplitProvider splitProvider;
   private final HoodieContinuousSplitDiscover splitDiscover;
@@ -95,7 +93,7 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
   private HoodieContinuousSplitBatch discoverSplits() {
     int pendingSplitNumber = splitProvider.pendingSplitCount();
     if (pendingSplitNumber > scanContext.getMaxPendingSplits()) {
-      LOG.info(
+      log.info(
           "Pause split discovery as the assigner already has too many pending splits: {}",
           pendingSplitNumber);
       return HoodieContinuousSplitBatch.EMPTY;
@@ -113,13 +111,13 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
       if (enumeratorMetrics != null) {
         position.get().getIssuedInstant().ifPresent(enumeratorMetrics::setIssuedInstant);
       }
-      LOG.debug(
+      log.debug(
           "Added {} splits discovered between ({}, {}] to the assigner",
           result.getSplits().size(),
           position.get().getIssuedOffset(),
           result.getOffset());
     } else {
-      LOG.debug(
+      log.debug(
           "No new splits discovered between ({}, {}]",
           position.get().getIssuedOffset(),
           result.getOffset());
@@ -130,7 +128,7 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
     // resumes from the correct point, which is required for READ_COMMITS_LIMIT to work correctly.
     if (!StringUtils.isNullOrEmpty(result.getOffset())) {
       position.set(HoodieEnumeratorPosition.of(result.getEndInstant(), result.getOffset()));
-      LOG.info("Update enumerator position to {}", position.get());
+      log.info("Update enumerator position to {}", position.get());
     }
   }
 

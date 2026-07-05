@@ -26,9 +26,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -49,9 +48,8 @@ import java.util.stream.Collectors;
  *   as the instant time.</li>
  * </ul>
  */
+@Slf4j
 public class CompactionPlanSourceFunction extends AbstractRichFunctionAdapter implements SourceFunctionAdapter<CompactionPlanEvent> {
-
-  protected static final Logger LOG = LoggerFactory.getLogger(CompactionPlanSourceFunction.class);
 
   /**
    * compaction plan instant -> compaction plan
@@ -74,13 +72,13 @@ public class CompactionPlanSourceFunction extends AbstractRichFunctionAdapter im
     HoodieTimeline pendingCompactionTimeline = StreamerUtil.createMetaClient(conf).getActiveTimeline().filterPendingCompactionTimeline();
     for (Pair<String, HoodieCompactionPlan> pair : compactionPlans) {
       if (!pendingCompactionTimeline.containsInstant(pair.getLeft())) {
-        LOG.warn("{} not found in pending compaction instants.", pair.getLeft());
+        log.warn("{} not found in pending compaction instants.", pair.getLeft());
         continue;
       }
       HoodieCompactionPlan compactionPlan = pair.getRight();
       List<CompactionOperation> operations = compactionPlan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
-      LOG.info("CompactionPlanFunction compacting {} files", operations);
+      log.info("CompactionPlanFunction compacting {} files", operations);
       for (CompactionOperation operation : operations) {
         sourceContext.collect(new CompactionPlanEvent(pair.getLeft(), operation));
       }

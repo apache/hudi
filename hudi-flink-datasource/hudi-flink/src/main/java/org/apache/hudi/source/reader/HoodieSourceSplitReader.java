@@ -24,14 +24,13 @@ import org.apache.hudi.source.reader.function.SplitReaderFunction;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.SerializableComparator;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.connector.base.source.reader.RecordsBySplits;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsChange;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
@@ -53,9 +52,8 @@ import java.util.Set;
  *
  * @param <T> record type
  */
+@Slf4j
 public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithPosition<T>, HoodieSourceSplit> {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSourceSplitReader.class);
-
   private final SerializableComparator<HoodieSourceSplit> splitComparator;
   private final Queue<HoodieSourceSplit> splits;
   private final FlinkStreamReadMetrics readerMetrics;
@@ -112,10 +110,10 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
     if (splitComparator != null) {
       List<HoodieSourceSplit> newSplits = new ArrayList<>(splitsChange.splits());
       newSplits.sort(splitComparator);
-      LOG.info("Add {} splits to reader: {}", newSplits.size(), newSplits);
+      log.info("Add {} splits to reader: {}", newSplits.size(), newSplits);
       splits.addAll(newSplits);
     } else {
-      LOG.info("Add {} splits to reader", splitsChange.splits().size());
+      log.info("Add {} splits to reader", splitsChange.splits().size());
       splits.addAll(splitsChange.splits());
     }
   }

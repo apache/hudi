@@ -21,8 +21,7 @@ package org.apache.hudi.sink.muttley;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.net.URI;
@@ -34,9 +33,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+@Slf4j
 public abstract class FlinkHudiMuttleyClient {
-
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkHudiMuttleyClient.class);
 
   public static final String URL = "http://localhost:%d/%s";
   public static final int DEFAULT_PORT = 5436;
@@ -117,9 +115,9 @@ public abstract class FlinkHudiMuttleyClient {
                            final Option<String> rpcProcedure)
       throws IOException, FlinkHudiMuttleyException {
     final String url = getUrl(path);
-    LOG.info("MuttleyClient request - Method: {}, URL: {}, Path: {}, RPC Procedure: {}",
+    log.info("MuttleyClient request - Method: {}, URL: {}, Path: {}, RPC Procedure: {}",
         method, url, path, rpcProcedure.orElse("none"));
-    LOG.debug("Request payload: {}", jsonPayload);
+    log.debug("Request payload: {}", jsonPayload);
 
     // Build request body
     HttpRequest.BodyPublisher bodyPublisher = jsonPayload == null
@@ -151,14 +149,14 @@ public abstract class FlinkHudiMuttleyClient {
     }
 
     final HttpRequest request = requestBuilder.build();
-    LOG.info("Executing HTTP request with headers: {}", request.headers());
+    log.info("Executing HTTP request with headers: {}", request.headers());
 
     // Execute with retry logic
     HttpResponse<String> response = executeWithRetry(request);
 
     int statusCode = response.statusCode();
     if (statusCode >= 200 && statusCode < 300) {
-      LOG.debug("Request successful, returning response");
+      log.debug("Request successful, returning response");
       return response;
     }
 
@@ -167,13 +165,13 @@ public abstract class FlinkHudiMuttleyClient {
         this.getService(), statusCode, error);
 
     if (statusCode >= 400 && statusCode < 500) {
-      LOG.error("path : {}, rpcProcedure : {}, statusCode : {}",
+      log.error("path : {}, rpcProcedure : {}, statusCode : {}",
           path, rpcProcedure.orElse("No RPC Procedure"), statusCode);
       throw new FlinkHudiMuttleyClientException(message, statusCode);
     }
 
     if (statusCode >= 500) {
-      LOG.error("path : {}, rpcProcedure : {}, statusCode : {}",
+      log.error("path : {}, rpcProcedure : {}, statusCode : {}",
           path, rpcProcedure.orElse("No RPC Procedure"), statusCode);
       throw new FlinkHudiMuttleyServerException(message, statusCode);
     }
@@ -190,15 +188,15 @@ public abstract class FlinkHudiMuttleyClient {
       try {
         response = client.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() >= 200 && response.statusCode() < 300) {
-          LOG.info("HTTP response received - Status code: {}, Successful: true", response.statusCode());
+          log.info("HTTP response received - Status code: {}, Successful: true", response.statusCode());
           return response;
         }
-        LOG.info("HTTP response received - Status code: {}, Successful: false", response.statusCode());
+        log.info("HTTP response received - Status code: {}, Successful: false", response.statusCode());
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new IOException("HTTP request interrupted", e);
       } catch (IOException e) {
-        LOG.error("IOException during HTTP request execution (attempt {}/{}): {}",
+        log.error("IOException during HTTP request execution (attempt {}/{}): {}",
             tryCount + 1, maxTries, e.getMessage(), e);
         if (tryCount + 1 >= maxTries) {
           throw e;

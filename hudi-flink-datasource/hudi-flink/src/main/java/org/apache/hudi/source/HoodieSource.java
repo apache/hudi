@@ -43,6 +43,7 @@ import org.apache.hudi.source.split.assign.HoodieSplitAssigner;
 import org.apache.hudi.source.split.assign.HoodieSplitAssigners;
 import org.apache.hudi.util.FileIndexReader;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.connector.source.Boundedness;
 import org.apache.flink.api.connector.source.Source;
@@ -53,8 +54,6 @@ import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -71,9 +70,8 @@ import java.util.stream.Collectors;
  *
  * @param <T> the record type to emit
  */
+@Slf4j
 public class HoodieSource<T> extends FileIndexReader implements Source<T, HoodieSourceSplit, HoodieSplitEnumeratorState> {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSource.class);
-
   private final HoodieScanContext scanContext;
   private final SplitReaderFunction<T> readerFunction;
   private final SerializableComparator<HoodieSourceSplit> splitComparator;
@@ -142,7 +140,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
     if (enumeratorState == null) {
       splitProvider = new DefaultHoodieSplitProvider(splitAssigner);
     } else {
-      LOG.info(
+      log.info(
           "Hoodie source restored {} splits from state for table {}",
           enumeratorState.getPendingSplitStates().size(), tableName);
       List<HoodieSourceSplit> pendingSplits =
@@ -179,7 +177,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
             List<HoodieSourceSplit> splits = buildHoodieSplits(metaClient, flinkConf);
             if (splits.isEmpty()) {
               // When there is no input splits, just return an empty source.
-              LOG.info("No input splits generate for MERGE_ON_READ input format. Returning empty collection");
+              log.info("No input splits generate for MERGE_ON_READ input format. Returning empty collection");
             }
             return splits;
           case COPY_ON_WRITE:

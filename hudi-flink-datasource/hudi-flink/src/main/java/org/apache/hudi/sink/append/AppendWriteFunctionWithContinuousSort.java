@@ -27,6 +27,7 @@ import org.apache.hudi.sink.buffer.TotalSizeTracer;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.core.memory.MemorySegmentFactory;
@@ -38,8 +39,6 @@ import org.apache.flink.table.runtime.generated.RecordComparator;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -67,9 +66,8 @@ import java.util.TreeMap;
  * @param <T> Type of the input record
  * @see StreamWriteOperatorCoordinator
  */
+@Slf4j
 public class AppendWriteFunctionWithContinuousSort<T> extends AppendWriteFunction<T> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(AppendWriteFunctionWithContinuousSort.class);
 
   private final long maxCapacity;
   private final int drainSize;
@@ -99,7 +97,7 @@ public class AppendWriteFunctionWithContinuousSort<T> extends AppendWriteFunctio
     this.maxCapacity = config.get(FlinkOptions.WRITE_BUFFER_SIZE);
     this.drainSize = config.get(FlinkOptions.WRITE_BUFFER_SORT_CONTINUOUS_DRAIN_SIZE);
 
-    LOG.info("AppendWriteFunctionWithContinuousSort created: maxCapacity={}, drainSize={}",
+    log.info("AppendWriteFunctionWithContinuousSort created: maxCapacity={}, drainSize={}",
         maxCapacity, drainSize);
   }
 
@@ -121,7 +119,7 @@ public class AppendWriteFunctionWithContinuousSort<T> extends AppendWriteFunctio
 
     super.open(parameters);
 
-    LOG.info("Initializing continuous sort with keys: {}", sortKeyList);
+    log.info("Initializing continuous sort with keys: {}", sortKeyList);
 
     // Create sort code generator for normalized key computation and record comparison
     SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType, sortKeyList.toArray(new String[0]));
@@ -169,7 +167,7 @@ public class AppendWriteFunctionWithContinuousSort<T> extends AppendWriteFunctio
     // Initialize memory size tracer for bounding buffer memory footprint
     this.sizeTracer = new TotalSizeTracer(config);
 
-    LOG.info("AppendWriteFunctionWithContinuousSort initialized successfully");
+    log.info("AppendWriteFunctionWithContinuousSort initialized successfully");
   }
 
   @Override
@@ -244,14 +242,14 @@ public class AppendWriteFunctionWithContinuousSort<T> extends AppendWriteFunctio
     try {
       // Drain all remaining records and reset for next checkpoint interval
       if (!sortedRecords.isEmpty()) {
-        LOG.info("Snapshot: draining {} remaining records", sortedRecords.size());
+        log.info("Snapshot: draining {} remaining records", sortedRecords.size());
         drainRecords(sortedRecords.size());
         sortedRecords.clear();
         insertionSequence = 0L;
         sizeTracer.reset();
       }
 
-      LOG.info("Snapshot complete: total drained={}, operations={}",
+      log.info("Snapshot complete: total drained={}, operations={}",
           totalDrainedRecords, totalDrainOperations);
 
     } catch (IOException e) {
@@ -265,7 +263,7 @@ public class AppendWriteFunctionWithContinuousSort<T> extends AppendWriteFunctio
     try {
       // Drain all remaining records and clear buffer
       if (!sortedRecords.isEmpty()) {
-        LOG.info("EndInput: draining {} remaining records", sortedRecords.size());
+        log.info("EndInput: draining {} remaining records", sortedRecords.size());
         drainRecords(sortedRecords.size());
         sortedRecords.clear();
         insertionSequence = 0L;
@@ -281,7 +279,7 @@ public class AppendWriteFunctionWithContinuousSort<T> extends AppendWriteFunctio
   @Override
   public void close() throws Exception {
     try {
-      LOG.info("AppendWriteFunctionWithContinuousSort closed: totalInserted={}, totalDrained={}, operations={}",
+      log.info("AppendWriteFunctionWithContinuousSort closed: totalInserted={}, totalDrained={}, operations={}",
           totalInserted, totalDrainedRecords, totalDrainOperations);
 
     } finally {

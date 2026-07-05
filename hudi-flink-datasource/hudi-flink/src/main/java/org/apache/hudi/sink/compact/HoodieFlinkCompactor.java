@@ -40,13 +40,12 @@ import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.JCommander;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.client.deployment.application.ApplicationExecutionException;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -57,9 +56,8 @@ import java.util.stream.Collectors;
 /**
  * Flink hudi compaction program that can be executed manually.
  */
+@Slf4j
 public class HoodieFlinkCompactor {
-
-  protected static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkCompactor.class);
 
   private static final String NO_EXECUTE_KEYWORD = "no execute";
 
@@ -78,7 +76,7 @@ public class HoodieFlinkCompactor {
 
     // Validate configuration
     if (cfg.retryLastFailedJob && cfg.maxProcessingTimeMs <= 0) {
-      LOG.warn("--retry-last-failed-job is enabled but --job-max-processing-time-ms is not set or <= 0. "
+      log.warn("--retry-last-failed-job is enabled but --job-max-processing-time-ms is not set or <= 0. "
           + "The retry-last-failed feature will have no effect.");
     }
 
@@ -101,7 +99,7 @@ public class HoodieFlinkCompactor {
               new HoodieFlinkCompactor(service).start(false);
             } catch (ApplicationExecutionException aee) {
               if (aee.getMessage() != null && aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
-                LOG.info("Compaction is not performed - no work to do");
+                log.info("Compaction is not performed - no work to do");
                 // Not a failure, no need to retry
               } else {
                 throw new RuntimeException(aee);
@@ -127,23 +125,23 @@ public class HoodieFlinkCompactor {
       } catch (Exception e) {
         throw new HoodieException(e.getMessage(), e);
       } finally {
-        LOG.info("Shut down hoodie flink compactor");
+        log.info("Shut down hoodie flink compactor");
       }
     } else {
-      LOG.info("Hoodie Flink Compactor running only single round");
+      log.info("Hoodie Flink Compactor running only single round");
       try {
         compactionScheduleService.compact();
       } catch (ApplicationExecutionException aee) {
         if (aee.getMessage() != null && aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
-          LOG.info("Compaction is not performed");
+          log.info("Compaction is not performed");
         } else {
           throw aee;
         }
       } catch (Exception e) {
-        LOG.error("Got error running delta sync once. Shutting down", e);
+        log.error("Got error running delta sync once. Shutting down", e);
         throw e;
       } finally {
-        LOG.info("Shut down hoodie flink compactor");
+        log.info("Shut down hoodie flink compactor");
       }
     }
   }
@@ -244,12 +242,12 @@ public class HoodieFlinkCompactor {
               Thread.sleep(cfg.minCompactionIntervalSeconds * 1000);
             } catch (ApplicationExecutionException aee) {
               if (aee.getMessage() != null && aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
-                LOG.info("Compaction is not performed.");
+                log.info("Compaction is not performed.");
               } else {
                 throw new HoodieException(aee.getMessage(), aee);
               }
             } catch (Exception e) {
-              LOG.error("Shutting down compaction service due to exception", e);
+              log.error("Shutting down compaction service due to exception", e);
               error = true;
               throw new HoodieException(e.getMessage(), e);
             }
@@ -269,7 +267,7 @@ public class HoodieFlinkCompactor {
         boolean scheduled = writeClient.scheduleCompaction(Option.empty()).isPresent();
         if (!scheduled) {
           // do nothing.
-          LOG.info("No compaction plan for this job ");
+          log.info("No compaction plan for this job ");
           return;
         }
         table.getMetaClient().reloadActiveTimeline();
@@ -284,7 +282,7 @@ public class HoodieFlinkCompactor {
         Option<HoodieInstant> staleInflightInstant = TableServiceUtils.findStaleInflightInstant(
             table.getMetaClient(), HoodieTimeline.COMPACTION_ACTION, cfg.maxProcessingTimeMs);
         if (staleInflightInstant.isPresent()) {
-          LOG.info("Found stale inflight compaction instant [{}] exceeding max processing time {}ms. Will rollback and retry.",
+          log.info("Found stale inflight compaction instant [{}] exceeding max processing time {}ms. Will rollback and retry.",
               staleInflightInstant.get(), cfg.maxProcessingTimeMs);
           requested = java.util.Collections.singletonList(staleInflightInstant.get());
         }
@@ -292,7 +290,7 @@ public class HoodieFlinkCompactor {
 
       if (requested.isEmpty()) {
         // do nothing.
-        LOG.info("No compaction plan scheduled, turns on the compaction plan schedule with --schedule option");
+        log.info("No compaction plan scheduled, turns on the compaction plan schedule with --schedule option");
         return;
       }
 
@@ -300,7 +298,7 @@ public class HoodieFlinkCompactor {
       compactionInstantTimes.forEach(timestamp -> {
         HoodieInstant inflightInstant = table.getInstantGenerator().getCompactionInflightInstant(timestamp);
         if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
-          LOG.info("Rollback inflight compaction instant: [{}]", timestamp);
+          log.info("Rollback inflight compaction instant: [{}]", timestamp);
           table.rollbackInflightCompaction(inflightInstant, writeClient.getTransactionManager());
           table.getMetaClient().reloadActiveTimeline();
         }
@@ -322,7 +320,7 @@ public class HoodieFlinkCompactor {
 
       if (compactionPlans.isEmpty()) {
         // No compaction plan, do nothing and return.
-        LOG.info("No compaction plan for instant {}", String.join(",", compactionInstantTimes));
+        log.info("No compaction plan for instant {}", String.join(",", compactionInstantTimes));
         return;
       }
 
@@ -336,7 +334,7 @@ public class HoodieFlinkCompactor {
           ? totalOperations
           : Math.min(conf.get(FlinkOptions.COMPACTION_TASKS), totalOperations);
 
-      LOG.info("Start to compaction for instant {}", compactionInstantTimes);
+      log.info("Start to compaction for instant {}", compactionInstantTimes);
 
       // Mark instant as compaction inflight
       for (HoodieInstant instant : instants) {
@@ -367,7 +365,7 @@ public class HoodieFlinkCompactor {
      * Shutdown async services like compaction/clustering as DeltaSync is shutdown.
      */
     public void shutdownAsyncService(boolean error) {
-      LOG.info("Gracefully shutting down compactor. Error: {}", error);
+      log.info("Gracefully shutting down compactor. Error: {}", error);
       executor.shutdown();
       writeClient.close();
     }

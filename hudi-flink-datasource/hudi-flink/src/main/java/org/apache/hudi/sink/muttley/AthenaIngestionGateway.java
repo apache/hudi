@@ -23,8 +23,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.net.http.HttpResponse;
@@ -35,9 +34,9 @@ import java.util.Map;
 /**
  * Client for interacting with Athena Ingestion Gateway using MuttleyClient.
  */
+@Slf4j
 public class AthenaIngestionGateway extends FlinkHudiMuttleyClient {
 
-  private static final Logger LOG = LoggerFactory.getLogger(AthenaIngestionGateway.class);
   protected static final String PATH_URL = "";
   protected static final String ATHENA_INGESTION_BASE =
       "uber.data.athena.manager.protos.CheckpointService::";
@@ -100,14 +99,14 @@ public class AthenaIngestionGateway extends FlinkHudiMuttleyClient {
       final String requestJson = OBJECT_MAPPER.writeValueAsString(getKafkaOffsetsRequest);
       HttpResponse<String> response = post(PATH_URL, requestJson, GET_KAFKA_OFFSETS_PROCEDURE);
       String resultAsJson = response.body();
-      LOG.info("Get Kafka Offsets response: {} \nfor request: {}", resultAsJson, requestJson);
+      log.info("Get Kafka Offsets response: {} \nfor request: {}", resultAsJson, requestJson);
 
       final CheckpointKafkaOffsetInfoResponse checkpointKafkaResponse = OBJECT_MAPPER
           .readValue(resultAsJson, CheckpointKafkaOffsetInfoResponse.class);
       if (checkpointKafkaResponse != null && checkpointKafkaResponse.isValid()) {
         return Option.of(checkpointKafkaResponse.kafkaOffsetsInfo);
       } else {
-        LOG.warn(
+        log.warn(
             "Empty kafka checkpoints info received for topic: {}, job: {}, "
                 + "env: {}, request: {}, \nresponse: {}",
             topicOperatorIds, jobName, env, requestJson, checkpointKafkaResponse);

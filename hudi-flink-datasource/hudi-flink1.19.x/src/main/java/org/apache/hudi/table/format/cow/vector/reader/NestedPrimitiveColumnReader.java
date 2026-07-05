@@ -22,6 +22,7 @@ import org.apache.hudi.table.format.cow.utils.IntArrayList;
 import org.apache.hudi.table.format.cow.vector.ParquetDecimalVector;
 import org.apache.hudi.table.format.cow.vector.position.LevelDelegation;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.columnar.vector.heap.HeapBooleanVector;
@@ -50,8 +51,6 @@ import org.apache.parquet.column.values.rle.RunLengthBitPackingHybridDecoder;
 import org.apache.parquet.io.ParquetDecodingException;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -73,9 +72,8 @@ import static org.apache.parquet.column.ValuesType.VALUES;
  * reader creation boundary in {@code ParquetSplitReaderUtil}, not inside this class — keeping it
  * a faithful copy of upstream.
  */
+@Slf4j
 public class NestedPrimitiveColumnReader implements ColumnReader<WritableColumnVector> {
-  private static final Logger LOG = LoggerFactory.getLogger(NestedPrimitiveColumnReader.class);
-
   private final IntArrayList repetitionLevelList = new IntArrayList(0);
   private final IntArrayList definitionLevelList = new IntArrayList(0);
 
@@ -545,13 +543,13 @@ public class NestedPrimitiveColumnReader implements ColumnReader<WritableColumnV
     this.definitionLevelColumn = new ValuesReaderIntIterator(dlReader);
     try {
       BytesInput bytes = page.getBytes();
-      LOG.debug("Page size {}  bytes and {} records.", bytes.size(), pageValueCount);
+      log.debug("Page size {}  bytes and {} records.", bytes.size(), pageValueCount);
       ByteBufferInputStream in = bytes.toInputStream();
-      LOG.debug("Reading repetition levels at {}.", in.position());
+      log.debug("Reading repetition levels at {}.", in.position());
       rlReader.initFromPage(pageValueCount, in);
-      LOG.debug("Reading definition levels at {}.", in.position());
+      log.debug("Reading definition levels at {}.", in.position());
       dlReader.initFromPage(pageValueCount, in);
-      LOG.debug("Reading data at {}.", in.position());
+      log.debug("Reading data at {}.", in.position());
       initDataReader(page.getValueEncoding(), in, page.getValueCount());
     } catch (IOException e) {
       throw new ParquetDecodingException(
@@ -566,7 +564,7 @@ public class NestedPrimitiveColumnReader implements ColumnReader<WritableColumnV
     this.definitionLevelColumn =
         newRLEIterator(descriptor.getMaxDefinitionLevel(), page.getDefinitionLevels());
     try {
-      LOG.debug(
+      log.debug(
           "Page data size {} bytes and {} records.", page.getData().size(), pageValueCount);
       initDataReader(
           page.getDataEncoding(), page.getData().toInputStream(), page.getValueCount());

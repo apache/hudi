@@ -54,6 +54,7 @@ import org.apache.hudi.utils.TestTableEnvs;
 import org.apache.hudi.utils.TestUtils;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.core.execution.JobClient;
@@ -79,8 +80,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -127,9 +126,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * IT cases for Hoodie table source and sink.
  */
 @ExtendWith(FlinkMiniCluster.class)
+@Slf4j
 public class ITTestHoodieDataSource {
-  private static final Logger LOG = LoggerFactory.getLogger(ITTestHoodieDataSource.class);
-
   // A streaming read collected via CollectTableSink is terminated by a forced SuccessException once it
   // reaches its expected row count. A benign teardown race (see isAcceptableTerminalFailure) can instead
   // close the source stream mid-read and terminate the job before all rows are emitted, leaving an
@@ -1259,7 +1257,7 @@ public class ITTestHoodieDataSource {
       if (result.size() >= expectedNum) {
         break;
       }
-      LOG.warn("testLookupJoin collected {} of {} rows on attempt {}/{}; a teardown race produced an "
+      log.warn("testLookupJoin collected {} of {} rows on attempt {}/{}; a teardown race produced an "
           + "empty lookup join. Retrying.", result.size(), expectedNum, attempt, MAX_STREAM_READ_ATTEMPTS);
     }
 
@@ -3981,7 +3979,7 @@ public class ITTestHoodieDataSource {
       if (expectedNum <= 0 || rows.size() >= expectedNum) {
         return rows;
       }
-      LOG.warn("Streaming read collected {} of {} expected rows on attempt {}/{}; a tolerated teardown "
+      log.warn("Streaming read collected {} of {} expected rows on attempt {}/{}; a tolerated teardown "
               + "race ended the job before the read completed. Retrying. select=[{}]",
           rows.size(), expectedNum, attempt, MAX_STREAM_READ_ATTEMPTS, select);
     }
@@ -4046,7 +4044,7 @@ public class ITTestHoodieDataSource {
       // before - ending the read with a short result. Log the tolerated cause so an incomplete read is
       // diagnosable; submitAndFetchWithRetry re-reads when the collected count is below the expectation.
       if (!isSuccessException(e)) {
-        LOG.warn("Streaming read terminated by a tolerated teardown race ({}); collected {} rows so far.",
+        log.warn("Streaming read terminated by a tolerated teardown race ({}); collected {} rows so far.",
             describeTerminalCause(e),
             CollectSinkTableFactory.RESULT.values().stream().mapToInt(List::size).sum());
       }
