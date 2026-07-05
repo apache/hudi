@@ -34,6 +34,12 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
@@ -56,6 +62,20 @@ public class AverageRecordSizeEstimator extends RecordSizeEstimator {
    * may result in OOM by making spark underestimate the actual input record sizes.
    */
   private static final Set<String> RECORD_SIZE_ESTIMATE_ACTIONS = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION);
+  private static final long ESTIMATOR_TIMEOUT_MINUTES = 5;
+  private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(0);
+  // Dedicated static thread pool for parallel commit metadata deserialization. Uses a shared pool
+  // instead of ForkJoinPool.commonPool() to avoid deadlocks
+  private static final ExecutorService ESTIMATOR_POOL;
+
+  static {
+    int maxThreads = 2 * Runtime.getRuntime().availableProcessors();
+    ESTIMATOR_POOL = new ThreadPoolExecutor(
+        0, maxThreads,
+        60L, TimeUnit.SECONDS,
+        new LinkedBlockingQueue<>(),
+        r -> new Thread(r, "hudi-record-size-estimator-" + THREAD_COUNTER.getAndIncrement()));
+  }
 
   public AverageRecordSizeEstimator(HoodieWriteConfig writeConfig) {
     super(writeConfig);
@@ -64,44 +84,73 @@ public class AverageRecordSizeEstimator extends RecordSizeEstimator {
   @Override
   public long averageBytesPerRecord(HoodieTimeline commitTimeline, CommitMetadataSerDe commitMetadataSerDe) {
     int maxCommits = hoodieWriteConfig.getRecordSizeEstimatorMaxCommits();
-    final long commitSizeThreshold = (long) (hoodieWriteConfig.getRecordSizeEstimationThreshold() * hoodieWriteConfig.getParquetSmallFileLimit());
-    final long metadataSizeEstimate = hoodieWriteConfig.getRecordSizeEstimatorAverageMetadataSize();
+    AverageRecordSizeStats stats = new AverageRecordSizeStats(hoodieWriteConfig);
     try {
       if (!commitTimeline.empty()) {
-        Iterator<HoodieInstant> instants = commitTimeline.filterCompletedInstants()
+        // Go over the reverse ordered commits to get a more recent estimate of average record size.
+        CompletableFuture<?>[] futures = commitTimeline.filterCompletedInstants()
             .getReverseOrderedInstants()
             .filter(s -> RECORD_SIZE_ESTIMATE_ACTIONS.contains(s.getAction()))
-            .limit(maxCommits).iterator();
-        while (instants.hasNext()) {
-          HoodieInstant instant = instants.next();
-          try {
-            HoodieCommitMetadata commitMetadata = commitTimeline.readCommitMetadata(instant);
-            final HoodieAtomicLongAccumulator totalBytesWritten = HoodieAtomicLongAccumulator.create();
-            final HoodieAtomicLongAccumulator totalRecordsWritten = HoodieAtomicLongAccumulator.create();
-            if (instant.getAction().equals(DELTA_COMMIT_ACTION)) {
-              // Only use base files for estimate
-              commitMetadata.getWriteStats().stream()
-                  .filter(hoodieWriteStat -> FSUtils.isBaseFile(new StoragePath(hoodieWriteStat.getPath())))
-                  .forEach(hoodieWriteStat -> {
-                    totalBytesWritten.add(hoodieWriteStat.getTotalWriteBytes() - metadataSizeEstimate);
-                    totalRecordsWritten.add(hoodieWriteStat.getNumWrites());
-                  });
-            } else {
-              totalBytesWritten.add(commitMetadata.fetchTotalBytesWritten() - (commitMetadata.fetchTotalFiles() * metadataSizeEstimate));
-              totalRecordsWritten.add(commitMetadata.fetchTotalRecordsWritten());
-            }
-            if (totalBytesWritten.value() > commitSizeThreshold && totalRecordsWritten.value() > 0) {
-              return (long) Math.ceil((1.0 * totalBytesWritten.value()) / totalRecordsWritten.value());
-            }
-          } catch (IOException ignore) {
-            log.info("Failed to parse commit metadata", ignore);
-          }
-        }
+            .limit(maxCommits)
+            .map(instant -> CompletableFuture.runAsync(() -> processInstant(commitTimeline, instant, stats), ESTIMATOR_POOL))
+            .toArray(CompletableFuture[]::new);
+        CompletableFuture.allOf(futures).get(ESTIMATOR_TIMEOUT_MINUTES, TimeUnit.MINUTES);
       }
-    } catch (Throwable t) {
-      log.info("Got error while trying to compute average bytes/record but will proceed to use the computed value "
-          + "or fallback to default config value ", t);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      log.warn("Interrupted while computing average bytes/record, will use partially computed average or default record size", e);
+    } catch (Exception e) {
+      log.warn("Error computing average bytes/record, will use partially computed average or default record size", e);
     }
-    return hoodieWriteConfig.getCopyOnWriteRecordSizeEstimate();
+    return stats.computeAverageRecordSize();
+  }
+
+  private void processInstant(HoodieTimeline commitTimeline, HoodieInstant instant, AverageRecordSizeStats stats) {
+    try {
+      HoodieCommitMetadata commitMetadata =
+          commitTimeline.deserializeInstantContent(instant, HoodieCommitMetadata.class);
+      if (instant.getAction().equals(DELTA_COMMIT_ACTION)) {
+        // Only consider base files for delta commits
+        commitMetadata.getWriteStats().stream()
+            .filter(writeStat -> FSUtils.isBaseFile(new Path(writeStat.getPath())))
+            .forEach(writeStat -> stats.updateStats(writeStat.getTotalWriteBytes(), writeStat.getNumWrites()));
+      } else {
+        stats.updateStats(commitMetadata.fetchTotalBytesWritten(), commitMetadata.fetchTotalRecordsWritten());
+      }
+    } catch (IOException ignore) {
+      LOG.info("Failed to parse commit metadata", ignore);
+    }
+  }
+
+  private static class AverageRecordSizeStats implements Serializable {
+    private final HoodieAtomicLongAccumulator totalBytesWritten;
+    private final HoodieAtomicLongAccumulator totalRecordsWritten;
+    private final long fileSizeThreshold;
+    private final long avgMetadataSize;
+    private final int defaultRecordSize;
+
+    public AverageRecordSizeStats(HoodieWriteConfig hoodieWriteConfig) {
+      totalBytesWritten = HoodieAtomicLongAccumulator.create();
+      totalRecordsWritten = HoodieAtomicLongAccumulator.create();
+      fileSizeThreshold = (long) (hoodieWriteConfig.getRecordSizeEstimationThreshold() * hoodieWriteConfig.getParquetSmallFileLimit());
+      avgMetadataSize = hoodieWriteConfig.getRecordSizeEstimatorAverageMetadataSize();
+      defaultRecordSize = hoodieWriteConfig.getCopyOnWriteRecordSizeEstimate();
+    }
+
+    private void updateStats(long fileSizeInBytes, long recordWritten) {
+      if (fileSizeInBytes > fileSizeThreshold && fileSizeInBytes > avgMetadataSize && recordWritten > 0) {
+        totalBytesWritten.add(fileSizeInBytes - avgMetadataSize);
+        totalRecordsWritten.add(recordWritten);
+      }
+    }
+
+    private long computeAverageRecordSize() {
+      if (totalBytesWritten.value() > 0 && totalRecordsWritten.value() > 0) {
+        return totalBytesWritten.value() / totalRecordsWritten.value();
+      }
+      // Fallback to default implementation in the cases were we either got an exception before we could
+      // compute the average record size or there are no eligible commits yet.
+      return defaultRecordSize;
+    }
   }
 }
