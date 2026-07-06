@@ -168,11 +168,7 @@ public class StringUtils {
    * @return {@code string} itself if it is nonempty; {@code null} if it is empty or null
    */
   public static @Nullable String emptyToNull(@Nullable String string) {
-    return stringIsNullOrEmpty(string) ? null : string;
-  }
-
-  private static boolean stringIsNullOrEmpty(@Nullable String string) {
-    return string == null || string.isEmpty();
+    return isNullOrEmpty(string) ? null : string;
   }
 
   /**

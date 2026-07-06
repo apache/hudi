@@ -32,9 +32,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.math.MathContext;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -407,6 +404,7 @@ public final class HoodieSchemaUtils {
 
   /**
    * Converts a byte array to a BigDecimal with the specified precision and scale.
+   * Delegates to {@link HoodieAvroUtils#convertBytesToBigDecimal(byte[], int, int)}.
    *
    * @param value     the byte array to convert
    * @param precision the precision of the decimal
@@ -414,8 +412,7 @@ public final class HoodieSchemaUtils {
    * @return the resulting BigDecimal
    */
   public static BigDecimal convertBytesToBigDecimal(byte[] value, int precision, int scale) {
-    return new BigDecimal(new BigInteger(value),
-        scale, new MathContext(precision, RoundingMode.HALF_UP));
+    return HoodieAvroUtils.convertBytesToBigDecimal(value, precision, scale);
   }
 
   /**

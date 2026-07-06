@@ -768,7 +768,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertEquals(Option.empty(),
         TimelineUtils.parseDateFromInstantTimeSafely(HoodieTimeline.INIT_INSTANT_TS + "001"));
 
-    // Test a valid instant timestamp, should equal the same result as ActiveTimelineUtils.parseDateFromInstantTime
+    // Test a valid instant timestamp, should equal the same result as TimelineUtils.parseDateFromInstantTime
     String testInstant = "20210101120101";
     assertEquals(TimelineUtils.parseDateFromInstantTime(testInstant).getTime(),
         TimelineUtils.parseDateFromInstantTimeSafely(testInstant).get().getTime());

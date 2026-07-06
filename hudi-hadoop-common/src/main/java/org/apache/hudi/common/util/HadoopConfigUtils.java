@@ -69,21 +69,4 @@ public class HadoopConfigUtils {
     }
     return Option.empty();
   }
-
-  /**
-   * Gets the boolean value for a {@link ConfigProperty} config from Hadoop configuration. The key and
-   * alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
-   * config, if exists, is returned if the config is not found in the configuration.
-   *
-   * @param conf           Configs in Hadoop {@link Configuration}.
-   * @param configProperty {@link ConfigProperty} config to fetch.
-   * @return boolean value if the config exists; default boolean value if the config does not exist
-   * and there is default value defined in the {@link ConfigProperty} config; {@code false} otherwise.
-   */
-  public static boolean getBooleanWithAltKeys(Configuration conf,
-                                              ConfigProperty<?> configProperty) {
-    Option<String> rawValue = getRawValueWithAltKeys(conf, configProperty);
-    boolean defaultValue = configProperty.hasDefaultValue() && Boolean.parseBoolean(configProperty.defaultValue().toString());
-    return rawValue.map(Boolean::parseBoolean).orElse(defaultValue);
-  }
 }

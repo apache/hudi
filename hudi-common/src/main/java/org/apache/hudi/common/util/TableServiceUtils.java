@@ -158,15 +158,4 @@ public class TableServiceUtils {
   public static boolean isStale(long startTimeMs, long maxProcessingTimeMs, long currentTimeMs) {
     return startTimeMs + maxProcessingTimeMs < currentTimeMs;
   }
-
-  /**
-   * Check if an instant start time is stale based on max processing time, using current system time.
-   *
-   * @param startTimeMs         the instant start time in milliseconds
-   * @param maxProcessingTimeMs the max processing time threshold in milliseconds
-   * @return true if the instant is stale, false otherwise
-   */
-  public static boolean isStale(long startTimeMs, long maxProcessingTimeMs) {
-    return isStale(startTimeMs, maxProcessingTimeMs, System.currentTimeMillis());
-  }
 }

@@ -21,7 +21,7 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.SeekableDataInputStream;
-import org.apache.hudi.io.util.IOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -406,7 +406,7 @@ public abstract class TestHoodieStorageBase {
     if (!isDirectory) {
       assertEquals(data.length, pathInfo.getLength());
       try (InputStream stream = storage.open(path)) {
-        assertArrayEquals(data, IOUtils.readAsByteArray(stream, data.length));
+        assertArrayEquals(data, FileIOUtils.readAsByteArray(stream, data.length));
       }
     }
     assertTrue(pathInfo.getModificationTime() > 0);

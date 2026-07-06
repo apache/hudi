@@ -377,10 +377,6 @@ public class HadoopFSUtils {
     }
   }
 
-  public static long getFileSize(FileSystem fs, Path path) throws IOException {
-    return fs.getFileStatus(path).getLen();
-  }
-
   /**
    * Given a base partition and a partition path, return relative path of partition path to the base path.
    */
@@ -401,16 +397,6 @@ public class HadoopFSUtils {
    */
   public static String getDeltaCommitTimeFromLogPath(Path path) {
     return FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(path.toUri()));
-  }
-
-  /**
-   * Check if the file is a base file of a log file. Then get the fileId appropriately.
-   */
-  public static String getFileIdFromFilePath(Path filePath) {
-    if (isLogFile(filePath)) {
-      return getFileIdFromLogPath(filePath);
-    }
-    return FSUtils.getFileId(filePath.getName());
   }
 
   public static boolean isBaseFile(Path path) {
