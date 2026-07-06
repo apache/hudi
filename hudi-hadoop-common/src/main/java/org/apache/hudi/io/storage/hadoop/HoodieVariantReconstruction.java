@@ -146,8 +146,8 @@ final class HoodieVariantReconstruction {
     Schema[] unshreddedSubSchemas = new Schema[requestedFields.size()];
     for (int i = 0; i < requestedFields.size(); i++) {
       if (isTarget[i]) {
-        shreddedSubSchemas[i] = unwrapNullable(fileSchema.getField(requestedFields.get(i).name()).get().schema()).getAvroSchema();
-        unshreddedSubSchemas[i] = unwrapNullable(outputSchema.getFields().get(i).schema()).getAvroSchema();
+        shreddedSubSchemas[i] = fileSchema.getField(requestedFields.get(i).name()).get().schema().getNonNullType().getAvroSchema();
+        unshreddedSubSchemas[i] = outputSchema.getFields().get(i).schema().getNonNullType().getAvroSchema();
       }
     }
 
@@ -174,13 +174,9 @@ final class HoodieVariantReconstruction {
   }
 
   private static boolean isShreddedVariant(HoodieSchema schema) {
-    HoodieSchema unwrapped = unwrapNullable(schema);
+    HoodieSchema unwrapped = schema.getNonNullType();
     return unwrapped.getType() == HoodieSchemaType.VARIANT
         && ((HoodieSchema.Variant) unwrapped).isShredded();
-  }
-
-  private static HoodieSchema unwrapNullable(HoodieSchema schema) {
-    return schema.isNullable() ? schema.getNonNullType() : schema;
   }
 
   private static VariantShreddingProvider loadProvider(HoodieStorage storage) {

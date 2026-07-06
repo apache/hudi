@@ -45,6 +45,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.apache.hudi.common.avro.HoodieAvroUtils.unwrapNullable;
+
 /**
  * Implementation of {@link VariantShreddingProvider} using Spark 4's variant parsing library.
  *
@@ -248,17 +250,6 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
       default:
         return null;
     }
-  }
-
-  private static Schema unwrapNullable(Schema schema) {
-    if (schema.getType() == Schema.Type.UNION) {
-      for (Schema type : schema.getTypes()) {
-        if (type.getType() != Schema.Type.NULL) {
-          return type;
-        }
-      }
-    }
-    return schema;
   }
 
   private static byte[] toByteArray(ByteBuffer buffer) {
