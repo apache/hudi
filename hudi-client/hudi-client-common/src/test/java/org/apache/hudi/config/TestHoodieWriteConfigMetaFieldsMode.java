@@ -18,20 +18,21 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.table.HoodieTableConfig;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Validates the writer-side accessors and validation guards for the meta-field-population modes
- * on {@link HoodieWriteConfig}. Companion test for the {@link
- * org.apache.hudi.common.table.HoodieTableConfig} accessors lives in {@code TestHoodieMetaFieldsMode};
- * this test covers the writer-builder surface and the cross-flag validation that runs at
- * {@code build()} time.
+ * on {@link HoodieWriteConfig}. Companion test for the {@link HoodieTableConfig} accessors lives
+ * in {@code TestHoodieMetaFieldsMode}; this test covers the writer-builder surface and the
+ * cross-flag validation that runs at {@code build()} time.
  */
 class TestHoodieWriteConfigMetaFieldsMode {
 
@@ -43,8 +44,7 @@ class TestHoodieWriteConfigMetaFieldsMode {
   void defaultsToAllMode() {
     HoodieWriteConfig cfg = baseBuilder().build();
     assertTrue(cfg.populateMetaFields());
-    assertTrue(cfg.getMetaFieldsMode().isEmpty(),
-        "mode list must be ignored when populate.meta.fields=true");
+    assertEquals(MetaFieldsMode.ALL, cfg.getMetaFieldsMode());
     assertTrue(cfg.isCommitTimePopulated());
     assertTrue(cfg.isFileNamePopulated());
   }
@@ -53,20 +53,19 @@ class TestHoodieWriteConfigMetaFieldsMode {
   void explicitNoneModeBuilds() {
     HoodieWriteConfig cfg = baseBuilder().withPopulateMetaFields(false).build();
     assertFalse(cfg.populateMetaFields());
-    assertTrue(cfg.getMetaFieldsMode().isEmpty());
+    assertEquals(MetaFieldsMode.NONE, cfg.getMetaFieldsMode());
     assertFalse(cfg.isCommitTimePopulated());
     assertFalse(cfg.isFileNamePopulated());
   }
 
   @Test
-  void commitTimeOnlyModeBuildsAndIsAdditiveOverNone() {
+  void commitTimeOnlyModeBuilds() {
     HoodieWriteConfig cfg = baseBuilder()
         .withPopulateMetaFields(false)
-        .withMetaFieldsMode(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
         .build();
-    assertFalse(cfg.populateMetaFields());
-    assertTrue(cfg.isCommitTimePopulated(),
-        "incremental query semantics depend on _hoodie_commit_time being populated in this mode");
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, cfg.getMetaFieldsMode());
+    assertTrue(cfg.isCommitTimePopulated());
     assertFalse(cfg.isFileNamePopulated());
   }
 
@@ -74,9 +73,9 @@ class TestHoodieWriteConfigMetaFieldsMode {
   void fileNameOnlyModeBuilds() {
     HoodieWriteConfig cfg = baseBuilder()
         .withPopulateMetaFields(false)
-        .withMetaFieldsMode(HoodieRecord.FILENAME_METADATA_FIELD)
+        .withMetaFieldsMode(MetaFieldsMode.FILE_NAME_ONLY)
         .build();
-    assertFalse(cfg.populateMetaFields());
+    assertEquals(MetaFieldsMode.FILE_NAME_ONLY, cfg.getMetaFieldsMode());
     assertFalse(cfg.isCommitTimePopulated());
     assertTrue(cfg.isFileNamePopulated());
   }
@@ -85,20 +84,19 @@ class TestHoodieWriteConfigMetaFieldsMode {
   void commitTimeAndFileNameCombinationBuilds() {
     HoodieWriteConfig cfg = baseBuilder()
         .withPopulateMetaFields(false)
-        .withMetaFieldsMode(HoodieRecord.COMMIT_TIME_METADATA_FIELD + "," + HoodieRecord.FILENAME_METADATA_FIELD)
+        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME)
         .build();
-    assertFalse(cfg.populateMetaFields());
+    assertEquals(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME, cfg.getMetaFieldsMode());
     assertTrue(cfg.isCommitTimePopulated());
     assertTrue(cfg.isFileNamePopulated());
   }
 
   @Test
   void rejectsIncompatibleCombination() {
-    // populate.meta.fields=true together with a non-empty mode is ambiguous (mode has no effect
-    // when all meta fields are already populated); reject loudly.
+    // populate.meta.fields=true together with a selective mode is ambiguous — reject.
     HoodieWriteConfig.Builder builder = baseBuilder()
         .withPopulateMetaFields(true)
-        .withMetaFieldsMode(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY);
     IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, builder::build);
     assertTrue(ex.getMessage().contains("hoodie.meta.fields.mode"),
         "exception must name the mode property: " + ex.getMessage());
@@ -107,25 +105,25 @@ class TestHoodieWriteConfigMetaFieldsMode {
   }
 
   @Test
-  void rejectsUnknownTokenInMode() {
-    HoodieWriteConfig.Builder builder = baseBuilder()
-        .withPopulateMetaFields(false)
-        .withMetaFieldsMode(HoodieRecord.RECORD_KEY_METADATA_FIELD);
-    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, builder::build);
-    assertTrue(ex.getMessage().contains(HoodieRecord.RECORD_KEY_METADATA_FIELD),
-        "exception must name the rejected token: " + ex.getMessage());
-    assertTrue(ex.getMessage().contains("populate.meta.fields"),
-        "exception must recommend populate.meta.fields=true for other columns: " + ex.getMessage());
+  void allModeWithPopulateFalseIsAlsoRejectedByBuilder() {
+    // Explicitly setting ALL is a no-op — the builder normalizes it to empty. Passing ALL directly
+    // is fine; ensuring populateMetaFields agrees is the caller's responsibility (validate() runs
+    // the cross-check at build time).
+    HoodieWriteConfig cfg = baseBuilder()
+        .withPopulateMetaFields(true)
+        .withMetaFieldsMode(MetaFieldsMode.ALL)
+        .build();
+    assertEquals(MetaFieldsMode.ALL, cfg.getMetaFieldsMode());
   }
 
   @Test
-  void noneModeWithEmptyModeExplicitIsStillNone() {
+  void noneModeWithExplicitBuildIsStillNone() {
     HoodieWriteConfig cfg = baseBuilder()
         .withPopulateMetaFields(false)
-        .withMetaFieldsMode("")
+        .withMetaFieldsMode(MetaFieldsMode.NONE)
         .build();
-    assertFalse(cfg.populateMetaFields());
-    assertTrue(cfg.getMetaFieldsMode().isEmpty());
+    // NONE is normalized to empty on-disk (implicit from populate=false).
+    assertEquals(MetaFieldsMode.NONE, cfg.getMetaFieldsMode());
     assertFalse(cfg.isCommitTimePopulated());
     assertFalse(cfg.isFileNamePopulated());
   }

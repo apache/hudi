@@ -70,9 +70,9 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
-    java.util.Set<String> metaFieldsMode = populateMetaFields
-        ? java.util.Collections.emptySet()
-        : HoodieTableConfig.parseMetaFieldsMode(config.getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE));
+    org.apache.hudi.common.model.MetaFieldsMode metaFieldsMode =
+        org.apache.hudi.common.model.MetaFieldsMode.fromConfig(populateMetaFields,
+            config.getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE));
 
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs = HoodieParquetConfigInjector.applyConfigInjector(path, storage.getConf(), config);
     StorageConfiguration storageConfiguration = injectedConfigs.getLeft();
@@ -92,7 +92,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         hoodieConfig.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
         storageConfiguration, hoodieConfig.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
         hoodieConfig.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
-    return new HoodieAvroParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields, metaFieldsMode);
+    return new HoodieAvroParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, metaFieldsMode);
   }
 
   protected HoodieFileWriter newParquetFileWriter(

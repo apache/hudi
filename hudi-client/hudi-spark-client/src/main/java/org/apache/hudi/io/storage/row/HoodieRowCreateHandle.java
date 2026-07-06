@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -66,12 +67,7 @@ public class HoodieRowCreateHandle implements Serializable {
   private final StoragePath path;
   private final String fileId;
 
-  private final boolean populateMetaFields;
-  // Selective meta-field population when populateMetaFields is false. commit_time enables
-  // incremental queries; file_name enables file-level pruning / investigation lookups. Other meta
-  // columns stay null. Record-key is never populated in these modes.
-  private final boolean populateCommitTime;
-  private final boolean populateFileName;
+  private final MetaFieldsMode metaFieldsMode;
 
   private final UTF8String fileName;
   private final UTF8String commitTime;
@@ -123,12 +119,7 @@ public class HoodieRowCreateHandle implements Serializable {
         table.getBaseFileExtension());
     this.path = makeNewPath(storage, partitionPath, fileName, writeConfig);
 
-    this.populateMetaFields = writeConfig.populateMetaFields();
-    java.util.Set<String> metaFieldsMode = this.populateMetaFields
-        ? java.util.Collections.emptySet()
-        : writeConfig.getMetaFieldsMode();
-    this.populateCommitTime = !this.populateMetaFields && metaFieldsMode.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
-    this.populateFileName = !this.populateMetaFields && metaFieldsMode.contains(HoodieRecord.FILENAME_METADATA_FIELD);
+    this.metaFieldsMode = writeConfig.getMetaFieldsMode();
     this.fileName = UTF8String.fromString(path.getName());
     this.commitTime = UTF8String.fromString(instantTime);
     this.seqIdGenerator = (id) -> HoodieRecord.generateSequenceId(instantTime, taskPartitionId, id);
@@ -168,33 +159,34 @@ public class HoodieRowCreateHandle implements Serializable {
    * @throws IOException
    */
   public void write(InternalRow row) throws IOException {
-    if (populateMetaFields) {
-      writeRow(row);
-    } else if (populateCommitTime || populateFileName) {
-      writeRowSelectiveMetaFields(row);
-    } else {
-      writeRowNoMetaFields(row);
+    switch (metaFieldsMode) {
+      case ALL:
+        writeRow(row);
+        break;
+      case NONE:
+        writeRowNoMetaFields(row);
+        break;
+      default:
+        writeRowSelectiveMetaFields(row);
+        break;
     }
   }
 
   /**
    * Selective meta-field write path: populate only the meta columns opted in via
-   * {@code hoodie.meta.fields.mode} — {@code _hoodie_commit_time} (with derived seq id) and/or
-   * {@code _hoodie_file_name}. The other meta columns stay null on disk. Record key is never
-   * populated in this path, so the record key is not registered with the write support (bloom
-   * filter / RLI hooks are meaningless without the record-key column).
+   * {@code hoodie.meta.fields.mode} — {@code _hoodie_commit_time} and/or {@code _hoodie_file_name}.
+   * The other meta columns stay null on disk. Record key is never populated in this path, so the
+   * record key is not registered with the write support (bloom filter / RLI hooks are meaningless
+   * without the record-key column).
    */
   private void writeRowSelectiveMetaFields(InternalRow row) {
     try {
       UTF8String[] metaFields = new UTF8String[5];
-      if (populateCommitTime) {
+      if (metaFieldsMode.isCommitTimePopulated()) {
         metaFields[HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD] = shouldPreserveHoodieMetadata
             ? row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD) : commitTime;
-        metaFields[HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD] = shouldPreserveHoodieMetadata
-            ? row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
-            : UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
       }
-      if (populateFileName) {
+      if (metaFieldsMode.isFileNamePopulated()) {
         metaFields[HoodieRecord.FILENAME_META_FIELD_ORD] = shouldPreserveHoodieMetadata
             ? row.getUTF8String(HoodieRecord.FILENAME_META_FIELD_ORD) : fileName;
       }
