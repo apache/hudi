@@ -24,7 +24,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemas;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -48,11 +47,9 @@ import org.apache.hudi.storage.StoragePath;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 
 import static org.apache.hudi.common.model.LogExtensions.DATA_LOG_EXTENSION;
 import static org.apache.hudi.common.model.LogExtensions.DELETE_LOG_EXTENSION;
@@ -237,23 +234,12 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
       return header;
     }
 
-    Set<Long> positionSet = new HashSet<>(recordPositions.size());
-    long previousPosition = Long.MIN_VALUE;
-    for (Long position : recordPositions) {
-      // RECORD_POSITIONS is encoded as a bitmap and decoded in ascending order. Native log records
-      // are read back in file write order, so only publish positions when both orders match.
-      if (!HoodieRecordLocation.isPositionValid(position) || position <= previousPosition) {
-        Map<HeaderMetadataType, String> updatedHeader = new HashMap<>(header);
-        updatedHeader.remove(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
-        return updatedHeader;
-      }
-      previousPosition = position;
-      positionSet.add(position);
-    }
-
     Map<HeaderMetadataType, String> updatedHeader = new HashMap<>(header);
-    if (positionSet.size() == recordPositions.size()) {
-      updatedHeader.put(HeaderMetadataType.RECORD_POSITIONS, LogReaderUtils.encodePositions(positionSet));
+    Option<String> encodedRecordPositions = LogReaderUtils.encodePositionsAsLongList(recordPositions);
+    if (encodedRecordPositions.isPresent()) {
+      updatedHeader.put(HeaderMetadataType.RECORD_POSITIONS, encodedRecordPositions.get());
+    } else {
+      updatedHeader.remove(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
     }
     return updatedHeader;
   }

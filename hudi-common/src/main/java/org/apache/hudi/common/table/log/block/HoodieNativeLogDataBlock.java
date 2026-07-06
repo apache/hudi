@@ -70,6 +70,11 @@ public class HoodieNativeLogDataBlock extends HoodieDataBlock {
   }
 
   @Override
+  public List<Long> getRecordPositionList() throws IOException {
+    return decodeOrderedRecordPositionList(getLogBlockHeader());
+  }
+
+  @Override
   protected <T> ClosableIterator<HoodieRecord<T>> readRecordsFromBlockPayload(HoodieRecord.HoodieRecordType type) throws IOException {
     StoragePath path = logFile.getPath();
     return HoodieIOFactory.getIOFactory(storage)

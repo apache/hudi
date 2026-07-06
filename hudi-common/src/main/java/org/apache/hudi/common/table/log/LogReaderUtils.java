@@ -21,12 +21,14 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.AbstractTableFileSystemView;
 import org.apache.hudi.common.util.Base64CodecUtil;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
@@ -35,6 +37,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -153,6 +156,28 @@ public class LogReaderUtils {
   }
 
   /**
+   * Encodes the record positions as an integer count followed by unsigned varlong positions,
+   * preserving the input order.
+   *
+   * @param positions record positions in file read order.
+   * @return Base64-encoded bytes containing the list size followed by varlong positions,
+   * or {@link Option#empty()} if any position is invalid.
+   * @throws IOException upon I/O error.
+   */
+  public static Option<String> encodePositionsAsLongList(List<Long> positions) throws IOException {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream(Integer.BYTES + positions.size());
+    DataOutputStream dos = new DataOutputStream(baos);
+    dos.writeInt(positions.size());
+    for (Long position : positions) {
+      if (!HoodieRecordLocation.isPositionValid(position)) {
+        return Option.empty();
+      }
+      writeUnsignedVarLong(baos, position);
+    }
+    return Option.of(Base64CodecUtil.encode(baos.toByteArray()));
+  }
+
+  /**
    * Decodes the {@link HeaderMetadataType#RECORD_POSITIONS} block header into record positions.
    *
    * @param content A string of Base64-encoded bytes ({@link java.util.Base64} in Java
@@ -167,5 +192,67 @@ public class LogReaderUtils {
     DataInputStream dis = new DataInputStream(bais);
     positionBitmap.deserializePortable(dis);
     return positionBitmap;
+  }
+
+  /**
+   * Decodes native-log record positions written as an ordered unsigned varlong list.
+   *
+   * @param content Base64-encoded bytes containing the list size followed by varlong positions.
+   * @return record positions in file read order.
+   * @throws IOException upon I/O error or invalid payload shape.
+   */
+  public static List<Long> decodeRecordPositionsLongList(String content) throws IOException {
+    ByteArrayInputStream bais = new ByteArrayInputStream(Base64CodecUtil.decode(content));
+    DataInputStream dis = new DataInputStream(bais);
+    int size = dis.readInt();
+    if (size < 0) {
+      throw new IOException("Invalid negative record position count " + size);
+    }
+    List<Long> positions = new ArrayList<>(size);
+    for (int i = 0; i < size; i++) {
+      long position = readUnsignedVarLong(bais);
+      if (!HoodieRecordLocation.isPositionValid(position)) {
+        throw new IOException("Invalid record position " + position);
+      }
+      positions.add(position);
+    }
+    if (bais.available() != 0) {
+      throw new IOException("Invalid record positions payload with " + bais.available() + " trailing bytes");
+    }
+    return positions;
+  }
+
+  /**
+   * Writes an unsigned long by splitting it into 7-bit groups from low bits to high bits.
+   * The most significant bit of each byte is the continuation flag: {@code 1} means more
+   * bytes follow and {@code 0} marks the final byte.
+   */
+  private static void writeUnsignedVarLong(ByteArrayOutputStream out, long value) {
+    while ((value & 0xFFFFFFFFFFFFFF80L) != 0) {
+      out.write(((int) value & 0x7F) | 0x80);
+      value >>>= 7;
+    }
+    out.write((int) value & 0x7F);
+  }
+
+  /**
+   * Reads an unsigned long written by {@link #writeUnsignedVarLong(ByteArrayOutputStream, long)}
+   * by rebuilding the value from 7-bit groups in low-to-high order.
+   */
+  private static long readUnsignedVarLong(ByteArrayInputStream in) throws IOException {
+    long value = 0;
+    int shift = 0;
+    while (shift < Long.SIZE) {
+      int currentByte = in.read();
+      if (currentByte < 0) {
+        throw new EOFException("Unexpected EOF while reading record position");
+      }
+      value |= (long) (currentByte & 0x7F) << shift;
+      if ((currentByte & 0x80) == 0) {
+        return value;
+      }
+      shift += 7;
+    }
+    throw new IOException("Invalid unsigned varlong for record position");
   }
 }

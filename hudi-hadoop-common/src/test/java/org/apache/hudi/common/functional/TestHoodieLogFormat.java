@@ -3034,9 +3034,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     String expectedInstantTime = hasPositions ? "001" : null;
     Set<Long> expectedPositions = hasPositions ? new HashSet<>(positions) : Collections.emptySet();
     assertEquals(expectedInstantTime, deleteBlock.getBaseFileInstantTimeOfPositions());
-    TestLogReaderUtils.assertPositionEquals(expectedPositions, deleteBlock.getRecordPositions());
+    assertEquals(expectedPositions, new HashSet<>(deleteBlock.getRecordPositionList()));
     assertEquals(expectedInstantTime, dataBlock.getBaseFileInstantTimeOfPositions());
-    TestLogReaderUtils.assertPositionEquals(expectedPositions, dataBlock.getRecordPositions());
+    assertEquals(expectedPositions, new HashSet<>(dataBlock.getRecordPositionList()));
   }
 
   private static Stream<Arguments> testArguments() {

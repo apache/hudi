@@ -44,6 +44,8 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -142,11 +144,31 @@ public abstract class HoodieLogBlock {
    * {@link Roaring64NavigableMap} bitmap.
    * @throws IOException upon I/O error.
    */
-  public Roaring64NavigableMap getRecordPositions() throws IOException {
+  private Roaring64NavigableMap getRecordPositions() throws IOException {
     if (!logBlockHeader.containsKey(HeaderMetadataType.RECORD_POSITIONS)) {
       return new Roaring64NavigableMap();
     }
     return LogReaderUtils.decodeRecordPositionsHeader(logBlockHeader.get(HeaderMetadataType.RECORD_POSITIONS));
+  }
+
+  /**
+   * @return record positions aligned with the block record iterator order.
+   * @throws IOException upon I/O error.
+   */
+  public List<Long> getRecordPositionList() throws IOException {
+    List<Long> positions = new ArrayList<>();
+    getRecordPositions().iterator().forEachRemaining(positions::add);
+    return positions;
+  }
+
+  /**
+   * Decodes ordered record positions stored for native log blocks.
+   */
+  protected static List<Long> decodeOrderedRecordPositionList(Map<HeaderMetadataType, String> logBlockHeader) throws IOException {
+    if (!logBlockHeader.containsKey(HeaderMetadataType.RECORD_POSITIONS)) {
+      return Collections.emptyList();
+    }
+    return LogReaderUtils.decodeRecordPositionsLongList(logBlockHeader.get(HeaderMetadataType.RECORD_POSITIONS));
   }
 
   /**

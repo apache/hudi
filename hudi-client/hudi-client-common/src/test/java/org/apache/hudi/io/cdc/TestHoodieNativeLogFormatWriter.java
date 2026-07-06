@@ -42,7 +42,6 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
-import org.roaringbitmap.longlong.Roaring64NavigableMap;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,7 +51,6 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -70,15 +68,16 @@ public class TestHoodieNativeLogFormatWriter {
 
     assertEquals("001", parsedHeader.get(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS));
     assertEquals(Arrays.asList(2L, 7L),
-        toList(LogReaderUtils.decodeRecordPositionsHeader(parsedHeader.get(HeaderMetadataType.RECORD_POSITIONS))));
+        LogReaderUtils.decodeRecordPositionsLongList(parsedHeader.get(HeaderMetadataType.RECORD_POSITIONS)));
   }
 
   @Test
-  public void testSkipsOutOfOrderRecordPositions() throws Exception {
+  public void testAddsOutOfOrderRecordPositionsToDataLogFooter() throws Exception {
     Map<HeaderMetadataType, String> parsedHeader = writeDataLogFooterWithPositions(7L, 2L);
 
-    assertFalse(parsedHeader.containsKey(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS));
-    assertFalse(parsedHeader.containsKey(HeaderMetadataType.RECORD_POSITIONS));
+    assertEquals("001", parsedHeader.get(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS));
+    assertEquals(Arrays.asList(7L, 2L),
+        LogReaderUtils.decodeRecordPositionsLongList(parsedHeader.get(HeaderMetadataType.RECORD_POSITIONS)));
   }
 
   @Test
@@ -90,11 +89,12 @@ public class TestHoodieNativeLogFormatWriter {
   }
 
   @Test
-  public void testSkipsDuplicateRecordPositions() throws Exception {
+  public void testAddsDuplicateRecordPositionsToDataLogFooter() throws Exception {
     Map<HeaderMetadataType, String> parsedHeader = writeDataLogFooterWithPositions(7L, 7L);
 
-    assertNull(parsedHeader.get(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS));
-    assertFalse(parsedHeader.containsKey(HeaderMetadataType.RECORD_POSITIONS));
+    assertEquals("001", parsedHeader.get(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS));
+    assertEquals(Arrays.asList(7L, 7L),
+        LogReaderUtils.decodeRecordPositionsLongList(parsedHeader.get(HeaderMetadataType.RECORD_POSITIONS)));
   }
 
   @Test
@@ -103,7 +103,7 @@ public class TestHoodieNativeLogFormatWriter {
 
     assertEquals("001", parsedHeader.get(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS));
     assertEquals(Arrays.asList(7L),
-        toList(LogReaderUtils.decodeRecordPositionsHeader(parsedHeader.get(HeaderMetadataType.RECORD_POSITIONS))));
+        LogReaderUtils.decodeRecordPositionsLongList(parsedHeader.get(HeaderMetadataType.RECORD_POSITIONS)));
   }
 
   @Test
@@ -262,11 +262,5 @@ public class TestHoodieNativeLogFormatWriter {
     when(record.getCurrentPosition()).thenReturn(position);
     when(record.getOrderingValue(eq(schema), any(), any())).thenReturn(OrderingValues.getDefault());
     return record;
-  }
-
-  private static List<Long> toList(Roaring64NavigableMap positions) {
-    List<Long> values = new ArrayList<>();
-    positions.iterator().forEachRemaining(values::add);
-    return values;
   }
 }

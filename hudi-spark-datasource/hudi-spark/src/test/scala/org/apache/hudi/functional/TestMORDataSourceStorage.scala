@@ -362,17 +362,16 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
         var numBlocks = 0
         while (logFormatReader.hasNext) {
           val logBlock = logFormatReader.next()
-          // todo(https://github.com/apache/hudi/issues/19178), re-enable the follow test after the issue solved.
-          // val recordPositions = logBlock.getRecordPositions
-          //
-          // assertEquals(shouldContainRecordPosition, !recordPositions.isEmpty)
-          // if (shouldContainRecordPosition) {
-          //  val baseFile = fsv.getLatestBaseFile("", filename.getFileId)
-          //  assertTrue(baseFile.isPresent)
-          //   assertEquals(
-          //    shouldBaseFileInstantTimeMatch,
-          //    baseFile.get().getCommitTime.equals(logBlock.getBaseFileInstantTimeOfPositions))
-          // }
+          val recordPositions = logBlock.getRecordPositionList
+
+          assertEquals(shouldContainRecordPosition, !recordPositions.isEmpty)
+          if (shouldContainRecordPosition) {
+            val baseFile = fsv.getLatestBaseFile("", filename.getFileId)
+            assertTrue(baseFile.isPresent)
+            assertEquals(
+              shouldBaseFileInstantTimeMatch,
+              baseFile.get().getCommitTime.equals(logBlock.getBaseFileInstantTimeOfPositions))
+          }
           numBlocks += 1
         }
         assertTrue(numBlocks > 0)
