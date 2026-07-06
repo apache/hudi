@@ -1128,6 +1128,17 @@ class HoodieSparkSqlWriterInternal {
       mergedParams.put(HoodieTableConfig.DROP_PARTITION_COLUMNS.key, "false")
     }
 
+    // Lance is Spark-only and its writer/reader only handles Spark InternalRow, not Avro.
+    // Auto-set DefaultSparkRecordMerger when the user hasn't explicitly configured a merger.
+    if (HoodieFileFormat.LANCE.name().equalsIgnoreCase(
+          mergedParams.getOrElse(HoodieTableConfig.BASE_FILE_FORMAT.key(),
+            HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().name()))
+        && !optParams.contains(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key())
+        && !optParams.contains(HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY)) {
+      mergedParams.put(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(),
+        classOf[DefaultSparkRecordMerger].getName)
+    }
+
     val tableVersion = if (tableConfig != null) {
       tableConfig.getTableVersion
     } else {
