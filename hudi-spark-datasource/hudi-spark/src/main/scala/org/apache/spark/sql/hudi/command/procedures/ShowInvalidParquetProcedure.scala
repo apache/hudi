@@ -72,8 +72,7 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
     val partitionPaths: java.util.List[String] = metadata.getPartitionPathWithPathPrefixes(partitions.split(",").toList.asJava)
     val instantsList = if (StringUtils.isNullOrEmpty(instants)) Array.empty[String] else instants.split(",")
     val fileStatus = partitionPaths.asScala.flatMap(part => {
-      val fs = HadoopFSUtils.getFs(new Path(srcPath), storageConf.unwrap())
-      HadoopFSUtils.getAllDataFilesInPartition(fs, HadoopFSUtils.constructAbsolutePathInHadoopPath(srcPath, part))
+      FSUtils.getAllDataFilesInPartition(storage, FSUtils.constructAbsolutePath(srcPath, part)).asScala
     }).toList
 
     if (fileStatus.isEmpty) {
@@ -87,7 +86,7 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
           true
         }
       }).filter(status => {
-        val filePath = status.getPath
+        val filePath = HadoopFSUtils.convertToHadoopPath(status.getPath)
         var isInvalid = false
         if (filePath.toString.endsWith(".parquet")) {
           try ParquetFileReader.readFooter(storageConf.unwrap(), filePath, SKIP_ROW_GROUPS).getFileMetaData catch {

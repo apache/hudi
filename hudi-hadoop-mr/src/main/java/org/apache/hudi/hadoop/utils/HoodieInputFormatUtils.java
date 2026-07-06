@@ -25,7 +25,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -91,7 +90,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
-import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
@@ -404,29 +402,15 @@ public class HoodieInputFormatUtils {
    * Extract HoodieTableMetaClient from a partition path (not base path)
    */
   public static HoodieTableMetaClient getTableMetaClientForBasePathUnchecked(Configuration conf, Path partitionPath) throws IOException {
-    Path baseDir = partitionPath;
     HoodieStorage storage = HoodieStorageUtils.getStorage(
         partitionPath.toString(), HadoopFSUtils.getStorageConf(conf));
-    StoragePath partitionStoragePath = convertToStoragePath(partitionPath);
-    if (HoodiePartitionMetadata.hasPartitionMetadata(storage,  partitionStoragePath)) {
-      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(storage, partitionStoragePath);
-      metadata.readFromFS();
-      int levels = metadata.getPartitionDepth();
-      baseDir = HoodieHiveUtils.getNthParent(partitionPath, levels);
-    } else {
-      for (int i = 0; i < partitionPath.depth(); i++) {
-        if (storage.exists(new StoragePath(convertToStoragePath(baseDir), METAFOLDER_NAME))) {
-          break;
-        } else if (i == partitionPath.depth() - 1) {
-          throw new TableNotFoundException(partitionPath.toString());
-        } else {
-          baseDir = baseDir.getParent();
-        }
-      }
+    Option<StoragePath> baseDir = TablePathUtils.getTablePath(storage, convertToStoragePath(partitionPath));
+    if (!baseDir.isPresent()) {
+      throw new TableNotFoundException(partitionPath.toString());
     }
-    LOG.info("Reading hoodie metadata from path {}", baseDir);
+    LOG.info("Reading hoodie metadata from path {}", baseDir.get());
     return HoodieTableMetaClient.builder()
-        .setConf(storage.getConf().newInstance()).setBasePath(baseDir.toString()).build();
+        .setConf(storage.getConf().newInstance()).setBasePath(baseDir.get().toString()).build();
   }
 
   public static FileStatus getFileStatus(HoodieBaseFile baseFile) throws IOException {
