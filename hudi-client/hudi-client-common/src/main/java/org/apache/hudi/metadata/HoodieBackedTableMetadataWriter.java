@@ -594,7 +594,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
     StorageConfiguration<?> storageConf = dataMetaClient.getStorageConf();
     final String dirFilterRegex = dataWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
-    final boolean skipZeroSizeFiles = dataWriteConfig.getMetadataConfig().shouldSkipZeroSizeFilesDuringBootstrap();
+    final boolean skipZeroSizeFiles = dataWriteConfig.getMetadataConfig().shouldSkipZeroSizeFilesOnInitialize();
     StoragePath storageBasePath = dataMetaClient.getBasePath();
     long totalZeroSizeFiles = 0;
 
@@ -636,7 +636,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }
 
     final long zeroSizeCount = totalZeroSizeFiles;
-    metrics.ifPresent(m -> m.incrementMetric("bootstrap_zero_size_files", zeroSizeCount));
+    metrics.ifPresent(m -> m.incrementMetric("skipped_zero_size_files_on_initialize", zeroSizeCount));
     return partitionsToBootstrap;
   }
 
