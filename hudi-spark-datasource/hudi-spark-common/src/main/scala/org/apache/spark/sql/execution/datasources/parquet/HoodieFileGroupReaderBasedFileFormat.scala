@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.HoodieSchemaRepair
 import org.apache.hudi.common.schema.HoodieSchemaUtils
 import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, ParquetTableSchemaResolver}
@@ -42,7 +43,7 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.mapreduce.Job
-import org.apache.parquet.schema.{HoodieSchemaRepair, MessageType}
+import org.apache.parquet.schema.MessageType
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection

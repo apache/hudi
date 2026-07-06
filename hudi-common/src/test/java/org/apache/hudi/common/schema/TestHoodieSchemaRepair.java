@@ -17,11 +17,7 @@
  * under the License.
  */
 
-package org.apache.parquet.schema;
-
-import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaField;
-import org.apache.hudi.common.schema.HoodieSchemaType;
+package org.apache.hudi.common.schema;
 
 import org.junit.jupiter.api.Test;
 

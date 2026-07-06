@@ -21,6 +21,7 @@ package org.apache.parquet.schema;
 
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaRepair;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 
 import org.apache.hadoop.conf.Configuration;

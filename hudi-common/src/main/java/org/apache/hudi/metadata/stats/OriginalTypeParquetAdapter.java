@@ -17,10 +17,10 @@
  * under the License.
  */
 
-package org.apache.parquet.schema;
+package org.apache.hudi.metadata.stats;
 
-import org.apache.hudi.metadata.stats.ParquetAdapter;
-import org.apache.hudi.metadata.stats.ValueType;
+import org.apache.parquet.schema.OriginalType;
+import org.apache.parquet.schema.PrimitiveType;
 
 /**
  * Uses OriginalType to extract value type, precision, and scale

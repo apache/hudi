@@ -17,13 +17,8 @@
  * under the License.
  */
 
-package org.apache.parquet.schema;
+package org.apache.hudi.common.schema;
 
-import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaCache;
-import org.apache.hudi.common.schema.HoodieSchemaField;
-import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 
 import java.util.ArrayList;

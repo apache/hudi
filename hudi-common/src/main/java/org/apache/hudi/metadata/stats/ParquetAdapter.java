@@ -21,8 +21,6 @@ package org.apache.hudi.metadata.stats;
 
 import org.apache.hudi.common.util.ReflectionUtils;
 
-import org.apache.parquet.schema.LogicalTypeParquetAdapter;
-import org.apache.parquet.schema.OriginalTypeParquetAdapter;
 import org.apache.parquet.schema.PrimitiveType;
 
 /**
