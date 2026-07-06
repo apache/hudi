@@ -185,7 +185,7 @@ public interface HoodieLogFormat {
 
       // Initialise logFile
       StoragePath logPath = new StoragePath(parentPath,
-          FSUtils.makeLogFileName(this.logFileId, this.fileExtension, this.instantTime, this.logVersion, this.logWriteToken));
+          FSUtils.makeInlineLogFileName(this.logFileId, this.fileExtension, this.instantTime, this.logVersion, this.logWriteToken));
       log.info("HoodieLogFile on path {}", logPath);
       this.logFile = new HoodieLogFile(logPath, this.fileSize);
     }

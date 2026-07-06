@@ -46,11 +46,11 @@ class TestHoodieFileSliceSerializer {
     HoodieFileSliceSerializer hoodieFileSliceSerializer = new HoodieFileSliceSerializer();
     HoodieBaseFile baseFile1 = new HoodieBaseFile(new StoragePathInfo(BASE_FILE_STORAGE_PATH_1, 100, false, BLOCK_REPLICATION, 1024, 0));
     HoodieLogFile logFile1 = new HoodieLogFile(new StoragePathInfo(LOG_FILE_STORAGE_PATH_1, 100, false, BLOCK_REPLICATION, 1024, 0));
-    HoodieLogFile logFile2 = new HoodieLogFile("/dummy/base/" + FSUtils.makeLogFileName("fileId-1", HoodieLogFile.DELTA_EXTENSION, "001", 2, "1-0-1"));
+    HoodieLogFile logFile2 = new HoodieLogFile("/dummy/base/" + FSUtils.makeInlineLogFileName("fileId-1", HoodieLogFile.DELTA_EXTENSION, "001", 2, "1-0-1"));
 
     HoodieBaseFile baseFile2 = new HoodieBaseFile(new StoragePathInfo(BASE_FILE_STORAGE_PATH_2, 100, false, BLOCK_REPLICATION, 1024, 0));
     HoodieLogFile logFile3 = new HoodieLogFile(new StoragePathInfo(LOG_FILE_STORAGE_PATH_2, 100, false, BLOCK_REPLICATION, 1024, 0));
-    HoodieLogFile logFile4 = new HoodieLogFile("/dummy/base/" + FSUtils.makeLogFileName("fileId-2", HoodieLogFile.DELTA_EXTENSION, "002", 2, "1-0-1"));
+    HoodieLogFile logFile4 = new HoodieLogFile("/dummy/base/" + FSUtils.makeInlineLogFileName("fileId-2", HoodieLogFile.DELTA_EXTENSION, "002", 2, "1-0-1"));
 
     List<FileSlice> fileSliceList = Arrays.asList(
         new FileSlice(new HoodieFileGroupId("partition1", "fileId-1"), "001", baseFile1, Arrays.asList(logFile1, logFile2)),

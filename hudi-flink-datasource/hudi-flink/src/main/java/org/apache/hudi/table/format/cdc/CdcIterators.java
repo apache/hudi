@@ -789,9 +789,11 @@ public final class CdcIterators {
   }
 
   public static MergeOnReadInputSplit singleLogFile2Split(String tablePath, String filePath, long maxCompactionMemoryInBytes) {
+    StoragePath logPath = new StoragePath(filePath);
+    HoodieLogFile logFile = new HoodieLogFile(logPath);
     return new MergeOnReadInputSplit(0, null, Option.of(Collections.singletonList(filePath)),
-            FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(filePath)), tablePath, maxCompactionMemoryInBytes,
-            FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, FSUtils.getFileIdFromLogPath(new StoragePath(filePath)),
-            FSUtils.getRelativePartitionPath(new StoragePath(tablePath), new StoragePath(filePath).getParent()));
+            logFile.getDeltaCommitTime(), tablePath, maxCompactionMemoryInBytes,
+            FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, logFile.getFileId(),
+            FSUtils.getRelativePartitionPath(new StoragePath(tablePath), logPath.getParent()));
   }
 }

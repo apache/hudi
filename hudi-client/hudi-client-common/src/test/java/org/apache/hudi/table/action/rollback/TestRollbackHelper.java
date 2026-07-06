@@ -704,10 +704,10 @@ class TestRollbackHelper extends HoodieRollbackTestBase {
     // HoodieLocalEngineContext uses LocalTaskContextSupplier which returns 0/0/0 -> token "0-0-0".
     String rollbackWriteToken = FSUtils.makeWriteToken(0, 0, 0);
     StoragePath rollbackLogPath1 = new StoragePath(new StoragePath(basePath, ctx.partition2),
-        FSUtils.makeLogFileName(ctx.logFileId1, HoodieLogFile.DELTA_EXTENSION,
+        FSUtils.makeInlineLogFileName(ctx.logFileId1, HoodieLogFile.DELTA_EXTENSION,
             ctx.baseInstantTimeOfLogFiles, 2, rollbackWriteToken));
     StoragePath rollbackLogPath2 = new StoragePath(new StoragePath(basePath, ctx.partition2),
-        FSUtils.makeLogFileName(ctx.logFileId2, HoodieLogFile.DELTA_EXTENSION,
+        FSUtils.makeInlineLogFileName(ctx.logFileId2, HoodieLogFile.DELTA_EXTENSION,
             ctx.baseInstantTimeOfLogFiles, ROLLBACK_LOG_VERSION, rollbackWriteToken));
 
     List<Pair<String, HoodieRollbackStat>> expected = buildExpectedBaseFileStats(ctx);
@@ -742,7 +742,7 @@ class TestRollbackHelper extends HoodieRollbackTestBase {
 
     String rollbackWriteToken = FSUtils.makeWriteToken(0, 0, 0);
     StoragePath rollbackLogPath = new StoragePath(new StoragePath(basePath, ctx.partition),
-        FSUtils.makeLogFileName(ctx.logFileId, HoodieLogFile.DELTA_EXTENSION,
+        FSUtils.makeInlineLogFileName(ctx.logFileId, HoodieLogFile.DELTA_EXTENSION,
             ctx.baseInstantTimeOfLogFiles, ROLLBACK_LOG_VERSION, rollbackWriteToken));
 
     List<Pair<String, HoodieRollbackStat>> expected = new ArrayList<>();
@@ -810,7 +810,7 @@ class TestRollbackHelper extends HoodieRollbackTestBase {
     // log file (the WriterBuilder rediscovers the existing log when we don't explicitly bump the
     // version), so it carries the existing log file's write token.
     StoragePath rollbackLogPath = new StoragePath(partitionStoragePath,
-        FSUtils.makeLogFileName(ctx.logFileId, HoodieLogFile.DELTA_EXTENSION,
+        FSUtils.makeInlineLogFileName(ctx.logFileId, HoodieLogFile.DELTA_EXTENSION,
             ctx.baseInstantTimeOfLogFiles, ctx.logVersionCount, HoodieLogFormat.UNKNOWN_WRITE_TOKEN));
     List<Pair<String, HoodieRollbackStat>> expected = Collections.singletonList(
         Pair.of(ctx.partition,

@@ -19,12 +19,14 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestHoodieBaseFile {
   private final String fileName = "136281f3-c24e-423b-a65a-95dbfbddce1d_1-0-1_100.parquet";
@@ -68,6 +70,12 @@ public class TestHoodieBaseFile {
     HoodieBaseFile bootstrapBaseFile = new HoodieBaseFile(pathStr);
     HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(pathStr, bootstrapBaseFile);
     assertFileGetters(null, hoodieBaseFile, -1, Option.of(bootstrapBaseFile));
+  }
+
+  @Test
+  void failToCreateFromBaseFileWithoutExtension() {
+    assertThrows(InvalidHoodiePathException.class,
+        () -> new HoodieBaseFile("136281f3-c24e-423b-a65a-95dbfbddce1d_1-0-1_100"));
   }
 
   @Test

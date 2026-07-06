@@ -144,7 +144,8 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     // Parquet stores VECTOR as FIXED_LEN_BYTE_ARRAY, so the reader needs BinaryType
     // and we decode back to ArrayType below. Lance returns ArrayType natively, so skip
     // the rewrite only for Lance base files; log files always go through the rewrite path.
-    val isLanceBaseFile = FSUtils.isBaseFile(filePath) &&
+    val isLogFile = FSUtils.isLogFile(filePath)
+    val isLanceBaseFile = !isLogFile && FSUtils.isBaseFile(filePath) &&
       tableConfig.getBaseFileFormat == HoodieFileFormat.LANCE
     val vectorColumnInfo: Map[Int, HoodieSchema.Vector] = if (isLanceBaseFile) {
       Map.empty
@@ -158,7 +159,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     }
 
     val (readSchema, readFilters) = getSchemaAndFiltersForRead(parquetReadStructType, hasRowIndexField)
-    if (FSUtils.isLogFile(filePath)) {
+    if (isLogFile) {
       // NOTE: now only primary key based filtering is supported for log files
       // Position-based merging pairs log records with the RECORD_POSITIONS bitmap by index (see
       // PositionBasedFileGroupRecordBuffer), which requires the record stream to contain every

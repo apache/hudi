@@ -19,6 +19,7 @@
 package org.apache.hudi.index.bucket;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.FileNameParser;
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -296,7 +297,7 @@ public class ConsistentBucketIndexUtils {
             .stream()
             .anyMatch(node -> node.getFileIdPrefix().equals(hoodieBaseFile));
     if (table.getBaseFileOnlyView().getLatestBaseFiles(partition)
-        .map(fileIdPrefix -> FSUtils.getFileIdPfxFromFileId(fileIdPrefix.getFileId())).anyMatch(hoodieFileGroupIdPredicate)) {
+        .map(fileIdPrefix -> FileNameParser.getFileIdPfxFromFileId(fileIdPrefix.getFileId())).anyMatch(hoodieFileGroupIdPredicate)) {
       try {
         createCommitMarker(table, metaFile.getPath(), metadataPath);
         return true;

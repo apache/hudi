@@ -19,6 +19,7 @@
 package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.hadoop.fs.inline.HadoopInLineFSUtils;
@@ -173,8 +175,10 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName, HoodieCommonTestHarness.BASE_FILE_EXTENSION);
     assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
     // test log file name
-    fullFileName = FSUtils.makeLogFileName(fileName, HOODIE_LOG.getFileExtension(), instantTime, 1, TEST_WRITE_TOKEN);
+    fullFileName = FSUtils.makeInlineLogFileName(fileName, HOODIE_LOG.getFileExtension(), instantTime, 1, TEST_WRITE_TOKEN);
     assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
+
+    assertThrows(HoodieException.class, () -> FSUtils.getCommitTime(fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime));
   }
 
   @Test
@@ -183,6 +187,46 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String fileName = UUID.randomUUID().toString();
     String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName, HoodieCommonTestHarness.BASE_FILE_EXTENSION);
     assertEquals(fileName, FSUtils.getFileId(fullFileName));
+  }
+
+  @Test
+  public void testFileNameParser() {
+    String fileId = UUID.randomUUID().toString();
+    String baseFileName = FSUtils.makeBaseFileName("20240706120100123", TEST_WRITE_TOKEN, fileId, ".parquet");
+    FileNameParser.BaseFileName parsedBaseFileName = FileNameParser.parseBaseFile(baseFileName).get();
+    assertEquals(fileId, parsedBaseFileName.getFileId());
+    assertEquals(TEST_WRITE_TOKEN, parsedBaseFileName.getWriteToken());
+    assertEquals("20240706120100123", parsedBaseFileName.getCommitTime());
+    assertEquals(".parquet", parsedBaseFileName.getFileExtension());
+
+    String logFileName = FSUtils.makeInlineLogFileName(fileId, ".log", "20240706120100123", 2, TEST_WRITE_TOKEN)
+        + HoodieCDCUtils.CDC_LOGFILE_SUFFIX;
+    FileNameParser.LogFileName parsedLogFileName = FileNameParser.parseLogFile(logFileName).get();
+    assertEquals(fileId, parsedLogFileName.getFileId());
+    assertEquals("20240706120100123", parsedLogFileName.getDeltaCommitTime());
+    assertEquals(2, parsedLogFileName.getLogVersion());
+    assertEquals(TEST_WRITE_TOKEN, parsedLogFileName.getWriteToken());
+    assertEquals(1, parsedLogFileName.getTaskPartitionId());
+    assertEquals(0, parsedLogFileName.getStageId());
+    assertEquals(1, parsedLogFileName.getTaskAttemptId());
+    assertEquals("log", parsedLogFileName.getFileExtension());
+    assertEquals(HoodieCDCUtils.CDC_LOGFILE_SUFFIX, parsedLogFileName.getSuffix());
+    assertTrue(parsedLogFileName.isCDCLogFile());
+    assertFalse(parsedLogFileName.isNativeLogFile());
+
+    String nativeLogFileName = FSUtils.makeNativeLogFileName(fileId, TEST_WRITE_TOKEN, "20240706120100123",
+        3, "deletes", HoodieFileFormat.PARQUET);
+    FileNameParser.LogFileName parsedNativeLogFileName = FileNameParser.parseLogFile(nativeLogFileName).get();
+    assertEquals(fileId, parsedNativeLogFileName.getFileId());
+    assertEquals("20240706120100123", parsedNativeLogFileName.getDeltaCommitTime());
+    assertEquals(3, parsedNativeLogFileName.getLogVersion());
+    assertEquals(TEST_WRITE_TOKEN, parsedNativeLogFileName.getWriteToken());
+    assertEquals("deletes", parsedNativeLogFileName.getFileExtension());
+    assertEquals("parquet", parsedNativeLogFileName.getSuffix());
+    assertTrue(parsedNativeLogFileName.isNativeLogFile());
+
+    assertEquals(fileId, FileNameParser.getFileIdPfxFromFileId(fileId + "-4"));
+    assertThrows(HoodieValidationException.class, () -> FileNameParser.getFileIdPfxFromFileId("fileIdWithoutNumericSuffix"));
   }
 
   @Test
@@ -244,7 +288,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     // Check if log file names are parsable by FSUtils method
     String partitionPath = "2019/01/01/";
     String fileName = UUID.randomUUID().toString();
-    String logFile = FSUtils.makeLogFileName(fileName, ".log", "100", 2, "1-0-1");
+    String logFile = FSUtils.makeInlineLogFileName(fileName, ".log", "100", 2, "1-0-1");
     StoragePath rlPath = new StoragePath(new StoragePath(partitionPath), logFile);
     StoragePath inlineFsPath = HadoopInLineFSUtils.getInlineFilePath(
         new StoragePath(rlPath.toUri()), "file", 0, 100);
@@ -266,7 +310,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testCdcLogFileName() {
     String partitionPath = "2022/11/04/";
     String fileName = UUID.randomUUID().toString();
-    String logFile = FSUtils.makeLogFileName(fileName, ".log", "100", 2, "1-0-1") + HoodieCDCUtils.CDC_LOGFILE_SUFFIX;
+    String logFile = FSUtils.makeInlineLogFileName(fileName, ".log", "100", 2, "1-0-1") + HoodieCDCUtils.CDC_LOGFILE_SUFFIX;
     StoragePath path = new StoragePath(new StoragePath(partitionPath), logFile);
 
     assertTrue(FSUtils.isLogFile(path));
@@ -305,7 +349,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testArchiveLogFileName() {
     String partitionPath = "2022/11/04/";
     String fileName = "commits";
-    String logFile = FSUtils.makeLogFileName(fileName, ".archive", "", 2, "1-0-1");
+    String logFile = FSUtils.makeInlineLogFileName(fileName, ".archive", "", 2, "1-0-1");
     StoragePath path = new StoragePath(new StoragePath(partitionPath), logFile);
 
     assertFalse(FSUtils.isLogFile(path));
@@ -339,12 +383,12 @@ public class TestFSUtils extends HoodieCommonTestHarness {
    */
   @Test
   public void testLogFilesComparison() {
-    String log1Ver0W0 = FSUtils.makeLogFileName("file1", ".log", "1", 0, "0-0-1");
-    String log1Ver0W1 = FSUtils.makeLogFileName("file1", ".log", "1", 0, "1-1-1");
-    String log1Ver1W0 = FSUtils.makeLogFileName("file1", ".log", "1", 1, "0-0-1");
-    String log1Ver1W1 = FSUtils.makeLogFileName("file1", ".log", "1", 1, "1-1-1");
-    String log1base2W0 = FSUtils.makeLogFileName("file1", ".log", "2", 0, "0-0-1");
-    String log1base2W1 = FSUtils.makeLogFileName("file1", ".log", "2", 0, "1-1-1");
+    String log1Ver0W0 = FSUtils.makeInlineLogFileName("file1", ".log", "1", 0, "0-0-1");
+    String log1Ver0W1 = FSUtils.makeInlineLogFileName("file1", ".log", "1", 0, "1-1-1");
+    String log1Ver1W0 = FSUtils.makeInlineLogFileName("file1", ".log", "1", 1, "0-0-1");
+    String log1Ver1W1 = FSUtils.makeInlineLogFileName("file1", ".log", "1", 1, "1-1-1");
+    String log1base2W0 = FSUtils.makeInlineLogFileName("file1", ".log", "2", 0, "0-0-1");
+    String log1base2W1 = FSUtils.makeInlineLogFileName("file1", ".log", "2", 0, "1-1-1");
 
     List<HoodieLogFile> logFiles =
         Stream.of(log1Ver1W1, log1base2W0, log1base2W1, log1Ver1W0, log1Ver0W1, log1Ver0W0)
@@ -359,11 +403,11 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
   @Test
   public void testLogFilesComparisonWithCDCFile() {
-    HoodieLogFile log1 = new HoodieLogFile(new StoragePath(FSUtils.makeLogFileName("file1", ".log", "1", 0, "0-0-1")));
-    HoodieLogFile log2 = new HoodieLogFile(new StoragePath(FSUtils.makeLogFileName("file1", ".log", "2", 0, "0-0-1")));
-    HoodieLogFile log3 = new HoodieLogFile(new StoragePath(FSUtils.makeLogFileName("file1", ".log", "2", 1, "0-0-1")));
-    HoodieLogFile log4 = new HoodieLogFile(new StoragePath(FSUtils.makeLogFileName("file1", ".log", "2", 1, "1-1-1")));
-    HoodieLogFile log5 = new HoodieLogFile(new StoragePath(FSUtils.makeLogFileName("file1", ".log", "2", 1, "1-1-1") + HoodieCDCUtils.CDC_LOGFILE_SUFFIX));
+    HoodieLogFile log1 = new HoodieLogFile(new StoragePath(FSUtils.makeInlineLogFileName("file1", ".log", "1", 0, "0-0-1")));
+    HoodieLogFile log2 = new HoodieLogFile(new StoragePath(FSUtils.makeInlineLogFileName("file1", ".log", "2", 0, "0-0-1")));
+    HoodieLogFile log3 = new HoodieLogFile(new StoragePath(FSUtils.makeInlineLogFileName("file1", ".log", "2", 1, "0-0-1")));
+    HoodieLogFile log4 = new HoodieLogFile(new StoragePath(FSUtils.makeInlineLogFileName("file1", ".log", "2", 1, "1-1-1")));
+    HoodieLogFile log5 = new HoodieLogFile(new StoragePath(FSUtils.makeInlineLogFileName("file1", ".log", "2", 1, "1-1-1") + HoodieCDCUtils.CDC_LOGFILE_SUFFIX));
 
     TreeSet<HoodieLogFile> logFilesSet = new TreeSet<>(HoodieLogFile.getLogFileComparator());
     logFilesSet.add(log1);
@@ -400,7 +444,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(instantTime, FSUtils.getCommitTime(dataFileName));
     assertEquals(fileId, FSUtils.getFileId(dataFileName));
 
-    String logFileName = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, version, writeToken);
+    String logFileName = FSUtils.makeInlineLogFileName(fileId, LOG_EXTENSION, instantTime, version, writeToken);
     assertTrue(FSUtils.isLogFile(new StoragePath(logFileName)));
     assertEquals(instantTime, FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(logFileName)));
     assertEquals(fileId, FSUtils.getFileIdFromLogPath(new StoragePath(logFileName)));
@@ -410,11 +454,11 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     // create three versions of log file
     java.nio.file.Path partitionPath = Paths.get(basePath, partitionStr);
     Files.createDirectories(partitionPath);
-    String log1 = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, 1, writeToken);
+    String log1 = FSUtils.makeInlineLogFileName(fileId, LOG_EXTENSION, instantTime, 1, writeToken);
     Files.createFile(partitionPath.resolve(log1));
-    String log2 = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, 2, writeToken);
+    String log2 = FSUtils.makeInlineLogFileName(fileId, LOG_EXTENSION, instantTime, 2, writeToken);
     Files.createFile(partitionPath.resolve(log2));
-    String log3 = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, 3, writeToken);
+    String log3 = FSUtils.makeInlineLogFileName(fileId, LOG_EXTENSION, instantTime, 3, writeToken);
     Files.createFile(partitionPath.resolve(log3));
 
     assertEquals(3, (int) FSUtils.getLatestLogVersion(

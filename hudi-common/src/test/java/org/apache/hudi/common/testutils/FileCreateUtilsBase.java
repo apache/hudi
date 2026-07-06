@@ -75,7 +75,7 @@ public class FileCreateUtilsBase {
 
   public static String logFileName(String instantTime, String fileId, int version,
                                    String fileExtension) {
-    return FSUtils.makeLogFileName(fileId, fileExtension, instantTime, version, WRITE_TOKEN);
+    return FSUtils.makeInlineLogFileName(fileId, fileExtension, instantTime, version, WRITE_TOKEN);
   }
 
   public static String markerFileName(String fileName, IOType ioType) {

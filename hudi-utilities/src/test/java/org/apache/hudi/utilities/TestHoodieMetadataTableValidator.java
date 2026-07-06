@@ -853,7 +853,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     // Empty log file
     HoodieLogFile logFile = new HoodieLogFile(new StoragePath(
         tempDir.toString(),
-        FSUtils.makeLogFileName(
+        FSUtils.makeInlineLogFileName(
             UUID.randomUUID().toString(), HoodieLogFile.DELTA_EXTENSION, logInstantTime, 1, "1-0-1")));
     storage.create(logFile.getPath()).close();
     prepareTimelineAndValidate(metaClient, validator, Collections.emptyList(),
@@ -1285,7 +1285,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   }
 
   private HoodieLogFile generateRandomLogFile(String fileId, String instantTime) {
-    return new HoodieLogFile("/dummy/base/" + FSUtils.makeLogFileName(
+    return new HoodieLogFile("/dummy/base/" + FSUtils.makeInlineLogFileName(
         fileId, HoodieLogFile.DELTA_EXTENSION, instantTime, 1, "1-0-1"));
   }
 
@@ -1639,8 +1639,8 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       HoodieBaseFile baseFile = new HoodieBaseFile(FSUtils.makeBaseFileName(
           baseInstantTime, "1-0-1", fileId, HoodieFileFormat.PARQUET.getFileExtension()));
       List<HoodieLogFile> logFiles = Arrays.asList(
-        new HoodieLogFile(FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, baseInstantTime, 1, "1-0-1")),
-        new HoodieLogFile(FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, baseInstantTime, 2, "1-0-1"))
+        new HoodieLogFile(FSUtils.makeInlineLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, baseInstantTime, 1, "1-0-1")),
+        new HoodieLogFile(FSUtils.makeInlineLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, baseInstantTime, 2, "1-0-1"))
       );
 
       FileSlice slice = new FileSlice(new HoodieFileGroupId(partition, fileId), baseInstantTime);

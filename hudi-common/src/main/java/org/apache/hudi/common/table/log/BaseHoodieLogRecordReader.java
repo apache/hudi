@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -41,7 +40,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StoragePath;
 
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -456,10 +454,10 @@ public abstract class BaseHoodieLogRecordReader<T> {
       }
       if (!logFiles.isEmpty()) {
         try {
-          StoragePath path = logFiles.get(0).getPath();
+          HoodieLogFile logFile = logFiles.get(0);
           log.info("Finished scanning log files. FileId: {}, LogFileInstantTime: {}, "
                   + "Total log files: {}, Total log blocks: {}, Total rollbacks: {}, Total corrupt blocks: {}",
-              FSUtils.getFileIdFromLogPath(path), FSUtils.getDeltaCommitTimeFromLogPath(path),
+              logFile.getFileId(), logFile.getDeltaCommitTime(),
               totalLogFiles.get(), totalLogBlocks.get(), totalRollbacks.get(), totalCorruptBlocks.get());
         } catch (Exception e) {
           log.warn("Could not extract fileId from log path", e);
