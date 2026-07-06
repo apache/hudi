@@ -30,9 +30,12 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.LanceUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -64,7 +67,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.bloom.BloomFilterTypeCode.DYNAMIC_V0;
@@ -134,6 +140,33 @@ public class TestHoodieSparkLanceReader {
 
       assertTrue(actualRows.get(3).isNullAt(1), "Fourth row name should be null");
       assertTrue(actualRows.get(3).isNullAt(2), "Fourth row value should be null");
+    }
+  }
+
+  @Test
+  public void testReadColumnStatsFromMetadata() throws Exception {
+    StructType schema = new StructType()
+        .add("id", DataTypes.IntegerType, false)
+        .add("name", DataTypes.StringType, true)
+        .add("age", DataTypes.LongType, true);
+
+    List<InternalRow> rows = new ArrayList<>();
+    rows.add(createRow(1, "Alice", 30L));
+    rows.add(createRow(2, null, 25L));
+    rows.add(createRow(3, "Charlie", 35L));
+
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_column_stats.lance");
+    try (HoodieSparkLanceReader ignored = writeAndCreateReader(path, schema, rows)) {
+      List<HoodieColumnRangeMetadata<Comparable>> stats = new LanceUtils()
+          .readColumnStatsFromMetadata(storage, path, Arrays.asList("id", "name", "age"), HoodieIndexVersion.V1);
+
+      Map<String, HoodieColumnRangeMetadata<Comparable>> statsByColumn = stats.stream()
+          .collect(Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity()));
+
+      assertEquals(3, statsByColumn.size());
+      assertColumnStats(statsByColumn.get("id"), 1, 3, 0, 3);
+      assertColumnStats(statsByColumn.get("name"), "Alice", "Charlie", 1, 3);
+      assertColumnStats(statsByColumn.get("age"), 25L, 35L, 0, 3);
     }
   }
 
@@ -593,6 +626,18 @@ public class TestHoodieSparkLanceReader {
       }
     }
     return new HoodieSparkLanceReader(path);
+  }
+
+  private void assertColumnStats(HoodieColumnRangeMetadata<Comparable> stats,
+                                 Comparable minValue,
+                                 Comparable maxValue,
+                                 long nullCount,
+                                 long valueCount) {
+    assertNotNull(stats);
+    assertEquals(minValue, stats.getMinValue());
+    assertEquals(maxValue, stats.getMaxValue());
+    assertEquals(nullCount, stats.getNullCount());
+    assertEquals(valueCount, stats.getValueCount());
   }
 
   @Test

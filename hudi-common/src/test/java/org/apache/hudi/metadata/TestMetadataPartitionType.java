@@ -112,6 +112,19 @@ public class TestMetadataPartitionType {
   }
 
   @Test
+  public void testColumnAndPartitionStatsEnabledForLanceTables() {
+    HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
+    Mockito.when(tableConfig.isTablePartitioned()).thenReturn(true);
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true)
+        .withMetadataIndexColumnStats(true)
+        .build();
+
+    assertTrue(MetadataPartitionType.COLUMN_STATS.isMetadataPartitionEnabled(metadataConfig, tableConfig));
+    assertTrue(MetadataPartitionType.PARTITION_STATS.isMetadataPartitionEnabled(metadataConfig, tableConfig));
+  }
+
+  @Test
   public void testPartitionAvailableByMetaClientOnly() {
     HoodieTableMetaClient metaClient = Mockito.mock(HoodieTableMetaClient.class);
     HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
