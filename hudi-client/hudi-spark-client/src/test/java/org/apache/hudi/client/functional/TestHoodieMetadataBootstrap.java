@@ -119,7 +119,12 @@ public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
     Path zeroSizeFilePath = FileCreateUtilsLegacy.getBaseFilePath(basePath, "p1", "0000003", fileName);
     FileCreateUtilsLegacy.createBaseFile(basePath, "p1", "0000003", fileName, 0);
 
-    writeConfig = getWriteConfig(true, true);
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withSkipZeroSizeFilesDuringBootstrap(true)
+            .build())
+        .build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
     syncTableMetadata(writeConfig);
 
