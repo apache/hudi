@@ -21,7 +21,6 @@ package org.apache.hudi.io;
 import org.apache.hudi.client.SecondaryIndexStats;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.avro.JoinedGenericRecord;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
