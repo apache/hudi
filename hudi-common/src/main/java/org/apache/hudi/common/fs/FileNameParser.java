@@ -137,7 +137,12 @@ public final class FileNameParser {
    * @return decoded native log file name when the input matches the native log-file format
    */
   public static Option<LogFileName> parseNativeLogFile(String fileName) {
-    return matchNativeLogFile(fileName).map(LogFileName::fromNativeLogFile);
+    if (StringUtils.isNullOrEmpty(fileName)) {
+      return Option.empty();
+    }
+
+    String actualFileName = getActualFileName(fileName);
+    return parseNativeLogFileFromActualFileName(actualFileName);
   }
 
   /**
@@ -153,15 +158,6 @@ public final class FileNameParser {
       throw new HoodieValidationException("Failed to get prefix from " + fileId);
     }
     return matcher.group(1);
-  }
-
-  static Option<Matcher> matchNativeLogFile(String fileName) {
-    if (StringUtils.isNullOrEmpty(fileName)) {
-      return Option.empty();
-    }
-
-    String actualFileName = getActualFileName(fileName);
-    return matchNativeLogFileFromActualFileName(actualFileName);
   }
 
   private static Option<LogFileName> parseNativeLogFileFromActualFileName(String actualFileName) {
@@ -211,6 +207,8 @@ public final class FileNameParser {
     private final Integer stageId;
     private final Integer taskAttemptId;
     private final String fileExtension;
+    // Inline logs use this as the optional CDC suffix (".cdc"), while native logs use it as
+    // the native storage format suffix, such as "parquet".
     private final String suffix;
     private final boolean nativeLogFile;
 

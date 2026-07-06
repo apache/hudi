@@ -526,9 +526,9 @@ public final class CdcIterators {
     }
 
     private static boolean isNativeCdcFileSplit(HoodieCDCFileSplit fileSplit) {
-      boolean nativeCdc = FSUtils.matchNativeLogFile(fileSplit.getCdcFiles().get(0)).isPresent();
+      boolean nativeCdc = FSUtils.isNativeLogFile(fileSplit.getCdcFiles().get(0));
       ValidationUtils.checkState(fileSplit.getCdcFiles().stream()
-              .allMatch(path -> FSUtils.matchNativeLogFile(path).isPresent() == nativeCdc),
+              .allMatch(path -> FSUtils.isNativeLogFile(path) == nativeCdc),
           "CDC file split cannot mix inline and native CDC log files");
       return nativeCdc;
     }

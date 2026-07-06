@@ -125,7 +125,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   }
 
   private HoodieLogFormat.Reader createReader(HoodieLogFile logFile, boolean reverseLogReader) throws IOException {
-    if (FSUtils.matchNativeLogFile(logFile.getFileName()).isPresent()) {
+    if (FSUtils.isNativeLogFile(logFile.getFileName())) {
       if (metaClient == null) {
         throw new HoodieNotSupportedException("Native log files require HoodieTableMetaClient");
       }

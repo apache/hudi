@@ -161,7 +161,7 @@ public class HoodieTestUtils {
   public static List<StoragePath> listNativeLogFiles(HoodieStorage storage, String basePath) throws IOException {
     return storage.listFiles(new StoragePath(basePath)).stream()
         .map(StoragePathInfo::getPath)
-        .filter(path -> FSUtils.matchNativeLogFile(path.getName()).isPresent())
+        .filter(path -> FSUtils.isNativeLogFile(path.getName()))
         .collect(Collectors.toList());
   }
 

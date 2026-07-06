@@ -551,7 +551,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   }
 
   private def isNativeCdcFileSplit(fileSplit: HoodieCDCFileSplit): Boolean = {
-    val nativeFlags = fileSplit.getCdcFiles.asScala.map(path => FSUtils.matchNativeLogFile(path).isPresent)
+    val nativeFlags = fileSplit.getCdcFiles.asScala.map(path => FSUtils.isNativeLogFile(path))
     ValidationUtils.checkState(nativeFlags.forall(_ == nativeFlags.head),
       "CDC file split cannot mix inline and native CDC log files")
     nativeFlags.head

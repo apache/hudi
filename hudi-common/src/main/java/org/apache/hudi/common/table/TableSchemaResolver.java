@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.FileNameParser;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -61,7 +62,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
-import java.util.regex.Matcher;
 import java.util.stream.Stream;
 
 /**
@@ -287,9 +287,9 @@ public class TableSchemaResolver {
    * @return
    */
   public static HoodieSchema readSchemaFromLogFile(HoodieTableMetaClient metaClient, StoragePath path) throws IOException {
-    Option<Matcher> nativeLogMatcherOpt = FSUtils.matchNativeLogFile(path.getName());
-    if (nativeLogMatcherOpt.isPresent()) {
-      return NativeLogFooterMetadata.readSchemaFromNativeLogFile(metaClient.getStorage(), path, nativeLogMatcherOpt.get());
+    Option<FileNameParser.LogFileName> nativeLogFileName = FileNameParser.parseNativeLogFile(path.getName());
+    if (nativeLogFileName.isPresent()) {
+      return NativeLogFooterMetadata.readSchemaFromNativeLogFile(metaClient.getStorage(), path, nativeLogFileName.get());
     }
 
     // We only need to read the schema from the log block header,

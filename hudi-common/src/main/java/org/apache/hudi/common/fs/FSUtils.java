@@ -62,7 +62,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -457,11 +456,11 @@ public class FSUtils {
   }
 
   public static boolean isInlineLogFile(String fileName) {
-    return FileNameParser.parseNativeLogFile(fileName).isEmpty();
+    return !isNativeLogFile(fileName);
   }
 
-  public static Option<Matcher> matchNativeLogFile(String fileName) {
-    return FileNameParser.matchNativeLogFile(fileName);
+  public static boolean isNativeLogFile(String fileName) {
+    return FileNameParser.parseNativeLogFile(fileName).isPresent();
   }
 
   public static boolean isNativeDeleteLogFile(String fileName) {

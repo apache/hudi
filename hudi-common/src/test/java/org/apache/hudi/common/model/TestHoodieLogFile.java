@@ -235,7 +235,7 @@ public class TestHoodieLogFile {
     logFiles.sort(HoodieLogFile.getLogFileComparator());
 
     assertEquals(Arrays.asList(logFile, deleteFile, cdcFile), logFiles);
-    assertFalse(FSUtils.matchNativeLogFile(nativeLogPath(LogExtensions.ARCHIVE_LOG_EXTENSION, 8)).isPresent());
+    assertFalse(FSUtils.isNativeLogFile(nativeLogPath(LogExtensions.ARCHIVE_LOG_EXTENSION, 8)));
   }
 
   private String nativeLogPath(String extension, int version) {

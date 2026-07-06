@@ -20,7 +20,6 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.FileNameParser;
-import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.StoragePath;
@@ -79,6 +78,7 @@ public class HoodieLogFile implements Serializable {
   private String fileExtension;
   private String suffix;
   private Boolean nativeLogFile;
+  private Boolean cdcLogFile;
   @Getter
   @Setter
   @ToString.Include
@@ -95,6 +95,7 @@ public class HoodieLogFile implements Serializable {
     this.fileExtension = logFile.getFileExtension();
     this.suffix = logFile.getSuffix();
     this.nativeLogFile = logFile.isNativeLogFile();
+    this.cdcLogFile = logFile.isCDC();
     this.fileSize = logFile.getFileSize();
   }
 
@@ -135,6 +136,7 @@ public class HoodieLogFile implements Serializable {
     this.logWriteToken = logFileName.getWriteToken();
     this.suffix = logFileName.getSuffix();
     this.nativeLogFile = logFileName.isNativeLogFile();
+    this.cdcLogFile = logFileName.isCDCLogFile();
   }
 
   public String getFileId() {
@@ -173,9 +175,10 @@ public class HoodieLogFile implements Serializable {
   }
 
   public boolean isCDC() {
-    return isNativeLogFile()
-        ? HoodieCDCUtils.CDC_LOGFILE_SUFFIX.substring(1).equals(getFileExtension())
-        : HoodieCDCUtils.CDC_LOGFILE_SUFFIX.equals(getSuffix());
+    if (cdcLogFile == null) {
+      parseFieldsFromPath();
+    }
+    return cdcLogFile;
   }
 
   public String getSuffix() {

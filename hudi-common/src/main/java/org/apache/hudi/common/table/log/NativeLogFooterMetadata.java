@@ -19,7 +19,9 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.fs.FileNameParser;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.LogExtensions;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.util.JsonUtils;
@@ -35,7 +37,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.regex.Matcher;
 
 /**
  * Shared on-disk contract for RFC-103 native log files. The log block header (schema, instant time,
@@ -119,17 +120,16 @@ public class NativeLogFooterMetadata {
    *
    * @param storage          storage used to read the native log file footer
    * @param path             native log file path
-   * @param nativeLogMatcher matcher returned by {@code FSUtils.matchNativeLogFile(path.getName())}
+   * @param nativeLogFileName parsed native log file name
    * @return table schema for native data logs, or {@code null} for native non-data logs
    */
   public static HoodieSchema readSchemaFromNativeLogFile(
-      HoodieStorage storage, StoragePath path, Matcher nativeLogMatcher) {
-    String nativeLogType = nativeLogMatcher.group(8);
-    if (!"log".equals(nativeLogType)) {
+      HoodieStorage storage, StoragePath path, FileNameParser.LogFileName nativeLogFileName) {
+    if (!LogExtensions.DATA_LOG_EXTENSION.equals(nativeLogFileName.getFileExtension())) {
       return null;
     }
 
-    HoodieFileFormat fileFormat = HoodieFileFormat.fromFileExtension("." + nativeLogMatcher.group(9));
+    HoodieFileFormat fileFormat = HoodieFileFormat.fromFileExtension("." + nativeLogFileName.getSuffix());
     Map<String, String> footer = HoodieIOFactory.getIOFactory(storage)
         .getFileFormatUtils(fileFormat)
         .readFooter(storage, false, path, FOOTER_METADATA_KEY);
