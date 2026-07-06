@@ -122,7 +122,7 @@ public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withSkipZeroSizeFilesDuringBootstrap(true)
+            .withSkipZeroSizeFilesOnInitialize(true)
             .build())
         .build();
     initWriteConfigAndMetatableWriter(writeConfig, true);

@@ -195,13 +195,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Directories matching this regex, will be filtered out when initializing metadata table from lake storage for the first time.");
 
-  public static final ConfigProperty<Boolean> SKIP_ZERO_SIZE_FILES_DURING_BOOTSTRAP = ConfigProperty
-      .key(METADATA_PREFIX + ".bootstrap.skip.zero.size.files")
+  public static final ConfigProperty<Boolean> SKIP_ZERO_SIZE_FILES_ON_INITIALIZE = ConfigProperty
+      .key(METADATA_PREFIX + ".skip.zero.size.files.on.initialize")
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("1.2.0")
       .withDocumentation("When enabled, zero-size data files encountered while listing the data table during "
-          + "metadata table bootstrap are skipped instead of being recorded in the metadata table.");
+          + "metadata table initialization are skipped instead of being recorded in the metadata table.");
 
   public static final ConfigProperty<Integer> FILE_LISTING_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.file.listing.parallelism")
@@ -799,8 +799,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getString(DIR_FILTER_REGEX);
   }
 
-  public boolean shouldSkipZeroSizeFilesDuringBootstrap() {
-    return getBoolean(SKIP_ZERO_SIZE_FILES_DURING_BOOTSTRAP);
+  public boolean shouldSkipZeroSizeFilesOnInitialize() {
+    return getBoolean(SKIP_ZERO_SIZE_FILES_ON_INITIALIZE);
   }
 
   public boolean shouldIgnoreSpuriousDeletes() {
@@ -1172,8 +1172,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withSkipZeroSizeFilesDuringBootstrap(boolean skipZeroSizeFiles) {
-      metadataConfig.setValue(SKIP_ZERO_SIZE_FILES_DURING_BOOTSTRAP, String.valueOf(skipZeroSizeFiles));
+    public Builder withSkipZeroSizeFilesOnInitialize(boolean skipZeroSizeFiles) {
+      metadataConfig.setValue(SKIP_ZERO_SIZE_FILES_ON_INITIALIZE, String.valueOf(skipZeroSizeFiles));
       return this;
     }
 
