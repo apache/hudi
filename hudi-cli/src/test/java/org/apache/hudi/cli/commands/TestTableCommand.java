@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -303,5 +304,141 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     fis.read(data);
     fis.close();
     return fromUTF8Bytes(data);
+  }
+
+  // ---------------------------------------------------------------------------
+  // set-meta-fields-mode
+  // ---------------------------------------------------------------------------
+
+  @Test
+  public void testSetMetaFieldsModeOnFreshTableToCommitTimeOnly() {
+    assertTrue(prepareTable());
+    // Default table is ALL — no commits yet, so the safety check must let this through.
+    Object result = shell.evaluate(() ->
+        "table set-meta-fields-mode --target-mode COMMIT_TIME_ONLY");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
+    // Rendered diff must surface the changed properties so the operator can confirm the write.
+    String rendered = result.toString();
+    assertTrue(rendered.contains(HoodieTableConfig.POPULATE_META_FIELDS.key()),
+        "expected rendered diff to mention populate.meta.fields, got: " + rendered);
+    assertTrue(rendered.contains(HoodieTableConfig.META_FIELDS_MODE.key()),
+        "expected rendered diff to mention meta.fields.mode, got: " + rendered);
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, client.getTableConfig().getMetaFieldsMode());
+    assertFalse(client.getTableConfig().populateMetaFields());
+  }
+
+  @Test
+  public void testSetMetaFieldsModeOnFreshTableToFileNameOnly() {
+    assertTrue(prepareTable());
+    Object result = shell.evaluate(() ->
+        "table set-meta-fields-mode --target-mode FILE_NAME_ONLY");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
+    assertEquals(MetaFieldsMode.FILE_NAME_ONLY,
+        HoodieCLI.getTableMetaClient().getTableConfig().getMetaFieldsMode());
+  }
+
+  @Test
+  public void testSetMetaFieldsModeOnFreshTableToCombinedMode() {
+    assertTrue(prepareTable());
+    Object result = shell.evaluate(() ->
+        "table set-meta-fields-mode --target-mode COMMIT_TIME_AND_FILE_NAME");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
+    assertEquals(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME,
+        HoodieCLI.getTableMetaClient().getTableConfig().getMetaFieldsMode());
+  }
+
+  @Test
+  public void testSetMetaFieldsModeOnFreshTableToNone() {
+    assertTrue(prepareTable());
+    Object result = shell.evaluate(() ->
+        "table set-meta-fields-mode --target-mode NONE");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    assertEquals(MetaFieldsMode.NONE, client.getTableConfig().getMetaFieldsMode());
+    assertFalse(client.getTableConfig().populateMetaFields());
+  }
+
+  @Test
+  public void testSetMetaFieldsModeToAllClearsProperty() throws IOException {
+    assertTrue(prepareTable());
+    // First move to a selective mode so we have something to clear.
+    shell.evaluate(() -> "table set-meta-fields-mode --target-mode COMMIT_TIME_ONLY");
+    // Then set back to ALL.
+    Object result = shell.evaluate(() -> "table set-meta-fields-mode --target-mode ALL");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    assertEquals(MetaFieldsMode.ALL, client.getTableConfig().getMetaFieldsMode());
+    assertTrue(client.getTableConfig().populateMetaFields());
+    // The mode property should be cleared (ALL is implicit).
+    assertFalse(client.getTableConfig().getProps().containsKey(HoodieTableConfig.META_FIELDS_MODE.key()));
+  }
+
+  @Test
+  public void testSetMetaFieldsModeNoOpWhenAlreadyInTargetMode() {
+    assertTrue(prepareTable());
+    Object first = shell.evaluate(() ->
+        "table set-meta-fields-mode --target-mode COMMIT_TIME_ONLY");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(first));
+    // Second call — same target — should be a no-op message.
+    Object second = shell.evaluate(() ->
+        "table set-meta-fields-mode --target-mode COMMIT_TIME_ONLY");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(second));
+    assertTrue(second.toString().contains("already in COMMIT_TIME_ONLY"),
+        "expected no-op message, got: " + second);
+  }
+
+  @Test
+  public void testSetMetaFieldsModeRejectsUnknownValue() {
+    assertTrue(prepareTable());
+    Object result = shell.evaluate(() ->
+        "table set-meta-fields-mode --target-mode BOGUS_MODE");
+    // Shell evaluate returns the exception object on failure.
+    assertFalse(ShellEvaluationResultUtil.isSuccess(result));
+    assertTrue(result.toString().contains("BOGUS_MODE"),
+        "expected error message to name the rejected value, got: " + result);
+  }
+
+  @Test
+  public void testSetMetaFieldsModeRefusesOnPopulatedTable() throws Exception {
+    assertTrue(prepareTable());
+    createDummyCommitFile("20260101000000000");
+    HoodieCLI.refreshTableMetadata();
+
+    Object result = shell.evaluate(() ->
+        "table set-meta-fields-mode --target-mode COMMIT_TIME_ONLY");
+    assertFalse(ShellEvaluationResultUtil.isSuccess(result));
+    assertTrue(result.toString().contains("Refusing to change") || result.toString().contains("--force"),
+        "expected refusal message, got: " + result);
+
+    // Mode must not have changed.
+    assertEquals(MetaFieldsMode.ALL,
+        HoodieCLI.getTableMetaClient().getTableConfig().getMetaFieldsMode());
+  }
+
+  @Test
+  public void testSetMetaFieldsModeWithForceOnPopulatedTable() throws Exception {
+    assertTrue(prepareTable());
+    createDummyCommitFile("20260101000000000");
+    HoodieCLI.refreshTableMetadata();
+
+    Object result = shell.evaluate(() ->
+        "table set-meta-fields-mode --target-mode COMMIT_TIME_ONLY --force true");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY,
+        HoodieCLI.getTableMetaClient().getTableConfig().getMetaFieldsMode());
+  }
+
+  private void createDummyCommitFile(String instantTime) throws IOException {
+    // Timeline v2 layout: files live under .hoodie/timeline/. Writing an empty completed commit
+    // is enough to make countInstants > 0 for the safety check.
+    java.nio.file.Path timelineDir = Paths.get(metaPath, "timeline");
+    if (!timelineDir.toFile().exists()) {
+      timelineDir.toFile().mkdirs();
+    }
+    // Completed-commit filename in v2 uses <requested>_<completed>.commit; the completion time is
+    // used for range queries. Any monotonically-later value works for a synthetic commit.
+    String completionTime = instantTime + "1";
+    java.nio.file.Files.createFile(timelineDir.resolve(instantTime + "_" + completionTime + ".commit"));
   }
 }
