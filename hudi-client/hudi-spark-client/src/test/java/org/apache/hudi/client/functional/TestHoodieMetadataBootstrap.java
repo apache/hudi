@@ -109,7 +109,7 @@ public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
   }
 
   @Test
-  public void testMetadataBootstrapSkipsZeroSizeFiles() throws Exception {
+  public void testMetadataSkipsZeroSizeFilesOnInitialize() throws Exception {
     HoodieTableType tableType = COPY_ON_WRITE;
     init(tableType, false);
     doPreBootstrapWriteOperation(testTable, INSERT, "0000001");
