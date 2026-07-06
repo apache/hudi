@@ -31,7 +31,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.index.expression.HoodieExpressionIndex;
+import org.apache.hudi.core.index.expression.HoodieExpressionIndex;
 import org.apache.hudi.metadata.stats.ValueMetadata;
 
 import lombok.Getter;

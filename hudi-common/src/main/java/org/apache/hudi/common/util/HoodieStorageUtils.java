@@ -17,11 +17,13 @@
  * under the License.
  */
 
-package org.apache.hudi.storage;
+package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 
 public class HoodieStorageUtils {
   public static final String DEFAULT_URI = "file:///";

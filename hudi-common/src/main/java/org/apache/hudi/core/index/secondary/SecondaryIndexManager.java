@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.index.secondary;
+package org.apache.hudi.core.index.secondary;
 
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;

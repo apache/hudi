@@ -414,7 +414,7 @@ public class MetadataCommand {
             indexMetadata.getIndexDefinitions()
                 .get(org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX))
         .map(indexDefinition -> "true".equalsIgnoreCase(
-            indexDefinition.getIndexOptions().getOrDefault(org.apache.hudi.index.record.HoodieRecordIndex.IS_PARTITIONED_OPTION, "false")))
+            indexDefinition.getIndexOptions().getOrDefault(org.apache.hudi.core.index.record.HoodieRecordIndex.IS_PARTITIONED_OPTION, "false")))
         .orElse(false);
 
     if (isPartitionedRLI) {

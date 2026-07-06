@@ -21,8 +21,9 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.metadata.{FileSystemBackedTableMetadata, HoodieBackedTableMetadata}
-import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath, StoragePathInfo}
+import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.table.repair.RepairUtils
 
 import org.apache.spark.internal.Logging

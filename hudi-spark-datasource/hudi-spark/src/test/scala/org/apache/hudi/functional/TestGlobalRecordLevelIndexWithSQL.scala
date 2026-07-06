@@ -26,7 +26,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.{FileSystemViewManager, HoodieTableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.index.record.HoodieRecordIndex
+import org.apache.hudi.core.index.record.HoodieRecordIndex
 import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.hudi.util.JFunction
 

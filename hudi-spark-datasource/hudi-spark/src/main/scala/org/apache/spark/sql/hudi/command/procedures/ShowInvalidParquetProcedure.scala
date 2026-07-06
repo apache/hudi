@@ -20,10 +20,10 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.{HoodieTableMetadata, NativeTableMetadataFactory}
-import org.apache.hudi.storage.HoodieStorageUtils
 
 import collection.JavaConverters._
 import org.apache.hadoop.fs.Path

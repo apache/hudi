@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.index.record;
+package org.apache.hudi.core.index.record;
 
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 

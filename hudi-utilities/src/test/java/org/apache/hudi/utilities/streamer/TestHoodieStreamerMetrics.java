@@ -20,7 +20,7 @@
 package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;

@@ -19,12 +19,12 @@
 package org.apache.hudi.sync.common.metrics;
 
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import com.codahale.metrics.Counter;

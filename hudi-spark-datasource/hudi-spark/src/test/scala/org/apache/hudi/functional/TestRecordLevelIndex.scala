@@ -32,10 +32,10 @@ import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeG
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.core.index.record.HoodieRecordIndex
 import org.apache.hudi.exception.{HoodieException, HoodieMetadataException}
 import org.apache.hudi.functional.TestRecordLevelIndex.TestPartitionedRecordLevelIndexTestCase
 import org.apache.hudi.index.HoodieIndex.IndexType.RECORD_LEVEL_INDEX
-import org.apache.hudi.index.record.HoodieRecordIndex
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy

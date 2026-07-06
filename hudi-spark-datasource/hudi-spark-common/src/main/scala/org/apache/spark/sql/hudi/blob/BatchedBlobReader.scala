@@ -21,8 +21,9 @@ package org.apache.spark.sql.hudi.blob
 
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
+import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.io.SeekableDataInputStream
-import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StorageConfiguration, StoragePath}
+import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 
 import org.apache.spark.TaskContext
 import org.apache.spark.broadcast.Broadcast

@@ -22,8 +22,8 @@ package org.apache
 import org.apache.hudi.DataSourceWriteOptions.RECORD_MERGE_MODE
 import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.storage.HoodieStorageUtils
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 

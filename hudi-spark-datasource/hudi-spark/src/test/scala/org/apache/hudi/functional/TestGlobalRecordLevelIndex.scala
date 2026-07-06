@@ -30,9 +30,9 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeGenerator}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.config._
+import org.apache.hudi.core.index.record.HoodieRecordIndex
 import org.apache.hudi.exception.HoodieWriteConflictException
 import org.apache.hudi.index.HoodieIndex
-import org.apache.hudi.index.record.HoodieRecordIndex
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.util.JavaConversions
 

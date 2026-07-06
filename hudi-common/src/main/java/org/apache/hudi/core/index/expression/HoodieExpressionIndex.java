@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.index.expression;
+package org.apache.hudi.core.index.expression;
 
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.util.CollectionUtils;
