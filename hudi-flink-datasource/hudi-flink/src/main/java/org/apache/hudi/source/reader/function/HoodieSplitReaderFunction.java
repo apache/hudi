@@ -23,13 +23,19 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.source.BlobMaterializingIterator;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.split.HoodieSourceSplit;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.HoodieSchemaConverter;
@@ -40,6 +46,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -81,7 +88,7 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
     // would close it. Keep it in a local and close it in the failure path.
     HoodieRecordReader<RowData> fileGroupReader = createRecordReader(split, metaClient);
     try {
-      return fileGroupReader.getClosableIterator();
+      return maybeMaterialize(fileGroupReader.getClosableIterator());
     } catch (IOException e) {
       closeSuppressing(fileGroupReader, e);
       throw new HoodieIOException("Failed to read from file group: " + split.getFileId(), e);
@@ -89,6 +96,45 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
       closeSuppressing(fileGroupReader, e);
       throw e;
     }
+  }
+
+  /**
+   * Wraps the raw iterator with {@link BlobMaterializingIterator} when
+   * {@link FlinkOptions#BLOB_READ_MATERIALIZE} is enabled and the required schema contains
+   * at least one BLOB field.
+   */
+  private ClosableIterator<RowData> maybeMaterialize(ClosableIterator<RowData> iter) {
+    if (!conf.get(FlinkOptions.BLOB_READ_MATERIALIZE)) {
+      return iter;
+    }
+    int[] blobPositions = detectBlobFieldPositions(requiredSchema);
+    if (blobPositions.length == 0) {
+      return iter;
+    }
+    RowType requiredRowType = HoodieSchemaConverter.convertToRowType(requiredSchema);
+    HoodieStorage storage = HoodieStorageUtils.getStorage(
+        conf.get(FlinkOptions.PATH), HadoopFSUtils.getStorageConf(getHadoopConf()));
+    return new BlobMaterializingIterator(
+        iter,
+        requiredRowType,
+        blobPositions,
+        storage,
+        conf.get(FlinkOptions.BLOB_BATCHING_MAX_GAP_BYTES),
+        conf.get(FlinkOptions.BLOB_BATCHING_LOOKAHEAD_SIZE));
+  }
+
+  /**
+   * Returns the field positions in {@code schema} whose type is a BLOB field.
+   */
+  private static int[] detectBlobFieldPositions(HoodieSchema schema) {
+    List<HoodieSchemaField> fields = schema.getFields();
+    List<Integer> positions = new ArrayList<>();
+    for (int i = 0; i < fields.size(); i++) {
+      if (fields.get(i).schema().isBlobField()) {
+        positions.add(i);
+      }
+    }
+    return positions.stream().mapToInt(Integer::intValue).toArray();
   }
 
   @Override

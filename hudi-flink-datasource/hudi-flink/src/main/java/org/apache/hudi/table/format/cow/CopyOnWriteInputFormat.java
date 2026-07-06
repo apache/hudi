@@ -20,9 +20,15 @@ package org.apache.hudi.table.format.cow;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.util.HoodieStorageUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.source.BlobMaterializingIterator;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
@@ -39,6 +45,8 @@ import org.apache.flink.core.fs.Path;
 import org.apache.flink.formats.parquet.utils.SerializableConfiguration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.FileStatus;
@@ -84,6 +92,13 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   private final List<Predicate> predicates;
   private final long limit;
 
+  /** Flink configuration used for blob-materialization options; may be {@code null}. */
+  private final org.apache.flink.configuration.Configuration flinkConf;
+  /** Output positions of BLOB fields; empty when no BLOB fields or materialization is disabled. */
+  private final int[] blobFieldPositions;
+  /** Output RowType derived from selectedFields; used by {@link BlobMaterializingIterator}. */
+  private final RowType requiredOutputRowType;
+
   private transient ClosableIterator<RowData> itr;
   private transient long currentReadCount;
 
@@ -107,7 +122,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       Configuration conf,
       boolean utcTimestamp,
       InternalSchemaManager internalSchemaManager,
-      HoodieSchema tableSchema) {
+      HoodieSchema tableSchema,
+      org.apache.flink.configuration.Configuration flinkConf) {
     super.setFilePaths(paths);
     this.predicates = predicates;
     this.limit = limit;
@@ -122,6 +138,9 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     this.conf = new SerializableConfiguration(conf);
     this.utcTimestamp = utcTimestamp;
     this.internalSchemaManager = internalSchemaManager;
+    this.flinkConf = flinkConf;
+    this.blobFieldPositions = detectBlobPositions(fullFieldNames, selectedFields, tableSchema);
+    this.requiredOutputRowType = buildRequiredOutputRowType(fullFieldNames, fullFieldTypes, selectedFields);
   }
 
   @Override
@@ -153,6 +172,18 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
           fileSplit.getLength(),
           predicates);
       this.itr = vectorColumnInfo.isEmpty() ? rowDataItr : VectorConversionUtils.wrapVectorColumnIterator(rowDataItr, fullFieldTypes, selectedFields, vectorColumnInfo);
+    }
+    if (flinkConf != null && flinkConf.get(FlinkOptions.BLOB_READ_MATERIALIZE)
+        && blobFieldPositions.length > 0) {
+      HoodieStorage storage = HoodieStorageUtils.getStorage(
+          flinkConf.get(FlinkOptions.PATH), HadoopFSUtils.getStorageConf(conf.conf()));
+      this.itr = new BlobMaterializingIterator(
+          this.itr,
+          requiredOutputRowType,
+          blobFieldPositions,
+          storage,
+          flinkConf.get(FlinkOptions.BLOB_BATCHING_MAX_GAP_BYTES),
+          flinkConf.get(FlinkOptions.BLOB_BATCHING_LOOKAHEAD_SIZE));
     }
     this.currentReadCount = 0L;
   }
@@ -417,6 +448,43 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     } else {
       return null;
     }
+  }
+
+  /**
+   * Detects blob field positions in the output (selected) row by looking up each selected field
+   * name in the table schema and checking whether its schema {@link HoodieSchema#isBlobField()}.
+   */
+  private static int[] detectBlobPositions(
+      String[] fullFieldNames,
+      int[] selectedFields,
+      HoodieSchema tableSchema) {
+    List<Integer> positions = new ArrayList<>();
+    for (int i = 0; i < selectedFields.length; i++) {
+      String fieldName = fullFieldNames[selectedFields[i]];
+      Option<HoodieSchemaField> field = tableSchema.getField(fieldName);
+      if (field.isPresent() && field.get().schema().isBlobField()) {
+        positions.add(i);
+      }
+    }
+    return positions.stream().mapToInt(Integer::intValue).toArray();
+  }
+
+  /**
+   * Builds the output {@link RowType} (selected fields only) needed by
+   * {@link BlobMaterializingIterator} for field-getter construction.
+   */
+  private static RowType buildRequiredOutputRowType(
+      String[] fullFieldNames,
+      DataType[] fullFieldTypes,
+      int[] selectedFields) {
+    LogicalType[] logicalTypes = new LogicalType[selectedFields.length];
+    String[] names = new String[selectedFields.length];
+    for (int i = 0; i < selectedFields.length; i++) {
+      int idx = selectedFields[i];
+      logicalTypes[i] = fullFieldTypes[idx].getLogicalType();
+      names[i] = fullFieldNames[idx];
+    }
+    return RowType.of(logicalTypes, names);
   }
 
 }
