@@ -1,0 +1,1532 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.common.avro;
+
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieAvroSchemaCache;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.util.DateTimeUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
+
+import org.apache.avro.AvroRuntimeException;
+import org.apache.avro.Conversions;
+import org.apache.avro.Conversions.DecimalConversion;
+import org.apache.avro.JsonProperties;
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.LogicalTypes.Decimal;
+import org.apache.avro.Schema;
+import org.apache.avro.Schema.Field;
+import org.apache.avro.Schema.Field.Order;
+import org.apache.avro.file.DataFileWriter;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericData.Record;
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.generic.GenericFixed;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.io.BinaryDecoder;
+import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.DatumWriter;
+import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.io.JsonEncoder;
+import org.apache.avro.specific.SpecificData;
+import org.apache.avro.specific.SpecificRecordBase;
+
+import javax.annotation.Nullable;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.MathContext;
+import java.math.RoundingMode;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.sql.Date;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Properties;
+import java.util.Set;
+import java.util.TimeZone;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
+
+import static org.apache.avro.Schema.Type.ARRAY;
+import static org.apache.avro.Schema.Type.MAP;
+import static org.apache.avro.Schema.Type.UNION;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
+/**
+ * Helper class to do common stuff across Avro.
+ */
+public class HoodieAvroUtils {
+
+  public static final String AVRO_VERSION = Schema.class.getPackage().getImplementationVersion();
+
+  private static final ThreadLocal<BinaryEncoder> BINARY_ENCODER = ThreadLocal.withInitial(() -> null);
+  private static final ThreadLocal<BinaryDecoder> BINARY_DECODER = ThreadLocal.withInitial(() -> null);
+
+  private static final long MILLIS_PER_DAY = 86400000L;
+
+  //Export for test
+  public static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
+
+  private static final Properties PROPERTIES = new Properties();
+
+  /**
+   * Convert a given avro record to bytes.
+   */
+  public static byte[] avroToBytes(IndexedRecord record) {
+    return indexedRecordToBytesStream(record).toByteArray();
+  }
+
+  /**
+   * Convert a given avro record to bytes.
+   */
+  public static ByteArrayOutputStream avroToBytesStream(IndexedRecord record) {
+    return indexedRecordToBytesStream(record);
+  }
+
+  public static <T extends IndexedRecord> ByteArrayOutputStream indexedRecordToBytesStream(T record) {
+    GenericDatumWriter<T> writer = new GenericDatumWriter<>(record.getSchema(), ConvertingGenericData.INSTANCE);
+    try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, BINARY_ENCODER.get());
+      BINARY_ENCODER.set(encoder);
+      writer.write(record, encoder);
+      encoder.flush();
+      return out;
+    } catch (IOException e) {
+      throw new HoodieIOException("Cannot convert GenericRecord to bytes", e);
+    }
+  }
+
+  public static byte[] avroToFileBytes(IndexedRecord record) {
+    try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+      try (DataFileWriter<IndexedRecord> writer = new DataFileWriter<>(new GenericDatumWriter<>(record.getSchema()))) {
+        writer.create(record.getSchema(), baos);
+        writer.append(record);
+        writer.flush();
+        return baos.toByteArray();
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to convert IndexedRecord to Avro file format", e);
+    }
+  }
+
+  /**
+   * Convert a given avro record to json and return the string
+   *
+   * @param record The GenericRecord to convert
+   * @param pretty Whether to pretty-print the json output
+   */
+  public static String avroToJsonString(GenericRecord record, boolean pretty) throws IOException {
+    return avroToJsonHelper(record, pretty).toString();
+  }
+
+  /**
+   * Convert a given avro record to a JSON string. If the record contents are invalid, return the record.toString().
+   * Use this method over {@link HoodieAvroUtils#avroToJsonString} when simply trying to print the record contents without any guarantees around their correctness.
+   *
+   * @param record The GenericRecord to convert
+   * @return a JSON string
+   */
+  public static String safeAvroToJsonString(GenericRecord record) {
+    try {
+      return avroToJsonString(record, false);
+    } catch (Exception e) {
+      return record.toString();
+    }
+  }
+
+  /**
+   * Convert a given avro record to json and return the encoded bytes.
+   *
+   * @param record The GenericRecord to convert
+   * @param pretty Whether to pretty-print the json output
+   */
+  public static byte[] avroToJson(GenericRecord record, boolean pretty) throws IOException {
+    return avroToJsonHelper(record, pretty).toByteArray();
+  }
+
+  private static ByteArrayOutputStream avroToJsonHelper(GenericRecord record, boolean pretty) throws IOException {
+    DatumWriter<Object> writer = new GenericDatumWriter<>(record.getSchema());
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    JsonEncoder jsonEncoder = EncoderFactory.get().jsonEncoder(record.getSchema(), out, pretty);
+    writer.write(record, jsonEncoder);
+    jsonEncoder.flush();
+    return out;
+  }
+
+  /**
+   * Convert serialized bytes back into avro record.
+   */
+  public static GenericRecord bytesToAvro(byte[] bytes, Schema schema) throws IOException {
+    return bytesToAvro(bytes, schema, schema);
+  }
+
+  /**
+   * Convert serialized bytes back into avro record.
+   */
+  public static GenericRecord bytesToAvro(byte[] bytes, Schema writerSchema, Schema readerSchema)
+      throws IOException {
+    return bytesToAvro(bytes, 0, bytes.length, writerSchema, readerSchema);
+  }
+
+  /**
+   * Convert serialized bytes back into avro record.
+   */
+  public static GenericRecord bytesToAvro(byte[] bytes, int offset, int length, Schema writerSchema,
+                                          Schema readerSchema) throws IOException {
+    BinaryDecoder decoder = getBinaryDecoder(bytes, offset, length);
+    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
+    return reader.read(null, decoder);
+  }
+
+  public static BinaryDecoder getBinaryDecoder(byte[] bytes, int offset, int length) {
+    BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(
+        bytes, offset, length, BINARY_DECODER.get());
+    BINARY_DECODER.set(decoder);
+    return decoder;
+  }
+
+  /**
+   * Creates a new Avro Schema.Field from an existing field, with special handling for
+   * default values to ensure compatibility with Avro 1.12.0 and later versions.
+   *
+   * @param field the original Schema.Field to create a new field from
+   * @return a new Schema.Field with the same properties but properly formatted default value
+   */
+  public static Schema.Field createNewSchemaField(Schema.Field field) {
+    return createNewSchemaField(field.name(), field.schema(), field.doc(), field.defaultVal());
+  }
+
+  /**
+   * Creates a new Avro Schema.Field with special handling for default values to ensure
+   * compatibility with Avro 1.12.0 and later versions.
+   *
+   * <p>In Avro 1.12.0+, the validation of default values for bytes fields is stricter.
+   * When the default value is a byte array, it needs to be converted to a String using
+   * ISO-8859-1 encoding so that the correct JsonNode type (TextNode) is used for validation,
+   * rather than BinaryNode which would fail validation. Changes in Avro 1.12.0 that
+   * lead to this behavior: [AVRO-3876] https://github.com/apache/avro/pull/2529
+   *
+   * <p>This conversion ensures that schemas with bytes fields having default values
+   * can be properly constructed without AvroTypeException in Avro 1.12.0+.
+   *
+   * @param name         the name of the field
+   * @param schema       the schema of the field
+   * @param doc          the documentation for the field (can be null)
+   * @param defaultValue the default value for the field (can be null)
+   * @return a new Schema.Field with properly formatted default value for Avro 1.12.0+ compatibility
+   */
+  public static Schema.Field createNewSchemaField(String name, Schema schema, String doc, Object defaultValue) {
+    return new Schema.Field(name, schema, doc, convertDefaultValueForAvroCompatibility(defaultValue));
+  }
+
+  /**
+   * Creates a new Avro Schema.Field with special handling for default values to ensure
+   * compatibility with Avro 1.12.0 and later versions.
+   *
+   * <p>In Avro 1.12.0+, the validation of default values for bytes fields is stricter.
+   * When the default value is a byte array, it needs to be converted to a String using
+   * ISO-8859-1 encoding so that the correct JsonNode type (TextNode) is used for validation,
+   * rather than BinaryNode which would fail validation. Changes in Avro 1.12.0 that
+   * lead to this behavior: [AVRO-3876] https://github.com/apache/avro/pull/2529
+   *
+   * <p>This conversion ensures that schemas with bytes fields having default values
+   * can be properly constructed without AvroTypeException in Avro 1.12.0+.
+   *
+   * @param name         the name of the field
+   * @param schema       the schema of the field
+   * @param doc          the documentation for the field (can be null)
+   * @param defaultValue the default value for the field (can be null)
+   * @param order        the sort order for this field (can be null, defaults to ascending)
+   * @return a new Schema.Field with properly formatted default value for Avro 1.12.0+ compatibility
+   */
+  public static Schema.Field createNewSchemaField(String name, Schema schema, String doc, Object defaultValue, Order order) {
+    return new Schema.Field(name, schema, doc, convertDefaultValueForAvroCompatibility(defaultValue), order);
+  }
+
+  private static Schema removeFields(Schema schema, Set<String> fieldsToRemove) {
+    List<Schema.Field> filteredFields = schema.getFields()
+        .stream()
+        .filter(field -> !fieldsToRemove.contains(field.name()))
+        .map(HoodieAvroUtils::createNewSchemaField)
+        .collect(Collectors.toList());
+
+    return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, filteredFields);
+  }
+
+  public static Schema makeFieldNonNull(Schema schema, String fieldName, Object fieldDefaultValue) {
+    ValidationUtils.checkArgument(fieldDefaultValue != null);
+    List<Schema.Field> filteredFields = schema.getFields()
+        .stream()
+        .map(field -> {
+          if (Objects.equals(field.name(), fieldName)) {
+            return createNewSchemaField(field.name(), AvroSchemaUtils.getNonNullTypeFromUnion(field.schema()), field.doc(), fieldDefaultValue);
+          } else {
+            return createNewSchemaField(field);
+          }
+        })
+        .collect(Collectors.toList());
+    return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, filteredFields);
+  }
+
+  /**
+   * Fetches projected schema given list of fields to project. The field can be nested in format `a.b.c` where a is
+   * the top level field, b is at second level and so on.
+   */
+  public static Schema projectSchema(Schema fileSchema, List<String> fields) {
+    List<LinkedList<String>> fieldPathLists = new ArrayList<>();
+    for (String path : fields) {
+      fieldPathLists.add(new LinkedList<>(Arrays.asList(path.split("\\."))));
+    }
+
+    Schema result = Schema.createRecord(fileSchema.getName(), fileSchema.getDoc(), fileSchema.getNamespace(), fileSchema.isError());
+    result.setFields(projectFields(fileSchema, fieldPathLists));
+    return result;
+  }
+
+  /**
+   * Projects the requested fields in the schema. The fields can be nested in format `a.b.c`.
+   *
+   * @param originalSchema Schema to project from
+   * @param fieldPaths List of fields. The field can be nested.
+   *
+   * @return List of projected schema fields
+   */
+  private static List<Schema.Field> projectFields(Schema originalSchema, List<LinkedList<String>> fieldPaths) {
+    // We maintain a mapping of top level field to list of nested field paths which need to be projected from the field
+    // If the entire field needs to be projected the list is empty
+    // The map is ordered by position of the field in the original schema so that projected schema also maintains
+    // the same field ordering
+    Map<Field, List<LinkedList<String>>> groupedByTop = new TreeMap<>(Comparator.comparingInt(Field::pos));
+
+    // Group paths by their current level (first element)
+    // Here nested fields are considered as a path. The top level field is the first element in the path
+    // second level field is the second element and so on.
+    // We iterate through the input field paths and populate groupedByTop described above
+    // For example if f1 is a top level field, and input field paths are f1.f2.f3 and f1.f2.f4
+    // we maintain a mapping from f1 to {f2->f3, f2->f4}
+    for (LinkedList<String> originalPath : fieldPaths) {
+      if (originalPath.isEmpty()) {
+        throw new IllegalArgumentException("Field path is empty or malformed: " + originalPath);
+      }
+      LinkedList<String> path = new LinkedList<>(originalPath); // Avoid mutating the original
+      String head = path.poll(); // Remove first element
+      Field topField = originalSchema.getField(head);
+      if (topField == null) {
+        throw new IllegalArgumentException("Field `" + head + "` not found in schema: " + originalSchema.getFields());
+      }
+      groupedByTop.compute(topField, (ignored, list) -> {
+        if (path.isEmpty() || (list != null && list.isEmpty())) {
+          // Case 1: where path is empty indicating the entire field needs to be included.
+          // No further projection provided for that field
+          // Case 2: if list is empty, it indicates that the top level field has already been selected
+          // No more projection possible.
+          return new ArrayList<>();
+        } else {
+          if (list == null) {
+            // if list is null return just the path
+            List<LinkedList<String>> retList = new ArrayList<>();
+            retList.add(path);
+            return retList;
+          } else {
+            // if list has elements, add path to it
+            list.add(path);
+            return list;
+          }
+        }
+      });
+    }
+
+    List<Schema.Field> projectedFields = new ArrayList<>();
+    for (Map.Entry<Field, List<LinkedList<String>>> entry : groupedByTop.entrySet()) {
+      // For every top level field we process the child fields to include in the projected schema
+      Field originalField = entry.getKey();
+      List<LinkedList<String>> childPaths = entry.getValue();
+      Schema originalFieldSchema = originalField.schema();
+      Schema nonNullableSchema = unwrapNullable(originalFieldSchema);
+
+      Schema projectedFieldSchema;
+      if (!childPaths.isEmpty()) {
+        // If child paths are present, it indicates there are nested fields which need to be projected
+        if (nonNullableSchema.getType() != Schema.Type.RECORD) {
+          throw new IllegalArgumentException("Cannot project nested field from non-record field '" + originalField.name()
+              + "' of type: " + nonNullableSchema.getType());
+        }
+
+        // For those nested fields we make a recursive call to project fields to fetch the nested schema fields
+        List<Schema.Field> nestedFields = projectFields(nonNullableSchema, childPaths);
+        Schema nestedProjected = Schema.createRecord(nonNullableSchema.getName(), nonNullableSchema.getDoc(),
+            nonNullableSchema.getNamespace(), nonNullableSchema.isError());
+        nestedProjected.setFields(nestedFields);
+        projectedFieldSchema = wrapNullable(originalFieldSchema, nestedProjected);
+      } else {
+        // if child field paths are empty, we need to include the top level field itself
+        projectedFieldSchema = originalFieldSchema;
+      }
+
+      projectedFields.add(createNewSchemaField(originalField.name(), projectedFieldSchema, originalField.doc(), originalField.defaultVal()));
+    }
+
+    return projectedFields;
+  }
+
+  /**
+   * If schema is a union with ["null", X], returns X.
+   * Otherwise, returns schema as-is.
+   */
+  public static Schema unwrapNullable(Schema schema) {
+    if (schema.getType() == Schema.Type.UNION) {
+      List<Schema> types = schema.getTypes();
+      for (Schema s : types) {
+        if (s.getType() != Schema.Type.NULL) {
+          return s;
+        }
+      }
+    }
+    return schema;
+  }
+
+  /**
+   * Wraps schema as nullable if original was a nullable union.
+   */
+  public static Schema wrapNullable(Schema original, Schema updated) {
+    if (original.getType() == Schema.Type.UNION) {
+      List<Schema> types = original.getTypes();
+      if (types.stream().anyMatch(s -> s.getType() == Schema.Type.NULL)) {
+        List<Schema> newUnion = new ArrayList<>();
+        newUnion.add(Schema.create(Schema.Type.NULL));
+        newUnion.add(updated);
+        return Schema.createUnion(newUnion);
+      }
+    }
+    return updated;
+  }
+
+  public static GenericRecord addHoodieKeyToRecord(GenericRecord record, String recordKey, String partitionPath,
+                                                   String fileName) {
+    record.put(HoodieRecord.FILENAME_METADATA_FIELD, fileName);
+    record.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, partitionPath);
+    record.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKey);
+    return record;
+  }
+
+  /**
+   * Adds the Hoodie commit metadata into the provided Generic Record.
+   */
+  public static GenericRecord addCommitMetadataToRecord(GenericRecord record, String instantTime, String commitSeqno) {
+    record.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
+    record.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, commitSeqno);
+    return record;
+  }
+
+  public static GenericRecord stitchRecords(GenericRecord left, GenericRecord right, Schema stitchedSchema) {
+    GenericRecord result = new Record(stitchedSchema);
+    for (Schema.Field f : left.getSchema().getFields()) {
+      result.put(f.name(), left.get(f.name()));
+    }
+    for (Schema.Field f : right.getSchema().getFields()) {
+      result.put(f.name(), right.get(f.name()));
+    }
+    return result;
+  }
+
+  /**
+   * Given an Avro record with a given schema, rewrites it into the new schema while setting fields only from the new
+   * schema.
+   * <p>
+   * NOTE: This method is rewriting every record's field that is record itself recursively. It's
+   * caller's responsibility to make sure that no unnecessary re-writing occurs (by preemptively
+   * checking whether the record does require re-writing to adhere to the new schema)
+   * <p>
+   * NOTE: Here, the assumption is that you cannot go from an evolved schema (schema with (N) fields)
+   * to an older schema (schema with (N-1) fields). All fields present in the older record schema MUST be present in the
+   * new schema and the default/existing values are carried over.
+   * <p>
+   * This particular method does the following:
+   * <ol>
+   *   <li>Create a new empty GenericRecord with the new schema.</li>
+   *   <li>For GenericRecord, copy over the data from the old schema to the new schema or set default values for all
+   *   fields of this transformed schema</li>
+   *   <li>For SpecificRecord, hoodie_metadata_fields have a special treatment (see below)</li>
+   * </ol>
+   * <p>
+   * For SpecificRecord we ignore Hudi Metadata fields, because for code generated
+   * avro classes (HoodieMetadataRecord), the avro record is a SpecificBaseRecord type instead of a GenericRecord.
+   * SpecificBaseRecord throws null pointer exception for record.get(name) if name is not present in the schema of the
+   * record (which happens when converting a SpecificBaseRecord without hoodie_metadata_fields to a new record with it).
+   * In this case, we do NOT set the defaults for the hoodie_metadata_fields explicitly, instead, the new record assumes
+   * the default defined in the avro schema itself.
+   * TODO: See if we can always pass GenericRecord instead of SpecificBaseRecord in some cases.
+   */
+  public static GenericRecord rewriteRecord(GenericRecord oldRecord, Schema newSchema) {
+    boolean isSpecificRecord = oldRecord instanceof SpecificRecordBase;
+    Object newRecord = rewriteRecordWithNewSchemaInternal(oldRecord, oldRecord.getSchema(), newSchema, Collections.emptyMap(), new LinkedList<>(), isSpecificRecord);
+    return (GenericRecord) newRecord;
+  }
+
+  /**
+   * Converts list of {@link GenericRecord} provided into the {@link GenericRecord} adhering to the
+   * provided {@code newSchema}.
+   * <p>
+   * To better understand conversion rules please check {@link #rewriteRecord(GenericRecord, Schema)}
+   */
+  public static List<GenericRecord> rewriteRecords(List<GenericRecord> records, Schema newSchema) {
+    return records.stream().map(r -> rewriteRecord(r, newSchema)).collect(Collectors.toList());
+  }
+
+  /**
+   * Given an Avro record and list of columns to remove, this method removes the list of columns from
+   * the given avro record using rewriteRecord method.
+   * <p>
+   * To better understand how it removes please check {@link #rewriteRecord(GenericRecord, Schema)}
+   */
+  public static GenericRecord removeFields(GenericRecord record, Set<String> fieldsToRemove) {
+    Schema newSchema = removeFields(record.getSchema(), fieldsToRemove);
+    return rewriteRecord(record, newSchema);
+  }
+
+  /**
+   * Obtain the root-level field name of a full field name, possibly a nested field.
+   * For example, given "a.b.c", the output is "a"; given "a", the output is "a".
+   *
+   * @param fieldName The field name.
+   * @return Root-level field name
+   */
+  public static String getRootLevelFieldName(String fieldName) {
+    return fieldName.split("\\.")[0];
+  }
+
+  /**
+   * Obtain value of the provided key, which is consistent with avro before 1.10
+   */
+  public static Object getFieldVal(GenericRecord record, String key) {
+    return getFieldVal(record, key, true);
+  }
+
+  /**
+   * Obtain value of the provided key, when set returnNullIfNotFound false,
+   * it is consistent with avro after 1.10
+   */
+  public static Object getFieldVal(GenericRecord record, String key, boolean returnNullIfNotFound) {
+    Schema.Field field = record.getSchema().getField(key);
+    if (field == null) {
+      if (returnNullIfNotFound) {
+        return null;
+      } else {
+        // Since avro 1.10, arvo will throw AvroRuntimeException("Not a valid schema field: " + key)
+        // rather than return null like the previous version if record doesn't contain this key.
+        // Here we simulate this behavior.
+        throw new AvroRuntimeException("Not a valid schema field: " + key);
+      }
+    } else {
+      return record.get(field.pos());
+    }
+  }
+
+  /**
+   * Obtain value of the provided field as string, denoted by dot notation. e.g: a.b.c
+   */
+  public static String getNestedFieldValAsString(GenericRecord record, String fieldName, boolean returnNullIfNotFound, boolean consistentLogicalTimestampEnabled) {
+    Object obj = getNestedFieldVal(record, fieldName, returnNullIfNotFound, consistentLogicalTimestampEnabled);
+    return StringUtils.objToString(obj);
+  }
+
+  /**
+   * Obtain value of the provided field, denoted by dot notation. e.g: a.b.c
+   */
+  public static Object getNestedFieldVal(GenericRecord record, String fieldName, boolean returnNullIfNotFound, boolean consistentLogicalTimestampEnabled) {
+    String[] parts = fieldName.split("\\.");
+    GenericRecord valueNode = record;
+
+    for (int i = 0; i < parts.length; i++) {
+      String part = parts[i];
+      Object val;
+      try {
+        val = HoodieAvroUtils.getFieldVal(valueNode, part, returnNullIfNotFound);
+      } catch (AvroRuntimeException e) {
+        if (returnNullIfNotFound) {
+          return null;
+        } else {
+          throw new HoodieException(
+              fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
+                  + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
+        }
+      }
+
+      if (i == parts.length - 1) {
+        // return, if last part of name
+        if (val == null) {
+          return null;
+        } else {
+          Schema fieldSchema = valueNode.getSchema().getField(part).schema();
+          return convertValueForSpecificDataTypes(fieldSchema, val, consistentLogicalTimestampEnabled);
+        }
+      } else {
+        if (!(val instanceof GenericRecord)) {
+          if (returnNullIfNotFound) {
+            return null;
+          } else {
+            throw new HoodieException("Cannot find a record at part value :" + part);
+          }
+        } else {
+          valueNode = (GenericRecord) val;
+        }
+      }
+    }
+
+    // This can only be reached if the length of parts is 0
+    if (returnNullIfNotFound) {
+      return null;
+    } else {
+      throw new HoodieException(
+          fieldName + " field not found in record. Acceptable fields were :"
+              + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
+    }
+  }
+
+  /**
+   * Returns the string value of the given record {@code rec} and field {@code fieldName}.
+   * The field and value both could be missing.
+   *
+   * @param rec       The record
+   * @param fieldName The field name
+   * @return the string form of the field
+   * or empty if the schema does not contain the field name or the value is null
+   */
+  public static Option<String> getNullableValAsString(GenericRecord rec, String fieldName) {
+    Schema.Field field = rec.getSchema().getField(fieldName);
+    String fieldVal = field == null ? null : StringUtils.objToString(rec.get(field.pos()));
+    return Option.ofNullable(fieldVal);
+  }
+
+  /**
+   * This method converts values for fields with certain Avro/Parquet data types that require special handling.
+   *
+   * @param fieldSchema avro field schema
+   * @param fieldValue  avro field value
+   * @return field value either converted (for certain data types) or as it is.
+   */
+  public static Object convertValueForSpecificDataTypes(Schema fieldSchema,
+                                                        Object fieldValue,
+                                                        boolean consistentLogicalTimestampEnabled) {
+    if (fieldSchema == null) {
+      return fieldValue;
+    } else if (fieldValue == null) {
+      checkState(AvroSchemaUtils.isNullable(fieldSchema));
+      return null;
+    }
+
+    return convertValueForAvroLogicalTypes(AvroSchemaUtils.getNonNullTypeFromUnion(fieldSchema), fieldValue, consistentLogicalTimestampEnabled);
+  }
+
+  /**
+   * This method converts values for fields with certain Avro Logical data types that require special handling.
+   * <p>
+   * Logical Date Type is converted to actual Date value instead of Epoch Integer which is how it is
+   * represented/stored in parquet.
+   * <p>
+   * Decimal Data Type is converted to actual decimal value instead of bytes/fixed which is how it is
+   * represented/stored in parquet.
+   * <p>
+   * <b>Avro version compatibility:</b> Avro 1.12.1 (pulled in by the Spark 4.1 profile) flipped the
+   * default of {@code GenericData}'s {@code fastReaderEnabled} flag from {@code false} to
+   * {@code true} (the {@code org.apache.avro.fastread} system property now defaults to
+   * {@code "true"}). With the fast reader enabled, {@code GenericDatumReader} applies the
+   * registered {@code Conversion}s during decode and materializes {@link LocalDate} for date,
+   * {@link Instant} for timestamp-millis / timestamp-micros, and {@link LocalDateTime} for
+   * local-timestamp-millis / local-timestamp-micros. Avro 1.12.0 (Spark 4.0) and Avro 1.11.x
+   * (Spark 3.5 and earlier) left the fast reader off by default, so those profiles exposed the raw
+   * {@link Integer} / {@link Long}. This method normalizes both forms to the same stable
+   * representation, so callers (precombine/ordering comparison, partition-path and record-key
+   * derivation, etc.) behave identically across Avro versions and across writer/reader Spark
+   * version combinations. The on-disk byte format is unaffected by this normalization: Avro's wire
+   * encoding for these logical types is fixed by spec to int / long and is identical across Avro
+   * versions; only the in-memory Java type returned by the reader changed.
+   *
+   * @param fieldSchema avro field schema
+   * @param fieldValue  avro field value
+   * @return field value either converted (for certain data types) or as it is.
+   */
+  public static Object convertValueForAvroLogicalTypes(Schema fieldSchema, Object fieldValue, boolean consistentLogicalTimestampEnabled) {
+    LogicalType logicalType = fieldSchema.getLogicalType();
+    if (logicalType == LogicalTypes.date()) {
+      return LocalDate.ofEpochDay(extractEpochDay(fieldValue));
+    } else if (logicalType == LogicalTypes.timestampMillis()) {
+      long millis = extractEpochMillis(fieldValue);
+      return consistentLogicalTimestampEnabled ? new Timestamp(millis) : millis;
+    } else if (logicalType == LogicalTypes.timestampMicros()) {
+      long micros = extractEpochMicros(fieldValue);
+      return consistentLogicalTimestampEnabled ? new Timestamp(micros / 1000) : micros;
+    } else if (logicalType == LogicalTypes.localTimestampMillis()) {
+      return extractLocalEpochMillis(fieldValue);
+    } else if (logicalType == LogicalTypes.localTimestampMicros()) {
+      return extractLocalEpochMicros(fieldValue);
+    } else if (logicalType instanceof LogicalTypes.Decimal) {
+      Decimal dc = (Decimal) logicalType;
+      DecimalConversion decimalConversion = new DecimalConversion();
+      if (fieldSchema.getType() == Schema.Type.FIXED) {
+        return decimalConversion.fromFixed((GenericFixed) fieldValue, fieldSchema,
+            LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
+      } else if (fieldSchema.getType() == Schema.Type.BYTES) {
+        ByteBuffer byteBuffer = (ByteBuffer) fieldValue;
+        BigDecimal convertedValue = decimalConversion.fromBytes(byteBuffer, fieldSchema,
+            LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
+        byteBuffer.rewind();
+        return convertedValue;
+      }
+    }
+    return fieldValue;
+  }
+
+  // The extract* helpers below accept either the Avro primitive form (Integer / Long, returned by
+  // Avro 1.12.0 / 1.11.x) or the java.time form (returned by Avro 1.12.1 with its default
+  // fastReaderEnabled=true), and return the canonical primitive for the same underlying bytes.
+  // See the javadoc on convertValueForAvroLogicalTypes for context.
+
+  private static long extractEpochDay(Object fieldValue) {
+    if (fieldValue instanceof LocalDate) {
+      return ((LocalDate) fieldValue).toEpochDay();
+    }
+    if (fieldValue instanceof Number) {
+      return ((Number) fieldValue).longValue();
+    }
+    return Long.parseLong(fieldValue.toString());
+  }
+
+  private static long extractEpochMillis(Object fieldValue) {
+    if (fieldValue instanceof Instant) {
+      return ((Instant) fieldValue).toEpochMilli();
+    }
+    if (fieldValue instanceof Number) {
+      return ((Number) fieldValue).longValue();
+    }
+    return Long.parseLong(fieldValue.toString());
+  }
+
+  private static long extractEpochMicros(Object fieldValue) {
+    if (fieldValue instanceof Instant) {
+      Instant instant = (Instant) fieldValue;
+      return Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1_000_000L), instant.getNano() / 1000L);
+    }
+    if (fieldValue instanceof Number) {
+      return ((Number) fieldValue).longValue();
+    }
+    return Long.parseLong(fieldValue.toString());
+  }
+
+  private static long extractLocalEpochMillis(Object fieldValue) {
+    if (fieldValue instanceof LocalDateTime) {
+      return ((LocalDateTime) fieldValue).toInstant(ZoneOffset.UTC).toEpochMilli();
+    }
+    if (fieldValue instanceof Number) {
+      return ((Number) fieldValue).longValue();
+    }
+    return Long.parseLong(fieldValue.toString());
+  }
+
+  private static long extractLocalEpochMicros(Object fieldValue) {
+    if (fieldValue instanceof LocalDateTime) {
+      Instant instant = ((LocalDateTime) fieldValue).toInstant(ZoneOffset.UTC);
+      return Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1_000_000L), instant.getNano() / 1000L);
+    }
+    if (fieldValue instanceof Number) {
+      return ((Number) fieldValue).longValue();
+    }
+    return Long.parseLong(fieldValue.toString());
+  }
+
+  /**
+   * If {@code schema} carries a date / timestamp logical type and {@code value} is in the
+   * java.time form ({@link LocalDate} / {@link Instant} / {@link LocalDateTime}), normalize it
+   * to the Avro primitive form ({@link Integer} for date, {@link Long} for timestamp-millis,
+   * timestamp-micros, local-timestamp-millis, and local-timestamp-micros). Used at the entry of
+   * schema-evolution rewrite paths whose legacy code does unguarded {@code (Integer)} /
+   * {@code (Long)} casts on field values, which would otherwise fail under Avro 1.12.1 (Spark
+   * 4.1) where the {@code fastReaderEnabled} default is {@code true} and {@code GenericDatumReader}
+   * materializes java.time types instead of primitives. For non-logical-type schemas, primitive
+   * inputs, or null, this is a no-op. The on-disk byte format is unaffected - this is purely
+   * about in-memory Java type.
+   */
+  private static Object normalizeAvroLogicalTypeToPrimitive(Object value, Schema schema) {
+    if (value == null || schema == null) {
+      return value;
+    }
+    LogicalType lt = schema.getLogicalType();
+    if (lt == null) {
+      return value;
+    }
+    if (lt == LogicalTypes.date()) {
+      return value instanceof LocalDate ? (int) ((LocalDate) value).toEpochDay() : value;
+    }
+    if (lt == LogicalTypes.timestampMillis()) {
+      return value instanceof Instant ? extractEpochMillis(value) : value;
+    }
+    if (lt == LogicalTypes.timestampMicros()) {
+      return value instanceof Instant ? extractEpochMicros(value) : value;
+    }
+    if (lt == LogicalTypes.localTimestampMillis()) {
+      return value instanceof LocalDateTime ? extractLocalEpochMillis(value) : value;
+    }
+    if (lt == LogicalTypes.localTimestampMicros()) {
+      return value instanceof LocalDateTime ? extractLocalEpochMicros(value) : value;
+    }
+    return value;
+  }
+
+  /**
+   * Gets record column values into object array.
+   *
+   * @param record  Hoodie record.
+   * @param columns Names of the columns to get values.
+   * @param schema  {@link Schema} instance.
+   * @return Column value.
+   */
+  public static Object[] getRecordColumnValues(HoodieRecord record,
+                                               String[] columns,
+                                               Schema schema,
+                                               boolean consistentLogicalTimestampEnabled) {
+    try {
+      GenericRecord genericRecord = (GenericRecord) (record.toIndexedRecord(HoodieAvroSchemaCache.intern(schema), new Properties()).get()).getData();
+      List<Object> list = new ArrayList<>();
+      for (String col : columns) {
+        list.add(HoodieAvroUtils.getNestedFieldVal(genericRecord, col, true, consistentLogicalTimestampEnabled));
+      }
+      return list.toArray();
+    } catch (IOException e) {
+      throw new HoodieIOException("Unable to read record with key:" + record.getKey(), e);
+    }
+  }
+
+  /**
+   * Gets record column values into object array.
+   *
+   * @param record  Hoodie record.
+   * @param columns Names of the columns to get values.
+   * @param schema  {@link Schema} instance.
+   * @return Column value.
+   */
+  public static Object[] getSortColumnValuesWithPartitionPathAndRecordKey(HoodieRecord record,
+                                                                          String[] columns,
+                                                                          HoodieSchema schema,
+                                                                          boolean suffixRecordKey,
+                                                                          boolean consistentLogicalTimestampEnabled) {
+    try {
+      GenericRecord genericRecord = (GenericRecord) record.toIndexedRecord(schema, PROPERTIES).get().getData();
+      int numColumns = columns.length;
+      Object[] values = new Object[columns.length + 1 + (suffixRecordKey ? 1 : 0)];
+      values[0] = record.getPartitionPath();
+      for (int i = 0; i < columns.length; i++) {
+        values[i + 1] = (HoodieAvroUtils.getNestedFieldVal(genericRecord, columns[i], true, consistentLogicalTimestampEnabled));
+      }
+      if (suffixRecordKey) {
+        values[numColumns + 1] = (record.getRecordKey());
+      }
+      return values;
+    } catch (IOException e) {
+      throw new HoodieIOException("Unable to read record with key:" + record.getKey(), e);
+    }
+  }
+
+  // TODO java-doc
+  public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema) {
+    return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.emptyMap());
+  }
+
+  /**
+   * Given a avro record with a given schema, rewrites it into the new schema while setting fields only from the new schema.
+   * support deep rewrite for nested record.
+   * This particular method does the following things :
+   * a) Create a new empty GenericRecord with the new schema.
+   * b) For GenericRecord, copy over the data from the old schema to the new schema or set default values for all fields of this transformed schema
+   *
+   * @param oldRecord  oldRecord to be rewritten
+   * @param newSchema  newSchema used to rewrite oldRecord
+   * @param renameCols a map store all rename cols, (k, v)-> (colNameFromNewSchema, colNameFromOldSchema)
+   * @return newRecord for new Schema
+   */
+  public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema, Map<String, String> renameCols) {
+    Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema, renameCols, new LinkedList<>(), false);
+    return (GenericRecord) newRecord;
+  }
+
+  public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema, Map<String, String> renameCols, boolean validate) {
+    Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema, renameCols, new LinkedList<>(), validate);
+    return (GenericRecord) newRecord;
+  }
+
+  /**
+   * Given a avro record with a given schema, rewrites it into the new schema while setting fields only from the new schema.
+   * support deep rewrite for nested record and adjust rename operation.
+   * This particular method does the following things :
+   * a) Create a new empty GenericRecord with the new schema.
+   * b) For GenericRecord, copy over the data from the old schema to the new schema or set default values for all fields of this transformed schema
+   *
+   * @param oldRecord     oldRecord to be rewritten
+   * @param oldAvroSchema old avro schema.
+   * @param newSchema     newSchema used to rewrite oldRecord
+   * @param renameCols    a map store all rename cols, (k, v)-> (full.path.to.field.colNameFromNewSchema, colNameFromOldSchema)
+   * @param fieldNames    track the full name of visited field when we travel new schema.
+   * @return newRecord for new Schema
+   */
+
+  private static Object rewriteRecordWithNewSchema(Object oldRecord,
+                                                   Schema oldAvroSchema,
+                                                   Schema newSchema,
+                                                   Map<String, String> renameCols,
+                                                   Deque<String> fieldNames,
+                                                   boolean validate) {
+    if (oldRecord == null) {
+      return null;
+    }
+    if (oldAvroSchema.equals(newSchema)) {
+      // there is no need to rewrite if the schema equals.
+      return oldRecord;
+    }
+    // try to get real schema for union type
+    Schema oldSchema = getActualSchemaFromUnion(oldAvroSchema, oldRecord);
+    Object newRecord = rewriteRecordWithNewSchemaInternal(oldRecord, oldSchema, newSchema, renameCols, fieldNames, false);
+    // validation is recursive so it only needs to be called on the original input
+    if (validate && !ConvertingGenericData.INSTANCE.validate(newSchema, newRecord)) {
+      throw new SchemaCompatibilityException(
+          "Unable to validate the rewritten record " + oldRecord + " against schema " + newSchema);
+    }
+    return newRecord;
+  }
+
+  private static Object rewriteRecordWithNewSchemaInternal(Object oldRecord,
+                                                           Schema oldSchema,
+                                                           Schema newSchema,
+                                                           Map<String, String> renameCols,
+                                                           Deque<String> fieldNames,
+                                                           boolean skipMetadataFields) {
+    switch (newSchema.getType()) {
+      case RECORD:
+        if (!(oldRecord instanceof IndexedRecord)) {
+          throw new SchemaCompatibilityException(String.format("Cannot rewrite %s as a record", oldRecord.getClass().getName()));
+        }
+        IndexedRecord indexedRecord = (IndexedRecord) oldRecord;
+        GenericData.Record newRecord = new GenericData.Record(newSchema);
+        // if no renaming, skip building the full name string.
+        boolean noFieldsRenaming = renameCols.isEmpty();
+        String namePrefix = createNamePrefix(noFieldsRenaming, fieldNames);
+        for (int i = 0; i < newSchema.getFields().size(); i++) {
+          Schema.Field newField = newSchema.getFields().get(i);
+          String newFieldName = newField.name();
+          if (skipMetadataFields && HoodieSchemaUtils.isMetadataField(newFieldName)) {
+            continue;
+          }
+          fieldNames.push(newFieldName);
+          Schema.Field oldField = noFieldsRenaming
+              ? oldSchema.getField(newFieldName)
+              : oldSchema.getField(getOldFieldNameWithRenaming(namePrefix, newFieldName, renameCols));
+          if (oldField != null) {
+            newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), newField.schema(), renameCols, fieldNames, false));
+          } else if (newField.defaultVal() instanceof JsonProperties.Null) {
+            newRecord.put(i, null);
+          } else if (!AvroSchemaUtils.isNullable(newField.schema()) && newField.defaultVal() == null) {
+            throw new SchemaCompatibilityException("Field " + createFullName(fieldNames) + " has no default value and is non-nullable");
+          } else {
+            newRecord.put(i, newField.defaultVal());
+          }
+          fieldNames.pop();
+        }
+        return newRecord;
+      case ENUM:
+        if (oldSchema.getType() != Schema.Type.STRING && oldSchema.getType() != Schema.Type.ENUM) {
+          throw new SchemaCompatibilityException(String.format("Only ENUM or STRING type can be converted ENUM type. Schema type was %s", oldSchema.getType().getName()));
+        }
+        if (oldSchema.getType() == Schema.Type.STRING) {
+          return new GenericData.EnumSymbol(newSchema, oldRecord);
+        }
+        return oldRecord;
+      case ARRAY:
+        if (!(oldRecord instanceof Collection)) {
+          throw new SchemaCompatibilityException(String.format("Cannot rewrite %s as an array", oldRecord.getClass().getName()));
+        }
+        Collection array = (Collection) oldRecord;
+        List<Object> newArray = new ArrayList<>(array.size());
+        fieldNames.push("element");
+        for (Object element : array) {
+          newArray.add(rewriteRecordWithNewSchema(element, oldSchema.getElementType(), newSchema.getElementType(), renameCols, fieldNames, false));
+        }
+        fieldNames.pop();
+        return newArray;
+      case MAP:
+        if (!(oldRecord instanceof Map)) {
+          throw new SchemaCompatibilityException(String.format("Cannot rewrite %s as a map", oldRecord.getClass().getName()));
+        }
+        Map<Object, Object> map = (Map<Object, Object>) oldRecord;
+        Map<Object, Object> newMap = new HashMap<>(map.size(), 1.0f);
+        fieldNames.push("value");
+        for (Map.Entry<Object, Object> entry : map.entrySet()) {
+          newMap.put(entry.getKey(), rewriteRecordWithNewSchema(entry.getValue(), oldSchema.getValueType(), newSchema.getValueType(), renameCols, fieldNames, false));
+        }
+        fieldNames.pop();
+        return newMap;
+      case UNION:
+        return rewriteRecordWithNewSchema(oldRecord, getActualSchemaFromUnion(oldSchema, oldRecord), getActualSchemaFromUnion(newSchema, oldRecord), renameCols, fieldNames, false);
+      default:
+        return rewritePrimaryType(oldRecord, oldSchema, newSchema);
+    }
+  }
+
+  public static String createNamePrefix(boolean noFieldsRenaming, Deque<String> fieldNames) {
+    return noFieldsRenaming || fieldNames.isEmpty() ? null : createFullName(fieldNames);
+  }
+
+  public static String getOldFieldNameWithRenaming(String namePrefix, String newFieldName, Map<String, String> renameCols) {
+    String renamed = renameCols.get(compositeName(namePrefix, newFieldName));
+    return renamed == null ? newFieldName : renamed;
+  }
+
+  private static String compositeName(@Nullable String prefix, String name) {
+    return prefix == null ? name : prefix + "." + name;
+  }
+
+  public static String createFullName(Deque<String> fieldNames) {
+    String result = "";
+    if (!fieldNames.isEmpty()) {
+      Iterator<String> iter = fieldNames.descendingIterator();
+      result = iter.next();
+      if (!iter.hasNext()) {
+        return result;
+      }
+
+      StringBuilder sb = new StringBuilder();
+      sb.append(result);
+      while (iter.hasNext()) {
+        sb.append(".");
+        sb.append(iter.next());
+      }
+      result = sb.toString();
+    }
+    return result;
+  }
+
+  public static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema) {
+    // Normalize any java.time form (LocalDate / Instant / LocalDateTime) to the Avro primitive
+    // form (Integer / Long) before doing any numeric / string conversion. The legacy branches
+    // below explicitly cast to Integer / Long; under Avro 1.12.1 (Spark 4.1 profile) the
+    // fastReaderEnabled default flipped to true and GenericDatumReader materializes java.time
+    // types for date / timestamp logical fields, which would break those casts. See
+    // convertValueForAvroLogicalTypes for the broader context — this is a read-side normalization
+    // only and does not affect on-disk byte format.
+    oldValue = normalizeAvroLogicalTypeToPrimitive(oldValue, oldSchema);
+    if (oldSchema.getType() == newSchema.getType()) {
+      switch (oldSchema.getType()) {
+        case NULL:
+        case BOOLEAN:
+        case INT:
+        case FLOAT:
+        case DOUBLE:
+        case BYTES:
+        case STRING:
+          return oldValue;
+        case LONG:
+          if (oldSchema.getLogicalType() != newSchema.getLogicalType()) {
+            if (oldSchema.getLogicalType() == null || newSchema.getLogicalType() == null) {
+              return oldValue;
+            } else if (oldSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+              if (newSchema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
+                return DateTimeUtils.millisToMicros((Long) oldValue);
+              }
+            } else if (oldSchema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
+              if (newSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+                return DateTimeUtils.microsToMillis((Long) oldValue);
+              }
+            } else if (oldSchema.getLogicalType() instanceof LogicalTypes.LocalTimestampMillis) {
+              if (newSchema.getLogicalType() instanceof LogicalTypes.LocalTimestampMicros) {
+                return DateTimeUtils.millisToMicros((Long) oldValue);
+              }
+            } else if (oldSchema.getLogicalType() instanceof LogicalTypes.LocalTimestampMicros) {
+              if (newSchema.getLogicalType() instanceof LogicalTypes.LocalTimestampMillis) {
+                return DateTimeUtils.microsToMillis((Long) oldValue);
+              }
+            }
+            throw new HoodieAvroSchemaException("Long type logical change from " + oldSchema.getLogicalType() + " to " + newSchema.getLogicalType() + " is not supported");
+          }
+          return oldValue;
+        case FIXED:
+          if (oldSchema.getFixedSize() != newSchema.getFixedSize()) {
+            // Check whether this is a [[Decimal]]'s precision change
+            if (oldSchema.getLogicalType() instanceof Decimal) {
+              final byte[] bytes;
+              bytes = ((GenericFixed) oldValue).bytes();
+              Decimal decimal = (Decimal) oldSchema.getLogicalType();
+              BigDecimal bd = new BigDecimal(new BigInteger(bytes), decimal.getScale()).setScale(((Decimal) newSchema.getLogicalType()).getScale());
+              return DECIMAL_CONVERSION.toFixed(bd, newSchema, newSchema.getLogicalType());
+            } else {
+              throw new HoodieAvroSchemaException("Fixed type size change is not currently supported");
+            }
+          }
+
+          // For [[Fixed]] data type both size and name have to match
+          //
+          // NOTE: That for values wrapped into [[Union]], to make sure that reverse lookup (by
+          //       full-name) is working we have to make sure that both schema's name and namespace
+          //       do match
+          if (Objects.equals(oldSchema.getFullName(), newSchema.getFullName())) {
+            return oldValue;
+          } else {
+            return new GenericData.Fixed(newSchema, ((GenericFixed) oldValue).bytes());
+          }
+
+        default:
+          throw new HoodieAvroSchemaException("Unknown schema type: " + newSchema.getType());
+      }
+    } else {
+      return rewritePrimaryTypeWithDiffSchemaType(oldValue, oldSchema, newSchema);
+    }
+  }
+
+  private static Object rewritePrimaryTypeWithDiffSchemaType(Object oldValue, Schema oldSchema, Schema newSchema) {
+    switch (newSchema.getType()) {
+      case NULL:
+      case BOOLEAN:
+        break;
+      case INT:
+        if (newSchema.getLogicalType() == LogicalTypes.date() && oldSchema.getType() == Schema.Type.STRING) {
+          return fromJavaDate(java.sql.Date.valueOf(oldValue.toString()));
+        }
+        break;
+      case LONG:
+        if (oldSchema.getType() == Schema.Type.INT) {
+          return ((Integer) oldValue).longValue();
+        }
+        break;
+      case FLOAT:
+        if ((oldSchema.getType() == Schema.Type.INT)
+            || (oldSchema.getType() == Schema.Type.LONG)) {
+          return oldSchema.getType() == Schema.Type.INT ? ((Integer) oldValue).floatValue() : ((Long) oldValue).floatValue();
+        }
+        break;
+      case DOUBLE:
+        if (oldSchema.getType() == Schema.Type.FLOAT) {
+          // java float cannot convert to double directly, deal with float precision change
+          return Double.valueOf(oldValue + "");
+        } else if (oldSchema.getType() == Schema.Type.INT) {
+          return ((Integer) oldValue).doubleValue();
+        } else if (oldSchema.getType() == Schema.Type.LONG) {
+          return ((Long) oldValue).doubleValue();
+        }
+        break;
+      case BYTES:
+        if (oldSchema.getType() == Schema.Type.FIXED) {
+          return ByteBuffer.wrap(((GenericFixed) oldValue).bytes());
+        }
+        if (oldSchema.getType() == Schema.Type.STRING) {
+          return ByteBuffer.wrap(getUTF8Bytes(oldValue.toString()));
+        }
+        break;
+      case STRING:
+        if (oldSchema.getType() == Schema.Type.ENUM) {
+          return String.valueOf(oldValue);
+        }
+        if (oldSchema.getType() == Schema.Type.BYTES) {
+          return StringUtils.fromUTF8Bytes(((ByteBuffer) oldValue).array());
+        }
+        if (oldSchema.getLogicalType() == LogicalTypes.date()) {
+          return toJavaDate((Integer) oldValue).toString();
+        }
+        if (oldSchema.getType() == Schema.Type.INT
+            || oldSchema.getType() == Schema.Type.LONG
+            || oldSchema.getType() == Schema.Type.FLOAT
+            || oldSchema.getType() == Schema.Type.DOUBLE) {
+          return oldValue.toString();
+        }
+        if (oldSchema.getType() == Schema.Type.FIXED && oldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
+          final byte[] bytes;
+          bytes = ((GenericFixed) oldValue).bytes();
+          LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) oldSchema.getLogicalType();
+          BigDecimal bd = new BigDecimal(new BigInteger(bytes), decimal.getScale());
+          return bd.toString();
+        }
+        break;
+      case FIXED:
+        // deal with decimal Type
+        if (newSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
+          // TODO: support more types
+          if (oldSchema.getType() == Schema.Type.STRING
+              || oldSchema.getType() == Schema.Type.DOUBLE
+              || oldSchema.getType() == Schema.Type.INT
+              || oldSchema.getType() == Schema.Type.LONG
+              || oldSchema.getType() == Schema.Type.FLOAT) {
+            LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) newSchema.getLogicalType();
+            // due to Java, there will be precision problems in direct conversion, we should use string instead of use double
+            BigDecimal bigDecimal = new java.math.BigDecimal(oldValue.toString()).setScale(decimal.getScale(), RoundingMode.HALF_UP);
+            return DECIMAL_CONVERSION.toFixed(bigDecimal, newSchema, newSchema.getLogicalType());
+          } else if (oldSchema.getType() == Schema.Type.BYTES) {
+            return convertBytesToFixed(((ByteBuffer) oldValue).array(), newSchema);
+          }
+        }
+        break;
+      default:
+    }
+    throw new HoodieAvroSchemaException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
+  }
+
+  /**
+   * bytes is the result of BigDecimal.unscaledValue().toByteArray();
+   * This is also what Conversions.DecimalConversion.toBytes() outputs inside a byte buffer
+   */
+  public static Object convertBytesToFixed(byte[] bytes, Schema schema) {
+    LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) schema.getLogicalType();
+    BigDecimal bigDecimal = convertBytesToBigDecimal(bytes, decimal);
+    return DECIMAL_CONVERSION.toFixed(bigDecimal, schema, decimal);
+  }
+
+  /**
+   * Use this instead of DECIMAL_CONVERSION.fromBytes() because that method does not add in precision
+   *
+   * bytes is the result of BigDecimal.unscaledValue().toByteArray();
+   * This is also what Conversions.DecimalConversion.toBytes() outputs inside a byte buffer
+   */
+  public static BigDecimal convertBytesToBigDecimal(byte[] value, LogicalTypes.Decimal decimal) {
+    return convertBytesToBigDecimal(value, decimal.getPrecision(), decimal.getScale());
+  }
+
+  public static BigDecimal convertBytesToBigDecimal(byte[] value, int precision, int scale) {
+    return new BigDecimal(new BigInteger(value),
+        scale, new MathContext(precision, RoundingMode.HALF_UP));
+  }
+
+  /**
+   * Projects a record to a new schema by performing a shallow copy of fields.
+   * Best used for adding or removing top-level metadata fields.
+   * <p>
+   * This is a high-performance alternative to deep rewriting. It only iterates through
+   * the top-level fields of the target schema and pulls values from the source record
+   * by field name.
+   * <p>
+   * <p>
+   * This is significantly faster than {@link #rewriteRecordWithNewSchema} for:
+   * 1. Wide records (many top-level fields): Reduces CPU overhead/recursion.
+   * 2. Deeply nested records: Uses reference-copying for nested structures instead of rebuilding them.
+   * <p>
+   * <b>Warning:</b> This method does not recursively rewrite/transform nested records, arrays,
+   * or maps. It assumes that the underlying values for each field are already
+   * compatible with the target schema.
+   *
+   * @param record      The source GenericRecord to project.
+   * @param targetSchema The schema to project the record into.
+   * @return A new GenericRecord matching targetSchema, or the original record if
+   * the schemas are identical in field count.
+   */
+
+  public static GenericRecord projectRecordToNewSchemaShallow(IndexedRecord record, Schema targetSchema) {
+    if (record.getSchema().getFields().size() == targetSchema.getFields().size()) {
+      return (GenericRecord) record;
+    } else {
+      GenericData.Record rec = new GenericData.Record(targetSchema);
+      for (Schema.Field field : targetSchema.getFields()) {
+        Field sourceField = record.getSchema().getField(field.name());
+        if (sourceField == null) {
+          rec.put(field.pos(), null);
+        } else {
+          rec.put(field.pos(), record.get(sourceField.pos()));
+        }
+      }
+      return rec;
+    }
+  }
+
+  /**
+   * Avro does not support type promotion from numbers to string. This function returns true if
+   * it will be necessary to rewrite the record to support this promotion.
+   * NOTE: this does not determine whether the writerSchema and readerSchema are compatible.
+   * It is just trying to find if the reader expects a number to be promoted to string, as quick as possible.
+   */
+  public static boolean recordNeedsRewriteForExtendedAvroTypePromotion(Schema writerSchema, Schema readerSchema) {
+    if (writerSchema.equals(readerSchema)) {
+      return false;
+    }
+    if (readerSchema.getLogicalType() != null) {
+      // check if logical types are equal
+      return !readerSchema.getLogicalType().equals(writerSchema.getLogicalType());
+    }
+    switch (readerSchema.getType()) {
+      case RECORD:
+        if (readerSchema.getFields().size() > writerSchema.getFields().size()) {
+          return true;
+        }
+        for (Schema.Field field : readerSchema.getFields()) {
+          Schema.Field writerField = writerSchema.getField(field.name());
+          if (writerField == null || recordNeedsRewriteForExtendedAvroTypePromotion(writerField.schema(), field.schema())) {
+            return true;
+          }
+        }
+        return false;
+      case ARRAY:
+        if (writerSchema.getType().equals(ARRAY)) {
+          return recordNeedsRewriteForExtendedAvroTypePromotion(writerSchema.getElementType(), readerSchema.getElementType());
+        }
+        return false;
+      case MAP:
+        if (writerSchema.getType().equals(MAP)) {
+          return recordNeedsRewriteForExtendedAvroTypePromotion(writerSchema.getValueType(), readerSchema.getValueType());
+        }
+        return false;
+      case UNION:
+        return recordNeedsRewriteForExtendedAvroTypePromotion(getActualSchemaFromUnion(writerSchema, null), getActualSchemaFromUnion(readerSchema, null));
+      case ENUM:
+        return needsRewriteToString(writerSchema, true);
+      case STRING:
+        return needsRewriteToString(writerSchema, false);
+      case DOUBLE:
+      case FLOAT:
+      case LONG:
+        return !(writerSchema.getType().equals(Schema.Type.INT) || writerSchema.getType().equals(Schema.Type.LONG));
+      default:
+        return !writerSchema.getType().equals(readerSchema.getType());
+    }
+  }
+
+  /**
+   * Helper for recordNeedsRewriteForExtendedAvroSchemaEvolution. Returns true if schema type is
+   * int, long, float, double, or bytes because avro doesn't support evolution from those types to
+   * string so some intervention is needed
+   */
+  private static boolean needsRewriteToString(Schema schema, boolean isEnum) {
+    if (schema.getLogicalType() != null) {
+      return true;
+    }
+    if (schema.getType() == Schema.Type.ENUM) {
+      return !isEnum;
+    }
+    return true;
+  }
+
+  /**
+   * convert days to Date
+   * <p>
+   * NOTE: This method could only be used in tests
+   *
+   * @VisibleForTesting
+   */
+  public static java.sql.Date toJavaDate(int days) {
+    LocalDate date = LocalDate.ofEpochDay(days);
+    ZoneId defaultZoneId = ZoneId.systemDefault();
+    ZonedDateTime zonedDateTime = date.atStartOfDay(defaultZoneId);
+    return new java.sql.Date(zonedDateTime.toInstant().toEpochMilli());
+  }
+
+  /**
+   * convert Date to days
+   * <p>
+   * NOTE: This method could only be used in tests
+   *
+   * @VisibleForTesting
+   */
+  public static int fromJavaDate(Date date) {
+    long millisUtc = date.getTime();
+    long millisLocal = millisUtc + TimeZone.getDefault().getOffset(millisUtc);
+    int julianDays = Math.toIntExact(Math.floorDiv(millisLocal, MILLIS_PER_DAY));
+    return julianDays;
+  }
+
+  private static Schema getActualSchemaFromUnion(Schema schema, Object data) {
+    Schema actualSchema;
+    if (schema.getType() != UNION) {
+      return schema;
+    }
+    if (schema.getTypes().size() == 2
+        && schema.getTypes().get(0).getType() == Schema.Type.NULL) {
+      actualSchema = schema.getTypes().get(1);
+    } else if (schema.getTypes().size() == 2
+        && schema.getTypes().get(1).getType() == Schema.Type.NULL) {
+      actualSchema = schema.getTypes().get(0);
+    } else if (schema.getTypes().size() == 1) {
+      actualSchema = schema.getTypes().get(0);
+    } else if (data == null) {
+      throw new HoodieAvroSchemaException("Union is malformed: " + schema);
+    } else {
+      // deal complex union. this should not happen in hoodie,
+      // since flink/spark do not write this type.
+      int i = GenericData.get().resolveUnion(schema, data);
+      actualSchema = schema.getTypes().get(i);
+    }
+    return actualSchema;
+  }
+
+  public static HoodieRecord createHoodieRecordFromAvro(
+      IndexedRecord data,
+      String payloadClass,
+      String[] preCombineFields,
+      Option<Pair<String, String>> simpleKeyGenFieldsOpt,
+      boolean withOperation,
+      Option<String> partitionNameOp,
+      boolean populateMetaFields,
+      Option<HoodieSchema> schemaWithoutMetaFields) {
+    if (populateMetaFields) {
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
+          payloadClass, preCombineFields, withOperation);
+    } else if (simpleKeyGenFieldsOpt.isPresent()) {
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
+          payloadClass, preCombineFields, simpleKeyGenFieldsOpt.get(), withOperation, partitionNameOp, schemaWithoutMetaFields);
+    } else {
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
+          payloadClass, preCombineFields, withOperation, partitionNameOp, schemaWithoutMetaFields);
+    }
+  }
+
+  /**
+   * Given avro records, rewrites them with new schema.
+   *
+   * @param oldRecords oldRecords to be rewritten
+   * @param newSchema  newSchema used to rewrite oldRecord
+   * @param renameCols a map store all rename cols, (k, v)-> (colNameFromNewSchema, colNameFromOldSchema)
+   * @return a iterator of rewritten GenericRecords
+   */
+  public static Iterator<GenericRecord> rewriteRecordWithNewSchema(Iterator<GenericRecord> oldRecords, Schema newSchema, Map<String, String> renameCols, boolean validate) {
+    if (oldRecords == null || newSchema == null) {
+      return Collections.emptyIterator();
+    }
+    return new Iterator<GenericRecord>() {
+      @Override
+      public boolean hasNext() {
+        return oldRecords.hasNext();
+      }
+
+      @Override
+      public GenericRecord next() {
+        return rewriteRecordWithNewSchema(oldRecords.next(), newSchema, renameCols, validate);
+      }
+    };
+  }
+
+  public static Iterator<GenericRecord> rewriteRecordWithNewSchema(Iterator<GenericRecord> oldRecords, Schema newSchema, Map<String, String> renameCols) {
+    return rewriteRecordWithNewSchema(oldRecords, newSchema, Collections.EMPTY_MAP, false);
+  }
+
+  public static GenericRecord rewriteRecordDeep(GenericRecord oldRecord, Schema newSchema) {
+    return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.EMPTY_MAP);
+  }
+
+  public static GenericRecord rewriteRecordDeep(GenericRecord oldRecord, Schema newSchema, boolean validate) {
+    return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.EMPTY_MAP, validate);
+  }
+
+  public static boolean gteqAvro1_9() {
+    return StringUtils.compareVersions(AVRO_VERSION, "1.9") >= 0;
+  }
+
+  public static boolean gteqAvro1_10() {
+    return StringUtils.compareVersions(AVRO_VERSION, "1.10") >= 0;
+  }
+
+  static boolean gteqAvro1_12() {
+    return StringUtils.compareVersions(AVRO_VERSION, "1.12") >= 0;
+  }
+
+  private static Object convertDefaultValueForAvroCompatibility(Object defaultValue) {
+    if (gteqAvro1_12() && defaultValue instanceof byte[]) {
+      // For Avro 1.12.0 compatibility, we need to convert the default value in byte array
+      // to String so that correct JsonNode is used for the default value for validation,
+      // instead of directly relying on Avro's JacksonUtils.toJsonNode which is called
+      // by `Schema.Field` constructor
+      // The logic of getting the String value is copied from JacksonUtils.toJsonNode in Avro 1.11.4
+      return new String((byte[]) defaultValue, StandardCharsets.ISO_8859_1);
+    }
+    return defaultValue;
+  }
+
+  public static <T extends SpecificRecordBase> T convertToSpecificRecord(Class<T> clazz, GenericRecord genericRecord) {
+    SpecificData specificData = new SpecificData(clazz.getClassLoader());
+    return convertToSpecificRecord(clazz, genericRecord, specificData);
+  }
+
+  private static <T extends SpecificRecordBase> T convertToSpecificRecord(Class<T> clazz, GenericRecord genericRecord, SpecificData specificData) {
+    try {
+      if (genericRecord == null) {
+        return null;
+      }
+      T specificRecord = clazz.newInstance();
+      Schema schema = SpecificData.getForClass(clazz).getSchema(clazz);
+      for (Field field : schema.getFields()) {
+        Object value = genericRecord.get(field.pos());
+        if (value == null) {
+          specificRecord.put(field.pos(), null);
+          continue;
+        }
+        value = convertFieldToSpecificRecordValue(field.schema(), value, specificData);
+        specificRecord.put(field.pos(), value);
+      }
+      return specificRecord;
+    } catch (InstantiationException | IllegalAccessException e) {
+      throw new HoodieException("Failed to convert to SpecificRecord " + clazz.getName(), e);
+    }
+  }
+
+  private static Object convertFieldToSpecificRecordValue(Schema fieldSchema, Object value, SpecificData specificData) {
+    Schema resolvedFieldSchema = getActualSchemaFromUnion(fieldSchema, value);
+    switch (resolvedFieldSchema.getType()) {
+      case RECORD:
+        value = convertToSpecificRecord(specificData.getClass(resolvedFieldSchema), (GenericRecord) value, specificData);
+        break;
+      case ARRAY:
+        value = ((List<?>) value).stream().map(element -> convertFieldToSpecificRecordValue(resolvedFieldSchema.getElementType(), element, specificData)).collect(Collectors.toList());
+        break;
+      case MAP:
+        value = ((Map<?, ?>) value).entrySet().stream().collect(Collectors.toMap(
+            Map.Entry::getKey,
+            entry -> {
+              Object mapValue = entry.getValue();
+              return convertFieldToSpecificRecordValue(resolvedFieldSchema.getValueType(), mapValue, specificData);
+            }
+        ));
+        break;
+      default:
+        // no conversion required
+    }
+    return value;
+  }
+}

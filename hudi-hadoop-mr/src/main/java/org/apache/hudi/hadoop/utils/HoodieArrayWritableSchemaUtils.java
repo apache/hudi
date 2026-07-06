@@ -19,7 +19,7 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.schema.HoodieProjectionMask;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
@@ -55,10 +55,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.createFullName;
-import static org.apache.hudi.avro.HoodieAvroUtils.createNamePrefix;
-import static org.apache.hudi.avro.HoodieAvroUtils.getOldFieldNameWithRenaming;
-import static org.apache.hudi.avro.HoodieAvroUtils.toJavaDate;
+import static org.apache.hudi.common.avro.HoodieAvroUtils.createFullName;
+import static org.apache.hudi.common.avro.HoodieAvroUtils.createNamePrefix;
+import static org.apache.hudi.common.avro.HoodieAvroUtils.getOldFieldNameWithRenaming;
+import static org.apache.hudi.common.avro.HoodieAvroUtils.toJavaDate;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 public class HoodieArrayWritableSchemaUtils {

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common;
 
-import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.avro.MercifulJsonConverter;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.schema.HoodieAvroSchemaCache;
 import org.apache.hudi.common.util.Option;

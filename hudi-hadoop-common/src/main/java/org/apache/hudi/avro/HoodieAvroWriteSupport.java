@@ -19,6 +19,10 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.avro.ConvertingGenericData;
+import org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport;
+import org.apache.hudi.common.avro.VariantSchemaUtils;
+import org.apache.hudi.common.avro.VariantShreddingProvider;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;

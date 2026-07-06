@@ -19,7 +19,7 @@
 package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.SparkAdapterSupport$;
-import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
+import org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 
 import org.apache.spark.sql.HoodieUTF8StringFactory;

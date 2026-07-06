@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.{AvroConversionUtils, SparkRowSerDe}
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.common.avro.HoodieAvroUtils
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.internal.Types
 import org.apache.hudi.common.schema.internal.action.TableChanges

@@ -35,7 +35,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.getBinaryDecoder;
+import static org.apache.hudi.common.avro.HoodieAvroUtils.getBinaryDecoder;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 

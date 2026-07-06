@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command.payload
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSchemaConversionUtils.{convertHoodieSchemaToDataType, convertStructTypeToHoodieSchema}
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.common.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.schema.{HoodieAvroSchemaCache, HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, HoodieRecordUtils, Option => HOption, OrderingValues, StringUtils, ValidationUtils}

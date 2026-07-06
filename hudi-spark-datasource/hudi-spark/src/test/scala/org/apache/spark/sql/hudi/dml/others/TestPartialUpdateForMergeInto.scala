@@ -20,7 +20,7 @@
 package org.apache.spark.sql.hudi.dml.others
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
-import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.common.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}

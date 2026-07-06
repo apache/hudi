@@ -19,8 +19,8 @@
 
 package org.apache.hudi.io.storage.hadoop;
 
-import org.apache.hudi.avro.VariantSchemaUtils;
-import org.apache.hudi.avro.VariantShreddingProvider;
+import org.apache.hudi.common.avro.VariantSchemaUtils;
+import org.apache.hudi.common.avro.VariantShreddingProvider;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;

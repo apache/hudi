@@ -20,7 +20,7 @@
 package org.apache.hudi.io.storage.hadoop;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.avro.VariantShreddingProvider;
+import org.apache.hudi.common.avro.VariantShreddingProvider;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieParquetConfig;

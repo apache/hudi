@@ -19,11 +19,11 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.run.strategy.SparkBinaryCopyClusteringExecutionStrategy;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;

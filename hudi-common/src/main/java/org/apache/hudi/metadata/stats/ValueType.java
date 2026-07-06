@@ -19,7 +19,7 @@
 
 package org.apache.hudi.metadata.stats;
 
-import org.apache.hudi.avro.HoodieAvroWrapperUtils;
+import org.apache.hudi.common.avro.HoodieAvroWrapperUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.DateTimeUtils;
@@ -45,7 +45,7 @@ import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.convertBytesToBigDecimal;
+import static org.apache.hudi.common.avro.HoodieAvroUtils.convertBytesToBigDecimal;
 import static org.apache.hudi.common.util.DateTimeUtils.instantToMicros;
 import static org.apache.hudi.common.util.DateTimeUtils.instantToNanos;
 import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;

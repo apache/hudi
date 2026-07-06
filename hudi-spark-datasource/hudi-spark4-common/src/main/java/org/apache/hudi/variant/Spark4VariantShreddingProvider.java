@@ -19,7 +19,7 @@
 
 package org.apache.hudi.variant;
 
-import org.apache.hudi.avro.VariantShreddingProvider;
+import org.apache.hudi.common.avro.VariantShreddingProvider;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.exception.HoodieException;
 

@@ -20,7 +20,7 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieBaseRelation.{projectReader, BaseFileReader}
 import org.apache.hudi.HoodieMergeOnReadRDDV2.CONFIG_INSTANTIATION_LOCK
-import org.apache.hudi.avro.HoodieAvroReaderContext
+import org.apache.hudi.common.avro.HoodieAvroReaderContext
 import org.apache.hudi.common.config.{HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE
 import org.apache.hudi.common.expression.{Predicate => HPredicate}

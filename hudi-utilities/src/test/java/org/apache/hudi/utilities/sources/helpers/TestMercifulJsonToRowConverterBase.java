@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.hudi.avro.MercifulJsonConverterTestBase;
+import org.apache.hudi.common.avro.MercifulJsonConverterTestBase;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.DateTimeUtils;

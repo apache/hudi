@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.MercifulJsonConverter;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;

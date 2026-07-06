@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -39,7 +39,7 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.getNullableValAsString;
+import static org.apache.hudi.common.avro.HoodieAvroUtils.getNullableValAsString;
 import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
 
 /**

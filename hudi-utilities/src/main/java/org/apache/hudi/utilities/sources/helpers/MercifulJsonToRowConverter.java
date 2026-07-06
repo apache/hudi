@@ -18,18 +18,18 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import org.apache.hudi.avro.MercifulJsonConverter;
-import org.apache.hudi.avro.processors.DateLogicalTypeProcessor;
-import org.apache.hudi.avro.processors.DecimalLogicalTypeProcessor;
-import org.apache.hudi.avro.processors.DurationLogicalTypeProcessor;
-import org.apache.hudi.avro.processors.EnumTypeProcessor;
-import org.apache.hudi.avro.processors.FixedTypeProcessor;
-import org.apache.hudi.avro.processors.JsonFieldProcessor;
-import org.apache.hudi.avro.processors.LocalTimestampMicroLogicalTypeProcessor;
-import org.apache.hudi.avro.processors.LocalTimestampMilliLogicalTypeProcessor;
-import org.apache.hudi.avro.processors.Parser;
-import org.apache.hudi.avro.processors.TimestampMicroLogicalTypeProcessor;
-import org.apache.hudi.avro.processors.TimestampMilliLogicalTypeProcessor;
+import org.apache.hudi.common.avro.MercifulJsonConverter;
+import org.apache.hudi.common.avro.processors.DateLogicalTypeProcessor;
+import org.apache.hudi.common.avro.processors.DecimalLogicalTypeProcessor;
+import org.apache.hudi.common.avro.processors.DurationLogicalTypeProcessor;
+import org.apache.hudi.common.avro.processors.EnumTypeProcessor;
+import org.apache.hudi.common.avro.processors.FixedTypeProcessor;
+import org.apache.hudi.common.avro.processors.JsonFieldProcessor;
+import org.apache.hudi.common.avro.processors.LocalTimestampMicroLogicalTypeProcessor;
+import org.apache.hudi.common.avro.processors.LocalTimestampMilliLogicalTypeProcessor;
+import org.apache.hudi.common.avro.processors.Parser;
+import org.apache.hudi.common.avro.processors.TimestampMicroLogicalTypeProcessor;
+import org.apache.hudi.common.avro.processors.TimestampMilliLogicalTypeProcessor;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.DateTimeUtils;

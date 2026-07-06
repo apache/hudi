@@ -18,8 +18,8 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hudi.avro.AvroRecordContext;
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.AvroRecordContext;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.engine.RecordContext;

@@ -39,7 +39,7 @@ import java.util.List;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.makeFieldNonNull;
+import static org.apache.hudi.common.avro.HoodieAvroUtils.makeFieldNonNull;
 import static org.apache.spark.sql.functions.expr;
 import static org.apache.spark.sql.functions.lit;
 import static org.apache.spark.sql.functions.when;
