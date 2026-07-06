@@ -1076,6 +1076,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
     StorageConfiguration<?> storageConf = dataMetaClient.getStorageConf();
     final String dirFilterRegex = dataWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
+    final boolean skipZeroSizeFiles = dataWriteConfig.getMetadataConfig().shouldSkipZeroSizeFilesDuringBootstrap();
     StoragePath storageBasePath = dataMetaClient.getBasePath();
     long totalZeroSizeFiles = 0;
 
@@ -1091,7 +1092,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       List<DirectoryInfo> processedDirectories = engineContext.map(pathsToProcess, path -> {
         HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConf);
         String relativeDirPath = FSUtils.getRelativePartitionPath(storageBasePath, path);
-        return new DirectoryInfo(relativeDirPath, storage.listDirectEntries(path), initializationTime, pendingDataInstants);
+        return new DirectoryInfo(relativeDirPath, storage.listDirectEntries(path), initializationTime, pendingDataInstants, true, skipZeroSizeFiles);
       }, numDirsToList);
 
       // If the listing reveals a directory, add it to queue. If the listing reveals a hoodie partition, add it to

@@ -3103,7 +3103,7 @@ public class HoodieTableMetadataUtil {
     private int zeroSizeFileCount = 0;
 
     public DirectoryInfo(String relativePath, List<StoragePathInfo> pathInfos, String maxInstantTime, Set<String> pendingDataInstants) {
-      this(relativePath, pathInfos, maxInstantTime, pendingDataInstants, true);
+      this(relativePath, pathInfos, maxInstantTime, pendingDataInstants, true, false);
     }
 
     /**
@@ -3111,6 +3111,11 @@ public class HoodieTableMetadataUtil {
      */
     public DirectoryInfo(String relativePath, List<StoragePathInfo> pathInfos, String maxInstantTime, Set<String> pendingDataInstants,
                          boolean validateHoodiePartitions) {
+      this(relativePath, pathInfos, maxInstantTime, pendingDataInstants, validateHoodiePartitions, false);
+    }
+
+    public DirectoryInfo(String relativePath, List<StoragePathInfo> pathInfos, String maxInstantTime, Set<String> pendingDataInstants,
+                         boolean validateHoodiePartitions, boolean skipZeroSizeFiles) {
       this.relativePath = relativePath;
 
       // Pre-allocate with the maximum length possible
@@ -3131,7 +3136,7 @@ public class HoodieTableMetadataUtil {
           String dataFileCommitTime = FSUtils.getCommitTime(pathInfo.getPath().getName());
           // Limit the file listings to files which were created by successful commits before the maxInstant time.
           if (!pendingDataInstants.contains(dataFileCommitTime) && compareTimestamps(dataFileCommitTime, LESSER_THAN_OR_EQUALS, maxInstantTime)) {
-            if (pathInfo.getLength() > 0) {
+            if (pathInfo.getLength() > 0 || !skipZeroSizeFiles) {
               filenameToSizeMap.put(pathInfo.getPath().getName(), pathInfo.getLength());
             } else {
               log.warn("Skipping zero-size data file during MDT bootstrap: {}", pathInfo.getPath());
