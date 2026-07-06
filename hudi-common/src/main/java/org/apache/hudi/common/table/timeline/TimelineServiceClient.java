@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.timeline;
+package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 
