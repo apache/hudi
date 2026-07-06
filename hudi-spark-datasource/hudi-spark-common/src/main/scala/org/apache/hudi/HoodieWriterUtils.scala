@@ -352,6 +352,21 @@ object HoodieWriterUtils {
             diffConfigs.append(s"${HoodieTableConfig.RECORD_MERGE_STRATEGY_ID}:\t$mergeStrategyId\tnull\n")
           }
         }
+
+        // hoodie.meta.fields.mode is a physical-storage decision baked into files at write time.
+        // Changing it at runtime would silently produce mixed-mode files whose incremental / file
+        // pruning behavior differs between old and new commits. The default loop above only flags
+        // the mismatch when the on-disk value is non-null, so an older table with the property
+        // absent from hoodie.properties would let a null → non-empty transition slip through
+        // (silent-drop risk on pre-enablement commits). Guard the null → non-empty case explicitly
+        // here. Set it only at table creation, via the hudi-cli, or during table upgrade.
+        val paramsMetaFieldsMode = params.getOrElse(HoodieTableConfig.META_FIELDS_MODE.key(), "")
+        val onDiskMetaFieldsMode = tableConfig.getString(HoodieTableConfig.META_FIELDS_MODE)
+        if (paramsMetaFieldsMode.nonEmpty && (onDiskMetaFieldsMode == null || onDiskMetaFieldsMode.isEmpty)) {
+          diffConfigs.append(
+            s"${HoodieTableConfig.META_FIELDS_MODE.key()}:\t$paramsMetaFieldsMode\t${if (onDiskMetaFieldsMode == null) "null" else "\"\""}"
+              + " (immutable at runtime; set only at table creation / hudi-cli / upgrade)\n")
+        }
       }
 
       if (diffConfigs.nonEmpty) {
