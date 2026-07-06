@@ -288,7 +288,7 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
         for (int i = 0; i < partitionFields.length; i++) {
           String field = partitionFields[i];
           if (dataSchema.getField(field).isPresent()) {
-            filterFieldsAndValues.add(Pair.of(field, readerContext.getRecordContext().convertPartitionValueToEngineType((Comparable) partitionValues[i])));
+            filterFieldsAndValues.add(Pair.of(field, readerContext.getRecordContext().convertValueToEngineType((Comparable) partitionValues[i])));
           }
         }
         return filterFieldsAndValues;

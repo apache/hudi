@@ -189,17 +189,6 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   }
 
   @Override
-  public Comparable convertPartitionValueToEngineType(Comparable value) {
-    if (value instanceof String) {
-      // Spark reads String field values as UTF8String.
-      // To foster value comparison, if the value is of String type, e.g., from
-      // the delete record, we convert it to UTF8String type.
-      return UTF8String.fromString((String) value);
-    }
-    return value;
-  }
-
-  @Override
   public InternalRow getDeleteRow(String recordKey) {
     UTF8String[] metaFields = new UTF8String[]{
         null,
