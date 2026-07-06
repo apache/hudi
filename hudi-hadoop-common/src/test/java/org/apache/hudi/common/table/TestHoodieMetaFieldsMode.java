@@ -18,29 +18,20 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests the meta-field-population modes exposed by {@link HoodieTableConfig} via the
- * {@code hoodie.meta.fields.mode} property:
- *
- * <ul>
- *   <li>ALL — {@code populate.meta.fields=true} (default). All five meta columns populated.</li>
- *   <li>NONE — {@code populate.meta.fields=false} and mode empty. No meta columns populated.</li>
- *   <li>COMMIT_TIME_ONLY — {@code populate.meta.fields=false},
- *   {@code meta.fields.mode=_hoodie_commit_time}. Only commit-time populated.</li>
- *   <li>FILE_NAME_ONLY — same but with {@code _hoodie_file_name}.</li>
- *   <li>COMMIT_TIME_AND_FILE_NAME — both tokens in the mode list.</li>
- * </ul>
- *
- * <p>Tokens other than the two allowed ones are rejected up-front by the parser. This test
- * exercises {@link HoodieTableConfig} accessors directly without touching the storage layer.
+ * {@code hoodie.meta.fields.mode} property. The mode is materialized as a {@link MetaFieldsMode}
+ * enum resolved from both the legacy {@code hoodie.populate.meta.fields} boolean and the on-disk
+ * {@code hoodie.meta.fields.mode} property.
  */
 class TestHoodieMetaFieldsMode {
 
@@ -59,17 +50,17 @@ class TestHoodieMetaFieldsMode {
   void defaultsResolveToAllMode() {
     HoodieTableConfig cfg = configOf(null, null);
     assertTrue(cfg.populateMetaFields(), "populateMetaFields default must remain true");
-    assertTrue(cfg.getMetaFieldsMode().isEmpty(), "mode list defaults to empty");
-    assertTrue(cfg.isCommitTimePopulated(), "commit time must be populated in ALL mode");
-    assertTrue(cfg.isFileNamePopulated(), "file name must be populated in ALL mode");
-    assertTrue(cfg.isRecordKeyPopulated(), "record key must be populated in ALL mode");
+    assertEquals(MetaFieldsMode.ALL, cfg.getMetaFieldsMode());
+    assertTrue(cfg.isCommitTimePopulated());
+    assertTrue(cfg.isFileNamePopulated());
+    assertTrue(cfg.isRecordKeyPopulated());
   }
 
   @Test
   void noneModeWhenPopulateFalseAndModeEmpty() {
     HoodieTableConfig cfg = configOf(false, "");
     assertFalse(cfg.populateMetaFields());
-    assertTrue(cfg.getMetaFieldsMode().isEmpty());
+    assertEquals(MetaFieldsMode.NONE, cfg.getMetaFieldsMode());
     assertFalse(cfg.isCommitTimePopulated());
     assertFalse(cfg.isFileNamePopulated());
     assertFalse(cfg.isRecordKeyPopulated());
@@ -77,10 +68,10 @@ class TestHoodieMetaFieldsMode {
 
   @Test
   void noneModeWhenPopulateFalseAndModeUnset() {
-    // Existing populate.meta.fields=false table without the mode property must still resolve to NONE.
+    // Existing populate.meta.fields=false table without the mode property must resolve to NONE.
     HoodieTableConfig cfg = configOf(false, null);
     assertFalse(cfg.populateMetaFields());
-    assertTrue(cfg.getMetaFieldsMode().isEmpty());
+    assertEquals(MetaFieldsMode.NONE, cfg.getMetaFieldsMode());
     assertFalse(cfg.isCommitTimePopulated());
     assertFalse(cfg.isFileNamePopulated());
     assertFalse(cfg.isRecordKeyPopulated());
@@ -88,8 +79,9 @@ class TestHoodieMetaFieldsMode {
 
   @Test
   void commitTimeOnlyMode() {
-    HoodieTableConfig cfg = configOf(false, HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+    HoodieTableConfig cfg = configOf(false, MetaFieldsMode.COMMIT_TIME_ONLY.name());
     assertFalse(cfg.populateMetaFields());
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, cfg.getMetaFieldsMode());
     assertTrue(cfg.isCommitTimePopulated());
     assertFalse(cfg.isFileNamePopulated());
     assertFalse(cfg.isRecordKeyPopulated());
@@ -97,8 +89,9 @@ class TestHoodieMetaFieldsMode {
 
   @Test
   void fileNameOnlyMode() {
-    HoodieTableConfig cfg = configOf(false, HoodieRecord.FILENAME_METADATA_FIELD);
+    HoodieTableConfig cfg = configOf(false, MetaFieldsMode.FILE_NAME_ONLY.name());
     assertFalse(cfg.populateMetaFields());
+    assertEquals(MetaFieldsMode.FILE_NAME_ONLY, cfg.getMetaFieldsMode());
     assertFalse(cfg.isCommitTimePopulated());
     assertTrue(cfg.isFileNamePopulated());
     assertFalse(cfg.isRecordKeyPopulated());
@@ -106,9 +99,9 @@ class TestHoodieMetaFieldsMode {
 
   @Test
   void commitTimeAndFileNameMode() {
-    HoodieTableConfig cfg = configOf(false,
-        HoodieRecord.COMMIT_TIME_METADATA_FIELD + "," + HoodieRecord.FILENAME_METADATA_FIELD);
+    HoodieTableConfig cfg = configOf(false, MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME.name());
     assertFalse(cfg.populateMetaFields());
+    assertEquals(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME, cfg.getMetaFieldsMode());
     assertTrue(cfg.isCommitTimePopulated());
     assertTrue(cfg.isFileNamePopulated());
     assertFalse(cfg.isRecordKeyPopulated());
@@ -116,30 +109,27 @@ class TestHoodieMetaFieldsMode {
 
   @Test
   void modeIsIgnoredWhenPopulateMetaFieldsIsTrue() {
-    // Note: writer-side validate() rejects this combination, but the accessor must still report
-    // ALL semantics defensively if a bad combo ever leaks through (mode has no effect when all
-    // meta fields are already populated).
-    HoodieTableConfig cfg = configOf(true, HoodieRecord.COMMIT_TIME_METADATA_FIELD);
-    assertTrue(cfg.populateMetaFields());
-    assertTrue(cfg.isCommitTimePopulated());
-    assertTrue(cfg.isFileNamePopulated());
-    assertTrue(cfg.isRecordKeyPopulated());
+    // populate.meta.fields=true always resolves to ALL — the raw mode on disk is not consulted.
+    // Writer-side validate() rejects this combination up-front, but the accessor must still report
+    // ALL semantics defensively.
+    HoodieTableConfig cfg = configOf(true, MetaFieldsMode.COMMIT_TIME_ONLY.name());
+    assertEquals(MetaFieldsMode.ALL, cfg.getMetaFieldsMode());
   }
 
   @Test
   void unknownTokenIsRejected() {
-    HoodieTableConfig cfg = configOf(false, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    HoodieTableConfig cfg = configOf(false, "GARBAGE_VALUE");
     IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, cfg::getMetaFieldsMode);
-    assertTrue(ex.getMessage().contains(HoodieRecord.RECORD_KEY_METADATA_FIELD),
-        "message must name the rejected token: " + ex.getMessage());
-    assertTrue(ex.getMessage().contains("populate.meta.fields"),
-        "message must recommend populate.meta.fields=true for other columns: " + ex.getMessage());
+    assertTrue(ex.getMessage().contains("GARBAGE_VALUE"),
+        "message must name the rejected value: " + ex.getMessage());
+    assertTrue(ex.getMessage().contains("hoodie.meta.fields.mode"),
+        "message must name the property: " + ex.getMessage());
   }
 
   @Test
-  void whitespaceAndEmptyTokensAreTolerated() {
-    HoodieTableConfig cfg = configOf(false, "  " + HoodieRecord.COMMIT_TIME_METADATA_FIELD + " , ");
-    assertTrue(cfg.isCommitTimePopulated());
-    assertFalse(cfg.isFileNamePopulated());
+  void modeStringIsCaseSensitiveAndTrimmed() {
+    // Enum-name form is uppercase-only; whitespace around the value is tolerated.
+    HoodieTableConfig cfg = configOf(false, "  COMMIT_TIME_ONLY  ");
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, cfg.getMetaFieldsMode());
   }
 }

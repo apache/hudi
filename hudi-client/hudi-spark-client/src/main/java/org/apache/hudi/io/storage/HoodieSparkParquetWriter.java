@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
 import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
@@ -30,9 +31,7 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD;
@@ -46,14 +45,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
   private final UTF8String fileName;
   private final UTF8String instantTime;
 
-  private final boolean populateMetaFields;
-  // Selective meta-field population when populateMetaFields is false. commit_time enables
-  // incremental queries; file_name enables file-level pruning / investigation lookups. Other meta
-  // columns stay null. We do NOT register the record key with writeSupport in the selective modes —
-  // that would feed the parquet bloom filter, which has no meaning when the record key column
-  // is unpopulated.
-  private final boolean populateCommitTime;
-  private final boolean populateFileName;
+  private final MetaFieldsMode metaFieldsMode;
 
   private final HoodieRowParquetWriteSupport writeSupport;
 
@@ -64,23 +56,20 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                   String instantTime,
                                   TaskContextSupplier taskContextSupplier,
                                   boolean populateMetaFields) throws IOException {
-    this(file, parquetConfig, instantTime, taskContextSupplier, populateMetaFields, Collections.emptySet());
+    this(file, parquetConfig, instantTime, taskContextSupplier,
+        populateMetaFields ? MetaFieldsMode.ALL : MetaFieldsMode.NONE);
   }
 
   public HoodieSparkParquetWriter(StoragePath file,
                                   HoodieRowParquetConfig parquetConfig,
                                   String instantTime,
                                   TaskContextSupplier taskContextSupplier,
-                                  boolean populateMetaFields,
-                                  Set<String> metaFieldsMode) throws IOException {
+                                  MetaFieldsMode metaFieldsMode) throws IOException {
     super(file, parquetConfig);
     this.writeSupport = parquetConfig.getWriteSupport();
     this.fileName = UTF8String.fromString(file.getName());
     this.instantTime = UTF8String.fromString(instantTime);
-    this.populateMetaFields = populateMetaFields;
-    Set<String> mode = metaFieldsMode == null ? Collections.emptySet() : metaFieldsMode;
-    this.populateCommitTime = !populateMetaFields && mode.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
-    this.populateFileName = !populateMetaFields && mode.contains(HoodieRecord.FILENAME_METADATA_FIELD);
+    this.metaFieldsMode = metaFieldsMode == null ? MetaFieldsMode.NONE : metaFieldsMode;
     this.seqIdGenerator = recordIndex -> {
       Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
       return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
@@ -89,31 +78,35 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
 
   @Override
   public void writeRowWithMetadata(HoodieKey key, InternalRow row) throws IOException {
-    if (populateMetaFields) {
-      UTF8String recordKey = UTF8String.fromString(key.getRecordKey());
-      updateRecordMetadata(row, recordKey, key.getPartitionPath(), getWrittenRecordCount());
-
-      super.write(row);
-      writeSupport.add(recordKey);
-    } else if (populateCommitTime || populateFileName) {
-      if (populateCommitTime) {
-        row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), instantTime);
-        row.update(COMMIT_SEQNO_METADATA_FIELD.ordinal(),
-            UTF8String.fromString(seqIdGenerator.apply(getWrittenRecordCount())));
-      }
-      if (populateFileName) {
-        row.update(FILENAME_METADATA_FIELD.ordinal(), fileName);
-      }
-      super.write(row);
-    } else {
-      super.write(row);
+    switch (metaFieldsMode) {
+      case ALL:
+        UTF8String recordKey = UTF8String.fromString(key.getRecordKey());
+        updateRecordMetadata(row, recordKey, key.getPartitionPath(), getWrittenRecordCount());
+        super.write(row);
+        writeSupport.add(recordKey);
+        break;
+      case NONE:
+        super.write(row);
+        break;
+      default:
+        // Selective mode — populate only the opted-in columns. Record-key column stays null, so
+        // we do NOT register the record key with the write support (bloom filter / RLI hooks are
+        // meaningless without the record-key column).
+        if (metaFieldsMode.isCommitTimePopulated()) {
+          row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), instantTime);
+        }
+        if (metaFieldsMode.isFileNamePopulated()) {
+          row.update(FILENAME_METADATA_FIELD.ordinal(), fileName);
+        }
+        super.write(row);
+        break;
     }
   }
 
   @Override
   public void writeRow(String recordKey, InternalRow row) throws IOException {
     super.write(row);
-    if (populateMetaFields) {
+    if (metaFieldsMode == MetaFieldsMode.ALL) {
       writeSupport.add(UTF8String.fromString(recordKey));
     }
   }

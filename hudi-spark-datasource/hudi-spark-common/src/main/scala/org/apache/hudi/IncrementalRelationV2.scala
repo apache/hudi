@@ -80,7 +80,10 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
 
   if (!metaClient.getTableConfig.isCommitTimePopulated()) {
     throw new HoodieException("Incremental queries are not supported when _hoodie_commit_time is not populated. "
-      + "Either keep hoodie.populate.meta.fields=true or include _hoodie_commit_time in hoodie.meta.fields.mode.")
+      + "hoodie.meta.fields.mode is a physical-storage decision baked into files at write time and cannot be "
+      + "changed by flipping write options — setting it only takes effect at table creation. To enable incremental "
+      + "queries on this table, recreate it with hoodie.populate.meta.fields=true or hoodie.meta.fields.mode=COMMIT_TIME_ONLY "
+      + "(or COMMIT_TIME_AND_FILE_NAME).")
   }
 
   private val queryContext: IncrementalQueryAnalyzer.QueryContext =

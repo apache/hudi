@@ -358,14 +358,16 @@ object HoodieWriterUtils {
         // pruning behavior differs between old and new commits. The default loop above only flags
         // the mismatch when the on-disk value is non-null, so an older table with the property
         // absent from hoodie.properties would let a null → non-empty transition slip through
-        // (silent-drop risk on pre-enablement commits). Guard the null → non-empty case explicitly
-        // here. Set it only at table creation, via the hudi-cli, or during table upgrade.
+        // (silent-drop risk on pre-enablement commits). Guard the null → selective-mode case
+        // explicitly here. Set it only at table creation, via the hudi-cli, or during table upgrade;
+        // otherwise the only way to change it is to recreate the table.
         val paramsMetaFieldsMode = params.getOrElse(HoodieTableConfig.META_FIELDS_MODE.key(), "")
         val onDiskMetaFieldsMode = tableConfig.getString(HoodieTableConfig.META_FIELDS_MODE)
         if (paramsMetaFieldsMode.nonEmpty && (onDiskMetaFieldsMode == null || onDiskMetaFieldsMode.isEmpty)) {
           diffConfigs.append(
             s"${HoodieTableConfig.META_FIELDS_MODE.key()}:\t$paramsMetaFieldsMode\t${if (onDiskMetaFieldsMode == null) "null" else "\"\""}"
-              + " (immutable at runtime; set only at table creation / hudi-cli / upgrade)\n")
+              + " (immutable at runtime; set only at table creation / hudi-cli / upgrade; "
+              + "existing tables must be recreated to change this)\n")
         }
       }
 
