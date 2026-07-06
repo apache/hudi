@@ -548,6 +548,10 @@ public class FSUtils {
     return matchNativeLogFile(fileName).map(matcher -> "deletes".equals(matcher.group(8))).orElse(false);
   }
 
+  public static boolean isNativeCDCLogFile(String fileName) {
+    return matchNativeLogFile(fileName).map(matcher -> "cdc".equals(matcher.group(8))).orElse(false);
+  }
+
   public static boolean isCDCLogFile(String fileName) {
     if (StringUtils.isNullOrEmpty(fileName)) {
       return false;

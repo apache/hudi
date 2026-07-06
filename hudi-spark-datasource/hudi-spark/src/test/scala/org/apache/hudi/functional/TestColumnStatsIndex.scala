@@ -1505,6 +1505,7 @@ object TestColumnStatsIndex {
     java.util.stream.Stream.of(Seq(
       Arguments.arguments("6"),
       Arguments.arguments("8"),
+      Arguments.arguments("9"),
       Arguments.arguments(currentVersionCode)
     )
       : _*)

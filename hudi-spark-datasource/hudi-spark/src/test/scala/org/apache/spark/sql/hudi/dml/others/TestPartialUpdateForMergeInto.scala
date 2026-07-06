@@ -608,8 +608,11 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
          |)""".stripMargin)
   }
 
-  test("Partial updates for table version 6 and 8 handled gracefully in MIT") {
-    Seq(HoodieTableVersion.SIX.versionCode(), HoodieTableVersion.EIGHT.versionCode()).foreach(
+  test("Partial updates for table version 6, 8 and 9 handled gracefully in MIT") {
+    Seq(
+      HoodieTableVersion.SIX.versionCode(),
+      HoodieTableVersion.EIGHT.versionCode(),
+      HoodieTableVersion.NINE.versionCode()).foreach(
       tableVersion => withTempDir { tmp =>
         val tableName = generateTableName
         spark.sql(

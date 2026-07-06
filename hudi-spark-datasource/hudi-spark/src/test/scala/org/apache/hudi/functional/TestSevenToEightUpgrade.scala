@@ -63,9 +63,8 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       "hoodie.metadata.enable" -> "false",
       // "OverwriteWithLatestAvroPayload" is used to trigger merge mode upgrade/downgrade.
       PAYLOAD_CLASS_NAME.key -> classOf[OverwriteWithLatestAvroPayload].getName,
-      RECORD_MERGE_MODE.key -> RecordMergeMode.COMMIT_TIME_ORDERING.name,
-      // todo remove this option after https://github.com/apache/hudi/issues/19090 resolved.
-      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.NINE.versionCode().toString)
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.NINE.versionCode().toString,
+      RECORD_MERGE_MODE.key -> RecordMergeMode.COMMIT_TIME_ORDERING.name)
 
     var hudiOpts = if (!lockProviderClass.equals("null")) {
       hudiOptsWithoutLockConfigs ++ Map(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> lockProviderClass)
@@ -146,8 +145,6 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
       HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "price",
       HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true",
-      // todo remove this option after https://github.com/apache/hudi/issues/19090 resolved.
-      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.EIGHT.versionCode().toString,
       // Ensure MDT compaction does not run before downgrade.
       HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "100"
     )
@@ -344,7 +341,6 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
         .build()
 
       val hudiOptsUpgrade = hudiOptsV6 ++ Map(
-        // todo remove this option after https://github.com/apache/hudi/issues/19090 resolved.
         HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.NINE.versionCode().toString,
         HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key -> "org.apache.hudi.client.transaction.lock.InProcessLockProvider",
         HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> "OPTIMISTIC_CONCURRENCY_CONTROL"

@@ -62,6 +62,7 @@ public class UpgradeDowngrade {
   ));
 
   private static final Set<Pair<Integer, Integer>> DOWNGRADE_HANDLERS_REQUIRING_ROLLBACK_ANDCOMPACT = new HashSet<>(Arrays.asList(
+      Pair.of(10, 9), // TenToNineDowngradeHandler
       Pair.of(8, 7), // EightToSevenDowngradeHandler
       Pair.of(9, 8), // NineToEightDowngradeHandler
       Pair.of(6, 5)  // SixToFiveDowngradeHandler
@@ -182,6 +183,8 @@ public class UpgradeDowngrade {
     if (!needsUpgradeOrDowngrade(toVersion)) {
       return;
     }
+
+    validateDowngradePrerequisites(fromVersion, toVersion, isUpgrade);
 
     // Perform rollback and compaction only if a specific handler requires it, before upgrade/downgrade process
     performRollbackAndCompactionIfRequired(fromVersion, toVersion, isUpgrade);
@@ -328,6 +331,8 @@ public class UpgradeDowngrade {
       return new EightToSevenDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else if (fromVersion == HoodieTableVersion.NINE && toVersion == HoodieTableVersion.EIGHT) {
       return new NineToEightDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.TEN && toVersion == HoodieTableVersion.NINE) {
+      return new TenToNineDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else {
       throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), false);
     }
@@ -406,6 +411,28 @@ public class UpgradeDowngrade {
           upgradeDowngradeHelper, 
           HoodieTableType.MERGE_ON_READ.equals(metaClient.getTableType()),
           tableVersion);
+    }
+  }
+
+  /**
+   * Checks if any handlers in the downgrade path require validation before rollback and compaction.
+   *
+   * @param fromVersion the current table version
+   * @param toVersion   the target table version
+   * @param isUpgrade   whether the current operation is an upgrade
+   */
+  private void validateDowngradePrerequisites(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, boolean isUpgrade) {
+    if (isUpgrade) {
+      return;
+    }
+
+    HoodieTableVersion checkVersion = fromVersion;
+    while (checkVersion.versionCode() > toVersion.versionCode()) {
+      HoodieTableVersion prevVersion = HoodieTableVersion.fromVersionCode(checkVersion.versionCode() - 1);
+      if (checkVersion == HoodieTableVersion.TEN && prevVersion == HoodieTableVersion.NINE) {
+        TenToNineDowngradeHandler.validateNoNativeCdcLogs(metaClient);
+      }
+      checkVersion = prevVersion;
     }
   }
 }

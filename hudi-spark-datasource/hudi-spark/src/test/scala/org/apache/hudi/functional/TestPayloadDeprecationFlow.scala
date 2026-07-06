@@ -41,10 +41,6 @@ import org.scalatest.Assertions.assertThrows
 import scala.jdk.CollectionConverters._
 
 class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
-  // TODO(https://github.com/apache/hudi/issues/19090): Remove this after 10 -> 9 downgrade is supported.
-  private val writeTableVersionNineOpts: Map[String, String] = Map(
-    HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> HoodieTableVersion.NINE.versionCode().toString)
-
   /**
    * Test if the payload based read have the same behavior for different table versions.
    */
@@ -195,9 +191,9 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
           option(OPERATION.key(), "upsert").
           option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
           option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+          option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9").
           option(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(),
             classOf[MySqlDebeziumAvroPayload].getName).
-          options(writeTableVersionNineOpts).
           mode(SaveMode.Append).
           save(basePath)
       }
@@ -212,8 +208,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(OPERATION.key(), "delete").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9").
       options(serviceOpts).
-      options(writeTableVersionNineOpts).
       mode(SaveMode.Append).
       save(basePath)
 
@@ -221,7 +217,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     val insertData = Seq(
       (13, 6L, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
       (13, 7L, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
-    performInsert(insertData, columns, serviceOpts, basePath, writeTableVersionNineOpts)
+    performInsert(insertData, columns, serviceOpts, basePath,
+      Map(HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> "9"))
 
     // Final validation of table management operations after all writes
     metaClient = HoodieTableMetaClient.builder()
@@ -330,11 +327,11 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL).
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9").
       option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(), "2048").
       option(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "1024").
       options(serviceOpts).
       options(opts).
-      options(writeTableVersionNineOpts).
       mode(SaveMode.Overwrite).
       save(basePath)
     // Verify table was created successfully
@@ -360,7 +357,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (11, 1L, "rider-X", "driver-X", 19.10, "i", "11.1", 11, 1, "i"),
       (12, 1L, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
       (11, 2L, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"))
-    performUpsert(firstUpdateData, columns, serviceOpts, writeTableVersionNineOpts, basePath)
+    performUpsert(firstUpdateData, columns, serviceOpts, Map.empty, basePath,
+      tableVersion = Some("9"))
     // Validate table version.
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -383,7 +381,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (8, 3L, "rider-CC", "driver-CC", 30.00, "u", "8.1", 8, 1, "u"),
       // Delete rider-E with LOWER ordering - should be IGNORED (rider-E has ts=10 originally)
       (9, 5L, "rider-EE", "driver-EE", 17.85, "D", "9.1", 9, 1, "d"))
-    performUpsert(mixedOrderingData, columns, serviceOpts, opts ++ writeTableVersionNineOpts, basePath)
+    performUpsert(mixedOrderingData, columns, serviceOpts, opts, basePath,
+      tableVersion = Some("9"))
     // Validate table version is still 9 after mixed ordering batch
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -403,8 +402,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       // so that the test will fail if _event_seq is still used for ordering
       (9, 4L, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
       (12, 5L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1, "i"))
-    performUpsert(secondUpdateData, columns, serviceOpts, writeTableVersionNineOpts, basePath,
-      compactionEnabled = compactionEnabled)
+    performUpsert(secondUpdateData, columns, serviceOpts, Map.empty, basePath,
+      tableVersion = Some("9"), compactionEnabled = compactionEnabled)
     // Validate table version as 9.
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -423,9 +422,9 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
           option(OPERATION.key(), "upsert").
           option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
           option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+          option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9").
           option(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(),
             classOf[MySqlDebeziumAvroPayload].getName).
-          options(writeTableVersionNineOpts).
           mode(SaveMode.Append).
           save(basePath)
       }
@@ -440,8 +439,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(OPERATION.key(), "delete").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9").
       options(serviceOpts).
-      options(writeTableVersionNineOpts).
       mode(SaveMode.Append).
       save(basePath)
 
@@ -449,7 +448,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     val insertData = Seq(
       (13, 6L, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
       (13, 7L, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
-    performInsert(insertData, columns, serviceOpts, basePath, writeTableVersionNineOpts)
+    performInsert(insertData, columns, serviceOpts, basePath,
+      Map(HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> "9"))
 
     // Final validation of table management operations after all writes
     metaClient = HoodieTableMetaClient.builder()
@@ -595,7 +595,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     // 10. Add post-downgrade upsert to verify table functionality
     performUpsert(
       Seq((14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i")),
-      columns, serviceOpts, Map.empty, basePath)
+      columns, serviceOpts, Map.empty, basePath, tableVersion = Some("8"))
 
     // Validate data consistency after downgrade including new row
     val downgradeDf = spark.read.format("hudi").load(basePath)

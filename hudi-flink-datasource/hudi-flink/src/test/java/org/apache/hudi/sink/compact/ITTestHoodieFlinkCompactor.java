@@ -195,9 +195,8 @@ public class ITTestHoodieFlinkCompactor {
     }
   }
 
-  // todo: enable test for downgrade after this issue solved: https://github.com/apache/hudi/issues/19090
   @ParameterizedTest
-  @ValueSource(booleans = {true})
+  @ValueSource(booleans = {true, false})
   void testHoodieFlinkCompactorWithUpgradeAndDowngrade(boolean upgrade) throws Exception {
     // Create hoodie table and insert into data.
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
