@@ -16,9 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utils;
-
-import org.apache.hudi.util.ConcatenatingIterator;
+package org.apache.hudi.common.util.collection;
 
 import org.junit.jupiter.api.Test;
 

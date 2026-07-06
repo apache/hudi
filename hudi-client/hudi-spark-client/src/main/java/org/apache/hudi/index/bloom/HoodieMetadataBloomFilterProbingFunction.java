@@ -26,11 +26,11 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.FlatteningIterator;
+import org.apache.hudi.common.util.collection.LazyIterableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.LazyIterableIterator;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.function.PairFlatMapFunction;

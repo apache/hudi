@@ -18,7 +18,7 @@
 
 package org.apache.hudi.integ.testsuite.generator;
 
-import org.apache.hudi.util.LazyIterableIterator;
+import org.apache.hudi.common.util.collection.LazyIterableIterator;
 
 import org.apache.avro.generic.GenericRecord;
 

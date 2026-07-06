@@ -20,7 +20,7 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.util.LazyIterableIterator;
+import org.apache.hudi.common.util.collection.LazyIterableIterator;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;

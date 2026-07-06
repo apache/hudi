@@ -19,8 +19,8 @@
 package org.apache.hudi.parquet.io;
 
 import org.apache.hudi.core.io.storage.HoodieFileBinaryCopier;
+import org.apache.hudi.core.io.storage.HoodieFileMetadataMerger;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.util.HoodieFileMetadataMerger;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;

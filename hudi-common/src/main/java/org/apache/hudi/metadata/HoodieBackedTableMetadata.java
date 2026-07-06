@@ -63,6 +63,7 @@ import org.apache.hudi.common.util.collection.CloseableFilterIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
 import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.common.util.collection.LazyConcatenatingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
@@ -71,8 +72,6 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.util.LazyConcatenatingIterator;
-import org.apache.hudi.util.PartitionPathFilterUtil;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -217,8 +216,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   @Override
   public List<String> getPartitionPathWithPathPrefixes(List<String> relativePathPrefixes) throws IOException {
     // TODO: consider skipping this method for non-partitioned table and simplify the checks
-    java.util.function.Predicate<String> relativePathPrefixesPredicate = PartitionPathFilterUtil
-        .relativePathPrefixPredicate(relativePathPrefixes);
+    java.util.function.Predicate<String> relativePathPrefixesPredicate = HoodieTableMetadataUtil.relativePathPrefixPredicate(relativePathPrefixes);
     return getAllPartitionPaths().stream()
         .filter(relativePathPrefixesPredicate)
         .collect(Collectors.toList());
@@ -911,4 +909,5 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return readIndexRecords(rawKeys, partitionName, Option.empty())
         .mapToPair(hoodieRecord -> SecondaryIndexKeyUtils.getSecondaryKeyRecordKeyPair(hoodieRecord.getRecordKey()));
   }
+
 }

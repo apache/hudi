@@ -25,7 +25,6 @@ import org.apache.hudi.common.schema.internal.Types
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
-import org.apache.hudi.util.PartitionPathFilterUtil
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -112,7 +111,7 @@ class CatalogBackedTableMetadata(engineContext: HoodieEngineContext,
   util.List[String] = {
     // Convert CatalogTablePartition object to String object containing relativePartitionPath.
     // and use relativePathPrefixesPredicate to filter the partition paths further
-    val relativePathPrefixPredicate = PartitionPathFilterUtil.relativePathPrefixPredicate(relativePathPrefix)
+    val relativePathPrefixPredicate = HoodieTableMetadataUtil.relativePathPrefixPredicate(relativePathPrefix)
     catalogTablePartitionSeq
       .map(catalogTablePartition => {
         val partitionPathURI = new StoragePath(catalogTablePartition.location)

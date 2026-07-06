@@ -96,6 +96,7 @@ import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
+import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -120,7 +121,6 @@ import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.util.Lazy;
 
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -3178,5 +3178,16 @@ public class HoodieTableMetadataUtil {
     properties.setProperty(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         Boolean.toString(storageConf.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())));
     return properties;
+  }
+
+  /**
+   * Predicate matching partition paths that equal, or are subdirectories of, any of the given
+   * relative path prefixes; an empty prefix matches all partitions. Partition paths stored in
+   * the metadata table carry no trailing slash, hence the explicit prefix + "/" check.
+   */
+  public static java.util.function.Predicate<String> relativePathPrefixPredicate(List<String> relativePathPrefixes) {
+    return path -> relativePathPrefixes.stream().anyMatch(relativePathPrefix ->
+        StringUtils.isNullOrEmpty(relativePathPrefix)
+            || path.equals(relativePathPrefix) || path.startsWith(relativePathPrefix + "/"));
   }
 }

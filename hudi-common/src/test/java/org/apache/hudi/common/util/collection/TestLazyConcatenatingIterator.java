@@ -16,9 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.util;
-
-import org.apache.hudi.common.util.collection.ClosableIterator;
+package org.apache.hudi.common.util.collection;
 
 import org.junit.jupiter.api.Test;
 

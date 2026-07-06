@@ -16,13 +16,12 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.core.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.util.HoodieFileMetadataMerger;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;

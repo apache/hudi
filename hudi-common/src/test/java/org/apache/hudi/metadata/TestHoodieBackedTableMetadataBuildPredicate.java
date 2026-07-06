@@ -24,8 +24,10 @@ import org.apache.hudi.common.expression.Predicate;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -77,4 +79,30 @@ public class TestHoodieBackedTableMetadataBuildPredicate {
           "Non-secondary index should use STARTS_WITH for isFullKey=false");
     }
   }
+
+  @Test
+  public void testRelativePathPrefixPredicateWithEmptyPrefixMatchesAllPartitions() {
+    java.util.function.Predicate<String> predicate =
+        HoodieTableMetadataUtil.relativePathPrefixPredicate(Collections.singletonList(""));
+    assertTrue(predicate.test("2024/01/01"));
+    assertTrue(predicate.test("country=us/state=ca"));
+  }
+
+  @Test
+  public void testRelativePathPrefixPredicateMatchesExactAndNestedPartitions() {
+    java.util.function.Predicate<String> predicate =
+        HoodieTableMetadataUtil.relativePathPrefixPredicate(Arrays.asList("2024/01", "2024/02/01"));
+    assertTrue(predicate.test("2024/01"), "Exact partition path should match");
+    assertTrue(predicate.test("2024/01/15"), "Nested partition path should match");
+    assertTrue(predicate.test("2024/02/01"), "Exact partition path for second prefix should match");
+  }
+
+  @Test
+  public void testRelativePathPrefixPredicateRejectsNonMatchingPartitions() {
+    java.util.function.Predicate<String> predicate =
+        HoodieTableMetadataUtil.relativePathPrefixPredicate(Collections.singletonList("2024/01"));
+    assertFalse(predicate.test("2024/02/01"));
+    assertFalse(predicate.test("2023/12/31"));
+  }
+
 }

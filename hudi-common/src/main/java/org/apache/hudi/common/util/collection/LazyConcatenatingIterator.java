@@ -16,10 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.util;
+package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import java.util.LinkedList;
 import java.util.List;
