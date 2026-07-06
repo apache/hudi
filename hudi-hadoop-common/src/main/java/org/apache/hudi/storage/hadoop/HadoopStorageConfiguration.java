@@ -20,7 +20,7 @@
 package org.apache.hudi.storage.hadoop;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.fs.inline.HadoopInLineFSUtils;
+import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
@@ -85,7 +85,12 @@ public class HadoopStorageConfiguration extends StorageConfiguration<Configurati
 
   @Override
   public StorageConfiguration<Configuration> getInline() {
-    return HadoopInLineFSUtils.buildInlineConf(this);
+    // newInstance() copies this object's underlying Configuration, so caller-supplied
+    // configs (e.g. S3 credentials) carry over into the inline conf
+    StorageConfiguration<Configuration> inlineConf = newInstance();
+    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+    inlineConf.unwrapAs(Configuration.class).setClassLoader(InLineFileSystem.class.getClassLoader());
+    return inlineConf;
   }
 
   @Override

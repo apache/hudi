@@ -34,7 +34,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.hadoop.fs.inline.HadoopInLineFSUtils;
+import org.apache.hudi.storage.inline.InLineFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -323,7 +323,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String fileName = UUID.randomUUID().toString();
     String logFile = FSUtils.makeInlineLogFileName(fileName, ".log", "100", 2, "1-0-1");
     StoragePath rlPath = new StoragePath(new StoragePath(partitionPath), logFile);
-    StoragePath inlineFsPath = HadoopInLineFSUtils.getInlineFilePath(
+    StoragePath inlineFsPath = InLineFSUtils.getInlineFilePath(
         new StoragePath(rlPath.toUri()), "file", 0, 100);
     assertTrue(FSUtils.isLogFile(rlPath));
     assertTrue(FSUtils.isLogFile(inlineFsPath));

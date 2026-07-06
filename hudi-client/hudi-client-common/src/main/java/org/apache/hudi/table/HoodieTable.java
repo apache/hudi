@@ -81,7 +81,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.metadata.HoodieColumnStatsIndexUtils;
+import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -1153,7 +1153,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
           }
           if (partitionType == MetadataPartitionType.COLUMN_STATS) {
             // delete index definition as well
-            HoodieColumnStatsIndexUtils.deleteColumnStatsIndexDefinition(getMetaClient());
+            HoodieMetadataWriteUtils.deleteColumnStatsIndexDefinition(getMetaClient());
           }
           clearMetadataTablePartitionsConfig(Option.of(partitionType), false);
         } catch (HoodieMetadataException e) {

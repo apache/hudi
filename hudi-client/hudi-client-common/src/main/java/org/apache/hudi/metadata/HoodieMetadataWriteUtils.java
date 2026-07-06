@@ -33,6 +33,7 @@ import org.apache.hudi.common.config.metrics.HoodieMetricsM3Config;
 import org.apache.hudi.common.config.metrics.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -50,6 +51,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.SpillableMapBasedFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -64,6 +66,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 
@@ -434,5 +437,44 @@ public class HoodieMetadataWriteUtils {
             fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
         .filter(e -> Objects.nonNull(e) && !filesWithColumnStats.contains(e) && !fileGroupIdsToReplace.contains(e))
         .collect(Collectors.toSet());
+  }
+
+  /**
+   * Updates the list of columns to index with col stats partition in MDT.
+   * @param dataTable {@link HoodieTable} of interest.
+   * @param config {@link HoodieWriteConfig} of interest.
+   * @param commitMetadata commit metadata of interest.
+   * @param commitActionType commit action type to include interested actions.
+   * @param updateColStatsFunc function to assist with updating columns to index.
+   */
+  @VisibleForTesting
+  public static void updateColsToIndex(HoodieTable dataTable,
+                                       HoodieWriteConfig config,
+                                       HoodieCommitMetadata commitMetadata,
+                                       String commitActionType,
+                                       Functions.Function2<HoodieTableMetaClient, List<String>, Void> updateColStatsFunc) {
+    if (config.isMetadataTableEnabled()                            // this is a data table
+        && config.getMetadataConfig().isColumnStatsIndexEnabled()  // the col_stats is enabled
+        && ActionType.isCommitActionType(commitActionType)) {      // with interested actions
+      dataTable.getMetaClient().reloadTableConfig();
+      try {
+        // update data table's table config for list of columns indexed.
+        List<String> columnsToIndex = new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(commitMetadata, dataTable.getMetaClient(), config.getMetadataConfig(),
+            Option.of(config.getRecordMerger().getRecordType())).keySet());
+        // if col stats is getting updated, lets also update list of columns indexed if changed.
+        updateColStatsFunc.apply(dataTable.getMetaClient(), columnsToIndex);
+      } catch (Exception e) {
+        throw new HoodieException("Updating data table config to latest set of columns indexed with col stats failed ", e);
+      }
+    }
+  }
+
+  /**
+   * Deletes col stats index definition for the given table of interest.
+   * @param dataTableMetaClient {@link HoodieTableMetaClient} instance for the data table.
+   */
+  @VisibleForTesting
+  public static void deleteColumnStatsIndexDefinition(HoodieTableMetaClient dataTableMetaClient) {
+    dataTableMetaClient.deleteIndexDefinition(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
   }
 }
