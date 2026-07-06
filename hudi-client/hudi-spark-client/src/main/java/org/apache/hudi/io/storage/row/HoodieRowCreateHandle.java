@@ -67,6 +67,11 @@ public class HoodieRowCreateHandle implements Serializable {
   private final String fileId;
 
   private final boolean populateMetaFields;
+  // Selective meta-field population when populateMetaFields is false. commit_time enables
+  // incremental queries; file_name enables file-level pruning / investigation lookups. Other meta
+  // columns stay null. Record-key is never populated in these modes.
+  private final boolean populateCommitTime;
+  private final boolean populateFileName;
 
   private final UTF8String fileName;
   private final UTF8String commitTime;
@@ -119,6 +124,11 @@ public class HoodieRowCreateHandle implements Serializable {
     this.path = makeNewPath(storage, partitionPath, fileName, writeConfig);
 
     this.populateMetaFields = writeConfig.populateMetaFields();
+    java.util.Set<String> metaFieldsMode = this.populateMetaFields
+        ? java.util.Collections.emptySet()
+        : writeConfig.getMetaFieldsMode();
+    this.populateCommitTime = !this.populateMetaFields && metaFieldsMode.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+    this.populateFileName = !this.populateMetaFields && metaFieldsMode.contains(HoodieRecord.FILENAME_METADATA_FIELD);
     this.fileName = UTF8String.fromString(path.getName());
     this.commitTime = UTF8String.fromString(instantTime);
     this.seqIdGenerator = (id) -> HoodieRecord.generateSequenceId(instantTime, taskPartitionId, id);
@@ -160,8 +170,42 @@ public class HoodieRowCreateHandle implements Serializable {
   public void write(InternalRow row) throws IOException {
     if (populateMetaFields) {
       writeRow(row);
+    } else if (populateCommitTime || populateFileName) {
+      writeRowSelectiveMetaFields(row);
     } else {
       writeRowNoMetaFields(row);
+    }
+  }
+
+  /**
+   * Selective meta-field write path: populate only the meta columns opted in via
+   * {@code hoodie.meta.fields.mode} — {@code _hoodie_commit_time} (with derived seq id) and/or
+   * {@code _hoodie_file_name}. The other meta columns stay null on disk. Record key is never
+   * populated in this path, so the record key is not registered with the write support (bloom
+   * filter / RLI hooks are meaningless without the record-key column).
+   */
+  private void writeRowSelectiveMetaFields(InternalRow row) {
+    try {
+      UTF8String[] metaFields = new UTF8String[5];
+      if (populateCommitTime) {
+        metaFields[HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD] = shouldPreserveHoodieMetadata
+            ? row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD) : commitTime;
+        metaFields[HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD] = shouldPreserveHoodieMetadata
+            ? row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
+            : UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
+      }
+      if (populateFileName) {
+        metaFields[HoodieRecord.FILENAME_META_FIELD_ORD] = shouldPreserveHoodieMetadata
+            ? row.getUTF8String(HoodieRecord.FILENAME_META_FIELD_ORD) : fileName;
+      }
+      // The remaining meta columns stay null — Parquet stores nulls as definition-level flags
+      // (zero data bytes).
+      InternalRow updatedRow = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(metaFields, row, true);
+      fileWriter.writeRow(updatedRow);
+      writeStatus.markSuccess((HoodieRecordDelegate) null, Option.empty());
+    } catch (Exception e) {
+      writeStatus.setGlobalError(e);
+      throw new HoodieException("Exception thrown while writing spark InternalRows to file ", e);
     }
   }
 

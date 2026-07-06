@@ -47,6 +47,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -1774,6 +1775,39 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean populateMetaFields() {
     return getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+  }
+
+  /**
+   * @return the raw comma-separated value of {@link HoodieTableConfig#META_FIELDS_MODE}, or an
+   * empty string when unset. Callers that need parsed access should use {@link #getMetaFieldsMode()}.
+   */
+  public String getMetaFieldsModeRaw() {
+    return getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE);
+  }
+
+  /**
+   * @return the parsed set of meta columns opted in via {@link HoodieTableConfig#META_FIELDS_MODE}.
+   * Throws when an unrecognized token is present.
+   */
+  public java.util.Set<String> getMetaFieldsMode() {
+    return HoodieTableConfig.parseMetaFieldsMode(getMetaFieldsModeRaw());
+  }
+
+  /**
+   * @return true when {@code _hoodie_commit_time} is physically populated on every row — either
+   * because all meta fields are populated, or because the mode set includes {@code _hoodie_commit_time}.
+   */
+  public boolean isCommitTimePopulated() {
+    return populateMetaFields()
+        || getMetaFieldsMode().contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+  }
+
+  /**
+   * @return true when {@code _hoodie_file_name} is physically populated on every row.
+   */
+  public boolean isFileNamePopulated() {
+    return populateMetaFields()
+        || getMetaFieldsMode().contains(HoodieRecord.FILENAME_METADATA_FIELD);
   }
 
   /**
@@ -3591,6 +3625,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withMetaFieldsMode(String metaFieldsMode) {
+      writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode == null ? "" : metaFieldsMode);
+      return this;
+    }
+
     public Builder withAllowOperationMetadataField(boolean allowOperationMetadataField) {
       writeConfig.setValue(ALLOW_OPERATION_METADATA_FIELD, Boolean.toString(allowOperationMetadataField));
       return this;
@@ -3883,6 +3922,31 @@ public class HoodieWriteConfig extends HoodieConfig {
       checkArgument(ttlStatsMaxParallelism > 0,
           String.format("%s must be positive, but was %d",
               HoodieTTLConfig.STATS_MAX_PARALLELISM.key(), ttlStatsMaxParallelism));
+
+      // hoodie.meta.fields.mode is an additive opt-in on top of populate.meta.fields=false. Setting
+      // populate.meta.fields=true together with a non-empty mode list is ambiguous (the mode list
+      // has no effect when all meta fields are already populated) so reject it explicitly rather
+      // than silently ignore. Also reject unknown tokens up-front — parseMetaFieldsMode throws.
+      boolean populateMetaFields = writeConfig.populateMetaFields();
+      java.util.Set<String> metaFieldsMode = writeConfig.getMetaFieldsMode();
+      checkArgument(!(populateMetaFields && !metaFieldsMode.isEmpty()),
+          String.format("%s must be empty when %s=true. Disable populate.meta.fields or clear the mode list.",
+              HoodieTableConfig.META_FIELDS_MODE.key(),
+              HoodieTableConfig.POPULATE_META_FIELDS.key()));
+      // Selective meta-field modes are CoW-only in this release. MoR log-write path does not yet
+      // respect the mode set, which would silently produce log records with null meta columns.
+      checkArgument(!(writeConfig.getTableType() == HoodieTableType.MERGE_ON_READ && !metaFieldsMode.isEmpty()),
+          String.format("%s is currently supported for COPY_ON_WRITE tables only. MoR support is a follow-up. "
+                  + "For MoR either keep %s=true or leave the mode list empty.",
+              HoodieTableConfig.META_FIELDS_MODE.key(),
+              HoodieTableConfig.POPULATE_META_FIELDS.key()));
+      // Selective meta-field modes are wired only for the Spark writer path in this release. Flink
+      // RowData / Java-client writers ignore the mode and would silently produce NONE-mode output.
+      checkArgument(!(engineType != EngineType.SPARK && !metaFieldsMode.isEmpty()),
+          String.format("%s is currently supported for the Spark writer only. Support for engine=%s is a follow-up. "
+                  + "Either keep %s=true or leave the mode list empty.",
+              HoodieTableConfig.META_FIELDS_MODE.key(), engineType,
+              HoodieTableConfig.POPULATE_META_FIELDS.key()));
     }
 
     public HoodieWriteConfig build() {

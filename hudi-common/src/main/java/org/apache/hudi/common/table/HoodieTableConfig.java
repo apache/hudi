@@ -333,6 +333,15 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated "
           + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
 
+  public static final ConfigProperty<String> META_FIELDS_MODE = ConfigProperty
+      .key("hoodie.meta.fields.mode")
+      .defaultValue("")
+      .withDocumentation("Comma-separated list of meta columns to populate when hoodie.populate.meta.fields=false. "
+          + "Allowed values: _hoodie_commit_time, _hoodie_file_name. Any other value is rejected — to populate the "
+          + "remaining meta columns, set hoodie.populate.meta.fields=true. Ignored when hoodie.populate.meta.fields=true "
+          + "(all meta fields are populated in that case). Set only at table creation, via the hudi-cli, or during "
+          + "table upgrade — the property is immutable at runtime.");
+
   public static final ConfigProperty<String> KEY_GENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.table.keygenerator.class")
       .noDefaultValue()
@@ -1233,6 +1242,76 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public boolean populateMetaFields() {
     return Boolean.parseBoolean(getStringOrDefault(POPULATE_META_FIELDS));
+  }
+
+  /**
+   * @return the set of meta columns explicitly opted in via {@link #META_FIELDS_MODE}. Empty when
+   * the mode is unset or when {@link #POPULATE_META_FIELDS} is {@code true} (in which case all meta
+   * columns are populated and the mode list is ignored). Throws when an unrecognized token is
+   * present — only {@code _hoodie_commit_time} and {@code _hoodie_file_name} are allowed here; to
+   * populate other meta columns, set {@code hoodie.populate.meta.fields=true}.
+   */
+  public Set<String> getMetaFieldsMode() {
+    return parseMetaFieldsMode(getStringOrDefault(META_FIELDS_MODE));
+  }
+
+  /**
+   * Package-visible helper so writer-side validation and CLI can parse without going through a
+   * {@link HoodieTableConfig} instance.
+   */
+  public static Set<String> parseMetaFieldsMode(String raw) {
+    if (raw == null || raw.trim().isEmpty()) {
+      return Collections.emptySet();
+    }
+    Set<String> result = new HashSet<>();
+    for (String token : raw.split(",")) {
+      String field = token.trim();
+      if (field.isEmpty()) {
+        continue;
+      }
+      if (!ALLOWED_META_FIELDS_MODE_VALUES.contains(field)) {
+        throw new IllegalArgumentException(String.format(
+            "Unsupported value '%s' for %s. Allowed values are %s. To populate other meta columns, set %s=true.",
+            field, META_FIELDS_MODE.key(), ALLOWED_META_FIELDS_MODE_VALUES, POPULATE_META_FIELDS.key()));
+      }
+      result.add(field);
+    }
+    return Collections.unmodifiableSet(result);
+  }
+
+  /**
+   * Allowed tokens for {@link #META_FIELDS_MODE}. Any other meta-field name is rejected at parse
+   * time to preserve the "either all meta fields, none, or the two selectable ones" invariant.
+   */
+  public static final Set<String> ALLOWED_META_FIELDS_MODE_VALUES = Collections.unmodifiableSet(
+      new HashSet<>(Arrays.asList(
+          HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+          HoodieRecord.FILENAME_METADATA_FIELD)));
+
+  /**
+   * @return true when the {@code _hoodie_commit_time} meta column is physically populated on disk —
+   * i.e., either all meta fields are populated, or the mode set includes {@code _hoodie_commit_time}.
+   */
+  public boolean isCommitTimePopulated() {
+    return populateMetaFields() || getMetaFieldsMode().contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+  }
+
+  /**
+   * @return true when the {@code _hoodie_file_name} meta column is physically populated on disk —
+   * i.e., either all meta fields are populated, or the mode set includes {@code _hoodie_file_name}.
+   */
+  public boolean isFileNamePopulated() {
+    return populateMetaFields() || getMetaFieldsMode().contains(HoodieRecord.FILENAME_METADATA_FIELD);
+  }
+
+  /**
+   * @return true when the {@code _hoodie_record_key} meta column is physically populated on disk.
+   * The selective mode never populates the record-key column, so this exactly mirrors
+   * {@link #populateMetaFields()} — exposed separately so callers that specifically care about the
+   * record-key column do not need to be updated again if the mode set is extended.
+   */
+  public boolean isRecordKeyPopulated() {
+    return populateMetaFields();
   }
 
   /**
