@@ -35,8 +35,8 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.stats.SparkValueMetadataUtils;
-import org.apache.hudi.stats.ValueType;
+import org.apache.hudi.metadata.stats.SparkValueMetadataUtils;
+import org.apache.hudi.metadata.stats.ValueType;
 import org.apache.hudi.utilities.exception.HoodieJsonToRowConversionException;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;

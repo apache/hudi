@@ -35,8 +35,8 @@ import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieIndexVersion, HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getValidIndexedColumns
-import org.apache.hudi.stats.{SparkValueMetadataUtils, ValueMetadata, ValueType}
-import org.apache.hudi.stats.ValueMetadata.getValueMetadata
+import org.apache.hudi.metadata.stats.{SparkValueMetadataUtils, ValueMetadata, ValueType}
+import org.apache.hudi.metadata.stats.ValueMetadata.getValueMetadata
 import org.apache.hudi.util.JFunction
 
 import org.apache.avro.Conversions.DecimalConversion

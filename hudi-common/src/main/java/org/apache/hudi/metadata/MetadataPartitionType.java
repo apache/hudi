@@ -32,7 +32,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
-import org.apache.hudi.stats.ValueMetadata;
+import org.apache.hudi.metadata.stats.ValueMetadata;
 
 import lombok.Getter;
 import org.apache.avro.generic.GenericRecord;

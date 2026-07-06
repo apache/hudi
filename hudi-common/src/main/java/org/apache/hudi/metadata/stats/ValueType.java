@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.stats;
+package org.apache.hudi.metadata.stats;
 
 import org.apache.hudi.avro.HoodieAvroWrapperUtils;
 import org.apache.hudi.common.schema.HoodieSchema;

@@ -36,8 +36,8 @@ import org.apache.hudi.core.read.BaseHoodieTableFileIndex
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.index.expression.HoodieExpressionIndex
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadataUtil, MetadataPartitionType}
-import org.apache.hudi.stats.{SparkValueMetadataUtils, ValueMetadata, ValueType}
-import org.apache.hudi.stats.ValueMetadata.getValueMetadata
+import org.apache.hudi.metadata.stats.{SparkValueMetadataUtils, ValueMetadata, ValueType}
+import org.apache.hudi.metadata.stats.ValueMetadata.getValueMetadata
 import org.apache.hudi.util.JFunction
 
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}

@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.io.storage.ColumnRangeMetadataProvider;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.HoodieIndexVersion;
-import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;

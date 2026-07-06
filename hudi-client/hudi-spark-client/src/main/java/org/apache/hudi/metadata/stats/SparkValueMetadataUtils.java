@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.stats;
+package org.apache.hudi.metadata.stats;
 
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.metadata.HoodieIndexVersion;

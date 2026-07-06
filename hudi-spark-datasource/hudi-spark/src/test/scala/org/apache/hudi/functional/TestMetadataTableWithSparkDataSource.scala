@@ -31,7 +31,7 @@ import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieIndexVersion, HoodieTableMetadata}
-import org.apache.hudi.stats.HoodieColumnRangeMetadata
+import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata
 import org.apache.hudi.storage.HoodieStorageUtils
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness

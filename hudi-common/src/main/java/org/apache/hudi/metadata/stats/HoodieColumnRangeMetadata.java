@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.stats;
+package org.apache.hudi.metadata.stats;
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -31,7 +31,7 @@ import javax.annotation.Nullable;
 
 import java.io.Serializable;
 
-import static org.apache.hudi.stats.ValueMetadata.getEmptyValueMetadata;
+import static org.apache.hudi.metadata.stats.ValueMetadata.getEmptyValueMetadata;
 
 /**
  * Hoodie metadata for the column range of data stored in columnar format (like Parquet)
