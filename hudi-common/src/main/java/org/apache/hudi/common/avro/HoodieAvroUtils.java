@@ -18,15 +18,20 @@
 
 package org.apache.hudi.common.avro;
 
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.schema.HoodieAvroSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
@@ -1407,15 +1412,85 @@ public class HoodieAvroUtils {
       boolean populateMetaFields,
       Option<HoodieSchema> schemaWithoutMetaFields) {
     if (populateMetaFields) {
-      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
+      return convertToHoodieRecordPayload((GenericRecord) data,
           payloadClass, preCombineFields, withOperation);
     } else if (simpleKeyGenFieldsOpt.isPresent()) {
-      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
+      return convertToHoodieRecordPayload((GenericRecord) data,
           payloadClass, preCombineFields, simpleKeyGenFieldsOpt.get(), withOperation, partitionNameOp, schemaWithoutMetaFields);
     } else {
-      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
+      return convertToHoodieRecordPayload((GenericRecord) data,
           payloadClass, preCombineFields, withOperation, partitionNameOp, schemaWithoutMetaFields);
     }
+  }
+
+  /**
+   * Utility method to convert bytes to HoodieRecord using schema and payload class.
+   */
+  public static <R> HoodieRecord<R> convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz, String[] preCombineFields, boolean withOperationField) {
+    return convertToHoodieRecordPayload(rec, payloadClazz, preCombineFields,
+        Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
+        withOperationField, Option.empty(), Option.empty());
+  }
+
+  public static <R> HoodieRecord<R> convertToHoodieRecordPayload(GenericRecord record, String payloadClazz,
+                                                                 String[] preCombineFields,
+                                                                 boolean withOperationField,
+                                                                 Option<String> partitionName,
+                                                                 Option<HoodieSchema> schemaWithoutMetaFields) {
+    return convertToHoodieRecordPayload(record, payloadClazz, preCombineFields,
+        Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
+        withOperationField, partitionName, schemaWithoutMetaFields);
+  }
+
+  /**
+   * Utility method to convert bytes to HoodieRecord using schema and payload class.
+   */
+  public static <R> HoodieRecord<R> convertToHoodieRecordPayload(GenericRecord record, String payloadClazz,
+                                                                 String[] preCombineFields,
+                                                                 Pair<String, String> recordKeyPartitionPathFieldPair,
+                                                                 boolean withOperationField,
+                                                                 Option<String> partitionName,
+                                                                 Option<HoodieSchema> schemaWithoutMetaFields) {
+    final String recKey = record.get(recordKeyPartitionPathFieldPair.getKey()).toString();
+    final String partitionPath = (partitionName.isPresent() ? partitionName.get() :
+        record.get(recordKeyPartitionPathFieldPair.getRight()).toString());
+
+    Comparable preCombineVal = getPreCombineVal(record, preCombineFields);
+    HoodieOperation operation = withOperationField
+        ? HoodieOperation.fromName(getNullableValAsString(record, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
+
+    if (schemaWithoutMetaFields.isPresent()) {
+      Schema schema = schemaWithoutMetaFields.get().toAvroSchema();
+      GenericRecord recordWithoutMetaFields = new GenericData.Record(schema);
+      for (Schema.Field f : schema.getFields()) {
+        recordWithoutMetaFields.put(f.pos(), record.get(f.name()));
+      }
+      record = recordWithoutMetaFields;
+    }
+
+    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
+        HoodieRecordUtils.loadPayload(payloadClazz, record, preCombineVal), operation);
+    return (HoodieRecord<R>) hoodieRecord;
+  }
+
+  /**
+   * Returns the preCombine value with given field name.
+   *
+   * @param rec The avro record
+   * @param preCombineFields The preCombine field names
+   * @return the preCombine field value or 0 if the field does not exist in the avro schema
+   */
+  private static Comparable getPreCombineVal(GenericRecord rec, @Nullable String[] preCombineFields) {
+    if (preCombineFields == null) {
+      return OrderingValues.getDefault();
+    }
+    // keep consistent with writer side, using Java type for ordering value, see `DefaultHoodieRecordPayload`.
+    return OrderingValues.create(
+        preCombineFields,
+        field -> {
+          Object orderingValue = getNestedFieldVal(rec, field, true, false);
+          return orderingValue == null ? OrderingValues.getDefault() : (Comparable) orderingValue;
+        });
   }
 
   /**
