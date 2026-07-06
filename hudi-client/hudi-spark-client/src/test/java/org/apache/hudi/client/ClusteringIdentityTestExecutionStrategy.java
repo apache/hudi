@@ -29,7 +29,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
-import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.io.SingleFileHandleCreateFactory;
 import org.apache.hudi.table.HoodieTable;
 
@@ -63,7 +63,7 @@ public class ClusteringIdentityTestExecutionStrategy<T extends HoodieRecordPaylo
       throw new HoodieClusteringException("Expect only one partition and one fileId in clustering group for identity strategy: " + getClass().getName());
     }
 
-    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, getWriteConfig());
+    long maxMemoryPerCompaction = MergeUtils.getMaxMemoryPerCompaction(taskContextSupplier, getWriteConfig());
     String fileId = clusteringGroup.getOperations().get(0).getFileId();
     try (ClosableIterator recordItr =
              getRecordIterator(readerContextFactory, clusteringGroup.getOperations().get(0), instantTime, maxMemoryPerCompaction)) {

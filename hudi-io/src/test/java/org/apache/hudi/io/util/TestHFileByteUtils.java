@@ -23,14 +23,14 @@ import org.apache.hudi.io.hfile.UTF8StringKey;
 
 import org.junit.jupiter.api.Test;
 
-import static org.apache.hudi.io.hfile.HFileUtils.isPrefixOfKey;
+import static org.apache.hudi.io.hfile.HFileByteUtils.isPrefixOfKey;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests {@link TestHFileUtils}.
+ * Tests {@link TestHFileByteUtils}.
  */
-public class TestHFileUtils {
+public class TestHFileByteUtils {
   @Test
   public void testIsPrefixOfKey() {
     assertTrue(isPrefixOfKey(new UTF8StringKey(""), new UTF8StringKey("")));

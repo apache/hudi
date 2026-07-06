@@ -26,7 +26,7 @@ import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 /**
  * Util methods for reading and writing HFile.
  */
-public class HFileUtils {
+public class HFileByteUtils {
   /**
    * Reads the HFile major version from the input.
    *

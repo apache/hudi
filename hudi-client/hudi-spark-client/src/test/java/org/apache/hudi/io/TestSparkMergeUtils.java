@@ -29,7 +29,7 @@ import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FRACTI
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestSparkIOUtils {
+public class TestSparkMergeUtils {
   @TempDir
   public java.nio.file.Path basePath;
 
@@ -45,8 +45,8 @@ public class TestSparkIOUtils {
     HoodieMemoryConfig memoryConfig = HoodieMemoryConfig.newBuilder().withMaxMemoryMaxSize(mergeMaxSize, compactionMaxSize).build();
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(path).withMemoryConfig(memoryConfig).build();
 
-    assertEquals(mergeMaxSize, IOUtils.getMaxMemoryPerPartitionMerge(contextSupplier, config));
-    assertEquals(compactionMaxSize, IOUtils.getMaxMemoryPerCompaction(contextSupplier, config));
+    assertEquals(mergeMaxSize, MergeUtils.getMaxMemoryPerPartitionMerge(contextSupplier, config));
+    assertEquals(compactionMaxSize, MergeUtils.getMaxMemoryPerCompaction(contextSupplier, config));
   }
 
   @Test
@@ -56,12 +56,12 @@ public class TestSparkIOUtils {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(path).build();
 
     String compactionFraction = config.getProps().getProperty(MAX_MEMORY_FRACTION_FOR_COMPACTION.key(), MAX_MEMORY_FRACTION_FOR_COMPACTION.defaultValue());
-    long compactionMaxSize = IOUtils.getMaxMemoryAllowedForMerge(contextSupplier, compactionFraction);
+    long compactionMaxSize = MergeUtils.getMaxMemoryAllowedForMerge(contextSupplier, compactionFraction);
 
     String mergeFraction = config.getProps().getProperty(MAX_MEMORY_FRACTION_FOR_MERGE.key(), MAX_MEMORY_FRACTION_FOR_MERGE.defaultValue());
-    long mergeMaxSize = IOUtils.getMaxMemoryAllowedForMerge(contextSupplier, mergeFraction);
+    long mergeMaxSize = MergeUtils.getMaxMemoryAllowedForMerge(contextSupplier, mergeFraction);
 
-    assertEquals(mergeMaxSize, IOUtils.getMaxMemoryPerPartitionMerge(contextSupplier, config));
-    assertEquals(compactionMaxSize, IOUtils.getMaxMemoryPerCompaction(contextSupplier, config));
+    assertEquals(mergeMaxSize, MergeUtils.getMaxMemoryPerPartitionMerge(contextSupplier, config));
+    assertEquals(compactionMaxSize, MergeUtils.getMaxMemoryPerCompaction(contextSupplier, config));
   }
 }

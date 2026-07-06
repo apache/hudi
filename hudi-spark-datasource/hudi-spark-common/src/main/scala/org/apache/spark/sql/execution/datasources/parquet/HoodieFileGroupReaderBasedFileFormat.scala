@@ -34,7 +34,7 @@ import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.exception.HoodieNotSupportedException
-import org.apache.hudi.io.IOUtils
+import org.apache.hudi.io.MergeUtils
 import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
 import org.apache.hudi.io.storage.VectorConversionUtils
 import org.apache.hudi.storage.StorageConfiguration
@@ -286,7 +286,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
 
     val engineContext = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
-    val maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(engineContext.getTaskContextSupplier, options.asJava)
+    val maxMemoryPerCompaction = MergeUtils.getMaxMemoryPerCompaction(engineContext.getTaskContextSupplier, options.asJava)
 
     // Create metaclient on driver to avoid expensive operations on executors
     val metaClient: HoodieTableMetaClient = HoodieTableMetaClient

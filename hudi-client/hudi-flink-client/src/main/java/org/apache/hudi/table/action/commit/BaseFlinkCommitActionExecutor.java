@@ -36,7 +36,7 @@ import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
-import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -192,7 +192,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
     ValidationUtils.checkArgument(this.writeHandle instanceof HoodieMergeHandle,
         "`writeHandle` should be an instance of `HoodieMergeHandle`");
     // these are updates
-    return IOUtils.runMerge((HoodieMergeHandle<?, ?, ?, ?>) this.writeHandle, instantTime, fileId);
+    return MergeUtils.runMerge((HoodieMergeHandle<?, ?, ?, ?>) this.writeHandle, instantTime, fileId);
   }
 
   @Override

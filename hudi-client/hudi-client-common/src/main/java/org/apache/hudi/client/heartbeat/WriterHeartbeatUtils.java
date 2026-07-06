@@ -36,7 +36,7 @@ import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.getLastHeart
  * Helper class to delete heartbeat for completed or failed instants with expired heartbeats.
  */
 @Slf4j
-public class HeartbeatUtils {
+public class WriterHeartbeatUtils {
 
   /**
    * Deletes the heartbeat file for the specified instant.

@@ -19,7 +19,7 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.util.CheckpointUtils.CheckpointFormat;
+import org.apache.hudi.common.util.KafkaCheckpointUtils.CheckpointFormat;
 
 import org.junit.jupiter.api.Test;
 
@@ -31,14 +31,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests for CheckpointUtils - Phase 1 core functionality.
+ * Tests for KafkaCheckpointUtils - Phase 1 core functionality.
  */
-public class TestCheckpointUtils {
+public class TestKafkaCheckpointUtils {
 
   @Test
   public void testParseSparkKafkaCheckpoint() {
     String checkpoint = "test_topic,0:100,1:200,2:150";
-    Map<Integer, Long> offsets = CheckpointUtils.parseCheckpoint(
+    Map<Integer, Long> offsets = KafkaCheckpointUtils.parseCheckpoint(
         CheckpointFormat.SPARK_KAFKA, checkpoint);
 
     assertEquals(3, offsets.size());
@@ -50,7 +50,7 @@ public class TestCheckpointUtils {
   @Test
   public void testParseSinglePartition() {
     String checkpoint = "my_topic,0:1000";
-    Map<Integer, Long> offsets = CheckpointUtils.parseCheckpoint(
+    Map<Integer, Long> offsets = KafkaCheckpointUtils.parseCheckpoint(
         CheckpointFormat.SPARK_KAFKA, checkpoint);
 
     assertEquals(1, offsets.size());
@@ -60,49 +60,49 @@ public class TestCheckpointUtils {
   @Test
   public void testParseInvalidFormat() {
     assertThrows(IllegalArgumentException.class, () ->
-        CheckpointUtils.parseCheckpoint(CheckpointFormat.SPARK_KAFKA, "invalid"));
+        KafkaCheckpointUtils.parseCheckpoint(CheckpointFormat.SPARK_KAFKA, "invalid"));
 
     assertThrows(IllegalArgumentException.class, () ->
-        CheckpointUtils.parseCheckpoint(CheckpointFormat.SPARK_KAFKA, "topic"));
+        KafkaCheckpointUtils.parseCheckpoint(CheckpointFormat.SPARK_KAFKA, "topic"));
 
     assertThrows(IllegalArgumentException.class, () ->
-        CheckpointUtils.parseCheckpoint(CheckpointFormat.SPARK_KAFKA, ""));
+        KafkaCheckpointUtils.parseCheckpoint(CheckpointFormat.SPARK_KAFKA, ""));
 
     assertThrows(IllegalArgumentException.class, () ->
-        CheckpointUtils.parseCheckpoint(CheckpointFormat.SPARK_KAFKA, null));
+        KafkaCheckpointUtils.parseCheckpoint(CheckpointFormat.SPARK_KAFKA, null));
   }
 
   @Test
   public void testParseInvalidPartitionOffset() {
     assertThrows(IllegalArgumentException.class, () ->
-        CheckpointUtils.parseCheckpoint(CheckpointFormat.SPARK_KAFKA, "topic,0:abc"));
+        KafkaCheckpointUtils.parseCheckpoint(CheckpointFormat.SPARK_KAFKA, "topic,0:abc"));
 
     assertThrows(IllegalArgumentException.class, () ->
-        CheckpointUtils.parseCheckpoint(CheckpointFormat.SPARK_KAFKA, "topic,abc:100"));
+        KafkaCheckpointUtils.parseCheckpoint(CheckpointFormat.SPARK_KAFKA, "topic,abc:100"));
 
     assertThrows(IllegalArgumentException.class, () ->
-        CheckpointUtils.parseCheckpoint(CheckpointFormat.SPARK_KAFKA, "topic,0-100"));
+        KafkaCheckpointUtils.parseCheckpoint(CheckpointFormat.SPARK_KAFKA, "topic,0-100"));
   }
 
   @Test
   public void testExtractTopicName() {
     assertEquals("test_topic",
-        CheckpointUtils.extractTopicName("test_topic,0:100,1:200"));
+        KafkaCheckpointUtils.extractTopicName("test_topic,0:100,1:200"));
     assertEquals("my.topic.name",
-        CheckpointUtils.extractTopicName("my.topic.name,0:1000"));
+        KafkaCheckpointUtils.extractTopicName("my.topic.name,0:1000"));
   }
 
   @Test
   public void testExtractTopicNameInvalid() {
     assertThrows(IllegalArgumentException.class, () ->
-        CheckpointUtils.extractTopicName(""));
+        KafkaCheckpointUtils.extractTopicName(""));
 
     assertThrows(IllegalArgumentException.class, () ->
-        CheckpointUtils.extractTopicName(null));
+        KafkaCheckpointUtils.extractTopicName(null));
 
     // Topic-only without partition data should be invalid
     assertThrows(IllegalArgumentException.class, () ->
-        CheckpointUtils.extractTopicName("just_topic"));
+        KafkaCheckpointUtils.extractTopicName("just_topic"));
   }
 
   @Test
@@ -111,7 +111,7 @@ public class TestCheckpointUtils {
     String current = "topic,0:150,1:300";
 
     // (150-100) + (300-200) = 50 + 100 = 150
-    long diff = CheckpointUtils.calculateOffsetDifference(
+    long diff = KafkaCheckpointUtils.calculateOffsetDifference(
         CheckpointFormat.SPARK_KAFKA, previous, current);
     assertEquals(150L, diff);
   }
@@ -121,7 +121,7 @@ public class TestCheckpointUtils {
     String previous = "topic,0:100,1:200";
     String current = "topic,0:100,1:200";
 
-    long diff = CheckpointUtils.calculateOffsetDifference(
+    long diff = KafkaCheckpointUtils.calculateOffsetDifference(
         CheckpointFormat.SPARK_KAFKA, previous, current);
     assertEquals(0L, diff);
   }
@@ -134,7 +134,7 @@ public class TestCheckpointUtils {
     // Partition 0: 150-100 = 50
     // Partition 1: new partition, skipped (start offset unknown)
     // Total: 50
-    long diff = CheckpointUtils.calculateOffsetDifference(
+    long diff = KafkaCheckpointUtils.calculateOffsetDifference(
         CheckpointFormat.SPARK_KAFKA, previous, current);
     assertEquals(50L, diff);
   }
@@ -146,7 +146,7 @@ public class TestCheckpointUtils {
 
     // Only partition 0 exists in both: 150-100 = 50
     // Partition 1 ignored (not in current)
-    long diff = CheckpointUtils.calculateOffsetDifference(
+    long diff = KafkaCheckpointUtils.calculateOffsetDifference(
         CheckpointFormat.SPARK_KAFKA, previous, current);
     assertEquals(50L, diff);
   }
@@ -159,7 +159,7 @@ public class TestCheckpointUtils {
 
     // When current < previous (offset reset), partition is skipped
     // to avoid overcounting since start offset is unknown
-    long diff = CheckpointUtils.calculateOffsetDifference(
+    long diff = KafkaCheckpointUtils.calculateOffsetDifference(
         CheckpointFormat.SPARK_KAFKA, previous, current);
     assertEquals(0L, diff);
   }
@@ -172,29 +172,29 @@ public class TestCheckpointUtils {
     // Partition 0: reset, skipped to avoid overcounting
     // Partition 1: normal increment = 2500-2000 = 500
     // Total: 500
-    long diff = CheckpointUtils.calculateOffsetDifference(
+    long diff = KafkaCheckpointUtils.calculateOffsetDifference(
         CheckpointFormat.SPARK_KAFKA, previous, current);
     assertEquals(500L, diff);
   }
 
   @Test
   public void testIsValidCheckpointFormat() {
-    assertTrue(CheckpointUtils.isValidCheckpointFormat(
+    assertTrue(KafkaCheckpointUtils.isValidCheckpointFormat(
         CheckpointFormat.SPARK_KAFKA, "topic,0:100"));
-    assertTrue(CheckpointUtils.isValidCheckpointFormat(
+    assertTrue(KafkaCheckpointUtils.isValidCheckpointFormat(
         CheckpointFormat.SPARK_KAFKA, "topic,0:100,1:200,2:300"));
-    assertTrue(CheckpointUtils.isValidCheckpointFormat(
+    assertTrue(KafkaCheckpointUtils.isValidCheckpointFormat(
         CheckpointFormat.SPARK_KAFKA, "my.topic.name,0:1000"));
 
-    assertFalse(CheckpointUtils.isValidCheckpointFormat(
+    assertFalse(KafkaCheckpointUtils.isValidCheckpointFormat(
         CheckpointFormat.SPARK_KAFKA, ""));
-    assertFalse(CheckpointUtils.isValidCheckpointFormat(
+    assertFalse(KafkaCheckpointUtils.isValidCheckpointFormat(
         CheckpointFormat.SPARK_KAFKA, null));
-    assertFalse(CheckpointUtils.isValidCheckpointFormat(
+    assertFalse(KafkaCheckpointUtils.isValidCheckpointFormat(
         CheckpointFormat.SPARK_KAFKA, "just_topic"));
-    assertFalse(CheckpointUtils.isValidCheckpointFormat(
+    assertFalse(KafkaCheckpointUtils.isValidCheckpointFormat(
         CheckpointFormat.SPARK_KAFKA, "topic,invalid"));
-    assertFalse(CheckpointUtils.isValidCheckpointFormat(
+    assertFalse(KafkaCheckpointUtils.isValidCheckpointFormat(
         CheckpointFormat.SPARK_KAFKA, "topic,0:abc"));
   }
 
@@ -202,17 +202,17 @@ public class TestCheckpointUtils {
   public void testUnsupportedFormats() {
     // Pulsar format not yet implemented (Phase 4)
     assertThrows(UnsupportedOperationException.class, () ->
-        CheckpointUtils.parseCheckpoint(CheckpointFormat.PULSAR, "anystring"));
+        KafkaCheckpointUtils.parseCheckpoint(CheckpointFormat.PULSAR, "anystring"));
 
     // Kinesis format not yet implemented (Phase 4)
     assertThrows(UnsupportedOperationException.class, () ->
-        CheckpointUtils.parseCheckpoint(CheckpointFormat.KINESIS, "anystring"));
+        KafkaCheckpointUtils.parseCheckpoint(CheckpointFormat.KINESIS, "anystring"));
   }
 
   @Test
   public void testFlinkKafkaCheckpointParsing() {
     // Flink Kafka format is now implemented (Phase 2)
-    Map<Integer, Long> result = CheckpointUtils.parseCheckpoint(
+    Map<Integer, Long> result = KafkaCheckpointUtils.parseCheckpoint(
         CheckpointFormat.FLINK_KAFKA,
         "kafka_metadata%3Aevents%3A0:100;kafka_metadata%3Aevents%3A1:200");
     assertEquals(2, result.size());
@@ -223,24 +223,24 @@ public class TestCheckpointUtils {
   @Test
   public void testCustomFormatThrows() {
     assertThrows(IllegalArgumentException.class, () ->
-        CheckpointUtils.parseCheckpoint(CheckpointFormat.CUSTOM, "anystring"));
+        KafkaCheckpointUtils.parseCheckpoint(CheckpointFormat.CUSTOM, "anystring"));
   }
 
   @Test
   public void testIsValidCheckpointFormatUnsupported() {
     // Unsupported formats should return false (caught internally)
-    assertFalse(CheckpointUtils.isValidCheckpointFormat(
+    assertFalse(KafkaCheckpointUtils.isValidCheckpointFormat(
         CheckpointFormat.CUSTOM, "anystring"));
   }
 
   @Test
   public void testIsValidCheckpointFormatFlinkKafka() {
     // Flink Kafka format is now supported (Phase 2)
-    assertTrue(CheckpointUtils.isValidCheckpointFormat(
+    assertTrue(KafkaCheckpointUtils.isValidCheckpointFormat(
         CheckpointFormat.FLINK_KAFKA,
         "kafka_metadata%3Aevents%3A0:100;kafka_metadata%3Aevents%3A1:200"));
     // Invalid Flink checkpoint should return false
-    assertFalse(CheckpointUtils.isValidCheckpointFormat(
+    assertFalse(KafkaCheckpointUtils.isValidCheckpointFormat(
         CheckpointFormat.FLINK_KAFKA, ""));
   }
 }

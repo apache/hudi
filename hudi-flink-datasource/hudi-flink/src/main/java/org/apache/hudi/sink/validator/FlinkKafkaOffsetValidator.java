@@ -21,7 +21,7 @@ package org.apache.hudi.sink.validator;
 
 import org.apache.hudi.client.validator.StreamingOffsetValidator;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.CheckpointUtils.CheckpointFormat;
+import org.apache.hudi.common.util.KafkaCheckpointUtils.CheckpointFormat;
 import org.apache.hudi.util.StreamerUtil;
 
 /**

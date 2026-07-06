@@ -54,7 +54,7 @@ import java.util.Map;
  *   Note: To be implemented in Phase 4
  */
 @Slf4j
-public class CheckpointUtils {
+public class KafkaCheckpointUtils {
 
   /**
    * Supported checkpoint formats across engines and sources.

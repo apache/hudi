@@ -36,7 +36,7 @@ import java.util.List;
 /**
  * Utils for secondary index.
  */
-public class SecondaryIndexUtils {
+public class SecondaryIndexDefinitionUtils {
 
   /**
    * Get secondary index metadata for this table
@@ -46,7 +46,7 @@ public class SecondaryIndexUtils {
    */
   public static Option<List<HoodieSecondaryIndex>> getSecondaryIndexes(HoodieTableMetaClient metaClient) {
     Option<String> indexesMetadata = metaClient.getTableConfig().getSecondaryIndexesMetadata();
-    return indexesMetadata.map(SecondaryIndexUtils::fromJsonString);
+    return indexesMetadata.map(SecondaryIndexDefinitionUtils::fromJsonString);
   }
 
   /**
@@ -57,7 +57,7 @@ public class SecondaryIndexUtils {
    */
   public static List<HoodieSecondaryIndex> fromJsonString(String jsonStr) {
     try {
-      return SecondaryIndexUtils.fromJsonString(jsonStr,
+      return SecondaryIndexDefinitionUtils.fromJsonString(jsonStr,
           new TypeReference<List<HoodieSecondaryIndex>>() {
           });
     } catch (Exception e) {

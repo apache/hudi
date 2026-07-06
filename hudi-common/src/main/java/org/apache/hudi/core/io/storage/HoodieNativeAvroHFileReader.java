@@ -63,7 +63,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
-import static org.apache.hudi.io.hfile.HFileUtils.isPrefixOfKey;
+import static org.apache.hudi.io.hfile.HFileByteUtils.isPrefixOfKey;
 
 /**
  * An implementation of {@link HoodieAvroHFileReaderImplBase} using native {@link HFileReader}.

@@ -43,7 +43,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.core.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieClusteringException;
-import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.metrics.FlinkClusteringMetrics;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
@@ -274,7 +274,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   @SuppressWarnings("unchecked")
   private Iterator<RowData> readRecordsForGroupWithLogs(List<ClusteringOperation> clusteringOps, String instantTime) {
     List<ClosableIterator<RowData>> recordIterators = new ArrayList<>();
-    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new FlinkTaskContextSupplier(null), writeConfig);
+    long maxMemoryPerCompaction = MergeUtils.getMaxMemoryPerCompaction(new FlinkTaskContextSupplier(null), writeConfig);
     log.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
 
     for (ClusteringOperation clusteringOp : clusteringOps) {

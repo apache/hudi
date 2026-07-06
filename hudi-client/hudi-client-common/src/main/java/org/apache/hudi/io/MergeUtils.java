@@ -41,7 +41,7 @@ import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FRACTI
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE;
 
 @Slf4j
-public class IOUtils {
+public class MergeUtils {
 
   /**
    * Dynamic calculation of max memory to use for spillable map. There is always more than one task

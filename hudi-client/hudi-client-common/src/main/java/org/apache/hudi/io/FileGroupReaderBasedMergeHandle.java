@@ -206,7 +206,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         storage,
         getWriterSchema(),
         createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX, Option.empty()),
-        IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
+        MergeUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 
   private void init(CompactionOperation operation, String partitionPath) {
@@ -335,8 +335,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   }
 
   protected long getMaxMemoryForMerge() {
-    return compactionOperation.isPresent() ? IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config)
-        : IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
+    return compactionOperation.isPresent() ? MergeUtils.getMaxMemoryPerCompaction(taskContextSupplier, config)
+        : MergeUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
   }
 
   protected HoodieRecordReader<T> getFileGroupReader(boolean usePosition, Option<InternalSchema> internalSchemaOption, TypedProperties props,
