@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.common.model.{HoodieRecordMerger, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
@@ -157,6 +158,35 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
       "type" -> "cow"
     )
     HoodieOptionConfig.validateTable(spark, schema, sqlOptions6)
+  }
+
+  @Test
+  def testValidateTableRejectsBlobKeyFields(): Unit = {
+    val blobMetadata = new MetadataBuilder()
+      .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.BLOB.name())
+      .build()
+    val schema = StructType(
+      Seq(StructField("id", IntegerType, true),
+        StructField("ts", LongType, true),
+        StructField("data", BlobType().asInstanceOf[StructType], true, blobMetadata))
+    )
+
+    // record key = blob -> rejected
+    val ePk = intercept[IllegalArgumentException] {
+      HoodieOptionConfig.validateTable(spark, schema, Map("primaryKey" -> "data", "type" -> "cow"))
+    }
+    assertTrue(ePk.getMessage.contains("BLOB type column"))
+
+    // ordering(preCombine) = blob -> rejected
+    val eOrd = intercept[IllegalArgumentException] {
+      HoodieOptionConfig.validateTable(spark, schema,
+        Map("primaryKey" -> "id", "orderingFields" -> "data", "type" -> "mor"))
+    }
+    assertTrue(eOrd.getMessage.contains("BLOB type column"))
+
+    // blob column present but keys point at non-blob columns -> ok
+    HoodieOptionConfig.validateTable(spark, schema,
+      Map("primaryKey" -> "id", "orderingFields" -> "ts", "type" -> "cow"))
   }
 
 }

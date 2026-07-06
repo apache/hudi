@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.HoodieSchemaUtils
 import org.apache.hudi.avro.HoodieAvroUtils.getRootLevelFieldName
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -232,6 +233,11 @@ object HoodieOptionConfig {
         ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, getRootLevelFieldName(primaryKey))),
           s"Can't find primaryKey `$primaryKey` in ${schema.treeString}.")
       }
+      val pkBlobs = HoodieSchemaUtils.findBlobFields(schema, primaryKeys.get.mkString(","), resolver)
+      ValidationUtils.checkArgument(pkBlobs.isEmpty,
+        s"BLOB type column(s) ${pkBlobs.mkString("[", ", ", "]")} cannot be used as primaryKey (record key). " +
+          "BLOB columns hold large binary payloads (INLINE or EXTERNAL) and are not supported as " +
+          "record key, ordering/preCombine, or partition path fields.")
     }
 
     // validate preCombine key
@@ -239,6 +245,11 @@ object HoodieOptionConfig {
     if (orderingFields.isDefined && orderingFields.get.nonEmpty) {
       ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, getRootLevelFieldName(orderingFields.get))),
         s"Can't find ordering fields `${orderingFields.get}` in ${schema.treeString}.")
+      val orderingBlobs = HoodieSchemaUtils.findBlobFields(schema, orderingFields.get, resolver)
+      ValidationUtils.checkArgument(orderingBlobs.isEmpty,
+        s"BLOB type column(s) ${orderingBlobs.mkString("[", ", ", "]")} cannot be used as orderingFields (preCombine field). " +
+          "BLOB columns hold large binary payloads (INLINE or EXTERNAL) and are not supported as " +
+          "record key, ordering/preCombine, or partition path fields.")
     }
 
     // validate table type

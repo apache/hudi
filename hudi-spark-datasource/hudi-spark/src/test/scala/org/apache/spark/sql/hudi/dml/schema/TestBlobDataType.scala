@@ -282,4 +282,72 @@ class TestBlobDataType extends HoodieSparkSqlTestBase {
         "Expected at least one .clean instant on the timeline after compaction")
     })
   }
+
+  test("Test BLOB column rejected as primaryKey / preCombine / partition path (DDL)") {
+    withRecordType()(withTempDir { tmp =>
+      def ddl(tableName: String, props: String, partitionedBy: String = ""): String =
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  data blob,
+           |  ts long
+           |) using hudi
+           | location '${new File(tmp, tableName).getCanonicalPath}'
+           | $partitionedBy
+           | tblproperties ( $props )
+       """.stripMargin
+
+      // primaryKey = blob column -> rejected
+      checkExceptionContain(ddl(generateTableName,
+        "primaryKey = 'data', type = 'cow'"))("BLOB type column")
+
+      // multi-field primaryKey including a blob column -> rejected, message names 'data'
+      checkExceptionContain(ddl(generateTableName,
+        "primaryKey = 'id,data', type = 'cow'"))("data")
+
+      // case-insensitive match: 'DATA' resolves to blob column 'data' -> rejected
+      checkExceptionContain(ddl(generateTableName,
+        "primaryKey = 'DATA', type = 'cow'"))("BLOB type column")
+
+      // preCombineField = blob column -> rejected
+      checkExceptionContain(ddl(generateTableName,
+        "primaryKey = 'id', preCombineField = 'data', type = 'mor'"))("BLOB type column")
+
+      // partition path via PARTITIONED BY = blob column -> rejected.
+      // Spark itself rejects a struct-typed partition column before Hudi's check runs, so the
+      // message comes from Spark ("for partition column"); the BLOB is still rejected.
+      checkExceptionContain(ddl(generateTableName,
+        "primaryKey = 'id', type = 'cow'", partitionedBy = "partitioned by (data)"))("for partition column")
+
+      // partition path via tblproperties = blob column -> rejected by Hudi's check
+      checkExceptionContain(ddl(generateTableName,
+        "primaryKey = 'id', type = 'cow', hoodie.datasource.write.partitionpath.field = 'data'"))("BLOB type column")
+    })
+  }
+
+  test("Test BLOB column allowed when keys point at non-BLOB columns (DDL regression)") {
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      // A blob column is present but record key / preCombine / partition all point at non-blob columns.
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  data blob,
+           |  ts long,
+           |  part string
+           |) using hudi
+           | location '${new File(tmp, tableName).getCanonicalPath}'
+           | partitioned by (part)
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  type = 'cow'
+           | )
+       """.stripMargin)
+      spark.sql(
+        s"insert into $tableName values (1, ${inlineBlobLiteral("01")}, 1000, 'a')")
+      assertResult(1)(spark.sql(s"select id from $tableName").collect().length)
+    })
+  }
 }

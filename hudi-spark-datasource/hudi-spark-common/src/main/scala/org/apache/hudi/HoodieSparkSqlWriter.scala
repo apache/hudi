@@ -70,6 +70,7 @@ import org.apache.hadoop.hive.shims.ShimLoader
 import org.apache.spark.{SPARK_VERSION, SparkContext}
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.execution.{QueryExecution, SQLExecution}
 import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.types.StructType
@@ -233,6 +234,8 @@ class HoodieSparkSqlWriterInternal {
     // Validate datasource and tableconfig keygen are the same
     validateKeyGeneratorConfig(originKeyGeneratorClassName, tableConfig)
     validateTableConfig(sparkSession, optParams, tableConfig, mode == SaveMode.Overwrite)
+    // Reject BLOB columns used as record key / ordering(preCombine) / partition path fields.
+    validateBlobFieldUsage(sourceDf.schema, optParams, sparkSession.sessionState.conf.resolver)
 
     asyncCompactionTriggerFnDefined = streamingWritesParamsOpt.map(_.asyncCompactionTriggerFn.isDefined).orElse(Some(false)).get
     asyncClusteringTriggerFnDefined = streamingWritesParamsOpt.map(_.asyncClusteringTriggerFn.isDefined).orElse(Some(false)).get
@@ -710,6 +713,8 @@ class HoodieSparkSqlWriterInternal {
     // fetch table config for an already existing table and SaveMode is not Overwrite.
     val tableConfig = getHoodieTableConfig(sparkContext, path, mode, hoodieTableConfigOpt)
     validateTableConfig(sparkSession, optParams, tableConfig, mode == SaveMode.Overwrite)
+    // Reject BLOB columns used as record key / ordering(preCombine) / partition path fields.
+    validateBlobFieldUsage(df.schema, optParams, sparkSession.sessionState.conf.resolver)
 
     val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig, mode, streamingWritesParamsOpt.isDefined)
     val tableName = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TBL_NAME, s"'${HoodieWriteConfig.TBL_NAME.key}' must be set.")
@@ -811,6 +816,31 @@ class HoodieSparkSqlWriterInternal {
       throw new HoodieException(HoodieRecord.HOODIE_IS_DELETED_FIELD + " has to be BOOLEAN type. Passed in dataframe's schema has type "
         + fieldOpt.get().schema().getType)
     }
+  }
+
+  /**
+   * Rejects BLOB-typed columns used as record key, ordering(preCombine), or partition path fields.
+   * BLOB columns hold large binary payloads (INLINE or EXTERNAL); using them as keys balloons the
+   * record key / shuffle / metadata index, or ties record identity to a storage path. Fails fast
+   * with a clear message naming the offending column(s).
+   */
+  private def validateBlobFieldUsage(schema: StructType,
+                                     optParams: Map[String, String],
+                                     resolver: Resolver): Unit = {
+    def check(spec: Option[String], usage: String): Unit = spec.foreach { s =>
+      val blobs = HoodieSchemaUtils.findBlobFields(schema, s, resolver)
+      if (blobs.nonEmpty) {
+        throw new HoodieException(
+          s"BLOB type column(s) ${blobs.mkString("[", ", ", "]")} cannot be used as $usage. " +
+            "BLOB columns hold large binary payloads (INLINE or EXTERNAL) and are not supported as " +
+            "record key, ordering/preCombine, or partition path fields.")
+      }
+    }
+
+    check(optParams.get(DataSourceWriteOptions.RECORDKEY_FIELD.key()), "record key")
+    check(optParams.get(DataSourceWriteOptions.PARTITIONPATH_FIELD.key())
+      .map(p => getPartitionColumns(p).map(_.split(":")(0)).mkString(",")), "partition path field")
+    check(optParams.get(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key()), "ordering field (preCombine)")
   }
 
   def bulkInsertAsRow(writeClient: SparkRDDWriteClient[_],
