@@ -21,6 +21,7 @@ package org.apache.hudi.core.transaction.lock;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +49,18 @@ public class TestNoopLockProvider {
     lockConfiguration1 = new LockConfiguration(properties);
     properties.put(HoodieCommonConfig.BASE_PATH.key(), "table2");
     lockConfiguration2 = new LockConfiguration(properties);
+  }
+
+  @Test
+  public void testLegacyClassNameResolvesViaCompatAlias() {
+    // Guards the upgrade path: configs carrying the pre-1.3.0 FQN must keep resolving,
+    // mirroring LockManager's reflective load (see TestSevenToEightUpgrade CsvSource).
+    Object provider = ReflectionUtils.loadClass("org.apache.hudi.client.transaction.lock.NoopLockProvider",
+        new Class<?>[] {LockConfiguration.class, StorageConfiguration.class},
+        lockConfiguration1, storageConf);
+    Assertions.assertTrue(provider instanceof NoopLockProvider);
+    assertDoesNotThrow(((NoopLockProvider) provider)::lock);
+    assertDoesNotThrow(((NoopLockProvider) provider)::unlock);
   }
 
   @Test
