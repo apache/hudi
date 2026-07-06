@@ -412,6 +412,32 @@ public class ConfigUtils {
   }
 
   /**
+   * Gets the raw value for a {@link ConfigProperty} config using a key mapping function. The key
+   * and alternative keys are used to fetch the config. Unlike
+   * {@link #getStringWithAltKeys(Function, ConfigProperty)}, this does not fall back to the
+   * config's default value when the config is not found.
+   *
+   * @param keyMapper      Mapper function to map the key to values.
+   * @param configProperty {@link ConfigProperty} config to fetch.
+   * @return {@link Option} of value if the config exists; empty {@link Option} otherwise.
+   */
+  public static Option<Object> getRawValueWithAltKeys(Function<String, Object> keyMapper,
+                                                      ConfigProperty<?> configProperty) {
+    Object value = keyMapper.apply(configProperty.key());
+    if (value != null) {
+      return Option.of(value);
+    }
+    for (String alternative : configProperty.getAlternatives()) {
+      Object altValue = keyMapper.apply(alternative);
+      if (altValue != null) {
+        deprecationWarning(alternative, configProperty);
+        return Option.of(altValue);
+      }
+    }
+    return Option.empty();
+  }
+
+  /**
    * Gets the raw value for a {@link ConfigProperty<T>} config from properties with the option
    * of using default value.
    *

@@ -21,7 +21,6 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.ConfigProperty;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 
 import java.util.Properties;
@@ -29,7 +28,6 @@ import java.util.Properties;
 /**
  * Utils on Hadoop {@link Configuration}.
  */
-@Slf4j
 public class HadoopConfigUtils {
 
   /**
@@ -54,19 +52,6 @@ public class HadoopConfigUtils {
    */
   public static Option<String> getRawValueWithAltKeys(Configuration conf,
                                                       ConfigProperty<?> configProperty) {
-    String value = conf.get(configProperty.key());
-    if (value != null) {
-      return Option.of(value);
-    }
-    for (String alternative : configProperty.getAlternatives()) {
-      String altValue = conf.get(alternative);
-      if (altValue != null) {
-        log.warn("The configuration key '{}' has been deprecated "
-            + "and may be removed in the future. Please use the new key '{}' instead.",
-            alternative, configProperty.key());
-        return Option.of(altValue);
-      }
-    }
-    return Option.empty();
+    return ConfigUtils.getRawValueWithAltKeys(conf::get, configProperty).map(Object::toString);
   }
 }
