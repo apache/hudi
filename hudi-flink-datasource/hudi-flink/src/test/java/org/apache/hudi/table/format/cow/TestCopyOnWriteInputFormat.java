@@ -171,7 +171,8 @@ class TestCopyOnWriteInputFormat {
         true,
         InternalSchemaManager.DISABLED,
         HoodieSchemaConverter.convertToSchema(
-            TestConfigurations.ROW_TYPE.copy()));
+            TestConfigurations.ROW_TYPE.copy()),
+        new org.apache.flink.configuration.Configuration());
   }
 
   private static FileStatus fileStatus(String name) {
