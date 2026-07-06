@@ -46,8 +46,9 @@ public final class FileNameParser {
       Pattern.compile("^\\.([^._]+)_([^.]*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(\\.cdc)?)?$");
   static final Pattern NATIVE_LOG_FILE_PATTERN =
       Pattern.compile("^([^._]+)_((\\d+)-(\\d+)-(\\d+))_([^_]+)_(\\d+)\\.(log|deletes|cdc)\\.([^.]+)$");
-  static final Pattern BASE_FILE_PATTERN = Pattern.compile("[a-zA-Z0-9-]+_[a-zA-Z0-9-]+_[0-9]+\\.[a-zA-Z0-9]+");
   private static final Pattern PREFIX_BY_FILE_ID_PATTERN = Pattern.compile("^(.+)-(\\d+)");
+  private static final char UNDERSCORE = '_';
+  private static final char DOT = '.';
 
   private FileNameParser() {
   }
@@ -55,9 +56,12 @@ public final class FileNameParser {
   /**
    * Parses a Hudi-generated base file name.
    *
-   * <p>Expected format: {@code <fileId>_<writeToken>_<commitTime>.<extension>}.
-   * The decoded {@link BaseFileName#getFileExtension()} value includes the leading dot, matching existing
-   * base-file helper API behavior.</p>
+   * <p>Expected format: {@code <fileId>_<writeToken>_<commitTime>[.<extension>]}.
+   * Decoding mirrors {@code HoodieBaseFile}'s historical substring scan: the first underscore terminates
+   * the file id, the second underscore precedes the commit time, and the first dot after the second
+   * underscore terminates the commit time. If the dot is absent, the commit time extends to the end of
+   * the file name. The decoded {@link BaseFileName#getFileExtension()} value includes the leading dot when
+   * an extension is present.</p>
    *
    * @param fileName file name or full path
    * @return decoded base file name when the input matches the Hudi base-file format
@@ -68,19 +72,33 @@ public final class FileNameParser {
     }
 
     String actualFileName = getActualFileName(fileName);
-    Matcher matcher = BASE_FILE_PATTERN.matcher(actualFileName);
-    if (!matcher.matches()) {
+    int firstUnderscoreIndex = -1;
+    int secondUnderscoreIndex = -1;
+    int dotIndex = -1;
+    short underscoreCount = 0;
+    for (int i = 0; i < actualFileName.length(); i++) {
+      char c = actualFileName.charAt(i);
+      if (c == UNDERSCORE) {
+        if (underscoreCount == 0) {
+          firstUnderscoreIndex = i;
+        } else if (underscoreCount == 1) {
+          secondUnderscoreIndex = i;
+        }
+        underscoreCount++;
+      } else if (c == DOT && underscoreCount == 2) {
+        dotIndex = i;
+        break;
+      }
+    }
+    if (firstUnderscoreIndex < 0 || secondUnderscoreIndex < 0) {
       return Option.empty();
     }
-
-    int firstUnderscoreIndex = actualFileName.indexOf('_');
-    int secondUnderscoreIndex = actualFileName.indexOf('_', firstUnderscoreIndex + 1);
-    int dotIndex = actualFileName.indexOf('.', secondUnderscoreIndex + 1);
+    int commitTimeEndIndex = dotIndex < 0 ? actualFileName.length() : dotIndex;
     return Option.of(new BaseFileName(
         actualFileName.substring(0, firstUnderscoreIndex),
         actualFileName.substring(firstUnderscoreIndex + 1, secondUnderscoreIndex),
-        actualFileName.substring(secondUnderscoreIndex + 1, dotIndex),
-        actualFileName.substring(dotIndex)));
+        actualFileName.substring(secondUnderscoreIndex + 1, commitTimeEndIndex),
+        dotIndex < 0 ? "" : actualFileName.substring(dotIndex)));
   }
 
   /**

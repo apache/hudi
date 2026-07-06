@@ -471,7 +471,8 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
     Random random = new Random();
     String fakeToken = "";
     do {
-      fakeToken = Math.abs(random.nextLong()) + "-" + Math.abs(random.nextLong()) + "-" + Math.abs(random.nextLong());
+      fakeToken = random.nextInt(Integer.MAX_VALUE) + "-" + random.nextInt(Integer.MAX_VALUE) + "-"
+          + random.nextInt(Integer.MAX_VALUE);
     } while (fakeToken.equals(correctWriteToken));
     return fakeToken;
   }

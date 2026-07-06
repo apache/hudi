@@ -178,7 +178,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     fullFileName = FSUtils.makeInlineLogFileName(fileName, HOODIE_LOG.getFileExtension(), instantTime, 1, TEST_WRITE_TOKEN);
     assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
 
-    assertThrows(HoodieException.class, () -> FSUtils.getCommitTime(fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime));
+    assertEquals(instantTime, FSUtils.getCommitTime(fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime));
   }
 
   @Test
@@ -198,6 +198,13 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(TEST_WRITE_TOKEN, parsedBaseFileName.getWriteToken());
     assertEquals("20240706120100123", parsedBaseFileName.getCommitTime());
     assertEquals(".parquet", parsedBaseFileName.getFileExtension());
+
+    FileNameParser.BaseFileName parsedBaseFileNameWithoutExtension =
+        FileNameParser.parseBaseFile(fileId + "_" + TEST_WRITE_TOKEN + "_20240706120100123").get();
+    assertEquals(fileId, parsedBaseFileNameWithoutExtension.getFileId());
+    assertEquals(TEST_WRITE_TOKEN, parsedBaseFileNameWithoutExtension.getWriteToken());
+    assertEquals("20240706120100123", parsedBaseFileNameWithoutExtension.getCommitTime());
+    assertEquals("", parsedBaseFileNameWithoutExtension.getFileExtension());
 
     String logFileName = FSUtils.makeInlineLogFileName(fileId, ".log", "20240706120100123", 2, TEST_WRITE_TOKEN)
         + HoodieCDCUtils.CDC_LOGFILE_SUFFIX;

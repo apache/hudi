@@ -426,11 +426,9 @@ public class FSUtils {
   }
 
   public static boolean isBaseFile(String path) {
-    String extension = getFileExtension(path);
-    if (HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(extension)) {
-      return FileNameParser.parseBaseFile(path).isPresent();
-    }
-    return false;
+    return FileNameParser.parseBaseFile(path)
+        .map(baseFileName -> HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(baseFileName.getFileExtension()))
+        .orElse(false);
   }
 
   public static boolean isBaseFile(StoragePath path) {

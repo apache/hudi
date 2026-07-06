@@ -38,6 +38,8 @@ public class TestFileSlice {
   private static final String PARTITION_PATH = "test_partition";
   private static final String FILE_ID = "test_file_id";
   private static final String BASE_INSTANT = "001";
+  private static final String BASE_FILE_NAME =
+      "b5068208-e1a4-11e6-bf01-fe55135034f3_1-0-1_" + BASE_INSTANT + ".parquet";
 
   @Test
   void testGetLatestInstantTime() {
@@ -63,7 +65,7 @@ public class TestFileSlice {
   public void testGetAllFilesWithBaseFileOnly() {
     // Create a FileSlice with only a base file and no log files
     HoodieBaseFile baseFile = new HoodieBaseFile(
-        "file://" + PARTITION_PATH + "/test_base_file.parquet");
+        "file://" + PARTITION_PATH + "/" + BASE_FILE_NAME);
     FileSlice fileSlice = new FileSlice(
         new HoodieFileGroupId(PARTITION_PATH, FILE_ID),
         BASE_INSTANT,
@@ -100,7 +102,7 @@ public class TestFileSlice {
   public void testGetAllFilesWithBaseFileAndLogFiles() {
     // Create a FileSlice with both base file and log files
     HoodieBaseFile baseFile = new HoodieBaseFile(
-        "file://" + PARTITION_PATH + "/test_base_file.parquet");
+        "file://" + PARTITION_PATH + "/" + BASE_FILE_NAME);
     // Log files must follow the proper naming convention: .{fileId}_{instant}.log.{version}
     HoodieLogFile logFile1 = new HoodieLogFile(new StoragePath(PARTITION_PATH + "/." + FILE_ID + "_004.log.1"));
     HoodieLogFile logFile2 = new HoodieLogFile(new StoragePath(PARTITION_PATH + "/." + FILE_ID + "_005.log.2"));
@@ -132,7 +134,7 @@ public class TestFileSlice {
   public void testFilterLogFiles() {
     // Create a FileSlice with both base file and log files
     HoodieBaseFile baseFile = new HoodieBaseFile(
-        "file://" + PARTITION_PATH + "/test_base_file.parquet");
+        "file://" + PARTITION_PATH + "/" + BASE_FILE_NAME);
     // Log files must follow the proper naming convention: .{fileId}_{instant}.log.{version}
     HoodieLogFile logFile1 = new HoodieLogFile(new StoragePath(PARTITION_PATH + "/." + FILE_ID + "_004.log.1"));
     HoodieLogFile logFile2 = new HoodieLogFile(new StoragePath(PARTITION_PATH + "/." + FILE_ID + "_005.log.2"));
