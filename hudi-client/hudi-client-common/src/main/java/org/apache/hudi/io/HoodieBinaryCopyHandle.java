@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -106,6 +107,10 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
         conf,
         CompressionCodecName.fromConf(config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME)),
         fileMetadataMerger);
+    // From the TABLE config, as the write handles do: the mode is a table property, and the copier
+    // otherwise rewrites _hoodie_file_name on a table that does not populate it.
+    this.writer.setMetaFieldsMode(
+        MetaFieldsMode.orAllIfUnknown(hoodieTable.getMetaClient().getTableConfig().getMetaFieldsMode()));
   }
 
   public void write() {

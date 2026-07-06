@@ -197,6 +197,40 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     return properties;
   }
 
+  /**
+   * The key-generator properties a clustering writer needs, with the meta-fields boolean following the
+   * flag the table was created with.
+   *
+   * <p>This is {@link #getPropertiesForKeyGen(boolean)} with one property overridden, and the
+   * distinction matters. The key-generator properties themselves are needed on both paths -- the
+   * reader context resolves record keys through them, and dropping them fails with "No record keys
+   * specified and meta fields are not populated". What must follow the flag is only
+   * {@code populate.meta.fields}, since the writer has to agree with the table about which meta
+   * columns hold values.
+   */
+  protected static Properties keyGenPropsWithMetaFields(boolean populateMetaFields) {
+    Properties props = getPropertiesForKeyGen(false);
+    props.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields));
+    return props;
+  }
+
+  /**
+   * Align the fixture table's meta-fields setting with what the writer under test is about to ask for.
+   *
+   * <p>The table is created once per test by {@code initMetaClient()}, which always populates all meta
+   * fields. A test that then builds a {@code populate.meta.fields=false} writer is asking to narrow the
+   * table on the fly, which is rejected -- meta columns are physical, so a writer may not disagree with
+   * the table about which of them hold values. Tests that legitimately want a non-populated table state
+   * that on the table itself, here, rather than only on the writer.
+   */
+  protected void alignTableWithPopulateMetaFields(boolean populateMetaFields) throws IOException {
+    Properties props = new Properties();
+    props.putAll(metaClient.getTableConfig().getProps());
+    props.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields));
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), props);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+  }
+
   protected Properties getPropertiesForMetadataTable() {
     Properties properties = new Properties();
     properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
@@ -890,7 +924,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
 
     HoodieWriteConfig config = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
             .withClusteringConfig(clusteringConfig)
-            .withProps(getPropertiesForKeyGen()).build();
+            .withProps(keyGenPropsWithMetaFields(populateMetaFields)).build();
     HoodieWriteMetadata<List<WriteStatus>> clusterMetadata =
             performClustering(clusteringConfig, populateMetaFields, completeClustering, validatorClasses, sqlQueryForEqualityValidation,
                     sqlQueryForSingleResultValidation, allRecords.getLeft(), transformWriteMetadataFn, createKeyGeneratorFn);
@@ -1021,9 +1055,12 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     }
   }
 
-  protected void testDeletesWithoutInserts(boolean populateMetaFields, Function transformInputFn, Function transformOutputFn) {
+  protected void testDeletesWithoutInserts(boolean populateMetaFields, Function transformInputFn, Function transformOutputFn) throws IOException {
     final String testPartitionPath = "2016/09/26";
     final int insertSplitLimit = 100;
+    // The fixture table always populates meta fields; make it agree with the writer built below, which
+    // otherwise asks to narrow an ALL table to NONE.
+    alignTableWithPopulateMetaFields(populateMetaFields);
     // setup the small file handling params
     HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit,
             TRIP_EXAMPLE_SCHEMA, dataGen.getEstimatedFileSizeInBytes(150), populateMetaFields, populateMetaFields
@@ -1044,7 +1081,11 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     testInsertTwoBatches(true, createBrokenClusteringClientFn);
     HoodieWriteConfig config = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
         .withClusteringConfig(clusteringConfig)
-        .withProps(getPropertiesForKeyGen()).build();
+        // The table above was created with meta fields populated, so this writer must agree with it.
+        // Only the meta-fields property, for the reason given in testClustering: the rest of the
+        // getPropertiesForKeyGen bundle was never present on this path and changes clustering
+        // behaviour beyond what the meta-fields check requires.
+        .withProps(keyGenPropsWithMetaFields(true)).build();
     dataGen = new HoodieTestDataGenerator(new String[] {"2015/03/16"});
     generateInsertsAndCommit(config, transformInputFn, transformOutputFn);
     HoodieTableMetaClient metaClient = createMetaClient();
@@ -1166,10 +1207,15 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig hoodieWriteConfig = cfgBuilder.withMergeAllowDuplicateOnInserts(true).withTimelineLayoutVersion(VERSION_0).build();
 
+    // Re-initialising from the meta client drops the meta-fields setting, so state it here too:
+    // meta-field population is a table property, and a writer that disagrees with the table about
+    // which meta columns hold values is rejected rather than silently narrowing it.
     HoodieTableMetaClient.newTableBuilder()
         .fromMetaClient(metaClient)
         .setTimelineLayoutVersion(VERSION_0)
+        .setPopulateMetaFields(populateMetaFields)
         .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
+    metaClient = HoodieTableMetaClient.reload(metaClient);
 
     BaseHoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 

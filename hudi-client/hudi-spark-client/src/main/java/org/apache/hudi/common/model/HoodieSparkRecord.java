@@ -26,6 +26,7 @@ import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
@@ -233,7 +234,17 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   public HoodieRecord updateMetaField(HoodieSchema recordSchema, int ordinal, String value) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     HoodieInternalRow updatableRow = wrapIntoUpdatableOverlay(this.data, structType);
-    updatableRow.update(ordinal, CatalystTypeConverters.convertToCatalyst(value));
+    if (value == null) {
+      // HoodieInternalRow#update cannot take a null: it accepts only UTF8String or String and
+      // otherwise reports the offending type via value.getClass(), which NPEs on a null before the
+      // exception is built. Clearing a meta column is a legitimate request -- a selective
+      // hoodie.meta.fields.mode leaves _hoodie_file_name unpopulated, and a record copied forward
+      // from a file written under ALL must have the stale value cleared rather than carried over --
+      // so route it through setNullAt, which handles the meta-field range correctly.
+      updatableRow.setNullAt(ordinal);
+    } else {
+      updatableRow.update(ordinal, CatalystTypeConverters.convertToCatalyst(value));
+    }
     return new HoodieSparkRecord(getKey(), updatableRow, structType, getOperation(), this.currentLocation, this.newLocation, false);
   }
 
@@ -296,9 +307,14 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     String key;
     String partition;
-    boolean populateMetaFields = Boolean.parseBoolean(props.getOrDefault(POPULATE_META_FIELDS.key(),
-        POPULATE_META_FIELDS.defaultValue().toString()).toString());
-    if (!populateMetaFields && keyGen.isPresent()) {
+    // Resolve via hoodie.meta.fields.mode — reading the deprecated boolean alone would report
+    // "populated" for a selective-mode table (whose _hoodie_record_key column is null), sending us
+    // down the meta-column branch below and NPE-ing on the null ordinal.
+    boolean recordKeyPopulated = MetaFieldsMode.resolve(
+        props.getProperty(HoodieTableConfig.META_FIELDS_MODE.key()),
+        Boolean.parseBoolean(props.getOrDefault(POPULATE_META_FIELDS.key(),
+            POPULATE_META_FIELDS.defaultValue().toString()).toString())).isRecordKeyPopulated();
+    if (!recordKeyPopulated && keyGen.isPresent()) {
       SparkKeyGeneratorInterface keyGenerator = (SparkKeyGeneratorInterface) keyGen.get();
       key = keyGenerator.getRecordKey(data, structType).toString();
       partition = keyGenerator.getPartitionPath(data, structType).toString();

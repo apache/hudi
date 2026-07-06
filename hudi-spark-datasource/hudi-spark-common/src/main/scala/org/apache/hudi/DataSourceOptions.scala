@@ -22,6 +22,7 @@ import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.config._
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.model.MetaFieldsMode
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.{Option, StringUtils}
 import org.apache.hudi.common.util.ConfigUtils.{DELTA_STREAMER_CONFIG_PREFIX, IS_QUERY_AS_RO_TABLE, STREAMER_CONFIG_PREFIX}
@@ -548,8 +549,12 @@ object DataSourceWriteOptions {
     .defaultValue("true")
     .withInferFunction(
       JFunction.toJavaFunction((config: HoodieConfig) => {
+        // Resolved through MetaFieldsMode: a config stating only hoodie.meta.fields.mode has no
+        // populate.meta.fields entry, so reading the boolean would take its `true` default, leave the
+        // row writer on, and silently ignore COMBINE_BEFORE_INSERT -- which the comment below says
+        // must not happen.
         if (config.getString(OPERATION) == WriteOperationType.BULK_INSERT.value
-          && !config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
+          && !MetaFieldsMode.resolve(config).toLegacyPopulateMetaFields
           && config.getBooleanOrDefault(HoodieWriteConfig.COMBINE_BEFORE_INSERT)) {
           // need to turn off row writing for BULK_INSERT without meta fields with turned on COMBINE_BEFORE_INSERT to prevent shortcutting and ignoring COMBINE_BEFORE_INSERT setting
           Option.of("false")
