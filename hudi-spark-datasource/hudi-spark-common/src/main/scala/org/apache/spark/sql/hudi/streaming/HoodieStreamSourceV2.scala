@@ -21,9 +21,9 @@ import org.apache.hudi.{DataSourceReadOptions, HoodieCopyOnWriteCDCHadoopFsRelat
 import org.apache.hudi.cdc.HoodieCDCFileIndex
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
-import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, StreamerCheckpointV2}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
+import org.apache.hudi.core.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
+import org.apache.hudi.core.table.checkpoint.{CheckpointUtils, StreamerCheckpointV2}
 import org.apache.hudi.util.SparkConfigUtils
 
 import org.apache.spark.internal.Logging

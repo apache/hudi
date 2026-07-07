@@ -22,8 +22,8 @@ import org.apache.hudi.DataSourceReadOptions.{END_COMMIT, QUERY_TYPE, QUERY_TYPE
 import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, DELETE_PARTITION_OPERATION_OPT_VAL, OPERATION, PARTITIONPATH_FIELD, PARTITIONS_TO_DELETE, RECORDKEY_FIELD}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
 import org.apache.hudi.common.model.HoodieAvroPayload
-import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
+import org.apache.hudi.core.table.HoodieTableConfig
 import org.apache.hudi.examples.common.{HoodieExampleDataGenerator, HoodieExampleSparkUtils}
 import org.apache.spark.sql.SaveMode.{Append, Overwrite}
 import org.apache.spark.sql.SparkSession

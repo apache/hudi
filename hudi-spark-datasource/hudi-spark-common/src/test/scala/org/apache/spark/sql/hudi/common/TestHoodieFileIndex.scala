@@ -20,7 +20,7 @@
 package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.HoodieFileIndex
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.core.table.HoodieTableConfig
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test

@@ -20,8 +20,8 @@ package org.apache.hudi.table.action.ttl.strategy;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.List;

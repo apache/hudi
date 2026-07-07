@@ -23,9 +23,9 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.core.table.HoodieTableConfig;
 import org.apache.hudi.core.util.ConfigUtils;
 
 import org.apache.avro.Schema;
@@ -36,8 +36,8 @@ import java.io.Serializable;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
+import static org.apache.hudi.core.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
+import static org.apache.hudi.core.table.HoodieTableConfig.RECORD_MERGE_MODE;
 
 /**
  * Every Hoodie table has an implementation of the <code>HoodieRecordPayload</code> This abstracts out callbacks which depend on record specific logic.

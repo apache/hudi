@@ -40,7 +40,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.Collections;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.ORDERING_FIELDS;
+import static org.apache.hudi.core.table.HoodieTableConfig.ORDERING_FIELDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

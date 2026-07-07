@@ -21,8 +21,6 @@ package org.apache.hudi.core.read.buffer;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.read.BaseFileUpdateCallback;
@@ -30,6 +28,8 @@ import org.apache.hudi.core.read.HoodieReadStats;
 import org.apache.hudi.core.read.InputSplit;
 import org.apache.hudi.core.read.ReaderParameters;
 import org.apache.hudi.core.read.UpdateProcessor;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.PartialUpdateMode;
 import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.storage.HoodieStorage;
 

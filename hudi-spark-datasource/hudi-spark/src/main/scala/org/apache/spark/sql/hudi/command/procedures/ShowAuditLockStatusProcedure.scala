@@ -119,7 +119,7 @@ class ShowAuditLockStatusProcedure extends BaseProcedure with ProcedureBuilder {
    * @param basePath Base path of the Hudi table
    * @return true if audit logging is enabled, false otherwise
    */
-  private def checkAuditStatus(metaClient: org.apache.hudi.common.table.HoodieTableMetaClient, basePath: String): Boolean = {
+  private def checkAuditStatus(metaClient: org.apache.hudi.core.table.HoodieTableMetaClient, basePath: String): Boolean = {
     val storage = metaClient.getStorage
     val auditConfigPath = new StoragePath(StorageLockProviderAuditService.getAuditConfigPath(basePath))
 

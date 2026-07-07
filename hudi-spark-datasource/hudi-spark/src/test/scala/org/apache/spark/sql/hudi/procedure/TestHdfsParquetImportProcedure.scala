@@ -18,10 +18,10 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.common.util.StringUtils.getUTF8Bytes
+import org.apache.hudi.core.table.timeline.TimelineUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils

@@ -17,10 +17,10 @@
 
 package org.apache.hudi;
 
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.table.HoodieTableVersion;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieIndexVersion;

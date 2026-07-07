@@ -27,13 +27,13 @@ import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, Hoo
 import org.apache.hudi.common.schema.HoodieSchemaType
 import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.table.timeline.TimelineUtils.{handleHollowCommitIfNeeded, HollowCommitHandling}
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.common.util.HoodieTimer
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.core.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.core.table.timeline.TimelineUtils.{handleHollowCommitIfNeeded, HollowCommitHandling}
+import org.apache.hudi.core.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.core.util.InternalSchemaCache
 import org.apache.hudi.exception.{HoodieException, HoodieIncrementalPathNotFoundException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils

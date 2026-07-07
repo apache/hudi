@@ -18,8 +18,8 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.model.HoodieTimelineTimeZone
-import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
+import org.apache.hudi.core.table.HoodieTableConfig
+import org.apache.hudi.core.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.testutils.DataSourceTestUtils
 
 import org.apache.spark.sql.SaveMode

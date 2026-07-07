@@ -18,11 +18,11 @@
 
 package org.apache.hudi.tableformat;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
-import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.versioning.v2.ActiveTimelineV2;
+import org.apache.hudi.core.table.timeline.versioning.v2.InstantComparatorV2;
 
 import lombok.NoArgsConstructor;
 

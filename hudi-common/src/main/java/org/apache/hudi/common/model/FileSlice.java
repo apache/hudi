@@ -19,8 +19,8 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
-import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.timeline.InstantComparison;
 
 import lombok.EqualsAndHashCode;
 import lombok.Getter;

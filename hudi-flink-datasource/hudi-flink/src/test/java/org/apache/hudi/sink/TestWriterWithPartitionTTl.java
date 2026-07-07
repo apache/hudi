@@ -21,9 +21,9 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.avro.model.HoodieReplaceCommitMetadata;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieTTLConfig;
+import org.apache.hudi.core.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
 import org.apache.hudi.sink.utils.TestWriteBase;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.ttl.strategy.KeepByTimeStrategy;
@@ -33,8 +33,8 @@ import org.apache.hudi.utils.TestData;
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 
-import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.fixInstantTimeCompatibility;
-import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimePlusMillis;
+import static org.apache.hudi.core.table.timeline.HoodieInstantTimeGenerator.fixInstantTimeCompatibility;
+import static org.apache.hudi.core.table.timeline.HoodieInstantTimeGenerator.instantTimePlusMillis;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**

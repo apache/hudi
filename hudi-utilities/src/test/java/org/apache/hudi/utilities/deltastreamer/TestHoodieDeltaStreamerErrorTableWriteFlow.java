@@ -20,8 +20,8 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.Tuple3;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.hadoop.fs.Path;

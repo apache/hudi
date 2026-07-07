@@ -25,13 +25,13 @@ import org.apache.hudi.common.expression.Literal;
 import org.apache.hudi.common.expression.Predicate;
 import org.apache.hudi.common.expression.Predicates;
 import org.apache.hudi.common.schema.internal.InternalSchema;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.core.read.BufferedRecord;
 import org.apache.hudi.core.read.HoodieReadStats;
 import org.apache.hudi.core.read.UpdateProcessor;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 
 import org.junit.jupiter.api.Test;
 

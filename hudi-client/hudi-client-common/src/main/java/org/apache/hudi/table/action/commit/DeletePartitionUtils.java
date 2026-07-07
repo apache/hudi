@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.core.table.view.SyncableFileSystemView;
 import org.apache.hudi.exception.HoodieDeletePartitionPendingTableServiceException;
 import org.apache.hudi.table.HoodieTable;
 

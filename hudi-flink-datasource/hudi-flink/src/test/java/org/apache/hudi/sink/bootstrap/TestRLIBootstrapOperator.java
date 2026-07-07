@@ -19,8 +19,8 @@
 package org.apache.hudi.sink.bootstrap;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.util.StreamerUtil;

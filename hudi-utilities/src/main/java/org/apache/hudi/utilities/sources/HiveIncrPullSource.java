@@ -19,8 +19,8 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.checkpoint.Checkpoint;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.config.HiveIncrPullSourceConfig;
@@ -47,7 +47,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
+import static org.apache.hudi.core.table.checkpoint.CheckpointUtils.createCheckpoint;
 import static org.apache.hudi.core.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 

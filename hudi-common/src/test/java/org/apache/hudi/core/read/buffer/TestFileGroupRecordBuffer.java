@@ -26,7 +26,6 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
@@ -36,6 +35,7 @@ import org.apache.hudi.core.read.DeleteContext;
 import org.apache.hudi.core.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.core.read.IteratorMode;
 import org.apache.hudi.core.read.UpdateProcessor;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;

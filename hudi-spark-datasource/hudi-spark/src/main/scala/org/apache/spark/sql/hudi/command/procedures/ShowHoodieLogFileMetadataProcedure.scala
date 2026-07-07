@@ -21,10 +21,10 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.TableSchemaResolver
-import org.apache.hudi.common.table.log.HoodieLogFormat
-import org.apache.hudi.common.table.log.block.{HoodieCorruptBlock, HoodieDataBlock}
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.{FooterMetadataType, HeaderMetadataType, HoodieLogBlockType}
+import org.apache.hudi.core.table.TableSchemaResolver
+import org.apache.hudi.core.table.log.HoodieLogFormat
+import org.apache.hudi.core.table.log.block.{HoodieCorruptBlock, HoodieDataBlock}
+import org.apache.hudi.core.table.log.block.HoodieLogBlock.{FooterMetadataType, HeaderMetadataType, HoodieLogBlockType}
 import org.apache.hudi.storage.StoragePath
 
 import com.fasterxml.jackson.databind.ObjectMapper

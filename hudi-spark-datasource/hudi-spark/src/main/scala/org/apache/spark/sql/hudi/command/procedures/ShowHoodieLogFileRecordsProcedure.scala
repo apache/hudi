@@ -22,10 +22,10 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieLogFile, HoodieRecordPayload}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.TableSchemaResolver
-import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieMergedLogRecordScanner}
-import org.apache.hudi.common.table.log.block.HoodieDataBlock
 import org.apache.hudi.common.util.ValidationUtils
+import org.apache.hudi.core.table.TableSchemaResolver
+import org.apache.hudi.core.table.log.{HoodieLogFormat, HoodieMergedLogRecordScanner}
+import org.apache.hudi.core.table.log.block.HoodieDataBlock
 import org.apache.hudi.io.util.FileIOUtils
 import org.apache.hudi.storage.StoragePath
 

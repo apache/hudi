@@ -19,7 +19,7 @@
 package org.apache.hudi.source.stats;
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 

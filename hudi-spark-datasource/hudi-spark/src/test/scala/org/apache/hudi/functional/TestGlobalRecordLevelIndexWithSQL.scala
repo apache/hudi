@@ -22,11 +22,11 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.view.{FileSystemViewManager, HoodieTableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.core.index.record.HoodieRecordIndex
+import org.apache.hudi.core.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.view.{FileSystemViewManager, HoodieTableFileSystemView}
 import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.hudi.util.JFunction
 

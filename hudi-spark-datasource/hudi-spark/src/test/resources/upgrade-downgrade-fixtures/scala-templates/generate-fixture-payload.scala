@@ -16,10 +16,10 @@
  */
 
 import org.apache.spark.sql.SaveMode
-import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.model.debezium.DebeziumConstants
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload
+import org.apache.hudi.common.model.debezium.DebeziumConstants
+import org.apache.hudi.core.table.HoodieTableConfig
 import spark.implicits._
 
 val baseDir = "${BASE_PATH}"

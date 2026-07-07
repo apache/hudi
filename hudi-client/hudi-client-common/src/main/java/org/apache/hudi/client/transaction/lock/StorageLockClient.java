@@ -27,7 +27,7 @@ import org.apache.hudi.storage.StoragePath;
 import java.net.URI;
 import java.net.URISyntaxException;
 
-import static org.apache.hudi.common.table.HoodieTableMetaClient.LOCKS_FOLDER_NAME;
+import static org.apache.hudi.core.table.HoodieTableMetaClient.LOCKS_FOLDER_NAME;
 
 /**
  * Defines a contract for a service which should be able to perform conditional writes to object storage.

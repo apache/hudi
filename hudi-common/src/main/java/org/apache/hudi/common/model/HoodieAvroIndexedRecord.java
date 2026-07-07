@@ -44,7 +44,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
+import static org.apache.hudi.core.table.HoodieTableConfig.POPULATE_META_FIELDS;
 
 /**
  * This only use by reader returning.

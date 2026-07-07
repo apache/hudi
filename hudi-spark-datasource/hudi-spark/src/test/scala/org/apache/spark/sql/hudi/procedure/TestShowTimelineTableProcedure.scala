@@ -24,15 +24,15 @@ import org.apache.hudi.client.timeline.LSMTimelineWriter
 import org.apache.hudi.common.engine.{HoodieEngineContext, HoodieLocalEngineContext}
 import org.apache.hudi.common.engine.LocalTaskContextSupplier
 import org.apache.hudi.common.model.{ActionType, HoodieArchivedLogFile, HoodieAvroIndexedRecord, HoodieCommitMetadata, HoodieLogFile, HoodieRecord, WriteOperationType}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
-import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieLogFormatWriter}
-import org.apache.hudi.common.table.log.block.{HoodieAvroDataBlock, HoodieLogBlock}
-import org.apache.hudi.common.table.timeline.{ActiveAction, HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
-import org.apache.hudi.common.table.timeline.versioning.v1.{ArchivedTimelineV1, InstantGeneratorV1}
 import org.apache.hudi.common.testutils.{HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestUtils.{convertMetadataToByteArray, INSTANT_GENERATOR}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.core.table.{HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.core.table.log.{HoodieLogFormat, HoodieLogFormatWriter}
+import org.apache.hudi.core.table.log.block.{HoodieAvroDataBlock, HoodieLogBlock}
+import org.apache.hudi.core.table.timeline.{ActiveAction, HoodieInstant, HoodieTimeline}
+import org.apache.hudi.core.table.timeline.versioning.TimelineLayoutVersion
+import org.apache.hudi.core.table.timeline.versioning.v1.{ArchivedTimelineV1, InstantGeneratorV1}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.HoodieIndex
 
@@ -134,7 +134,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
   }
 
   private def createActiveInstantV2(
-      activeTimeline: org.apache.hudi.common.table.timeline.HoodieActiveTimeline,
+      activeTimeline: org.apache.hudi.core.table.timeline.HoodieActiveTimeline,
       timestamp: String,
       action: String,
       state: HoodieInstant.State,
@@ -269,7 +269,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
   private val INSTANT_GENERATOR_V1 = new InstantGeneratorV1()
 
   private def createActiveInstantV1(
-      activeTimeline: org.apache.hudi.common.table.timeline.HoodieActiveTimeline,
+      activeTimeline: org.apache.hudi.core.table.timeline.HoodieActiveTimeline,
       timestamp: String,
       action: String,
       state: HoodieInstant.State,

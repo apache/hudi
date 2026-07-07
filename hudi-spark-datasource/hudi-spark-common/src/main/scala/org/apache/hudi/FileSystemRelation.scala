@@ -19,8 +19,8 @@ package org.apache.hudi
 
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieFileGroup, HoodieLogFile}
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.core.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.view.HoodieTableFileSystemView
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.rdd.RDD

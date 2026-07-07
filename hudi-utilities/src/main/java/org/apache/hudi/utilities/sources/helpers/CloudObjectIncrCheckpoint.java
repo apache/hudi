@@ -18,8 +18,8 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.checkpoint.Checkpoint;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

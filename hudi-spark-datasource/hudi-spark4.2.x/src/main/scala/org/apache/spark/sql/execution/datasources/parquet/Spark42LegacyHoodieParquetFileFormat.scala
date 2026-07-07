@@ -22,11 +22,11 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger
 import org.apache.hudi.common.schema.internal.utils.{InternalSchemaUtils, SerDeHelper}
-import org.apache.hudi.common.table.timeline.TimelineLayout
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
 import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.collection.Pair
+import org.apache.hudi.core.table.timeline.TimelineLayout
+import org.apache.hudi.core.table.timeline.versioning.TimelineLayoutVersion
 import org.apache.hudi.core.util.InternalSchemaCache
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 

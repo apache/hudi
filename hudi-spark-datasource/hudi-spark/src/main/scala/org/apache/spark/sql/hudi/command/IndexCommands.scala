@@ -20,9 +20,9 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.common.model.HoodieIndexDefinition
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.{StringUtils, ValidationUtils}
 import org.apache.hudi.core.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION
+import org.apache.hudi.core.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.exception.HoodieIndexException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.HoodieSparkIndexClient

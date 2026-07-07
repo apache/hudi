@@ -21,10 +21,10 @@ package org.apache.hudi.cdc
 
 import org.apache.hudi.{DataSourceReadOptions, HoodieFileIndex}
 import org.apache.hudi.cdc.HoodieCDCFileIndex.isCDCEnabled
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.cdc.{HoodieCDCExtractor, HoodieCDCUtils}
 import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.log.InstantRange.RangeType
+import org.apache.hudi.core.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.cdc.{HoodieCDCExtractor, HoodieCDCUtils}
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.hadoop.fs.{FileStatus, Path}

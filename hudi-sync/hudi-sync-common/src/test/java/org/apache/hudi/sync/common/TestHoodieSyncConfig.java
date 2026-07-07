@@ -20,7 +20,7 @@
 package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.core.table.HoodieTableConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.hadoop.conf.Configuration;

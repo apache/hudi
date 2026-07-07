@@ -19,12 +19,12 @@
 package org.apache.hudi.timeline.service.handlers;
 
 import org.apache.hudi.common.model.HoodieFileGroup;
-import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
-import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
-import org.apache.hudi.common.table.timeline.dto.DTOUtils;
-import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
-import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.core.table.timeline.dto.ClusteringOpDTO;
+import org.apache.hudi.core.table.timeline.dto.CompactionOpDTO;
+import org.apache.hudi.core.table.timeline.dto.DTOUtils;
+import org.apache.hudi.core.table.timeline.dto.FileGroupDTO;
+import org.apache.hudi.core.table.timeline.dto.FileSliceDTO;
+import org.apache.hudi.core.table.view.FileSystemViewManager;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 

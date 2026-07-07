@@ -32,10 +32,10 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.HoodieTableConfig;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.generic.GenericData;
@@ -93,7 +93,7 @@ class TestHoodieWriteHandle {
     when(mockHoodieTable.shouldTrackSuccessRecords()).thenReturn(true);
     when(mockHoodieTable.isMetadataTable()).thenReturn(false);
     when(mockHoodieTable.getConfig()).thenReturn(mockWriteConfig);
-    when(mockTableConfig.getTableVersion()).thenReturn(org.apache.hudi.common.table.HoodieTableVersion.EIGHT);
+    when(mockTableConfig.getTableVersion()).thenReturn(org.apache.hudi.core.table.HoodieTableVersion.EIGHT);
 
     when(mockHoodieTable.getBaseFileExtension()).thenReturn(".parquet");
   }

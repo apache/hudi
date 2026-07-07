@@ -19,12 +19,12 @@
 
 package org.apache.hudi.core.read.buffer;
 
-import org.apache.hudi.common.table.log.KeySpec;
-import org.apache.hudi.common.table.log.block.HoodieDataBlock;
-import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.core.read.BufferedRecord;
+import org.apache.hudi.core.table.log.KeySpec;
+import org.apache.hudi.core.table.log.block.HoodieDataBlock;
+import org.apache.hudi.core.table.log.block.HoodieDeleteBlock;
 
 import java.io.IOException;
 import java.io.Serializable;

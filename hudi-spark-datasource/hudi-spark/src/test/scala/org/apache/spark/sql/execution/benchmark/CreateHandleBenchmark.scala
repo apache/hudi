@@ -25,9 +25,9 @@ import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.{HoodieLocalEngineContext, LocalTaskContextSupplier}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieAvroIndexedRecord, HoodieKey, HoodieRecord}
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.table.HoodieTableConfig
+import org.apache.hudi.core.table.marker.MarkerType
 import org.apache.hudi.core.util.HoodieRecordUtils
 import org.apache.hudi.io.HoodieCreateHandle
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions

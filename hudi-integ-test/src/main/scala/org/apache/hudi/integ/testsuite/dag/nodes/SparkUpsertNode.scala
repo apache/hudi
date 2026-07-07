@@ -19,8 +19,8 @@
 package org.apache.hudi.integ.testsuite.dag.nodes
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.collection.Pair
+import org.apache.hudi.core.table.HoodieTableConfig
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats

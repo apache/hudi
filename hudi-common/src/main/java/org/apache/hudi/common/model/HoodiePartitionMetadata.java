@@ -41,7 +41,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.HoodieTableMetaClient.COMMIT_TIME_KEY;
+import static org.apache.hudi.core.table.HoodieTableMetaClient.COMMIT_TIME_KEY;
 
 /**
  * The metadata that goes into the meta file in each partition.

@@ -19,9 +19,9 @@
 package org.apache.hudi.index.bucket.partition;
 
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;

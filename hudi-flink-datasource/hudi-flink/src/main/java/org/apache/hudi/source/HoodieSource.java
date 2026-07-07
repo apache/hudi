@@ -19,10 +19,10 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.source.enumerator.HoodieContinuousSplitEnumerator;
 import org.apache.hudi.source.enumerator.HoodieEnumeratorStateSerializer;

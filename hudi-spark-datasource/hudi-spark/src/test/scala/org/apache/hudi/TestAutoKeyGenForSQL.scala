@@ -19,7 +19,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.HoodieTableMetaClient
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf

@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan
-import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.core.table.timeline.HoodieTimeline
 import org.apache.hudi.core.util.ClusteringUtils
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient

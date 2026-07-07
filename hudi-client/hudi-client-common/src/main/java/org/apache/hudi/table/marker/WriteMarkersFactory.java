@@ -18,9 +18,9 @@
 
 package org.apache.hudi.table.marker;
 
-import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.core.table.HoodieTableVersion;
+import org.apache.hudi.core.table.marker.MarkerType;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageSchemes;

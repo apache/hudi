@@ -20,7 +20,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling
+import org.apache.hudi.core.table.timeline.TimelineUtils.HollowCommitHandling
 
 import org.apache.spark.sql.internal.SQLConf
 

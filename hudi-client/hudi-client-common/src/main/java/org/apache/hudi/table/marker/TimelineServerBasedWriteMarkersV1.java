@@ -21,10 +21,10 @@ package org.apache.hudi.table.marker;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.TimelineServiceClientBase;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.core.table.timeline.TimelineServiceClientBase;
 import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -37,8 +37,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.marker.MarkerOperation.APPEND_MARKERS_URL;
-import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_DIR_PATH_PARAM;
+import static org.apache.hudi.core.table.marker.MarkerOperation.APPEND_MARKERS_URL;
+import static org.apache.hudi.core.table.marker.MarkerOperation.MARKER_DIR_PATH_PARAM;
 
 /**
  * Marker operations of using timeline server as a proxy to create and delete markers

@@ -28,10 +28,6 @@ import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger;
 import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.PartialUpdateMode;
-import org.apache.hudi.common.table.log.KeySpec;
-import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -45,6 +41,10 @@ import org.apache.hudi.core.read.BufferedRecordMergerFactory;
 import org.apache.hudi.core.read.BufferedRecords;
 import org.apache.hudi.core.read.DeleteContext;
 import org.apache.hudi.core.read.UpdateProcessor;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.PartialUpdateMode;
+import org.apache.hudi.core.table.log.KeySpec;
+import org.apache.hudi.core.table.log.block.HoodieDataBlock;
 import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.core.util.InternalSchemaCache;
 import org.apache.hudi.exception.HoodieIOException;
@@ -65,7 +65,7 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
-import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
+import static org.apache.hudi.core.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 
 abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   protected final HoodieReaderContext<T> readerContext;

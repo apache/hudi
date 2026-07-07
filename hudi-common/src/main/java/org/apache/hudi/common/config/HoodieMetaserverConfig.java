@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.config;
 
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.core.table.HoodieTableConfig;
 
 import javax.annotation.concurrent.Immutable;
 

@@ -21,9 +21,9 @@ package org.apache.hudi.execution.estimator;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
-import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.timeline.CommitMetadataSerDe;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
 
 import java.io.Serializable;
 

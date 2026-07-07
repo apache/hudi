@@ -28,10 +28,10 @@ import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.Types;
 import org.apache.hudi.common.schema.internal.action.TableChanges;
 import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 
 import java.util.Collections;
 import java.util.List;

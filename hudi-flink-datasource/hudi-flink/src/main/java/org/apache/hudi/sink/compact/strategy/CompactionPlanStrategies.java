@@ -18,9 +18,9 @@
 
 package org.apache.hudi.sink.compact.strategy;
 
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
 import org.apache.hudi.sink.compact.FlinkCompactionConfig;
 import org.apache.hudi.util.CompactionUtil;
 

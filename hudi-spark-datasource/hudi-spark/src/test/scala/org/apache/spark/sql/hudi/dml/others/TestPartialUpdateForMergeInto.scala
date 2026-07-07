@@ -24,12 +24,12 @@ import org.apache.hudi.common.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
-import org.apache.hudi.common.table.log.HoodieLogFormat
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType
-import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.core.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
+import org.apache.hudi.core.table.log.HoodieLogFormat
+import org.apache.hudi.core.table.log.block.HoodieLogBlock.HeaderMetadataType
+import org.apache.hudi.core.table.timeline.HoodieTimeline
 import org.apache.hudi.core.util.CompactionUtils
 import org.apache.hudi.exception.HoodieNotSupportedException
 

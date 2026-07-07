@@ -20,7 +20,7 @@ package org.apache.hudi.core.transaction.conflict.detection;
 
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
 import org.apache.hudi.storage.HoodieStorage;
 
 import java.util.Set;

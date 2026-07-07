@@ -18,9 +18,9 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.core.table.marker.MarkerType;
 import org.apache.hudi.core.util.MarkerUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;

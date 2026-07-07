@@ -18,9 +18,9 @@
 
 package org.apache.hudi.table.marker;
 
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
 import org.apache.hudi.core.transaction.conflict.detection.DirectMarkerBasedDetectionStrategy;
 import org.apache.hudi.core.util.MarkerUtils;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;

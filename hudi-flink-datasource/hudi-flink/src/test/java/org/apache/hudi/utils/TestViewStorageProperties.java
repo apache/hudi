@@ -19,9 +19,9 @@
 package org.apache.hudi.utils;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.core.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.core.table.view.FileSystemViewStorageType;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.ViewStorageProperties;
 

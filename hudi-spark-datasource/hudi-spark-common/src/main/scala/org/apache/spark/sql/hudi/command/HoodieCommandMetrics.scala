@@ -18,9 +18,9 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.common.model.HoodieCommitMetadata
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, InstantComparison}
 import org.apache.hudi.common.util.VisibleForTesting
+import org.apache.hudi.core.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.timeline.{HoodieInstant, InstantComparison}
 
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.core.table.HoodieTableConfig;
 
 import org.junit.jupiter.api.Test;
 

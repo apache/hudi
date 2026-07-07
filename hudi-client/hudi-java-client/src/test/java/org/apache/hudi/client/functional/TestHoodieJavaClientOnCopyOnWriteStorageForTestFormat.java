@@ -20,8 +20,8 @@ package org.apache.hudi.client.functional;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.core.table.HoodieTableConfig;
 import org.apache.hudi.tableformat.TestTableFormat;
 
 import org.apache.hadoop.fs.FileSystem;

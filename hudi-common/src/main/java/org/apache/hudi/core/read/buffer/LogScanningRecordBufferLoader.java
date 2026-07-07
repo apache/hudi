@@ -21,16 +21,16 @@ package org.apache.hudi.core.read.buffer;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.core.read.HoodieReadStats;
 import org.apache.hudi.core.read.InputSplit;
 import org.apache.hudi.core.read.ReaderParameters;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.storage.HoodieStorage;
 
 import java.util.List;
 
-import static org.apache.hudi.common.table.log.BaseHoodieLogRecordReader.BLOCK_SIZE_IN_BYTES;
+import static org.apache.hudi.core.table.log.BaseHoodieLogRecordReader.BLOCK_SIZE_IN_BYTES;
 import static org.apache.hudi.core.util.ConfigUtils.getIntWithAltKeys;
 
 abstract class LogScanningRecordBufferLoader {

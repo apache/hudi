@@ -20,9 +20,9 @@
 package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
-import org.apache.hudi.common.table.timeline.TimeGenerator;
-import org.apache.hudi.common.table.timeline.TimeGenerators;
+import org.apache.hudi.core.table.timeline.HoodieInstantTimeGenerator;
+import org.apache.hudi.core.table.timeline.TimeGenerator;
+import org.apache.hudi.core.table.timeline.TimeGenerators;
 
 /**
  * An in-process time generator that always use in-process lock for time generation.

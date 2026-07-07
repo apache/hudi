@@ -22,11 +22,11 @@ import org.apache.hudi.DummyActiveAction
 import org.apache.hudi.client.common.HoodieJavaEngineContext
 import org.apache.hudi.client.timeline.LSMTimelineWriter
 import org.apache.hudi.common.model.{HoodieAvroPayload, HoodieCommitMetadata, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.timeline.{ActiveAction, HoodieInstant, LSMTimeline}
-import org.apache.hudi.common.table.timeline.versioning.v2.CompletionTimeQueryViewV2
 import org.apache.hudi.common.testutils.{HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestUtils.{convertMetadataToByteArray, INSTANT_GENERATOR, TIMELINE_FACTORY}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.core.table.timeline.{ActiveAction, HoodieInstant, LSMTimeline}
+import org.apache.hudi.core.table.timeline.versioning.v2.CompletionTimeQueryViewV2
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.table.HoodieJavaTable
 

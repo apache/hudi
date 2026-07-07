@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.JavaTypeConverter;
 import org.apache.hudi.common.util.LocalHoodieSchemaCache;
 import org.apache.hudi.common.util.OrderingValues;
@@ -32,6 +31,7 @@ import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.read.BufferedRecord;
 import org.apache.hudi.core.read.DeleteContext;
+import org.apache.hudi.core.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.KeyGenerator;
 

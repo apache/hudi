@@ -20,13 +20,13 @@ package org.apache.hudi.core.read.buffer;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.read.BaseFileUpdateCallback;
 import org.apache.hudi.core.read.HoodieReadStats;
 import org.apache.hudi.core.read.InputSplit;
 import org.apache.hudi.core.read.ReaderParameters;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.storage.HoodieStorage;
 
 import java.util.List;

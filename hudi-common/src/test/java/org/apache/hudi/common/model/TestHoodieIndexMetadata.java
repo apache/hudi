@@ -19,8 +19,8 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.HoodieTableVersion;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 

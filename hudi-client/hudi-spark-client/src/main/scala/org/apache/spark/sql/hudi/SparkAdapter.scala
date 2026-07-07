@@ -22,9 +22,9 @@ import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileS
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.core.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.hadoop.conf.Configuration

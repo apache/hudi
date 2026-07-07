@@ -20,12 +20,12 @@ package org.apache.hudi.client.embedded;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
-import org.apache.hudi.common.table.marker.MarkerType;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.NetworkUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.marker.MarkerType;
+import org.apache.hudi.core.table.view.FileSystemViewManager;
+import org.apache.hudi.core.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.core.table.view.FileSystemViewStorageType;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 

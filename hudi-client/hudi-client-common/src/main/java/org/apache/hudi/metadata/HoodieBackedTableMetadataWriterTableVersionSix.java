@@ -34,6 +34,11 @@ import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.core.util.CompactionUtils;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metadata.index.EngineIndexerSupport;
@@ -46,10 +51,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.core.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.core.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.core.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.core.table.timeline.InstantComparison.compareTimestamps;
 
 /**
  * HoodieBackedTableMetadataWriter for tables with version 6. The class derives most of the functionality from HoodieBackedTableMetadataWriter
@@ -62,7 +67,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
   /**
    * Hudi backed table metadata writer.
    *
-   * Timestamps are generated in format {@link org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator#MILLIS_INSTANT_TIMESTAMP_FORMAT}.
+   * Timestamps are generated in format {@link org.apache.hudi.core.table.timeline.HoodieInstantTimeGenerator#MILLIS_INSTANT_TIMESTAMP_FORMAT}.
    * For operations like compaction, log compaction, clean, index and rollback - suffix are used which are appended to the timestamp. In some cases
    * it is possible for suffix to be added twice. For instance, there is an index commit in metadata table leading to an instant with 010 suffix in
    * the timeline. If compaction triggers now, the compaction would use the index instant timestamp and add 001 suffix to it, creating a timestamp

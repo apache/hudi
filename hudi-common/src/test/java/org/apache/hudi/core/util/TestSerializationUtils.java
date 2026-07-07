@@ -20,8 +20,8 @@ package org.apache.hudi.core.util;
 
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.table.log.block.HoodieDeleteBlock;
 
 import org.apache.avro.util.Utf8;
 import org.junit.jupiter.api.Test;

@@ -26,9 +26,9 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex
+import org.apache.hudi.core.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadataUtil}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.{getValidIndexedColumns, PARTITION_NAME_COLUMN_STATS}
 import org.apache.hudi.util.{JFunction}

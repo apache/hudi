@@ -24,10 +24,10 @@ import org.apache.hudi.aws.transaction.lock.DynamoDBBasedLockProviderBase;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.hash.HashID;
 import org.apache.hudi.config.DynamoDbBasedLockConfig;
+import org.apache.hudi.core.table.HoodieTableConfig;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.Assertions;

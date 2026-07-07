@@ -28,9 +28,9 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.schema.internal.Types;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
@@ -59,7 +59,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   String METADATA_TABLE_NAME_SUFFIX = "_metadata";
   /**
    * Timestamp for a commit when the base dataset had not had any commits yet. this is < than even
-   * {@link org.apache.hudi.common.table.timeline.HoodieTimeline#INIT_INSTANT_TS}, such that the metadata table
+   * {@link org.apache.hudi.core.table.timeline.HoodieTimeline#INIT_INSTANT_TS}, such that the metadata table
    * can be prepped even before bootstrap is done.
    */
   String SOLO_COMMIT_TIMESTAMP = "00000000000000";

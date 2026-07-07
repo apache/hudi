@@ -18,7 +18,7 @@
 
 package org.apache.hudi.sink.cluster;
 
-import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.clustering.ClusteringCommitEvent;
 import org.apache.hudi.sink.clustering.ClusteringCommitSink;

@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.{HoodieCLIUtils, SparkAdapterSupport}
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
+import org.apache.hudi.core.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row

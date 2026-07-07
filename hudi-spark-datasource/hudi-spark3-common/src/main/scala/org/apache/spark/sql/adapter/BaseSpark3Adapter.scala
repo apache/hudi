@@ -21,9 +21,9 @@ import org.apache.hudi.{DefaultSource, HoodieFileScanRDD, HoodiePartitionCDCFile
 import org.apache.hudi.client.model.{HoodieInternalRow, Spark3HoodieInternalRow}
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.common.util.JsonUtils
+import org.apache.hudi.core.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.spark.internal.ReflectUtil
 
 import org.apache.parquet.schema.Type

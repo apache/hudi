@@ -39,8 +39,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
+import static org.apache.hudi.core.table.HoodieTableConfig.KEY_GENERATOR_CLASS_NAME;
+import static org.apache.hudi.core.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
 
 /**
  * Types of {@link org.apache.hudi.keygen.KeyGenerator}.

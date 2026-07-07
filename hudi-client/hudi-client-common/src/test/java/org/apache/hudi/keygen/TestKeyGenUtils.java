@@ -19,8 +19,8 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -36,8 +36,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
-import static org.apache.hudi.common.table.HoodieTableConfig.RECORDKEY_FIELDS;
+import static org.apache.hudi.core.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
+import static org.apache.hudi.core.table.HoodieTableConfig.RECORDKEY_FIELDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;

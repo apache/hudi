@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.config;
 
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.core.table.timeline.TimelineUtils.HollowCommitHandling;
 
 import java.io.File;
 import java.io.FileReader;

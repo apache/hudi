@@ -19,7 +19,7 @@
 
 package org.apache.hudi.common.bootstrap.index;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 
 /**
  * No Op Bootstrap Index is an empty implementation.

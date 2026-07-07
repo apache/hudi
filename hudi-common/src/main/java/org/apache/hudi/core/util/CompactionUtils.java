@@ -24,15 +24,15 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionPlanMigrator;
-import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV1MigrationHandler;
-import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV2MigrationHandler;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.table.timeline.versioning.compaction.CompactionPlanMigrator;
+import org.apache.hudi.core.table.timeline.versioning.compaction.CompactionV1MigrationHandler;
+import org.apache.hudi.core.table.timeline.versioning.compaction.CompactionV2MigrationHandler;
 import org.apache.hudi.exception.HoodieException;
 
 import org.slf4j.Logger;
@@ -47,7 +47,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
+import static org.apache.hudi.core.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 
 /**
  * Helper class to generate compaction plan from FileGroup/FileSlice abstraction.

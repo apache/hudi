@@ -24,12 +24,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.PartialUpdateMode;
-import org.apache.hudi.common.table.log.KeySpec;
-import org.apache.hudi.common.table.log.block.HoodieDataBlock;
-import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -38,6 +32,12 @@ import org.apache.hudi.core.read.BufferedRecord;
 import org.apache.hudi.core.read.BufferedRecordMergerFactory;
 import org.apache.hudi.core.read.BufferedRecords;
 import org.apache.hudi.core.read.UpdateProcessor;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.PartialUpdateMode;
+import org.apache.hudi.core.table.log.KeySpec;
+import org.apache.hudi.core.table.log.block.HoodieDataBlock;
+import org.apache.hudi.core.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.core.table.log.block.HoodieLogBlock;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
 
@@ -52,7 +52,7 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
+ * A buffer that is used to store log records by {@link org.apache.hudi.core.table.log.HoodieMergedLogRecordReader}
  * by calling the {@link #processDataBlock} and {@link #processDeleteBlock} methods into record position based map.
  * Here the position means that record position in the base file. The records from the base file is accessed from an iterator object. These records are merged when the
  * {@link #hasNext} method is called.

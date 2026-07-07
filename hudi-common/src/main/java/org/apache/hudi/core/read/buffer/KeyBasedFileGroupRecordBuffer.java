@@ -25,11 +25,6 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.PartialUpdateMode;
-import org.apache.hudi.common.table.log.KeySpec;
-import org.apache.hudi.common.table.log.block.HoodieDataBlock;
-import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -38,13 +33,18 @@ import org.apache.hudi.core.read.BufferedRecord;
 import org.apache.hudi.core.read.BufferedRecordMergerFactory;
 import org.apache.hudi.core.read.BufferedRecords;
 import org.apache.hudi.core.read.UpdateProcessor;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.PartialUpdateMode;
+import org.apache.hudi.core.table.log.KeySpec;
+import org.apache.hudi.core.table.log.block.HoodieDataBlock;
+import org.apache.hudi.core.table.log.block.HoodieDeleteBlock;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
 
 /**
- * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
+ * A buffer that is used to store log records by {@link org.apache.hudi.core.table.log.HoodieMergedLogRecordReader}
  * by calling the {@link #processDataBlock} and {@link #processDeleteBlock} methods into a record key based map.
  * The records from the base file is accessed from an iterator object. These records are merged when the
  * {@link #hasNext} method is called.

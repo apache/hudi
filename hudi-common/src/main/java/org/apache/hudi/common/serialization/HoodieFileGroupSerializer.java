@@ -21,7 +21,7 @@ package org.apache.hudi.common.serialization;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
 import org.apache.hudi.core.util.SerializationUtils;
 
 import java.io.IOException;

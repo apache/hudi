@@ -19,11 +19,11 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.{HoodieCLIUtils, HoodieTimelineCleanupUtil}
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.HoodiePendingRollbackInfo
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.table.HoodiePendingRollbackInfo
+import org.apache.hudi.core.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.timeline.HoodieTimeline
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.table.HoodieSparkTable
 

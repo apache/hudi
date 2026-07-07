@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
+import org.apache.hudi.core.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.hadoop.fs.Path

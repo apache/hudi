@@ -18,9 +18,9 @@
 
 package org.apache.hudi.core.table.format;
 
-import org.apache.hudi.common.table.timeline.TimelineFactory;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.core.table.timeline.TimelineFactory;
+import org.apache.hudi.core.table.timeline.TimelineLayout;
+import org.apache.hudi.core.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.metadata.NativeTableMetadataFactory;
 import org.apache.hudi.metadata.TableMetadataFactory;
 

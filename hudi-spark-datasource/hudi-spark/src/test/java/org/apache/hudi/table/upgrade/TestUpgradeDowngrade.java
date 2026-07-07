@@ -26,18 +26,18 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.HoodieTableConfig;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.HoodieTableVersion;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.table.timeline.InstantFileNameGenerator;
+import org.apache.hudi.core.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -834,15 +834,15 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     log.info("Validating log files {} rollback and compaction during {}", validationPhase, operation);
     
     // Get the latest completed commit to ensure we're looking at a consistent state
-    org.apache.hudi.common.table.timeline.HoodieTimeline completedTimeline = 
+    org.apache.hudi.core.table.timeline.HoodieTimeline completedTimeline = 
         metaClient.getCommitsTimeline().filterCompletedInstants();
     String latestCommit = completedTimeline.lastInstant()
         .map(instant -> instant.requestedTime())
         .orElse(null);
     
     // Get file system view to check for log files using the latest commit state
-    try (org.apache.hudi.common.table.view.HoodieTableFileSystemView fsView = 
-        org.apache.hudi.common.table.view.HoodieTableFileSystemView.fileListingBasedFileSystemView(
+    try (org.apache.hudi.core.table.view.HoodieTableFileSystemView fsView = 
+        org.apache.hudi.core.table.view.HoodieTableFileSystemView.fileListingBasedFileSystemView(
             context(), metaClient, completedTimeline)) {
     
       // Get all partition paths using FSUtils

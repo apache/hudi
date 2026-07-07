@@ -23,8 +23,8 @@ import org.apache.hudi.avro.model.HoodieClusteringGroup
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider
 import org.apache.hudi.common.config.{HoodieCommonConfig, TypedProperties}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.core.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.StorageSchemes
 

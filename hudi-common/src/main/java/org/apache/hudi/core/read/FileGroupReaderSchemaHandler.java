@@ -31,14 +31,14 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger;
 import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.core.read.buffer.PositionBasedFileGroupRecordBuffer;
+import org.apache.hudi.core.table.HoodieTableConfig;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.HoodieTableVersion;
 import org.apache.hudi.core.util.InternalSchemaCache;
 import org.apache.hudi.storage.StoragePath;
 
@@ -62,7 +62,7 @@ import static org.apache.hudi.common.schema.HoodieSchemaUtils.appendFieldsToSche
 import static org.apache.hudi.common.schema.HoodieSchemaUtils.createNewSchemaField;
 import static org.apache.hudi.common.schema.HoodieSchemaUtils.createNewSchemaFromFieldsWithReference;
 import static org.apache.hudi.common.schema.HoodieSchemaUtils.findNestedField;
-import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForPreV9Table;
+import static org.apache.hudi.core.table.HoodieTableConfig.inferMergingConfigsForPreV9Table;
 
 /**
  * This class is responsible for handling the schema for the file group reader.

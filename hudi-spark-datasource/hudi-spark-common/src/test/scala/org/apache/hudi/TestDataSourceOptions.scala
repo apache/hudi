@@ -20,7 +20,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig}
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.core.table.HoodieTableConfig
 
 import org.apache.spark.sql.SQLContext
 import org.junit.jupiter.api.AfterEach

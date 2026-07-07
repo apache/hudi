@@ -19,7 +19,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
+import org.apache.hudi.core.table.cdc.HoodieCDCFileSplit
 
 trait HoodiePartitionCDCFileGroupMapping extends HoodiePartitionValues {
   def getFileSplits(): List[HoodieCDCFileSplit]

@@ -20,11 +20,11 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
-import org.apache.hudi.common.table.checkpoint.UnresolvedStreamerCheckpointBasedOnCfg;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.checkpoint.Checkpoint;
+import org.apache.hudi.core.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.core.table.checkpoint.StreamerCheckpointV2;
+import org.apache.hudi.core.table.checkpoint.UnresolvedStreamerCheckpointBasedOnCfg;
 
 import java.util.function.BiFunction;
 
@@ -88,13 +88,13 @@ public class CheckpointValidator {
   private static void assertCheckpointIsInstanceOf(TypedProperties props, Checkpoint ckp) {
     if (props.containsKey(VAL_CKP_INSTANCE_OF)) {
       switch ((String) props.get(VAL_CKP_INSTANCE_OF)) {
-        case "org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1":
+        case "org.apache.hudi.core.table.checkpoint.StreamerCheckpointV1":
           assertInstanceOf(StreamerCheckpointV1.class, ckp);
           break;
-        case "org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2":
+        case "org.apache.hudi.core.table.checkpoint.StreamerCheckpointV2":
           assertInstanceOf(StreamerCheckpointV2.class, ckp);
           break;
-        case "org.apache.hudi.common.table.checkpoint.StreamerCheckpointFromCfgCkp":
+        case "org.apache.hudi.core.table.checkpoint.StreamerCheckpointFromCfgCkp":
           assertInstanceOf(UnresolvedStreamerCheckpointBasedOnCfg.class, ckp);
           break;
         default:

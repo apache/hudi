@@ -27,10 +27,10 @@ import org.apache.hudi.common.schema.internal.action.TableChanges
 import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
 import org.apache.hudi.common.schema.internal.io.FileBasedInternalSchemaStorageManager
 import org.apache.hudi.common.schema.internal.utils.{SchemaChangeUtils, SerDeHelper}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig}
+import org.apache.hudi.core.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.core.table.timeline.HoodieInstant.State
 import org.apache.hudi.core.util.CommitUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.table.HoodieSparkTable

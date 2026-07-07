@@ -27,10 +27,10 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieAvroSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.AvroJavaTypeConverter;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.core.read.BufferedRecord;
+import org.apache.hudi.core.table.HoodieTableConfig;
 import org.apache.hudi.core.util.HoodieRecordUtils;
 import org.apache.hudi.exception.HoodieException;
 

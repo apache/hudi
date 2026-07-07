@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.common.table.timeline.{HoodieInstant, TimelineUtils}
+import org.apache.hudi.core.table.timeline.{HoodieInstant, TimelineUtils}
 import org.apache.hudi.core.util.CleanerUtils
 import org.apache.hudi.exception.HoodieIOException
 

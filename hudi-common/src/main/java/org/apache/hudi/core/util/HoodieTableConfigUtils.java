@@ -18,10 +18,10 @@
 package org.apache.hudi.core.util;
 
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.core.table.HoodieTableConfig;
+import org.apache.hudi.core.table.HoodieTableVersion;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -44,7 +44,7 @@ public class HoodieTableConfigUtils {
    */
   public static Option<String> getPartitionFieldProp(HoodieConfig config) {
     if (getTableVersion(config).greaterThan(HoodieTableVersion.SEVEN)) {
-      // With table version eight, the table config org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS
+      // With table version eight, the table config org.apache.hudi.core.table.HoodieTableConfig.PARTITION_FIELDS
       // stores the corresponding partition type as well. This partition type is useful for CustomKeyGenerator
       // and CustomAvroKeyGenerator.
       return getPartitionFields(config).map(fields -> String.join(BaseKeyGenerator.FIELD_SEPARATOR, fields));

@@ -16,7 +16,7 @@
  */
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.core.table.HoodieTableConfig
 import org.apache.spark.sql.SaveMode
 
 val tableName = "${TABLE_NAME}"

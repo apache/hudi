@@ -24,8 +24,8 @@ import org.apache.hudi.blob.BlobTestHelpers._
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieFileFormat, HoodieKey, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.config.HoodieIndexConfig
+import org.apache.hudi.core.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.testutils.HoodieClientTestBase
 

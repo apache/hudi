@@ -22,9 +22,9 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.core.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
@@ -52,10 +52,10 @@ import java.util.{Collections, Date, UUID}
 import scala.collection.JavaConverters._
 
 /**
- * Test suite for SparkSqlWriter class with format as "test-format" that implements org.apache.hudi.common.table.HoodieTableFormat.
+ * Test suite for SparkSqlWriter class with format as "test-format" that implements org.apache.hudi.core.table.HoodieTableFormat.
  * All cases of using of {@link HoodieTimelineTimeZone.UTC} should be done in a separate test class {@link TestHoodieSparkSqlWriterUtc}.
  * Otherwise UTC tests will generate infinite loops, if there is any initiated test with time zone that is greater then UTC+0.
- * The reason is in a saved value in the heap of static {@link org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.lastInstantTime}.
+ * The reason is in a saved value in the heap of static {@link org.apache.hudi.core.table.timeline.HoodieInstantTimeGenerator.lastInstantTime}.
  */
 class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
 

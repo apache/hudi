@@ -18,8 +18,8 @@
 
 package org.apache.hudi.core.util;
 
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.RetryHelper;
+import org.apache.hudi.core.table.view.FileSystemViewStorageConfig;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;

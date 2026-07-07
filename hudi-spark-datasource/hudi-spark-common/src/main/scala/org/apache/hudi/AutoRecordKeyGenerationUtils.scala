@@ -21,9 +21,9 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.INSERT_DROP_DUPS
 import org.apache.hudi.common.config.HoodieConfig
-import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.table.HoodieTableConfig
 import org.apache.hudi.core.util.ConfigUtils
 import org.apache.hudi.exception.HoodieKeyGeneratorException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions

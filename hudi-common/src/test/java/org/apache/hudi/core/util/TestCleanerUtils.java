@@ -21,12 +21,12 @@ package org.apache.hudi.core.util;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.table.timeline.versioning.v2.InstantComparatorV2;
 
 import org.junit.jupiter.api.Test;
 
@@ -215,7 +215,7 @@ class TestCleanerUtils {
     List<String> timestamps = new ArrayList<>();
     for (int i = 0; i < numCommits; i++) {
       ZonedDateTime commitTime = nowUtc.minusHours(totalHoursSpan).plusMinutes((long) i * totalHoursSpan * 60 / numCommits);
-      String ts = org.apache.hudi.common.table.timeline.TimelineUtils.formatDate(Date.from(commitTime.toInstant()));
+      String ts = org.apache.hudi.core.table.timeline.TimelineUtils.formatDate(Date.from(commitTime.toInstant()));
       timestamps.add(ts);
     }
 

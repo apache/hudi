@@ -20,7 +20,7 @@
 package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.{DataSourceOptionsHelper, DataSourceReadOptions}
-import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.core.table.timeline.HoodieTimeline
 
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}

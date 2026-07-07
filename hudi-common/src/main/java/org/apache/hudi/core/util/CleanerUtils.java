@@ -22,22 +22,22 @@ import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
-import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigrator;
-import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV1MigrationHandler;
-import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV2MigrationHandler;
-import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanMigrator;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.HoodieCleanStat;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.core.table.timeline.TimelineUtils;
+import org.apache.hudi.core.table.timeline.versioning.clean.CleanMetadataMigrator;
+import org.apache.hudi.core.table.timeline.versioning.clean.CleanMetadataV1MigrationHandler;
+import org.apache.hudi.core.table.timeline.versioning.clean.CleanMetadataV2MigrationHandler;
+import org.apache.hudi.core.table.timeline.versioning.clean.CleanPlanMigrator;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -51,10 +51,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
+import static org.apache.hudi.core.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.core.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.core.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.core.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 
 /**
  * Utils for clean action.

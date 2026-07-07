@@ -25,7 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToAvro;
+import static org.apache.hudi.core.table.timeline.MetadataConversionUtils.convertCommitMetadataToAvro;
 
 /**
  * Utility methods to commit instant for test.

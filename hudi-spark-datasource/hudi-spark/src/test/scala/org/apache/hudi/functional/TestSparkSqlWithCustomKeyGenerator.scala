@@ -22,8 +22,8 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
-import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.core.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.TestSparkSqlWithCustomKeyGenerator._
 import org.apache.hudi.keygen.constant.KeyGeneratorType

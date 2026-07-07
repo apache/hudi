@@ -23,11 +23,11 @@ import org.apache.hudi.common.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.log.HoodieLogFormat
-import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.HoodieStorageUtils
+import org.apache.hudi.core.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.log.HoodieLogFormat
+import org.apache.hudi.core.table.log.block.HoodieAvroDataBlock
+import org.apache.hudi.core.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath

@@ -18,8 +18,8 @@
 
 package org.apache.hudi.aws.sync;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.hive.HiveSyncConfig;
 
 import org.apache.hadoop.conf.Configuration;

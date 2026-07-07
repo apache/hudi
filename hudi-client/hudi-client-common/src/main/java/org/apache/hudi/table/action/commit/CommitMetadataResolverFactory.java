@@ -21,8 +21,8 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.core.table.HoodieTableVersion;
+import org.apache.hudi.core.table.timeline.HoodieActiveTimeline;
 
 /**
  * Factory of {@link CommitMetadataResolver}

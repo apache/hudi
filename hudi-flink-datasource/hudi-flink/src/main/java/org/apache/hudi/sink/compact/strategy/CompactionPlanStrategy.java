@@ -18,8 +18,8 @@
 
 package org.apache.hudi.sink.compact.strategy;
 
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
 
 import java.util.List;
 

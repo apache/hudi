@@ -20,7 +20,7 @@ package org.apache.hudi.io.log.block;
 
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.core.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import javax.annotation.Nonnull;

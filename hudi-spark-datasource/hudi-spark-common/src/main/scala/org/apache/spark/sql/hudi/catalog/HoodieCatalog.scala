@@ -22,8 +22,8 @@ package org.apache.spark.sql.hudi.catalog
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.view.FileSystemViewManager
+import org.apache.hudi.core.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.view.FileSystemViewManager
 import org.apache.hudi.core.util.ConfigUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils

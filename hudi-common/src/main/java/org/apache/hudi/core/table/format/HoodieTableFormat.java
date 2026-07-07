@@ -21,10 +21,10 @@ package org.apache.hudi.core.table.format;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineFactory;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.TimelineFactory;
+import org.apache.hudi.core.table.view.FileSystemViewManager;
 import org.apache.hudi.metadata.TableMetadataFactory;
 
 import java.io.Serializable;
@@ -43,7 +43,7 @@ public interface HoodieTableFormat extends Serializable {
   String getName();
 
   /**
-   * Initializes the table format implementation with the properties supplied from {@link org.apache.hudi.common.table.HoodieTableConfig}
+   * Initializes the table format implementation with the properties supplied from {@link org.apache.hudi.core.table.HoodieTableConfig}
    */
   default void init(Properties properties) {
   }

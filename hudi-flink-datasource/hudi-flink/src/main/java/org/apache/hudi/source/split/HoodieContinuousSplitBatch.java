@@ -18,8 +18,8 @@
 
 package org.apache.hudi.source.split;
 
-import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.core.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.table.format.cdc.CdcInputSplit;
 

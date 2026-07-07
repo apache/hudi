@@ -20,8 +20,8 @@ package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.client.WriteClientTestUtils
-import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.core.table.timeline.HoodieInstant
 
 import org.apache.spark.SparkConf
 

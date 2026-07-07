@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.model.HoodieLogFile
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePathInfo
 import org.apache.hudi.util.JFunction
 

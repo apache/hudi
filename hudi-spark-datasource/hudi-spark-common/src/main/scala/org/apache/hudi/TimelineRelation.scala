@@ -17,8 +17,8 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, TimelineUtils}
+import org.apache.hudi.core.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.timeline.{HoodieInstant, TimelineUtils}
 import org.apache.hudi.core.util.CommitUtils
 
 import org.apache.spark.rdd.RDD

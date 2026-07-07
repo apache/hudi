@@ -19,10 +19,10 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.common.model.TableServiceType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
-import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.timeline.HoodieInstantTimeGenerator;
+import org.apache.hudi.core.table.timeline.TimeGenerator;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;

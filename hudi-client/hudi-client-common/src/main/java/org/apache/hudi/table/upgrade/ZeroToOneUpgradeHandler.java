@@ -19,15 +19,15 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
-import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.table.marker.MarkerType;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.HoodieRollbackStat;
+import org.apache.hudi.core.table.marker.MarkerType;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -40,7 +40,7 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.InstantComparison.EQUALS;
+import static org.apache.hudi.core.table.timeline.InstantComparison.EQUALS;
 
 /**
  * Upgrade handle to assist in upgrading hoodie table from version 0 to 1.

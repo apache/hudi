@@ -22,8 +22,8 @@ import org.apache.hudi.adapter.AbstractRichFunctionAdapter;
 import org.apache.hudi.adapter.SourceFunctionAdapter;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.CompactionOperation;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
 import org.apache.hudi.util.StreamerUtil;
 
 import lombok.extern.slf4j.Slf4j;
@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
  *
  * <ul>
  *   <li>If the timeline has no inflight instants,
- *   use {@link org.apache.hudi.common.table.timeline.HoodieActiveTimeline#createNewInstantTime() as the instant time;</li>
+ *   use {@link org.apache.hudi.core.table.timeline.HoodieActiveTimeline#createNewInstantTime() as the instant time;</li>
  *   <li>If the timeline has inflight instants,
  *   use the median instant time between [last complete instant time, earliest inflight instant time]
  *   as the instant time.</li>

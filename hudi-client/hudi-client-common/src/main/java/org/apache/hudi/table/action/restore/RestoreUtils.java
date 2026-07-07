@@ -20,9 +20,9 @@
 package org.apache.hudi.table.action.restore;
 
 import org.apache.hudi.avro.model.HoodieRestorePlan;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 

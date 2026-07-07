@@ -23,9 +23,9 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.core.read.BufferedRecord;
+import org.apache.hudi.core.table.HoodieTableConfig;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.storage.StorageConfiguration;
 

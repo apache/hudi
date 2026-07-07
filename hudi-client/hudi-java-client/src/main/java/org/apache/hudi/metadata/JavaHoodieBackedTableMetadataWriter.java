@@ -31,6 +31,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.metadata.index.UnsupportedEngineIndexerSupport;
 import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;

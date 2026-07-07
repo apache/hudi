@@ -21,7 +21,7 @@ import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileS
 import org.apache.hudi.client.model.{HoodieInternalRow, Spark42HoodieInternalRow}
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
+import org.apache.hudi.core.table.cdc.HoodieCDCFileSplit
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.{GroupType, LogicalTypeAnnotation, Types}

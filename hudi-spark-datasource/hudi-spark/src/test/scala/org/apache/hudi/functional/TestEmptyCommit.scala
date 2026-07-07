@@ -18,8 +18,8 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
-import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.table.HoodieTableConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{SaveMode, SparkSession}

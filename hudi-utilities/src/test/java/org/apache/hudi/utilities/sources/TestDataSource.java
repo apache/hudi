@@ -19,8 +19,8 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.checkpoint.Checkpoint;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.testutils.sources.AbstractBaseTestSource;
 
@@ -33,7 +33,7 @@ import org.apache.spark.sql.SparkSession;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
+import static org.apache.hudi.core.table.checkpoint.CheckpointUtils.createCheckpoint;
 
 /**
  * An implementation of {@link Source}, that emits test upserts.

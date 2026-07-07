@@ -19,7 +19,7 @@
 
 package org.apache.hudi.table.action.index;
 
-import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
 
 import java.io.IOException;
 

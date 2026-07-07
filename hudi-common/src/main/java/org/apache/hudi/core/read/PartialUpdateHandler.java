@@ -25,14 +25,14 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
-import org.apache.hudi.common.table.PartialUpdateMode;
+import org.apache.hudi.core.table.PartialUpdateMode;
 
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
-import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
+import static org.apache.hudi.core.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
+import static org.apache.hudi.core.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.core.util.ConfigUtils.extractWithPrefix;
 
 /**
