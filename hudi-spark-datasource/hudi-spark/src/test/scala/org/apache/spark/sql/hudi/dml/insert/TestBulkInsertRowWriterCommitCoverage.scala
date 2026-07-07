@@ -36,6 +36,7 @@ class TestBulkInsertRowWriterCommitCoverage extends HoodieSparkSqlTestBase {
 
   test("Test row-writer bulk_insert into partitioned table") {
     withSQLConf(
+      "hoodie.metadata.enable" -> "false",
       "hoodie.spark.sql.insert.into.operation" -> "bulk_insert",
       "hoodie.bulkinsert.shuffle.parallelism" -> "1") {
       Seq("cow", "mor").foreach { tableType =>
@@ -75,6 +76,7 @@ class TestBulkInsertRowWriterCommitCoverage extends HoodieSparkSqlTestBase {
     // Dynamic overwrite mode is required so that only the partitions present in the
     // incoming data are replaced; the default (static) mode overwrites the whole table.
     withSQLConf(
+      "hoodie.metadata.enable" -> "false",
       "hoodie.spark.sql.insert.into.operation" -> "bulk_insert",
       "hoodie.datasource.overwrite.mode" -> "dynamic") {
       withTempDir { tmp =>
@@ -115,7 +117,9 @@ class TestBulkInsertRowWriterCommitCoverage extends HoodieSparkSqlTestBase {
   }
 
   test("Test row-writer insert overwrite with static partition") {
-    withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert") {
+    withSQLConf(
+      "hoodie.metadata.enable" -> "false",
+      "hoodie.spark.sql.insert.into.operation" -> "bulk_insert") {
       withTempDir { tmp =>
         val tableName = generateTableName
         spark.sql(
@@ -154,6 +158,7 @@ class TestBulkInsertRowWriterCommitCoverage extends HoodieSparkSqlTestBase {
 
   test("Test row-writer insert overwrite rejected when overlapping pending clustering") {
     withSQLConf(
+      "hoodie.metadata.enable" -> "false",
       "hoodie.spark.sql.insert.into.operation" -> "bulk_insert",
       "hoodie.compact.inline" -> "false",
       "hoodie.compact.schedule.inline" -> "false") {
