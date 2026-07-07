@@ -19,10 +19,10 @@
 
 package org.apache.hudi.common.fs;
 
-import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.core.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.storage.StoragePath;
 

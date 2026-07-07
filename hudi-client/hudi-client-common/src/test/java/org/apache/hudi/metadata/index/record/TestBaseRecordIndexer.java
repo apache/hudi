@@ -19,9 +19,9 @@
 package org.apache.hudi.metadata.index.record;
 
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.TableSchemaResolver;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedConstruction;

@@ -70,9 +70,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_GR
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP;
-import static org.apache.hudi.common.table.HoodieTableConfig.TableStorageLayout.LSM_TREE;
 import static org.apache.hudi.core.table.HoodieTableConfig.TableStorageLayout.LSM_TREE;
-import static org.apache.hudi.metadata.HoodieBackedTableMetadataWriter.RECORD_INDEX_AVERAGE_RECORD_SIZE;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.RECORD_INDEX_AVERAGE_RECORD_SIZE;
 
 /**

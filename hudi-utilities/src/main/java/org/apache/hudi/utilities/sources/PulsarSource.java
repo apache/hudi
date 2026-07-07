@@ -53,11 +53,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
-import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
-import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
-import static org.apache.hudi.common.util.ThreadUtils.collectActiveThreads;
 import static org.apache.hudi.core.table.checkpoint.CheckpointUtils.createCheckpoint;
 import static org.apache.hudi.core.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.core.util.ConfigUtils.getLongWithAltKeys;

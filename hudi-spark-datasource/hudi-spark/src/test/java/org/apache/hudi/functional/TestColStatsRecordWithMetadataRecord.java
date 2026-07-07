@@ -44,7 +44,6 @@ import org.apache.hudi.core.io.storage.HoodieSeekingFileReader;
 import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.core.table.HoodieTableVersion;
 import org.apache.hudi.core.util.FileFormatUtils;
-import org.apache.hudi.core.util.SpillableMapUtils;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;

@@ -20,8 +20,8 @@
 package org.apache.hudi.metadata.index.model;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.core.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 
 import lombok.AllArgsConstructor;

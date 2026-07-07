@@ -168,8 +168,6 @@ import static org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_METADATA_FIE
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION;
 import static org.apache.hudi.common.model.HoodieRecord.PARTITION_PATH_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
-import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -177,7 +175,6 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION;
 import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.IDENTITY_TRANSFORM;
 import static org.apache.hudi.core.table.timeline.InstantComparison.GREATER_THAN;
-import static org.apache.hudi.core.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.core.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.core.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_IS_TIGHT_BOUND;

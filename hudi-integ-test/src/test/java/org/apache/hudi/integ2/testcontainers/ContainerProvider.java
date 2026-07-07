@@ -16,11 +16,7 @@
  * limitations under the License.
  */
 
-<<<<<<<< HEAD:hudi-integ-test/src/test/java/org/apache/hudi/integ2/testcontainers/ContainerProvider.java
 package org.apache.hudi.integ2.testcontainers;
-========
-package org.apache.hudi.core.table.timeline;
->>>>>>>> f5364a667c29 (refactor(common)!: move org.apache.hudi.common.table to org.apache.hudi.core.table):hudi-common/src/main/java/org/apache/hudi/core/table/timeline/ActiveTimelineUtils.java
 
 import org.testcontainers.containers.ContainerState;
 

@@ -20,10 +20,10 @@
 package org.apache.hudi.metadata.index.record;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.index.record.HoodieRecordIndex;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.metadata.BucketizedMetadataTableFileGroupIndexParser;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.model.DataPartitionAndRecords;
