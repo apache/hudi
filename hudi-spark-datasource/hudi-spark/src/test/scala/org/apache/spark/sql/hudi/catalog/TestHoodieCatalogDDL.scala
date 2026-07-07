@@ -227,7 +227,11 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
         assertTrue(v2.schema().fieldNames.contains("id"))
         assertTrue(v2.partitioning().isEmpty)
         assertFalse(v2.properties().isEmpty)
-        assertEquals(s"spark_catalog.default.$tableName", v2.name())
+        // v2.name() is catalog-qualified on Spark 3.4+ (spark_catalog.default.<t>) but only
+        // db-qualified on Spark 3.3 (TableIdentifier has no catalog field there), so match either.
+        assertTrue(
+          v2.name() == s"spark_catalog.default.$tableName" || v2.name() == s"default.$tableName",
+          v2.name())
 
         // Append then overwrite through the V1-fallback write builder.
         spark.sql(s"insert into $tableName values (1, 'a1', 1000), (2, 'a2', 2000)")
