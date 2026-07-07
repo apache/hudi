@@ -27,11 +27,8 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
-<<<<<<< HEAD
-import org.apache.hudi.common.util.HoodieStorageUtils;
-=======
 import org.apache.hudi.common.util.ExternalFilePathUtil;
->>>>>>> 2a93785726a9 (Fix filename parser test regressions)
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -212,6 +209,13 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(TEST_WRITE_TOKEN, parsedBaseFileNameWithoutExtension.getWriteToken());
     assertEquals("20240706120100123", parsedBaseFileNameWithoutExtension.getCommitTime());
     assertEquals("", parsedBaseFileNameWithoutExtension.getFileExtension());
+
+    FileNameParser.BaseFileName parsedExternalBaseFileName = FileNameParser.parseBaseFile(
+        ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker("file_1.parquet", "20240706120100123")).get();
+    assertEquals("file_1.parquet", parsedExternalBaseFileName.getFileId());
+    assertEquals("", parsedExternalBaseFileName.getWriteToken());
+    assertEquals("20240706120100123", parsedExternalBaseFileName.getCommitTime());
+    assertEquals(".parquet", parsedExternalBaseFileName.getFileExtension());
 
     String logFileName = FSUtils.makeInlineLogFileName(fileId, ".log", "20240706120100123", 2, TEST_WRITE_TOKEN)
         + HoodieCDCUtils.CDC_LOGFILE_SUFFIX;

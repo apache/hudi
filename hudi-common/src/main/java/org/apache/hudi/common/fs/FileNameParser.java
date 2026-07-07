@@ -20,6 +20,7 @@
 package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -31,7 +32,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Parser for Hudi-generated base and log file names.
+ * Parser for Hudi base and log file names.
  *
  * <p>The parser accepts either a file name or a full path and always decodes only the last path component.
  * A non-matching input returns {@link Option#empty()} instead of throwing.</p>
@@ -54,7 +55,7 @@ public final class FileNameParser {
   }
 
   /**
-   * Parses a Hudi-generated base file name.
+   * Parses a base file name.
    *
    * <p>Expected format: {@code <fileId>_<writeToken>_<commitTime>[.<extension>]}.
    * Decoding mirrors {@code HoodieBaseFile}'s historical substring scan: the first underscore terminates
@@ -63,8 +64,12 @@ public final class FileNameParser {
    * the file name. The decoded {@link BaseFileName#getFileExtension()} value includes the leading dot when
    * an extension is present.</p>
    *
+   * <p>Externally registered base files marked with {@code _hudiext} are decoded through
+   * {@link ExternalFilePathUtil}. For these files, {@link BaseFileName#getWriteToken()} is empty and
+   * {@link BaseFileName#getFileExtension()} is derived from the original external file name.</p>
+   *
    * @param fileName file name or full path
-   * @return decoded base file name when the input matches the Hudi base-file format
+   * @return decoded base file name when the input matches a supported base-file format
    */
   public static Option<BaseFileName> parseBaseFile(String fileName) {
     if (StringUtils.isNullOrEmpty(fileName)) {
@@ -72,6 +77,10 @@ public final class FileNameParser {
     }
 
     String actualFileName = getActualFileName(fileName);
+    if (ExternalFilePathUtil.isExternallyCreatedFile(actualFileName)) {
+      return parseExternalBaseFile(actualFileName);
+    }
+
     int firstUnderscoreIndex = -1;
     int secondUnderscoreIndex = -1;
     int dotIndex = -1;
@@ -175,8 +184,20 @@ public final class FileNameParser {
         : fileName;
   }
 
+  private static Option<BaseFileName> parseExternalBaseFile(String actualFileName) {
+    String[] fileIdAndCommitTime = ExternalFilePathUtil.parseFileIdAndCommitTimeFromExternalFile(actualFileName);
+    return Option.of(new BaseFileName(fileIdAndCommitTime[0], "", fileIdAndCommitTime[1],
+        getFileExtension(fileIdAndCommitTime[0])));
+  }
+
+  private static String getFileExtension(String fileName) {
+    int lastSeparatorIndex = fileName.lastIndexOf(StoragePath.SEPARATOR);
+    int dotIndex = fileName.lastIndexOf(DOT);
+    return dotIndex > lastSeparatorIndex ? fileName.substring(dotIndex) : "";
+  }
+
   /**
-   * Decoded parts of a Hudi-generated base file name.
+   * Decoded parts of a base file name.
    */
   @Getter
   public static final class BaseFileName {

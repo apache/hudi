@@ -28,11 +28,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.LogExtensions;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-<<<<<<< HEAD
 import org.apache.hudi.common.util.HoodieStorageUtils;
-=======
-import org.apache.hudi.common.util.ExternalFilePathUtil;
->>>>>>> 2a93785726a9 (Fix filename parser test regressions)
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -121,10 +117,6 @@ public class FSUtils {
   }
 
   public static String getCommitTime(String fullFileName) {
-    if (ExternalFilePathUtil.isExternallyCreatedFile(fullFileName)) {
-      return ExternalFilePathUtil.parseFileIdAndCommitTimeFromExternalFile(fullFileName)[1];
-    }
-
     Option<FileNameParser.LogFileName> logFileName = FileNameParser.parseLogFile(fullFileName);
     if (logFileName.isPresent()) {
       return logFileName.get().getDeltaCommitTime();
