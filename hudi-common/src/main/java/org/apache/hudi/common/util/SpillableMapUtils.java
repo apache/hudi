@@ -22,8 +22,6 @@ import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.common.util.collection.BitCaskDiskMap.FileEntry;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 
-
-
 import java.io.IOException;
 import java.io.RandomAccessFile;
 

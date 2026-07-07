@@ -18,8 +18,8 @@
 
 package org.apache.hudi.hadoop.hive;
 
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 
