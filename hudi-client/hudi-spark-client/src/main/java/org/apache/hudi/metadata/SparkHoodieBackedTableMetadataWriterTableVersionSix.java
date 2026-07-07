@@ -39,7 +39,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieSparkIndexClient;
-import org.apache.hudi.metadata.index.UnsupportedExpressionIndexRecordGenerator;
+import org.apache.hudi.metadata.index.UnsupportedEngineIndexSupport;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -89,7 +89,7 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
                                        Option<String> inflightInstantTimestamp) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, new UnsupportedExpressionIndexRecordGenerator(EngineType.SPARK), inflightInstantTimestamp);
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, new UnsupportedEngineIndexSupport(EngineType.SPARK), inflightInstantTimestamp);
   }
 
   @Override

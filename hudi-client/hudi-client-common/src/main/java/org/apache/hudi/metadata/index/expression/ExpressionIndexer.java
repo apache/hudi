@@ -25,16 +25,15 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.BaseIndexer;
-import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
-import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
-import org.apache.hudi.metadata.model.FileInfo;
+import org.apache.hudi.metadata.index.EngineIndexSupport;
+import org.apache.hudi.metadata.index.IndexInitializationContext;
+import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 import org.apache.hudi.metadata.model.FileInfoAndPartition;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 
@@ -44,7 +43,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getExpressionIndexPartitionsToInit;
@@ -57,24 +55,20 @@ import static org.apache.hudi.metadata.MetadataPartitionType.EXPRESSION_INDEX;
 @Slf4j
 public class ExpressionIndexer extends BaseIndexer {
 
-  private final ExpressionIndexRecordGenerator expressionIndexRecordGenerator;
+  private final EngineIndexSupport engineIndexSupport;
 
   public ExpressionIndexer(
       HoodieEngineContext engineContext,
       HoodieWriteConfig dataTableWriteConfig,
       HoodieTableMetaClient dataTableMetaClient,
-      ExpressionIndexRecordGenerator expressionIndexRecordGenerator) {
+      EngineIndexSupport engineIndexSupport) {
     super(engineContext, dataTableWriteConfig, dataTableMetaClient);
 
-    this.expressionIndexRecordGenerator = expressionIndexRecordGenerator;
+    this.engineIndexSupport = engineIndexSupport;
   }
 
   @Override
-  public List<IndexPartitionInitialization> buildInitialization(
-      String dataTableInstantTime,
-      String instantTimeForPartition,
-      Map<String, List<FileInfo>> partitionToAllFilesMap,
-      Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlices) throws IOException {
+  public List<IndexInitializationPlan> buildInitialization(IndexInitializationContext context) throws IOException {
     Set<String> expressionIndexPartitionsToInit = getExpressionIndexPartitionsToInit(
         EXPRESSION_INDEX, dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient);
     if (expressionIndexPartitionsToInit.size() != 1) {
@@ -89,7 +83,7 @@ public class ExpressionIndexer extends BaseIndexer {
     HoodieIndexDefinition indexDefinition = HoodieTableMetadataUtil.getHoodieIndexDefinition(indexName, dataTableMetaClient);
     ValidationUtils.checkState(indexDefinition != null, "Expression Index definition is not present for index " + indexName);
 
-    List<FileSliceAndPartition> partitionFileSlicePairs = lazyPartitionFileSlices.get();
+    List<FileSliceAndPartition> partitionFileSlicePairs = context.latestFileSlices().get();
     List<FileInfoAndPartition> filesToIndex = new ArrayList<>();
     partitionFileSlicePairs.forEach(fsp -> {
       if (fsp.fileSlice().getBaseFile().isPresent()) {
@@ -102,19 +96,19 @@ public class ExpressionIndexer extends BaseIndexer {
 
     int fileGroupCount = dataTableWriteConfig.getMetadataConfig().getExpressionIndexFileGroupCount();
     if (filesToIndex.isEmpty()) {
-      return Collections.singletonList(IndexPartitionInitialization.of(fileGroupCount, indexName, engineContext.emptyHoodieData()));
+      return Collections.singletonList(IndexInitializationPlan.of(fileGroupCount, indexName, engineContext.emptyHoodieData()));
     }
 
     int parallelism = Math.min(filesToIndex.size(), dataTableWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
     HoodieSchema tableSchema =
-        HoodieTableMetadataUtil.tryResolveSchemaForTable(dataTableMetaClient)
+        context.tableSchema().get()
             .orElseThrow(() -> new HoodieMetadataException("Table schema is not available for expression index initialization"));
     HoodieSchema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataTableMetaClient, tableSchema);
 
-    HoodieData<HoodieRecord> records = expressionIndexRecordGenerator.generate(
+    HoodieData<HoodieRecord> records = engineIndexSupport.generateExpressionIndexRecords(
         filesToIndex, indexDefinition, dataTableMetaClient, parallelism,
-        tableSchema, readerSchema, engineContext.getStorageConf(), dataTableInstantTime);
+        tableSchema, readerSchema, engineContext.getStorageConf(), context.dataInstantTime());
 
-    return Collections.singletonList(IndexPartitionInitialization.of(fileGroupCount, indexName, records));
+    return Collections.singletonList(IndexInitializationPlan.of(fileGroupCount, indexName, records));
   }
 }

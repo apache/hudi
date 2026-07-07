@@ -46,7 +46,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
-import org.apache.hudi.metadata.index.SparkExpressionIndexRecordGenerator;
+import org.apache.hudi.metadata.index.SparkEngineIndexSupport;
 import org.apache.hudi.metadata.model.FileInfoAndPartition;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.metrics.DistributedRegistry;
@@ -125,7 +125,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                        Option<String> inflightInstantTimestamp,
                                        boolean streamingWrites) {
     super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext,
-        new SparkExpressionIndexRecordGenerator(engineContext, writeConfig), inflightInstantTimestamp, streamingWrites);
+        new SparkEngineIndexSupport(engineContext, writeConfig), inflightInstantTimestamp, streamingWrites);
   }
 
   @Override

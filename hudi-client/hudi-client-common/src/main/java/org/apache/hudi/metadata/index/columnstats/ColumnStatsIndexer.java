@@ -30,9 +30,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.BaseIndexer;
-import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
+import org.apache.hudi.metadata.index.IndexInitializationContext;
+import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 import org.apache.hudi.metadata.model.FileInfo;
-import org.apache.hudi.metadata.model.FileSliceAndPartition;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -70,15 +70,12 @@ public class ColumnStatsIndexer extends BaseIndexer {
   }
 
   @Override
-  public List<IndexPartitionInitialization> buildInitialization(
-      String dataTableInstantTime,
-      String instantTimeForPartition,
-      Map<String, List<FileInfo>> partitionToAllFilesMap,
-      Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlices) throws IOException {
+  public List<IndexInitializationPlan> buildInitialization(IndexInitializationContext context) throws IOException {
+    Map<String, List<FileInfo>> partitionToAllFilesMap = context.allFiles();
     final int fileGroupCount = dataTableWriteConfig.getMetadataConfig().getColumnStatsIndexFileGroupCount();
     // columnsToIndex can be empty if meta fields are disabled and cols to index is not explicitly overridden.
     if (partitionToAllFilesMap.isEmpty() || columnsToIndex.get().isEmpty()) {
-      return Collections.singletonList(IndexPartitionInitialization.of(fileGroupCount, COLUMN_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
+      return Collections.singletonList(IndexInitializationPlan.of(fileGroupCount, COLUMN_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
     }
 
     log.info("Indexing {} columns for column stats index", columnsToIndex.get().size());
@@ -88,7 +85,7 @@ public class ColumnStatsIndexer extends BaseIndexer {
         dataTableMetaClient, dataTableWriteConfig.getColumnStatsIndexParallelism(),
         dataTableWriteConfig.getMetadataConfig().getMaxReaderBufferSize(),
         columnsToIndex.get());
-    return Collections.singletonList(IndexPartitionInitialization.of(fileGroupCount, COLUMN_STATS.getPartitionPath(), records));
+    return Collections.singletonList(IndexInitializationPlan.of(fileGroupCount, COLUMN_STATS.getPartitionPath(), records));
   }
 
   @Override

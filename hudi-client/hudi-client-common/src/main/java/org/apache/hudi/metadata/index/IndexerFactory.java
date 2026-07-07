@@ -47,7 +47,7 @@ public class IndexerFactory {
                                        HoodieEngineContext engineContext,
                                        HoodieWriteConfig dataTableWriteConfig,
                                        HoodieTableMetaClient dataTableMetaClient,
-                                       ExpressionIndexRecordGenerator expressionIndexRecordGenerator) {
+                                       EngineIndexSupport engineIndexSupport) {
     switch (partitionType) {
       case FILES:
         return new FilesIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient);
@@ -60,7 +60,7 @@ public class IndexerFactory {
             ? new PartitionedRecordIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient)
             : new RecordIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient);
       case EXPRESSION_INDEX:
-        return new ExpressionIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient, expressionIndexRecordGenerator);
+        return new ExpressionIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient, engineIndexSupport);
       case PARTITION_STATS:
         return new PartitionStatsIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient);
       case SECONDARY_INDEX:
@@ -78,7 +78,7 @@ public class IndexerFactory {
       HoodieEngineContext engineContext,
       HoodieWriteConfig dataTableWriteConfig,
       HoodieTableMetaClient dataTableMetaClient,
-      ExpressionIndexRecordGenerator expressionIndexRecordGenerator) {
+      EngineIndexSupport engineIndexSupport) {
     if (!dataTableWriteConfig.getMetadataConfig().isEnabled()) {
       return Collections.emptyMap();
     }
@@ -90,7 +90,7 @@ public class IndexerFactory {
         )
         .collect(Collectors.toMap(
             Function.identity(),
-            type -> IndexerFactory.createIndexer(type, engineContext, dataTableWriteConfig, dataTableMetaClient, expressionIndexRecordGenerator))));
+            type -> IndexerFactory.createIndexer(type, engineContext, dataTableWriteConfig, dataTableMetaClient, engineIndexSupport))));
   }
 
   /**

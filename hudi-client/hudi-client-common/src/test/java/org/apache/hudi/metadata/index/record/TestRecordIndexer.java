@@ -17,8 +17,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.index.IndexInitializationContext;
 import org.apache.hudi.metadata.index.model.DataPartitionAndRecords;
-import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
+import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 import org.apache.hudi.metadata.model.FileInfo;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 
@@ -58,7 +59,7 @@ class TestRecordIndexer {
     ExposedRecordIndexer indexer = new ExposedRecordIndexer(engineContext, writeConfig, metaClient, init);
 
     try (MockedStatic<HoodieTableMetadataUtil> mockedUtil = mockStatic(HoodieTableMetadataUtil.class)) {
-      List<IndexPartitionInitialization> result = indexer.callGetData("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
+      List<IndexInitializationPlan> result = indexer.callGetData("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
       assertEquals(1, result.size());
       assertEquals(2, result.get(0).totalFileGroups());
       mockedUtil.verify(() -> HoodieTableMetadataUtil.createRecordIndexDefinition(any(), any()), times(1));
@@ -81,12 +82,12 @@ class TestRecordIndexer {
         engineContext, writeConfig, metaClient, new DataPartitionAndRecords(1, Option.empty(), records));
 
     when(metadataConfig.isRecordIndexInitializationValidationEnabled()).thenReturn(false);
-    indexer.callPost(metaClient, IndexPartitionInitialization.of(1, "record_index", records), "record_index");
+    indexer.callPost(metaClient, IndexInitializationPlan.of(1, "record_index", records), "record_index");
     assertFalse(indexer.validateCalled);
     verify(records, times(1)).unpersistWithDependencies();
 
     when(metadataConfig.isRecordIndexInitializationValidationEnabled()).thenReturn(true);
-    indexer.callPost(metaClient, IndexPartitionInitialization.of(1, "record_index", records), "record_index");
+    indexer.callPost(metaClient, IndexInitializationPlan.of(1, "record_index", records), "record_index");
     assertTrue(indexer.validateCalled);
   }
 
@@ -110,7 +111,7 @@ class TestRecordIndexer {
         engineContext, writeConfig, metaClient, new DataPartitionAndRecords(2, Option.empty(), records));
 
     try (MockedStatic<HoodieTableMetadataUtil> mockedUtil = mockStatic(HoodieTableMetadataUtil.class)) {
-      List<IndexPartitionInitialization> result = indexer.callGetData("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
+      List<IndexInitializationPlan> result = indexer.callGetData("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
       assertEquals(1, result.size());
       assertEquals(1, result.get(0).dataPartitionAndRecords().get(0).indexRecords().collectAsList().size());
       assertEquals("p_record", result.get(0).dataPartitionAndRecords().get(0).indexRecords().collectAsList().get(0).getRecordKey());
@@ -139,13 +140,15 @@ class TestRecordIndexer {
       validateCalled = true;
     }
 
-    List<IndexPartitionInitialization> callGetData(String dataTableInstantTime, String instantTimeForPartition,
+    List<IndexInitializationPlan> callGetData(String dataTableInstantTime, String instantTimeForPartition,
                                                    Map<String, List<FileInfo>> partitionIdToAllFilesMap,
                                                    Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
-      return buildInitialization(dataTableInstantTime, instantTimeForPartition, partitionIdToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
+      return buildInitialization(IndexInitializationContext.of(
+          dataTableInstantTime, instantTimeForPartition, partitionIdToAllFilesMap,
+          lazyLatestMergedPartitionFileSliceList, Lazy.lazily(Option::empty)));
     }
 
-    void callPost(HoodieTableMetaClient metadataMetaClient, IndexPartitionInitialization indexPartitionInitialization, String relativePartitionPath) {
+    void callPost(HoodieTableMetaClient metadataMetaClient, IndexInitializationPlan indexPartitionInitialization, String relativePartitionPath) {
       postInitialization(metadataMetaClient, indexPartitionInitialization.dataPartitionAndRecords().get(0).indexRecords(),
           indexPartitionInitialization.totalFileGroups(), relativePartitionPath);
     }

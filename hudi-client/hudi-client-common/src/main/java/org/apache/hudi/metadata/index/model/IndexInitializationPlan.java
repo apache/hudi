@@ -40,7 +40,7 @@ import java.util.List;
 @AllArgsConstructor
 @Getter
 @Accessors(fluent = true)
-public class IndexPartitionInitialization {
+public class IndexInitializationPlan {
   private final int totalFileGroups;
   private final String indexPartitionName;
   private final MetadataTableFileGroupIndexParser indexParser;
@@ -52,10 +52,10 @@ public class IndexPartitionInitialization {
    *
    * @param indexPartitionName      metadata index partition path to initialize
    * @param dataPartitionAndRecords records and metadata for one data partition (or non-partitioned payload)
-   * @return an {@link IndexPartitionInitialization} instance configured with file-group count inferred
+   * @return an {@link IndexInitializationPlan} instance configured with file-group count inferred
    *         from {@code dataPartitionAndRecords}
    */
-  public static IndexPartitionInitialization of(String indexPartitionName, DataPartitionAndRecords dataPartitionAndRecords) {
+  public static IndexInitializationPlan of(String indexPartitionName, DataPartitionAndRecords dataPartitionAndRecords) {
     return of(dataPartitionAndRecords.numFileGroups(), indexPartitionName, dataPartitionAndRecords.indexRecords());
   }
 
@@ -66,10 +66,10 @@ public class IndexPartitionInitialization {
    * @param totalFileGroups    total number of file groups to pre-create for this index partition
    * @param indexPartitionName metadata index partition path/name to initialize
    * @param indexRecords       records to be written into the target index partition
-   * @return an {@link IndexPartitionInitialization} containing one {@link DataPartitionAndRecords}
+   * @return an {@link IndexInitializationPlan} containing one {@link DataPartitionAndRecords}
    *         entry without source data-partition binding
    */
-  public static IndexPartitionInitialization of(int totalFileGroups, String indexPartitionName, HoodieData<HoodieRecord> indexRecords) {
+  public static IndexInitializationPlan of(int totalFileGroups, String indexPartitionName, HoodieData<HoodieRecord> indexRecords) {
     return of(totalFileGroups, indexPartitionName, new DefaultMetadataTableFileGroupIndexParser(totalFileGroups),
         Collections.singletonList(new DataPartitionAndRecords(totalFileGroups, Option.empty(), indexRecords)));
   }
@@ -82,9 +82,9 @@ public class IndexPartitionInitialization {
    * @param indexPartitionName      metadata index partition path to initialize
    * @param indexParser             parser used to map records to metadata table file-group indexes
    * @param dataPartitionAndRecords input record payloads grouped by source data partition
-   * @return an {@link IndexPartitionInitialization} with the provided parser and partitioned payloads
+   * @return an {@link IndexInitializationPlan} with the provided parser and partitioned payloads
    */
-  public static IndexPartitionInitialization of(int totalFileGroups, String indexPartitionName, MetadataTableFileGroupIndexParser indexParser, List<DataPartitionAndRecords> dataPartitionAndRecords) {
-    return new IndexPartitionInitialization(totalFileGroups, indexPartitionName, indexParser, dataPartitionAndRecords);
+  public static IndexInitializationPlan of(int totalFileGroups, String indexPartitionName, MetadataTableFileGroupIndexParser indexParser, List<DataPartitionAndRecords> dataPartitionAndRecords) {
+    return new IndexInitializationPlan(totalFileGroups, indexPartitionName, indexParser, dataPartitionAndRecords);
   }
 }

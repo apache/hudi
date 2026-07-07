@@ -19,7 +19,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
+import org.apache.hudi.metadata.index.IndexInitializationContext;
+import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 import org.apache.hudi.metadata.model.FileInfo;
 
 import org.junit.jupiter.api.Test;
@@ -56,7 +57,8 @@ class TestColumnStatsIndexer {
     when(engineContext.emptyHoodieData()).thenReturn((HoodieData) emptyData);
 
     ColumnStatsIndexer indexer = new ColumnStatsIndexer(engineContext, writeConfig, metaClient);
-    List<IndexPartitionInitialization> initializationList = indexer.buildInitialization("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
+    List<IndexInitializationPlan> initializationList = indexer.buildInitialization(IndexInitializationContext.of(
+        "001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList), Lazy.lazily(Option::empty)));
     assertEquals(1, initializationList.size());
 
     assertEquals(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), initializationList.get(0).indexPartitionName());
@@ -98,7 +100,8 @@ class TestColumnStatsIndexer {
           .thenReturn(records);
 
       ColumnStatsIndexer indexer = new ColumnStatsIndexer(engineContext, writeConfig, metaClient);
-      List<IndexPartitionInitialization> initializationList = indexer.buildInitialization("001", "002", files, Lazy.lazily(Collections::emptyList));
+      List<IndexInitializationPlan> initializationList = indexer.buildInitialization(IndexInitializationContext.of(
+          "001", "002", files, Lazy.lazily(Collections::emptyList), Lazy.lazily(Option::empty)));
       assertEquals(1, initializationList.size());
 
       assertEquals(5, initializationList.get(0).totalFileGroups());

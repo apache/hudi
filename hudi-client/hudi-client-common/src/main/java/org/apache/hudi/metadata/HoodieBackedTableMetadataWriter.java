@@ -77,11 +77,12 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
+import org.apache.hudi.metadata.index.EngineIndexSupport;
+import org.apache.hudi.metadata.index.IndexInitializationContext;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.metadata.index.IndexerFactory;
 import org.apache.hudi.metadata.index.model.DataPartitionAndRecords;
-import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
+import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 import org.apache.hudi.metadata.model.DirectoryInfo;
 import org.apache.hudi.metadata.model.FileInfo;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
@@ -165,7 +166,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   protected final transient HoodieEngineContext engineContext;
   @Getter
   protected final transient Map<MetadataPartitionType, Indexer> enabledIndexerMap;
-  protected final transient ExpressionIndexRecordGenerator expressionIndexRecordGenerator;
+  protected final transient EngineIndexSupport engineIndexSupport;
 
   // Is the MDT bootstrapped and ready to be read from
   @Getter
@@ -177,9 +178,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
                                             HoodieWriteConfig writeConfig,
                                             HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                             HoodieEngineContext engineContext,
-                                            ExpressionIndexRecordGenerator expressionIndexRecordGenerator,
+                                            EngineIndexSupport engineIndexSupport,
                                             Option<String> inflightInstantTimestamp) {
-    this(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, expressionIndexRecordGenerator, inflightInstantTimestamp, false);
+    this(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, engineIndexSupport, inflightInstantTimestamp, false);
   }
 
   /**
@@ -196,7 +197,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
                                             HoodieWriteConfig writeConfig,
                                             HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                             HoodieEngineContext engineContext,
-                                            ExpressionIndexRecordGenerator expressionIndexRecordGenerator,
+                                            EngineIndexSupport engineIndexSupport,
                                             Option<String> inflightInstantTimestamp,
                                             boolean streamingWritesEnabled) {
     this.dataWriteConfig = writeConfig;
@@ -206,8 +207,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     this.dataMetaClient = HoodieTableMetaClient.builder().setConf(storageConf.newInstance())
         .setBasePath(dataWriteConfig.getBasePath())
         .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
-    this.enabledIndexerMap = IndexerFactory.getEnabledIndexerMap(engineContext, dataWriteConfig, dataMetaClient, expressionIndexRecordGenerator);
-    this.expressionIndexRecordGenerator = expressionIndexRecordGenerator;
+    this.enabledIndexerMap = IndexerFactory.getEnabledIndexerMap(engineContext, dataWriteConfig, dataMetaClient, engineIndexSupport);
+    this.engineIndexSupport = engineIndexSupport;
     if (writeConfig.isMetadataTableEnabled()) {
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy, dataMetaClient.getTableConfig().getTableVersion());
       try {
@@ -444,10 +445,15 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
     String instantTimeForPartition = generateUniqueInstantTime(dataTableInstantTime);
     // initialize metadata partitions
-    List<IndexPartitionInitialization> initializationList;
+    List<IndexInitializationPlan> initializationList;
     try {
-      initializationList = indexer.buildInitialization(
-          dataTableInstantTime, instantTimeForPartition, partitionToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
+      IndexInitializationContext initializationContext = IndexInitializationContext.of(
+          dataTableInstantTime,
+          instantTimeForPartition,
+          partitionToAllFilesMap,
+          lazyLatestMergedPartitionFileSliceList,
+          Lazy.lazily(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(dataMetaClient)));
+      initializationList = indexer.buildInitialization(initializationContext);
       if (initializationList.isEmpty()) {
         LOG.info("Skip building {} index in metadata table", partitionType.getPartitionPath());
         return;
@@ -457,23 +463,24 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           "Only support the initialization of one partition per index type "
               + "(HUDI-9358 for the feature support)");
 
-      IndexPartitionInitialization indexPartitionInit = initializationList.get(0);
-      final int numFileGroup = indexPartitionInit.totalFileGroups();
-      String relativePartitionPath = indexPartitionInit.indexPartitionName();
+      IndexInitializationPlan initializationPlan = initializationList.get(0);
+      final int numFileGroup = initializationPlan.totalFileGroups();
+      String relativePartitionPath = initializationPlan.indexPartitionName();
       LOG.info("Initializing {} index with {} file groups", relativePartitionPath, numFileGroup);
 
       HoodieTimer partitionInitTimer = HoodieTimer.start();
       clearExistingMetadataPartition(relativePartitionPath);
       HoodieData<HoodieRecord> records = engineContext.emptyHoodieData();
-      for (DataPartitionAndRecords dataPartitionAndRecords: indexPartitionInit.dataPartitionAndRecords()) {
+      for (DataPartitionAndRecords dataPartitionAndRecords: initializationPlan.dataPartitionAndRecords()) {
         initializeFileGroups(dataMetaClient, partitionType, instantTimeForPartition,
             dataPartitionAndRecords.numFileGroups(), relativePartitionPath, dataPartitionAndRecords.dataPartition());
         records = records.union(dataPartitionAndRecords.indexRecords());
       }
 
-      bulkCommit(instantTimeForPartition, relativePartitionPath, records, indexPartitionInit.indexParser());
+      bulkCommit(instantTimeForPartition, relativePartitionPath, records, initializationPlan.indexParser());
 
       indexer.postInitialization(metadataMetaClient, records, numFileGroup, relativePartitionPath);
+      dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, relativePartitionPath, true);
       // initialize metadata reader
       initMetadataReader();
       long totalInitTime = partitionInitTimer.endTimer();

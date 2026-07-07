@@ -34,7 +34,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.metadata.index.UnsupportedExpressionIndexRecordGenerator;
+import org.apache.hudi.metadata.index.UnsupportedEngineIndexSupport;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
@@ -89,7 +89,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                        HoodieEngineContext engineContext,
                                        Option<String> inFlightInstantTimestamp,
                                        boolean streamingWrites) {
-    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, new UnsupportedExpressionIndexRecordGenerator(EngineType.FLINK), inFlightInstantTimestamp, streamingWrites);
+    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, new UnsupportedEngineIndexSupport(EngineType.FLINK), inFlightInstantTimestamp, streamingWrites);
   }
 
   @Override

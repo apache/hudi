@@ -25,31 +25,31 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.metadata.model.FileInfoAndPartition;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.List;
 
 /**
- * Engine-specific generator for expression index records used during metadata index bootstrap.
+ * Fallback {@link EngineIndexSupport} for engines without a metadata index implementation.
  */
-public interface ExpressionIndexRecordGenerator {
-  EngineType getEngineType();
+public class UnsupportedEngineIndexSupport implements EngineIndexSupport {
 
-  /**
-   * Generates expression index records.
-   *
-   * @param filesToIndex    information for files to index, including partition, file path and file size
-   * @param indexDefinition definition of the expression index
-   * @param metaClient      {@link HoodieTableMetaClient} instance
-   * @param parallelism     parallelism to use for engine operations
-   * @param tableSchema     table schema
-   * @param readerSchema    reader schema
-   * @param storageConf     storage config
-   * @param instantTime     instant time
-   * @return expression index records
-   */
-  HoodieData<HoodieRecord> generate(
+  private final EngineType engineType;
+
+  public UnsupportedEngineIndexSupport(EngineType engineType) {
+    this.engineType = engineType;
+  }
+
+  @Override
+  public EngineType getEngineType() {
+    return engineType;
+  }
+
+  @Override
+  public HoodieData<HoodieRecord> generateExpressionIndexRecords(
       List<FileInfoAndPartition> filesToIndex,
       HoodieIndexDefinition indexDefinition,
       HoodieTableMetaClient metaClient,
@@ -57,5 +57,10 @@ public interface ExpressionIndexRecordGenerator {
       HoodieSchema tableSchema,
       HoodieSchema readerSchema,
       StorageConfiguration<?> storageConf,
-      String instantTime);
+      String instantTime) {
+    if (metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
+      throw new HoodieNotSupportedException("Table version 7 and below does not support expression index");
+    }
+    throw new HoodieNotSupportedException(engineType + " engine does not support building expression index yet");
+  }
 }

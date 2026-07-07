@@ -14,10 +14,12 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
+import org.apache.hudi.metadata.index.IndexInitializationContext;
+import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 import org.apache.hudi.metadata.model.FileInfo;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 
@@ -50,7 +52,7 @@ class TestPartitionStatsIndexer {
     when(tableConfig.isTablePartitioned()).thenReturn(false);
 
     ExposedPartitionStatsIndexer indexer = new ExposedPartitionStatsIndexer(engineContext, writeConfig, metaClient);
-    List<IndexPartitionInitialization> result = indexer.callGetData("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
+    List<IndexInitializationPlan> result = indexer.callGetData("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
     assertTrue(result.isEmpty());
   }
 
@@ -66,7 +68,7 @@ class TestPartitionStatsIndexer {
     when(writeConfig.isMetadataColumnStatsIndexEnabled()).thenReturn(false);
 
     ExposedPartitionStatsIndexer indexer = new ExposedPartitionStatsIndexer(engineContext, writeConfig, metaClient);
-    List<IndexPartitionInitialization> result = indexer.callGetData("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
+    List<IndexInitializationPlan> result = indexer.callGetData("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
     assertTrue(result.isEmpty());
   }
 
@@ -98,7 +100,7 @@ class TestPartitionStatsIndexer {
           .thenReturn(records);
 
       ExposedPartitionStatsIndexer indexer = new ExposedPartitionStatsIndexer(engineContext, writeConfig, metaClient);
-      List<IndexPartitionInitialization> initializationList = indexer.callGetData("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
+      List<IndexInitializationPlan> initializationList = indexer.callGetData("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
       assertEquals(1, initializationList.size());
 
       assertEquals(4, initializationList.get(0).totalFileGroups());
@@ -113,10 +115,12 @@ class TestPartitionStatsIndexer {
       super(engineContext, dataTableWriteConfig, dataTableMetaClient);
     }
 
-    List<IndexPartitionInitialization> callGetData(String dataTableInstantTime, String instantTimeForPartition,
+    List<IndexInitializationPlan> callGetData(String dataTableInstantTime, String instantTimeForPartition,
                                                    Map<String, List<FileInfo>> partitionIdToAllFilesMap,
                                                    Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
-      return buildInitialization(dataTableInstantTime, instantTimeForPartition, partitionIdToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
+      return buildInitialization(IndexInitializationContext.of(
+          dataTableInstantTime, instantTimeForPartition, partitionIdToAllFilesMap,
+          lazyLatestMergedPartitionFileSliceList, Lazy.lazily(Option::empty)));
     }
   }
 }

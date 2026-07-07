@@ -22,14 +22,10 @@ package org.apache.hudi.metadata.index;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Lazy;
-import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
-import org.apache.hudi.metadata.model.FileInfo;
-import org.apache.hudi.metadata.model.FileSliceAndPartition;
+import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Interface to building records for initializing and updating a type of metadata or index
@@ -43,19 +39,12 @@ public interface Indexer {
   /**
    * Generates records for initializing the index.
    *
-   * @param dataTableInstantTime    instant time of the data table that the metadata table is initialized on
-   * @param instantTimeForPartition instant time used for initializing a specific metadata partition
-   * @param partitionToAllFilesMap  map of partition to files
-   * @param lazyPartitionFileSlices lazily evaluated list of file slices for the indexer that needs it
-   * @return zero or more {@link IndexPartitionInitialization} entries to be initialized.
+   * @param context shared metadata indexing context
+   * @return zero or more {@link IndexInitializationPlan} entries to be initialized.
    * Returning an empty list means no metadata partition needs initialization in this invocation.
    * @throws IOException upon IO error
    */
-  List<IndexPartitionInitialization> buildInitialization(
-      String dataTableInstantTime,
-      String instantTimeForPartition,
-      Map<String, List<FileInfo>> partitionToAllFilesMap,
-      Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlices) throws IOException;
+  List<IndexInitializationPlan> buildInitialization(IndexInitializationContext context) throws IOException;
 
   /**
    * Hook invoked after the bootstrap bulk commit for an index partition succeeds.

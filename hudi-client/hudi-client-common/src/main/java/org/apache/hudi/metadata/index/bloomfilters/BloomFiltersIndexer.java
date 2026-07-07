@@ -23,21 +23,18 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.BaseIndexer;
-import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
-import org.apache.hudi.metadata.model.FileInfo;
-import org.apache.hudi.metadata.model.FileSliceAndPartition;
+import org.apache.hudi.metadata.index.IndexInitializationContext;
+import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Implementation of {@link MetadataPartitionType#BLOOM_FILTERS} index
@@ -52,15 +49,11 @@ public class BloomFiltersIndexer extends BaseIndexer {
   }
 
   @Override
-  public List<IndexPartitionInitialization> buildInitialization(
-      String dataTableInstantTime,
-      String instantTimeForPartition,
-      Map<String, List<FileInfo>> partitionToAllFilesMap,
-      Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlices) throws IOException {
+  public List<IndexInitializationPlan> buildInitialization(IndexInitializationContext context) throws IOException {
     HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToBloomFilterRecords(
-        engineContext, Collections.emptyMap(), partitionToAllFilesMap, dataTableInstantTime, dataTableMetaClient,
+        engineContext, Collections.emptyMap(), context.allFiles(), context.dataInstantTime(), dataTableMetaClient,
         dataTableWriteConfig.getBloomIndexParallelism(), dataTableWriteConfig.getBloomFilterType());
     final int fileGroupCount = dataTableWriteConfig.getMetadataConfig().getBloomFilterIndexFileGroupCount();
-    return Collections.singletonList(IndexPartitionInitialization.of(fileGroupCount, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath(), records));
+    return Collections.singletonList(IndexInitializationPlan.of(fileGroupCount, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath(), records));
   }
 }

@@ -34,7 +34,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
+import org.apache.hudi.metadata.index.EngineIndexSupport;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.Arrays;
@@ -74,9 +74,9 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
                                                            HoodieWriteConfig writeConfig,
                                                            HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                            HoodieEngineContext engineContext,
-                                                           ExpressionIndexRecordGenerator expressionIndexRecordGenerator,
+                                                           EngineIndexSupport engineIndexSupport,
                                                            Option<String> inflightInstantTimestamp) {
-    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, expressionIndexRecordGenerator, inflightInstantTimestamp);
+    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, engineIndexSupport, inflightInstantTimestamp);
   }
 
   @Override

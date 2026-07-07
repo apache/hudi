@@ -20,8 +20,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
-import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
+import org.apache.hudi.metadata.index.EngineIndexSupport;
+import org.apache.hudi.metadata.index.IndexInitializationContext;
+import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 
 import org.junit.jupiter.api.Test;
@@ -57,8 +58,9 @@ class TestExpressionIndexer {
       mockedUtil.when(() -> HoodieTableMetadataUtil.getExpressionIndexPartitionsToInit(any(), any(), any()))
           .thenReturn(Set.of("expr1", "expr2"));
 
-      ExpressionIndexer indexer = new ExpressionIndexer(engineContext, writeConfig, metaClient, mock(ExpressionIndexRecordGenerator.class));
-      List<IndexPartitionInitialization> result = indexer.buildInitialization("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
+      ExpressionIndexer indexer = new ExpressionIndexer(engineContext, writeConfig, metaClient, mock(EngineIndexSupport.class));
+      List<IndexInitializationPlan> result = indexer.buildInitialization(IndexInitializationContext.of(
+          "001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList), Lazy.lazily(Option::empty)));
       assertTrue(result.isEmpty());
     }
   }
@@ -70,7 +72,7 @@ class TestExpressionIndexer {
     HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
     HoodieMetadataConfig metadataConfig = mock(HoodieMetadataConfig.class);
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    ExpressionIndexRecordGenerator generator = mock(ExpressionIndexRecordGenerator.class);
+    EngineIndexSupport engineIndexSupport = mock(EngineIndexSupport.class);
     HoodieIndexDefinition definition = mock(HoodieIndexDefinition.class);
     HoodieSchema tableSchema = mock(HoodieSchema.class);
     HoodieSchema projectedSchema = mock(HoodieSchema.class);
@@ -83,7 +85,7 @@ class TestExpressionIndexer {
         Collections.singletonList(HoodieMetadataPayload.createPartitionFilesRecord("p_expr",
             Collections.singletonMap("f_expr.parquet", 55L), Collections.emptyList())),
         1);
-    when(generator.generate(any(), any(), any(), anyInt(), any(), any(), any(), any())).thenReturn(records);
+    when(engineIndexSupport.generateExpressionIndexRecords(any(), any(), any(), anyInt(), any(), any(), any(), any())).thenReturn(records);
 
     FileSlice fileSlice = new FileSlice("p1", "001", "f1");
     fileSlice.setBaseFile(new HoodieBaseFile("file:///tmp/p1/f1.parquet"));
@@ -93,11 +95,11 @@ class TestExpressionIndexer {
       mockedUtil.when(() -> HoodieTableMetadataUtil.getExpressionIndexPartitionsToInit(any(), any(), any()))
           .thenReturn(Collections.singleton("expr_idx"));
       mockedUtil.when(() -> HoodieTableMetadataUtil.getHoodieIndexDefinition("expr_idx", metaClient)).thenReturn(definition);
-      mockedUtil.when(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(metaClient)).thenReturn(Option.of(tableSchema));
       mockedUtil.when(() -> HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex(definition, metaClient, tableSchema)).thenReturn(projectedSchema);
 
-      ExpressionIndexer indexer = new ExpressionIndexer(engineContext, writeConfig, metaClient, generator);
-      List<IndexPartitionInitialization> initializationList = indexer.buildInitialization("001", "002", new HashMap<>(), Lazy.lazily(() -> fileSlices));
+      ExpressionIndexer indexer = new ExpressionIndexer(engineContext, writeConfig, metaClient, engineIndexSupport);
+      List<IndexInitializationPlan> initializationList = indexer.buildInitialization(IndexInitializationContext.of(
+          "001", "002", new HashMap<>(), Lazy.lazily(() -> fileSlices), Lazy.lazily(() -> Option.of(tableSchema))));
       assertEquals(1, initializationList.size());
 
       assertEquals("expr_idx", initializationList.get(0).indexPartitionName());

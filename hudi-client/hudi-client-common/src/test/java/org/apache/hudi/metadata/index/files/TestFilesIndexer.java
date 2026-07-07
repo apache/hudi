@@ -18,11 +18,13 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
+import org.apache.hudi.metadata.index.IndexInitializationContext;
+import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 import org.apache.hudi.metadata.model.FileInfo;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 
@@ -58,7 +60,7 @@ class TestFilesIndexer {
     when(engineContext.parallelize(any(List.class), org.mockito.ArgumentMatchers.eq(1))).thenReturn(allPartitions);
 
     ExposedFilesIndexer indexer = new ExposedFilesIndexer(engineContext, writeConfig, metaClient);
-    List<IndexPartitionInitialization> initializationList = indexer.callGetData("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
+    List<IndexInitializationPlan> initializationList = indexer.callGetData("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
     assertEquals(1, initializationList.size());
 
     assertEquals(MetadataPartitionType.FILES.getPartitionPath(), initializationList.get(0).indexPartitionName());
@@ -76,7 +78,7 @@ class TestFilesIndexer {
     files.put("p2", Collections.singletonList(FileInfo.of("f2.parquet", 200L)));
 
     ExposedFilesIndexer indexer = new ExposedFilesIndexer(engineContext, writeConfig, metaClient);
-    List<IndexPartitionInitialization> initializationList = indexer.callGetData("001", "002", files, Lazy.lazily(Collections::emptyList));
+    List<IndexInitializationPlan> initializationList = indexer.callGetData("001", "002", files, Lazy.lazily(Collections::emptyList));
     assertEquals(1, initializationList.size());
 
     assertEquals(MetadataPartitionType.FILES.getPartitionPath(), initializationList.get(0).indexPartitionName());
@@ -106,10 +108,12 @@ class TestFilesIndexer {
       super(engineContext, dataTableWriteConfig, dataTableMetaClient);
     }
 
-    List<IndexPartitionInitialization> callGetData(String dataTableInstantTime, String instantTimeForPartition,
+    List<IndexInitializationPlan> callGetData(String dataTableInstantTime, String instantTimeForPartition,
                                                    Map<String, List<FileInfo>> partitionIdToAllFilesMap,
                                                    Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
-      return buildInitialization(dataTableInstantTime, instantTimeForPartition, partitionIdToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
+      return buildInitialization(IndexInitializationContext.of(
+          dataTableInstantTime, instantTimeForPartition, partitionIdToAllFilesMap,
+          lazyLatestMergedPartitionFileSliceList, Lazy.lazily(Option::empty)));
     }
   }
 }

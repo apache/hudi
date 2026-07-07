@@ -18,8 +18,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.index.IndexInitializationContext;
 import org.apache.hudi.metadata.index.model.DataPartitionAndRecords;
-import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
+import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 
 import org.junit.jupiter.api.Test;
@@ -72,7 +73,8 @@ class TestPartitionedRecordIndexer {
     ExposedPartitionedRecordIndexer indexer = new ExposedPartitionedRecordIndexer(engineContext, writeConfig, dataMetaClient, p1Init, p2Init);
 
     try (MockedStatic<HoodieTableMetadataUtil> mockedUtil = mockStatic(HoodieTableMetadataUtil.class)) {
-      List<IndexPartitionInitialization> initializationList = indexer.buildInitialization("001", "002", Map.of(), Lazy.lazily(() -> input));
+      List<IndexInitializationPlan> initializationList = indexer.buildInitialization(IndexInitializationContext.of(
+          "001", "002", Map.of(), Lazy.lazily(() -> input), Lazy.lazily(Option::empty)));
 
       mockedUtil.verify(() -> HoodieTableMetadataUtil.createRecordIndexDefinition(any(), any()));
       assertEquals(1, initializationList.size());

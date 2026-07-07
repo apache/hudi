@@ -41,14 +41,14 @@ import java.util.List;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 
 /**
- * Spark implementation of {@link ExpressionIndexRecordGenerator}.
+ * Spark implementation of {@link EngineIndexSupport}.
  */
-public class SparkExpressionIndexRecordGenerator implements ExpressionIndexRecordGenerator {
+public class SparkEngineIndexSupport implements EngineIndexSupport {
   private final HoodieEngineContext engineContext;
   private final HoodieWriteConfig dataTableWriteConfig;
 
-  public SparkExpressionIndexRecordGenerator(HoodieEngineContext engineContext,
-                                             HoodieWriteConfig dataTableWriteConfig) {
+  public SparkEngineIndexSupport(HoodieEngineContext engineContext,
+                                 HoodieWriteConfig dataTableWriteConfig) {
     this.engineContext = engineContext;
     this.dataTableWriteConfig = dataTableWriteConfig;
   }
@@ -59,11 +59,12 @@ public class SparkExpressionIndexRecordGenerator implements ExpressionIndexRecor
   }
 
   @Override
-  public HoodieData<HoodieRecord> generate(
+  public HoodieData<HoodieRecord> generateExpressionIndexRecords(
       List<FileInfoAndPartition> filesToIndex,
       HoodieIndexDefinition indexDefinition,
       HoodieTableMetaClient metaClient,
-      int parallelism, HoodieSchema tableSchema,
+      int parallelism,
+      HoodieSchema tableSchema,
       HoodieSchema readerSchema,
       StorageConfiguration<?> storageConf,
       String instantTime) {

@@ -21,15 +21,14 @@ package org.apache.hudi.metadata.index.record;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.index.record.HoodieRecordIndex;
 import org.apache.hudi.metadata.BucketizedMetadataTableFileGroupIndexParser;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metadata.index.IndexInitializationContext;
 import org.apache.hudi.metadata.index.model.DataPartitionAndRecords;
-import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
-import org.apache.hudi.metadata.model.FileInfo;
+import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 
 import lombok.extern.slf4j.Slf4j;
@@ -57,10 +56,9 @@ public class PartitionedRecordIndexer extends BaseRecordIndexer {
   }
 
   @Override
-  public List<IndexPartitionInitialization> buildInitialization(String dataTableInstantTime, String instantTimeForPartition, Map<String, List<FileInfo>> partitionToAllFilesMap,
-                                                                Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlices) throws IOException {
+  public List<IndexInitializationPlan> buildInitialization(IndexInitializationContext context) throws IOException {
     createRecordIndexDefinition(dataTableMetaClient, Collections.singletonMap(HoodieRecordIndex.IS_PARTITIONED_OPTION, "true"));
-    Map<String, List<FileSliceAndPartition>> partitionFileSlicePairsMap = lazyPartitionFileSlices.get().stream()
+    Map<String, List<FileSliceAndPartition>> partitionFileSlicePairsMap = context.latestFileSlices().get().stream()
         .collect(Collectors.groupingBy(FileSliceAndPartition::partitionPath));
     Map<String, DataPartitionAndRecords> fileGroupCountAndRecordsPairMap = new HashMap<>(partitionFileSlicePairsMap.size());
     int maxParallelismPerHudiPartition = partitionFileSlicePairsMap.isEmpty()
@@ -87,7 +85,7 @@ public class PartitionedRecordIndexer extends BaseRecordIndexer {
       initializationList.add(dataPartitionAndRecords);
     }
 
-    return Collections.singletonList(IndexPartitionInitialization.of(totalFileGroupCount,
+    return Collections.singletonList(IndexInitializationPlan.of(totalFileGroupCount,
         RECORD_INDEX.getPartitionPath(), new BucketizedMetadataTableFileGroupIndexParser(partitionSizes), initializationList));
   }
 }

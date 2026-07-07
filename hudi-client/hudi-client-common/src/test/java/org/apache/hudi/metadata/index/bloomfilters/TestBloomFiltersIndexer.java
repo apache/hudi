@@ -19,11 +19,13 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
+import org.apache.hudi.metadata.index.IndexInitializationContext;
+import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
@@ -65,8 +67,9 @@ class TestBloomFiltersIndexer {
           .thenReturn(records);
 
       BloomFiltersIndexer indexer = new BloomFiltersIndexer(engineContext, writeConfig, metaClient);
-      List<IndexPartitionInitialization> initializationList =
-          indexer.buildInitialization("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
+      List<IndexInitializationPlan> initializationList =
+          indexer.buildInitialization(IndexInitializationContext.of(
+              "001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList), Lazy.lazily(Option::empty)));
       assertEquals(1, initializationList.size());
 
       assertEquals(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath(), initializationList.get(0).indexPartitionName());

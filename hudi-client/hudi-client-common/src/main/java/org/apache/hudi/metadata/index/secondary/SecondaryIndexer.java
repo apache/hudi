@@ -24,14 +24,13 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.BaseIndexer;
-import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
-import org.apache.hudi.metadata.model.FileInfo;
+import org.apache.hudi.metadata.index.IndexInitializationContext;
+import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 
 import lombok.extern.slf4j.Slf4j;
@@ -39,7 +38,6 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.RECORD_INDEX_AVERAGE_RECORD_SIZE;
@@ -62,8 +60,7 @@ public class SecondaryIndexer extends BaseIndexer {
   }
 
   @Override
-  public List<IndexPartitionInitialization> buildInitialization(String dataTableInstantTime, String instantTimeForPartition, Map<String, List<FileInfo>> partitionToAllFilesMap,
-                                                                Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlices) throws IOException {
+  public List<IndexInitializationPlan> buildInitialization(IndexInitializationContext context) throws IOException {
     Set<String> secondaryIndexPartitionsToInit = getSecondaryIndexPartitionsToInit(SECONDARY_INDEX, dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient);
     if (secondaryIndexPartitionsToInit.size() != 1) {
       if (secondaryIndexPartitionsToInit.size() > 1) {
@@ -76,7 +73,7 @@ public class SecondaryIndexer extends BaseIndexer {
     HoodieIndexDefinition indexDefinition = HoodieTableMetadataUtil.getHoodieIndexDefinition(indexName, dataTableMetaClient);
     ValidationUtils.checkState(indexDefinition != null, "Secondary Index definition is not present for index " + indexName);
 
-    List<FileSliceAndPartition> partitionFileSlicePairs = lazyPartitionFileSlices.get();
+    List<FileSliceAndPartition> partitionFileSlicePairs = context.latestFileSlices().get();
 
     int parallelism = Math.min(partitionFileSlicePairs.size(), dataTableWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());
     HoodieData<HoodieRecord> records = readSecondaryKeysFromFileSlices(
@@ -94,6 +91,6 @@ public class SecondaryIndexer extends BaseIndexer {
         dataTableWriteConfig.getGlobalRecordLevelIndexMaxFileGroupCount(), dataTableWriteConfig.getRecordIndexGrowthFactor(),
         dataTableWriteConfig.getRecordIndexMaxFileGroupSizeBytes());
 
-    return Collections.singletonList(IndexPartitionInitialization.of(fileGroupCount, indexName, records));
+    return Collections.singletonList(IndexInitializationPlan.of(fileGroupCount, indexName, records));
   }
 }

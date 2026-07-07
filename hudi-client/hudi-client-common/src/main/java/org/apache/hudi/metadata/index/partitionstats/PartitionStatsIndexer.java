@@ -23,24 +23,20 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.BaseIndexer;
-import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
-import org.apache.hudi.metadata.model.FileInfo;
-import org.apache.hudi.metadata.model.FileSliceAndPartition;
+import org.apache.hudi.metadata.index.IndexInitializationContext;
+import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
 
@@ -55,8 +51,7 @@ public class PartitionStatsIndexer extends BaseIndexer {
   }
 
   @Override
-  public List<IndexPartitionInitialization> buildInitialization(String dataTableInstantTime, String instantTimeForPartition, Map<String, List<FileInfo>> partitionToAllFilesMap,
-                                                                Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlices) throws IOException {
+  public List<IndexInitializationPlan> buildInitialization(IndexInitializationContext context) throws IOException {
     // Partition stats index cannot be enabled for a non-partitioned table
     if (!dataTableMetaClient.getTableConfig().isTablePartitioned()) {
       return Collections.emptyList();
@@ -69,12 +64,11 @@ public class PartitionStatsIndexer extends BaseIndexer {
       return Collections.emptyList();
     }
 
-    Lazy<Option<HoodieSchema>> tableSchemaOpt = Lazy.lazily(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(dataTableMetaClient));
     HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(
-        engineContext, lazyPartitionFileSlices.get(), dataTableWriteConfig.getMetadataConfig(),
-        dataTableMetaClient, tableSchemaOpt, Option.of(dataTableWriteConfig.getRecordMerger().getRecordType()));
+        engineContext, context.latestFileSlices().get(), dataTableWriteConfig.getMetadataConfig(),
+        dataTableMetaClient, context.tableSchema(), Option.of(dataTableWriteConfig.getRecordMerger().getRecordType()));
     final int fileGroupCount = dataTableWriteConfig.getMetadataConfig().getPartitionStatsIndexFileGroupCount();
 
-    return Collections.singletonList(IndexPartitionInitialization.of(fileGroupCount, PARTITION_STATS.getPartitionPath(), records));
+    return Collections.singletonList(IndexInitializationPlan.of(fileGroupCount, PARTITION_STATS.getPartitionPath(), records));
   }
 }
