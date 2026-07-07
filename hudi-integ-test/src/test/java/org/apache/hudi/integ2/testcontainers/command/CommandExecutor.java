@@ -21,9 +21,6 @@ package org.apache.hudi.integ2.testcontainers.command;
 import lombok.extern.slf4j.Slf4j;
 import org.testcontainers.containers.Container;
 import org.testcontainers.containers.ContainerState;
-import org.testcontainers.utility.MountableFile;
-
-import java.nio.file.Paths;
 
 /**
  * A utility class for executing commands within a given Testcontainer.
@@ -73,20 +70,6 @@ public final class CommandExecutor {
   public CommandResult executeCommandString(String cmd) throws Exception {
     String[] cmdArray = {"/bin/bash", "-c", cmd};
     return executeCommand(cmdArray);
-  }
-
-  /**
-   * Copy a file from the host to the container.
-   */
-  public void copyFileToContainer(String fromFile, String remotePath) {
-    try {
-      MountableFile mountableFile = MountableFile.forHostPath(Paths.get(fromFile));
-      container.copyFileToContainer(mountableFile, remotePath);
-      log.info("Successfully copied file {} to container at path {}", fromFile, remotePath);
-    } catch (Exception e) {
-      log.error("Failed to copy file {} to container at path {}", fromFile, remotePath, e);
-      throw new RuntimeException("Failed to copy file to container", e);
-    }
   }
 
   /**

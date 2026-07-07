@@ -59,13 +59,6 @@ public class SparkService {
   }
 
   /**
-   * Copy a file from the host to the Spark container.
-   */
-  public void copyFile(String fromFile, String remotePath) {
-    executor.copyFileToContainer(fromFile, remotePath);
-  }
-
-  /**
    * Executes an arbitrary shell command inside the service's container.
    * This is useful for hdfs commands, hudi-cli, etc.
    *

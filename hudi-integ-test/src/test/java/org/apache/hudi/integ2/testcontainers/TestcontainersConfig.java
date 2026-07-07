@@ -39,22 +39,10 @@ public final class TestcontainersConfig {
 
   /** Docker Compose service names. Must match the compose YAML verbatim. */
   public static final class Containers {
-    public static final String NAMENODE = "namenode";
-    public static final String DATANODE_1 = "datanode1";
-    public static final String HISTORY_SERVER = "historyserver";
-    public static final String HIVE_METASTORE_PGSQL = "hive-metastore-postgresql";
-    public static final String HIVE_METASTORE = "hivemetastore";
     public static final String HIVESERVER = "hiveserver";
-    public static final String ZOOKEEPER = "zookeeper";
-    // TODO: The value intentionally matches SPARK_MASTER, preserved from the
-    // pre-refactor source to avoid changing behavior. If the compose YAML has a
-    // distinct sparkworker1 service, correct this in a follow-up commit.
-    public static final String SPARK_WORKER_1 = "sparkmaster";
-    public static final String KAFKA = "kafka";
     public static final String SPARK_MASTER = "sparkmaster";
     // Testcontainers appends the replica index, so the adhoc services resolve as "<name>-1".
     public static final String ADHOC_1 = "adhoc-1-1";
-    public static final String ADHOC_2 = "adhoc-2-1";
 
     private Containers() {
     }
@@ -66,7 +54,6 @@ public final class TestcontainersConfig {
     public static final String DEMO_DIR = WS_ROOT + "/docker/demo";
     public static final String DEMO_SETUP = DEMO_DIR + "/setup_demo_container.sh";
     public static final String HIVE_TARGET = WS_ROOT + "/docker/hoodie/hadoop/hive_base/target";
-    public static final String HADOOP_MR_BUNDLE = HIVE_TARGET + "/hoodie-hadoop-mr-bundle.jar";
     public static final String SPARK_BUNDLE = HIVE_TARGET + "/hoodie-spark-bundle.jar";
     public static final String HADOOP_CONF_DIR = "/etc/hadoop";
     /** Host-side, relative to the hudi-integ-test module working directory. */
@@ -78,9 +65,6 @@ public final class TestcontainersConfig {
 
   /** Network endpoints the harness exposes to tests. */
   public static final class Network {
-    public static final int HIVE_SERVER_JDBC_PORT = 10000;
-    public static final String HIVE_SERVER_JDBC_URL =
-        "jdbc:hive2://" + Containers.HIVESERVER + ":" + HIVE_SERVER_JDBC_PORT;
     public static final int SPARK_MASTER_WEB_UI_PORT = 8080;
 
     private Network() {

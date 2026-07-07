@@ -24,7 +24,6 @@ import org.testcontainers.containers.Container;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
  * A dedicated class to hold the result of a command execution and provide
@@ -64,31 +63,7 @@ public class CommandResult {
   }
 
   /**
-   * Asserts that the command's exit code is not 0 (failure).
-   * More specifically, it asserts the exit code is 1.
-   *
-   * @return The same {@link CommandResult} instance for chaining assertions.
-   * @throws AssertionError if the exit code is 0.
-   */
-  public CommandResult expectToFail() {
-    assertNotEquals(0, exitCode,
-        String.format("Command succeeded with exit code %d. Stderr: %s", exitCode, stderr));
-    return this;
-  }
-
-  /**
-   * Asserts that the command's exit code is zero.
-   *
-   * @return The same {@link CommandResult} instance for chaining assertions.
-   */
-  public CommandResult assertExitCodeIs(int expectedCode) {
-    assertEquals(expectedCode, exitCode,
-        String.format("Unexpected exitCode found, exit code %d,  Stderr: %s", exitCode, stderr));
-    return this;
-  }
-
-  /**
-   * Asserts that the standard output contains a specific substring at least once.
+   * Asserts that the standard output contains a specific substring exactly once.
    *
    * @param expectedSubstring The substring to search for.
    * @return The same {@link CommandResult} instance for chaining assertions.
@@ -157,39 +132,6 @@ public class CommandResult {
     assertEquals(times, count,
         String.format("Expected line '%s' %d times, but found %d. Full stdout: %s",
             expected, times, count, stdout));
-    return this;
-  }
-
-  /**
-   * Asserts that the standard error contains a specific substring at least once.
-   *
-   * @param expectedSubstring The substring to search for.
-   * @return The same {@link CommandResult} instance for chaining assertions.
-   */
-  public CommandResult assertStdErrContains(String expectedSubstring) {
-    return assertStdErrContains(expectedSubstring, 1);
-  }
-
-  /**
-   * Asserts that the standard error contains a specific substring an exact number of times.
-   *
-   * @param expectedSubstring The substring to search for.
-   * @param times The exact number of times the substring is expected to appear.
-   * @return The same {@link CommandResult} instance for chaining assertions.
-   */
-  public CommandResult assertStdErrContains(String expectedSubstring, int times) {
-    int lastIndex = 0;
-    int count = 0;
-    while (lastIndex != -1) {
-      lastIndex = stderr.indexOf(expectedSubstring, lastIndex);
-      if (lastIndex != -1) {
-        count++;
-        lastIndex += expectedSubstring.length();
-      }
-    }
-    assertEquals(times, count,
-        String.format("Expected to find substring '%s' in stderr %d times, but found %d. Full stderr: %s",
-            expectedSubstring, times, count, stderr));
     return this;
   }
 }

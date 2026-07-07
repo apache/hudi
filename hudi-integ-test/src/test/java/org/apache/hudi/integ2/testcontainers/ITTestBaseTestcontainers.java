@@ -59,7 +59,6 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
   // Service objects for interacting with different components
   protected HiveService hive;
   protected SparkService sparkAdhoc1;
-  protected SparkService sparkAdhoc2;
 
   @BeforeAll
   public static void setupDockerCompose() {
@@ -107,7 +106,6 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
   protected void initializeServices() {
     this.hive = new HiveService(this);
     this.sparkAdhoc1 = new SparkService(this, Containers.ADHOC_1);
-    this.sparkAdhoc2 = new SparkService(this, Containers.ADHOC_2);
   }
 
   /**
@@ -212,18 +210,22 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
       // Create a temporary file to hold our modified configuration
       Path tempDir = Files.createTempDirectory("hudi-test-compose-");
 
-      // Ensure the temporary directory is deleted when the JVM exits
+      // Delete the temp dir at JVM exit. File.delete() cannot remove a non-empty directory,
+      // and deleteOnExit runs LIFO, so the files below are registered too: they are deleted
+      // first, leaving the dir empty for its own delete.
       tempDir.toFile().deleteOnExit();
 
       // Write the modified content to the temporary file as a byte array.
       File tempDockerComposeFile = new File(tempDir.toFile(), "docker-compose.yml");
       Files.write(tempDockerComposeFile.toPath(), modifiedContent.getBytes(StandardCharsets.UTF_8));
+      tempDockerComposeFile.deleteOnExit();
 
       // tempDir is used as the working directory, docker-compose will look for hadoop.env in the SAME temp directory
       // Copy hadoop.env into the SAME temp directory
       Path destHadoopEnvPath = tempDir.resolve("hadoop.env");
       Path originalHadoopEnvPath = Paths.get(getHadoopEnvFilePath()).toAbsolutePath().normalize();
       Files.copy(originalHadoopEnvPath, destHadoopEnvPath, StandardCopyOption.REPLACE_EXISTING);
+      destHadoopEnvPath.toFile().deleteOnExit();
 
       // Return the temporary file for Testcontainers to use
       return tempDockerComposeFile.toPath().toAbsolutePath().toString();

@@ -29,7 +29,7 @@ public interface ContainerProvider {
   /**
    * Get a container by its service name.
    *
-   * @param serviceName the name of the service (without _1 suffix)
+   * @param serviceName the full compose service instance name as Testcontainers resolves it (e.g. "adhoc-1-1")
    * @return the container state
    * @throws IllegalStateException if container not found
    */
