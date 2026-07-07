@@ -119,6 +119,11 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
             catalog.dropTable(table, true, true)
           }
         }
+        // The INMEMORY index keeps a JVM-static record-location map; reset it after every test so
+        // stale keys from an earlier test cannot misroute writes in a later one. withRecordType
+        // clears it between record-type iterations, but only on success and only for tests that use
+        // it, so a throwing or non-withRecordType INMEMORY test would otherwise leak state here.
+        HoodieInMemoryHashIndex.clear()
       }
     )
   }
