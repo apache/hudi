@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hudi.common.HoodieTableFormat;
-import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
@@ -61,6 +59,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
+import org.apache.hudi.core.table.format.HoodieTableFormat;
+import org.apache.hudi.core.table.format.NativeTableFormat;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;

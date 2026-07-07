@@ -19,8 +19,6 @@
 package org.apache.hudi.common.table;
 
 import org.apache.hudi.HoodieVersion;
-import org.apache.hudi.common.HoodieTableFormat;
-import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
@@ -58,6 +56,8 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Triple;
+import org.apache.hudi.core.table.format.HoodieTableFormat;
+import org.apache.hudi.core.table.format.NativeTableFormat;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;

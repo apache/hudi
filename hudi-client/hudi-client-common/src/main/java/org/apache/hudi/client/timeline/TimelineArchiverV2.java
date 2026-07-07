@@ -20,7 +20,6 @@
 package org.apache.hudi.client.timeline;
 
 import org.apache.hudi.client.transaction.TransactionManager;
-import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -38,6 +37,7 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.format.NativeTableFormat;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.metadata.HoodieTableMetadata;

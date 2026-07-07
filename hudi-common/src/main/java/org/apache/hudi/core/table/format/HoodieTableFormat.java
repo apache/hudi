@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common;
+package org.apache.hudi.core.table.format;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;

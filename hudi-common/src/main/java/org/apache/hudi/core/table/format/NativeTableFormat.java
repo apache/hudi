@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common;
+package org.apache.hudi.core.table.format;
 
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
