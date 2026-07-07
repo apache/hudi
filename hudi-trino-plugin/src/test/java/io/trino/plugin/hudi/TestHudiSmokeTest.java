@@ -801,7 +801,7 @@ public class TestHudiSmokeTest
                 .withRecordLevelIndexEnabled(true)
                 .withSecondaryIndexEnabled(false)
                 .withPartitionStatsIndexEnabled(false)
-                .withColumnStatsTimeout("10s")
+                .withRecordIndexTimeout("10s")
                 .build();
         MaterializedResult totalRes = getQueryRunner().execute(session, "SELECT * FROM " + table);
         MaterializedResult prunedRes = getQueryRunner().execute(session, "SELECT * FROM " + table
