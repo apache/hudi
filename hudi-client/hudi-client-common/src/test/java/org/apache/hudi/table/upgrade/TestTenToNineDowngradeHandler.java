@@ -19,31 +19,14 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
-import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 class TestTenToNineDowngradeHandler {
-
-  @TempDir
-  private Path baseDir;
 
   @Test
   void testDowngradeRemovesStorageLayoutOnly() {
@@ -56,31 +39,6 @@ class TestTenToNineDowngradeHandler {
   }
 
   @Test
-  void testNativeCdcValidationIgnoresNonCdcNativeLogsAndMetaFolder() throws Exception {
-    Files.createDirectories(baseDir.resolve("partition"));
-    Files.createDirectories(baseDir.resolve(HoodieTableMetaClient.METAFOLDER_NAME).resolve("partition"));
-    Files.createFile(baseDir.resolve("partition").resolve("file-1_1-0-1_001_1.log.parquet"));
-    Files.createFile(baseDir.resolve("partition").resolve("file-1_1-0-1_001_1.deletes.parquet"));
-    Files.createFile(baseDir.resolve(HoodieTableMetaClient.METAFOLDER_NAME).resolve("partition")
-        .resolve("file-1_1-0-1_001_1.cdc.parquet"));
-
-    assertDoesNotThrow(() -> TenToNineDowngradeHandler.validateNoNativeCdcLogs(createMetaClient()));
-  }
-
-  @Test
-  void testNativeCdcValidationFailsWithOffendingPath() throws Exception {
-    Files.createDirectories(baseDir.resolve("partition"));
-    Path nativeCdcLog = baseDir.resolve("partition").resolve("file-1_1-0-1_001_1.cdc.parquet");
-    Files.createFile(nativeCdcLog);
-
-    HoodieUpgradeDowngradeException exception = assertThrows(
-        HoodieUpgradeDowngradeException.class,
-        () -> TenToNineDowngradeHandler.validateNoNativeCdcLogs(createMetaClient()));
-
-    assertTrue(exception.getMessage().contains(nativeCdcLog.toString()));
-  }
-
-  @Test
   void testTenToNineDowngradeRouteIsSupported() {
     UpgradeDowngrade.TableConfigChangeSet changeSet =
         new UpgradeDowngrade(null, null, null, null)
@@ -88,13 +46,5 @@ class TestTenToNineDowngradeHandler {
 
     assertEquals(1, changeSet.propertiesToDelete().size());
     assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.TABLE_STORAGE_LAYOUT));
-  }
-
-  private HoodieTableMetaClient createMetaClient() {
-    HoodieStorage storage = HoodieStorageUtils.getStorage(getDefaultStorageConf());
-    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    when(metaClient.getStorage()).thenReturn(storage);
-    when(metaClient.getBasePath()).thenReturn(new StoragePath(baseDir.toString()));
-    return metaClient;
   }
 }

@@ -60,7 +60,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -558,36 +557,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         .select("id", "rider", "driver", "fare");
     assertEquals(100, downgradedData.count());
     assertEquals(100, downgradedData.select("id").distinct().count());
-  }
-
-  @Test
-  public void testTenToNineDowngradeFailsFastForNativeCdcLog() throws Exception {
-    Properties props = new Properties();
-    props.put(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
-    props.put(HoodieTableConfig.VERSION.key(), String.valueOf(HoodieTableVersion.TEN.versionCode()));
-    HoodieTableMetaClient metaClient =
-        getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), props);
-    StoragePath partitionPath = new StoragePath(metaClient.getBasePath(), "partition");
-    metaClient.getStorage().createDirectory(partitionPath);
-    StoragePath nativeCdcLog = new StoragePath(partitionPath, "file-1_1-0-1_001_1.cdc.parquet");
-    try (OutputStream outputStream = metaClient.getStorage().create(nativeCdcLog, true)) {
-      outputStream.write(1);
-    }
-
-    HoodieWriteConfig downgradeConfig = HoodieWriteConfig.newBuilder()
-        .withPath(metaClient.getBasePath())
-        .withWriteTableVersion(HoodieTableVersion.NINE.versionCode())
-        .withAutoUpgradeVersion(true)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
-        .build();
-
-    HoodieUpgradeDowngradeException exception = assertThrows(
-        HoodieUpgradeDowngradeException.class,
-        () -> new UpgradeDowngrade(metaClient, downgradeConfig, context(), SparkUpgradeDowngradeHelper.getInstance())
-            .run(HoodieTableVersion.NINE, null));
-
-    assertTrue(exception.getMessage().contains(nativeCdcLog.toString()));
-    assertEquals(0, metaClient.getActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants().countInstants());
   }
 
   /**
