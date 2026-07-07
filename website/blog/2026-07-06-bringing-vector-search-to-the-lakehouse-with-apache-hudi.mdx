@@ -22,15 +22,13 @@ tags:
 
 :::tip TL;DR
 
-Apache Hudi now ships native vector search directly on Hudi tables through two SQL functions: `hudi_vector_search` for a single query vector, and `hudi_vector_search_batch` for running top-k search across a table of query vectors. Embeddings live in a first-class `VECTOR` column alongside the rest of the row, so there is no separate vector database and no sync pipeline to maintain. Vectors can be stored as FLOAT, DOUBLE, or INT8, and compared using cosine, L2, or dot product distance. The initial implementation is a distributed brute-force KNN; an optimized ANN vector index is being developed behind the same SQL interface, so applications written today keep working as faster algorithms land.
+AI applications increasingly need to search data by meaning, not just by exact fields or keywords. Product descriptions, support tickets, documents, images, and other unstructured data are becoming first-class inputs to analytics and application workflows. But adding semantic search to lakehouse data has usually meant introducing a separate vector database, copying embeddings into it, and maintaining a sync pipeline to keep records, metadata, deletes, and updates aligned.
+
+Apache Hudi's native vector search brings that workflow closer to the table itself. Embeddings can live in the same Hudi table as the rest of the row, represented as a first-class VECTOR column and queried directly from SQL. This lets semantic search compose with structured filters, joins, updates, time travel, and incremental queries instead of requiring a separate sidecar system.
+
+Hudi exposes vector search through two SQL functions: hudi_vector_search for a single query vector and hudi_vector_search_batch for running top-k search across a table of query vectors. Embeddings can be stored as FLOAT, DOUBLE, or INT8, and compared using cosine, L2, or dot product distance. The initial implementation uses distributed brute-force KNN, while an optimized ANN vector index is being developed behind the same SQL interface so applications can adopt the API today and benefit from faster algorithms as they land.
 
 :::
-
-**AI applications increasingly need to search data by meaning, not just by exact fields or keywords. Product descriptions, support tickets, documents, images, and other unstructured data are becoming first-class inputs to analytics and application workflows. But adding semantic search to lakehouse data has usually meant introducing a separate vector database, copying embeddings into it, and maintaining a sync pipeline to keep records, metadata, deletes, and updates aligned.**
-
-**Apache Hudi's native vector [search](https://hudi.apache.org/docs/sql_queries#vector-similarity-search) brings that workflow closer to the table itself. Embeddings can live in the same Hudi table as the rest of the row, represented as a first-class [VECTOR](https://hudi.apache.org/docs/sql_ddl#vector) column and queried directly from SQL. This lets semantic search compose with structured filters, joins, updates, time travel, and incremental queries instead of requiring a separate sidecar system.**
-
-**Hudi exposes vector search through two SQL functions: hudi_vector_search for a single query vector and [hudi_vector_search_batch](https://hudi.apache.org/docs/sql_queries#hudi_vector_search_batch) for running top-k search across a table of query vectors. Embeddings can be stored as FLOAT, DOUBLE, or INT8, and compared using cosine, L2, or dot product distance. The initial implementation uses distributed brute-force KNN, while an optimized ANN vector [index](https://github.com/apache/hudi/pull/19107) is being developed behind the same SQL interface so applications can adopt the API today and benefit from faster algorithms as they land.**
 
 ## What is Semantic search?
 
