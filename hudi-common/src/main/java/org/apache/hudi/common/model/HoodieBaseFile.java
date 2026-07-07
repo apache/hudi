@@ -95,10 +95,6 @@ public class HoodieBaseFile extends BaseFile {
    * @return String array of size 2 with fileId as the first and commitTime as the second element.
    */
   private static String[] getFileIdAndCommitTimeFromFileName(String fileName) {
-    return ExternalFilePathUtil.isExternallyCreatedFile(fileName) ? handleExternallyGeneratedFile(fileName) : handleHudiGeneratedFile(fileName);
-  }
-
-  private static String[] handleHudiGeneratedFile(String fileName) {
     Option<FileNameParser.BaseFileName> parsedBaseFileName = FileNameParser.parseBaseFile(fileName);
     if (!parsedBaseFileName.isPresent()) {
       throw new InvalidHoodiePathException(fileName, "BaseFile");
@@ -108,10 +104,6 @@ public class HoodieBaseFile extends BaseFile {
         parsedBaseFileName.get().getFileId(),
         parsedBaseFileName.get().getCommitTime()
     };
-  }
-
-  private static String[] handleExternallyGeneratedFile(String fileName) {
-    return ExternalFilePathUtil.parseFileIdAndCommitTimeFromExternalFile(fileName);
   }
 
   public void setBootstrapBaseFile(BaseFile bootstrapBaseFile) {
