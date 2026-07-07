@@ -38,9 +38,10 @@ import java.util.regex.Pattern;
  * A non-matching input returns {@link Option#empty()} instead of throwing.</p>
  */
 public final class FileNameParser {
-  // Inline log files are of this pattern - .b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1_1-0-1
-  // Inline archive log files are of this pattern - .commits_.archive.1_1-0-1
-  // Native log files are of this pattern - b5068208-e1a4-11e6-bf01-fe55135034f3_1-0-1_20170101134598_1.log.parquet
+  // Base files are of this pattern - <fg-id>_<write-token>_<instant>.<suffix>
+  // Inline log files are of this pattern - .<fg-id>_<instant>.log.<version>_<write-token>
+  // Inline archive log files are of this pattern - .commits_.archive.<version>_<write-token>
+  // Native log files are of this pattern - <fg-id>_<write-token>_<instant>_<version>.log.<suffix>
   // For native log files, the file extension is log/deletes/cdc and the suffix is the native file format.
 
   static final Pattern INLINE_LOG_FILE_PATTERN =
@@ -57,12 +58,19 @@ public final class FileNameParser {
   /**
    * Parses a base file name.
    *
-   * <p>Expected format: {@code <fileId>_<writeToken>_<commitTime>[.<extension>]}.
-   * Decoding mirrors {@code HoodieBaseFile}'s historical substring scan: the first underscore terminates
-   * the file id, the second underscore precedes the commit time, and the first dot after the second
-   * underscore terminates the commit time. If the dot is absent, the commit time extends to the end of
-   * the file name. The decoded {@link BaseFileName#getFileExtension()} value includes the leading dot when
-   * an extension is present.</p>
+   * <p>A Hudi-generated base file name is encoded as
+   * {@code <fileId>_<writeToken>_<commitTime><fileExtension>}. For example,
+   * {@code 136281f3-c24e-423b-a65a-95dbfbddce1d_1-0-1_20240706120100123.parquet}
+   * has file id {@code 136281f3-c24e-423b-a65a-95dbfbddce1d}, write token {@code 1-0-1},
+   * commit time {@code 20240706120100123}, and file extension {@code .parquet}. The decoded
+   * {@link BaseFileName#getFileExtension()} value includes the leading dot when an extension is present.</p>
+   *
+   * <p>Decoding mirrors {@code HoodieBaseFile}'s historical substring scan for Hudi-generated names: the
+   * first underscore terminates the file id, the last underscore seen before a commit-time delimiter
+   * precedes the commit time, and the first dot after the second underscore terminates the commit time.
+   * If the second underscore is absent, the parser treats the name as a legacy base file without a write
+   * token and uses the first dot after the first underscore as the commit-time delimiter. If the delimiter
+   * dot is absent, the commit time extends to the end of the file name.</p>
    *
    * <p>Externally registered base files marked with {@code _hudiext} are decoded through
    * {@link ExternalFilePathUtil}. For these files, {@link BaseFileName#getWriteToken()} is empty and
@@ -99,8 +107,18 @@ public final class FileNameParser {
         break;
       }
     }
-    if (firstUnderscoreIndex < 0 || secondUnderscoreIndex < 0) {
+    if (firstUnderscoreIndex < 0) {
       return Option.empty();
+    }
+    if (secondUnderscoreIndex < 0) {
+      // parse file name line file_1.parquet, this is hacky for external file path,
+      // should refactor it out in the future.
+      int commitTimeEndIndex = actualFileName.indexOf(DOT, firstUnderscoreIndex + 1);
+      return Option.of(new BaseFileName(
+          actualFileName.substring(0, firstUnderscoreIndex),
+          "",
+          actualFileName.substring(firstUnderscoreIndex + 1, commitTimeEndIndex < 0 ? actualFileName.length() : commitTimeEndIndex),
+          commitTimeEndIndex < 0 ? "" : actualFileName.substring(commitTimeEndIndex)));
     }
     int commitTimeEndIndex = dotIndex < 0 ? actualFileName.length() : dotIndex;
     return Option.of(new BaseFileName(

@@ -210,6 +210,13 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals("20240706120100123", parsedBaseFileNameWithoutExtension.getCommitTime());
     assertEquals("", parsedBaseFileNameWithoutExtension.getFileExtension());
 
+    FileNameParser.BaseFileName parsedLegacyBaseFileName =
+        FileNameParser.parseBaseFile("file_1.parquet").get();
+    assertEquals("file", parsedLegacyBaseFileName.getFileId());
+    assertEquals("", parsedLegacyBaseFileName.getWriteToken());
+    assertEquals("1", parsedLegacyBaseFileName.getCommitTime());
+    assertEquals(".parquet", parsedLegacyBaseFileName.getFileExtension());
+
     FileNameParser.BaseFileName parsedExternalBaseFileName = FileNameParser.parseBaseFile(
         ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker("file_1.parquet", "20240706120100123")).get();
     assertEquals("file_1.parquet", parsedExternalBaseFileName.getFileId());
