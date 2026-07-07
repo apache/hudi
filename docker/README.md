@@ -25,7 +25,7 @@ docker demo environment.
 ### Configs for assembling docker images - `/hoodie`
 
 The `/hoodie` folder contains all the configs for assembling necessary docker images. The name and repository of each
-docker image, e.g., `apachehudi/hudi-hadoop_2.8.4-trinobase_368`, is defined in the maven configuration file `pom.xml`.
+docker image, e.g., `apachehudi/hudi-hadoop_2.8.4-prestobase_0.232`, is defined in the maven configuration file `pom.xml`.
 
 ### Base images by Java version
 
@@ -39,9 +39,9 @@ docker image, e.g., `apachehudi/hudi-hadoop_2.8.4-trinobase_368`, is defined in 
 The legacy Java 8 `base` module under `/hoodie/hadoop/base` is retained for historical reference only; Spark 2.x is no
 longer supported and `build_docker_images.sh` never selects it.
 
-Downstream Dockerfiles (`datanode`, `historyserver`, `hive_base`, `namenode`, `prestobase`, `trinobase`) pick the base
-via the `BASE_IMAGE_TAG` build arg (default `java11`). `build_docker_images.sh` sets it automatically; bare `docker
-build` invocations targeting the Java 17 base must pass `--build-arg BASE_IMAGE_TAG=java17`.
+Downstream Dockerfiles (`datanode`, `historyserver`, `hive_base`, `namenode`, `prestobase`) pick the base via the
+`BASE_IMAGE_TAG` build arg (default `java11`). `build_docker_images.sh` sets it automatically; bare `docker build`
+invocations targeting the Java 17 base must pass `--build-arg BASE_IMAGE_TAG=java17`.
 
 ### Docker compose config for the Demo - `/compose`
 
@@ -63,8 +63,8 @@ To build a single image target, you can run
 
 ```shell
 mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false -pl :<image_target> -am
-# For example, to build hudi-hadoop-trinobase-docker
-mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false -pl :hudi-hadoop-trinobase-docker -am
+# For example, to build hudi-hadoop-prestobase-docker
+mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false -pl :hudi-hadoop-prestobase-docker -am
 ```
 
 Alternatively, you can use `docker` cli directly under `hoodie/hadoop` to build images in a faster way. If you use this
@@ -84,8 +84,8 @@ steps in the next section).
 ```shell
 # Run under hoodie/hadoop, the <tag> is optional, "latest" by default
 docker build <image_folder_name> -t <hub-user>/<repo-name>[:<tag>]
-# For example, to build trinobase
-docker build trinobase -t apachehudi/hudi-hadoop_2.8.4-trinobase_368
+# For example, to build prestobase
+docker build prestobase -t apachehudi/hudi-hadoop_2.8.4-prestobase_0.232
 ```
 
 After new images are built, you can run the following script to bring up docker demo with your local images:
@@ -102,7 +102,7 @@ Hud registry designated by its name or tag:
 ```shell
 docker push <hub-user>/<repo-name>:<tag>
 # For example
-docker push apachehudi/hudi-hadoop_2.8.4-trinobase_368
+docker push apachehudi/hudi-hadoop_2.8.4-prestobase_0.232
 ```
 
 You can also easily push the image to the Docker Hub using Docker Desktop app: go to `Images`, search for the image by

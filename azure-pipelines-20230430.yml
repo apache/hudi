@@ -97,7 +97,6 @@ parameters:
       - '!packaging/hudi-presto-bundle'
       - '!packaging/hudi-spark-bundle'
       - '!packaging/hudi-timeline-server-bundle'
-      - '!packaging/hudi-trino-bundle'
       - '!packaging/hudi-utilities-slim-bundle'
 
 variables:
