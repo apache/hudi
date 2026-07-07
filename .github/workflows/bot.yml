@@ -1434,9 +1434,9 @@ jobs:
 
   integration-tests-hive-sync:
     # Testcontainers-based E2E hive sync coverage for Hudi's custom logical types
-    # (VECTOR, BLOB) and the Spark 4.0 VARIANT type. Runs the integ2 testcontainers
-    # suite (ITTestCustomTypeHiveSync) against a real Hive metastore on both a
-    # Spark 3.5.3 and Spark 4.0.2 stack.
+    # (VECTOR, BLOB) and the Spark 4.0+ VARIANT type. Runs the integ2 testcontainers
+    # suite (ITTestCustomTypeHiveSync) against a real Hive metastore on Spark 3.5.3,
+    # 4.0.2, and 4.1.1 stacks.
     runs-on: ubuntu-latest
     needs: changes
     strategy:
@@ -1455,6 +1455,12 @@ jobs:
             jdkVersion: '17'
             composePrefix: 'docker-compose_hadoop340_hive2310_spark402'
             sparkAdhocImage: 'apachehudi/hudi-hadoop_3.4.0-hive_2.3.10-sparkadhoc_4.0.2:latest'
+          - sparkProfile: 'spark4.1'
+            scalaProfile: '-Dscala-2.13 -Dscala.binary.version=2.13'
+            flinkProfile: 'flink1.20'
+            jdkVersion: '17'
+            composePrefix: 'docker-compose_hadoop340_hive2310_spark411'
+            sparkAdhocImage: 'apachehudi/hudi-hadoop_3.4.0-hive_2.3.10-sparkadhoc_4.1.1:latest'
     steps:
       - if: needs.changes.outputs.relevant == 'true'
         uses: actions/checkout@v5
