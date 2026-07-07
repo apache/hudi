@@ -22,6 +22,7 @@ import org.apache.hudi.table.format.cow.utils.NestedPositionUtil;
 import org.apache.hudi.table.format.cow.vector.HeapArrayVector;
 import org.apache.hudi.table.format.cow.vector.HeapMapColumnVector;
 import org.apache.hudi.table.format.cow.vector.HeapRowColumnVector;
+import org.apache.hudi.table.format.cow.vector.ParquetDecimalVector;
 import org.apache.hudi.table.format.cow.vector.position.CollectionPosition;
 import org.apache.hudi.table.format.cow.vector.position.LevelDelegation;
 import org.apache.hudi.table.format.cow.vector.position.RowPosition;
@@ -158,7 +159,21 @@ public class NestedColumnReader implements ColumnReader<WritableColumnVector> {
     // legacy RowColumnReader (deleted alongside the Dremel rewire) and existing Hudi tables rely
     // on it. Diverges from Flink 2.1, which would surface it as Row(null, null). Pinned by the
     // integration test ITTestHoodieDataSource#testParquetNullChildColumnsRowTypes.
-    int rowCount = rowPosition.getPositionsCount();
+    // positionsCount comes from the Dremel definition/repetition level stream
+    // (NestedPositionUtil#calculateRowOffsets). On a full, non-final batch that stream carries a
+    // one-record lookahead (NestedPrimitiveColumnReader#readAndNewVector reads one value past the
+    // batch in its do/while, and #getLevelDelegation keeps that trailing level for the next batch),
+    // so positionsCount can be one larger than the materialized vector lengths. When inside==true
+    // the row vector is renewed to positionsCount but its children are sized to their value count;
+    // when inside==false the row vector keeps its batch capacity. Either way, iterating all the way
+    // to positionsCount can read one element past a shorter vector and throw
+    // ArrayIndexOutOfBoundsException. Clamp to the shortest vector this loop indexes -- the phantom
+    // trailing position is never surfaced downstream (ParquetColumnarRowSplitReader caps the batch
+    // at num).
+    int rowCount = Math.min(rowPosition.getPositionsCount(), heapRowVector.getLen());
+    for (WritableColumnVector child : finalChildrenVectors) {
+      rowCount = Math.min(rowCount, vectorLength(child));
+    }
     for (int j = 0; j < rowCount; j++) {
       if (heapRowVector.isNullAt(j)) {
         continue;
@@ -272,6 +287,22 @@ public class NestedColumnReader implements ColumnReader<WritableColumnVector> {
     WritableColumnVector writableColumnVector =
         reader.readAndNewVector(readNumber, (WritableColumnVector) vector);
     return Tuple2.of(reader.getLevelDelegation(), writableColumnVector);
+  }
+
+  /**
+   * The length of the {@code isNull}-backed storage that {@code vector} (a row child) is indexed
+   * against by the null-collapse loop in {@link #readRow}. Every row child is an {@link
+   * AbstractHeapVector} (nested rows/arrays/maps and all non-decimal primitives) or a {@link
+   * ParquetDecimalVector} wrapping one (DECIMAL leaves; see {@code
+   * NestedPrimitiveColumnReader#fillColumnVector}); unwrapping the latter yields an {@code
+   * AbstractHeapVector} in all cases.
+   */
+  private static int vectorLength(ColumnVector vector) {
+    ColumnVector storage =
+        vector instanceof ParquetDecimalVector
+            ? ((ParquetDecimalVector) vector).getVector()
+            : vector;
+    return ((AbstractHeapVector) storage).getLen();
   }
 
   private static void setFieldNullFlag(boolean[] nullFlags, AbstractHeapVector vector) {
