@@ -25,9 +25,10 @@ import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonCo
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME
-import org.apache.hudi.common.util.{ConfigUtils, HoodieTableConfigUtils, ReflectionUtils, StringUtils}
+import org.apache.hudi.common.util.{ReflectionUtils, StringUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
+import org.apache.hudi.core.util.{ConfigUtils, HoodieTableConfigUtils}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, NonPartitionedExtractor}
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.index.HoodieIndex

@@ -28,9 +28,9 @@ import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
 import org.apache.hudi.common.table.read.UpdateProcessor;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.storage.HoodieStorage;
 
 import lombok.AccessLevel;

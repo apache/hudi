@@ -15,11 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.core.util;
 
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 

@@ -20,7 +20,7 @@
 package org.apache.hudi.sync.datahub.config;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.sync.datahub.HoodieDataHubSyncException;
 
 import datahub.client.rest.RestEmitter;

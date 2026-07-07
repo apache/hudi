@@ -62,7 +62,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_PARSER;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
-import static org.apache.hudi.common.util.CleanerUtils.getCleanerPlan;
+import static org.apache.hudi.core.util.CleanerUtils.getCleanerPlan;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;

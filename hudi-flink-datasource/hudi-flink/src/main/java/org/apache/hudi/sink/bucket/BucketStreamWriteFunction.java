@@ -20,10 +20,10 @@ package org.apache.hudi.sink.bucket;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.util.Functions;
-import org.apache.hudi.common.util.RemotePartitionHelper;
 import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.core.util.RemotePartitionHelper;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.sink.StreamWriteFunction;

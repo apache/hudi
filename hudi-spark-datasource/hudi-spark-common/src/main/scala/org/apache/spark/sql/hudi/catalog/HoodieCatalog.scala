@@ -24,7 +24,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.FileSystemViewManager
-import org.apache.hudi.common.util.ConfigUtils
+import org.apache.hudi.core.util.ConfigUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.sql.InsertMode

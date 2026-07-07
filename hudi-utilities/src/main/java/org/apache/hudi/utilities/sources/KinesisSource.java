@@ -52,7 +52,7 @@ import java.util.NoSuchElementException;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
-import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getBooleanWithAltKeys;
 
 @Slf4j
 public abstract class KinesisSource<T> extends Source<T> {

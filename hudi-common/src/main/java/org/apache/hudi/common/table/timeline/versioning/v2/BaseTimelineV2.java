@@ -24,9 +24,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.util.ClusteringUtils;
 
 import java.util.List;
 import java.util.Set;

@@ -40,9 +40,9 @@ import java.util.Collections;
 import java.util.Scanner;
 
 import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
-import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
-import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.core.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.SqlFileBasedSourceConfig.EMIT_EPOCH_CHECKPOINT;
 import static org.apache.hudi.utilities.config.SqlFileBasedSourceConfig.SOURCE_SQL_FILE;
 

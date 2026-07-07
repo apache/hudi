@@ -25,9 +25,9 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieStorageUtils;
-import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.util.MarkerUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -43,7 +43,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.MarkerUtils.MARKERS_FILENAME_PREFIX;
+import static org.apache.hudi.core.util.MarkerUtils.MARKERS_FILENAME_PREFIX;
 /**
  * Downgrade handler to assist in downgrading hoodie table from version 2 to 1.
  */

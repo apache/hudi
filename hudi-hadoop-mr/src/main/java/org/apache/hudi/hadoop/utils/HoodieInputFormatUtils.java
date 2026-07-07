@@ -34,7 +34,7 @@ import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.TablePathUtils;
+import org.apache.hudi.core.util.TablePathUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;

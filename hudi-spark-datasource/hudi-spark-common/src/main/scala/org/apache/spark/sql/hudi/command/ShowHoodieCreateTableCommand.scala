@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.common.util.ConfigUtils
+import org.apache.hudi.core.util.ConfigUtils
 
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier

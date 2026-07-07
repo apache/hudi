@@ -29,8 +29,8 @@ import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.testutils.HoodieTestUtils
-import org.apache.hudi.common.util.CompactionUtils
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.core.util.CompactionUtils
 import org.apache.hudi.exception.HoodieNotSupportedException
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase

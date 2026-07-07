@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.core.util;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieCommonConfig;
@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 

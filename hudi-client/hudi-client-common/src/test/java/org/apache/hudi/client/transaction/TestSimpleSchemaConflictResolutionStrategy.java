@@ -58,8 +58,8 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_AC
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.incTimestampStrByOne;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
-import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
 import static org.apache.hudi.config.HoodieWriteConfig.ENABLE_SCHEMA_CONFLICT_RESOLUTION;
+import static org.apache.hudi.core.util.CommitUtils.buildMetadata;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;

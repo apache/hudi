@@ -21,6 +21,7 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.core.util.MarkerUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -30,7 +31,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
-import static org.apache.hudi.common.util.MarkerUtils.MARKER_TYPE_FILENAME;
+import static org.apache.hudi.core.util.MarkerUtils.MARKER_TYPE_FILENAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 import org.apache.hudi.common.testutils.CompactionTestUtils.DummyHoodieBaseFile;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.util.CompactionUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.Path;
@@ -59,8 +60,8 @@ import static org.apache.hudi.common.testutils.CompactionTestUtils.setupAndValid
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
-import static org.apache.hudi.common.util.CompactionUtils.COMPACTION_METADATA_VERSION_1;
-import static org.apache.hudi.common.util.CompactionUtils.LATEST_COMPACTION_METADATA_VERSION;
+import static org.apache.hudi.core.util.CompactionUtils.COMPACTION_METADATA_VERSION_1;
+import static org.apache.hudi.core.util.CompactionUtils.LATEST_COMPACTION_METADATA_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;

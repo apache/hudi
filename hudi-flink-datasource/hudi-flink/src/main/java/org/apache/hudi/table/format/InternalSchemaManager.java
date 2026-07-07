@@ -33,9 +33,9 @@ import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.HoodieStorageUtils;
-import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.util.InternalSchemaCache;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.HoodieSchemaConverter;
 

@@ -40,8 +40,8 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_TABLE_VERSION;
-import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
 
 /**

@@ -20,10 +20,10 @@
 package org.apache.hudi.utilities.schema.converter;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 
 import com.fasterxml.jackson.databind.JsonNode;

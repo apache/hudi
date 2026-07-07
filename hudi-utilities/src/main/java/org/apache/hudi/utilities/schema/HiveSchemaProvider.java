@@ -36,9 +36,9 @@ import org.apache.spark.sql.types.StructType;
 
 import java.util.Collections;
 
-import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
-import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.core.util.ConfigUtils.containsConfigProperty;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * A schema provider to get data schema through user specified hive table.

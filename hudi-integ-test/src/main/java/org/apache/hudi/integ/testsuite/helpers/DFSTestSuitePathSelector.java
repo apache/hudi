@@ -41,7 +41,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * A custom dfs path selector used only for the hudi test suite. To be used only if workload is not run inline.

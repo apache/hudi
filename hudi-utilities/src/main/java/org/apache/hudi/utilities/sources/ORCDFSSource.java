@@ -31,7 +31,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
-import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getBooleanWithAltKeys;
 
 /**
  * DFS Source that reads ORC data.

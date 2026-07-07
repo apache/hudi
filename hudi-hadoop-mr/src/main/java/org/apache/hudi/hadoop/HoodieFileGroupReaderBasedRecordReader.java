@@ -70,8 +70,8 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.REALTIME_PAYLOAD_
 import static org.apache.hudi.common.config.HoodieReaderConfig.REALTIME_SKIP_MERGE;
 import static org.apache.hudi.common.fs.FSUtils.getCommitTime;
 import static org.apache.hudi.common.fs.FSUtils.getFileId;
-import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+import static org.apache.hudi.core.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePathInfo;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getDeltaCommitTimeFromLogPath;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getFileIdFromLogPath;

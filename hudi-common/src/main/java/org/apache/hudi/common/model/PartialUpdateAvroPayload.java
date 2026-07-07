@@ -19,9 +19,9 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.avro.HoodieAvroUtils;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
+import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import lombok.extern.slf4j.Slf4j;

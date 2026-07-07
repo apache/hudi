@@ -69,7 +69,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightDel
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDeltaCommit;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
-import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
+import static org.apache.hudi.core.util.CommitUtils.buildMetadata;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

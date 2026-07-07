@@ -68,9 +68,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
-import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
-import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.containsConfigProperty;
+import static org.apache.hudi.core.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_DATAFILE_EXTENSION;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_INCREMENTAL_MERGE_SCHEMA;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_PREFIX;

@@ -47,8 +47,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
-import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 
 public class DFSPathSelector implements Serializable {
 

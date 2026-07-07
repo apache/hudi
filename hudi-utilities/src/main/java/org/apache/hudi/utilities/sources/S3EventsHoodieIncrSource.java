@@ -45,10 +45,10 @@ import org.apache.spark.sql.SparkSession;
 
 import java.util.Collections;
 
-import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
-import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.core.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.core.util.ConfigUtils.getIntWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.Type.S3;

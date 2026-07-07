@@ -37,9 +37,9 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
-import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
-import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.core.util.ConfigUtils.containsConfigProperty;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 
 public class HoodieDateTimeParser extends BaseHoodieDateTimeParser {
 

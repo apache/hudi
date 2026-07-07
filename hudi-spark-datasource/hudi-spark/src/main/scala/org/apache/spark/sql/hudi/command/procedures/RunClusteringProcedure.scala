@@ -22,9 +22,10 @@ import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OP
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.util.{ClusteringUtils, HoodieTimer, Option => HOption}
+import org.apache.hudi.common.util.{HoodieTimer, Option => HOption}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieLockConfig}
+import org.apache.hudi.core.util.ClusteringUtils
 import org.apache.hudi.exception.HoodieClusteringException
 
 import org.apache.spark.internal.Logging

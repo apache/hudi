@@ -84,7 +84,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATE
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
 import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForPreV9Table;
 import static org.apache.hudi.common.table.HoodieTableConfig.inferRecordMergeModeFromPayloadClass;
-import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
+import static org.apache.hudi.core.util.ConfigUtils.recoverIfNeeded;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

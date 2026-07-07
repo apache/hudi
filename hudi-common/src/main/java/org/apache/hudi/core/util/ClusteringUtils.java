@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.core.util;
 
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -43,6 +43,9 @@ import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TableFormatCompletionAction;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2;
+import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.io.storage.HoodieFileReader;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;

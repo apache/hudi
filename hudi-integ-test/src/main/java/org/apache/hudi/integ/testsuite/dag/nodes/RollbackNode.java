@@ -33,7 +33,7 @@ import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 
 import lombok.extern.slf4j.Slf4j;
 
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * A rollback node in the DAG helps to perform rollback operations.

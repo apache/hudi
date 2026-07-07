@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.core.util;
 
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
@@ -36,6 +36,8 @@ import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigra
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV2MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanMigrator;
+import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.Option;
 
 import lombok.extern.slf4j.Slf4j;
 

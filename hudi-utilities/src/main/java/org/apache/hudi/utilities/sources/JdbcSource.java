@@ -52,11 +52,11 @@ import java.util.List;
 import java.util.Set;
 
 import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
-import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
-import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
-import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
-import static org.apache.hudi.common.util.ConfigUtils.stripPrefix;
+import static org.apache.hudi.core.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.core.util.ConfigUtils.containsConfigProperty;
+import static org.apache.hudi.core.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.stripPrefix;
 
 /**
  * Reads data from RDBMS data sources.

@@ -24,7 +24,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.core.util.CompactionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkMdtCompactionMetrics;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;

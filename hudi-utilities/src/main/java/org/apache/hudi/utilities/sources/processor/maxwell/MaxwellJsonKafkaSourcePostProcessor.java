@@ -20,9 +20,9 @@ package org.apache.hudi.utilities.sources.processor.maxwell;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.utilities.config.JsonKafkaPostProcessorConfig;
 import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
@@ -36,7 +36,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.sources.processor.maxwell.OrderingFieldType.DATE_STRING;
 import static org.apache.hudi.utilities.sources.processor.maxwell.OrderingFieldType.EPOCHMILLISECONDS;
 import static org.apache.hudi.utilities.sources.processor.maxwell.OrderingFieldType.NON_TIMESTAMP;

@@ -27,8 +27,8 @@ import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieAvroIndex
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.marker.MarkerType
-import org.apache.hudi.common.util.HoodieRecordUtils
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.util.HoodieRecordUtils
 import org.apache.hudi.io.HoodieCreateHandle
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration

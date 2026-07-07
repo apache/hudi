@@ -16,9 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.core.util;
 
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
+import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.collection.BitCaskDiskMap.FileEntry;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 

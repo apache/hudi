@@ -22,8 +22,9 @@ import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.util.{CompactionUtils, HoodieTimer, Option => HOption}
+import org.apache.hudi.common.util.{HoodieTimer, Option => HOption}
 import org.apache.hudi.config.HoodieLockConfig
+import org.apache.hudi.core.util.CompactionUtils
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.spark.internal.Logging

@@ -26,8 +26,8 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.util.CompactionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 

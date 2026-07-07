@@ -69,7 +69,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
+import static org.apache.hudi.core.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 public class HoodieRealtimeRecordReaderUtils {

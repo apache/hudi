@@ -27,7 +27,7 @@ import com.azure.identity.ManagedIdentityCredentialBuilder;
 
 import java.util.Properties;
 
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * Factory for resolving an Azure {@link TokenCredential} from Hudi properties.

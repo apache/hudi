@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.core.util;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
@@ -35,6 +35,8 @@ import org.apache.hudi.common.table.timeline.InstantFileNameParser;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.TimelinePathProvider;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;

@@ -23,7 +23,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.hudi.common.util.HadoopConfigUtils.getRawValueWithAltKeys;
-import static org.apache.hudi.common.util.TestConfigUtils.TEST_BOOLEAN_CONFIG_PROPERTY;
+import static org.apache.hudi.core.util.TestConfigUtils.TEST_BOOLEAN_CONFIG_PROPERTY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestHadoopConfigUtils {

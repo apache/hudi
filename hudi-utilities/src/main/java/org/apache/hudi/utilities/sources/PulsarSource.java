@@ -57,6 +57,10 @@ import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createChec
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.common.util.ThreadUtils.collectActiveThreads;
+import static org.apache.hudi.core.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.core.util.ConfigUtils.getLongWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.PulsarSourceConfig.PULSAR_SOURCE_ADMIN_ENDPOINT_URL;
 import static org.apache.hudi.utilities.config.PulsarSourceConfig.PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD;
 import static org.apache.hudi.utilities.config.PulsarSourceConfig.PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY;

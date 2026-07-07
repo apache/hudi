@@ -33,8 +33,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.SPARK_DATASOURCE_OPTIONS;
 
 /**

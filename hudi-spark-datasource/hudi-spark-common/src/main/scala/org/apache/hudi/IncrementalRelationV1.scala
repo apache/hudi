@@ -31,9 +31,10 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.TimelineUtils.{handleHollowCommitIfNeeded, HollowCommitHandling}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
-import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
 import org.apache.hudi.common.util.HoodieStorageUtils
+import org.apache.hudi.common.util.HoodieTimer
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.util.InternalSchemaCache
 import org.apache.hudi.exception.{HoodieException, HoodieIncrementalPathNotFoundException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.StoragePath

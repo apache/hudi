@@ -38,7 +38,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * A {@link SchemaPostProcessor} that support to delete column(s) from given schema.

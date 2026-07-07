@@ -37,7 +37,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
+import static org.apache.hudi.core.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 
 /**
  * Data block backed by a native log file.

@@ -31,7 +31,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import java.util.List;
 
 import static org.apache.hudi.common.table.log.BaseHoodieLogRecordReader.BLOCK_SIZE_IN_BYTES;
-import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getIntWithAltKeys;
 
 abstract class LogScanningRecordBufferLoader {
 

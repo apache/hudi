@@ -28,7 +28,7 @@ import java.util.Arrays;
 import java.util.Locale;
 import java.util.Properties;
 
-import static org.apache.hudi.common.util.ConfigUtils.enumNames;
+import static org.apache.hudi.core.util.ConfigUtils.enumNames;
 
 /**
  * Hudi configs used across engines.

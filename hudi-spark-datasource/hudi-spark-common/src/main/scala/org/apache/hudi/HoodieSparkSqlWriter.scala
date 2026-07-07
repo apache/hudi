@@ -40,11 +40,12 @@ import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
-import org.apache.hudi.common.util.{CommitUtils, ConfigUtils, Option => HOption, StringUtils}
-import org.apache.hudi.common.util.ConfigUtils.getAllConfigKeys
+import org.apache.hudi.common.util.{Option => HOption, StringUtils}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
 import org.apache.hudi.config.HoodieWriteConfig.{SPARK_SQL_MERGE_INTO_PREPPED_KEY, WRITE_TABLE_VERSION}
+import org.apache.hudi.core.util.{CommitUtils, ConfigUtils}
+import org.apache.hudi.core.util.ConfigUtils.getAllConfigKeys
 import org.apache.hudi.exception.{HoodieException, HoodieRecordCreationException, HoodieWriteConflictException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}

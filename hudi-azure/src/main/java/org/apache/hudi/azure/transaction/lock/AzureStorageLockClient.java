@@ -67,8 +67,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getLongWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * Azure Storage implementation of {@link StorageLockClient} using Azure Blob conditional requests.

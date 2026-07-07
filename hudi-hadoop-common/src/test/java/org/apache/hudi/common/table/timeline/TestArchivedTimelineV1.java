@@ -48,9 +48,9 @@ import org.apache.hudi.common.table.timeline.versioning.v1.ArchivedTimelineV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantGeneratorV1;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.core.util.CompactionUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 

@@ -21,10 +21,10 @@ package org.apache.hudi.client.transaction;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaComparatorForSchemaEvolution;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.util.ClusteringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 

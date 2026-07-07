@@ -22,8 +22,8 @@ import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.core.util.ConfigUtils;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;

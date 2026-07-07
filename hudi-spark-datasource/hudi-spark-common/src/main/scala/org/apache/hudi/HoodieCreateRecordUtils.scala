@@ -27,8 +27,9 @@ import org.apache.hudi.common.model.WriteOperationType.isChangingRecords
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCache}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.DeleteContext
-import org.apache.hudi.common.util.{ConfigUtils, HoodieRecordUtils, Option => HOption, OrderingValues}
+import org.apache.hudi.common.util.{Option => HOption, OrderingValues}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.util.{ConfigUtils, HoodieRecordUtils}
 import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory

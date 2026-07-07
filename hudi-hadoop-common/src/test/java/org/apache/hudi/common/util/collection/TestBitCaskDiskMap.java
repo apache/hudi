@@ -34,7 +34,7 @@ import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.SpillableMapTestUtils;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.core.util.SpillableMapUtils;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;

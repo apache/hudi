@@ -28,8 +28,8 @@ import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
 import org.apache.hudi.common.schema.internal.utils.AvroSchemaEvolutionUtils
 import org.apache.hudi.common.schema.internal.utils.AvroSchemaEvolutionUtils.reconcileSchemaRequirements
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.util.ConfigUtils
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 
 import org.apache.spark.sql.types.StructField

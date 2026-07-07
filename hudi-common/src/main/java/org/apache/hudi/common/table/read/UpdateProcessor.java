@@ -24,9 +24,9 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.util.HoodieRecordUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 

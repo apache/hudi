@@ -32,11 +32,11 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.versioning.v2.ArchivedTimelineV2;
-import org.apache.hudi.common.util.CleanerUtils;
-import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.core.util.CleanerUtils;
+import org.apache.hudi.core.util.CompactionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 

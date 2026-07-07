@@ -22,7 +22,8 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.HoodiePendingRollbackInfo
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.util.{ClusteringUtils, Option}
+import org.apache.hudi.common.util.Option
+import org.apache.hudi.core.util.ClusteringUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.table.HoodieSparkTable
 

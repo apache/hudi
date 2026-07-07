@@ -33,7 +33,7 @@ import java.util.Map;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
-import static org.apache.hudi.common.util.ConfigUtils.extractWithPrefix;
+import static org.apache.hudi.core.util.ConfigUtils.extractWithPrefix;
 
 /**
  * This class implements the detailed partial update logic for different partial update modes,

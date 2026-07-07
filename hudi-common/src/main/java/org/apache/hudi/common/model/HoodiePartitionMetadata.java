@@ -18,11 +18,11 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
+import org.apache.hudi.core.util.FileFormatUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieInstantWriter;

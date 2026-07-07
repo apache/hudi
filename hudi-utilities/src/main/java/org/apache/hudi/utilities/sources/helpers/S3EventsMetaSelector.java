@@ -43,7 +43,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * S3 events metadata selector class. This class provides methods to process the

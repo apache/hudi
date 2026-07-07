@@ -36,13 +36,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.core.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
+import org.apache.hudi.core.util.HoodieRecordUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.util.FileIOUtils;
 
@@ -71,7 +71,7 @@ import scala.Tuple2;
 
 import static java.util.Map.Entry.comparingByValue;
 import static java.util.stream.Collectors.toMap;
-import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
+import static org.apache.hudi.core.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 
 /**
  * This class helps to generate updates from an already existing hoodie dataset. It supports generating updates in across partitions, files and records.

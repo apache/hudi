@@ -35,8 +35,9 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, Tim
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.common.testutils.HoodieTestUtils.{INSTANT_FILE_NAME_GENERATOR, INSTANT_GENERATOR}
-import org.apache.hudi.common.util.{ClusteringUtils, Option}
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.util.ClusteringUtils
 import org.apache.hudi.exception.{HoodieException, SchemaBackwardsCompatibilityException}
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, GlobalDeleteKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}

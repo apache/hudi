@@ -26,9 +26,9 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.util.HoodieRecordUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.spark.sql.HoodieInternalRowUtils;

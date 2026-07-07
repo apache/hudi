@@ -60,11 +60,11 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
-import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.util.CompactionUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.util.FileIOUtils;
@@ -138,10 +138,10 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createSavepointCo
 import static org.apache.hudi.common.testutils.FileCreateUtils.deleteSavepointCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.BASE_FILE_EXTENSION;
-import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
-import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
-import static org.apache.hudi.common.util.CommitUtils.getCommitActionType;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+import static org.apache.hudi.core.util.CleanerUtils.convertCleanMetadata;
+import static org.apache.hudi.core.util.CommitUtils.buildMetadata;
+import static org.apache.hudi.core.util.CommitUtils.getCommitActionType;
 
 /**
  * Test Hoodie Table for testing only.

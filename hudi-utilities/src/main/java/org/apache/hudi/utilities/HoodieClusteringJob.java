@@ -27,12 +27,12 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.TableServiceUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.core.util.ClusteringUtils;
+import org.apache.hudi.core.util.TableServiceUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import com.beust.jcommander.JCommander;

@@ -30,10 +30,10 @@ import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogBlockMetadataScanner;
 import org.apache.hudi.common.table.log.InstantRange;
-import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.util.CompactionUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 

@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, TimelineUtils}
-import org.apache.hudi.common.util.CommitUtils
+import org.apache.hudi.core.util.CommitUtils
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Row, SQLContext}

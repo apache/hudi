@@ -24,9 +24,9 @@ import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.core.util.ConfigUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;

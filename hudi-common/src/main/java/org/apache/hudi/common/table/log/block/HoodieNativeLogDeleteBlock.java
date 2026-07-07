@@ -43,7 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
+import static org.apache.hudi.core.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 
 /**
  * Delete block backed by a native delete log file.

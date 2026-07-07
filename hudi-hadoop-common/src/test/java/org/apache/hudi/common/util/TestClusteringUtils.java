@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.util.ClusteringUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
 

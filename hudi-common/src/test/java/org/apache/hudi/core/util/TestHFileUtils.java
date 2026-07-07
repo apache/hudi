@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.core.util;
 
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -54,8 +54,8 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_NUM
 import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_TYPE;
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_WITH_BLOOM_FILTER_ENABLED;
-import static org.apache.hudi.common.util.HFileUtils.getHFileCompressionAlgorithm;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
+import static org.apache.hudi.core.util.HFileUtils.getHFileCompressionAlgorithm;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

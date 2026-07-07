@@ -48,8 +48,6 @@ import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.BinaryUtil;
-import org.apache.hudi.common.util.ConfigUtils;
-import org.apache.hudi.common.util.HoodieTableConfigUtils;
 import org.apache.hudi.common.util.NetworkUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -58,6 +56,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.core.table.format.HoodieTableFormat;
 import org.apache.hudi.core.table.format.NativeTableFormat;
+import org.apache.hudi.core.util.ConfigUtils;
+import org.apache.hudi.core.util.HoodieTableConfigUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -111,13 +111,13 @@ import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_
 import static org.apache.hudi.common.model.HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
-import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
-import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.core.util.ConfigUtils.fetchConfigs;
+import static org.apache.hudi.core.util.ConfigUtils.recoverIfNeeded;
 
 @Immutable
 @Slf4j

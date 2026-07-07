@@ -76,7 +76,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
-import static org.apache.hudi.common.util.HoodieRecordUtils.getOrderingFieldNames;
+import static org.apache.hudi.core.util.HoodieRecordUtils.getOrderingFieldNames;
 
 /**
  * Sink function to write the data to the underneath filesystem.

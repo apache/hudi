@@ -24,9 +24,9 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.core.transaction.conflict.detection.TimelineServerBasedDetectionStrategy;
+import org.apache.hudi.core.util.MarkerUtils;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -53,7 +53,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.util.MarkerUtils.MARKERS_FILENAME_PREFIX;
+import static org.apache.hudi.core.util.MarkerUtils.MARKERS_FILENAME_PREFIX;
 import static org.apache.hudi.io.util.FileIOUtils.closeQuietly;
 import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
 

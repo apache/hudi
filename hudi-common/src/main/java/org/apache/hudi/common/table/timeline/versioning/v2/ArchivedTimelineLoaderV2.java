@@ -49,7 +49,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
+import static org.apache.hudi.core.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 
 public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
 

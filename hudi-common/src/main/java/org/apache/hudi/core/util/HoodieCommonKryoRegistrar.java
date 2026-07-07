@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.core.util;
 
 import org.apache.hudi.common.HoodieJsonPayload;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
@@ -47,6 +47,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.storage.StoragePath;
 

@@ -27,9 +27,9 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HadoopConfigUtils;
-import org.apache.hudi.common.util.HoodieTableConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.core.util.HoodieTableConfigUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 

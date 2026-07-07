@@ -21,7 +21,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.serialization.RecordSerializer;
-import org.apache.hudi.common.util.SerializationUtils;
+import org.apache.hudi.core.util.SerializationUtils;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;

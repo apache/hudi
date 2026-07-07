@@ -25,10 +25,11 @@ import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion, PartialUpdateMode}
-import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
-import org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
+import org.apache.hudi.core.util.ConfigUtils
+import org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys
 import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.index.HoodieIndex

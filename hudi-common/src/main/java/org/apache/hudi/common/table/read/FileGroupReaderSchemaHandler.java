@@ -35,11 +35,11 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer;
-import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
+import org.apache.hudi.core.util.InternalSchemaCache;
 import org.apache.hudi.storage.StoragePath;
 
 import lombok.Getter;

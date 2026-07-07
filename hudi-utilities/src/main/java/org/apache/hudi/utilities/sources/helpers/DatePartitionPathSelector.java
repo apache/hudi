@@ -44,8 +44,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
-import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getIntWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.DFSPathSelectorConfig.ROOT_INPUT_PATH;
 import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.DATE_FORMAT;
 import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.DATE_PARTITION_DEPTH;

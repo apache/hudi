@@ -39,14 +39,14 @@ import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.UpdateProcessor;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
-import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.util.ConfigUtils;
+import org.apache.hudi.core.util.InternalSchemaCache;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.util.FileIOUtils;
 

@@ -248,7 +248,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
       activeTimeline.getInstantContentStream(HoodieTestUtils.INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT,
         HoodieTimeline.CLUSTERING_ACTION, WriteClientTestUtils.createNewInstantTime()))
     } catch {
-      // org.apache.hudi.common.util.ClusteringUtils.getRequestedReplaceMetadata depends upon this behaviour
+      // org.apache.hudi.core.util.ClusteringUtils.getRequestedReplaceMetadata depends upon this behaviour
       // where FileNotFoundException is the cause of exception thrown by the API getInstantDetails
       case e: HoodieIOException => assertTrue(classOf[FileNotFoundException].equals(e.getCause.getClass))
       case _ => fail("Should have failed with FileNotFoundException")

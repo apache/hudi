@@ -59,9 +59,9 @@ import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLL
 import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.convertToCheckpointV1ForCommitTime;
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimeMinusMillis;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
-import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
-import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.containsConfigProperty;
+import static org.apache.hudi.core.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT;
 import static org.apache.spark.sql.functions.col;

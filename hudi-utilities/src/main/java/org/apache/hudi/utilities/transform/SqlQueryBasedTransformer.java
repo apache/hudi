@@ -30,7 +30,7 @@ import org.apache.spark.sql.SparkSession;
 
 import java.util.UUID;
 
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * A transformer that allows a sql-query template be used to transform the source before writing to Hudi data-set.

@@ -43,7 +43,7 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESS
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
-import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
+import static org.apache.hudi.core.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 
 /**
  * HoodieParquetDataBlock contains a list of records serialized using Parquet.

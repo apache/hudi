@@ -32,12 +32,12 @@ import org.apache.hudi.common.metrics.LocalRegistry;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableSortingIterator;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
 

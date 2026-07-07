@@ -46,11 +46,11 @@ import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameGe
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameParser;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
 import org.apache.hudi.common.table.timeline.versioning.DefaultTimelineFactory;
-import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.util.CleanerUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.HoodieTableMetadata;

@@ -36,8 +36,8 @@ import org.apache.spark.sql.SparkSession;
 import java.util.Arrays;
 import java.util.Collections;
 
-import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * SQL Source that reads from any table, used mainly for backfill jobs which will process specific partition dates.

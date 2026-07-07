@@ -21,7 +21,7 @@ import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieWriteStat}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.util.ClusteringUtils
+import org.apache.hudi.core.util.ClusteringUtils
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.spark.sql.Row

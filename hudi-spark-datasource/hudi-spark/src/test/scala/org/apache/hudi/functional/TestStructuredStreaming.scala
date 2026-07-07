@@ -26,9 +26,10 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
-import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
+import org.apache.hudi.common.util.CollectionUtils
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider
+import org.apache.hudi.core.util.CommitUtils
 import org.apache.hudi.exception.TableNotFoundException
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase, HoodieSparkDeleteRecordMerger}

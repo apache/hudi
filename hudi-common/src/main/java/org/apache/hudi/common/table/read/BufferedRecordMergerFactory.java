@@ -27,10 +27,10 @@ import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.PartialUpdateMode;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.util.HoodieRecordUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
 import lombok.AccessLevel;

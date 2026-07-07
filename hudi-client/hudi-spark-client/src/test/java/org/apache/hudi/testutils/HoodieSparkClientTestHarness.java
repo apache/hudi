@@ -106,7 +106,7 @@ import scala.Tuple2;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
-import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
+import static org.apache.hudi.core.util.CleanerUtils.convertCleanMetadata;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

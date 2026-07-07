@@ -54,8 +54,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.common.util.TablePathUtils.getTablePath;
-import static org.apache.hudi.common.util.TablePathUtils.isHoodieTablePath;
+import static org.apache.hudi.core.util.TablePathUtils.getTablePath;
+import static org.apache.hudi.core.util.TablePathUtils.isHoodieTablePath;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.shouldUseFilegroupReader;
 

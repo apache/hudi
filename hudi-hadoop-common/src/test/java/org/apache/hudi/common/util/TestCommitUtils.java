@@ -32,6 +32,8 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.core.util.CommitUtils;
+import org.apache.hudi.core.util.CompactionUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -51,7 +53,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMI
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
-import static org.apache.hudi.common.util.CommitUtils.getCheckpointValueAsString;
+import static org.apache.hudi.core.util.CommitUtils.getCheckpointValueAsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

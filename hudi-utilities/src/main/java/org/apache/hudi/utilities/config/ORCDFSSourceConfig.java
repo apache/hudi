@@ -26,7 +26,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
-import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.core.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
 
 /**
  * ORC DFS Source Configs

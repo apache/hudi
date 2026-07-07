@@ -31,12 +31,12 @@ import org.apache.hudi.common.table.checkpoint.UnresolvedStreamerCheckpointBased
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
@@ -52,7 +52,7 @@ import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREA
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_RESET_KEY_V2;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
-import static org.apache.hudi.common.util.ConfigUtils.removeConfigFromProps;
+import static org.apache.hudi.core.util.ConfigUtils.removeConfigFromProps;
 import static org.apache.hudi.table.upgrade.UpgradeDowngrade.needsUpgradeOrDowngrade;
 
 @Slf4j

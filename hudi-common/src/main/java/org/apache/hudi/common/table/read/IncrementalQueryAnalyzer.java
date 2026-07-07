@@ -25,11 +25,11 @@ import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.util.ClusteringUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import lombok.AccessLevel;

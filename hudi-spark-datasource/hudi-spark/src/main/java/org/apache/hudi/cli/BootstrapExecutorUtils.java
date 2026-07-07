@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -35,6 +34,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
@@ -64,9 +64,9 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_METAFILE_
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_TIMEZONE;
-import static org.apache.hudi.common.util.ConfigUtils.filterProperties;
 import static org.apache.hudi.config.HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD;
 import static org.apache.hudi.config.HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS;
+import static org.apache.hudi.core.util.ConfigUtils.filterProperties;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -79,7 +79,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 
 /**
  * Performs bootstrap from a non-hudi source.
- * import static org.apache.hudi.common.util.ConfigUtils.filterProperties;
+ * import static org.apache.hudi.core.util.ConfigUtils.filterProperties;
  */
 @Slf4j
 public class BootstrapExecutorUtils implements Serializable {

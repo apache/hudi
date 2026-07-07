@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.core.util;
 
 import org.apache.hudi.common.avro.GenericAvroSerializer;
 import org.apache.hudi.common.model.FileSlice;

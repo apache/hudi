@@ -38,13 +38,13 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.util.CleanerUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.testutils.HoodieCleanerTestBase;
 

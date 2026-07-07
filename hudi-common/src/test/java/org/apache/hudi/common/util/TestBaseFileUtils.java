@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.core.util.FileFormatUtils;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.metadata.stats.ValueMetadata;
