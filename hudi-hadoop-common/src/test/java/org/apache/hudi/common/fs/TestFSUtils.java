@@ -194,6 +194,15 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testIsBaseFile() {
+    String baseFileName = FSUtils.makeBaseFileName("20240706120100123", TEST_WRITE_TOKEN, UUID.randomUUID().toString(), ".parquet");
+    assertTrue(FSUtils.isBaseFile(baseFileName));
+    assertTrue(FSUtils.isBaseFile("foo_20240101.parquet"));
+    assertTrue(FSUtils.isBaseFile("a_b_xyz.parquet"));
+    assertTrue(FSUtils.isBaseFile(ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker("file_1.parquet", "20240706120100123")));
+  }
+
+  @Test
   public void testFileNameParser() {
     String fileId = UUID.randomUUID().toString();
     String baseFileName = FSUtils.makeBaseFileName("20240706120100123", TEST_WRITE_TOKEN, fileId, ".parquet");
@@ -210,8 +219,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals("20240706120100123", parsedBaseFileNameWithoutExtension.getCommitTime());
     assertEquals("", parsedBaseFileNameWithoutExtension.getFileExtension());
 
-    FileNameParser.BaseFileName parsedLegacyBaseFileName =
-        FileNameParser.parseBaseFile("file_1.parquet").get();
+    FileNameParser.BaseFileName parsedLegacyBaseFileName = FileNameParser.parseBaseFile("file_1.parquet").get();
     assertEquals("file", parsedLegacyBaseFileName.getFileId());
     assertEquals("", parsedLegacyBaseFileName.getWriteToken());
     assertEquals("1", parsedLegacyBaseFileName.getCommitTime());

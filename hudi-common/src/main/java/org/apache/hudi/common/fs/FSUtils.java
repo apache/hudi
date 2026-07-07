@@ -426,7 +426,8 @@ public class FSUtils {
 
   public static boolean isBaseFile(String path) {
     return FileNameParser.parseBaseFile(path)
-        .map(baseFileName -> HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(baseFileName.getFileExtension()))
+        .map(baseFileName -> !isNativeLogFile(path)
+            && HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(baseFileName.getFileExtension()))
         .orElse(false);
   }
 

@@ -70,7 +70,9 @@ public final class FileNameParser {
    * precedes the commit time, and the first dot after the second underscore terminates the commit time.
    * If the second underscore is absent, the parser treats the name as a legacy base file without a write
    * token and uses the first dot after the first underscore as the commit-time delimiter. If the delimiter
-   * dot is absent, the commit time extends to the end of the file name.</p>
+   * dot is absent, the commit time extends to the end of the file name. This looser fallback is kept to
+   * preserve the historical {@code FSUtils} behavior for non-generated/external base file names such as
+   * {@code file_1.parquet}; it is not the naming pattern produced by Hudi writers.</p>
    *
    * <p>Externally registered base files marked with {@code _hudiext} are decoded through
    * {@link ExternalFilePathUtil}. For these files, {@link BaseFileName#getWriteToken()} is empty and
@@ -111,8 +113,7 @@ public final class FileNameParser {
       return Option.empty();
     }
     if (secondUnderscoreIndex < 0) {
-      // parse file name line file_1.parquet, this is hacky for external file path,
-      // should refactor it out in the future.
+      // Preserve the old loose base-file parsing used by FSUtils for external/non-generated file names.
       int commitTimeEndIndex = actualFileName.indexOf(DOT, firstUnderscoreIndex + 1);
       return Option.of(new BaseFileName(
           actualFileName.substring(0, firstUnderscoreIndex),
