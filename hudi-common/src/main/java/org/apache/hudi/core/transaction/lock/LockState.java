@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.lock;
+package org.apache.hudi.core.transaction.lock;
 
 /**
  * Enum to signal the state of the lock.

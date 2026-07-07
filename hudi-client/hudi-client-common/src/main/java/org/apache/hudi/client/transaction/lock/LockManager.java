@@ -20,11 +20,11 @@ package org.apache.hudi.client.transaction.lock;
 
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.transaction.lock.LockProvider;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.HoodieStorage;

@@ -30,7 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 
-import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.getLastHeartbeatTime;
+import static org.apache.hudi.core.transaction.heartbeat.HoodieHeartbeatUtils.getLastHeartbeatTime;
 
 /**
  * Helper class to delete heartbeat for completed or failed instants with expired heartbeats.

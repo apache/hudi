@@ -50,7 +50,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.isHeartbeatExpired;
+import static org.apache.hudi.core.transaction.heartbeat.HoodieHeartbeatUtils.isHeartbeatExpired;
 import static org.apache.hudi.io.util.FileIOUtils.closeQuietly;
 
 /**

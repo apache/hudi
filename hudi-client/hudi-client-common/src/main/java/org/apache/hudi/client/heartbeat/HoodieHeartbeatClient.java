@@ -46,7 +46,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.getLastHeartbeatTime;
+import static org.apache.hudi.core.transaction.heartbeat.HoodieHeartbeatUtils.getLastHeartbeatTime;
 
 /**
  * This class creates heartbeat for hudi client. This heartbeat is used to ascertain whether the running job is or not.

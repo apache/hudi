@@ -20,9 +20,9 @@
 package org.apache.hudi.hive.transaction.lock;
 
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.core.transaction.lock.LockProvider;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -62,12 +62,12 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_HEARTBEAT_INT
 import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_PORT_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT_MS_PROP_KEY;
-import static org.apache.hudi.common.lock.LockState.ACQUIRING;
-import static org.apache.hudi.common.lock.LockState.ALREADY_ACQUIRED;
-import static org.apache.hudi.common.lock.LockState.FAILED_TO_ACQUIRE;
-import static org.apache.hudi.common.lock.LockState.FAILED_TO_RELEASE;
-import static org.apache.hudi.common.lock.LockState.RELEASED;
-import static org.apache.hudi.common.lock.LockState.RELEASING;
+import static org.apache.hudi.core.transaction.lock.LockState.ACQUIRING;
+import static org.apache.hudi.core.transaction.lock.LockState.ALREADY_ACQUIRED;
+import static org.apache.hudi.core.transaction.lock.LockState.FAILED_TO_ACQUIRE;
+import static org.apache.hudi.core.transaction.lock.LockState.FAILED_TO_RELEASE;
+import static org.apache.hudi.core.transaction.lock.LockState.RELEASED;
+import static org.apache.hudi.core.transaction.lock.LockState.RELEASING;
 
 /**
  * A hivemetastore based lock. Default HiveMetastore Lock Manager uses zookeeper to provide locks,
@@ -169,7 +169,7 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
       Hive.closeCurrent();
       executor.shutdown();
     } catch (Exception e) {
-      log.error(generateLogStatement(org.apache.hudi.common.lock.LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
+      log.error(generateLogStatement(org.apache.hudi.core.transaction.lock.LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
     }
   }
 
@@ -251,7 +251,7 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
     return StringUtils.join(" database ", databaseName, " and ", "table ", tableName);
   }
 
-  protected String generateLogStatement(org.apache.hudi.common.lock.LockState state, String suffix) {
+  protected String generateLogStatement(org.apache.hudi.core.transaction.lock.LockState state, String suffix) {
     return StringUtils.join(state.name(), " lock at", suffix);
   }
 }

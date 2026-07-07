@@ -20,9 +20,9 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.RetryHelper;
+import org.apache.hudi.core.transaction.lock.LockProvider;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.StorageConfiguration;
 

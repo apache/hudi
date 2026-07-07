@@ -18,7 +18,6 @@
 
 package org.apache.hudi.timeline.service.handlers.marker;
 
-import org.apache.hudi.common.conflict.detection.TimelineServerBasedDetectionStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -27,6 +26,7 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.transaction.conflict.detection.TimelineServerBasedDetectionStrategy;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;

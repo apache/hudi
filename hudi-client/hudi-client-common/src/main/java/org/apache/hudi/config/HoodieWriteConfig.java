@@ -854,7 +854,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       })
       .withDocumentation("The class name of the early conflict detection strategy to use. "
           + "This should be a subclass of "
-          + "`org.apache.hudi.common.conflict.detection.EarlyConflictDetectionStrategy`.");
+          + "`org.apache.hudi.core.transaction.conflict.detection.EarlyConflictDetectionStrategy`.");
 
   public static final ConfigProperty<Boolean> EARLY_CONFLICT_DETECTION_ENABLE = ConfigProperty
       .key(CONCURRENCY_PREFIX + "early.conflict.detection.enable")

@@ -142,7 +142,7 @@ public class TimelineService {
     @Parameter(names = {"--early-conflict-detection-strategy"}, description =
         "The class name of the early conflict detection strategy to use. "
             + "This should be subclass of "
-            + "`org.apache.hudi.common.conflict.detection.EarlyConflictDetectionStrategy`")
+            + "`org.apache.hudi.core.transaction.conflict.detection.EarlyConflictDetectionStrategy`")
     public String earlyConflictDetectionStrategy = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy";
 
     @Builder.Default

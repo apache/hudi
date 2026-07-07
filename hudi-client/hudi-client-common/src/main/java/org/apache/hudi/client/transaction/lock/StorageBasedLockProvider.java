@@ -23,14 +23,14 @@ import org.apache.hudi.client.transaction.lock.audit.AuditService;
 import org.apache.hudi.client.transaction.lock.audit.AuditServiceFactory;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.lock.LockProvider;
-import org.apache.hudi.common.lock.LockState;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.StorageBasedLockConfig;
+import org.apache.hudi.core.transaction.lock.LockProvider;
+import org.apache.hudi.core.transaction.lock.LockState;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -52,12 +52,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS;
-import static org.apache.hudi.common.lock.LockState.ACQUIRED;
-import static org.apache.hudi.common.lock.LockState.ACQUIRING;
-import static org.apache.hudi.common.lock.LockState.FAILED_TO_ACQUIRE;
-import static org.apache.hudi.common.lock.LockState.FAILED_TO_RELEASE;
-import static org.apache.hudi.common.lock.LockState.RELEASED;
-import static org.apache.hudi.common.lock.LockState.RELEASING;
+import static org.apache.hudi.core.transaction.lock.LockState.ACQUIRED;
+import static org.apache.hudi.core.transaction.lock.LockState.ACQUIRING;
+import static org.apache.hudi.core.transaction.lock.LockState.FAILED_TO_ACQUIRE;
+import static org.apache.hudi.core.transaction.lock.LockState.FAILED_TO_RELEASE;
+import static org.apache.hudi.core.transaction.lock.LockState.RELEASED;
+import static org.apache.hudi.core.transaction.lock.LockState.RELEASING;
 
 /**
  * A distributed filesystem storage based lock provider. This {@link LockProvider} implementation

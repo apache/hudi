@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.common.heartbeat;
+package org.apache.hudi.core.transaction.heartbeat;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.storage.HoodieStorage;
