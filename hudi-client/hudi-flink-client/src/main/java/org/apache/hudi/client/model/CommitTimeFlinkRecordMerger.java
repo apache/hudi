@@ -21,7 +21,7 @@ package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
-import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.core.read.BufferedRecord;
 
 import java.io.IOException;
 

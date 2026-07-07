@@ -22,7 +22,7 @@ package org.apache.hudi;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.core.read.BufferedRecord;
 import org.apache.hudi.merge.SparkRecordMergingUtils;
 
 import org.apache.spark.sql.catalyst.InternalRow;

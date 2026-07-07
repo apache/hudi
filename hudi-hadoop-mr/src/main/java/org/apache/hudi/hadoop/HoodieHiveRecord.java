@@ -26,10 +26,10 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.read.DeleteContext;
 import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 

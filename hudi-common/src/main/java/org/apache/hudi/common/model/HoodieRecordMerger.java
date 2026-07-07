@@ -27,8 +27,8 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.read.BufferedRecord;
 
 import java.io.IOException;
 import java.io.Serializable;

@@ -19,8 +19,8 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.read.IncrementalQueryAnalyzer.QueryContext;
 import org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter;
 
 import org.apache.spark.sql.Dataset;

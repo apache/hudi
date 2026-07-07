@@ -22,7 +22,7 @@ package org.apache.spark.execution.datasources.parquet
 import org.apache.hudi.{SparkFileFormatInternalRecordContext, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, filterIsSafeForPrimaryKey}
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
+import org.apache.hudi.core.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 
 import org.apache.spark.sql.sources.{And, IsNotNull, Or}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}

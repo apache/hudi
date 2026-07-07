@@ -22,9 +22,9 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.read.BufferedRecord;
-import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.read.BufferedRecord;
+import org.apache.hudi.core.read.BufferedRecords;
 import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.core.util.HoodieRecordUtils;
 

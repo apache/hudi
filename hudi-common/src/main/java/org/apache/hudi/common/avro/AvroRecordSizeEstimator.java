@@ -18,9 +18,9 @@
 
 package org.apache.hudi.common.avro;
 
-import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.core.read.BufferedRecord;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;

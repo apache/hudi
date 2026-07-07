@@ -24,10 +24,10 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
 import org.apache.hudi.common.table.timeline.{HoodieInstantTimeGenerator, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.table.timeline.TimelineUtils.parseDateFromInstantTime
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
+import org.apache.hudi.core.read.IncrementalQueryAnalyzer
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.storage.{HoodieStorage, StoragePath, StoragePathInfo}
 import org.apache.hudi.util.SparkConfigUtils
