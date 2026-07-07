@@ -27,7 +27,11 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+<<<<<<< HEAD
 import org.apache.hudi.common.util.HoodieStorageUtils;
+=======
+import org.apache.hudi.common.util.ExternalFilePathUtil;
+>>>>>>> 2a93785726a9 (Fix filename parser test regressions)
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -179,6 +183,9 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
 
     assertEquals(instantTime, FSUtils.getCommitTime(fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime));
+
+    String externalFileName = ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker("file_1.parquet", instantTime);
+    assertEquals(instantTime, FSUtils.getCommitTime(externalFileName));
   }
 
   @Test
