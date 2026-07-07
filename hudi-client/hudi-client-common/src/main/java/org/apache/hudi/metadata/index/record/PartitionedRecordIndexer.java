@@ -20,17 +20,17 @@
 package org.apache.hudi.metadata.index.record;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.metadata.index.model.DataPartitionAndRecords;
-import org.apache.hudi.metadata.model.FileInfo;
-import org.apache.hudi.metadata.model.FileSliceAndPartition;
-import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.index.record.HoodieRecordIndex;
+import org.apache.hudi.core.index.record.HoodieRecordIndex;
 import org.apache.hudi.metadata.BucketizedMetadataTableFileGroupIndexParser;
-import org.apache.hudi.util.Lazy;
+import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metadata.index.model.DataPartitionAndRecords;
+import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
+import org.apache.hudi.metadata.model.FileInfo;
+import org.apache.hudi.metadata.model.FileSliceAndPartition;
 
 import lombok.extern.slf4j.Slf4j;
 

@@ -20,12 +20,12 @@
 package org.apache.hudi.metadata.index;
 
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
 import org.apache.hudi.metadata.model.FileInfo;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.util.Lazy;
 
 import java.io.IOException;
 import java.util.List;

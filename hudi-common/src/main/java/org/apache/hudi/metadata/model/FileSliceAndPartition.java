@@ -21,8 +21,8 @@ package org.apache.hudi.metadata.model;
 import org.apache.hudi.common.model.FileSlice;
 
 import lombok.AllArgsConstructor;
-import lombok.ToString;
 import lombok.Getter;
+import lombok.ToString;
 import lombok.experimental.Accessors;
 
 import java.io.Serializable;
