@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -48,7 +49,7 @@ public class TestSimpleBloomFilter {
     SimpleBloomFilter filter = new SimpleBloomFilter(1000, 0.000001, Hash.MURMUR_HASH);
     filter.add("key1");
     // With a low error rate and small key set, an unrelated key should not be reported as present.
-    assertTrue(!filter.mightContain("totally-different-key-xyz"));
+    assertFalse(filter.mightContain("totally-different-key-xyz"));
   }
 
   @Test

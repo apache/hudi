@@ -29,9 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -47,14 +45,7 @@ import static org.mockito.Mockito.when;
 public class TestSecondaryIndexUtils {
 
   private static HoodieSecondaryIndex newIndex(String name) {
-    LinkedHashMap<String, Map<String, String>> columns = new LinkedHashMap<>();
-    columns.put("name", Collections.emptyMap());
-    return HoodieSecondaryIndex.builder()
-        .setIndexName(name)
-        .setIndexType("lucene")
-        .setColumns(columns)
-        .setOptions(Collections.singletonMap("k", "v"))
-        .build();
+    return SecondaryIndexTestUtils.newLuceneIndex(name, "name", Collections.singletonMap("k", "v"));
   }
 
   private static HoodieTableMetaClient metaClientWithTableConfig(HoodieTableConfig tableConfig) {

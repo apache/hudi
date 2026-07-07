@@ -58,12 +58,10 @@ public class TestHoodieSecondaryIndex {
 
   @Test
   public void testBuilderIndexTypeIsCaseInsensitive() {
-    LinkedHashMap<String, Map<String, String>> columns = new LinkedHashMap<>();
-    columns.put("name", Collections.emptyMap());
     HoodieSecondaryIndex index = HoodieSecondaryIndex.builder()
         .setIndexName("idx_name")
         .setIndexType("LUCENE")
-        .setColumns(columns)
+        .setColumns(SecondaryIndexTestUtils.singleColumn("name"))
         .setOptions(Collections.emptyMap())
         .build();
 
@@ -72,11 +70,7 @@ public class TestHoodieSecondaryIndex {
 
   @Test
   public void testLuceneIndexWithSingleColumnIsValid() {
-    LinkedHashMap<String, Map<String, String>> columns = new LinkedHashMap<>();
-    columns.put("name", Collections.emptyMap());
-
-    HoodieSecondaryIndex index =
-        new HoodieSecondaryIndex("idx_name", SecondaryIndexType.LUCENE, columns, Collections.emptyMap());
+    HoodieSecondaryIndex index = SecondaryIndexTestUtils.newLuceneIndex("idx_name", "name");
     assertEquals(1, index.getColumns().size());
   }
 
@@ -93,10 +87,7 @@ public class TestHoodieSecondaryIndex {
 
   @Test
   public void testToStringContainsAllFields() {
-    LinkedHashMap<String, Map<String, String>> columns = new LinkedHashMap<>();
-    columns.put("name", Collections.emptyMap());
-    HoodieSecondaryIndex index =
-        new HoodieSecondaryIndex("idx_name", SecondaryIndexType.LUCENE, columns, Collections.emptyMap());
+    HoodieSecondaryIndex index = SecondaryIndexTestUtils.newLuceneIndex("idx_name", "name");
 
     String str = index.toString();
     assertTrue(str.contains("idx_name"));
@@ -106,12 +97,8 @@ public class TestHoodieSecondaryIndex {
 
   @Test
   public void testHoodieIndexCompactorSortsByIndexName() {
-    LinkedHashMap<String, Map<String, String>> columns = new LinkedHashMap<>();
-    columns.put("name", Collections.emptyMap());
-    HoodieSecondaryIndex idxB =
-        new HoodieSecondaryIndex("idx_b", SecondaryIndexType.LUCENE, columns, Collections.emptyMap());
-    HoodieSecondaryIndex idxA =
-        new HoodieSecondaryIndex("idx_a", SecondaryIndexType.LUCENE, columns, Collections.emptyMap());
+    HoodieSecondaryIndex idxB = SecondaryIndexTestUtils.newLuceneIndex("idx_b", "name");
+    HoodieSecondaryIndex idxA = SecondaryIndexTestUtils.newLuceneIndex("idx_a", "name");
 
     List<HoodieSecondaryIndex> sorted = Arrays.asList(idxB, idxA);
     sorted.sort(new HoodieSecondaryIndex.HoodieIndexCompactor());

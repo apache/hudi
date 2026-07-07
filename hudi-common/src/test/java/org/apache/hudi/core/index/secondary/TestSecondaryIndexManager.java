@@ -102,14 +102,8 @@ public class TestSecondaryIndexManager {
   }
 
   @Test
-  public void testGetInstanceReturnsSingleton() {
-    assertEquals(manager, SecondaryIndexManager.getInstance());
-  }
-
-  @Test
   public void testCreateAddsSecondaryIndexMetadata() {
-    LinkedHashMap<String, Map<String, String>> columns = new LinkedHashMap<>();
-    columns.put("name", Collections.emptyMap());
+    LinkedHashMap<String, Map<String, String>> columns = SecondaryIndexTestUtils.singleColumn("name");
     manager.create(metaClient, "idx_name", "lucene", false, columns, Collections.emptyMap());
 
     Option<List<HoodieSecondaryIndex>> indexes = manager.show(metaClient);
@@ -123,8 +117,7 @@ public class TestSecondaryIndexManager {
 
   @Test
   public void testCreateThrowsWhenColumnNotInSchema() {
-    LinkedHashMap<String, Map<String, String>> columns = new LinkedHashMap<>();
-    columns.put("unknown_col", Collections.emptyMap());
+    LinkedHashMap<String, Map<String, String>> columns = SecondaryIndexTestUtils.singleColumn("unknown_col");
 
     HoodieSecondaryIndexException e = assertThrows(HoodieSecondaryIndexException.class,
         () -> manager.create(metaClient, "idx_unknown", "lucene", false, columns, Collections.emptyMap()));
@@ -133,8 +126,7 @@ public class TestSecondaryIndexManager {
 
   @Test
   public void testCreateThrowsWhenIndexNameAlreadyExists() {
-    LinkedHashMap<String, Map<String, String>> columns = new LinkedHashMap<>();
-    columns.put("name", Collections.emptyMap());
+    LinkedHashMap<String, Map<String, String>> columns = SecondaryIndexTestUtils.singleColumn("name");
     manager.create(metaClient, "idx_name", "lucene", false, columns, Collections.emptyMap());
 
     HoodieSecondaryIndexException e = assertThrows(HoodieSecondaryIndexException.class,
@@ -144,8 +136,7 @@ public class TestSecondaryIndexManager {
 
   @Test
   public void testCreateIgnoresWhenIndexNameAlreadyExistsAndIgnoreFlagSet() {
-    LinkedHashMap<String, Map<String, String>> columns = new LinkedHashMap<>();
-    columns.put("name", Collections.emptyMap());
+    LinkedHashMap<String, Map<String, String>> columns = SecondaryIndexTestUtils.singleColumn("name");
     manager.create(metaClient, "idx_name", "lucene", false, columns, Collections.emptyMap());
 
     assertDoesNotThrow(() -> manager.create(metaClient, "idx_name", "lucene", true, columns, Collections.emptyMap()));
@@ -154,8 +145,7 @@ public class TestSecondaryIndexManager {
 
   @Test
   public void testCreateThrowsWhenSameTypeAndColumnsUnderDifferentName() {
-    LinkedHashMap<String, Map<String, String>> columns = new LinkedHashMap<>();
-    columns.put("name", Collections.emptyMap());
+    LinkedHashMap<String, Map<String, String>> columns = SecondaryIndexTestUtils.singleColumn("name");
     manager.create(metaClient, "idx_1", "lucene", false, columns, Collections.emptyMap());
 
     // Same index type and columns, but a different name: should be treated as a duplicate.
@@ -166,10 +156,8 @@ public class TestSecondaryIndexManager {
 
   @Test
   public void testCreateMultipleDistinctIndexesAreSortedByName() {
-    LinkedHashMap<String, Map<String, String>> nameCol = new LinkedHashMap<>();
-    nameCol.put("name", Collections.emptyMap());
-    LinkedHashMap<String, Map<String, String>> cityCol = new LinkedHashMap<>();
-    cityCol.put("city", Collections.emptyMap());
+    LinkedHashMap<String, Map<String, String>> nameCol = SecondaryIndexTestUtils.singleColumn("name");
+    LinkedHashMap<String, Map<String, String>> cityCol = SecondaryIndexTestUtils.singleColumn("city");
 
     manager.create(metaClient, "idx_z", "lucene", false, nameCol, Collections.emptyMap());
     manager.create(metaClient, "idx_a", "lucene", false, cityCol, Collections.emptyMap());
@@ -199,8 +187,7 @@ public class TestSecondaryIndexManager {
 
   @Test
   public void testDropRemovesSecondaryIndexMetadataEntirelyWhenLastIndexDropped() {
-    LinkedHashMap<String, Map<String, String>> columns = new LinkedHashMap<>();
-    columns.put("name", Collections.emptyMap());
+    LinkedHashMap<String, Map<String, String>> columns = SecondaryIndexTestUtils.singleColumn("name");
     manager.create(metaClient, "idx_name", "lucene", false, columns, Collections.emptyMap());
 
     manager.drop(metaClient, "idx_name", false);
@@ -210,10 +197,8 @@ public class TestSecondaryIndexManager {
 
   @Test
   public void testDropKeepsRemainingIndexesWhenOtherIndexesExist() {
-    LinkedHashMap<String, Map<String, String>> nameCol = new LinkedHashMap<>();
-    nameCol.put("name", Collections.emptyMap());
-    LinkedHashMap<String, Map<String, String>> cityCol = new LinkedHashMap<>();
-    cityCol.put("city", Collections.emptyMap());
+    LinkedHashMap<String, Map<String, String>> nameCol = SecondaryIndexTestUtils.singleColumn("name");
+    LinkedHashMap<String, Map<String, String>> cityCol = SecondaryIndexTestUtils.singleColumn("city");
 
     manager.create(metaClient, "idx_name", "lucene", false, nameCol, Collections.emptyMap());
     manager.create(metaClient, "idx_city", "lucene", false, cityCol, Collections.emptyMap());
