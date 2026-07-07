@@ -18,12 +18,14 @@
 
 package org.apache.hudi.common.engine;
 
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -108,5 +110,20 @@ public class TestExecutorServiceBasedEngineContext {
     }, 1);
     assertEquals(ExecutorServiceBasedEngineContext.class.getClassLoader(), captured[0],
         "Worker threads must use ExecutorServiceBasedEngineContext classloader to avoid ClassNotFoundException on Java 11+");
+  }
+
+  @Test
+  void testUnion() {
+    List<HoodieData<Integer>> dataList = new ArrayList<>();
+    for (int i = 0; i < 50; i++) {
+      dataList.add(context.parallelize(
+          IntStream.rangeClosed(i * 100, (i * 100) + 99).boxed().collect(Collectors.toList()), 6));
+    }
+
+    List<Integer> expected = context.parallelize(
+        IntStream.rangeClosed(0, 50 * 100 - 1).boxed().collect(Collectors.toList()), 6).collectAsList();
+
+    List<Integer> actual = context.union(dataList).collectAsList();
+    assertEquals(expected, actual);
   }
 }

@@ -149,6 +149,13 @@ public class ExecutorServiceBasedEngineContext extends HoodieEngineContext {
   }
 
   @Override
+  public <T> HoodieData<T> union(List<HoodieData<T>> dataList) {
+    return HoodieListData.eager(dataList.stream()
+        .flatMap(hoodieData -> hoodieData.collectAsList().stream())
+        .collect(Collectors.toList()));
+  }
+
+  @Override
   public <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism) {
     return mapAsync(data, FunctionWrapper.throwingMapWrapper(func));
   }
