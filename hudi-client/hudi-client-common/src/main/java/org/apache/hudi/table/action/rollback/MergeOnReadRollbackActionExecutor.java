@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -80,7 +81,8 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
 
     // For Requested State (like failure during index lookup), there is nothing to do rollback other than
     // deleting the timeline file
-    if (!resolvedInstant.isRequested()) {
+    if (!resolvedInstant.isRequested()
+        || HoodieTimeline.COMPACTION_ACTION.equals(instantToRollback.getAction())) {
       log.info("Unpublished {}", resolvedInstant);
       allRollbackStats = executeRollback(instantToRollback, hoodieRollbackPlan);
     }

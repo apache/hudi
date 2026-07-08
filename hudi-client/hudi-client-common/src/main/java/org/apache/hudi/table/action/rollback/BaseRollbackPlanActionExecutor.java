@@ -103,7 +103,8 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
     final HoodieInstant rollbackInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, startRollbackTime);
     try {
       List<HoodieRollbackRequest> rollbackRequests = new ArrayList<>();
-      if (!instantToRollback.isRequested()) {
+      if (!instantToRollback.isRequested()
+          || HoodieTimeline.COMPACTION_ACTION.equals(instantToRollback.getAction())) {
         rollbackRequests.addAll(getRollbackStrategy().getRollbackRequests(instantToRollback));
       }
       HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan(new HoodieInstantInfo(instantToRollback.requestedTime(),
