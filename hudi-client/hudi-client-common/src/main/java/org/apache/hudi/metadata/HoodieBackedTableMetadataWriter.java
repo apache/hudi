@@ -1111,13 +1111,17 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     @Override
     public List<IndexPartitionAndRecords> convertMetadata() {
-      return partitionsToUpdate.stream().flatMap(indexPartition -> {
-        MetadataPartitionType partitionType = MetadataPartitionType.fromPartitionPath(indexPartition);
-        Indexer indexer = enabledIndexerMap.get(partitionType);
-        ValidationUtils.checkArgument(indexer != null,
-            String.format("Index partition %s should be included in the enabled index partitions: %s", indexPartition, enabledIndexerMap.keySet()));
-        return indexer.buildUpdate(IndexUpdateContext.of(instantTime, getTableMetadata(), Lazy.lazily(() -> getMetadataView()), commitMetadata)).stream();
-      }).collect(Collectors.toList());
+      return partitionsToUpdate.stream()
+          .map(MetadataPartitionType::fromPartitionPath)
+          .distinct()
+          .flatMap(partitionType -> {
+            Indexer indexer = enabledIndexerMap.get(partitionType);
+            ValidationUtils.checkArgument(indexer != null,
+                String.format("Index partition type %s should be included in the enabled index partitions: %s",
+                    partitionType, enabledIndexerMap.keySet()));
+            return indexer.buildUpdate(IndexUpdateContext.of(instantTime, getTableMetadata(),
+                Lazy.lazily(() -> getMetadataView()), commitMetadata)).stream();
+          }).collect(Collectors.toList());
     }
   }
 
