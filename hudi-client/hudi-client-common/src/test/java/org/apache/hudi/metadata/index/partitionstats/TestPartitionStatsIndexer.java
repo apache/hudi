@@ -150,7 +150,7 @@ class TestPartitionStatsIndexer {
   @SuppressWarnings("unchecked")
   void testBuildUpdateWithNonEmptyCommitMetadataProducesPartitionEntry() {
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
-    HoodieEngineContext realEngineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
+    HoodieEngineContext testDataEngineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
     HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
     HoodieMetadataConfig metadataConfig = mock(HoodieMetadataConfig.class);
     HoodieRecordMerger recordMerger = mock(HoodieRecordMerger.class);
@@ -170,7 +170,7 @@ class TestPartitionStatsIndexer {
     writeStat.setPath("p1/fileid-1_1-0-1_012.parquet");
     commitMetadata.getPartitionToWriteStats().put("p1", Collections.singletonList(writeStat));
 
-    HoodieData<HoodieRecord> partitionStatsData = (HoodieData<HoodieRecord>) (HoodieData<?>) realEngineContext.parallelize(
+    HoodieData<HoodieRecord> partitionStatsData = (HoodieData<HoodieRecord>) (HoodieData<?>) testDataEngineContext.parallelize(
         HoodieMetadataPayload.createPartitionStatsRecords(
             "p1",
             Collections.singletonList(HoodieColumnRangeMetadata.stub("p1/fileid-1_1-0-1_012.parquet", "c1", HoodieIndexVersion.V1)),
@@ -182,7 +182,7 @@ class TestPartitionStatsIndexer {
     PartitionStatsIndexer indexer = new PartitionStatsIndexer(engineContext, writeConfig, metaClient);
     List<IndexPartitionAndRecords> result;
     try (MockedStatic<PartitionStatsIndexer> mockedPartitionStatsIndexer = mockStatic(PartitionStatsIndexer.class)) {
-      mockedPartitionStatsIndexer.when(() -> PartitionStatsIndexer.convertMetadataToPartitionStatRecords(
+      mockedPartitionStatsIndexer.when(() -> PartitionStatsIndexer.convertMetadataToPartitionStatsRecords(
               any(), any(), any(), any(), any(), any(), any(), any(), anyBoolean()))
           .thenReturn(partitionStatsData);
 

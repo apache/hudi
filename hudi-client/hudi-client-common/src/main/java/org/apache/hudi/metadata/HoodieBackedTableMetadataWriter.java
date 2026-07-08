@@ -1134,14 +1134,11 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   @Override
   public void update(HoodieCleanMetadata cleanMetadata, String instantTime) {
     mayBeReinitMetadataReader();
-    processAndCommit(instantTime, new ConvertMetadataFunction() {
-      @Override
-      public List<IndexPartitionAndRecords> convertMetadata() {
-        // for index partitions not needed to handle, `buildClean` will return an empty list.
-        return enabledIndexerMap.entrySet().stream()
-            .flatMap(entry -> entry.getValue().buildClean(IndexCleanContext.of(instantTime, cleanMetadata)).stream())
-            .collect(Collectors.toList());
-      }
+    processAndCommit(instantTime, () -> {
+      // for index partitions not needed to handle, `buildClean` will return an empty list.
+      return enabledIndexerMap.entrySet().stream()
+          .flatMap(entry -> entry.getValue().buildClean(IndexCleanContext.of(instantTime, cleanMetadata)).stream())
+          .collect(Collectors.toList());
     });
     closeInternal();
   }

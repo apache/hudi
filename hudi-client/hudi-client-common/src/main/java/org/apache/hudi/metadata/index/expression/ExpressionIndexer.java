@@ -239,7 +239,7 @@ public class ExpressionIndexer extends BaseIndexer {
     HoodieIndexMetadata metadata = indexMetadata.get();
     Map<String, HoodieIndexDefinition> indexDefinitions = metadata.getIndexDefinitions();
     if (indexDefinitions.isEmpty()) {
-      throw new HoodieMetadataException("Expression index metadata not found");
+      throw new HoodieMetadataException("Expression index has no index definitions");
     }
     // iterate over each index definition and check:
     // if it is an expression index using column_stats, then follow the same approach as column_stats

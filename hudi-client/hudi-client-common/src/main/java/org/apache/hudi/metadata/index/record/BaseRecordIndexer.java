@@ -176,8 +176,8 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
 
       ValidationUtils.checkArgument(totalRecords == expectedRecordCount, "Record Count Validation failed with "
           + totalRecords + " present in record index vs the expected " + expectedRecordCount);
-      log.info(String.format("Record index initialized on %d shards (expected = %d) with %d records (expected = %d)",
-          fileSlices.size(), fileGroupCount, totalRecords, expectedRecordCount));
+      log.info("Record index initialized on {} shards (expected = {}) with {} records (expected = {})",
+          fileSlices.size(), fileGroupCount, totalRecords, expectedRecordCount);
     } finally {
       fsView.close();
     }

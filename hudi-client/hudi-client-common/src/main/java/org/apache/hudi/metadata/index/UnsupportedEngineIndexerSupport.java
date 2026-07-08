@@ -79,7 +79,7 @@ public class UnsupportedEngineIndexerSupport implements EngineIndexerSupport {
       String indexPartition,
       String instantTime) {
     if (metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
-      throw new HoodieNotSupportedException("Table version 6 and below does not support expression index");
+      throw new HoodieNotSupportedException("Table version 7 and below does not support expression index");
     }
     throw new HoodieNotSupportedException(engineType + " engine does not support building expression index yet");
   }

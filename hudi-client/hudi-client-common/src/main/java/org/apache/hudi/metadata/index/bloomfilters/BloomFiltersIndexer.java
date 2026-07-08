@@ -185,8 +185,8 @@ public class BloomFiltersIndexer extends BaseIndexer {
     cleanMetadata.getPartitionMetadata().forEach((partition, partitionMetadata) -> {
       // Files deleted from a partition
       List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
-      deletedFiles.forEach(entry -> {
-        final StoragePath deletedFilePath = new StoragePath(entry);
+      deletedFiles.forEach(deletedFilePathStr -> {
+        final StoragePath deletedFilePath = new StoragePath(deletedFilePathStr);
         if (FSUtils.isBaseFile(deletedFilePath)) {
           deleteFileList.add(Pair.of(partition, deletedFilePath.getName()));
         }

@@ -86,7 +86,7 @@ public class IndexerFactory {
         .filter(partitionType ->
             (partitionType.isMetadataPartitionEnabled(dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient.getTableConfig())
             || partitionType.isMetadataPartitionAvailable(dataTableMetaClient))
-            && !(partitionType == MetadataPartitionType.RECORD_INDEX && shouldDeferRecordIndexInit(dataTableWriteConfig, dataTableMetaClient))
+            && (partitionType != MetadataPartitionType.RECORD_INDEX || !shouldDeferRecordIndexInit(dataTableWriteConfig, dataTableMetaClient))
         )
         .collect(Collectors.toMap(
             Function.identity(),

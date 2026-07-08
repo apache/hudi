@@ -71,7 +71,6 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.getFilesToFetchColumnStats;
 import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.getMaxInstantTime;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToPartitionStatsRecords;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.generateColumnStatsKeys;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getColumnsToIndex;
@@ -116,8 +115,10 @@ public class PartitionStatsIndexer extends BaseIndexer {
         "Column stats partition must be enabled to generate partition stats. Please enable: " + HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
     // Generate Hoodie Pair data of partition name and list of column range metadata for all the files in that partition
     boolean isDeletePartition = context.commitMetadata().getOperationType().equals(WriteOperationType.DELETE_PARTITION);
-    final HoodieData<HoodieRecord> records = convertMetadataToPartitionStatRecords(context.commitMetadata(), context.instantTime(), engineContext, dataTableWriteConfig,
-        dataTableMetaClient, context.tableMetadata(), dataTableWriteConfig.getMetadataConfig(), Option.of(dataTableWriteConfig.getRecordMerger().getRecordType()), isDeletePartition);
+    final HoodieData<HoodieRecord> records = convertMetadataToPartitionStatsRecords(
+        context.commitMetadata(), context.instantTime(), engineContext, dataTableWriteConfig,
+        dataTableMetaClient, context.tableMetadata(), dataTableWriteConfig.getMetadataConfig(),
+        Option.of(dataTableWriteConfig.getRecordMerger().getRecordType()), isDeletePartition);
     return Collections.singletonList(IndexPartitionAndRecords.of(PARTITION_STATS.getPartitionPath(), records));
   }
 
@@ -127,11 +128,11 @@ public class PartitionStatsIndexer extends BaseIndexer {
   }
 
   @VisibleForTesting
-  public static HoodieData<HoodieRecord> convertMetadataToPartitionStatRecords(HoodieCommitMetadata commitMetadata, String instantTime,
-                                                                               HoodieEngineContext engineContext, HoodieWriteConfig dataWriteConfig,
-                                                                               HoodieTableMetaClient dataMetaClient,
-                                                                               HoodieTableMetadata tableMetadata, HoodieMetadataConfig metadataConfig,
-                                                                               Option<HoodieRecord.HoodieRecordType> recordTypeOpt, boolean isDeletePartition) {
+  public static HoodieData<HoodieRecord> convertMetadataToPartitionStatsRecords(HoodieCommitMetadata commitMetadata, String instantTime,
+                                                                                HoodieEngineContext engineContext, HoodieWriteConfig dataWriteConfig,
+                                                                                HoodieTableMetaClient dataMetaClient,
+                                                                                HoodieTableMetadata tableMetadata, HoodieMetadataConfig metadataConfig,
+                                                                                Option<HoodieRecord.HoodieRecordType> recordTypeOpt, boolean isDeletePartition) {
     try {
       Option<HoodieSchema> writerSchema =
           Option.ofNullable(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY))
@@ -221,9 +222,10 @@ public class PartitionStatsIndexer extends BaseIndexer {
             return Pair.of(partitionName, fileColumnMetadata);
           });
 
-      return convertMetadataToPartitionStatsRecords(columnRangeMetadata, dataMetaClient, columnsToIndexSchemaMap, partitionStatsIndexVersion);
+      return HoodieTableMetadataUtil.convertMetadataToPartitionStatsRecords(
+          columnRangeMetadata, dataMetaClient, columnsToIndexSchemaMap, partitionStatsIndexVersion);
     } catch (Exception e) {
-      throw new HoodieException("Failed to generate column stats records for metadata table", e);
+      throw new HoodieException("Failed to generate partition stats records for metadata table", e);
     }
   }
 }

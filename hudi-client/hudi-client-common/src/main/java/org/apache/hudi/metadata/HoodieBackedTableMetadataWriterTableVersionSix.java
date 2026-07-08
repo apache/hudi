@@ -252,7 +252,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
    * We only need to handle FILES partition here as HUDI rollbacks on MOR table may end up adding a new log file. All other partitions
    * are handled by actual rollback of the deltacommit which added records to those partitions.
    */
-  public static List<IndexPartitionAndRecords> convertMetadataToRecords(
+  static List<IndexPartitionAndRecords> convertMetadataToRecords(
       HoodieEngineContext engineContext, HoodieRollbackMetadata rollbackMetadata, String instantTime) {
 
     List<HoodieRecord> filesPartitionRecords = HoodieTableMetadataUtil.convertMetadataToRollbackRecords(rollbackMetadata, instantTime);

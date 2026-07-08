@@ -242,17 +242,17 @@ class TestPartitionedRecordIndexer {
   }
 
   private static class ExposedPartitionedRecordIndexer extends PartitionedRecordIndexer {
-    private final DataPartitionAndRecords p1;
-    private final DataPartitionAndRecords p2;
+    private final DataPartitionAndRecords partition1Data;
+    private final DataPartitionAndRecords partition2Data;
     private int initializePartitionCalls;
 
     ExposedPartitionedRecordIndexer(HoodieEngineContext engineContext, HoodieWriteConfig dataTableWriteConfig,
                                     HoodieTableMetaClient dataTableMetaClient,
-                                    DataPartitionAndRecords p1,
-                                    DataPartitionAndRecords p2) {
+                                    DataPartitionAndRecords partition1Data,
+                                    DataPartitionAndRecords partition2Data) {
       super(engineContext, dataTableWriteConfig, dataTableMetaClient);
-      this.p1 = p1;
-      this.p2 = p2;
+      this.partition1Data = partition1Data;
+      this.partition2Data = partition2Data;
     }
 
     @Override
@@ -260,9 +260,9 @@ class TestPartitionedRecordIndexer {
                                                                      int recordIndexMaxParallelism) {
       initializePartitionCalls++;
       if ("p1".equals(dataPartition)) {
-        return p1;
+        return partition1Data;
       }
-      return p2;
+      return partition2Data;
     }
   }
 }

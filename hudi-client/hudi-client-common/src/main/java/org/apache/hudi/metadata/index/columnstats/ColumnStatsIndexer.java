@@ -130,14 +130,15 @@ public class ColumnStatsIndexer extends BaseIndexer {
     }
     Lazy<Option<HoodieSchema>> tableSchema =
         Lazy.lazily(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(dataTableMetaClient));
-    final List<String> columnsToIndex = new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(
+    // Restore records are generated from data files, so meta fields are not included here.
+    final List<String> restoreColumnsToIndex = new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(
         dataTableMetaClient.getTableConfig(),
         dataTableWriteConfig.getMetadataConfig(),
         tableSchema,
         false,
         Option.of(dataTableWriteConfig.getRecordMerger().getRecordType()),
         HoodieTableMetadataUtil.existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, dataTableMetaClient)).keySet());
-    if (columnsToIndex.isEmpty()) {
+    if (restoreColumnsToIndex.isEmpty()) {
       log.info("Since there are no columns to index, stop to generate ColumnStats records.");
       return Collections.emptyList();
     }
@@ -146,7 +147,7 @@ public class ColumnStatsIndexer extends BaseIndexer {
         context.filesAdded(), dataTableMetaClient,
         dataTableWriteConfig.getMetadataConfig().getColumnStatsIndexParallelism(),
         dataTableWriteConfig.getMetadataConfig().getMaxReaderBufferSize(),
-        columnsToIndex);
+        restoreColumnsToIndex);
     return Collections.singletonList(IndexPartitionAndRecords.of(COLUMN_STATS.getPartitionPath(), records));
   }
 

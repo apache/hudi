@@ -25,6 +25,9 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 
+/**
+ * Holds metadata records and the concrete metadata table partition they should be written to.
+ */
 @AllArgsConstructor
 @Getter
 @Accessors(fluent = true)
