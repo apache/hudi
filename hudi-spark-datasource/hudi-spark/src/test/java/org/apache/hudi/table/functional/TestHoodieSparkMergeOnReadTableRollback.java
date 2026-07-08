@@ -26,6 +26,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -48,11 +49,13 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
@@ -372,6 +375,79 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       }
     }
     return arguments;
+  }
+
+  @Test
+  void testRollbackCompactionCleansFilesAfterHigherInflightDeltaRollback() throws Exception {
+    HoodieWriteConfig.Builder cfgBuilder = getHoodieWriteConfigWithSmallFileHandlingOffBuilder(true)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withMarkersType(MarkerType.DIRECT.name());
+    addConfigsForPopulateMetaFields(cfgBuilder, true);
+    HoodieWriteConfig cfg = cfgBuilder.build();
+    cfg.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, "6");
+
+    Properties properties = CollectionUtils.copy(cfg.getProps());
+    properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
+    properties.setProperty(HoodieTableConfig.VERSION.key(), "6");
+    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "6");
+    properties.setProperty(HoodieTableConfig.TIMELINE_LAYOUT_VERSION.key(),
+        Integer.toString(TimelineLayoutVersion.LAYOUT_VERSION_1.getVersion()));
+
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, properties);
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+
+    String firstCommitTime = "000000001";
+    String secondCommitTime = "000000002";
+    String compactionCommitTime = "000000003";
+    String inflightDeltaCommitTime = "000000004";
+    int numRecords = 20;
+    List<HoodieRecord> secondCommitRecords = new ArrayList<>();
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      WriteClientTestUtils.startCommitWithTime(client, firstCommitTime);
+      List<HoodieRecord> firstCommitRecords = dataGen.generateInserts(firstCommitTime, numRecords);
+      List<WriteStatus> statuses = client.upsert(jsc().parallelize(firstCommitRecords, 1), firstCommitTime).collect();
+      assertNoWriteErrors(statuses);
+      client.commit(firstCommitTime, jsc().parallelize(statuses));
+
+      WriteClientTestUtils.startCommitWithTime(client, secondCommitTime);
+      secondCommitRecords = dataGen.generateUpdates(secondCommitTime, firstCommitRecords);
+      secondCommitRecords.addAll(dataGen.generateInserts(secondCommitTime, numRecords));
+      statuses = client.upsert(jsc().parallelize(secondCommitRecords, 1), secondCommitTime).collect();
+      assertNoWriteErrors(statuses);
+      client.commit(secondCommitTime, jsc().parallelize(statuses));
+
+      assertTrue(client.scheduleCompactionAtInstant(compactionCommitTime, Option.empty()));
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(compactionCommitTime);
+      List<WriteStatus> compactionStatuses = compactionMetadata.getWriteStatuses().collect();
+      assertNoWriteErrors(compactionStatuses);
+      compactionMetadata.setWriteStatuses(jsc().parallelize(compactionStatuses));
+      client.commitCompaction(compactionCommitTime, compactionMetadata, Option.empty());
+
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      assertFilesForInstant(hoodieTable, compactionCommitTime, false);
+
+      WriteClientTestUtils.startCommitWithTime(client, inflightDeltaCommitTime);
+      List<HoodieRecord> inflightUpdates = dataGen.generateUpdates(inflightDeltaCommitTime, secondCommitRecords);
+      statuses = client.upsert(jsc().parallelize(inflightUpdates, 1), inflightDeltaCommitTime).collect();
+      assertNoWriteErrors(statuses);
+    }
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      client.rollback(inflightDeltaCommitTime);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      assertTrue(metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().containsInstant(compactionCommitTime));
+      assertFilesForInstant(hoodieTable, compactionCommitTime, false);
+
+      client.rollback(compactionCommitTime);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      assertFalse(metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().containsInstant(compactionCommitTime));
+      assertFilesForInstant(hoodieTable, compactionCommitTime, true);
+    }
   }
 
   @ParameterizedTest
@@ -855,6 +931,18 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
         HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
             basePath());
     assertRecords(expectedRecords, recordsRead);
+  }
+
+  private void assertFilesForInstant(HoodieTable hoodieTable, String instantTime, boolean shouldBeEmpty) throws IOException {
+    List<String> remainingFiles = HoodieTestTable.of(hoodieTable.getMetaClient()).listAllBaseAndLogFiles().stream()
+        .filter(file -> file.getPath().getName().contains("_" + instantTime))
+        .map(file -> file.getPath().toString())
+        .collect(Collectors.toList());
+    if (shouldBeEmpty) {
+      assertTrue(remainingFiles.isEmpty(), "Files for instant " + instantTime + " should have been rolled back: " + remainingFiles);
+    } else {
+      assertFalse(remainingFiles.isEmpty(), "Files for instant " + instantTime + " should exist");
+    }
   }
 
   private void assertRecords(List<HoodieRecord> inputRecords, List<GenericRecord> recordsRead) {
