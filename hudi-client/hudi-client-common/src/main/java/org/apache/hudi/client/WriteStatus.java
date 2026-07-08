@@ -257,6 +257,10 @@ public class WriteStatus implements Serializable {
     return trackSuccessRecords;
   }
 
+  public double getFailureFraction() {
+    return failureFraction;
+  }
+
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("WriteStatus {");
