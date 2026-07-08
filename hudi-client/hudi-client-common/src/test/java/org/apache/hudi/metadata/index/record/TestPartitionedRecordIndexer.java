@@ -53,6 +53,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
@@ -167,7 +168,7 @@ class TestPartitionedRecordIndexer {
     when(dataMetaClient.getTableConfig()).thenReturn(tableConfig);
     when(tableConfig.getBaseFileFormat()).thenReturn(HoodieFileFormat.PARQUET);
     when(dataMetaClient.getBasePath()).thenReturn(new StoragePath("/tmp/hudi-partitioned-record-index-test"));
-    when(dataMetaClient.getStorageConf()).thenReturn((org.apache.hudi.storage.StorageConfiguration) getDefaultStorageConf());
+    doReturn(getDefaultStorageConf()).when(dataMetaClient).getStorageConf();
 
     HoodieData<HoodieRecord> empty = (HoodieData<HoodieRecord>) (HoodieData<?>) engineContext.emptyHoodieData();
     ExposedPartitionedRecordIndexer indexer = new ExposedPartitionedRecordIndexer(

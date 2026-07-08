@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.FileSlice;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.ToString;
-import lombok.experimental.Accessors;
 
 import java.io.Serializable;
 
@@ -33,7 +32,6 @@ import java.io.Serializable;
 @AllArgsConstructor
 @Getter
 @ToString
-@Accessors(fluent = true)
 public class FileSliceAndPartition implements Serializable {
   private static final long serialVersionUID = 1L;
 

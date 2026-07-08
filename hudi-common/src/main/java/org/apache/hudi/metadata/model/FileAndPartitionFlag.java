@@ -26,7 +26,7 @@ import lombok.experimental.Accessors;
 import java.io.Serializable;
 
 /**
- * Data class representing a file and partition with a flag.
+ * Data class representing a file and partition with delete status.
  */
 @Getter
 @AllArgsConstructor

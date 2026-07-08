@@ -104,15 +104,15 @@ public class ExpressionIndexer extends BaseIndexer {
     HoodieIndexDefinition indexDefinition = HoodieTableMetadataUtil.getHoodieIndexDefinition(indexName, dataTableMetaClient);
     ValidationUtils.checkState(indexDefinition != null, "Expression Index definition is not present for index " + indexName);
 
-    List<FileSliceAndPartition> partitionFileSlicePairs = context.latestFileSlices().get();
+    List<FileSliceAndPartition> fileSlices = context.latestFileSlices().get();
     List<FileInfoAndPartition> filesToIndex = new ArrayList<>();
-    partitionFileSlicePairs.forEach(fsp -> {
-      if (fsp.fileSlice().getBaseFile().isPresent()) {
-        filesToIndex.add(FileInfoAndPartition.of(fsp.partitionPath(), fsp.fileSlice().getBaseFile().get().getPath(), fsp.fileSlice().getBaseFile().get().getFileSize()));
+    fileSlices.forEach(fsp -> {
+      if (fsp.getFileSlice().getBaseFile().isPresent()) {
+        filesToIndex.add(FileInfoAndPartition.of(fsp.getPartitionPath(), fsp.getFileSlice().getBaseFile().get().getPath(), fsp.getFileSlice().getBaseFile().get().getFileSize()));
       }
-      fsp.fileSlice().getLogFiles()
+      fsp.getFileSlice().getLogFiles()
           .forEach(hoodieLogFile
-              -> filesToIndex.add(FileInfoAndPartition.of(fsp.partitionPath(), hoodieLogFile.getPath().toString(), hoodieLogFile.getFileSize())));
+              -> filesToIndex.add(FileInfoAndPartition.of(fsp.getPartitionPath(), hoodieLogFile.getPath().toString(), hoodieLogFile.getFileSize())));
     });
 
     int fileGroupCount = dataTableWriteConfig.getMetadataConfig().getExpressionIndexFileGroupCount();
@@ -164,14 +164,14 @@ public class ExpressionIndexer extends BaseIndexer {
     HoodieIndexDefinition indexDefinition = HoodieTableMetadataUtil.getHoodieIndexDefinition(indexPartition, dataTableMetaClient);
     ValidationUtils.checkState(indexDefinition != null, "Expression Index definition is not present for index " + indexPartition);
 
-    // Step 1: Generate partition name, file path and size triplets from the newly created files in the commit metadata
+    // Step 1: Generate partition, file path and size descriptors from the newly created files in the commit metadata
     List<FileInfoAndPartition> filesToIndex = getFilesToIndex(commitMetadata);
     int parallelism = Math.min(filesToIndex.size(), dataTableWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
     HoodieSchema tableSchema;
     try {
       tableSchema = new TableSchemaResolver(dataTableMetaClient).getTableSchema();
     } catch (Exception e) {
-      throw new HoodieSchemaNotFoundException("No schema found for table at " + dataTableMetaClient.getBasePath());
+      throw new HoodieSchemaNotFoundException("No schema found for table at " + dataTableMetaClient.getBasePath(), e);
     }
     HoodieSchema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataTableMetaClient, tableSchema);
     Option<PartitionStatsRecordsFunction> partitionRecordsFunctionOpt =

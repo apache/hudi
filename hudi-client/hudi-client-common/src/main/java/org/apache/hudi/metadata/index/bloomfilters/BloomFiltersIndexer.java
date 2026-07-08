@@ -21,7 +21,6 @@ package org.apache.hudi.metadata.index.bloomfilters;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -109,7 +108,7 @@ public class BloomFiltersIndexer extends BaseIndexer {
    */
   private static HoodieData<HoodieRecord> convertMetadataToBloomFilterRecords(
       HoodieEngineContext context,
-      HoodieConfig hoodieConfig,
+      HoodieWriteConfig hoodieConfig,
       HoodieCommitMetadata commitMetadata,
       String instantTime,
       HoodieTableMetaClient dataMetaClient,
@@ -145,7 +144,8 @@ public class BloomFiltersIndexer extends BaseIndexer {
 
       final StoragePath writeFilePath = new StoragePath(dataMetaClient.getBasePath(), pathWithPartition);
       try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(dataMetaClient.getStorage())
-          .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(hoodieConfig, writeFilePath)) {
+          .getReaderFactory(hoodieConfig.getRecordMerger().getRecordType())
+          .getFileReader(hoodieConfig, writeFilePath)) {
         try {
           final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
           if (fileBloomFilter == null) {

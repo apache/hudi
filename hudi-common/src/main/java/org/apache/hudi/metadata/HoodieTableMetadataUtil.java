@@ -740,7 +740,7 @@ public class HoodieTableMetadataUtil {
       if (hasRollbackLogFiles) {
         partitionToAppendedFiles.putIfAbsent(partitionId, new ArrayList<>());
         Map<String, Long> currentFileToSize = partitionToAppendedFiles.get(partitionId).stream()
-            .collect(Collectors.toMap(FileInfoAndPartition::path, FileInfoAndPartition::size));
+            .collect(Collectors.toMap(FileInfoAndPartition::filePath, FileInfoAndPartition::size));
 
         // Extract appended file name from the absolute paths saved in getAppendFiles()
         pm.getRollbackLogFiles().forEach((path, size) -> {
@@ -775,7 +775,7 @@ public class HoodieTableMetadataUtil {
       Map<String, Long> filesAdded = Collections.emptyMap();
       if (partitionToAppendedFiles.containsKey(partitionName)) {
         filesAdded = partitionToAppendedFiles.remove(partitionName).stream()
-            .collect(Collectors.toMap(FileInfoAndPartition::path, FileInfoAndPartition::size));
+            .collect(Collectors.toMap(FileInfoAndPartition::filePath, FileInfoAndPartition::size));
       }
 
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partitionName, filesAdded,
@@ -786,7 +786,7 @@ public class HoodieTableMetadataUtil {
     partitionToAppendedFiles.forEach((partitionName, appendedFiles) -> {
       final String partition = getPartitionIdentifierForFilesPartition(partitionName);
       fileChangeCount[1] += appendedFiles.size();
-      Map<String, Long> appendedFileMap = appendedFiles.stream().collect(Collectors.toMap(FileInfoAndPartition::path, FileInfoAndPartition::size));
+      Map<String, Long> appendedFileMap = appendedFiles.stream().collect(Collectors.toMap(FileInfoAndPartition::filePath, FileInfoAndPartition::size));
 
       // Validate that no appended file has been deleted
       checkState(
@@ -2196,8 +2196,8 @@ public class HoodieTableMetadataUtil {
 
     // Group by partition path and collect file names (BaseFile and LogFiles)
     List<Pair<String, Set<String>>> partitionToFileNames = partitionInfoList.stream()
-        .collect(Collectors.groupingBy(FileSliceAndPartition::partitionPath,
-            Collectors.mapping(pair -> extractFileNames(pair.fileSlice()), Collectors.toList())))
+        .collect(Collectors.groupingBy(FileSliceAndPartition::getPartitionPath,
+            Collectors.mapping(pair -> extractFileNames(pair.getFileSlice()), Collectors.toList())))
         .entrySet().stream()
         .map(entry -> Pair.of(entry.getKey(),
             entry.getValue().stream().flatMap(Set::stream).collect(Collectors.toSet())))

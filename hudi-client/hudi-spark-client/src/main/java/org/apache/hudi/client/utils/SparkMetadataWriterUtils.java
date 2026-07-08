@@ -261,7 +261,7 @@ public class SparkMetadataWriterUtils {
   /**
    * Generates expression index records
    *
-   * @param filesToIndex                Triplet of file path, file size and partition name to which file belongs
+   * @param filesToIndex                files to index, paired with their data partition and file size
    * @param indexDefinition             Hoodie Index Definition for the expression index for which records need to be generated
    * @param metaClient                  Hoodie Table Meta Client
    * @param parallelism                 Parallelism to use for engine operations
@@ -323,7 +323,7 @@ public class SparkMetadataWriterUtils {
   private static Iterator<Row> getExpressionIndexRecordsIterator(HoodieReaderContext<InternalRow> readerContext, HoodieTableMetaClient metaClient,
                                                                  HoodieSchema tableSchema, HoodieSchema readerSchema, HoodieWriteConfig dataWriteConfig, FileInfoAndPartition entry) {
     String partition = entry.partitionPath();
-    String filePath = entry.path();
+    String filePath = entry.filePath();
     String relativeFilePath = FSUtils.getRelativePartitionPath(metaClient.getBasePath(), new StoragePath(filePath));
     long fileSize = entry.size();
     boolean isBaseFile = FSUtils.isBaseFile(new StoragePath(filePath.substring(filePath.lastIndexOf("/") + 1)));

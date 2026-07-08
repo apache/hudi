@@ -74,10 +74,11 @@ public class SecondaryIndexer extends BaseIndexer {
   @Override
   public List<IndexInitializationPlan> buildInitialization(IndexInitializationContext context) throws IOException {
     Set<String> secondaryIndexPartitionsToInit = getSecondaryIndexPartitionsToInit(SECONDARY_INDEX, dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient);
-    if (secondaryIndexPartitionsToInit.size() != 1) {
-      if (secondaryIndexPartitionsToInit.size() > 1) {
-        log.warn("Skipping secondary index initialization as only one secondary index bootstrap at a time is supported for now. Provided: {}", secondaryIndexPartitionsToInit);
-      }
+    if (secondaryIndexPartitionsToInit.size() > 1) {
+      log.warn("Skipping secondary index initialization as only one secondary index bootstrap at a time is supported for now. Provided: {}", secondaryIndexPartitionsToInit);
+      return Collections.emptyList();
+    }
+    if (secondaryIndexPartitionsToInit.isEmpty()) {
       return Collections.emptyList();
     }
 
@@ -85,12 +86,12 @@ public class SecondaryIndexer extends BaseIndexer {
     HoodieIndexDefinition indexDefinition = HoodieTableMetadataUtil.getHoodieIndexDefinition(indexName, dataTableMetaClient);
     ValidationUtils.checkState(indexDefinition != null, "Secondary Index definition is not present for index " + indexName);
 
-    List<FileSliceAndPartition> partitionFileSlicePairs = context.latestFileSlices().get();
+    List<FileSliceAndPartition> fileSlices = context.latestFileSlices().get();
 
-    int parallelism = Math.min(partitionFileSlicePairs.size(), dataTableWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());
+    int parallelism = Math.min(fileSlices.size(), dataTableWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());
     HoodieData<HoodieRecord> records = readSecondaryKeysFromFileSlices(
         engineContext,
-        partitionFileSlicePairs,
+        fileSlices,
         parallelism,
         this.getClass().getSimpleName(),
         dataTableMetaClient,

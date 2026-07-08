@@ -125,7 +125,7 @@ public class FilesIndexer extends BaseIndexer {
       records.add(record);
     });
 
-    // there could be partitions which only has missing deleted files.
+    // There could be partitions that only appear in the delete map.
     context.filesDeleted().forEach((partition, filesToDelete) -> {
       if (!context.filesAdded().containsKey(partition)) {
         fileDeleteCount[0] += filesToDelete.size();

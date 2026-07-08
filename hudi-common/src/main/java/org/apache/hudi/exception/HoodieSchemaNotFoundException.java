@@ -25,4 +25,8 @@ public class HoodieSchemaNotFoundException extends HoodieSchemaException {
   public HoodieSchemaNotFoundException(String message) {
     super(message);
   }
+
+  public HoodieSchemaNotFoundException(String message, Throwable t) {
+    super(message, t);
+  }
 }

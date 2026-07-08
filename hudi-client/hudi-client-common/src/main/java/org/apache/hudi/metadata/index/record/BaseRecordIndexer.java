@@ -166,8 +166,8 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
 
       // Filter to only file slices with base files and extract their storage paths
       List<StoragePath> baseFilePaths = fileSlices.stream()
-          .filter(fs -> fs.getBaseFile().isPresent())
-          .map(fs -> fs.getBaseFile().get().getStoragePath())
+          .filter(fileSlice -> fileSlice.getBaseFile().isPresent())
+          .map(fileSlice -> fileSlice.getBaseFile().get().getStoragePath())
           .collect(Collectors.toList());
 
       // Count records in a distributed manner using the engine context
@@ -231,7 +231,7 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
    * Fetch record locations from FileSlice snapshot.
    *
    * @param engineContext             context to use.
-   * @param partitionFileSlicePairs   list of pairs of partition and file slice.
+   * @param fileSlices                file slices with their data partitions.
    * @param recordIndexMaxParallelism parallelism to use.
    * @param activeModule              active module of interest.
    * @param metaClient                metaclient instance to use.
@@ -239,12 +239,12 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
    * @return metadata records for initializing record index entries.
    */
   protected static <T> HoodieData<HoodieRecord> readRecordKeysFromFileSliceSnapshot(HoodieEngineContext engineContext,
-                                                                                  List<FileSliceAndPartition> partitionFileSlicePairs,
+                                                                                  List<FileSliceAndPartition> fileSlices,
                                                                                   int recordIndexMaxParallelism,
                                                                                   String activeModule,
                                                                                   HoodieTableMetaClient metaClient,
                                                                                   HoodieWriteConfig dataWriteConfig) {
-    if (partitionFileSlicePairs.isEmpty()) {
+    if (fileSlices.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
 
@@ -256,12 +256,12 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
       return engineContext.emptyHoodieData();
     }
 
-    engineContext.setJobStatus(activeModule, "Record Index: reading record keys from " + partitionFileSlicePairs.size() + " file slices");
-    final int parallelism = Math.min(partitionFileSlicePairs.size(), recordIndexMaxParallelism);
+    engineContext.setJobStatus(activeModule, "Record Index: reading record keys from " + fileSlices.size() + " file slices");
+    final int parallelism = Math.min(fileSlices.size(), recordIndexMaxParallelism);
     ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(metaClient);
-    return engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndFileSlice -> {
-      final String partition = partitionAndFileSlice.partitionPath();
-      final FileSlice fileSlice = partitionAndFileSlice.fileSlice();
+    return engineContext.parallelize(fileSlices, parallelism).flatMap(partitionAndFileSlice -> {
+      final String partition = partitionAndFileSlice.getPartitionPath();
+      final FileSlice fileSlice = partitionAndFileSlice.getFileSlice();
       final String fileId = fileSlice.getFileId();
       HoodieReaderContext<T> readerContext = readerContextFactory.getContext();
       HoodieSchema dataSchema = resolveDataSchemaForRLIBootstrap(metaClient, dataWriteConfig);

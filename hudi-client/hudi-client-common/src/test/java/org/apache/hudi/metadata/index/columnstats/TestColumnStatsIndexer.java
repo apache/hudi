@@ -63,6 +63,7 @@ import static org.mockito.Mockito.when;
 class TestColumnStatsIndexer {
   private static final int PARALLELISM = 4;
   private static final int MAX_READER_BUFFER_SIZE = 1024;
+  private static final int FILE_GROUP_COUNT = 5;
 
   private HoodieEngineContext engineContext;
   private HoodieWriteConfig writeConfig;
@@ -193,13 +194,8 @@ class TestColumnStatsIndexer {
 
   @Test
   void testInitializeDataWithEmptyInputUsesEmptyHoodieData() throws IOException {
-    HoodieEngineContext engineContext = mock(HoodieEngineContext.class);
-    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
-    HoodieMetadataConfig metadataConfig = mock(HoodieMetadataConfig.class);
-    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieData<HoodieRecord> emptyData = mock(HoodieData.class);
 
-    when(writeConfig.getMetadataConfig()).thenReturn(metadataConfig);
     when(metadataConfig.getColumnStatsIndexFileGroupCount()).thenReturn(2);
     when(engineContext.emptyHoodieData()).thenReturn((HoodieData) emptyData);
 
@@ -215,25 +211,14 @@ class TestColumnStatsIndexer {
   @SuppressWarnings("unchecked")
   @Test
   void testInitializeDataWithRealEngineContextAndIndexDataContent() throws IOException {
-    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
-    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
-    HoodieMetadataConfig metadataConfig = mock(HoodieMetadataConfig.class);
-    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
-    HoodieRecordMerger recordMerger = mock(HoodieRecordMerger.class);
+    HoodieEngineContext testDataEngineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
 
-    when(writeConfig.getMetadataConfig()).thenReturn(metadataConfig);
-    when(writeConfig.getColumnStatsIndexParallelism()).thenReturn(4);
-    when(writeConfig.getRecordMerger()).thenReturn(recordMerger);
-    when(recordMerger.getRecordType()).thenReturn(HoodieRecord.HoodieRecordType.AVRO);
-    when(metadataConfig.getColumnStatsIndexFileGroupCount()).thenReturn(5);
-    when(metadataConfig.getMaxReaderBufferSize()).thenReturn(4096);
-    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(metadataConfig.getColumnStatsIndexFileGroupCount()).thenReturn(FILE_GROUP_COUNT);
 
     Map<String, List<FileInfo>> files = new HashMap<>();
     files.put("p1", Collections.singletonList(FileInfo.of("f1.parquet", 1L)));
 
-    HoodieData<HoodieRecord> records = (HoodieData<HoodieRecord>) (HoodieData<?>) engineContext.parallelize(
+    HoodieData<HoodieRecord> records = (HoodieData<HoodieRecord>) (HoodieData<?>) testDataEngineContext.parallelize(
         Collections.singletonList(HoodieMetadataPayload.createPartitionFilesRecord("p_col",
             Collections.singletonMap("f_col.parquet", 22L), Collections.emptyList())),
         1);
@@ -251,7 +236,7 @@ class TestColumnStatsIndexer {
           "001", "002", files, Lazy.lazily(Collections::emptyList), Lazy.lazily(Option::empty)));
       assertEquals(1, initializationList.size());
 
-      assertEquals(5, initializationList.get(0).totalFileGroups());
+      assertEquals(FILE_GROUP_COUNT, initializationList.get(0).totalFileGroups());
       List<HoodieRecord> collected = initializationList.get(0).dataPartitionAndRecords().get(0).indexRecords().collectAsList();
       assertEquals(1, collected.size());
       assertEquals("p_col", collected.get(0).getRecordKey());

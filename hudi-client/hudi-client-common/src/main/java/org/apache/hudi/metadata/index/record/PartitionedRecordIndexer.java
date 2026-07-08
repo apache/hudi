@@ -58,18 +58,18 @@ public class PartitionedRecordIndexer extends BaseRecordIndexer {
   @Override
   public List<IndexInitializationPlan> buildInitialization(IndexInitializationContext context) throws IOException {
     createRecordIndexDefinition(dataTableMetaClient, Collections.singletonMap(HoodieRecordIndex.IS_PARTITIONED_OPTION, "true"));
-    Map<String, List<FileSliceAndPartition>> partitionFileSlicePairsMap = context.latestFileSlices().get().stream()
-        .collect(Collectors.groupingBy(FileSliceAndPartition::partitionPath));
-    Map<String, DataPartitionAndRecords> fileGroupCountAndRecordsPairMap = new HashMap<>(partitionFileSlicePairsMap.size());
-    int maxParallelismPerHudiPartition = partitionFileSlicePairsMap.isEmpty()
-        ? 1 : Math.max(1, dataTableWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism() / partitionFileSlicePairsMap.size());
+    Map<String, List<FileSliceAndPartition>> fileSlicesByPartition = context.latestFileSlices().get().stream()
+        .collect(Collectors.groupingBy(FileSliceAndPartition::getPartitionPath));
+    Map<String, DataPartitionAndRecords> partitionDataMap = new HashMap<>(fileSlicesByPartition.size());
+    int maxParallelismPerHudiPartition = fileSlicesByPartition.isEmpty()
+        ? 1 : Math.max(1, dataTableWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism() / fileSlicesByPartition.size());
     int totalFileGroupCount = 0;
-    for (Map.Entry<String, List<FileSliceAndPartition>> entry: partitionFileSlicePairsMap.entrySet()) {
+    for (Map.Entry<String, List<FileSliceAndPartition>> entry: fileSlicesByPartition.entrySet()) {
       String partition = entry.getKey();
       List<FileSliceAndPartition> fileSliceAndPartitions = entry.getValue();
       log.info("Initializing partitioned record index from data partition {}", partition);
       DataPartitionAndRecords dataPartitionAndRecords = initializeRecordIndexPartition(partition, fileSliceAndPartitions, maxParallelismPerHudiPartition);
-      fileGroupCountAndRecordsPairMap.put(partition, dataPartitionAndRecords);
+      partitionDataMap.put(partition, dataPartitionAndRecords);
       totalFileGroupCount += dataPartitionAndRecords.numFileGroups();
     }
     log.info("Initializing partitioned record index with {} mappings", totalFileGroupCount);
@@ -77,7 +77,7 @@ public class PartitionedRecordIndexer extends BaseRecordIndexer {
     List<DataPartitionAndRecords> initializationList = new ArrayList<>();
     // Generate the file groups
     TreeMap<String, Integer> partitionSizes = new TreeMap<>();
-    for (Map.Entry<String, DataPartitionAndRecords> entry: fileGroupCountAndRecordsPairMap.entrySet()) {
+    for (Map.Entry<String, DataPartitionAndRecords> entry: partitionDataMap.entrySet()) {
       String dataPartition = entry.getKey();
       DataPartitionAndRecords dataPartitionAndRecords = entry.getValue();
       ValidationUtils.checkArgument(dataPartitionAndRecords.numFileGroups() > 0, "FileGroup count for partitioned RLI data partition " + dataPartition + " should be > 0");

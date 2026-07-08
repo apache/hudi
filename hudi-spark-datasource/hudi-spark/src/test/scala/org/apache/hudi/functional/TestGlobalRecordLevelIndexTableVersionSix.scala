@@ -56,7 +56,7 @@ class TestGlobalRecordLevelIndexTableVersionSix extends TestGlobalRecordLevelInd
     assertEquals(0, getFileGroupCountForRecordIndex(writeConfig))
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(0, metaClient.getTableConfig.getMetadataPartitionsInflight.size())
-    // only files, col stats partition should be present.
+    // Only FILES and COLUMN_STATS partitions should be present.
     assertEquals(2, metaClient.getTableConfig.getMetadataPartitions.size())
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,

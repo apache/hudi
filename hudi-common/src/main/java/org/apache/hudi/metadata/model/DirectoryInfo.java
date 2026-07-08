@@ -97,13 +97,17 @@ public class DirectoryInfo implements Serializable {
 
   public static Map<String, List<FileInfo>> getPartitionToFileInfo(List<DirectoryInfo> partitionInfoList) {
     return partitionInfoList.stream()
-        .map(p -> {
-          String partitionName = HoodieTableMetadataUtil.getPartitionIdentifierForFilesPartition(p.getRelativePath());
-          List<FileInfo> files = p.getFilenameToSizeMap().entrySet().stream()
+        .map(dirInfo -> {
+          String partitionName = HoodieTableMetadataUtil.getPartitionIdentifierForFilesPartition(dirInfo.getRelativePath());
+          List<FileInfo> files = dirInfo.getFilenameToSizeMap().entrySet().stream()
               .map(entry -> FileInfo.of(entry.getKey(), entry.getValue()))
               .collect(Collectors.toList());
           return Pair.of(partitionName, files);
         })
-        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+        .collect(Collectors.toMap(Pair::getKey, Pair::getValue, (existing, replacement) -> {
+          List<FileInfo> merged = new ArrayList<>(existing);
+          merged.addAll(replacement);
+          return merged;
+        }));
   }
 }

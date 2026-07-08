@@ -411,18 +411,18 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       }
     }
     Map<String, List<FileInfo>> partitionIdToAllFilesMap = DirectoryInfo.getPartitionToFileInfo(partitionInfoList);
-    Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList = getLazyLatestMergedPartitionFileSliceList();
+    Lazy<List<FileSliceAndPartition>> lazyMergedFileSlices = getLazyMergedFileSlices();
 
     // FILES partition should always be initialized first if enabled
     if (!filesPartitionAvailable) {
       initializeMetadataPartition(FILES, indexerMapForPartitionsToInit.get(FILES),
-          dataTableInstantTime, partitionIdToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
+          dataTableInstantTime, partitionIdToAllFilesMap, lazyMergedFileSlices);
     }
 
     indexerMapForPartitionsToInit.entrySet().stream().filter(e -> e.getKey() != FILES).forEach(
         e -> {
           try {
-            initializeMetadataPartition(e.getKey(), e.getValue(), dataTableInstantTime, partitionIdToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
+            initializeMetadataPartition(e.getKey(), e.getValue(), dataTableInstantTime, partitionIdToAllFilesMap, lazyMergedFileSlices);
           } catch (IOException ex) {
             throw new HoodieMetadataException("Failed to initialize metadata partition: " + e.getKey(), ex);
           }
@@ -435,7 +435,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       Indexer indexer,
       String dataTableInstantTime,
       Map<String, List<FileInfo>> partitionToAllFilesMap,
-      Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
+      Lazy<List<FileSliceAndPartition>> lazyMergedFileSlices) throws IOException {
     String instantTimeForPartition = generateUniqueInstantTime(dataTableInstantTime);
     // initialize metadata partitions
     List<IndexInitializationPlan> initializationList;
@@ -444,7 +444,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           dataTableInstantTime,
           instantTimeForPartition,
           partitionToAllFilesMap,
-          lazyLatestMergedPartitionFileSliceList,
+          lazyMergedFileSlices,
           Lazy.lazily(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(dataMetaClient)));
       initializationList = indexer.buildInitialization(initializationContext);
       if (initializationList.isEmpty()) {
@@ -523,7 +523,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
   protected abstract EngineType getEngineType();
 
-  private Lazy<List<FileSliceAndPartition>> getLazyLatestMergedPartitionFileSliceList() {
+  private Lazy<List<FileSliceAndPartition>> getLazyMergedFileSlices() {
     return Lazy.lazily(() -> {
       String latestInstant = dataMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
           .map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
@@ -531,10 +531,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         // Collect the list of latest file slices present in each partition
         List<String> partitions = metadata.getAllPartitionPaths();
         fsView.loadAllPartitions();
-        List<FileSliceAndPartition> partitionFileSlicePairs = new ArrayList<>();
+        List<FileSliceAndPartition> fileSlices = new ArrayList<>();
         partitions.forEach(partition -> fsView.getLatestMergedFileSlicesBeforeOrOn(partition, latestInstant)
-            .forEach(fs -> partitionFileSlicePairs.add(FileSliceAndPartition.of(partition, fs))));
-        return partitionFileSlicePairs;
+            .forEach(fileSlice -> fileSlices.add(FileSliceAndPartition.of(partition, fileSlice))));
+        return fileSlices;
       } catch (IOException e) {
         throw new HoodieIOException("Cannot get the latest merged file slices", e);
       }

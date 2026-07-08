@@ -33,16 +33,16 @@ public class FileInfoAndPartition implements Serializable {
   private static final long serialVersionUID = 1L;
 
   private final String partitionPath;
-  private final String path;
+  private final String filePath;
   private final long size;
 
-  private FileInfoAndPartition(String partitionPath, String path, long size) {
+  private FileInfoAndPartition(String partitionPath, String filePath, long size) {
     this.partitionPath = partitionPath;
-    this.path = path;
+    this.filePath = filePath;
     this.size = size;
   }
 
-  public static FileInfoAndPartition of(String partition, String path, long size) {
-    return new FileInfoAndPartition(partition, path, size);
+  public static FileInfoAndPartition of(String partition, String filePath, long size) {
+    return new FileInfoAndPartition(partition, filePath, size);
   }
 }
