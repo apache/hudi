@@ -94,17 +94,17 @@ public final class TestcontainersConfig {
      */
     public static final String HIVE_VERBOSE = "hudi.integ.hive.verbose";
 
+    /**
+     * Hiveconf entries applied only when {@link #HIVE_VERBOSE} is enabled.
+     * See {@code HiveService#execute} for the per-flag rationale.
+     */
+    public static final List<String> VERBOSE_HIVECONFS =
+        List.of("hive.root.logger=INFO,console",
+            "hive.exec.mode.local.auto=false",
+            "hive.log.explain.output=true",
+            "hive.server2.logging.operation.verbose=true");
+
     private SystemProps() {
     }
   }
-
-  /**
-   * Hiveconf entries applied only when {@link SystemProps#HIVE_VERBOSE} is enabled.
-   * See {@code HiveService#execute} for the per-flag rationale.
-   */
-  public static final List<String> VERBOSE_HIVECONFS =
-      List.of("hive.root.logger=INFO,console",
-          "hive.exec.mode.local.auto=false",
-          "hive.log.explain.output=true",
-          "hive.server2.logging.operation.verbose=true");
 }

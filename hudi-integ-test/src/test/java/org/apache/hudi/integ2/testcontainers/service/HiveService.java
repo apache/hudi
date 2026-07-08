@@ -60,7 +60,7 @@ public class HiveService {
     hiveCmd.add("--hiveconf");
     hiveCmd.add("hive.stats.autogather=false");
     if (verbose) {
-      for (String kv : TestcontainersConfig.VERBOSE_HIVECONFS) {
+      for (String kv : TestcontainersConfig.SystemProps.VERBOSE_HIVECONFS) {
         hiveCmd.add("--hiveconf");
         hiveCmd.add(kv);
       }
