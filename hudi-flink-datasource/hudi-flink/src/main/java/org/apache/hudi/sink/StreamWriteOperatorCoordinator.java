@@ -26,7 +26,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -42,6 +41,7 @@ import org.apache.hudi.sink.validator.FlinkValidatorUtils;
 import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
 import org.apache.hudi.sink.utils.EventBuffers;
 import org.apache.hudi.sink.utils.EventBuffers.EventBuffer;
+import org.apache.hudi.sink.utils.EventBuffersStateSerializer;
 import org.apache.hudi.sink.utils.ExplicitClassloaderThreadFactory;
 import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
@@ -66,6 +66,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 
 import javax.annotation.Nullable;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
@@ -290,7 +291,8 @@ public class StreamWriteOperatorCoordinator
     executor.execute(
         () -> {
           try {
-            byte[] eventBytes = SerializationUtils.serialize(this.eventBuffers.getAllCompletedEvents());
+            byte[] eventBytes = EventBuffersStateSerializer.serialize(
+                this.eventBuffers.getAllCompletedEvents());
             result.complete(eventBytes);
           } catch (Throwable throwable) {
             // when a checkpoint fails, throws directly.
@@ -324,9 +326,14 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void resetToCheckpoint(long checkpointID, byte[] checkpointData) {
-    if (checkpointData != null) {
+    if (checkpointData != null && checkpointData.length > 0) {
       initEventBufferIfNecessary();
-      this.eventBuffers.addEventsToBuffer(SerializationUtils.deserialize(checkpointData));
+      try {
+        this.eventBuffers.addEventsToBuffer(
+            EventBuffersStateSerializer.deserialize(checkpointData));
+      } catch (IOException e) {
+        throw new HoodieException("Failed to restore event buffers from coordinator state", e);
+      }
       // resetToCheckpoint() is called in two cases:
       // 1. The job is restarted from state, start() will be called later.
       // 2. The job is recovered from global failover. The coordinator is already started, and start() will not be called again.

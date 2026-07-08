@@ -38,6 +38,15 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro-maven-plugin</artifactId>
+                <configuration>
+                    <imports>
+                        <import>${basedir}/src/main/avro/WriteMetadataEventState.avsc</import>
+                    </imports>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
             </plugin>

@@ -185,7 +185,7 @@ public class EventBuffers implements Serializable {
     private final WriteMetadataEvent[] dataWriteEventBuffer;
     private final WriteMetadataEvent[] indexWriteEventBuffer;
 
-    private EventBuffer(WriteMetadataEvent[] dataWriteEventBuffer, WriteMetadataEvent[] indexWriteEventBuffer) {
+    EventBuffer(WriteMetadataEvent[] dataWriteEventBuffer, WriteMetadataEvent[] indexWriteEventBuffer) {
       this.dataWriteEventBuffer = dataWriteEventBuffer;
       this.indexWriteEventBuffer = indexWriteEventBuffer;
     }
