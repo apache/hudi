@@ -471,7 +471,9 @@ public class FSUtils {
   }
 
   public static boolean isNativeCDCLogFile(String fileName) {
-    return matchNativeLogFile(fileName).map(matcher -> "cdc".equals(matcher.group(8))).orElse(false);
+    return FileNameParser.parseNativeLogFile(fileName)
+        .map(logFileName -> LogExtensions.CDC_LOG_EXTENSION.equals(logFileName.getFileExtension()))
+        .orElse(false);
   }
 
   public static boolean isCDCLogFile(String fileName) {

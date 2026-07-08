@@ -146,6 +146,7 @@ public class TestHoodieLogFile {
     assertEquals("parquet", hoodieLogFile.getSuffix());
     assertEquals("cdc", FSUtils.getFileExtensionFromLog(nativeCdcLogPath));
     assertTrue(hoodieLogFile.isCDC());
+    assertTrue(FSUtils.isNativeCDCLogFile(nativeCdcLogPathStr));
     assertTrue(FSUtils.isCDCLogFile(nativeCdcLogPathStr));
   }
 
@@ -185,6 +186,7 @@ public class TestHoodieLogFile {
     assertEquals("cdc", hoodieLogFile.getFileExtension());
     assertEquals("lance", hoodieLogFile.getSuffix());
     assertTrue(hoodieLogFile.isCDC());
+    assertTrue(FSUtils.isNativeCDCLogFile(nativeCdcLogPathStr));
     assertTrue(FSUtils.isCDCLogFile(nativeCdcLogPathStr));
   }
 
@@ -205,6 +207,7 @@ public class TestHoodieLogFile {
     assertEquals("1-0-1", hoodieLogFile.getLogWriteToken());
     assertEquals("log", hoodieLogFile.getFileExtension());
     assertEquals("custom", hoodieLogFile.getSuffix());
+    assertFalse(FSUtils.isNativeCDCLogFile(nativeLogPathStr));
     assertFalse(FSUtils.isCDCLogFile(nativeLogPathStr));
   }
 
