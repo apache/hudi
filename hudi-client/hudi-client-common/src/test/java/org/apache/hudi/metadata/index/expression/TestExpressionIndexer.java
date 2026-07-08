@@ -9,6 +9,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
@@ -33,6 +34,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -87,8 +89,10 @@ class TestExpressionIndexer {
         1);
     when(engineIndexSupport.generateExpressionIndexRecords(any(), any(), any(), anyInt(), any(), any(), any(), any())).thenReturn(records);
 
-    FileSlice fileSlice = new FileSlice("p1", "001", "f1");
-    fileSlice.setBaseFile(new HoodieBaseFile("file:///tmp/p1/f1.parquet"));
+    String fileId = UUID.randomUUID().toString();
+    FileSlice fileSlice = new FileSlice("p1", "001", fileId);
+    String baseFileName = FSUtils.makeBaseFileName("001", "1-0-1", fileId, ".parquet");
+    fileSlice.setBaseFile(new HoodieBaseFile("file:///tmp/p1/" + baseFileName));
     List<FileSliceAndPartition> fileSlices = Collections.singletonList(FileSliceAndPartition.of("p1", fileSlice));
 
     try (MockedStatic<HoodieTableMetadataUtil> mockedUtil = mockStatic(HoodieTableMetadataUtil.class)) {
