@@ -197,12 +197,14 @@ public class AbstractDebeziumTransformer implements Transformer {
       }
     }
 
-    // Apply correct nullability to the transformed schema: a column stays non-nullable only if it
-    // was a non-nullable source column; every other column (including Debezium metadata columns) is nullable.
+    // Apply nullability to the transformed schema: a column stays non-nullable if Spark already
+    // infers it non-nullable, or if it was a non-nullable source data column; every other column
+    // is nullable. This preserves the non-nullability of Debezium metadata columns (e.g.
+    // _change_operation_type) that Spark infers as non-nullable when schema.nullable.enable is off.
     StructField[] updatedStructFields = Arrays.stream(debeziumDataset.schema().fields())
-        .map(field -> nonNullableColumns.contains(field.name())
-          ? new StructField(field.name(), field.dataType(), false, field.metadata())
-          : new StructField(field.name(), field.dataType(), true, field.metadata()))
+        .map(field -> field.nullable() && !nonNullableColumns.contains(field.name())
+          ? new StructField(field.name(), field.dataType(), true, field.metadata())
+          : new StructField(field.name(), field.dataType(), false, field.metadata()))
         .toArray(StructField[]::new);
 
     return sparkSession.createDataFrame(debeziumDataset.rdd(), new StructType(updatedStructFields));
