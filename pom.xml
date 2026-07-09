@@ -484,6 +484,9 @@
               <!-- afterburner module for jackson performance -->
               <include>com.fasterxml.jackson.module:jackson-module-afterburner</include>
               <include>com.fasterxml.jackson.module:jackson-module-scala_${scala.binary.version}</include>
+              <!-- Parquet 1.16.0+ (Spark 4.1+) splits VariantConverters into parquet-variant,
+                   which parquet-avro needs at runtime. No-op for older Spark. See apache/hudi#19234. -->
+              <include>org.apache.parquet:parquet-variant</include>
             </includes>
           </artifactSet>
           <relocations>
