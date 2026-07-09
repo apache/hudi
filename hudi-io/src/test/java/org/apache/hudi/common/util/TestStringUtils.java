@@ -283,4 +283,47 @@ public class TestStringUtils {
     assertEquals("abc", StringUtils.stripEnd("abc", ""));
     assertEquals("abc", StringUtils.stripEnd("abcabab", "ab"));
   }
+
+  @Test
+  public void testCompareUtf8BytesAsciiMatchesStringCompareTo() {
+    // Pure ASCII bytes equal their UTF-16 code unit values, so UTF-8 byte order and
+    // String.compareTo order coincide.
+    assertEquals(Integer.signum("apple".compareTo("banana")), Integer.signum(StringUtils.compareUtf8Bytes("apple", "banana")));
+    assertEquals(Integer.signum("banana".compareTo("apple")), Integer.signum(StringUtils.compareUtf8Bytes("banana", "apple")));
+    assertEquals(0, StringUtils.compareUtf8Bytes("apple", "apple"));
+  }
+
+  @Test
+  public void testCompareUtf8BytesSupplementaryPairFlipsOrderVsStringCompareTo() {
+    // U+E000 (BMP private-use, UTF-8 lead byte 0xEE) vs U+20000 (supplementary plane, UTF-8 lead byte
+    // 0xF0). In UTF-16, U+20000 is encoded as a surrogate pair starting with 0xD840, which is < 0xE000,
+    // so String.compareTo orders U+20000 first. In UTF-8 byte order 0xF0 > 0xEE, flipping the order --
+    // exactly the pathological shape that breaks HFile's forward-only seek under String.compareTo.
+    String bmpPrivateUse = new String(Character.toChars(0xE000));
+    String supplementary = new String(Character.toChars(0x20000));
+
+    assertTrue(bmpPrivateUse.compareTo(supplementary) > 0,
+        "String.compareTo should order U+E000 after U+20000 (UTF-16 code unit order)");
+    assertTrue(StringUtils.compareUtf8Bytes(bmpPrivateUse, supplementary) < 0,
+        "compareUtf8Bytes should order U+E000 before U+20000 (UTF-8 byte order)");
+  }
+
+  @Test
+  public void testCompareUtf8BytesEmptyPrefixAndIdenticalStrings() {
+    assertTrue(StringUtils.compareUtf8Bytes("", "a") < 0);
+    assertTrue(StringUtils.compareUtf8Bytes("a", "") > 0);
+    assertEquals(0, StringUtils.compareUtf8Bytes("", ""));
+    assertTrue(StringUtils.compareUtf8Bytes("ab", "abc") < 0);
+    assertTrue(StringUtils.compareUtf8Bytes("abc", "ab") > 0);
+    assertEquals(0, StringUtils.compareUtf8Bytes("abc", "abc"));
+  }
+
+  @Test
+  public void testUtf8LexicographicComparatorMatchesCompareUtf8Bytes() {
+    String bmpPrivateUse = new String(Character.toChars(0xE000));
+    String supplementary = new String(Character.toChars(0x20000));
+    assertEquals(StringUtils.compareUtf8Bytes(bmpPrivateUse, supplementary),
+        StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR.compare(bmpPrivateUse, supplementary));
+    assertThrows(NullPointerException.class, () -> StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR.compare(null, "a"));
+  }
 }
