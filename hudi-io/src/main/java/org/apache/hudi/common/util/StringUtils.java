@@ -123,16 +123,19 @@ public class StringUtils {
   }
 
   /**
-   * Serializable comparator ordering strings by their unsigned UTF-8 byte representation, matching
-   * the ordering HFiles enforce (HBase's {@code CellComparatorImpl}). Unlike
-   * {@link String#compareTo(String)} (UTF-16), this stays consistent with HFile ordering for
-   * non-ASCII / binary keys.
+   * Serializable comparator ordering strings by their unsigned UTF-8 byte representation. See
+   * {@link #compareUtf8Bytes(String, String)} for the rationale and null-handling contract.
    */
   public static final Comparator<String> UTF8_LEXICOGRAPHIC_COMPARATOR =
       (Comparator<String> & Serializable) StringUtils::compareUtf8Bytes;
 
   /**
-   * Compares two strings by their unsigned UTF-8 byte order. See {@link #UTF8_LEXICOGRAPHIC_COMPARATOR}.
+   * Compares two strings by their unsigned UTF-8 byte order, matching the ordering HFiles enforce
+   * (HBase's {@code CellComparatorImpl}). Unlike {@link String#compareTo(String)} (UTF-16 code unit
+   * order), this stays consistent with HFile ordering for non-ASCII / binary keys.
+   *
+   * <p>Neither argument may be {@code null}; like {@link String#compareTo(String)}, a {@code null}
+   * argument throws {@link NullPointerException}.
    */
   public static int compareUtf8Bytes(String s1, String s2) {
     byte[] b1 = getUTF8Bytes(s1);
