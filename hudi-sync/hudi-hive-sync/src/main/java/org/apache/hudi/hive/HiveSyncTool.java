@@ -51,6 +51,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getInputFormatClassName;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getOutputFormatClassName;
@@ -276,7 +278,8 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
       boolean partitionsChanged = validateAndSyncPartitions(tableName, tableExists);
       boolean meetSyncConditions = schemaChanged || propertiesChanged || partitionsChanged;
-      if (!config.getBoolean(META_SYNC_CONDITIONAL_SYNC) || meetSyncConditions) {
+      if (!config.getBoolean(META_SYNC_CONDITIONAL_SYNC) || meetSyncConditions
+          || isLastCommitTimeSyncedBehindTimelineMidpoint(tableName)) {
         syncClient.updateLastCommitTimeSynced(tableName);
       }
       syncClient.updateHoodieWriterVersion(tableName);
@@ -289,6 +292,26 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         throw new HoodieHiveSyncException("failed to sync the table " + tableName, ex);
       }
     }
+  }
+
+  /**
+   * Checks whether the last synced commit trails the midpoint of the active commits timeline.
+   * Under conditional sync, no-op commits do not advance the sync marker, and once the marker
+   * falls behind the start of the active timeline, every subsequent round reads the archived
+   * timeline to compute the written and dropped partitions since the marker. Advancing the
+   * marker when it crosses the midpoint bounds that staleness with an infrequent marker update.
+   */
+  private boolean isLastCommitTimeSyncedBehindTimelineMidpoint(String tableName) {
+    Option<String> lastCommitTimeSynced = syncClient.getLastCommitTimeSynced(tableName);
+    if (!lastCommitTimeSynced.isPresent()) {
+      return false;
+    }
+    List<HoodieInstant> completedInstants = syncClient.getActiveTimeline().getInstants();
+    if (completedInstants.isEmpty()) {
+      return false;
+    }
+    String midpointInstantTime = completedInstants.get(completedInstants.size() / 2).requestedTime();
+    return compareTimestamps(lastCommitTimeSynced.get(), LESSER_THAN, midpointInstantTime);
   }
 
   private boolean isAlreadySynced(String tableName) {
