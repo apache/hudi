@@ -1433,11 +1433,30 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
         s"DESCRIPTOR default should populate reference on plain read (id=$id)")
     }
 
-    // read_blob() under CONTENT mode is what we use to verify the post-compaction bytes
-    // because read_blob() on INLINE rows throws under the DESCRIPTOR default. The bytes can
-    // only come back if HoodieSparkLanceReader's CONTENT pin held during the compactor's
-    // base-file read — otherwise untouched ids 3..5 would have been rewritten with null
-    // `data` and CONTENT-mode read would surface that.
+    // Plain projection under CONTENT first: on a regression this fails with an explicit
+    // "data is null" assertion, i.e. observable data loss, instead of read_blob()'s
+    // misleading DESCRIPTOR-mode IllegalStateException (the shape that made #19232 look
+    // like an error by design).
+    val contentRows = spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .select($"id", $"payload")
+      .orderBy($"id")
+      .collect()
+    assertEquals(numRows, contentRows.length)
+    contentRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val payload = row.getStruct(row.fieldIndex("payload"))
+      assertFalse(payload.isNullAt(payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"null data under CONTENT: the compaction rewrite dropped the bytes (id=$id)")
+      assertArrayEquals(expected(id),
+        payload.getAs[Array[Byte]](payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"INLINE data bytes must survive the compaction rewrite (id=$id)")
+    }
+
+    // read_blob() under CONTENT verifies the same bytes through the SQL expression path
+    // (read_blob() on INLINE rows throws under the DESCRIPTOR default, so CONTENT is
+    // required here).
     val viewName = s"${tableName}_view"
     spark.read.format("hudi")
       .option("hoodie.read.blob.inline.mode", "CONTENT")
@@ -1525,6 +1544,27 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     // Read back in CONTENT mode and assert every row's bytes survived the clustering rewrite.
     val allExpected: Map[Int, Array[Byte]] =
       (expectedPayloads.zipWithIndex.map { case (b, i) => i -> b } ++ extraPayloads).toMap
+
+    // Plain projection under CONTENT first: on a regression this fails with an explicit
+    // "data is null" assertion, i.e. observable data loss, instead of read_blob()'s
+    // misleading DESCRIPTOR-mode IllegalStateException (see #19232).
+    val contentRows = spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .select($"id", $"payload")
+      .orderBy($"id")
+      .collect()
+    assertEquals(allExpected.size, contentRows.length)
+    contentRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val payload = row.getStruct(row.fieldIndex("payload"))
+      assertFalse(payload.isNullAt(payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"null data under CONTENT: the clustering rewrite dropped the bytes (id=$id)")
+      assertArrayEquals(allExpected(id),
+        payload.getAs[Array[Byte]](payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"INLINE data bytes must survive the clustering rewrite (id=$id)")
+    }
+
     val viewName = s"${tableName}_view"
     spark.read.format("hudi")
       .option("hoodie.read.blob.inline.mode", "CONTENT")
