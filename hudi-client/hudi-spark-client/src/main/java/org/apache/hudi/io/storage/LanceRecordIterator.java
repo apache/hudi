@@ -57,7 +57,11 @@ import java.util.Map;
  */
 public final class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
 
-  /** Rows per {@code readAll} for BLOB reads. Must not exceed Lance's 512-row BLOB page size. */
+  /**
+   * Rows per {@code readAll} for BLOB reads. Must not exceed Lance's internal BLOB page size,
+   * which is 512 rows in lance-core 4.0.0 but is NOT exposed through any lance API; revalidate
+   * this constant against the batch-scale BLOB tests whenever {@code lance.version} is bumped.
+   */
   public static final int BLOB_READ_CHUNK_ROWS = 512;
 
   /**

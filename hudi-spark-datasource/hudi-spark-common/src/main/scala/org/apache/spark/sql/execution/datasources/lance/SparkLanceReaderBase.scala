@@ -150,7 +150,8 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
         // lance-core 4.0.0 aborts the JVM when a single readAll stream crosses Lance's internal
         // BLOB page boundary (512 rows). For BLOB-containing reads, drain the file in <=512-row
         // range chunks (one fresh readAll each); non-BLOB reads keep the single streamed reader.
-        lanceIterator = if (blobFieldNames.nonEmpty) {
+        // The detection recurses so a nested BLOB (unsupported by the writer today) still chunks.
+        lanceIterator = if (containsBlobField(iteratorSchema)) {
           LanceRecordIterator.chunkedBlobReader(
             allocator, lanceReader, columnNames, readOpts, lanceReader.numRows(),
             iteratorSchema, filePath, blobTransform)
@@ -257,6 +258,14 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
       md.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
       HoodieSchema.parseTypeDescriptor(md.getString(HoodieSchema.TYPE_METADATA_FIELD))
         .getType == HoodieSchemaType.BLOB
+  }
+
+  /** Recursively checks for a BLOB field (see [[isBlobField]]) at any nesting depth. */
+  private def containsBlobField(dt: DataType): Boolean = dt match {
+    case s: StructType => s.fields.exists(f => isBlobField(f) || containsBlobField(f.dataType))
+    case a: ArrayType => containsBlobField(a.elementType)
+    case m: MapType => containsBlobField(m.valueType)
+    case _ => false
   }
 
   private def forceFieldNullable(field: StructField): StructField =

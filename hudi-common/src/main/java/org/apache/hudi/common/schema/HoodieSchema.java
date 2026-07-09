@@ -1374,7 +1374,12 @@ public class HoodieSchema implements Serializable {
     return HoodieSchema.createUnion(nonNullTypes);
   }
 
-  boolean containsBlobType() {
+  /**
+   * Recursively checks whether this schema is or contains a BLOB type at any nesting depth,
+   * descending through arrays, maps, unions and record fields. Unlike {@link #isBlobField()},
+   * this also finds BLOBs nested inside records.
+   */
+  public boolean containsBlobType() {
     if (getType() == HoodieSchemaType.BLOB) {
       return true;
     } else if (getType() == HoodieSchemaType.ARRAY) {

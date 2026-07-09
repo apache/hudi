@@ -210,11 +210,10 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
       FileReadOptions readOpts = FileReadOptions.builder().blobReadMode(BlobReadMode.CONTENT).build();
 
       // BLOB reads must be chunked to dodge a lance-core FFI abort (see LanceRecordIterator).
-      // Unwrap a nullable UNION wrapper before checking whether the projection has a BLOB field.
-      HoodieSchema recordSchema = requestedSchema.getNonNullType();
-      boolean hasBlob = recordSchema.hasFields()
-          && recordSchema.getFields().stream().anyMatch(f -> f.schema().isBlobField());
-      if (hasBlob) {
+      // containsBlobType() recurses through nested records/arrays/maps/unions, so a BLOB at any
+      // depth routes through the chunked path; a top-level-only check would silently skip
+      // chunking (and re-introduce the abort) if the writer ever gains nested-BLOB support.
+      if (requestedSchema.containsBlobType()) {
         return LanceRecordIterator.chunkedBlobReader(allocator, lanceReader, columnNames, readOpts,
             lanceReader.numRows(), requestedSparkSchema, path.toString(), null);
       }
