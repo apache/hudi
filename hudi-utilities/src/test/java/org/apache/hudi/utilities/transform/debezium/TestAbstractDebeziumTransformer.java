@@ -215,11 +215,10 @@ class TestAbstractDebeziumTransformer extends DebeziumTransformerTestBase {
   }
 
   @Test
-  void testSchemaAsNullableFalseMakesMetadataColumnsNullableEvenIfSourceDeclaredNonNullable() {
-    // "op" is declared non-nullable at the envelope level, but it is a Debezium metadata column
-    // (not a __data-derived business column), so it must NOT be treated as a "known non-nullable
-    // source column" -- it should end up nullable in the output regardless of its declared
-    // nullability in the raw envelope schema.
+  void testSchemaAsNullableFalsePreservesNonNullableMetadataColumns() {
+    // "op" is declared non-nullable at the envelope level and is selected directly into the
+    // flattened _change_operation_type column, so Spark keeps it non-nullable. The transformer must
+    // preserve that non-nullability when schema.nullable.enable is disabled.
     StructType rowDataSchema = DataTypes.createStructType(Arrays.asList(
         DataTypes.createStructField("id", DataTypes.LongType, false, Metadata.empty()),
         DataTypes.createStructField("name", DataTypes.StringType, true, Metadata.empty())));
@@ -243,8 +242,8 @@ class TestAbstractDebeziumTransformer extends DebeziumTransformerTestBase {
 
     Dataset<Row> result = new TestableDebeziumTransformer().apply(jsc, spark, input, props);
 
-    assertTrue(result.schema().apply(DebeziumConstants.FLATTENED_OP_COL_NAME).nullable(),
-        "op is a Debezium metadata column, not a known non-nullable source column, so it must be nullable");
+    assertFalse(result.schema().apply(DebeziumConstants.FLATTENED_OP_COL_NAME).nullable(),
+        "op is selected directly from a non-nullable envelope field, so _change_operation_type stays non-nullable");
     assertFalse(result.schema().apply("id").nullable(), "id remains non-nullable as a known source column");
   }
 
