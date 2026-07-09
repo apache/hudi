@@ -19,10 +19,20 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -30,14 +40,20 @@ import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
 
   @BeforeEach
-  private void setup() throws IOException {
+  void setup() throws IOException {
     initPath();
     initFileSystem();
     initMetaClient();
+  }
+
+  @AfterEach
+  void teardown() throws IOException {
+    cleanupResources();
   }
 
   @ParameterizedTest
@@ -60,5 +76,61 @@ public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
     }
 
     writeClient.close();
+  }
+
+  @Test
+  public void testRestartHeartbeatStartsDataTableHeartbeatForLazyFailedWrites() throws IOException {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePath())
+        .withEngineType(EngineType.FLINK)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .build())
+        .build();
+
+    writeClient = new HoodieFlinkWriteClient(context, writeConfig);
+    String instantTime = "20260709120000000";
+    writeClient.restartHeartbeat(instantTime);
+
+    assertTrue(HoodieHeartbeatClient.heartbeatExists(
+        metaClient.getStorage(), metaClient.getBasePath().toString(), instantTime));
+
+    writeClient.releaseResources(instantTime);
+    assertFalse(HoodieHeartbeatClient.heartbeatExists(
+        metaClient.getStorage(), metaClient.getBasePath().toString(), instantTime));
+  }
+
+  @Test
+  public void testCleanResourcesCleansMetadataTableHeartbeatForStreamingMetadataWrites() throws IOException {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePath())
+        .withEngineType(EngineType.FLINK)
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .withIndexType(HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX)
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withStreamingWriteEnabled(true)
+            .withEnableGlobalRecordLevelIndex(true)
+            .build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .build())
+        .build();
+
+    writeClient = new HoodieFlinkWriteClient(context, writeConfig, true);
+    String instantTime = "20260709120000000";
+    writeClient.restartHeartbeat(instantTime);
+
+    String metadataTableBasePath = metaClient.getBasePath()
+        + "/" + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH;
+    assertTrue(HoodieHeartbeatClient.heartbeatExists(
+        metaClient.getStorage(), metadataTableBasePath, instantTime));
+
+    writeClient.cleanResources(instantTime);
+    assertFalse(HoodieHeartbeatClient.heartbeatExists(
+        metaClient.getStorage(), metaClient.getBasePath().toString(), instantTime));
+    assertFalse(HoodieHeartbeatClient.heartbeatExists(
+        metaClient.getStorage(), metadataTableBasePath, instantTime));
   }
 }

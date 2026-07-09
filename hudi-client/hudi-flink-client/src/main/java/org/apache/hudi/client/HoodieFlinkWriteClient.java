@@ -139,6 +139,20 @@ public class HoodieFlinkWriteClient<T>
   }
 
   /**
+   * Restart the heartbeat for a recommitted instant.
+   *
+   * @param instantTime The instant time
+   */
+  public void restartHeartbeat(String instantTime) {
+    if (getConfig().getFailedWritesCleanPolicy().isLazy()) {
+      getHeartbeatClient().start(instantTime);
+    }
+    if (isStreamingWriteMetadataTable) {
+      this.streamingMetadataWriteHandler.startHeartbeat(instantTime, getHoodieTable());
+    }
+  }
+
+  /**
    * Performs streaming write operations to metadata partitions.
    * This method retrieves the metadata writer for the given instant time and table,
    * validates that it exists, and then performs streaming writes of index records.

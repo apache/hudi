@@ -21,7 +21,10 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTableServiceManagerConfig;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -40,6 +43,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.MockedStatic;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.stream.Stream;
@@ -50,6 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doThrow;
@@ -57,9 +62,33 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 class TestHoodieBackedTableMetadataWriter {
+  @Test
+  void completeStreamingCommitSkipsAlreadyCompletedMetadataInstant() {
+    String instantTime = "20260709120000000";
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> metadataWriter =
+        mock(HoodieBackedTableMetadataWriter.class, CALLS_REAL_METHODS);
+    HoodieEngineContext engineContext = mock(HoodieEngineContext.class);
+    HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
+    HoodieTimeline completedTimeline = mock(HoodieTimeline.class);
+    BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+
+    metadataWriter.metadataMetaClient = metadataMetaClient;
+    when(metadataMetaClient.getActiveTimeline()).thenReturn(activeTimeline);
+    when(activeTimeline.filterCompletedInstants()).thenReturn(completedTimeline);
+    when(completedTimeline.containsInstant(instantTime)).thenReturn(true);
+    when(metadataWriter.initializeWriteClient()).thenReturn(writeClient);
+
+    metadataWriter.completeStreamingCommit(instantTime, engineContext, Collections.emptyList(), mock(HoodieCommitMetadata.class));
+
+    verify(writeClient).releaseResources(instantTime);
+    verifyNoMoreInteractions(writeClient);
+  }
+
   @ParameterizedTest
   @CsvSource(value = {
       "true,true,false,true",
