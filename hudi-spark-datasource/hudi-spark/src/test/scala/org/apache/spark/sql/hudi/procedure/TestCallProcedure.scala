@@ -161,7 +161,11 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
       }
 
       val instantTime = commits(1).get(0).toString
-      checkAnswer(s"""call rollback_to_instant(table => '$tableName', instant_time => '$instantTime')""")(Seq(true), Seq(true))
+      val rollbackResult = spark.sql(s"""call rollback_to_instant(table => '$tableName', instant_time => '$instantTime')""").collect()
+      assertResult(2) {
+        rollbackResult.length
+      }
+      assert(rollbackResult.forall(_.getBoolean(0)))
 
       commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
       assertResult(1) {

@@ -112,7 +112,7 @@ class RollbackToInstantTimeProcedure extends BaseProcedure with ProcedureBuilder
         }
       }
       spark.catalog.refreshTable(table)
-      res.asScala
+      res.asScala.toSeq
     } finally {
       if (client != null) {
         client.close()
