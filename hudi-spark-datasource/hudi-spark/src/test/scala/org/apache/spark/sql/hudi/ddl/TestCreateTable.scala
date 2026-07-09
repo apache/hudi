@@ -2064,6 +2064,11 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       // Verify structure matches blob schema
       assertTrue(videoField.dataType.isInstanceOf[StructType])
       assertEquals(BlobType(), videoField.dataType)
+
+      // The catalog-stored copy of the schema must retain the hudi_type metadata too
+      val catalogField = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+        .schema.find(_.name == "video").get
+      assertEquals(HoodieSchemaType.BLOB.name(), catalogField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
     }
   }
 
@@ -2183,6 +2188,11 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       assertEquals("VECTOR(128)", embeddingField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
       assertEquals("document embedding", embeddingField.metadata.getString("comment"))
       assertEquals(ArrayType(FloatType, containsNull = false), embeddingField.dataType)
+
+      // The catalog-stored copy of the schema must retain the hudi_type metadata too
+      val catalogField = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+        .schema.find(_.name == "embedding").get
+      assertEquals("VECTOR(128)", catalogField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
     }
   }
 
