@@ -320,6 +320,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             }
             distinctSortedKeyIter.forEachRemaining(keysList::add);
           }
+          // The shuffle above repartitions/sorts by String (UTF-16) order, but the HFile reader below
+          // does a forward-only seek in UTF-8 byte order. Re-sort so the two agree.
+          keysList.sort(StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR);
           FileSlice fileSlice = fileSlices.get(mappingFunction.apply(keysList.get(0), numFileSlices));
           return lookupRecordsItr(partitionName, keysList, fileSlice, !isSecondaryIndex);
         };
