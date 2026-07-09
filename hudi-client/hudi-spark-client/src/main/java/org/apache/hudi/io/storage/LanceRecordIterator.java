@@ -61,18 +61,18 @@ public final class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
   public static final int BLOB_READ_CHUNK_ROWS = 512;
 
   /**
-   * Supplies the sequence of {@link ArrowReader}s to drain, one after another. Single-reader
+   * The sequence of {@link ArrowReader}s to drain, one after another. Single-reader
    * mode yields one reader; BLOB chunked mode yields one fresh reader per row-range chunk. Each
    * returned reader is owned (and closed) by {@link LanceRecordIterator}.
    */
-  private interface ArrowReaderSupplier {
+  private interface ArrowReaderSequence {
     /** @return the next reader to drain, or {@code null} when the sequence is exhausted. */
     ArrowReader next() throws IOException;
   }
 
   private final BufferAllocator allocator;
   private final LanceFileReader lanceReader;
-  private final ArrowReaderSupplier readerSupplier;
+  private final ArrowReaderSequence readerSequence;
   private final StructType sparkSchema;
   private final UnsafeProjection projection;
   private final String path;
@@ -116,18 +116,18 @@ public final class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
                              StructType schema,
                              String path,
                              BlobDescriptorTransform blobTransform) {
-    this(allocator, lanceReader, singleReaderSupplier(arrowReader), schema, path, blobTransform);
+    this(allocator, lanceReader, singleReaderSequence(arrowReader), schema, path, blobTransform);
   }
 
   private LanceRecordIterator(BufferAllocator allocator,
                               LanceFileReader lanceReader,
-                              ArrowReaderSupplier readerSupplier,
+                              ArrowReaderSequence readerSequence,
                               StructType schema,
                               String path,
                               BlobDescriptorTransform blobTransform) {
     this.allocator = allocator;
     this.lanceReader = lanceReader;
-    this.readerSupplier = readerSupplier;
+    this.readerSequence = readerSequence;
     this.sparkSchema = schema;
     this.projection = UnsafeProjection.create(schema);
     this.path = path;
@@ -156,7 +156,7 @@ public final class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
                                                       StructType schema,
                                                       String path,
                                                       BlobDescriptorTransform blobTransform) {
-    ArrowReaderSupplier supplier = new ArrowReaderSupplier() {
+    ArrowReaderSequence sequence = new ArrowReaderSequence() {
       private long nextStart = 0;
 
       @Override
@@ -172,11 +172,11 @@ public final class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
         return lanceReader.readAll(columnNames, ranges, BLOB_READ_CHUNK_ROWS, readOpts);
       }
     };
-    return new LanceRecordIterator(allocator, lanceReader, supplier, schema, path, blobTransform);
+    return new LanceRecordIterator(allocator, lanceReader, sequence, schema, path, blobTransform);
   }
 
-  private static ArrowReaderSupplier singleReaderSupplier(ArrowReader arrowReader) {
-    return new ArrowReaderSupplier() {
+  private static ArrowReaderSequence singleReaderSequence(ArrowReader arrowReader) {
+    return new ArrowReaderSequence() {
       private ArrowReader remaining = arrowReader;
 
       @Override
@@ -202,7 +202,7 @@ public final class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
     try {
       while (true) {
         if (currentReader == null) {
-          currentReader = readerSupplier.next();
+          currentReader = readerSequence.next();
           if (currentReader == null) {
             return false;
           }
