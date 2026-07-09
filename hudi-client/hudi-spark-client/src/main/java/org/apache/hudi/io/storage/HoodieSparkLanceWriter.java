@@ -27,6 +27,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.lance.HoodieBaseLanceWriter;
 import org.apache.hudi.io.storage.row.HoodieBloomFilterRowWriteSupport;
@@ -88,6 +89,8 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
   // avoid leaking that internal lance-spark utility into Hudi APIs).
   private static final String LANCE_BLOB_ENCODING_KEY = "lance-encoding:blob";
   private static final String LANCE_BLOB_ENCODING_VALUE = "true";
+  // Precomputed INLINE type token, compared against each BLOB row's type field without per-row allocation.
+  private static final UTF8String INLINE_TYPE_TOKEN = UTF8String.fromString(HoodieSchema.Blob.INLINE);
 
   private final StructType sparkSchema;
   private final Schema arrowSchema;
@@ -96,6 +99,10 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
   private final boolean populateMetaFields;
   private final Function<Long, String> seqIdGenerator;
   private final long maxFileSize;
+  // Top-level BLOB column ordinals and their names (parallel arrays), used by the per-row
+  // descriptor-leak guard. Empty when the schema has no BLOB columns, making the guard a no-op.
+  private final int[] blobFieldOrdinals;
+  private final String[] blobFieldNames;
   private long recordCountForNextSizeCheck = MIN_RECORDS_FOR_SIZE_CHECK;
 
   /**
@@ -159,6 +166,20 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
     super(file, DEFAULT_BATCH_SIZE, allocatorSize, flushByteWatermark,
         bloomFilterOpt.map(HoodieBloomFilterRowWriteSupport::new));
     this.sparkSchema = enrichSparkSchemaForLance(sparkSchema);
+    StructField[] topFields = this.sparkSchema.fields();
+    List<Integer> blobOrds = new ArrayList<>();
+    for (int i = 0; i < topFields.length; i++) {
+      if (isBlobField(topFields[i])) {
+        blobOrds.add(i);
+      }
+    }
+    this.blobFieldOrdinals = new int[blobOrds.size()];
+    this.blobFieldNames = new String[blobOrds.size()];
+    for (int i = 0; i < blobOrds.size(); i++) {
+      int ord = blobOrds.get(i);
+      this.blobFieldOrdinals[i] = ord;
+      this.blobFieldNames[i] = topFields[ord].name();
+    }
     Schema baseArrow = LanceArrowUtils.toArrowSchema(this.sparkSchema, DEFAULT_TIMEZONE, true);
     // Force LargeBinary + `lance-encoding:blob=true` on each BLOB's nested `data` Arrow leaf.
     // Can't be expressed Spark-side: toArrowSchema drops nested-field metadata, and tagging
@@ -367,7 +388,7 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
 
   @Override
   protected ArrowWriter<InternalRow> createArrowWriter(VectorSchemaRoot root) {
-    return SparkArrowWriter.of(LanceArrowWriter.create(root, sparkSchema));
+    return SparkArrowWriter.of(LanceArrowWriter.create(root, sparkSchema), blobFieldOrdinals, blobFieldNames);
   }
 
   /**
@@ -446,10 +467,41 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
   @AllArgsConstructor(staticName = "of")
   private static class SparkArrowWriter implements ArrowWriter<InternalRow> {
     private final LanceArrowWriter lanceArrowWriter;
+    // Parallel arrays of top-level BLOB column ordinals and names for the per-row guard.
+    private final int[] blobFieldOrdinals;
+    private final String[] blobFieldNames;
 
     @Override
     public void write(InternalRow row) {
+      validateBlobRow(row);
       lanceArrowWriter.write(row);
+    }
+
+    /**
+     * Reject descriptor-shaped BLOB rows before they are persisted. A row is descriptor-shaped when
+     * a top-level BLOB struct is non-null, its type is INLINE, its data is null, and its reference
+     * is non-null; this only arises when a DESCRIPTOR-mode read leaks onto a write path, and writing
+     * it would silently drop the inline bytes. The legitimate empty-inline shape {INLINE, null, null}
+     * stays writable.
+     */
+    private void validateBlobRow(InternalRow row) {
+      for (int i = 0; i < blobFieldOrdinals.length; i++) {
+        int ordinal = blobFieldOrdinals[i];
+        if (row.isNullAt(ordinal)) {
+          continue;
+        }
+        InternalRow blob = row.getStruct(ordinal, 3);
+        if (blob.isNullAt(0) || !INLINE_TYPE_TOKEN.equals(blob.getUTF8String(0))) {
+          continue;
+        }
+        if (blob.isNullAt(1) && !blob.isNullAt(2)) {
+          throw new HoodieException(
+              "BLOB column '" + blobFieldNames[i] + "' has an INLINE row with null data but a "
+                  + "populated reference: a DESCRIPTOR-mode read leaked into the write path, and "
+                  + "persisting it would silently drop the blob bytes. Internal rewrites "
+                  + "(compaction, clustering, merge) must read with hoodie.read.blob.inline.mode=CONTENT.");
+        }
+      }
     }
 
     @Override
