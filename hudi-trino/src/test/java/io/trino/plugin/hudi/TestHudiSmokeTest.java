@@ -60,6 +60,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -1304,6 +1305,10 @@ public class TestHudiSmokeTest
                 List.of(createBaseColumn("created", 0, HIVE_TIMESTAMP, columnType, REGULAR, Optional.empty())),
                 hudiSplit,
                 new LocalInputFile(parquetFile),
+                parquetFile.getPath(),
+                0L,
+                parquetFile.length(),
+                OptionalLong.of(parquetFile.length()),
                 new FileFormatDataSourceStats(),
                 ParquetReaderOptions.builder().build(),
                 DateTimeZone.UTC, DynamicFilter.EMPTY, true)) {

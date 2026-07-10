@@ -82,6 +82,18 @@ public class MaxRankRecordMerger
         return fields.toArray(new String[0]);
     }
 
+    /**
+     * Merging depends only on {@code merge_rank}, which is declared mandatory above, so it works on projected
+     * records. Without this override the file-group reader reads ALL table columns for merging, which the Trino
+     * connector does not support -- it can only resolve columns in the projection plus the merger's declared
+     * mandatory fields.
+     */
+    @Override
+    public boolean isProjectionCompatible()
+    {
+        return true;
+    }
+
     @Override
     public HoodieRecord.HoodieRecordType getRecordType()
     {

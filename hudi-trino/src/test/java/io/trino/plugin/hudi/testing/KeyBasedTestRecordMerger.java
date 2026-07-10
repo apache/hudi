@@ -59,6 +59,17 @@ public class KeyBasedTestRecordMerger
         return Character.isDigit(last) && ((last - '0') % 2 == 1);
     }
 
+    /**
+     * Merging depends only on the record key, so it works on projected records. Without this override the
+     * file-group reader reads ALL table columns for merging, which the Trino connector does not support --
+     * it can only resolve columns in the projection plus the merger's declared mandatory fields.
+     */
+    @Override
+    public boolean isProjectionCompatible()
+    {
+        return true;
+    }
+
     @Override
     public HoodieRecord.HoodieRecordType getRecordType()
     {

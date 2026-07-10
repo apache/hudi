@@ -183,21 +183,26 @@ public class HudiPageSourceProvider
         List<HiveColumnHandle> hudiMetaAndDataColumnHandles = prependHudiMetaAndOrderingColumns(hudiTableHandle, dataColumnHandles);
 
         TrinoFileSystem fileSystem = fileSystemFactory.create(session);
+        ParquetReaderOptions sessionOptions = ParquetReaderOptions.builder(options)
+                .withIgnoreStatistics(isParquetIgnoreStatistics(session))
+                .withMaxReadBlockSize(getParquetMaxReadBlockSize(session))
+                .withMaxReadBlockRowCount(getParquetMaxReadBlockRowCount(session))
+                .withSmallFileThreshold(getParquetSmallFileThreshold(session))
+                .withUseColumnIndex(isParquetUseColumnIndex(session))
+                .withBloomFilter(useParquetBloomFilter(session))
+                .withVectorizedDecodingEnabled(isParquetVectorizedDecodingEnabled(session))
+                .build();
         ConnectorPageSource dataPageSource = createPageSource(
                 session,
                 isBaseFileOnly ? dataColumnHandles : hudiMetaAndDataColumnHandles,
                 hudiSplit,
                 fileSystem.newInputFile(Location.of(hudiBaseFileOpt.get().getPath()), hudiBaseFileOpt.get().getFileSize()),
+                hudiBaseFileOpt.get().getPath(),
+                start,
+                length,
+                OptionalLong.of(hudiBaseFileOpt.get().getFileSize()),
                 dataSourceStats,
-                ParquetReaderOptions.builder(options)
-                        .withIgnoreStatistics(isParquetIgnoreStatistics(session))
-                        .withMaxReadBlockSize(getParquetMaxReadBlockSize(session))
-                        .withMaxReadBlockRowCount(getParquetMaxReadBlockRowCount(session))
-                        .withSmallFileThreshold(getParquetSmallFileThreshold(session))
-                        .withUseColumnIndex(isParquetUseColumnIndex(session))
-                        .withBloomFilter(useParquetBloomFilter(session))
-                        .withVectorizedDecodingEnabled(isParquetVectorizedDecodingEnabled(session))
-                        .build(),
+                sessionOptions,
                 timeZone, dynamicFilter, isBaseFileOnly);
 
         SynthesizedColumnHandler synthesizedColumnHandler = SynthesizedColumnHandler.create(hudiSplit);
@@ -214,13 +219,31 @@ public class HudiPageSourceProvider
         // TODO: Move this into HudiTableHandle
         HoodieTableMetaClient metaClient = buildTableMetaClient(
                 fileSystemFactory.create(session), hudiTableHandle.getSchemaTableName().toString(), hudiTableHandle.getBasePath());
+        // Build native (RFC-103) delta-log parquet page sources on demand, projected on the file-group
+        // reader's requiredSchema with predicate pushdown OFF so every log record is read and merged.
+        HudiTrinoReaderContext.LogFileParquetPageSourceFactory logPageSourceFactory =
+                (logPath, logStart, logLength, projection) -> createPageSource(
+                        session,
+                        projection,
+                        hudiSplit,
+                        fileSystem.newInputFile(Location.of(logPath)),
+                        logPath,
+                        logStart,
+                        logLength,
+                        OptionalLong.empty(),
+                        dataSourceStats,
+                        sessionOptions,
+                        timeZone,
+                        DynamicFilter.EMPTY,
+                        false);
         HudiTrinoReaderContext readerContext = new HudiTrinoReaderContext(
                 metaClient.getStorageConf(),
                 metaClient.getTableConfig(),
                 dataPageSource,
                 dataColumnHandles,
                 hudiMetaAndDataColumnHandles,
-                synthesizedColumnHandler);
+                synthesizedColumnHandler,
+                logPageSourceFactory);
         HoodieSchema dataSchema =
                 Optional.ofNullable(hudiTableHandle.getTableSchema())
                         .orElseGet(() -> getLatestTableSchema(metaClient, hudiTableHandle.getTableName()));
@@ -272,6 +295,10 @@ public class HudiPageSourceProvider
             List<HiveColumnHandle> columns,
             HudiSplit hudiSplit,
             TrinoInputFile inputFile,
+            String path,
+            long start,
+            long length,
+            OptionalLong estimatedFileSize,
             FileFormatDataSourceStats dataSourceStats,
             ParquetReaderOptions options,
             DateTimeZone timeZone,
@@ -280,13 +307,9 @@ public class HudiPageSourceProvider
     {
         ParquetDataSource dataSource = null;
         boolean useColumnNames = shouldUseParquetColumnNames(session);
-        HudiBaseFile baseFile = hudiSplit.getBaseFile().get();
-        String path = baseFile.getPath();
-        long start = baseFile.getStart();
-        long length = baseFile.getLength();
         try {
             AggregatedMemoryContext memoryContext = newSimpleAggregatedMemoryContext();
-            dataSource = createDataSource(inputFile, OptionalLong.of(baseFile.getFileSize()), options, memoryContext, dataSourceStats);
+            dataSource = createDataSource(inputFile, estimatedFileSize, options, memoryContext, dataSourceStats);
             ParquetMetadata parquetMetadata = MetadataReader.readFooter(dataSource, Optional.empty());
             FileMetadata fileMetaData = parquetMetadata.getFileMetaData();
             MessageType fileSchema = fileMetaData.getSchema();
