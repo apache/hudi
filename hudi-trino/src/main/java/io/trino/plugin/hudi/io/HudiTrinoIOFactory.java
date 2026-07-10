@@ -46,7 +46,11 @@ public class HudiTrinoIOFactory
     @Override
     public FileFormatUtils getFileFormatUtils(HoodieFileFormat fileFormat)
     {
-        throw new UnsupportedOperationException("FileFormatUtils not supported in HudiTrinoIOFactory");
+        if (fileFormat == HoodieFileFormat.PARQUET) {
+            return new HudiTrinoParquetFileFormatUtils();
+        }
+        throw new UnsupportedOperationException(
+                "Native " + fileFormat + " log files are not supported by the Hudi Trino connector");
     }
 
     @Override
