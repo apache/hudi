@@ -428,7 +428,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     } else {
       // if auto initialization is enabled, then we need to list all partitions from the file system
       if (dataWriteConfig.getMetadataConfig().shouldAutoInitialize()) {
-        partitionInfoList = listAllPartitionsFromFilesystem(dataTableInstantTime, pendingDataInstants);
+        partitionInfoList = listAllPartitionsFromFilesystem(dataTableInstantTime, pendingDataInstants,
+            dataWriteConfig.getMetadataConfig().shouldSkipZeroSizeFilesOnInitialize());
       } else {
         // if auto initialization is disabled, we can return an empty list
         partitionInfoList = Collections.emptyList();
@@ -1063,9 +1064,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    *
    * @param initializationTime  Files which have a timestamp after this are neglected
    * @param pendingDataInstants Pending instants on data set
+   * @param skipZeroSizeFiles   Whether to skip zero-size files during listing
    * @return List consisting of {@code DirectoryInfo} for each partition found.
    */
-  private List<DirectoryInfo> listAllPartitionsFromFilesystem(String initializationTime, Set<String> pendingDataInstants) {
+  private List<DirectoryInfo> listAllPartitionsFromFilesystem(String initializationTime, Set<String> pendingDataInstants, boolean skipZeroSizeFiles) {
     if (dataMetaClient.getActiveTimeline().countInstants() == 0) {
       return Collections.emptyList();
     }
@@ -1076,7 +1078,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
     StorageConfiguration<?> storageConf = dataMetaClient.getStorageConf();
     final String dirFilterRegex = dataWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
-    final boolean skipZeroSizeFiles = dataWriteConfig.getMetadataConfig().shouldSkipZeroSizeFilesOnInitialize();
     StoragePath storageBasePath = dataMetaClient.getBasePath();
     long totalZeroSizeFiles = 0;
 
@@ -1117,8 +1118,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       }
     }
 
-    final long zeroSizeCount = totalZeroSizeFiles;
-    metrics.ifPresent(m -> m.incrementMetric("skipped_zero_size_files_on_initialize", zeroSizeCount));
+    if (skipZeroSizeFiles) {
+      final long zeroSizeCount = totalZeroSizeFiles;
+      metrics.ifPresent(m -> m.incrementMetric("skipped_zero_size_files_on_initialize", zeroSizeCount));
+    }
     return partitionsToBootstrap;
   }
 
@@ -1741,7 +1744,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     // Restore requires the existing pipelines to be shutdown. So we can safely scan the dataset to find the current
     // list of files in the filesystem.
-    List<DirectoryInfo> dirInfoList = listAllPartitionsFromFilesystem(instantTime, Collections.emptySet());
+    List<DirectoryInfo> dirInfoList = listAllPartitionsFromFilesystem(instantTime, Collections.emptySet(), false);
     Map<String, DirectoryInfo> dirInfoMap = dirInfoList.stream().collect(Collectors.toMap(DirectoryInfo::getRelativePath, Function.identity()));
     dirInfoList.clear();
 
