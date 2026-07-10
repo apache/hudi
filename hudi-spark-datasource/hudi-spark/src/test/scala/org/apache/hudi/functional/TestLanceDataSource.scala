@@ -1441,11 +1441,14 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
         s"DESCRIPTOR default should populate reference on plain read (id=$id)")
     }
 
-    // Plain projection under CONTENT: a DESCRIPTOR leak ({INLINE, null data, populated
-    // reference}) can no longer reach the base file -- HoodieSparkLanceWriter.validateBlobRow
-    // fails the compaction rewrite itself -- so this backstops the shape the guard deliberately
-    // allows, {INLINE, null, null}, where dropped bytes would land silently. The CONTENT pin on
-    // internal reads is unit-tested in TestSparkReaderContextFactory.
+    // Byte check via a plain projection under CONTENT. A broken rewrite could produce two shapes:
+    // - {INLINE, null data, populated reference}: a DESCRIPTOR-mode read leaked into the write
+    //   path. HoodieSparkLanceWriter.validateBlobRow rejects this shape and fails the compaction
+    //   itself, so it can never reach the base file.
+    // - {INLINE, null data, null reference}: legitimate for an empty inline blob, so the writer
+    //   guard lets it through. If a rewrite dropped the bytes this way, only the null-data
+    //   assertion below would catch it.
+    // The CONTENT pin on internal reads is unit-tested in TestSparkReaderContextFactory.
     val contentRows = spark.read.format("hudi")
       .option("hoodie.read.blob.inline.mode", "CONTENT")
       .load(tablePath)
@@ -1518,25 +1521,6 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       spark.createDataFrame(rawDf.rdd, canonicalSchema)
     }
 
-    // Latest base file names for a timeline snapshot, used to prove clustering rewrote the base file(s).
-    def latestBaseFileNames(mc: HoodieTableMetaClient): Set[String] = {
-      val engineContext = new HoodieLocalEngineContext(mc.getStorageConf)
-      val metadataConfig = HoodieMetadataConfig.newBuilder.build
-      val viewManager = FileSystemViewManager.createViewManager(
-        engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
-        HoodieCommonConfig.newBuilder.build,
-        (m: HoodieTableMetaClient) => mc.getTableFormat
-          .getMetadataFactory.create(engineContext, m.getStorage, metadataConfig, tablePath))
-      val fsView = viewManager.getFileSystemView(mc)
-      try {
-        fsView.getLatestBaseFiles("")
-          .collect(Collectors.toList[org.apache.hudi.common.model.HoodieBaseFile])
-          .asScala.map(_.getFileName).toSet
-      } finally {
-        fsView.close()
-      }
-    }
-
     // First commit: bulk_insert ids 0..4 with the initial pattern into a base file.
     writeDataframe(tableType, tableName, tablePath,
       asInlineDf(expectedPayloads.zipWithIndex.map { case (b, i) => (i, b) }),
@@ -1552,7 +1536,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .setConf(HoodieTestUtils.getDefaultStorageConf)
       .setBasePath(tablePath)
       .build()
-    val preClusterBaseFiles = latestBaseFileNames(metaClientAfterFirst)
+    val preClusterBaseFiles = latestBaseFileNames(metaClientAfterFirst, tablePath)
     assertFalse(preClusterBaseFiles.isEmpty, "First commit should have written at least one base file")
 
     // Second commit: a small bulk_insert that trips inline clustering (max.commits=1). Clustering
@@ -1581,7 +1565,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     // ...and that it rewrote the base file(s) into new ones. Disjoint sets prove the rewrite ran
     // instead of the byte checks reading untouched originals (#19232).
-    val postClusterBaseFiles = latestBaseFileNames(metaClient)
+    val postClusterBaseFiles = latestBaseFileNames(metaClient, tablePath)
     assertTrue(preClusterBaseFiles.intersect(postClusterBaseFiles).isEmpty,
       s"Post-clustering base files must be disjoint from the pre-clustering base file(s), proving the " +
         s"rewrite ran (pre=$preClusterBaseFiles, post=$postClusterBaseFiles)")
@@ -1590,10 +1574,10 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     val allExpected: Map[Int, Array[Byte]] =
       (expectedPayloads.zipWithIndex.map { case (b, i) => i -> b } ++ extraPayloads).toMap
 
-    // Plain projection under CONTENT: as in the compaction test, validateBlobRow already fails
-    // the rewrite on a DESCRIPTOR leak ({INLINE, null data, populated reference}); this
-    // backstops the allowed {INLINE, null, null} shape, where dropped bytes would land silently.
-    // The CONTENT pin on internal reads is unit-tested in TestSparkReaderContextFactory.
+    // Byte check via a plain projection under CONTENT. As in the compaction test: a DESCRIPTOR
+    // leak already fails the rewrite in HoodieSparkLanceWriter.validateBlobRow, so what this
+    // catches is the guard-allowed empty-inline shape {INLINE, null data, null reference},
+    // where dropped bytes would persist silently.
     val contentRows = spark.read.format("hudi")
       .option("hoodie.read.blob.inline.mode", "CONTENT")
       .load(tablePath)
@@ -1624,6 +1608,187 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       val bytes = row.getAs[Array[Byte]]("bytes")
       assertArrayEquals(allExpected(id), bytes,
         s"read_blob() must return correct bytes post-clustering (id=$id)")
+    }
+  }
+
+  /**
+   * A CoW upsert merge must preserve INLINE blob bytes under the DESCRIPTOR default.
+   *
+   * Compaction and clustering (covered above) obtain their reader through
+   * {@code HoodieEngineContext.getReaderContextFactory}. A CoW upsert takes a different path: it
+   * rewrites the base file through FileGroupReaderBasedMergeHandle, which resolves its reader
+   * through {@code getReaderContextFactoryForWrite}. That method branches on the record merger
+   * type: AvroReaderContextFactory for AVRO, SparkReaderContextFactory for SPARK (the datasource
+   * default, used here). A DESCRIPTOR leak on this branch would rewrite untouched rows with null
+   * {@code data}, the same silent loss as #19232.
+   *
+   * The test bulk-inserts INLINE blobs into a single file group, upserts a subset, proves the
+   * merge rewrote the base file, and verifies touched rows carry the new bytes while untouched
+   * rows keep the originals.
+   */
+  @Test
+  def testBlobInlineCowUpsertMergeRoundTrip(): Unit = {
+    val tableType = HoodieTableType.COPY_ON_WRITE
+    val tableName = "test_lance_blob_inline_upsert_merge_cow"
+    val tablePath = s"$basePath/$tableName"
+
+    val payloadLen = 1024
+    val numRows = 6
+    val initialPayloads: Seq[Array[Byte]] = (0 until numRows).map { i =>
+      (0 until payloadLen).map(j => ((i + j) % 256).toByte).toArray
+    }
+    val sparkSess = spark
+    import sparkSess.implicits._
+
+    val canonicalSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("payload", BlobType().asInstanceOf[StructType], nullable = true,
+        BlobTestHelpers.blobMetadata)
+    ))
+    def asInlineDf(idToBytes: Seq[(Int, Array[Byte])]): DataFrame = {
+      val rawDf = idToBytes.toDF("id", "bytes")
+        .select($"id", BlobTestHelpers.inlineBlobStructCol("payload", $"bytes"))
+      spark.createDataFrame(rawDf.rdd, canonicalSchema).coalesce(1)
+    }
+
+    // First commit: bulk_insert ids 0..5 into a single base file. A single file group is required
+    // so the untouched ids 3..5 genuinely pass through the merge rewrite; in their own group the
+    // upsert would never touch them and the byte checks below would pass vacuously.
+    writeDataframe(tableType, tableName, tablePath,
+      asInlineDf(initialPayloads.zipWithIndex.map { case (b, i) => (i, b) }),
+      saveMode = SaveMode.Overwrite,
+      operation = Some("bulk_insert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id",
+        "hoodie.bulkinsert.shuffle.parallelism" -> "1",
+        "hoodie.insert.shuffle.parallelism" -> "1"))
+
+    assertLanceBlobEncoding(tablePath)
+
+    val metaClientAfterFirst = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+    val preUpsertBaseFiles = latestBaseFileNames(metaClientAfterFirst, tablePath)
+    assertEquals(1, preUpsertBaseFiles.size,
+      s"All rows must land in exactly one base file (coalesce(1) + shuffle parallelism 1) at " +
+        s"$tablePath, got $preUpsertBaseFiles; otherwise untouched ids sit in file groups the " +
+        s"upsert never rewrites and the merge path is not exercised")
+
+    // Second commit: upsert ids 0..2 with all-0xEE payloads. On CoW this routes every existing
+    // file-group record through the merge handle's CONTENT-pinned base-file read and rewrite.
+    val updatedPayloadByte: Byte = 0xEE.toByte
+    val updatedIds = 0 until 3
+    val updatedPayloads = updatedIds.map(i => (i, Array.fill[Byte](payloadLen)(updatedPayloadByte)))
+    writeDataframe(tableType, tableName, tablePath,
+      asInlineDf(updatedPayloads),
+      operation = Some("upsert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id"))
+
+    // The upsert must have stayed on the CoW commit path: two completed commits, no deltacommits
+    // (a deltacommit would mean an append path that never rewrites the base file).
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+    val completedInstants = metaClient.reloadActiveTimeline().filterCompletedInstants()
+      .getInstants.asScala
+    assertEquals(2, completedInstants.count(_.getAction == "commit"),
+      "Expected exactly two completed commits (bulk_insert + upsert) on CoW")
+    assertTrue(completedInstants.forall(_.getAction != "deltacommit"),
+      "CoW upsert must not write deltacommits; the merge rewrite would not be exercised")
+
+    // The merge must also have replaced the base file: a single new name, disjoint from the
+    // pre-upsert one. If the old name were still the latest, the untouched ids were never
+    // merged and the byte checks below would read stale bytes.
+    val postUpsertBaseFiles = latestBaseFileNames(metaClient, tablePath)
+    assertEquals(1, postUpsertBaseFiles.size,
+      s"Upsert must keep all rows in one file group, got $postUpsertBaseFiles")
+    assertTrue(preUpsertBaseFiles.intersect(postUpsertBaseFiles).isEmpty,
+      s"Post-upsert base file must differ from the pre-upsert one, proving the merge rewrote it " +
+        s"(pre=$preUpsertBaseFiles, post=$postUpsertBaseFiles)")
+
+    val expected: Map[Int, Array[Byte]] = (
+      updatedIds.map(i => i -> Array.fill[Byte](payloadLen)(updatedPayloadByte)) ++
+        (updatedIds.length until numRows).map(i => i -> initialPayloads(i))
+      ).toMap
+
+    // Plain read yields the DESCRIPTOR shape, confirming the user-facing default end-to-end.
+    val readRows = spark.read.format("hudi")
+      .load(tablePath)
+      .select($"id", $"payload")
+      .orderBy($"id")
+      .collect()
+    assertEquals(numRows, readRows.length)
+    readRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val payload = row.getStruct(row.fieldIndex("payload"))
+      assertEquals(HoodieSchema.Blob.INLINE,
+        payload.getString(payload.fieldIndex(HoodieSchema.Blob.TYPE)),
+        s"Type must remain INLINE post-merge (id=$id)")
+      assertTrue(payload.isNullAt(payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"DESCRIPTOR default should null `data` on plain read (id=$id)")
+      assertNotNull(payload.getStruct(payload.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)),
+        s"DESCRIPTOR default should populate reference on plain read (id=$id)")
+    }
+
+    // Byte check via a plain projection under CONTENT. As in the compaction test: a DESCRIPTOR
+    // leak already fails the merge in HoodieSparkLanceWriter.validateBlobRow, so what this
+    // catches is the guard-allowed empty-inline shape {INLINE, null data, null reference},
+    // where dropped bytes would persist silently.
+    val contentRows = spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .select($"id", $"payload")
+      .orderBy($"id")
+      .collect()
+    assertEquals(numRows, contentRows.length)
+    contentRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val payload = row.getStruct(row.fieldIndex("payload"))
+      assertFalse(payload.isNullAt(payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"null data under CONTENT: the merge rewrite dropped the bytes (id=$id)")
+      assertArrayEquals(expected(id),
+        payload.getAs[Array[Byte]](payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"INLINE data bytes must survive the merge rewrite (id=$id)")
+    }
+
+    // read_blob() under CONTENT verifies the same bytes through the SQL expression path.
+    val viewName = s"${tableName}_view"
+    spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(viewName)
+    val materializedRows = spark.sql(
+      s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
+    assertEquals(numRows, materializedRows.length)
+    materializedRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val bytes = row.getAs[Array[Byte]]("bytes")
+      assertArrayEquals(expected(id), bytes,
+        s"read_blob() must return correct bytes post-merge (id=$id)")
+    }
+  }
+
+  /**
+   * Latest base file name per file group under {@code tablePath}. Snapshots taken before and
+   * after a rewriting table service (clustering, CoW upsert merge) are compared for disjointness
+   * to prove the rewrite actually replaced the base file(s).
+   */
+  private def latestBaseFileNames(mc: HoodieTableMetaClient, tablePath: String): Set[String] = {
+    val engineContext = new HoodieLocalEngineContext(mc.getStorageConf)
+    val metadataConfig = HoodieMetadataConfig.newBuilder.build
+    val viewManager = FileSystemViewManager.createViewManager(
+      engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
+      HoodieCommonConfig.newBuilder.build,
+      (m: HoodieTableMetaClient) => mc.getTableFormat
+        .getMetadataFactory.create(engineContext, m.getStorage, metadataConfig, tablePath))
+    val fsView = viewManager.getFileSystemView(mc)
+    try {
+      fsView.getLatestBaseFiles("")
+        .collect(Collectors.toList[org.apache.hudi.common.model.HoodieBaseFile])
+        .asScala.map(_.getFileName).toSet
+    } finally {
+      fsView.close()
     }
   }
 
