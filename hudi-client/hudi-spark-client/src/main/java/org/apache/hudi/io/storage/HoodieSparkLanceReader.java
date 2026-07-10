@@ -208,8 +208,16 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
       // Pinned to CONTENT: compaction/merge/log-replay need actual bytes to rewrite.
       // The user-facing `hoodie.read.blob.inline.mode` is honored by SparkLanceReaderBase.
       FileReadOptions readOpts = FileReadOptions.builder().blobReadMode(BlobReadMode.CONTENT).build();
-      ArrowReader arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE, readOpts);
 
+      // BLOB reads must be chunked to dodge a lance-core FFI abort (see LanceRecordIterator).
+      // containsBlobType() recurses through nested records/arrays/maps/unions, so a BLOB at any
+      // depth routes through the chunked path; a top-level-only check would silently skip
+      // chunking (and re-introduce the abort) if the writer ever gains nested-BLOB support.
+      if (requestedSchema.containsBlobType()) {
+        return LanceRecordIterator.chunkedBlobReader(allocator, lanceReader, columnNames, readOpts,
+            lanceReader.numRows(), requestedSparkSchema, path.toString(), null);
+      }
+      ArrowReader arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE, readOpts);
       return new LanceRecordIterator(allocator, lanceReader, arrowReader, requestedSparkSchema, path.toString());
     } catch (Exception e) {
       allocator.close();

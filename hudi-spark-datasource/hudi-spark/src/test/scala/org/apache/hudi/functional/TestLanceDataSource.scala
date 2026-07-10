@@ -991,7 +991,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     // read_blob() on INLINE rows under DESCRIPTOR mode is unsupported by design: DESCRIPTOR
     // is metadata-only and the synthesized reference is an internal pointer into the .lance
     // file's storage layout, not user-facing metadata. BatchedBlobReader must throw with a
-    // message that names both INLINE and DESCRIPTOR so the failure is actionable.
+    // message that names INLINE, DESCRIPTOR and the CONTENT fix so the failure is actionable
     val viewName = s"${tableName}_view"
     spark.read.format("hudi")
       .option(modeKey, "DESCRIPTOR")
@@ -1004,8 +1004,8 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     })
     val msgChain = Iterator.iterate[Throwable](ex)(_.getCause).takeWhile(_ != null)
       .flatMap(t => Option(t.getMessage)).mkString(" | ")
-    assertTrue(msgChain.contains("INLINE") && msgChain.contains("DESCRIPTOR"),
-      s"error must mention INLINE and DESCRIPTOR; got: $msgChain")
+    assertTrue(Seq("INLINE", "DESCRIPTOR", "CONTENT").forall(msgChain.contains),
+      s"error must name INLINE, DESCRIPTOR and the CONTENT fix; got: $msgChain")
   }
 
   /**
@@ -1981,6 +1981,253 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     writer.mode(saveMode).save(tablePath)
   }
+
+  // The small-n blob tests above all read fewer than 512 rows, so they never cross Lance's
+  // internal BLOB page boundary (512 rows). BLOB reads regress specifically once a single base
+  // file holds more than 512 rows: a single Lance readAll stream then exports a second BLOB page
+  // through the Arrow C FFI, which panics in lance-core 4.0.0. These tests size the base file
+  // above 512 rows (single coalesced file) to exercise the chunked-read work-around.
+  private val BATCH_SCALE_ROWS = 1000
+  private val BATCH_SCALE_PARALLELISM_OPTS = Map(
+    "hoodie.bulkinsert.shuffle.parallelism" -> "1",
+    "hoodie.insert.shuffle.parallelism" -> "1")
+
+  /**
+   * Batch-scale INLINE BLOB read regression (HUDI-UNSTRUCTURED-001). Writes
+   * {@code BATCH_SCALE_ROWS} inline-blob rows into a single Lance base file and reads them back
+   * under CONTENT mode, materializing each via {@code read_blob()}. Reproduces the native Lance
+   * BLOB decoder failure that only surfaces once the read crosses the 512-row batch boundary.
+   */
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testBlobInlineContentBatchScale(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_blob_inline_batch_${tableType.name().toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    val payloadLen = 256
+    val n = BATCH_SCALE_ROWS
+    val sparkSess = spark
+    import sparkSess.implicits._
+    // Deterministic per-row payload: row i -> bytes (i + j) % 256, so a row/byte misalignment
+    // across the batch boundary surfaces as a byte mismatch rather than silently passing.
+    def payloadFor(i: Int): Array[Byte] =
+      (0 until payloadLen).map(j => ((i + j) % 256).toByte).toArray
+    val baseDf = (0 until n).map(i => (i, payloadFor(i)))
+      .toDF("id", "bytes")
+      .coalesce(1)
+    val rawDf = baseDf.select($"id", BlobTestHelpers.inlineBlobStructCol("payload", $"bytes"))
+    val canonicalSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("payload", BlobType().asInstanceOf[StructType], nullable = true,
+        BlobTestHelpers.blobMetadata)
+    ))
+    val df = spark.createDataFrame(rawDf.rdd, canonicalSchema).coalesce(1)
+
+    writeDataframe(tableType, tableName, tablePath, df, saveMode = SaveMode.Overwrite,
+      operation = Some("bulk_insert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id") ++ BATCH_SCALE_PARALLELISM_OPTS)
+
+    assertLanceBlobEncoding(tablePath)
+    assertSingleLanceBaseFileSpansMultipleBatches(tablePath)
+
+    val viewName = s"${tableName}_view"
+    spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(viewName)
+    val materialized = spark.sql(
+      s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
+    assertEquals(n, materialized.length, "row count mismatch after read_blob at batch scale")
+    materialized.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val bytes = row.getAs[Array[Byte]]("bytes")
+      assertArrayEquals(payloadFor(id), bytes, s"inline read_blob() bytes mismatch for id=$id")
+    }
+  }
+
+  /**
+   * Comprehensive batch-scale VECTOR + OUT_OF_LINE BLOB regression (HUDI-UNSTRUCTURED-002 and 003).
+   * Parameterized over table type and {@code n} in {100, 1000}; n=1000 crosses the 512-row BLOB page
+   * boundary that trips the lance-core FFI panic without the chunked-read fix. Writes one Lance base
+   * file with a VECTOR(32) and an OUT_OF_LINE BLOB column, then validates across DataFrame and SQL
+   * reads: row count; exact vector values (incl. rows straddling the boundary); top-k IDs via
+   * {@code hudi_vector_search}; column projection and id-range filtering; {@code read_blob()} bytes +
+   * SHA-256 (full and filtered); and DESCRIPTOR-mode reference pass-through. Default Lance read
+   * allocator (256MB) suffices — no non-default settings required.
+   */
+  @ParameterizedTest
+  @MethodSource(Array("vectorBlobBatchParams"))
+  def testVectorAndBlobBatchScale(tableType: HoodieTableType, n: Int): Unit = {
+    val tableName = s"test_lance_vec_blob_batch_${n}_${tableType.name().toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    val dim = 32
+    val payloadLen = 512
+    val externalDir = Files.createDirectories(
+      Paths.get(s"$basePath/_vec_blob_ext_${n}_${tableType.name().toLowerCase}"))
+    val extPath = BlobTestHelpers.createTestFile(externalDir, "vec_blob.bin", n * payloadLen)
+
+    val sparkSess = spark
+    import sparkSess.implicits._
+    // Deterministic, strictly monotonic-by-id vector: row i -> [(i*dim+j)/1000f]. Monotonicity
+    // makes nearest-neighbor ordering predictable; per-row distinctness makes a row/value
+    // misalignment across the batch boundary surface as a value (or top-k) mismatch.
+    def vectorFor(i: Int): Array[Float] = (0 until dim).map(j => (i * dim + j) / 1000.0f).toArray
+    // Deterministic blob bytes for row i: (i*payloadLen + k) % 256, matching assertBytesContent.
+    def expectedBlob(i: Int): Array[Byte] =
+      (0 until payloadLen).map(k => ((i * payloadLen + k) % 256).toByte).toArray
+    def sha256(bytes: Array[Byte]): Seq[Byte] =
+      java.security.MessageDigest.getInstance("SHA-256").digest(bytes).toSeq
+
+    val baseDf = (0 until n)
+      .map(i => (i, vectorFor(i), extPath, (i.toLong * payloadLen), payloadLen.toLong))
+      .toDF("id", "embedding", "path", "offset", "length")
+      .coalesce(1)
+    val rawDf = baseDf.select($"id", $"embedding",
+      BlobTestHelpers.blobStructCol("payload", $"path", $"offset", $"length"))
+    val vectorMeta = new MetadataBuilder()
+      .putString(HoodieSchema.TYPE_METADATA_FIELD, s"VECTOR($dim)").build()
+    val canonicalSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("embedding", ArrayType(FloatType, containsNull = false), nullable = false,
+        vectorMeta),
+      StructField("payload", BlobType().asInstanceOf[StructType], nullable = true,
+        BlobTestHelpers.blobMetadata)
+    ))
+    val df = spark.createDataFrame(rawDf.rdd, canonicalSchema).coalesce(1)
+
+    writeDataframe(tableType, tableName, tablePath, df, saveMode = SaveMode.Overwrite,
+      operation = Some("bulk_insert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id") ++ BATCH_SCALE_PARALLELISM_OPTS)
+
+    if (n > 512) {
+      assertSingleLanceBaseFileSpansMultipleBatches(tablePath)
+    }
+
+    // --- Vectors (DataFrame path): row count + exact values on a sample straddling the boundary.
+    val vecRows = spark.read.format("hudi").load(tablePath)
+      .select($"id", $"embedding").orderBy($"id").collect()
+    assertEquals(n, vecRows.length, "vector row count mismatch at batch scale")
+    val sampleIds = (Seq(0, 1, n / 2, n - 1) ++ (if (n > 512) Seq(511, 512, 513) else Seq.empty))
+      .filter(i => i >= 0 && i < n).distinct
+    val vecById = vecRows.map(r => r.getInt(r.fieldIndex("id")) -> r).toMap
+    sampleIds.foreach { id =>
+      val emb = vecById(id).getSeq[Float](vecById(id).fieldIndex("embedding")).toArray
+      assertEquals(dim, emb.length, s"vector dim mismatch for id=$id")
+      val expected = vectorFor(id)
+      (0 until dim).foreach { j =>
+        assertEquals(expected(j), emb(j), 1e-6f, s"vector value mismatch id=$id j=$j")
+      }
+    }
+
+    // --- Top-k vector search IDs: query near row q nudged toward higher ids by a small delta so
+    // the L2 ordering is strict (q, q+1, q-1). hudi_vector_search must return those exact IDs.
+    val tkView = s"${tableName}_tk"
+    spark.read.format("hudi").load(tablePath)
+      .select("id", "embedding").createOrReplaceTempView(tkView)
+    val q = n / 2
+    val delta = 0.005f
+    val queryLiteral = vectorFor(q).map(v => (v + delta).toDouble).mkString(", ")
+    val topk = spark.sql(
+      s"""SELECT id, _hudi_distance
+         |FROM hudi_vector_search('$tkView', 'embedding', ARRAY($queryLiteral), 3, 'l2')
+         |ORDER BY _hudi_distance""".stripMargin).collect()
+    val topkIds = topk.map(_.getInt(0)).toSeq
+    assertEquals(Seq(q, q + 1, q - 1), topkIds,
+      s"top-3 vector-search IDs mismatch for query near id=$q")
+
+    // --- Projection (id only) and predicate filter (id range) correctness.
+    val idOnly = spark.read.format("hudi").load(tablePath).select("id")
+    assertEquals(1, idOnly.schema.fields.length, "projection should yield a single column")
+    // collect() (not count()) so the id column is actually projected/read; a count() would push an
+    // empty required schema down the scan, a separate code path not under test here.
+    val idOnlyVals = idOnly.collect().map(_.getInt(0)).toSet
+    assertEquals((0 until n).toSet, idOnlyVals, "projected id set mismatch")
+    // For n=1000 choose a range that straddles the 512-row batch boundary (400..620).
+    val lo = if (n > 512) 400 else n / 4
+    val hi = math.min(n, lo + (if (n > 512) 220 else 30))
+    val filteredIds = spark.read.format("hudi").load(tablePath)
+      .where(s"id >= $lo AND id < $hi").select("id").orderBy("id")
+      .collect().map(_.getInt(0)).toSeq
+    assertEquals((lo until hi).toSeq, filteredIds, "filtered id range mismatch")
+
+    // --- Blobs (SQL path, CONTENT): full-scan read_blob byte content + SHA-256 round-trip.
+    val viewName = s"${tableName}_view"
+    spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(viewName)
+    val blobRows = spark.sql(
+      s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
+    assertEquals(n, blobRows.length, "blob row count mismatch at batch scale")
+    blobRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val bytes = row.getAs[Array[Byte]]("bytes")
+      assertEquals(payloadLen, bytes.length, s"blob length mismatch for id=$id")
+      BlobTestHelpers.assertBytesContent(bytes, expectedOffset = id * payloadLen)
+    }
+    // SHA-256 round-trip on a sample (faithful to the AC's SHA256 requirement).
+    val blobById = blobRows.map(r => r.getInt(r.fieldIndex("id")) -> r.getAs[Array[Byte]]("bytes")).toMap
+    sampleIds.foreach { id =>
+      assertEquals(sha256(expectedBlob(id)), sha256(blobById(id)),
+        s"blob SHA-256 mismatch for id=$id")
+    }
+
+    // --- Blobs under a filter (SQL path, CONTENT): read_blob restricted to an id range.
+    val filteredBlobs = spark.sql(
+      s"SELECT id, read_blob(payload) AS bytes FROM $viewName WHERE id >= $lo AND id < $hi ORDER BY id")
+      .collect()
+    assertEquals(hi - lo, filteredBlobs.length, "filtered read_blob count mismatch")
+    filteredBlobs.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      assertEquals(sha256(expectedBlob(id)), sha256(row.getAs[Array[Byte]]("bytes")),
+        s"filtered blob SHA-256 mismatch for id=$id")
+    }
+
+    // --- DESCRIPTOR-mode read at scale: exercises the chunked reader WITH the blob transform
+    // (re-initialized per chunk). OUT_OF_LINE references must pass through intact on both sides of
+    // the batch boundary.
+    val descRows = spark.read.format("hudi").option("hoodie.read.blob.inline.mode", "DESCRIPTOR")
+      .load(tablePath).select($"id", $"payload").orderBy($"id").collect()
+    val descById = descRows.map(r => r.getInt(r.fieldIndex("id")) -> r).toMap
+    sampleIds.foreach { id =>
+      val payload = descById(id).getStruct(descById(id).fieldIndex("payload"))
+      assertEquals(HoodieSchema.Blob.OUT_OF_LINE,
+        payload.getString(payload.fieldIndex(HoodieSchema.Blob.TYPE)), s"type mismatch id=$id")
+      val ref = payload.getStruct(payload.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE))
+      assertTrue(ref.getString(ref.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH))
+        .endsWith(".bin"), s"external_path mismatch id=$id")
+      assertEquals(id.toLong * payloadLen,
+        ref.getLong(ref.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET)),
+        s"reference offset mismatch id=$id")
+    }
+  }
+
+  /**
+   * Guards the batch-scale tests' core assumption: exactly one Lance base file holds all rows and
+   * that file has more rows than a single Arrow read batch (512). If a future change splits the
+   * write across files or shrinks the row count below the batch size, the cross-batch drain path
+   * would no longer be exercised and the regression would silently stop reproducing.
+   */
+  private def assertSingleLanceBaseFileSpansMultipleBatches(tablePath: String): Unit = {
+    val lanceFiles = Files.walk(Paths.get(tablePath))
+      .filter(p => p.toString.endsWith(".lance"))
+      .collect(Collectors.toList[java.nio.file.Path]).asScala
+    assertEquals(1, lanceFiles.length,
+      s"expected exactly one Lance base file, found: ${lanceFiles.mkString(", ")}")
+    val allocator = new RootAllocator(64L * 1024 * 1024)
+    try {
+      val reader = LanceFileReader.open(lanceFiles.head.toString, allocator)
+      try {
+        assertTrue(reader.numRows() > 512,
+          s"base file must span >512 rows to cross a batch boundary, got ${reader.numRows()}")
+      } finally {
+        reader.close()
+      }
+    } finally {
+      allocator.close()
+    }
+  }
 }
 
 object TestLanceDataSource {
@@ -1990,6 +2237,18 @@ object TestLanceDataSource {
       tableType <- HoodieTableType.values()
       readMode <- Array(null, "CONTENT", "DESCRIPTOR")
     } yield Arguments.of(tableType, readMode: java.lang.String)
+    java.util.stream.Stream.of(params: _*)
+  }
+
+  /**
+   * Cross-product of table types and row counts for the VECTOR+BLOB batch-scale suite. n=100 stays
+   * within one Arrow batch; n=1000 crosses the 512-row Lance BLOB page boundary.
+   */
+  def vectorBlobBatchParams(): java.util.stream.Stream[Arguments] = {
+    val params = for {
+      tableType <- HoodieTableType.values()
+      n <- Array(100, 1000)
+    } yield Arguments.of(tableType, n: java.lang.Integer)
     java.util.stream.Stream.of(params: _*)
   }
 }
