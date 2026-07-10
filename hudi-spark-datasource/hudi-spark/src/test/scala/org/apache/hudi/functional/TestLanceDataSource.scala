@@ -1519,6 +1519,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     // Latest base file names for a timeline snapshot, used to prove clustering rewrote the base file(s).
     def latestBaseFileNames(mc: HoodieTableMetaClient): Set[String] = {
+      val engineContext = new HoodieLocalEngineContext(mc.getStorageConf)
       val metadataConfig = HoodieMetadataConfig.newBuilder.build
       val viewManager = FileSystemViewManager.createViewManager(
         engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
