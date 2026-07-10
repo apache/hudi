@@ -1305,7 +1305,8 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
    * Compaction must preserve INLINE blob bytes under the DESCRIPTOR default. MOR compaction reads
    * the base file through the internal write-side reader stack
    * SparkReaderContextFactory -> SparkFileFormatInternalRowReaderContext -> SparkLanceReaderBase,
-   * not through HoodieSparkLanceReader (that reader only serves LanceUtils stats/key reads).
+   * not through HoodieSparkLanceReader (that reader serves LanceUtils stats/key reads,
+   * bloom-index key lookups, and legacy HoodieWriteMergeHandle merges, with its own CONTENT pin).
    * SparkLanceReaderBase honors {@code hoodie.read.blob.inline.mode}, whose DESCRIPTOR default
    * would read null {@code data} and rewrite a base file without bytes, silently corrupting
    * untouched rows. Correctness now relies on SparkReaderContextFactory pinning
@@ -1377,9 +1378,9 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .getInstants.asScala
     val deltaCommits = completedInstants.filter(_.getAction == "deltacommit")
     assertTrue(deltaCommits.nonEmpty,
-      "Upsert must have written a deltacommit on MOR — without log files the compaction " +
+      "Upsert must have written a deltacommit on MOR -- without log files the compaction " +
         "round-trip below would be a no-op and the test would silently pass even if the " +
-        "CONTENT-pin in HoodieSparkLanceReader were broken.")
+        "CONTENT-pin in SparkReaderContextFactory were broken.")
     val compactionCommits = completedInstants.filter(_.getAction == "commit")
     assertTrue(compactionCommits.nonEmpty, "Compaction commit should be present after upsert")
 
