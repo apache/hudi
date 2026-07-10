@@ -1469,6 +1469,12 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
   @Override
   public void completeStreamingCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> partialWriteStats, HoodieCommitMetadata metadata) {
+    if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(instantTime)) {
+      LOG.info("Skipping streaming metadata commit completion for already completed instant {}", instantTime);
+      getWriteClient().postCommit(instantTime);
+      return;
+    }
+
     List<HoodieWriteStat> allWriteStats = new ArrayList<>(partialWriteStats);
     // update metadata for left over partitions which does not have streaming writes support.
     allWriteStats.addAll(prepareAndWriteToNonStreamingPartitions(metadata, instantTime).map(WriteStatus::getStat).collectAsList());
@@ -1907,6 +1913,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   public void close() throws Exception {
     if (metadata != null) {
       metadata.close();
+      // Keep the closed reader reference: guarded update paths use its presence to proceed and
+      // mayBeReinitMetadataReader() detects the closed file-system view and reopens the reader.
+      // Nullifying it here would silently skip subsequent metadata updates, such as rollbacks.
     }
     if (writeClient != null) {
       writeClient.close();

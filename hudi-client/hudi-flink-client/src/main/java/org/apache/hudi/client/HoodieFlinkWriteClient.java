@@ -139,6 +139,20 @@ public class HoodieFlinkWriteClient<T>
   }
 
   /**
+   * Restart the heartbeat for a recommitted instant.
+   *
+   * @param instantTime The instant time
+   */
+  public void restartHeartbeat(String instantTime) {
+    if (getConfig().getFailedWritesCleanPolicy().isLazy()) {
+      getHeartbeatClient().start(instantTime);
+    }
+    if (isStreamingWriteMetadataTable) {
+      this.streamingMetadataWriteHandler.startHeartbeat(instantTime, getHoodieTable());
+    }
+  }
+
+  /**
    * Performs streaming write operations to metadata partitions.
    * This method retrieves the metadata writer for the given instant time and table,
    * validates that it exists, and then performs streaming writes of index records.
@@ -628,5 +642,16 @@ public class HoodieFlinkWriteClient<T>
     public void close() {
       ((MiniBatchHandle) writeHandle).closeGracefully();
     }
+  }
+
+  /**
+   * Flink keeps the heartbeat active when a commit attempt fails because the coordinator may need to
+   * recommit the instant after failover. Successful commits stop the heartbeat from {@code postCommit},
+   * while {@link #cleanResources(String)} cleans up data-table and metadata-table resources for
+   * instants discarded or resolved by the coordinator. Therefore this generic hook is intentionally
+   * a no-op.
+   */
+  @Override
+  public void releaseResources(String instantTime) {
   }
 }
