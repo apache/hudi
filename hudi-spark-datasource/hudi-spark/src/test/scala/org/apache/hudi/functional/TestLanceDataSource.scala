@@ -1517,6 +1517,24 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       spark.createDataFrame(rawDf.rdd, canonicalSchema)
     }
 
+    // Latest base file names for a timeline snapshot, used to prove clustering rewrote the base file(s).
+    def latestBaseFileNames(mc: HoodieTableMetaClient): Set[String] = {
+      val metadataConfig = HoodieMetadataConfig.newBuilder.build
+      val viewManager = FileSystemViewManager.createViewManager(
+        engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
+        HoodieCommonConfig.newBuilder.build,
+        (m: HoodieTableMetaClient) => mc.getTableFormat
+          .getMetadataFactory.create(engineContext, m.getStorage, metadataConfig, tablePath))
+      val fsView = viewManager.getFileSystemView(mc)
+      try {
+        fsView.getLatestBaseFiles("")
+          .collect(Collectors.toList[org.apache.hudi.common.model.HoodieBaseFile])
+          .asScala.map(_.getFileName).toSet
+      } finally {
+        fsView.close()
+      }
+    }
+
     // First commit: bulk_insert ids 0..4 with the initial pattern into a base file.
     writeDataframe(tableType, tableName, tablePath,
       asInlineDf(expectedPayloads.zipWithIndex.map { case (b, i) => (i, b) }),
@@ -1525,6 +1543,15 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       extraOptions = Map(PRECOMBINE_FIELD.key() -> "id"))
 
     assertLanceBlobEncoding(tablePath)
+
+    // Snapshot the first commit's base file(s); the disjointness check below uses them to prove
+    // clustering rewrote (not skipped) them, else the byte checks pass on stale bytes (#19232).
+    val metaClientAfterFirst = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+    val preClusterBaseFiles = latestBaseFileNames(metaClientAfterFirst)
+    assertFalse(preClusterBaseFiles.isEmpty, "First commit should have written at least one base file")
 
     // Second commit: a small bulk_insert that trips inline clustering (max.commits=1). Clustering
     // rewrites the existing base file's rows through readRecordsForGroupAsRow, which must read the
@@ -1539,15 +1566,23 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
         "hoodie.clustering.inline" -> "true",
         "hoodie.clustering.inline.max.commits" -> "1"))
 
-    // Assert a clustering (replacecommit) instant actually completed, so the test cannot silently
-    // pass without a rewrite.
+    // Require a COMPLETED replacecommit. getLastClusteringInstant filters by action only, so a
+    // REQUESTED/INFLIGHT instant satisfies isPresent; isCompleted confirms the rewrite finished.
     val metaClient = HoodieTableMetaClient.builder()
       .setConf(HoodieTestUtils.getDefaultStorageConf)
       .setBasePath(tablePath)
       .build()
-    assertTrue(metaClient.getActiveTimeline.getLastClusteringInstant.isPresent,
-      "Clustering (replacecommit) instant should be present after inline clustering; without a " +
-        "rewrite the blob-loss regression below could not be exercised")
+    val lastClustering = metaClient.getActiveTimeline.getLastClusteringInstant
+    assertTrue(lastClustering.isPresent && lastClustering.get.isCompleted,
+      "A COMPLETED clustering (replacecommit) instant must exist after inline clustering; without a " +
+        "completed rewrite the blob-loss regression below could not be exercised")
+
+    // ...and that it rewrote the base file(s) into new ones. Disjoint sets prove the rewrite ran
+    // instead of the byte checks reading untouched originals (#19232).
+    val postClusterBaseFiles = latestBaseFileNames(metaClient)
+    assertTrue(preClusterBaseFiles.intersect(postClusterBaseFiles).isEmpty,
+      s"Post-clustering base files must be disjoint from the pre-clustering base file(s), proving the " +
+        s"rewrite ran (pre=$preClusterBaseFiles, post=$postClusterBaseFiles)")
 
     // Read back in CONTENT mode and assert every row's bytes survived the clustering rewrite.
     val allExpected: Map[Int, Array[Byte]] =
