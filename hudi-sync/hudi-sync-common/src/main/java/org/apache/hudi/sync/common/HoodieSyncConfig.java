@@ -34,6 +34,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -211,6 +212,16 @@ public class HoodieSyncConfig extends HoodieConfig {
         .collect(Collectors.joining("\n")));
     setDefaults(HoodieSyncConfig.class.getName());
     this.hadoopConf = hadoopConf;
+    // Normalize the table base path so that downstream metastore LOCATION values never carry
+    // consecutive or trailing slashes. Strict object-store filesystems (e.g. GCS) reject "//",
+    // and this keeps the synced location consistent with the Hudi table base path (which is
+    // itself normalized through org.apache.hadoop.fs.Path on the write path).
+    if (contains(META_SYNC_BASE_PATH)) {
+      String basePath = getString(META_SYNC_BASE_PATH);
+      if (!StringUtils.isNullOrEmpty(basePath)) {
+        setValue(META_SYNC_BASE_PATH, new Path(basePath).toString());
+      }
+    }
   }
 
   public void setHadoopConf(Configuration hadoopConf) {

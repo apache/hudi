@@ -31,6 +31,7 @@ import java.util.Properties;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DECODE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
@@ -174,5 +175,27 @@ class TestHoodieSyncConfig {
     props2.setProperty(HoodieMetadataConfig.ENABLE.key(), "true");
     HoodieSyncConfig config2 = new HoodieSyncConfig(props2, new Configuration());
     assertTrue(config2.getBoolean(META_SYNC_USE_FILE_LISTING_FROM_METADATA));
+  }
+
+  @Test
+  void testNormalizeBasePath() {
+    // Consecutive and trailing slashes in the base path must be collapsed so that the synced
+    // metastore LOCATION is valid for strict object-store filesystems (e.g. GCS rejects "//").
+    Properties props = new Properties();
+    props.setProperty(META_SYNC_BASE_PATH.key(), "/tmp/base_path//db//tbl//");
+    HoodieSyncConfig config = new HoodieSyncConfig(props, new Configuration());
+    assertEquals("/tmp/base_path/db/tbl", config.getAbsoluteBasePath());
+    assertEquals("/tmp/base_path/db/tbl", config.getString(META_SYNC_BASE_PATH));
+
+    Properties gcsProps = new Properties();
+    gcsProps.setProperty(META_SYNC_BASE_PATH.key(), "gs://bucket/base//ho_set_data_pymt_pgm//");
+    HoodieSyncConfig gcsConfig = new HoodieSyncConfig(gcsProps, new Configuration());
+    assertEquals("gs://bucket/base/ho_set_data_pymt_pgm", gcsConfig.getAbsoluteBasePath());
+
+    // A well-formed base path is left unchanged.
+    Properties cleanProps = new Properties();
+    cleanProps.setProperty(META_SYNC_BASE_PATH.key(), "gs://bucket/base/tbl");
+    HoodieSyncConfig cleanConfig = new HoodieSyncConfig(cleanProps, new Configuration());
+    assertEquals("gs://bucket/base/tbl", cleanConfig.getAbsoluteBasePath());
   }
 }
