@@ -220,7 +220,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.READ_STREAMING_SKIP_COMPACT, false)
         .option(FlinkOptions.CDC_ENABLED, true)
         .option(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE, mode.name())
-        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, true)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 select * from source";
@@ -1732,6 +1732,49 @@ public class ITTestHoodieDataSource {
     List<Row> projectedRows = CollectionUtil.iteratorToList(
         batchTableEnv.executeSql("select name, uuid from lance_t1").collect());
     assertRowsEquals(projectedRows, "[+I[Alice, id1], +I[Bob, id2]]");
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testLanceFormatNestedTypesUpsertWriteAndRead(HoodieTableType tableType) {
+    String createHoodieTable = sql("lance_nested")
+        .field("id int not null")
+        .field("ts bigint")
+        .field("f_row row(f_name varchar(10), f_age int)")
+        .field("f_array array<row(f_name varchar(10), f_age int)>")
+        .field("f_nested_array array<row(f_scores array<int>)>")
+        .pkField("id")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, "upsert")
+        .option(FlinkOptions.ORDERING_FIELDS, "ts")
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option("hoodie.table.base.file.format", "LANCE")
+        .end();
+    batchTableEnv.executeSql(createHoodieTable);
+
+    execInsertSql(batchTableEnv, "insert into lance_nested values "
+        + "(1, 1, ROW('alice', 30), ARRAY[ROW('child1', 1), ROW('child2', 2)], "
+        + "ARRAY[ROW(ARRAY[1, 2]), ROW(ARRAY[3])]),"
+        + "(2, 2, ROW('bob', 31), ARRAY[ROW('child3', 3)], ARRAY[ROW(ARRAY[4])])");
+
+    execInsertSql(batchTableEnv, "insert into lance_nested values "
+        + "(1, 3, ROW('alice_v2', 32), ARRAY[ROW('child4', 4)], ARRAY[ROW(ARRAY[5, 6])]),"
+        + "(3, 4, ROW('charlie', 33), ARRAY[ROW('child5', 5)], ARRAY[ROW(ARRAY[7])])");
+
+    List<Row> rows = CollectionUtil.iterableToList(
+        () -> batchTableEnv.sqlQuery("select * from lance_nested").execute().collect());
+    assertRowsEqualsUnordered(Arrays.asList(
+        row(1, 3L, row("alice_v2", 32), array(row("child4", 4)), array(row((Object) array(5, 6)))),
+        row(2, 2L, row("bob", 31), array(row("child3", 3)), array(row((Object) array(4)))),
+        row(3, 4L, row("charlie", 33), array(row("child5", 5)), array(row((Object) array(7))))), rows);
+
+    List<Row> projectedRows = CollectionUtil.iterableToList(
+        () -> batchTableEnv.sqlQuery("select f_nested_array, id from lance_nested").execute().collect());
+    assertRowsEqualsUnordered(Arrays.asList(
+        row(array(row((Object) array(5, 6))), 1),
+        row(array(row((Object) array(4))), 2),
+        row(array(row((Object) array(7))), 3)), projectedRows);
   }
 
   @Test

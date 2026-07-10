@@ -16,8 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage.row;
+package org.apache.hudi.io.storage.row.lance;
 
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.arrow.vector.BigIntVector;
@@ -30,11 +31,13 @@ import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.SmallIntVector;
 import org.apache.arrow.vector.TimeMilliVector;
-import org.apache.arrow.vector.TimeStampMicroVector;
+import org.apache.arrow.vector.TimeStampVector;
 import org.apache.arrow.vector.TinyIntVector;
 import org.apache.arrow.vector.ValueVector;
 import org.apache.arrow.vector.VarBinaryVector;
 import org.apache.arrow.vector.VarCharVector;
+import org.apache.arrow.vector.complex.ListVector;
+import org.apache.arrow.vector.complex.StructVector;
 import org.apache.arrow.vector.types.DateUnit;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.TimeUnit;
@@ -42,11 +45,14 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.types.pojo.Schema;
+import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.DecimalData;
+import org.apache.flink.table.data.GenericArrayData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
+import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.BigIntType;
 import org.apache.flink.table.types.logical.BooleanType;
 import org.apache.flink.table.types.logical.DateType;
@@ -66,13 +72,16 @@ import org.apache.flink.table.types.logical.VarCharType;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
-import static org.apache.flink.table.types.logical.utils.LogicalTypeChecks.getPrecision;
-
 /**
- * Primitive RowData/Arrow conversion helpers for Flink Lance base files.
+ * RowData/Arrow conversion helpers for Flink Lance base files.
+ *
+ * <p>Supports primitive types, {@code ROW}, and {@code ARRAY}. Currently, {@code MAP} is not
+ * supported in the current Lance version. Enable it once the lance version is upgraded to support
+ * {@code MAP}.
+ *
+ * @see <a href="https://github.com/lance-format/lance/issues/3620">Lance issue #3620</a>
  */
 public final class HoodieFlinkLanceArrowUtils {
 
@@ -90,7 +99,7 @@ public final class HoodieFlinkLanceArrowUtils {
   public static RowType toRowType(Schema schema) {
     List<RowType.RowField> fields = new ArrayList<>(schema.getFields().size());
     for (Field field : schema.getFields()) {
-      fields.add(new RowType.RowField(field.getName(), toLogicalType(field.getType())));
+      fields.add(new RowType.RowField(field.getName(), toLogicalType(field, field.getName())));
     }
     return new RowType(fields);
   }
@@ -108,68 +117,10 @@ public final class HoodieFlinkLanceArrowUtils {
     return rowData;
   }
 
-  public static void writeValue(LogicalType type, FieldVector vector, int rowId, RowData rowData, int ordinal) {
-    writeValue(type, vector, rowId, rowData, ordinal, true);
-  }
-
-  public static void writeValue(LogicalType type, FieldVector vector, int rowId, RowData rowData, int ordinal, boolean utcTimestamp) {
-    if (rowData.isNullAt(ordinal)) {
-      vector.setNull(rowId);
-      return;
-    }
-    switch (type.getTypeRoot()) {
-      case BOOLEAN:
-        ((BitVector) vector).setSafe(rowId, rowData.getBoolean(ordinal) ? 1 : 0);
-        return;
-      case TINYINT:
-        ((TinyIntVector) vector).setSafe(rowId, rowData.getByte(ordinal));
-        return;
-      case SMALLINT:
-        ((SmallIntVector) vector).setSafe(rowId, rowData.getShort(ordinal));
-        return;
-      case INTEGER:
-        ((IntVector) vector).setSafe(rowId, rowData.getInt(ordinal));
-        return;
-      case DATE:
-        ((DateDayVector) vector).setSafe(rowId, rowData.getInt(ordinal));
-        return;
-      case TIME_WITHOUT_TIME_ZONE:
-        ((TimeMilliVector) vector).setSafe(rowId, rowData.getInt(ordinal));
-        return;
-      case BIGINT:
-        ((BigIntVector) vector).setSafe(rowId, rowData.getLong(ordinal));
-        return;
-      case FLOAT:
-        ((Float4Vector) vector).setSafe(rowId, rowData.getFloat(ordinal));
-        return;
-      case DOUBLE:
-        ((Float8Vector) vector).setSafe(rowId, rowData.getDouble(ordinal));
-        return;
-      case CHAR:
-      case VARCHAR:
-        ((VarCharVector) vector).setSafe(rowId, rowData.getString(ordinal).toBytes());
-        return;
-      case BINARY:
-      case VARBINARY:
-        ((VarBinaryVector) vector).setSafe(rowId, rowData.getBinary(ordinal));
-        return;
-      case DECIMAL:
-        DecimalType decimalType = (DecimalType) type;
-        DecimalData decimal = rowData.getDecimal(ordinal, decimalType.getPrecision(), decimalType.getScale());
-        ((DecimalVector) vector).setSafe(rowId, decimal.toBigDecimal());
-        return;
-      case TIMESTAMP_WITHOUT_TIME_ZONE:
-      case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-        TimestampData timestamp = rowData.getTimestamp(ordinal, getPrecision(type));
-        long micros = timestampToMicros(timestamp, getPrecision(type), utcTimestamp);
-        ((TimeStampMicroVector) vector).setSafe(rowId, micros);
-        return;
-      default:
-        throw unsupported(type);
-    }
-  }
-
   private static Object readValue(LogicalType type, ValueVector vector, int rowId) {
+    if (vector.isNull(rowId)) {
+      return null;
+    }
     switch (type.getTypeRoot()) {
       case BOOLEAN:
         return ((BitVector) vector).get(rowId) == 1;
@@ -201,15 +152,32 @@ public final class HoodieFlinkLanceArrowUtils {
         return DecimalData.fromBigDecimal(decimal, decimalType.getPrecision(), decimalType.getScale());
       case TIMESTAMP_WITHOUT_TIME_ZONE:
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-        long micros = ((TimeStampMicroVector) vector).get(rowId);
+        long micros = ((TimeStampVector) vector).get(rowId);
         return TimestampData.fromEpochMillis(Math.floorDiv(micros, 1000L), (int) Math.floorMod(micros, 1000L) * 1000);
+      case ROW:
+        return readRow((RowType) type, (StructVector) vector, rowId);
+      case ARRAY:
+        return readArray((ArrayType) type, (ListVector) vector, rowId);
       default:
         throw unsupported(type);
     }
   }
 
   private static Field toArrowField(String name, LogicalType type) {
-    return new Field(name, FieldType.nullable(toArrowType(type)), Collections.emptyList());
+    List<Field> children = new ArrayList<>();
+    switch (type.getTypeRoot()) {
+      case ROW:
+        for (RowType.RowField field : ((RowType) type).getFields()) {
+          children.add(toArrowField(field.getName(), field.getType()));
+        }
+        break;
+      case ARRAY:
+        children.add(toArrowField("element", ((ArrayType) type).getElementType()));
+        break;
+      default:
+        break;
+    }
+    return new Field(name, new FieldType(type.isNullable(), toArrowType(type), null), children);
   }
 
   private static ArrowType toArrowType(LogicalType type) {
@@ -245,61 +213,96 @@ public final class HoodieFlinkLanceArrowUtils {
         return new ArrowType.Timestamp(TimeUnit.MICROSECOND, null);
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
         return new ArrowType.Timestamp(TimeUnit.MICROSECOND, "UTC");
+      case ROW:
+        return ArrowType.Struct.INSTANCE;
+      case ARRAY:
+        return ArrowType.List.INSTANCE;
       default:
         throw unsupported(type);
     }
   }
 
-  private static LogicalType toLogicalType(ArrowType arrowType) {
+  private static LogicalType toLogicalType(Field field, String path) {
+    ArrowType arrowType = field.getType();
+    LogicalType logicalType;
     if (arrowType instanceof ArrowType.Bool) {
-      return new BooleanType();
+      logicalType = new BooleanType();
     } else if (arrowType instanceof ArrowType.Int) {
       ArrowType.Int intType = (ArrowType.Int) arrowType;
       switch (intType.getBitWidth()) {
         case 8:
-          return new TinyIntType();
+          logicalType = new TinyIntType();
+          break;
         case 16:
-          return new SmallIntType();
+          logicalType = new SmallIntType();
+          break;
         case 32:
-          return new IntType();
+          logicalType = new IntType();
+          break;
         case 64:
-          return new BigIntType();
+          logicalType = new BigIntType();
+          break;
         default:
           throw new HoodieNotSupportedException("Unsupported Arrow int width for Lance Flink reader: " + intType.getBitWidth());
       }
     } else if (arrowType instanceof ArrowType.FloatingPoint) {
       ArrowType.FloatingPoint fp = (ArrowType.FloatingPoint) arrowType;
-      return fp.getPrecision() == FloatingPointPrecision.SINGLE
+      logicalType = fp.getPrecision() == FloatingPointPrecision.SINGLE
           ? new FloatType()
           : new DoubleType();
     } else if (arrowType instanceof ArrowType.Utf8) {
-      return new VarCharType();
+      logicalType = new VarCharType();
     } else if (arrowType instanceof ArrowType.Binary) {
-      return new VarBinaryType();
+      logicalType = new VarBinaryType();
     } else if (arrowType instanceof ArrowType.Date) {
-      return new DateType();
+      logicalType = new DateType();
     } else if (arrowType instanceof ArrowType.Time) {
-      return new TimeType();
+      logicalType = new TimeType();
     } else if (arrowType instanceof ArrowType.Decimal) {
       ArrowType.Decimal decimal = (ArrowType.Decimal) arrowType;
-      return new DecimalType(decimal.getPrecision(), decimal.getScale());
+      logicalType = new DecimalType(decimal.getPrecision(), decimal.getScale());
     } else if (arrowType instanceof ArrowType.Timestamp) {
       ArrowType.Timestamp timestamp = (ArrowType.Timestamp) arrowType;
-      return timestamp.getTimezone() == null
+      logicalType = timestamp.getTimezone() == null
           ? new TimestampType(6)
           : new LocalZonedTimestampType(6);
+    } else if (arrowType instanceof ArrowType.Struct) {
+      List<RowType.RowField> fields = new ArrayList<>(field.getChildren().size());
+      for (Field child : field.getChildren()) {
+        fields.add(new RowType.RowField(child.getName(), toLogicalType(child, path + "." + child.getName())));
+      }
+      logicalType = new RowType(field.isNullable(), fields);
+    } else if (arrowType instanceof ArrowType.List) {
+      ValidationUtils.checkArgument(field.getChildren().size() == 1,
+          String.format("Unsupported Arrow schema at '%s': LIST must contain exactly one child field", path));
+      Field element = field.getChildren().get(0);
+      logicalType = new ArrayType(field.isNullable(), toLogicalType(element, path + "[]"));
+    } else {
+      throw new HoodieNotSupportedException("Unsupported Arrow type for Lance Flink reader at '" + path + "': " + arrowType);
     }
-    throw new HoodieNotSupportedException("Unsupported Arrow type for Lance Flink reader: " + arrowType);
+    return logicalType.copy(field.isNullable());
   }
 
-  private static long timestampToMicros(TimestampData timestampData, int precision, boolean utcTimestamp) {
-    long millis = utcTimestamp ? timestampData.getMillisecond() : timestampData.toTimestamp().getTime();
-    return precision > 3 && utcTimestamp
-        ? millis * 1000L + timestampData.getNanoOfMillisecond() / 1000L
-        : millis * 1000L;
+  private static RowData readRow(RowType rowType, StructVector vector, int rowId) {
+    GenericRowData row = new GenericRowData(rowType.getFieldCount());
+    for (int i = 0; i < rowType.getFieldCount(); i++) {
+      row.setField(i, readValue(rowType.getTypeAt(i), vector.getChildByOrdinal(i), rowId));
+    }
+    return row;
+  }
+
+  private static ArrayData readArray(ArrayType arrayType, ListVector vector, int rowId) {
+    int startIndex = vector.getElementStartIndex(rowId);
+    int endIndex = vector.getElementEndIndex(rowId);
+    Object[] values = new Object[endIndex - startIndex];
+    FieldVector dataVector = vector.getDataVector();
+    for (int i = 0; i < values.length; i++) {
+      values[i] = readValue(arrayType.getElementType(), dataVector, startIndex + i);
+    }
+    return new GenericArrayData(values);
   }
 
   private static HoodieNotSupportedException unsupported(LogicalType type) {
-    return new HoodieNotSupportedException("Flink Lance base-file support currently supports primitive append-only columns; unsupported type: " + type);
+    return new HoodieNotSupportedException("Flink Lance base-file support currently supports primitive, ROW, and ARRAY columns; unsupported type: " + type);
   }
 }
