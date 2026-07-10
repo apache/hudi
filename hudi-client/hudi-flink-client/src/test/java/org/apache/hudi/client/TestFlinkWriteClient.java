@@ -27,7 +27,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 
 import org.junit.jupiter.api.AfterEach;
@@ -37,9 +39,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
@@ -79,7 +83,7 @@ public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
   }
 
   @Test
-  public void testRestartHeartbeatStartsDataTableHeartbeatForLazyFailedWrites() throws IOException {
+  public void testReleaseAndPostCommitResourcesForLazyFailedWrites() throws IOException {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(metaClient.getBasePath())
         .withEngineType(EngineType.FLINK)
@@ -88,7 +92,16 @@ public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
             .build())
         .build();
 
-    writeClient = new HoodieFlinkWriteClient(context, writeConfig);
+    AtomicBoolean failTableCreation = new AtomicBoolean(false);
+    writeClient = new HoodieFlinkWriteClient(context, writeConfig) {
+      @Override
+      protected HoodieTable createTable(HoodieWriteConfig config) {
+        if (failTableCreation.get()) {
+          throw new HoodieException("Expected table creation failure");
+        }
+        return super.createTable(config);
+      }
+    };
     String instantTime = "20260709120000000";
     writeClient.restartHeartbeat(instantTime);
 
@@ -96,8 +109,19 @@ public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
         metaClient.getStorage(), metaClient.getBasePath().toString(), instantTime));
 
     writeClient.releaseResources(instantTime);
+    assertTrue(HoodieHeartbeatClient.heartbeatExists(
+        metaClient.getStorage(), metaClient.getBasePath().toString(), instantTime));
+
+    writeClient.postCommit(instantTime);
     assertFalse(HoodieHeartbeatClient.heartbeatExists(
         metaClient.getStorage(), metaClient.getBasePath().toString(), instantTime));
+
+    String failedPostCommitInstantTime = "20260709120000001";
+    writeClient.restartHeartbeat(failedPostCommitInstantTime);
+    failTableCreation.set(true);
+    assertThrows(HoodieException.class, () -> writeClient.postCommit(failedPostCommitInstantTime));
+    assertFalse(HoodieHeartbeatClient.heartbeatExists(
+        metaClient.getStorage(), metaClient.getBasePath().toString(), failedPostCommitInstantTime));
   }
 
   @Test

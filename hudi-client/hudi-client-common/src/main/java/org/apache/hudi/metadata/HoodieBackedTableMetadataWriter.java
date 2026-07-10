@@ -964,7 +964,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   public void completeStreamingCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> partialWriteStats, HoodieCommitMetadata metadata) {
     if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(instantTime)) {
       LOG.info("Skipping streaming metadata commit completion for already completed instant {}", instantTime);
-      getWriteClient().releaseResources(instantTime);
+      getWriteClient().postCommit(instantTime);
       return;
     }
 
@@ -1292,7 +1292,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   public void close() throws Exception {
     if (metadata != null) {
       metadata.close();
-      metadata = null;
+      // Keep the closed reader reference: guarded update paths use its presence to proceed and
+      // mayBeReinitMetadataReader() detects the closed file-system view and reopens the reader.
+      // Nullifying it here would silently skip subsequent metadata updates, such as rollbacks.
     }
     if (writeClient != null) {
       writeClient.close();

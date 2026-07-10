@@ -682,6 +682,29 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
+   * Performs post-commit cleanup when the instant is already completed and commit metadata is not
+   * available to invoke the regular post-commit hook. This can happen while recovering a streaming
+   * metadata-table write after failover. The table is recreated from the write configuration so its
+   * marker directory can still be removed, and the heartbeat is always stopped even if marker cleanup
+   * fails.
+   *
+   * @param instantTime the completed instant to clean up
+   */
+  public void postCommit(String instantTime) {
+    try {
+      HoodieTable table = createTable(config);
+      context.setJobStatus(this.getClass().getSimpleName(), "Cleaning up marker directories for commit " + instantTime + " in table "
+          + config.getTableName());
+      // Delete the marker directory for the instant.
+      WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
+          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+      metrics.updateTableServiceInstantMetrics(table.getActiveTimeline());
+    } finally {
+      this.heartbeatClient.stop(instantTime);
+    }
+  }
+
+  /**
    * Triggers cleaning and archival for the table of interest. This method is called outside of locks. So, internal callers should ensure they acquire lock whereever applicable.
    * @param table instance of {@link HoodieTable} of interest.
    */

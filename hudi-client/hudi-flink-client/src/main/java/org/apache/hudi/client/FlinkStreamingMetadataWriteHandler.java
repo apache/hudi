@@ -116,12 +116,12 @@ public class FlinkStreamingMetadataWriteHandler extends StreamingMetadataWriteHa
   public void cleanResources(String instantTime) {
     Option<HoodieTableMetadataWriter> metadataWriterOpt = this.metadataWriterMap.remove(instantTime);
     if (metadataWriterOpt == null || metadataWriterOpt.isEmpty()) {
-      log.debug("Metadata writer for {} is not initialized or already been closed, skip closing.", instantTime);
+      log.debug("Metadata writer for {} has already been closed, skip closing.", instantTime);
       return;
     }
     try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
       if (metadataWriter instanceof FlinkHoodieBackedTableMetadataWriter) {
-        ((FlinkHoodieBackedTableMetadataWriter) metadataWriter).getWriteClient().releaseResources(instantTime);
+        ((FlinkHoodieBackedTableMetadataWriter) metadataWriter).getWriteClient().getHeartbeatClient().stop(instantTime);
       }
     } catch (Exception e) {
       throw new HoodieException("Failed to close the metadata writer for instant: " + instantTime, e);

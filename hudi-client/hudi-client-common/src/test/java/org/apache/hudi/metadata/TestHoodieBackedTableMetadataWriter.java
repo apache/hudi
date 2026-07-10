@@ -85,7 +85,7 @@ class TestHoodieBackedTableMetadataWriter {
 
     metadataWriter.completeStreamingCommit(instantTime, engineContext, Collections.emptyList(), mock(HoodieCommitMetadata.class));
 
-    verify(writeClient).releaseResources(instantTime);
+    verify(writeClient).postCommit(instantTime);
     verifyNoMoreInteractions(writeClient);
   }
 

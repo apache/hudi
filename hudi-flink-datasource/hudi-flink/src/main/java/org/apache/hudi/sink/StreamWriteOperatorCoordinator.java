@@ -556,6 +556,7 @@ public class StreamWriteOperatorCoordinator
     } else {
       // clean the corresponding event buffer if the instant is already committed.
       eventBuffers.reset(checkpointId);
+      writeClient.cleanResources(instant);
       return false;
     }
   }

@@ -643,4 +643,15 @@ public class HoodieFlinkWriteClient<T>
       ((MiniBatchHandle) writeHandle).closeGracefully();
     }
   }
+
+  /**
+   * Flink keeps the heartbeat active when a commit attempt fails because the coordinator may need to
+   * recommit the instant after failover. Successful commits stop the heartbeat from {@code postCommit},
+   * while {@link #cleanResources(String)} cleans up data-table and metadata-table resources for
+   * instants discarded or resolved by the coordinator. Therefore this generic hook is intentionally
+   * a no-op.
+   */
+  @Override
+  public void releaseResources(String instantTime) {
+  }
 }
