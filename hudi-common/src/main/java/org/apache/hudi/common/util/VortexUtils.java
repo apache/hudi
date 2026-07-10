@@ -138,6 +138,12 @@ public class VortexUtils extends FileFormatUtils {
   }
 
   @Override
+  public Map<String, String> readFooterWithPrefix(
+      HoodieStorage storage, boolean required, StoragePath filePath, String footerPrefix) {
+    throw new UnsupportedOperationException("readFooterWithPrefix is not yet supported for Vortex format");
+  }
+
+  @Override
   public long getRowCount(HoodieStorage storage, StoragePath filePath) {
     try (HoodieFileReader fileReader =
                  HoodieIOFactory.getIOFactory(storage)

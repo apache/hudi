@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Map;
 
 /**
  * HFile reader that supports seeks.
@@ -77,6 +78,14 @@ public interface HFileReader extends Closeable {
    * @throws IOException upon read errors.
    */
   Option<byte[]> getMetaInfo(UTF8StringKey key) throws IOException;
+
+  /**
+   * Gets all entries from the file info block.
+   *
+   * @return all file info entries
+   * @throws IOException upon read errors
+   */
+  Map<UTF8StringKey, byte[]> getMetaInfo() throws IOException;
 
   /**
    * Gets the content of a meta block from HFile.

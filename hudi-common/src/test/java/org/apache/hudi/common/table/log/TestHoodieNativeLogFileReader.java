@@ -45,7 +45,8 @@ class TestHoodieNativeLogFileReader {
         () -> HoodieNativeLogFileReader.validateDataBlockHeader(logFile, header));
 
     assertTrue(exception.getMessage().contains(HeaderMetadataType.SCHEMA.name()));
-    assertTrue(exception.getMessage().contains(NativeLogFooterMetadata.FOOTER_METADATA_KEY));
+    assertTrue(exception.getMessage().contains(
+        NativeLogFooterMetadata.getFooterMetadataKey(HeaderMetadataType.SCHEMA)));
     assertTrue(exception.getMessage().contains(logFile.toString()));
   }
 }

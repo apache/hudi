@@ -43,7 +43,12 @@ class TestNativeLogFooterMetadata {
 
     // Footer produced by the write path must be readable by the read path.
     Map<String, String> footer = NativeLogFooterMetadata.toFooterMetadata(header);
-    assertTrue(footer.containsKey(NativeLogFooterMetadata.FOOTER_METADATA_KEY));
+    assertEquals(String.valueOf(HoodieLogFormat.CURRENT_VERSION), footer.get("hudi.log.format.VERSION"));
+    assertEquals("001", footer.get("hudi.log.format.INSTANT_TIME"));
+    assertEquals("{\"type\":\"record\",\"name\":\"test\",\"fields\":[]}",
+        footer.get("hudi.log.format.SCHEMA"));
+    assertEquals("true", footer.get("hudi.log.format.IS_PARTIAL"));
+    assertEquals(4, footer.size());
 
     Map<HeaderMetadataType, String> parsed = NativeLogFooterMetadata.fromFooterMetadata(footer);
     assertEquals("001", parsed.get(HeaderMetadataType.INSTANT_TIME));
@@ -67,15 +72,16 @@ class TestNativeLogFooterMetadata {
   }
 
   @Test
-  void testMissingFooterKeyReturnsEmptyHeader() {
+  void testMissingFooterMetadataReturnsEmptyHeader() {
     assertTrue(NativeLogFooterMetadata.fromFooterMetadata(new HashMap<>()).isEmpty());
   }
 
   @Test
   void testUnknownHeaderTypesAreIgnored() {
     Map<String, String> footer = new HashMap<>();
-    footer.put(NativeLogFooterMetadata.FOOTER_METADATA_KEY,
-        "{\"VERSION\":\"2\",\"INSTANT_TIME\":\"001\",\"SOME_FUTURE_KEY\":\"v\"}");
+    footer.put(NativeLogFooterMetadata.getFooterMetadataKey(HeaderMetadataType.VERSION), "2");
+    footer.put(NativeLogFooterMetadata.getFooterMetadataKey(HeaderMetadataType.INSTANT_TIME), "001");
+    footer.put(NativeLogFooterMetadata.FOOTER_METADATA_KEY_PREFIX + "some_future_key", "v");
 
     Map<HeaderMetadataType, String> parsed = NativeLogFooterMetadata.fromFooterMetadata(footer);
     assertEquals("001", parsed.get(HeaderMetadataType.INSTANT_TIME));
@@ -85,8 +91,9 @@ class TestNativeLogFooterMetadata {
   @Test
   void testNewerFormatVersionIsRejected() {
     Map<String, String> footer = new HashMap<>();
-    footer.put(NativeLogFooterMetadata.FOOTER_METADATA_KEY,
-        "{\"VERSION\":\"" + (HoodieLogFormat.CURRENT_VERSION + 1) + "\",\"INSTANT_TIME\":\"001\"}");
+    footer.put(NativeLogFooterMetadata.getFooterMetadataKey(HeaderMetadataType.VERSION),
+        String.valueOf(HoodieLogFormat.CURRENT_VERSION + 1));
+    footer.put(NativeLogFooterMetadata.getFooterMetadataKey(HeaderMetadataType.INSTANT_TIME), "001");
 
     assertThrows(HoodieNotSupportedException.class,
         () -> NativeLogFooterMetadata.fromFooterMetadata(footer));

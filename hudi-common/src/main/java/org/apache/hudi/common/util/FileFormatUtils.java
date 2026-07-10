@@ -232,6 +232,18 @@ public abstract class FileFormatUtils {
                                                  String... footerNames);
 
   /**
+   * Read data file footer entries whose keys start with the given prefix.
+   *
+   * @param storage      {@link HoodieStorage} instance
+   * @param required     require at least one matching footer entry
+   * @param filePath     data file path
+   * @param footerPrefix prefix of the footer entries to read
+   * @return matching footer entries keyed by their full names
+   */
+  public abstract Map<String, String> readFooterWithPrefix(
+      HoodieStorage storage, boolean required, StoragePath filePath, String footerPrefix);
+
+  /**
    * Returns the number of records in the data file.
    *
    * @param storage  {@link HoodieStorage} instance.

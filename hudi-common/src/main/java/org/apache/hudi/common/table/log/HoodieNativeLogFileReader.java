@@ -122,7 +122,8 @@ public class HoodieNativeLogFileReader implements HoodieLogFormat.Reader {
   private Map<HeaderMetadataType, String> getLogBlockHeader(HoodieFileFormat fileFormat) {
     Map<String, String> keyValueMetadata = HoodieIOFactory.getIOFactory(storage)
         .getFileFormatUtils(fileFormat)
-        .readFooter(storage, false, logFile.getPath(), NativeLogFooterMetadata.FOOTER_METADATA_KEY);
+        .readFooterWithPrefix(
+            storage, false, logFile.getPath(), NativeLogFooterMetadata.FOOTER_METADATA_KEY_PREFIX);
     Map<HeaderMetadataType, String> header = NativeLogFooterMetadata.fromFooterMetadata(keyValueMetadata);
     header.putIfAbsent(HeaderMetadataType.INSTANT_TIME, logFile.getDeltaCommitTime());
     return header;
@@ -132,8 +133,8 @@ public class HoodieNativeLogFileReader implements HoodieLogFormat.Reader {
     if (!header.containsKey(HeaderMetadataType.SCHEMA)) {
       throw new HoodieIOException("Missing required native log block header metadata '"
           + HeaderMetadataType.SCHEMA.name() + "' for " + logFile
-          + ". Native log files must store log block metadata in footer key '"
-          + NativeLogFooterMetadata.FOOTER_METADATA_KEY + "'");
+          + ". Native log files must store the schema in footer key '"
+          + NativeLogFooterMetadata.getFooterMetadataKey(HeaderMetadataType.SCHEMA) + "'");
     }
   }
 

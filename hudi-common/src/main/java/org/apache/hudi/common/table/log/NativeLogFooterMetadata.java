@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.LogExtensions;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
-import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieIOException;
@@ -32,76 +31,52 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-
-import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Shared on-disk contract for RFC-103 native log files. The log block header (schema, instant time,
- * etc.) is persisted as a single JSON entry in the native file footer, keyed by
- * {@link #FOOTER_METADATA_KEY}. This is the single source of truth used by both the write path
- * ({@code HoodieNativeLogFormatWriter}) and the read path ({@code HoodieNativeLogFileReader}) so the
- * two cannot drift apart.
+ * Shared on-disk contract for RFC-103 native log files. Each log block header entry (schema,
+ * instant time, etc.) is persisted as a separate, namespaced entry in the native file footer.
+ * This is the single source of truth used by both the write path ({@code HoodieNativeLogFormatWriter})
+ * and the read path ({@code HoodieNativeLogFileReader}) so the two cannot drift apart.
  */
 public class NativeLogFooterMetadata {
 
   /**
-   * Footer key under which the serialized log block header is stored in a native log file.
+   * Prefix for log format metadata entries stored in a native log file footer.
    */
-  public static final String FOOTER_METADATA_KEY = "hudi.log.format.metadata";
-
-  private static final TypeReference<LinkedHashMap<String, String>> MAP_TYPE =
-      new TypeReference<LinkedHashMap<String, String>>() {
-      };
+  public static final String FOOTER_METADATA_KEY_PREFIX = "hudi.log.format.";
 
   private NativeLogFooterMetadata() {
   }
 
   /**
-   * Serializes the log block header into the footer key/value map written to the native file.
+   * Converts the log block header into the footer key/value map written to the native file.
    * The {@link HeaderMetadataType#VERSION} entry is injected automatically.
    */
   public static Map<String, String> toFooterMetadata(Map<HeaderMetadataType, String> header) {
-    Map<String, String> logFormatMetadata = new LinkedHashMap<>();
-    logFormatMetadata.put(HeaderMetadataType.VERSION.name(), String.valueOf(HoodieLogFormat.CURRENT_VERSION));
-    header.forEach((key, value) -> {
+    Map<String, String> footer = new LinkedHashMap<>();
+    footer.put(getFooterMetadataKey(HeaderMetadataType.VERSION), String.valueOf(HoodieLogFormat.CURRENT_VERSION));
+    header.forEach((type, value) -> {
       if (value != null) {
-        logFormatMetadata.put(key.name(), value);
+        footer.put(getFooterMetadataKey(type), value);
       }
     });
-    String serialized;
-    try {
-      serialized = JsonUtils.getObjectMapper().writeValueAsString(logFormatMetadata);
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to serialize native log footer metadata", e);
-    }
-    Map<String, String> footer = new LinkedHashMap<>();
-    footer.put(FOOTER_METADATA_KEY, serialized);
     return footer;
   }
 
   /**
-   * Parses the log block header back from the native file footer key/value map. Unknown header
-   * types are ignored so that files written by newer minor versions remain readable.
+   * Converts the native file footer key/value map back into a log block header. Unknown footer
+   * entries are ignored so that files written by newer minor versions remain readable.
    */
   public static Map<HeaderMetadataType, String> fromFooterMetadata(Map<String, String> footerMetadata) {
     Map<HeaderMetadataType, String> header = new LinkedHashMap<>();
-    String serialized = footerMetadata.get(FOOTER_METADATA_KEY);
-    if (serialized == null) {
-      return header;
-    }
-    Map<String, String> logFormatMetadata;
-    try {
-      logFormatMetadata = JsonUtils.getObjectMapper().readValue(serialized, MAP_TYPE);
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to parse native log footer metadata: " + serialized, e);
-    }
-    logFormatMetadata.forEach((name, value) -> {
-      HeaderMetadataType type = headerTypeOrNull(name);
-      if (type != null) {
-        header.put(type, value);
+    footerMetadata.forEach((key, value) -> {
+      if (key.startsWith(FOOTER_METADATA_KEY_PREFIX) && value != null) {
+        HeaderMetadataType type = headerTypeOrNull(key.substring(FOOTER_METADATA_KEY_PREFIX.length()));
+        if (type != null) {
+          header.put(type, value);
+        }
       }
     });
     validateFormatVersion(header);
@@ -109,10 +84,17 @@ public class NativeLogFooterMetadata {
   }
 
   /**
+   * Returns the stable native log footer key for the given header metadata type.
+   */
+  public static String getFooterMetadataKey(HeaderMetadataType type) {
+    return FOOTER_METADATA_KEY_PREFIX + type.name();
+  }
+
+  /**
    * Reads the table schema embedded in a native data log file footer.
    *
    * <p>Native data logs persist the synthetic log-block header, including {@link HeaderMetadataType#SCHEMA},
-   * in the footer metadata entry keyed by {@link #FOOTER_METADATA_KEY}. This method is intended for
+   * in namespaced footer metadata entries. This method is intended for
    * schema discovery paths that do not have a {@code HoodieReaderContext} and therefore cannot construct
    * a {@code HoodieNativeLogFileReader}. Native delete logs do not expose a generic table schema through
    * this API because their schema depends on the table schema and configured ordering fields; those files
@@ -132,13 +114,13 @@ public class NativeLogFooterMetadata {
     HoodieFileFormat fileFormat = HoodieFileFormat.fromFileExtension("." + nativeLogFileName.getSuffix());
     Map<String, String> footer = HoodieIOFactory.getIOFactory(storage)
         .getFileFormatUtils(fileFormat)
-        .readFooter(storage, false, path, FOOTER_METADATA_KEY);
+        .readFooterWithPrefix(storage, false, path, FOOTER_METADATA_KEY_PREFIX);
     Map<HeaderMetadataType, String> header = fromFooterMetadata(footer);
     String schema = header.get(HeaderMetadataType.SCHEMA);
     if (StringUtils.isNullOrEmpty(schema)) {
       throw new HoodieIOException("Missing required native log schema metadata '"
           + HeaderMetadataType.SCHEMA.name() + "' in footer key '"
-          + FOOTER_METADATA_KEY + "' for " + path);
+          + getFooterMetadataKey(HeaderMetadataType.SCHEMA) + "' for " + path);
     }
     return HoodieSchema.parse(schema);
   }

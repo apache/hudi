@@ -180,7 +180,8 @@ class TestTableSchemaResolver {
     HoodieIOFactory ioFactory = mock(HoodieIOFactory.class);
     FileFormatUtils fileFormatUtils = mock(FileFormatUtils.class);
     when(ioFactory.getFileFormatUtils(HoodieFileFormat.PARQUET)).thenReturn(fileFormatUtils);
-    when(fileFormatUtils.readFooter(storage, false, logFilePath, NativeLogFooterMetadata.FOOTER_METADATA_KEY))
+    when(fileFormatUtils.readFooterWithPrefix(
+        storage, false, logFilePath, NativeLogFooterMetadata.FOOTER_METADATA_KEY_PREFIX))
         .thenReturn(new HashMap<>());
 
     try (MockedStatic<HoodieIOFactory> ioFactoryMockedStatic = mockStatic(HoodieIOFactory.class)) {
@@ -189,7 +190,8 @@ class TestTableSchemaResolver {
       HoodieIOException exception = assertThrows(HoodieIOException.class,
           () -> TableSchemaResolver.readSchemaFromLogFile(metaClient, logFilePath));
       assertTrue(exception.getMessage().contains(HoodieLogBlock.HeaderMetadataType.SCHEMA.name()));
-      assertTrue(exception.getMessage().contains(NativeLogFooterMetadata.FOOTER_METADATA_KEY));
+      assertTrue(exception.getMessage().contains(
+          NativeLogFooterMetadata.getFooterMetadataKey(HoodieLogBlock.HeaderMetadataType.SCHEMA)));
       assertTrue(exception.getMessage().contains(logFilePath.toString()));
     }
   }

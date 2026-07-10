@@ -25,6 +25,7 @@ import org.apache.hudi.io.util.IOUtils;
 import lombok.AccessLevel;
 import lombok.Getter;
 
+import java.util.Collections;
 import java.util.Map;
 
 /**
@@ -66,6 +67,10 @@ public class HFileInfo {
 
   public byte[] get(UTF8StringKey key) {
     return infoMap.get(key);
+  }
+
+  public Map<UTF8StringKey, byte[]> getInfoMap() {
+    return Collections.unmodifiableMap(infoMap);
   }
 
   private long parseFileCreationTime() {
