@@ -502,7 +502,8 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
               "BLOB column '" + blobFieldNames[i] + "' has an INLINE row with null data but a "
                   + "populated reference: a DESCRIPTOR-mode read leaked into the write path, and "
                   + "persisting it would silently drop the blob bytes. Internal rewrites "
-                  + "(compaction, clustering, merge) must read with hoodie.read.blob.inline.mode=CONTENT.");
+                  + "(compaction, clustering, merge) and any query whose rows are written back "
+                  + "must read with hoodie.read.blob.inline.mode=CONTENT.");
         }
       }
     }
