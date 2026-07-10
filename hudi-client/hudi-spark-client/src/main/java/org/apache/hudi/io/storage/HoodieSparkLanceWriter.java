@@ -68,6 +68,11 @@ import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.FILE
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.io.storage.BlobStructLayout.DATA_IDX;
+import static org.apache.hudi.io.storage.BlobStructLayout.FIELD_COUNT;
+import static org.apache.hudi.io.storage.BlobStructLayout.INLINE_UTF8;
+import static org.apache.hudi.io.storage.BlobStructLayout.REF_IDX;
+import static org.apache.hudi.io.storage.BlobStructLayout.TYPE_IDX;
 
 /**
  * Spark Lance file writer implementing {@link HoodieSparkFileWriter} and {@link HoodieInternalRowFileWriter}.
@@ -89,8 +94,6 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
   // avoid leaking that internal lance-spark utility into Hudi APIs).
   private static final String LANCE_BLOB_ENCODING_KEY = "lance-encoding:blob";
   private static final String LANCE_BLOB_ENCODING_VALUE = "true";
-  // Precomputed INLINE type token, compared against each BLOB row's type field without per-row allocation.
-  private static final UTF8String INLINE_TYPE_TOKEN = UTF8String.fromString(HoodieSchema.Blob.INLINE);
 
   private final StructType sparkSchema;
   private final Schema arrowSchema;
@@ -490,11 +493,11 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
         if (row.isNullAt(ordinal)) {
           continue;
         }
-        InternalRow blob = row.getStruct(ordinal, 3);
-        if (blob.isNullAt(0) || !INLINE_TYPE_TOKEN.equals(blob.getUTF8String(0))) {
+        InternalRow blob = row.getStruct(ordinal, FIELD_COUNT);
+        if (blob.isNullAt(TYPE_IDX) || !INLINE_UTF8.equals(blob.getUTF8String(TYPE_IDX))) {
           continue;
         }
-        if (blob.isNullAt(1) && !blob.isNullAt(2)) {
+        if (blob.isNullAt(DATA_IDX) && !blob.isNullAt(REF_IDX)) {
           throw new HoodieException(
               "BLOB column '" + blobFieldNames[i] + "' has an INLINE row with null data but a "
                   + "populated reference: a DESCRIPTOR-mode read leaked into the write path, and "
