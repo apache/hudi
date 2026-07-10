@@ -34,7 +34,13 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{SpecializedGetters, SpecificInternalRow}
 import org.apache.spark.sql.catalyst.util.{DateTimeUtils, RebaseDateTime}
 import org.apache.spark.sql.execution.datasources.DataSourceUtils
-import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
+// LegacyBehaviorPolicy is nested in SQLConf on Spark 3.3/3.4 (org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy)
+// but a top-level object on Spark 3.5 (org.apache.spark.sql.internal.LegacyBehaviorPolicy). Importing both
+// containers via wildcards lets this single shared source resolve the enum on every 3.x version: exactly one of
+// the two wildcards contributes LegacyBehaviorPolicy on any given version, so there is no ambiguity. The same two
+// wildcards also keep the SQLConf object in scope for the SQLConf.get / SQLConf.AVRO_REBASE_MODE_IN_WRITE usages.
+import org.apache.spark.sql.internal._
+import org.apache.spark.sql.internal.SQLConf._
 import org.apache.spark.sql.types._
 
 import java.nio.ByteBuffer

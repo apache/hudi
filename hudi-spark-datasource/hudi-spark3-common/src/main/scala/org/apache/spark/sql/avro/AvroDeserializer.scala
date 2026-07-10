@@ -33,7 +33,12 @@ import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArr
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, DateTimeUtils, GenericArrayData, RebaseDateTime}
 import org.apache.spark.sql.catalyst.util.DateTimeConstants.MILLIS_PER_DAY
 import org.apache.spark.sql.execution.datasources.DataSourceUtils
-import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
+// LegacyBehaviorPolicy is nested in SQLConf on Spark 3.3/3.4 (org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy)
+// but a top-level object on Spark 3.5 (org.apache.spark.sql.internal.LegacyBehaviorPolicy). Importing both
+// containers via wildcards lets this single shared source resolve the enum on every 3.x version: exactly one of
+// the two wildcards contributes LegacyBehaviorPolicy on any given version, so there is no ambiguity.
+import org.apache.spark.sql.internal._
+import org.apache.spark.sql.internal.SQLConf._
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
