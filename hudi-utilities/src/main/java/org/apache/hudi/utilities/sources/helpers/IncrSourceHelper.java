@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
@@ -64,6 +65,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT;
 import static org.apache.spark.sql.functions.col;
+import static org.apache.spark.sql.functions.row_number;
 import static org.apache.spark.sql.functions.sum;
 
 @Slf4j
@@ -71,6 +73,7 @@ public class IncrSourceHelper {
 
   public static final String DEFAULT_START_TIMESTAMP = HoodieTimeline.INIT_INSTANT_TS;
   private static final String CUMULATIVE_COLUMN_NAME = "cumulativeSize";
+  private static final String CUMULATIVE_COUNT_COLUMN_NAME = "cumulativeCount";
 
   /**
    * When hollow commits are found while using incremental source with {@link HoodieDeltaStreamer},
@@ -259,8 +262,24 @@ public class IncrSourceHelper {
    * @param queryInfo   Query Info
    * @return end instants along with filtered rows.
    */
-  public static Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> filterAndGenerateCheckpointBasedOnSourceLimit(Dataset<Row> sourceData,
+  @VisibleForTesting
+  static Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> filterAndGenerateCheckpointBasedOnSourceLimit(Dataset<Row> sourceData,
                                                                                                                     long sourceLimit, QueryInfo queryInfo,
+                                                                                                                    CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint) {
+    return filterAndGenerateCheckpointBasedOnSourceLimit(sourceData, sourceLimit, Long.MAX_VALUE, queryInfo, cloudObjectIncrCheckpoint);
+  }
+
+  /**
+   * Adjust the source dataset to size based batch based on last checkpoint key.
+   *
+   * @param sourceData    Source dataset
+   * @param sourceLimit   Max number of bytes to be read from source
+   * @param numFilesLimit Max number of files to be read from source in this batch
+   * @param queryInfo     Query Info
+   * @return end instants along with filtered rows.
+   */
+  public static Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> filterAndGenerateCheckpointBasedOnSourceLimit(Dataset<Row> sourceData,
+                                                                                                                    long sourceLimit, long numFilesLimit, QueryInfo queryInfo,
                                                                                                                     CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint) {
     if (sourceData.isEmpty()) {
       // There is no file matching the prefix.
@@ -272,54 +291,72 @@ public class IncrSourceHelper {
     }
     // Let's persist the dataset to avoid triggering the dag repeatedly
     sourceData.persist(StorageLevel.MEMORY_AND_DISK());
-    // Set ordering in query to enable batching
-    Dataset<Row> orderedDf = QueryRunner.applyOrdering(sourceData, queryInfo.getOrderByColumns());
-    Option<String> lastCheckpoint = Option.of(cloudObjectIncrCheckpoint.getCommit());
-    Option<String> lastCheckpointKey = Option.ofNullable(cloudObjectIncrCheckpoint.getKey());
-    Option<String> concatenatedKey = lastCheckpoint.flatMap(checkpoint -> lastCheckpointKey.map(key -> checkpoint + key));
+    try {
+      // Set ordering in query to enable batching
+      Dataset<Row> orderedDf = QueryRunner.applyOrdering(sourceData, queryInfo.getOrderByColumns());
+      Option<String> lastCheckpoint = Option.of(cloudObjectIncrCheckpoint.getCommit());
+      Option<String> lastCheckpointKey = Option.ofNullable(cloudObjectIncrCheckpoint.getKey());
+      Option<String> concatenatedKey = lastCheckpoint.flatMap(checkpoint -> lastCheckpointKey.map(key -> checkpoint + key));
 
-    // Filter until last checkpoint key
-    if (concatenatedKey.isPresent()) {
-      orderedDf = orderedDf.withColumn("commit_key",
-          functions.concat(functions.col(queryInfo.getOrderColumn()), functions.col(queryInfo.getKeyColumn())));
-      // Apply incremental filter
-      orderedDf = orderedDf.filter(functions.col("commit_key").gt(concatenatedKey.get())).drop("commit_key");
-      // If there are no more files where commit_key is greater than lastCheckpointCommit#lastCheckpointKey
-      if (orderedDf.isEmpty()) {
-        log.info("Empty ordered source, returning endpoint: {}", queryInfo.getEndInstant());
-        sourceData.unpersist();
-        // queryInfo.getEndInstant() represents source table's last completed instant
-        // If current checkpoint is c1#abc and queryInfo.getEndInstant() is c1, return c1#abc.
-        // If current checkpoint is c1#abc and queryInfo.getEndInstant() is c2, return c2.
-        CloudObjectIncrCheckpoint updatedCheckpoint =
-            queryInfo.getEndInstant().equals(cloudObjectIncrCheckpoint.getCommit())
-                ? cloudObjectIncrCheckpoint
-                : new CloudObjectIncrCheckpoint(queryInfo.getEndInstant(), null);
-        return Pair.of(updatedCheckpoint, Option.empty());
+      // Filter until last checkpoint key
+      if (concatenatedKey.isPresent()) {
+        orderedDf = orderedDf.withColumn("commit_key",
+            functions.concat(functions.col(queryInfo.getOrderColumn()), functions.col(queryInfo.getKeyColumn())));
+        // Apply incremental filter
+        orderedDf = orderedDf.filter(functions.col("commit_key").gt(concatenatedKey.get())).drop("commit_key");
+        // If there are no more files where commit_key is greater than lastCheckpointCommit#lastCheckpointKey
+        if (orderedDf.isEmpty()) {
+          log.info("Empty ordered source, returning endpoint: {}", queryInfo.getEndInstant());
+          // queryInfo.getEndInstant() represents source table's last completed instant
+          // If current checkpoint is c1#abc and queryInfo.getEndInstant() is c1, return c1#abc.
+          // If current checkpoint is c1#abc and queryInfo.getEndInstant() is c2, return c2.
+          CloudObjectIncrCheckpoint updatedCheckpoint =
+              queryInfo.getEndInstant().equals(cloudObjectIncrCheckpoint.getCommit())
+                  ? cloudObjectIncrCheckpoint
+                  : new CloudObjectIncrCheckpoint(queryInfo.getEndInstant(), null);
+          return Pair.of(updatedCheckpoint, Option.empty());
+        }
       }
-    }
 
-    // Limit based on sourceLimit
-    WindowSpec windowSpec = Window.orderBy(col(queryInfo.getOrderColumn()), col(queryInfo.getKeyColumn()));
-    // Add the 'cumulativeSize' column with running sum of 'limitColumn'
-    Dataset<Row> aggregatedData = orderedDf.withColumn(CUMULATIVE_COLUMN_NAME,
-        sum(col(queryInfo.getLimitColumn())).over(windowSpec));
-    Dataset<Row> collectedRows = aggregatedData.filter(col(CUMULATIVE_COLUMN_NAME).leq(sourceLimit));
+      // Compute cumulative size and cumulative row count over the same ordered window so that
+      // both the byte-based and files-based limits select a contiguous prefix of the ordered set.
+      // Applying both predicates in a single window pass keeps the result deterministic across
+      // executors and avoids a post-hoc limit() on an unordered dataset.
+      // Note: Window.orderBy() without partitionBy() triggers Spark's SinglePartition exchange —
+      // the entire filteredSourceData is held on one executor for the window pass. This is
+      // intentional (running sum and row_number() require a total ordering), but it bounds how
+      // large numFilesLimit can usefully go. A follow-up could compute the prefix via
+      // mapPartitions + driver-merge to avoid the single-partition collapse.
+      WindowSpec windowSpec = Window.orderBy(col(queryInfo.getOrderColumn()), col(queryInfo.getKeyColumn()));
+      Dataset<Row> aggregatedData = orderedDf
+          .withColumn(CUMULATIVE_COLUMN_NAME, sum(col(queryInfo.getLimitColumn())).over(windowSpec))
+          .withColumn(CUMULATIVE_COUNT_COLUMN_NAME, row_number().over(windowSpec));
+      Dataset<Row> collectedRows = aggregatedData
+          .filter(col(CUMULATIVE_COLUMN_NAME).leq(sourceLimit)
+              .and(col(CUMULATIVE_COUNT_COLUMN_NAME).leq(numFilesLimit)));
 
-    Row row = null;
-    if (collectedRows.isEmpty()) {
-      // If the first element itself exceeds limits then return first element
-      log.info("First object exceeding source limit: {} bytes", sourceLimit);
-      row = aggregatedData.select(queryInfo.getOrderColumn(), queryInfo.getKeyColumn(), CUMULATIVE_COLUMN_NAME).first();
-      collectedRows = aggregatedData.limit(1);
-    } else {
-      // Get the last row and form composite key
-      row = collectedRows.select(queryInfo.getOrderColumn(), queryInfo.getKeyColumn(), CUMULATIVE_COLUMN_NAME).orderBy(
-          col(queryInfo.getOrderColumn()).desc(), col(queryInfo.getKeyColumn()).desc()).first();
+      Row row;
+      if (collectedRows.isEmpty()) {
+        // The first file itself exceeds the byte limit. Since numFilesLimit >= 1 is enforced at
+        // the call site and row_number() starts at 1, the files limit can never exclude the first
+        // file. We deliberately take one file even when it exceeds the byte limit, matching
+        // pre-existing behavior.
+        log.info("First object exceeds source limit: {} bytes", sourceLimit);
+        collectedRows = aggregatedData.filter(col(CUMULATIVE_COUNT_COLUMN_NAME).equalTo(1));
+        row = collectedRows.select(queryInfo.getOrderColumn(), queryInfo.getKeyColumn(), CUMULATIVE_COLUMN_NAME).first();
+      } else {
+        // Get the last row and form composite key
+        row = collectedRows.select(queryInfo.getOrderColumn(), queryInfo.getKeyColumn(), CUMULATIVE_COLUMN_NAME).orderBy(
+            col(queryInfo.getOrderColumn()).desc(), col(queryInfo.getKeyColumn()).desc()).first();
+      }
+      log.info("Processed batch size: {} bytes", row.get(row.fieldIndex(CUMULATIVE_COLUMN_NAME)));
+      // Drop the helper count column so returned dataset shape matches pre-existing contract
+      // (only the source columns plus cumulativeSize).
+      return Pair.of(new CloudObjectIncrCheckpoint(row.getString(0), row.getString(1)),
+          Option.of(collectedRows.drop(CUMULATIVE_COUNT_COLUMN_NAME)));
+    } finally {
+      sourceData.unpersist();
     }
-    log.info("Processed batch size: {} bytes", row.get(row.fieldIndex(CUMULATIVE_COLUMN_NAME)));
-    sourceData.unpersist();
-    return Pair.of(new CloudObjectIncrCheckpoint(row.getString(0), row.getString(1)), Option.of(collectedRows));
   }
 
   /**

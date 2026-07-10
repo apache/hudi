@@ -286,6 +286,137 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     assertTrue(!result.getRight().isPresent());
   }
 
+  /**
+   * Files-limit must produce a contiguous prefix of the ordered set even when the source dataset
+   * is spread across many Spark partitions. Spans 50 files across 8 partitions; iterates 5 syncs
+   * with numFilesLimit = 10 and asserts every file is consumed exactly once in order.
+   */
+  @Test
+  void testFilesLimitContiguousAcrossManyPartitions() {
+    List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
+    for (int i = 0; i < 50; i++) {
+      // zero-pad so lexicographic key order matches insertion order
+      filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file%02d.json", i), 100L, "commit1"));
+    }
+    Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime, 8);
+
+    QueryInfo queryInfo = new QueryInfo(
+        QUERY_TYPE_INCREMENTAL_OPT_VAL(), "commit0", "commit0",
+        "commit1", "_hoodie_commit_time",
+        "s3.object.key", "s3.object.size");
+
+    CloudObjectIncrCheckpoint cursor = new CloudObjectIncrCheckpoint("commit0", null);
+    List<String> consumedKeys = new ArrayList<>();
+    long byteLimit = 1_000_000L;
+    long filesLimit = 10L;
+    for (int batch = 0; batch < 5; batch++) {
+      Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> result =
+          IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(inputDs, byteLimit, filesLimit, queryInfo, cursor);
+      assertTrue(result.getRight().isPresent(), "batch " + batch + " unexpectedly empty");
+      List<Row> rows = result.getRight().get()
+          .select("s3.object.key")
+          .collectAsList();
+      assertEquals(filesLimit, rows.size(), "batch " + batch + " did not respect filesLimit");
+      for (Row r : rows) {
+        consumedKeys.add(r.getString(0));
+      }
+      cursor = result.getKey();
+    }
+    assertEquals(50, consumedKeys.size());
+    // Verify keys are returned in the exact order produced; if .limit() on an unordered dataset
+    // had been used, a multi-partition input would yield duplicates or gaps under any
+    // non-deterministic order.
+    for (int i = 0; i < 50; i++) {
+      assertEquals(String.format("path/to/file%02d.json", i), consumedKeys.get(i),
+          "file at position " + i + " is out of order");
+    }
+  }
+
+  /**
+   * Files-limit hits mid-commit. After the truncated batch, next sync must resume from the
+   * exact next file in the same commit without skipping or re-reading.
+   */
+  @Test
+  void testFilesLimitCrossesCommitBoundary() {
+    List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
+    // commit1: 3 files; commit2: 3 files
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file1.json", 100L, "commit1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file2.json", 100L, "commit1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file3.json", 100L, "commit1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file4.json", 100L, "commit2"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file5.json", 100L, "commit2"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file6.json", 100L, "commit2"));
+    Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime, 4);
+
+    QueryInfo queryInfo = new QueryInfo(
+        QUERY_TYPE_INCREMENTAL_OPT_VAL(), "commit0", "commit0",
+        "commit2", "_hoodie_commit_time",
+        "s3.object.key", "s3.object.size");
+
+    // First batch: filesLimit = 4 truncates at file4 (first file of commit2)
+    Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> first = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
+        inputDs, 1_000_000L, 4L, queryInfo, new CloudObjectIncrCheckpoint("commit0", null));
+    assertEquals("commit2#path/to/file4.json", first.getKey().toString());
+    assertEquals(4, first.getRight().get().count());
+
+    // Second batch: resume from the prior checkpoint; remaining files are file5 and file6
+    Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> second = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
+        inputDs, 1_000_000L, 4L, queryInfo, first.getKey());
+    assertEquals("commit2#path/to/file6.json", second.getKey().toString());
+    assertEquals(2, second.getRight().get().count());
+  }
+
+  /**
+   * Files-limit alone (when bytes-limit is non-binding) still selects a contiguous prefix.
+   */
+  @Test
+  void testFilesLimitBindingOverByteLimit() {
+    List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
+    for (int i = 0; i < 10; i++) {
+      filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file%02d.json", i), 100L, "commit1"));
+    }
+    Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime, 4);
+
+    QueryInfo queryInfo = new QueryInfo(
+        QUERY_TYPE_INCREMENTAL_OPT_VAL(), "commit0", "commit0",
+        "commit1", "_hoodie_commit_time",
+        "s3.object.key", "s3.object.size");
+
+    Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
+        inputDs, 1_000_000L, 3L, queryInfo, new CloudObjectIncrCheckpoint("commit0", null));
+    assertEquals("commit1#path/to/file02.json", result.getKey().toString());
+    assertEquals(3, result.getRight().get().count());
+  }
+
+  /**
+   * Files-limit larger than dataset: byte-limit drives the checkpoint as if no files-limit
+   * existed. Guards against the previous size-based recalculation branch silently breaking
+   * the byte-only path.
+   */
+  @Test
+  void testFilesLimitLargerThanAvailable() {
+    List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file1.json", 100L, "commit1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file2.json", 100L, "commit1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file3.json", 100L, "commit1"));
+    Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime, 2);
+
+    QueryInfo queryInfo = new QueryInfo(
+        QUERY_TYPE_INCREMENTAL_OPT_VAL(), "commit0", "commit0",
+        "commit1", "_hoodie_commit_time",
+        "s3.object.key", "s3.object.size");
+
+    Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
+        inputDs, 1_000_000L, 1000L, queryInfo, new CloudObjectIncrCheckpoint("commit0", null));
+    assertEquals("commit1#path/to/file3.json", result.getKey().toString());
+    assertEquals(3, result.getRight().get().count());
+  }
+
+  private Dataset<Row> generateDataset(List<Triple<String, Long, String>> filePathSizeAndCommitTime, int numPartitions) {
+    JavaRDD<String> testRdd = jsc.parallelize(getSampleS3ObjectKeys(filePathSizeAndCommitTime), numPartitions);
+    return spark().read().json(testRdd);
+  }
+
   private HoodieRecord generateS3EventMetadata(String commitTime, String bucketName, String objectKey, Long objectSize) {
     String partitionPath = bucketName;
     HoodieSchema schema = S3_METADATA_SCHEMA;

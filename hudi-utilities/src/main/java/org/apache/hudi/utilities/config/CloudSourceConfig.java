@@ -166,6 +166,15 @@ public class CloudSourceConfig extends HoodieConfig {
       .sinceVersion("0.14.1")
       .withDocumentation("specify this value in bytes, to coalesce partitions of source dataset not greater than specified limit");
 
+  public static final ConfigProperty<Long> SOURCE_MAX_FILES_PER_SYNC = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.max.files.per.sync")
+      .defaultValue(10_000L)
+      .markAdvanced()
+      .sinceVersion("1.4.0")
+      .withDocumentation("Maximum number of files to consume per sync round when using the cloud incremental source. "
+          + "This limit is applied in addition to the byte-based source limit to prevent driver OOM when processing "
+          + "many small files. The sync will process files up to whichever limit is reached first.");
+
   public static final ConfigProperty<Integer> MAX_FETCH_TIME_PER_SYNC_SECS = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.meta.max.fetch.time.per.sync.secs")
       .defaultValue(60)
