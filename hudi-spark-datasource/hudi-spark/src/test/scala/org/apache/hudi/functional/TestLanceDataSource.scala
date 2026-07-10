@@ -1397,6 +1397,13 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     val fsView = viewManager.getFileSystemView(metaClient)
     try {
       fsView.loadAllPartitions()
+      // Pin the single-file-group invariant the whole test rests on. If rows ever spread across
+      // multiple file groups, the untouched ids could sit in log-free groups that compaction never
+      // rewrites, and the round-trip below would pass without exercising the regression (#19232).
+      assertEquals(1L, fsView.getAllFileGroups("").count(),
+        s"All rows must land in exactly one file group (coalesce(1) + shuffle parallelism 1) " +
+          s"at $tablePath; otherwise untouched ids may sit in log-free file groups that " +
+          s"compaction never rewrites and the regression is not exercised")
       val anyHadLogs = fsView.getAllFileGroups("").iterator().asScala.exists { fg =>
         fg.getAllFileSlices.iterator().asScala.exists(_.hasLogFiles)
       }
