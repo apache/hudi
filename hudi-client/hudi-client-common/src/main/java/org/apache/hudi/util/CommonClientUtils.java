@@ -21,7 +21,6 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -151,19 +150,6 @@ public class CommonClientUtils {
       return false;
     }
     return writeConfig.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.TEN);
-  }
-
-  public static void validateIndexSupportForNativeLogFormat(HoodieWriteConfig writeConfig, HoodieFileFormat nativeLogFileFormat) {
-    if (!writeConfig.isMetadataColumnStatsIndexEnabled()) {
-      return;
-    }
-
-    if (nativeLogFileFormat == HoodieFileFormat.ORC) {
-      throw new HoodieNotSupportedException(String.format(
-          "Column stats index is not supported for native %s log files because its HoodieFileWriter does not support file format metadata. "
-              + "Please disable %s.",
-          nativeLogFileFormat, HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key()));
-    }
   }
 
   public static String generateWriteToken(TaskContextSupplier taskContextSupplier) {

@@ -39,7 +39,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.CommonClientUtils;
 
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 
@@ -85,7 +84,6 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
                                       TaskContextSupplier taskContextSupplier, boolean preserveMetadata,
                                       Map<HeaderMetadataType, String> header) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier, preserveMetadata);
-    CommonClientUtils.validateIndexSupportForNativeLogFormat(config, hoodieTable.getBaseFileFormat());
     this.header.putAll(header);
   }
 
@@ -234,6 +232,10 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
     if (dataFileFormatMetadata.isPresent()) {
       stat.putRecordsStats(collectNativeLogColumnRangeMetadata(
           stat.getPath(), dataFileFormatMetadata.get(), columnsToIndexSet, indexVersion));
+    } else {
+      // Mark column stats collection as handled so the metadata writer does not fall back to scanning this native
+      // log file. This is consistent with unsupported base-file formats, which contribute no column stats records.
+      stat.putRecordsStats(Collections.emptyMap());
     }
   }
 

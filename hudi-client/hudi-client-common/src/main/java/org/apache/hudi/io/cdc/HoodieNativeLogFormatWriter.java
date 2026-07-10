@@ -278,8 +278,17 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
   private void closeFileWriters() throws IOException {
     if (dataFileWriter != null) {
       dataFileWriter.close();
-      lastDataFileFormatMetadata = writeConfig.isMetadataColumnStatsIndexEnabled()
-          ? Option.ofNullable(dataFileWriter.getFileFormatMetadata()) : Option.empty();
+      if (writeConfig.isMetadataColumnStatsIndexEnabled()) {
+        try {
+          lastDataFileFormatMetadata = Option.ofNullable(dataFileWriter.getFileFormatMetadata());
+        } catch (UnsupportedOperationException e) {
+          // File-format metadata is an optional writer capability. Unsupported formats can still produce valid
+          // native log files; they simply do not contribute column stats for this append.
+          lastDataFileFormatMetadata = Option.empty();
+        }
+      } else {
+        lastDataFileFormatMetadata = Option.empty();
+      }
       dataFileWriter = null;
     }
     if (deleteFileWriter != null) {

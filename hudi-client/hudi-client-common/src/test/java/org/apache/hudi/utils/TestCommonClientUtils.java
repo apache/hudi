@@ -140,28 +140,6 @@ class TestCommonClientUtils {
     assertFalse(CommonClientUtils.shouldWriteNativeLogs(writeConfig, tableConfig));
   }
 
-  @ParameterizedTest(name = "{0} native log with column stats enabled {1} should throw: {2}")
-  @MethodSource("provideNativeLogColumnStatsExpectations")
-  void testValidateIndexSupportForNativeLogFormat(
-      HoodieFileFormat nativeLogFileFormat, boolean enableColumnStats, boolean expectThrow) {
-    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
-    when(writeConfig.isMetadataColumnStatsIndexEnabled()).thenReturn(enableColumnStats);
-
-    if (expectThrow) {
-      assertThrows(HoodieNotSupportedException.class,
-          () -> CommonClientUtils.validateIndexSupportForNativeLogFormat(writeConfig, nativeLogFileFormat));
-    } else {
-      CommonClientUtils.validateIndexSupportForNativeLogFormat(writeConfig, nativeLogFileFormat);
-    }
-  }
-
-  private static Stream<Arguments> provideNativeLogColumnStatsExpectations() {
-    return Stream.of(
-        Arguments.of(HoodieFileFormat.ORC, true, true),
-        Arguments.of(HoodieFileFormat.ORC, false, false)
-    );
-  }
-
   @ParameterizedTest(name = "Table version {0} with write version {1} should be valid: {2}")
   @MethodSource("provideValidTableVersionWriteVersionPairs")
   void testValidTableVersionWriteVersionPairs(

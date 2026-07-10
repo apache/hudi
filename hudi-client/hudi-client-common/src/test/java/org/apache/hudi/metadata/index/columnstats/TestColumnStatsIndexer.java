@@ -58,6 +58,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 class TestColumnStatsIndexer {
@@ -291,6 +292,40 @@ class TestColumnStatsIndexer {
     assertTrue(payload.getColumnStatMetadata().isPresent());
     assertEquals("c1", payload.getColumnStatMetadata().get().getColumnName());
     assertFalse(payload.getColumnStatMetadata().get().getIsDeleted());
+  }
+
+  @Test
+  void testBuildUpdateWithEmptyWriteStatColumnStatsSkipsFileFallback() {
+    HoodieEngineContext localEngineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
+    ColumnStatsIndexer indexer = new ColumnStatsIndexer(localEngineContext, writeConfig, metaClient);
+
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.setOperationType(WriteOperationType.UPSERT);
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setPartitionPath("p1");
+    writeStat.setPath("p1/.fileid-1_014.log.1_1-0-1.orc");
+    writeStat.setRecordsStats(Collections.emptyMap());
+    commitMetadata.getPartitionToWriteStats().put("p1", Collections.singletonList(writeStat));
+
+    List<IndexPartitionAndRecords> result;
+    try (MockedStatic<HoodieTableMetadataUtil> mockedUtil = mockStatic(HoodieTableMetadataUtil.class)) {
+      Map<String, HoodieSchema> columnsToIndex = Collections.singletonMap("c1", mock(HoodieSchema.class));
+      mockedUtil.when(() -> HoodieTableMetadataUtil.getColumnsToIndex(
+              any(HoodieCommitMetadata.class), any(HoodieTableMetaClient.class), any(HoodieMetadataConfig.class), any()))
+          .thenReturn(columnsToIndex);
+
+      result = indexer.buildUpdate(IndexUpdateContext.of(
+          "014",
+          mock(HoodieBackedTableMetadata.class),
+          Lazy.lazily(() -> mock(HoodieTableFileSystemView.class)),
+          commitMetadata));
+
+      mockedUtil.verify(() -> HoodieTableMetadataUtil.getColumnStatsRecords(
+          eq("p1"), any(), eq(metaClient), eq(Collections.singletonList("c1")), eq(false)), never());
+    }
+
+    assertEquals(1, result.size());
+    assertTrue(result.get(0).indexRecords().collectAsList().isEmpty());
   }
 
   @Test

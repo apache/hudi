@@ -21,7 +21,7 @@ package org.apache.hudi.common.table.read
 
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieSchemaConversionUtils, HoodieSparkUtils, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, RECORDKEY_FIELD, TABLE_TYPE}
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig, RecordMergeMode, TypedProperties}
+import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
@@ -135,14 +135,12 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     // Check if Lance format is being used and add required configuration
     val baseFileFormat = options.getOrDefault(HoodieTableConfig.BASE_FILE_FORMAT.key(), "")
     val isLanceFormat = baseFileFormat.equalsIgnoreCase("LANCE")
-    val columnStatsEnabled = !baseFileFormat.equalsIgnoreCase("ORC") && !isLanceFormat
 
     var writer = inputDF.write.format("hudi")
       .options(options)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
       .option("hoodie.datasource.write.operation", operation)
       .option("hoodie.datasource.write.table.type", "MERGE_ON_READ")
-      .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), columnStatsEnabled.toString)
 
     // Lance requires DefaultSparkRecordMerger for Spark InternalRow compatibility
     if (isLanceFormat) {
