@@ -1441,10 +1441,11 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
         s"DESCRIPTOR default should populate reference on plain read (id=$id)")
     }
 
-    // Plain projection under CONTENT first: on a regression this fails with an explicit
-    // "data is null" assertion, i.e. observable data loss, instead of read_blob()'s
-    // misleading DESCRIPTOR-mode IllegalStateException (the shape that made #19232 look
-    // like an error by design).
+    // Plain projection under CONTENT: a DESCRIPTOR leak ({INLINE, null data, populated
+    // reference}) can no longer reach the base file -- HoodieSparkLanceWriter.validateBlobRow
+    // fails the compaction rewrite itself -- so this backstops the shape the guard deliberately
+    // allows, {INLINE, null, null}, where dropped bytes would land silently. The CONTENT pin on
+    // internal reads is unit-tested in TestSparkReaderContextFactory.
     val contentRows = spark.read.format("hudi")
       .option("hoodie.read.blob.inline.mode", "CONTENT")
       .load(tablePath)
@@ -1589,9 +1590,10 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     val allExpected: Map[Int, Array[Byte]] =
       (expectedPayloads.zipWithIndex.map { case (b, i) => i -> b } ++ extraPayloads).toMap
 
-    // Plain projection under CONTENT first: on a regression this fails with an explicit
-    // "data is null" assertion, i.e. observable data loss, instead of read_blob()'s
-    // misleading DESCRIPTOR-mode IllegalStateException (see #19232).
+    // Plain projection under CONTENT: as in the compaction test, validateBlobRow already fails
+    // the rewrite on a DESCRIPTOR leak ({INLINE, null data, populated reference}); this
+    // backstops the allowed {INLINE, null, null} shape, where dropped bytes would land silently.
+    // The CONTENT pin on internal reads is unit-tested in TestSparkReaderContextFactory.
     val contentRows = spark.read.format("hudi")
       .option("hoodie.read.blob.inline.mode", "CONTENT")
       .load(tablePath)
