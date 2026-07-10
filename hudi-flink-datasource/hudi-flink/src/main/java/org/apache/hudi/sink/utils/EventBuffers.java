@@ -154,7 +154,7 @@ public class EventBuffers implements Serializable {
    */
   public Map<Long, Pair<String, WriteMetadataEvent[]>> getAllCompletedEvents() {
     return this.eventBuffers.entrySet().stream()
-        .filter(entry -> Arrays.stream(entry.getValue().getRight()).allMatch(event -> event == null || event.isLastBatch()))
+        .filter(entry -> Arrays.stream(entry.getValue().getRight()).allMatch(event -> event != null && event.isLastBatch()))
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   }
 }

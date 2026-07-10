@@ -257,7 +257,8 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public void jobFailover() throws Exception {
-    coordinatorFails();
+    // A same-graph global failover resets the running coordinator without restarting it.
+    resetCoordinatorToCheckpoint();
     subTaskFails(0, 0);
   }
 

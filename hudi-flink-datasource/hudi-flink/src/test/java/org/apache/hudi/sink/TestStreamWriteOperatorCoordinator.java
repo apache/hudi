@@ -20,6 +20,7 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -43,6 +44,7 @@ import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestUtils;
 
@@ -92,7 +94,7 @@ public class TestStreamWriteOperatorCoordinator {
 
   @BeforeEach
   public void before() throws Exception {
-    coordinator = createCoordinator(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), 2);
+    coordinator = startCoordinator(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), 2);
   }
 
   @AfterEach
@@ -128,11 +130,44 @@ public class TestStreamWriteOperatorCoordinator {
     }
   }
 
+  /**
+   * Verifies both coordinator restore paths. In case 1, a newly constructed coordinator receives
+   * checkpoint data before {@link StreamWriteOperatorCoordinator#start()}, so it must deserialize
+   * the event buffers for restoration during start. In case 2, global failover resets an already
+   * started coordinator, so it recommits its live event buffers directly.
+   */
   @Test
   public void testCheckpointAndRestore() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    coordinator = startCoordinator(conf, 2);
+
+    requestInstantTime(-1);
+    String instant = coordinator.getInstant();
+    assertNotEquals("", instant);
+
+    OperatorEvent event0 = createOperatorEvent(0, instant, "par1", true, 0.1);
+    OperatorEvent event1 = createOperatorEvent(1, instant, "par2", true, 0.2);
+    coordinator.handleEventFromOperator(0, event0);
+    coordinator.handleEventFromOperator(1, event1);
+
     CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
+
+    // Case 1: job restart restores checkpoint data before the coordinator starts.
+    try (StreamWriteOperatorCoordinator restoredCoordinator = createCoordinator(conf, 2)) {
+      restoredCoordinator.resetToCheckpoint(1, future.get());
+
+      WriteMetadataEvent[] eventBuffer = restoredCoordinator.getEventBuffer(-1);
+      assertEquals(2, eventBuffer.length);
+    }
+
+    // Case 2: global failover recommits the live buffers of the already started coordinator.
     coordinator.resetToCheckpoint(1, future.get());
+
+    assertNull(coordinator.getEventBuffer());
+    assertTrue(StreamerUtil.createMetaClient(conf).reloadActiveTimeline()
+        .filterCompletedInstants().containsInstant(instant));
   }
 
   @Test
@@ -154,7 +189,7 @@ public class TestStreamWriteOperatorCoordinator {
   public void testEventReset() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
-    coordinator = createCoordinator(conf, 2);
+    coordinator = startCoordinator(conf, 2);
     CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
     String instant = requestInstantTime(0);
@@ -197,7 +232,7 @@ public class TestStreamWriteOperatorCoordinator {
     conf.setString(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), "false");
 
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
-    coordinator = createCoordinator(conf, 2);
+    coordinator = startCoordinator(conf, 2);
 
     final CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
@@ -243,7 +278,7 @@ public class TestStreamWriteOperatorCoordinator {
     // override the default configuration
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(), HoodieFailedWritesCleaningPolicy.LAZY.name());
-    coordinator = createCoordinator(conf, 1);
+    coordinator = startCoordinator(conf, 1);
 
     assertTrue(coordinator.getWriteClient().getConfig().getFailedWritesCleanPolicy().isLazy());
 
@@ -289,7 +324,7 @@ public class TestStreamWriteOperatorCoordinator {
     // override the default configuration
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.set(FlinkOptions.HIVE_SYNC_ENABLED, true);
-    coordinator = createCoordinator(conf, 1);
+    coordinator = startCoordinator(conf, 1);
 
     String instant = mockWriteWithMetadata(0);
     assertNotEquals("", instant);
@@ -307,7 +342,7 @@ public class TestStreamWriteOperatorCoordinator {
     int metadataCompactionDeltaCommits = 5;
     conf.set(FlinkOptions.METADATA_ENABLED, true);
     conf.set(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, metadataCompactionDeltaCommits);
-    coordinator = createCoordinator(conf, 1);
+    coordinator = startCoordinator(conf, 1);
 
     String instant = coordinator.getInstant();
     assertEquals("", instant);
@@ -384,7 +419,7 @@ public class TestStreamWriteOperatorCoordinator {
     conf.set(FlinkOptions.METADATA_ENABLED, true);
     conf.set(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, 20);
     conf.setString("hoodie.metadata.log.compaction.enable", "true");
-    coordinator = createCoordinator(conf, 1);
+    coordinator = startCoordinator(conf, 1);
 
     String instant = coordinator.getInstant();
     assertEquals("", instant);
@@ -428,7 +463,7 @@ public class TestStreamWriteOperatorCoordinator {
     // override the default configuration
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.set(FlinkOptions.METADATA_ENABLED, true);
-    coordinator = createCoordinator(conf, 1);
+    coordinator = startCoordinator(conf, 1);
 
     String instant = coordinator.getInstant();
     assertEquals("", instant);
@@ -452,7 +487,7 @@ public class TestStreamWriteOperatorCoordinator {
     metadataTableMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instant);
     metadataTableMetaClient.reloadActiveTimeline();
     // reset the coordinator to mimic the job failover.
-    coordinator = createCoordinator(conf, 1);
+    coordinator = startCoordinator(conf, 1);
 
     // write another commit with new instant on the metadata timeline
     instant = mockWriteWithMetadata(ckp);
@@ -471,7 +506,7 @@ public class TestStreamWriteOperatorCoordinator {
     Logger logger = Mockito.mock(Logger.class); // avoid too many logs by executor
     NonThrownExecutor executor = NonThrownExecutor.builder(logger).waitForTasksFinish(true).build();
 
-    try (StreamWriteOperatorCoordinator coordinator = createCoordinator(conf, 1)) {
+    try (StreamWriteOperatorCoordinator coordinator = startCoordinator(conf, 1)) {
       coordinator.start();
       coordinator.setExecutor(executor);
       TimeUnit.SECONDS.sleep(5); // wait for handled bootstrap event
@@ -509,7 +544,7 @@ public class TestStreamWriteOperatorCoordinator {
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setString("hoodie.write.lock.client.num_retries", "1");
 
-    coordinator = createCoordinator(conf, 1);
+    coordinator = startCoordinator(conf, 1);
 
     String instant = coordinator.getInstant();
     assertEquals("", instant);
@@ -534,7 +569,7 @@ public class TestStreamWriteOperatorCoordinator {
   public void testCommitOnEmptyBatch() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setString(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), "true");
-    try (StreamWriteOperatorCoordinator coordinator = createCoordinator(conf, 2)) {
+    try (StreamWriteOperatorCoordinator coordinator = startCoordinator(conf, 2)) {
       // Coordinator start the instant
       String instant = requestInstantTime(coordinator, -1);
 
@@ -578,13 +613,18 @@ public class TestStreamWriteOperatorCoordinator {
     }
   }
 
-  private static StreamWriteOperatorCoordinator createCoordinator(Configuration conf, int subTasks) throws Exception {
-    MockOperatorCoordinatorContext coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), subTasks);
-    StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(conf, coordinatorContext);
+  private static StreamWriteOperatorCoordinator startCoordinator(Configuration conf, int subTasks) throws Exception {
+    StreamWriteOperatorCoordinator coordinator = createCoordinator(conf, subTasks);
     coordinator.start();
+    MockOperatorCoordinatorContext coordinatorContext = (MockOperatorCoordinatorContext) coordinator.getContext();
     coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
     coordinator.setInstantRequestExecutor(new MockCoordinatorExecutor(coordinatorContext));
     return coordinator;
+  }
+
+  private static StreamWriteOperatorCoordinator createCoordinator(Configuration conf, int subTasks) {
+    MockOperatorCoordinatorContext coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), subTasks);
+    return new StreamWriteOperatorCoordinator(conf, coordinatorContext);
   }
 
   private String mockWriteWithMetadata(long checkpointId) {
@@ -624,7 +664,7 @@ public class TestStreamWriteOperatorCoordinator {
     HoodieWriteStat writeStat = new HoodieWriteStat();
     writeStat.setPartitionPath(partitionPath);
     writeStat.setFileId("fileId123");
-    writeStat.setPath("path123");
+    writeStat.setPath(partitionPath + "/" + FSUtils.makeBaseFileName(instant, "1-0-1", "fileId123", ".parquet"));
     writeStat.setFileSizeInBytes(123);
     writeStat.setTotalWriteBytes(123);
     writeStat.setNumWrites(1);

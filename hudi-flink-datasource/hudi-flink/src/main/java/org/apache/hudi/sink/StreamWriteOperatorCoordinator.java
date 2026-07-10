@@ -241,7 +241,7 @@ public class StreamWriteOperatorCoordinator
       if (OptionsResolver.isMultiWriter(conf)) {
         initClientIds(conf);
       }
-      restoreEvents();
+      restoreEvents(Long.MAX_VALUE);
     } catch (Throwable throwable) {
       LOG.error("Failed to start operator coordinator.", throwable);
       context.failJob(throwable);
@@ -311,8 +311,17 @@ public class StreamWriteOperatorCoordinator
   @Override
   public void resetToCheckpoint(long checkpointID, byte[] checkpointData) {
     if (checkpointData != null) {
-      initEventBufferIfNecessary();
-      this.eventBuffers.addEventsToBuffer(SerializationUtils.deserialize(checkpointData));
+      // resetToCheckpoint() is called in two cases:
+      // 1. The job is restarted from state, start() will be called later.
+      // 2. The job is recovered from global failover. The coordinator is already started, and start() will not be called again.
+      if (this.eventBuffers == null) {
+        // case1: the events restore is moved to start() since it requires the write/meta client instantiation.
+        initEventBuffer();
+        this.eventBuffers.addEventsToBuffer(SerializationUtils.deserialize(checkpointData));
+      } else {
+        // case2: restore the events directly.
+        restoreEvents(checkpointID);
+      }
     }
   }
 
@@ -394,10 +403,11 @@ public class StreamWriteOperatorCoordinator
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private void restoreEvents() {
+  private void restoreEvents(long checkpointId) {
     if (this.eventBuffers.nonEmpty()) {
-      final HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
+      final HoodieTimeline completedTimeline = this.metaClient.reloadActiveTimeline().filterCompletedInstants();
       this.eventBuffers.getEventBufferStream()
+          .filter(entry -> entry.getKey() < checkpointId)
           .forEach(entry -> recommitInstant(completedTimeline, entry.getKey(), entry.getValue().getLeft(), entry.getValue().getRight()));
       this.metaClient.reloadActiveTimeline();
     }
@@ -460,6 +470,10 @@ public class StreamWriteOperatorCoordinator
     if (this.eventBuffers != null) {
       return;
     }
+    initEventBuffer();
+  }
+
+  private void initEventBuffer() {
     // initialize event buffer
     this.eventBuffers = EventBuffers.getInstance(conf);
   }
@@ -497,10 +511,12 @@ public class StreamWriteOperatorCoordinator
       LOG.info("Recommit instant {}", instant);
       // Recommit should start heartbeat for lazy failed writes clean policy to avoid aborting for heartbeat expired;
       // The following up checkpoints would recommit the instant.
-      if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()) {
-        writeClient.getHeartbeatClient().start(instant);
-      }
+      writeClient.restartHeartbeat(instant);
       commitInstant(checkpointId, instant, bootstrapBuffer);
+    } else {
+      // clean the corresponding event buffer if the instant is already committed.
+      eventBuffers.reset(checkpointId);
+      writeClient.cleanResources(instant);
     }
   }
 

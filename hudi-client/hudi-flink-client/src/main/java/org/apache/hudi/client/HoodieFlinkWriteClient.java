@@ -98,6 +98,22 @@ public class HoodieFlinkWriteClient<T>
     return FlinkHoodieIndexFactory.createIndex((HoodieFlinkEngineContext) context, config);
   }
 
+  /**
+   * Stop the heartbeat for the instant.
+   */
+  public void cleanResources(String instantTime) {
+    getHeartbeatClient().stop(instantTime);
+  }
+
+  /**
+   * Restart the heartbeat for a recommitted instant.
+   */
+  public void restartHeartbeat(String instantTime) {
+    if (getConfig().getFailedWritesCleanPolicy().isLazy()) {
+      getHeartbeatClient().start(instantTime);
+    }
+  }
+
   @Override
   public boolean commit(String instantTime, List<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
                         String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
@@ -537,5 +553,16 @@ public class HoodieFlinkWriteClient<T>
     public void close() {
       ((MiniBatchHandle) writeHandle).closeGracefully();
     }
+  }
+
+  /**
+   * Flink keeps the heartbeat active when a commit attempt fails because the coordinator may need to
+   * recommit the instant after failover. Successful commits stop the heartbeat from {@code postCommit},
+   * while {@link #cleanResources(String)} cleans up data-table resources for
+   * instants discarded or resolved by the coordinator. Therefore this generic hook is intentionally
+   * a no-op.
+   */
+  @Override
+  public void releaseResources(String instantTime) {
   }
 }

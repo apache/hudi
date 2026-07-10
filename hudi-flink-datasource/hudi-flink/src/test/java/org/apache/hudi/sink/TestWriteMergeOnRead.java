@@ -268,6 +268,33 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   }
 
   @Test
+  public void testRecommitOnGlobalFailover() throws Exception {
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");
+    expected.put("par2", "[id3,par2,id3,Julian,53,3,par2]");
+
+    preparePipeline(conf)
+        .consume(TestData.DATA_SET_PART1)
+        .emptyEventBuffer()
+        .checkpoint(1)
+        .assertNextEvent(1, "par1")
+        .consume(TestData.DATA_SET_PART3)
+        .checkpoint(2)
+        // both ckp-1 and ckp-2 are not committing
+        .assertNextEvent(1, "par2")
+        .checkCompletedInstantCount(0)
+        // Simulate the global failover path. The coordinator resets to ckp-2, recommits ckp-1
+        // from the coordinator state, and recommits ckp-2 from the restored writer state.
+        .jobFailover()
+        .checkCompletedInstantCount(2)
+        .checkWrittenData(expected, 2)
+        .end();
+  }
+
+  @Test
   public void testInsertDuplicateRecordsWithCDCMode() throws Exception {
     conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
     conf.set(FlinkOptions.CDC_ENABLED, true);
