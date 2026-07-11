@@ -138,7 +138,7 @@ graph LR
 
     subgraph Driver["Standalone / Spark Driver"]
         subgraph TimelineServer["Javalin (Timeline Server)"]
-            Static["/ui + assets at root\n(HTML, JS, CSS)"]
+            Static["/ui entry + /ui/static/*\n(HTML, JS, CSS)"]
             API["/v2/hoodie/view/* - TimelineHandler"]
             FSVM["FileSystemViewManager"]
             Meta["HoodieTimeline / MetaClient"]
@@ -163,9 +163,9 @@ graph LR
 
 There are two categories of requests:
 
-1. **Static file requests** - Javalin serves HTML, JavaScript, and CSS files from the classpath
-   (`src/main/resources/public/`) at the server root; `UiHandler` serves `index.html` at `/ui`. No server-side
-   rendering or template engine is needed.
+1. **Static file requests** - Javalin serves JavaScript, CSS, and library assets from the classpath
+   (`src/main/resources/public/`) under the `/ui/static/` URL prefix; `UiHandler` serves `index.html` at `/ui`. No
+   server-side rendering or template engine is needed.
 2. **REST API requests** (`/v2/hoodie/view/*`) - `TimelineHandler` processes these requests, reading timeline data from
    the `FileSystemViewManager` (and a per-basepath `HoodieTableMetaClient` for table config/schema), returning JSON.
 
@@ -201,10 +201,10 @@ hudi-timeline-service/src/main/resources/public/
 
 #### JavaScript Delivery: Bundled, No External Calls
 
-All three libraries are served from bundled copies under `/lib/` (`/lib/vis-timeline/`, `/lib/bootstrap/`,
-`/lib/renderjson/`). The UI makes no external network calls, so it works out of the box in air-gapped and
-security-conscious deployments with no extra configuration. The bundled, minified assets add ~890KB to the JAR
-(vis-timeline ~575KB, Bootstrap 5 ~305KB, renderjson ~11KB).
+All three libraries are served from bundled copies under `/ui/static/lib/` (`/ui/static/lib/vis-timeline/`,
+`/ui/static/lib/bootstrap/`, `/ui/static/lib/renderjson/`). The UI makes no external network calls, so it works out of
+the box in air-gapped and security-conscious deployments with no extra configuration. The bundled, minified assets add
+~890KB to the JAR (vis-timeline ~575KB, Bootstrap 5 ~305KB, renderjson ~11KB).
 
 Pinning a vendored copy (rather than loading from a CDN) keeps the UI deterministic and avoids a runtime dependency on
 an external host being reachable. If automatic patch updates are wanted later, a CDN source can be added as an opt-in
@@ -243,9 +243,12 @@ We extend this module with `/v2/` APIs to serve the timeline metadata needed by 
 | GET    | `/v2/hoodie/view/table/config`          | `basepath` (required)                                                 | JSON object     | The table's `hoodie.properties` (sorted)                                                     |
 | GET    | `/v2/hoodie/view/table/schema/history`  | `basepath` (required), `limit` (optional, default 200, max 1000)      | JSON object     | Current table schema plus schema-change history from recent commits                          |
 
-Static files (HTML, JS, CSS) are served from the classpath under `src/main/resources/public/` at the server root (e.g.,
-`/js/timeline.js`, `/lib/...`). `UiHandler` additionally registers `GET /ui`, which returns `index.html` to give the UI
-a stable entry URL.
+Static assets (JS, CSS, library files) are served from the classpath directory `src/main/resources/public/`, mounted
+under the `/ui/static/` URL prefix via Javalin's static-files `hostedPath` (e.g., `/ui/static/js/timeline.js`,
+`/ui/static/lib/...`). Namespacing everything UI under `/ui` keeps the UI surface from colliding with `/v1/`, `/v2/`, or
+any future module-registered routes on the same Javalin instance, rather than reserving root prefixes like `/js`,
+`/css`, and `/lib`. `UiHandler` additionally registers `GET /ui`, which returns `index.html` (with asset links pointing
+at `/ui/static/...`) to give the UI a stable entry URL.
 
 **On response size and pagination:** `GET /v2/hoodie/view/timeline/instants/all` returns the full active timeline. The
 active timeline is bounded by archiving (the unbounded archived timeline is out of scope), so instant counts are
