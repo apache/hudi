@@ -175,8 +175,9 @@ The frontend is static HTML pages with vanilla JavaScript, similar to the Spark 
 serving handles files from the classpath - no template engine (e.g., Thymeleaf) is needed and no new Java compile-time
 dependencies are added.
 
-No frontend build pipeline (npm, webpack, vite) is needed. Contributing to the UI requires only a text editor. The only
-external library is vis-timeline for timeline rendering.
+No frontend build pipeline (npm, webpack, vite) is needed. Contributing to the UI requires only a text editor. Three
+libraries are vendored as static assets: vis-timeline (timeline rendering), Bootstrap 5 (layout/styling), and renderjson
+(collapsible JSON in the detail panel).
 
 #### File Structure
 
@@ -187,17 +188,23 @@ hudi-timeline-service/src/main/resources/public/
 │   └── timeline.js                # vis-timeline initialization and REST API calls
 ├── css/
 │   └── style.css                  # Basic styling
-└── lib/
-    └── vis-timeline/              # Bundled vis-timeline assets
-        ├── vis-timeline-graph2d.min.js
-        └── vis-timeline-graph2d.min.css
+└── lib/                           # Vendored third-party assets (see Dependency Impact)
+    ├── vis-timeline/              # Timeline rendering (Apache-2.0 OR MIT)
+    │   ├── vis-timeline-graph2d.min.js
+    │   └── vis-timeline-graph2d.min.css
+    ├── bootstrap/                 # Layout/styling (MIT)
+    │   ├── bootstrap.bundle.min.js
+    │   └── bootstrap.min.css
+    └── renderjson/                # Collapsible JSON detail panel (ISC)
+        └── renderjson.js
 ```
 
 #### JavaScript Delivery: Bundled, No External Calls
 
-The vis-timeline library is served from the bundled copy at `/lib/vis-timeline/`. The UI makes no external network
-calls, so it works out of the box in air-gapped and security-conscious deployments with no extra configuration. The
-bundled assets add ~300KB to the JAR.
+All three libraries are served from bundled copies under `/lib/` (`/lib/vis-timeline/`, `/lib/bootstrap/`,
+`/lib/renderjson/`). The UI makes no external network calls, so it works out of the box in air-gapped and
+security-conscious deployments with no extra configuration. The bundled, minified assets add ~890KB to the JAR
+(vis-timeline ~575KB, Bootstrap 5 ~305KB, renderjson ~11KB).
 
 Pinning a vendored copy (rather than loading from a CDN) keeps the UI deterministic and avoids a runtime dependency on
 an external host being reachable. If automatic patch updates are wanted later, a CDN source can be added as an opt-in
@@ -449,7 +456,18 @@ with a `HoodieSparkEngineContext`.
 
 - **Zero new Java compile-time dependencies.** The frontend uses Javalin's built-in static file serving; no template
   engine is added.
-- **vis-timeline JS/CSS:** ~300KB bundled as static resources under `src/main/resources/public/lib/vis-timeline/`.
+- **Three vendored frontend libraries (~890KB total)** bundled as static resources under
+  `src/main/resources/public/lib/`. All are ASF Category A licenses and may be redistributed in a release:
+    - **vis-timeline** (`lib/vis-timeline/`, ~575KB) - timeline rendering. Dual-licensed Apache-2.0 OR MIT.
+    - **Bootstrap 5** (`lib/bootstrap/`, ~305KB) - layout and styling. MIT.
+    - **renderjson** (`lib/renderjson/`, ~11KB) - collapsible JSON in the detail panel. ISC.
+- **LICENSE/NOTICE obligations.** Each vendored library needs a "This product bundles ..." stanza in the source-release
+  top-level `LICENSE` (and in the `hudi-timeline-server-bundle` LICENSE, since the assets ship inside that JAR) naming
+  the library, its license, and its copyright, with the full MIT/ISC license text inlined the same way existing bundled
+  code is handled in `LICENSE`. The minified files already carry their upstream copyright headers, which must be
+  preserved. No `NOTICE` changes are required: MIT and ISC do not mandate NOTICE entries, and vis-timeline is taken
+  under its MIT option (ASF policy discourages adding MIT/ISC copyrights to `NOTICE`); were vis-timeline instead taken
+  under Apache-2.0, any upstream `NOTICE` content it ships would have to be propagated.
 - **Spark UI tab (planned follow-up):** Will use existing `spark-core` APIs (`WebUITab`, `WebUIPage`), already provided
   in `hudi-spark-client`. No new JARs are added.
 - **No impact on Spark/Flink bundles.** `hudi-timeline-server-bundle` is a separate artifact; adding static resources
