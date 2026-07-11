@@ -27,7 +27,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.functions.col
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 /** Row shape written by these tests. A nested struct and an array are included so the legacy
  * parquet read path is exercised on complex types -- the historically fragile vectorized
@@ -80,6 +80,13 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase {
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession
+    // The test schema carries a nested struct and an array. On the legacy parquet read path, batch
+    // (vectorized) support for such complex types is additionally gated on nested-column
+    // vectorization, which defaults off on spark3.3 and on only from spark3.4. Enable it so the
+    // vectorized nested-column branch -- the one HUDI-7190 fixed -- is exercised on every Spark
+    // profile instead of silently falling back to parquet-mr on 3.3 (which would make the vectorized
+    // and non-vectorized cases below collapse onto the same row-based path there).
+    spark.conf.set("spark.sql.parquet.enableNestedColumnVectorizedReader", "true")
     initHoodieStorage()
   }
 
@@ -144,6 +151,20 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase {
     spark.baseRelationToDataFrame(hadoopFsRelation)
   }
 
+  /**
+   * Whether the legacy parquet format engages its vectorized (batch) reader for the table's
+   * schema. Because the schema carries a nested struct and an array, batch support additionally
+   * requires nested-column vectorization; asserting on this pins which branch of the reader a test
+   * exercises so the vectorized and row-based cases cannot silently collapse onto one path (e.g. if
+   * a Spark default change dropped nested-column vectorization on some profile).
+   */
+  private def legacyFormatSupportsBatch: Boolean = {
+    val metaClient = createMetaClient(spark, basePath)
+    val hadoopFsRelation =
+      BaseFileOnlyRelation(sqlContext, metaClient, legacyReadOpts(Map.empty), None).toHadoopFsRelation
+    hadoopFsRelation.fileFormat.supportBatch(spark, hadoopFsRelation.schema)
+  }
+
   private def collectSorted(df: DataFrame): Seq[Row] =
     df.select(comparedCols.map(col): _*).collect().toSeq.sortBy(_.getAs[String]("id").toInt)
 
@@ -156,6 +177,12 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase {
   @Test
   def testCowSnapshotReadEqualsFileGroupReader(): Unit = {
     writeTwoCommits()
+
+    // With nested-column vectorization enabled (see setUp), the legacy format must take its
+    // vectorized branch on every profile; otherwise this would degenerate to the same row-based
+    // path as testCowSnapshotReadWithoutVectorizedReader.
+    assertTrue(legacyFormatSupportsBatch,
+      "Legacy parquet format must engage the vectorized reader on the nested-column schema")
 
     val newReaderDf = fgReaderDf()
     assertEquals(30, newReaderDf.count())
@@ -177,7 +204,11 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase {
     val previous = spark.conf.get(vectorizedKey, "true")
     spark.conf.set(vectorizedKey, "false")
     try {
-      // Row-based (non-batch) branch of the legacy parquet file format.
+      // Row-based (non-batch) branch of the legacy parquet file format. Pin that the disabled
+      // vectorized reader really forces the fallback path, so this case stays distinct from the
+      // vectorized one above on every profile.
+      assertFalse(legacyFormatSupportsBatch,
+        "Disabling the vectorized reader must force the legacy parquet format onto the row-based path")
       val newReaderDf = fgReaderDf()
       assertSameRows(newReaderDf, legacyFileFormatDf())
       assertSameRows(newReaderDf, legacyRelationDf())
