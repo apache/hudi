@@ -17,13 +17,44 @@ limitations under the License.
 -->
 # hudi-k8s-lakehouse
 
-Kubernetes packaging for running a Hudi lakehouse. Two clearly separated
-concerns:
+Kubernetes packaging for running a Hudi lakehouse: deployable Helm charts for
+the components, plus a self-contained laptop environment to develop against.
 
-1. **`charts/` — deployable product charts.** Components you install against
-   *real* infrastructure. A lakehouse is a decoupled architecture: writers,
-   object storage, the catalog, and query engines are independent — so each
-   chart deploys one component and points at the others via values.
+## Quickstart (one command)
+
+Prereqs: `docker`, `minikube`, `helm`, `kubectl`, `mvn`, a JDK (11/17 for the
+Hudi build; a JDK 23 for the Trino connector is auto-provisioned if missing).
+
+```bash
+./hudi-k8s-lakehouse/scripts/quickstart.sh --run-example
+```
+
+The script is **idempotent** — run it as many times as you like; every step
+(minikube, maven artifacts, container images, Kubernetes releases) checks
+whether its work is already done and converges. It brings up MinIO, a Hive
+Metastore, the Apache Spark Kubernetes Operator, and Trino with the Hudi
+connector; `--run-example` additionally runs a Spark job that writes a Hudi
+table, registers it in the metastore, and queries it back through Trino:
+
+```
+     city      | trips
+---------------+-------
+ chennai       |    33
+ san_francisco |    34
+ sao_paulo     |    33
+```
+
+Tear down with `./hudi-k8s-lakehouse/local-dev/scripts/down.sh`.
+
+## Layout: two separated concerns
+
+A lakehouse is a decoupled architecture — writers, object storage, the
+catalog, and query engines are independent. This directory keeps the
+*deployable product* separate from the *development scaffolding*:
+
+1. **`charts/` — product charts.** Components you install against **real**
+   infrastructure. Each chart deploys one component and points at the others
+   via values.
 
    | Chart | What it deploys | Points at |
    |---|---|---|
@@ -33,38 +64,42 @@ concerns:
 
 2. **`local-dev/` — a laptop environment.** Minikube scaffolding that stands
    up everything the charts point at (MinIO, a Derby-backed Hive Metastore,
-   the Apache Spark Kubernetes Operator), installs the same `hudi-trino`
-   chart with local values, and ships a copy-me [`example/`](local-dev/example)
-   for submitting Spark jobs. See [`local-dev/README.md`](local-dev/README.md).
+   the Spark operator), installs the same `hudi-trino` chart with local
+   values, and ships a copy-me [`example/`](local-dev/example) for submitting
+   Spark jobs. Details: [`local-dev/README.md`](local-dev/README.md).
+
+## Scripts
+
+| Script | Purpose |
+|---|---|
+| `scripts/quickstart.sh` | one-command idempotent bring-up (everything below, in order) |
+| `scripts/build-jars.sh` | maven builds: hudi-spark bundle (JDK 11/17) + hudi-trino-plugin (JDK 23) |
+| `scripts/build-images.sh` | stages jars and builds the two container images; `--registry`/`--push` for clusters |
+| `local-dev/scripts/up.sh` | manifests + spark-operator + hudi-trino chart onto the current kube context |
+| `local-dev/scripts/run-example.sh` | uploads the example job and submits it as a `SparkApplication` |
+| `local-dev/scripts/smoke-test.sh` | end-to-end assert: up → example → Trino row counts |
+| `local-dev/scripts/down.sh` | full teardown |
 
 ## Deploying `hudi-trino` against real infrastructure
 
 ```bash
-# build the connector + image (see "Building" below), push to your registry, then:
+# build + push the image, then:
+./hudi-k8s-lakehouse/scripts/build-jars.sh
+./hudi-k8s-lakehouse/scripts/build-images.sh --registry my.registry/team --push
+
 helm install hudi-trino hudi-k8s-lakehouse/charts/hudi-trino \
-  --set image.repository=my.registry/hudi-lakehouse-trino \
+  --set image.repository=my.registry/team/hudi-lakehouse-trino \
   --set catalog.metastore.uri=thrift://my-hms.example.internal:9083 \
   --set catalog.filesystem.s3.existingSecret=my-s3-creds
 # or for AWS Glue + IAM-based S3 access:
 helm install hudi-trino hudi-k8s-lakehouse/charts/hudi-trino \
-  --set image.repository=my.registry/hudi-lakehouse-trino \
+  --set image.repository=my.registry/team/hudi-lakehouse-trino \
   --set catalog.metastore.type=glue
 ```
 
 `charts/hudi-trino/values-local-dev.yaml` is a fully worked example of the
-values surface.
-
-## Building
-
-Two artifacts come from this repository; the images are thin layers over
-official upstream images (no binaries are committed to git — build outputs
-are staged into gitignored `images/*/target/` directories):
-
-```bash
-./hudi-k8s-lakehouse/scripts/build-jars.sh      # 1) hudi-spark bundle (JDK 11/17)  2) hudi-trino-plugin (JDK 23)
-./hudi-k8s-lakehouse/scripts/build-images.sh    # hudi-lakehouse-trino:472, hudi-lakehouse-spark:3.5
-# cluster use: ./scripts/build-images.sh --registry my.registry/team --push
-```
+values surface. No binaries are ever committed: image builds stage locally
+built jars into gitignored `images/*/target/` directories.
 
 ## Version compatibility notes
 
@@ -79,5 +114,6 @@ are staged into gitignored `images/*/target/` directories):
   pin goes away once the plugin's Hudi dependency is upgraded to a release
   that reads the current table version.
 - The Spark image's Scala version must match the bundle:
-  `apache/spark:3.5.x`/Scala 2.12 ↔ `-Pspark3.5`; `apache/spark:4.1.x`/Scala
-  2.13 ↔ `-Pspark4.1` (`build-images.sh --spark-version 4.1`, experimental).
+  `apache/spark:3.5.x`/Scala 2.12 ↔ `-Pspark3.5` (default);
+  `apache/spark:4.1.x`/Scala 2.13 ↔ `-Pspark4.1`
+  (`quickstart.sh --spark-version 4.1`, experimental).

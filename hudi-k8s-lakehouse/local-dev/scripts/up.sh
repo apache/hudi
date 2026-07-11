@@ -37,6 +37,9 @@ done
 kubectl apply -f "$HERE/manifests/namespace.yaml"
 kubectl apply -f "$HERE/manifests/minio.yaml"
 kubectl apply -f "$HERE/manifests/hive-metastore.yaml"
+# Jobs are immutable: delete any previous run so re-applying converges
+# (the job itself is a no-op when the bucket already exists).
+kubectl -n "$NS" delete job minio-make-bucket --ignore-not-found
 kubectl apply -f "$HERE/manifests/minio-bucket-job.yaml"
 
 echo ">>> Installing Apache Spark Kubernetes Operator (chart ${SPARK_OPERATOR_VERSION})"
