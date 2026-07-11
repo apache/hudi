@@ -21,9 +21,16 @@ RUN groupadd --gid 1000 gateway && \
     useradd --uid 1000 --gid gateway --create-home gateway
 
 WORKDIR /opt/hudi-ai-gateway
+# Install third-party dependencies in their own layer (cached across source
+# changes) by building against a stub package first, then overlay the real
+# sources with a fast no-deps reinstall.
 COPY pyproject.toml README.md ./
+RUN mkdir -p src/hudi_ai_gateway \
+    && printf '__version__ = "0.1.0"\n' > src/hudi_ai_gateway/__init__.py \
+    && pip install --no-cache-dir . \
+    && pip uninstall -y hudi-ai-gateway
 COPY src ./src
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir --no-deps .
 
 USER gateway
 EXPOSE 8000
