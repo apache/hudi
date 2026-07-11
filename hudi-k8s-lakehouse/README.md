@@ -1,0 +1,83 @@
+<!--
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+# hudi-k8s-lakehouse
+
+Kubernetes packaging for running a Hudi lakehouse. Two clearly separated
+concerns:
+
+1. **`charts/` — deployable product charts.** Components you install against
+   *real* infrastructure. A lakehouse is a decoupled architecture: writers,
+   object storage, the catalog, and query engines are independent — so each
+   chart deploys one component and points at the others via values.
+
+   | Chart | What it deploys | Points at |
+   |---|---|---|
+   | `hudi-trino` | Trino (server 472) with the Hudi connector built from this repository | your Hive Metastore or AWS Glue; your S3/GCS |
+
+   (Planned siblings as the stack grows: vLLM wiring, the hudi-ai-gateway.)
+
+2. **`local-dev/` — a laptop environment.** Minikube scaffolding that stands
+   up everything the charts point at (MinIO, a Derby-backed Hive Metastore,
+   the Apache Spark Kubernetes Operator), installs the same `hudi-trino`
+   chart with local values, and ships a copy-me [`example/`](local-dev/example)
+   for submitting Spark jobs. See [`local-dev/README.md`](local-dev/README.md).
+
+## Deploying `hudi-trino` against real infrastructure
+
+```bash
+# build the connector + image (see "Building" below), push to your registry, then:
+helm install hudi-trino hudi-k8s-lakehouse/charts/hudi-trino \
+  --set image.repository=my.registry/hudi-lakehouse-trino \
+  --set catalog.metastore.uri=thrift://my-hms.example.internal:9083 \
+  --set catalog.filesystem.s3.existingSecret=my-s3-creds
+# or for AWS Glue + IAM-based S3 access:
+helm install hudi-trino hudi-k8s-lakehouse/charts/hudi-trino \
+  --set image.repository=my.registry/hudi-lakehouse-trino \
+  --set catalog.metastore.type=glue
+```
+
+`charts/hudi-trino/values-local-dev.yaml` is a fully worked example of the
+values surface.
+
+## Building
+
+Two artifacts come from this repository; the images are thin layers over
+official upstream images (no binaries are committed to git — build outputs
+are staged into gitignored `images/*/target/` directories):
+
+```bash
+./hudi-k8s-lakehouse/scripts/build-jars.sh      # 1) hudi-spark bundle (JDK 11/17)  2) hudi-trino-plugin (JDK 23)
+./hudi-k8s-lakehouse/scripts/build-images.sh    # hudi-lakehouse-trino:472, hudi-lakehouse-spark:3.5
+# cluster use: ./scripts/build-images.sh --registry my.registry/team --push
+```
+
+## Version compatibility notes
+
+- **Trino server is pinned to 472**: the `hudi-trino-plugin` performs a strict
+  SPI version match at load time. The chart deliberately has no Trino version
+  knob; it tracks the plugin.
+- **Table version pin**: the plugin currently reads with a Hudi 1.0.x runtime,
+  which understands table versions 6 and 8. Writers on this repository's
+  master default to a newer table version, so any table Trino must read has to
+  be written with `hoodie.write.table.version=8` and
+  `hoodie.write.auto.upgrade=false` (the local-dev example does this). This
+  pin goes away once the plugin's Hudi dependency is upgraded to a release
+  that reads the current table version.
+- The Spark image's Scala version must match the bundle:
+  `apache/spark:3.5.x`/Scala 2.12 ↔ `-Pspark3.5`; `apache/spark:4.1.x`/Scala
+  2.13 ↔ `-Pspark4.1` (`build-images.sh --spark-version 4.1`, experimental).

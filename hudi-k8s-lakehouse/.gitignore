@@ -1,0 +1,4 @@
+target/
+*.tgz
+Chart.lock
+charts/*/charts/
