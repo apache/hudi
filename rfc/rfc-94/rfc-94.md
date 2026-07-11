@@ -255,15 +255,23 @@ optional `from`/`to` time-range query params (and/or a `limit`) without breaking
 
 #### DTO Design
 
-Two v2 DTOs are introduced in a `v2` package to avoid modifying the existing `/v1/` API contract:
+The UI's timeline endpoint returns a `TimelineDTOV2` built from two v2 DTOs in a `v2` package, leaving the existing
+`/v1/` API contract untouched.
 
-- **`InstantDTO`** (`o.a.h.common.table.timeline.dto.v2`) - the v1 `InstantDTO` only exposes `action`, `timestamp`
-  (requested time), and `state`; it lacks completion time, needed for rendering range bars. The v2 `InstantDTO` has:
+The v1 `InstantDTO` already carries everything needed to render range bars - `fromInstant` populates both
+`requestedTime` and `completionTime` from `HoodieInstant` (added under HUDI-9332) - so the UI could consume the v1
+timeline DTO directly. The v2 DTOs are not about exposing new fields; they are a deliberate, low-cost choice to give the
+new `/v2/` API a cleaner JSON contract:
+
+- **`InstantDTO`** (`o.a.h.common.table.timeline.dto.v2`) - the same source fields as v1, with UI-oriented JSON keys:
     - `action` - the action type (e.g., `commit`, `deltacommit`, `compaction`)
     - `requestedTime` (JSON `requestTs`) - requested timestamp (`HoodieInstant.requestedTime()`)
     - `completionTime` (JSON `completionTs`) - completion timestamp (`HoodieInstant.getCompletionTime()`), null for
       non-completed instants
     - `state` - the instant state (`REQUESTED`, `INFLIGHT`, `COMPLETED`)
+
+  Versus v1, this renames `requestedTime`/`completionTime` to `requestTs`/`completionTs` and drops v1's redundant legacy
+  `ts` field (a duplicate of the requested time that the UI does not need).
 - **`TimelineDTOV2`** - wraps a `List<InstantDTO>` (`instants`); this is what `/v2/hoodie/view/timeline/instants/all`
   returns.
 
