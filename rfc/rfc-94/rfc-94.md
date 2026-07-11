@@ -106,11 +106,19 @@ The following are **out of scope**:
 - **Authentication/authorization:** No access control is added. The timeline server is assumed to run in a trusted
   network, same as today.
 
-  **Threat model:** The UI does not widen the timeline server's exposure surface. The `/v2/` endpoints read the same
-  active-timeline and filesystem metadata that the existing `/v1/` REST APIs already serve, on the same network
-  interface (the server binds to all interfaces on the driver/standalone host). The UI is also opt-in and off by default
-  (`--enable-ui`). Operators on untrusted networks should front the server with a reverse proxy or restrict it to a
-  private interface / localhost via network policy.
+  **Threat model:** The timeline and instant-detail views are `/v1`-parity - they read the same active-timeline and
+  filesystem metadata the existing `/v1/` REST APIs already serve, on the same network interface (the server binds to
+  all interfaces on the driver/standalone host). Two views widen the read surface beyond `/v1`, whose routes serve only
+  file-slice/base-file/timeline DTOs: the table-config view (`/v2/hoodie/view/table/config`) returns the full
+  `hoodie.properties` via `HoodieTableConfig.getProps()`, and the schema-history view
+  (`/v2/hoodie/view/table/schema/history`) exposes current and historical table schemas. Table properties can reference
+  sensitive material - KMS endpoints, lock-provider connection strings, external key/vault paths - though they rarely
+  embed secrets directly. The first cut serves table config unfiltered (sorted, as-is); the same content is already
+  readable by anyone with filesystem access to `.hoodie/hoodie.properties`. The primary control is that all UI routes,
+  including these two, are gated behind `--enable-ui` (off by default), with the server assumed to run on a trusted
+  network; a redacting/allowlisted config view is a possible future refinement for less-trusted interfaces. The UI adds
+  no write or mutation capability. Operators on untrusted networks should front the server with a reverse proxy or
+  restrict it to a private interface / localhost via network policy.
 
 ## Implementation
 
