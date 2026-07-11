@@ -241,7 +241,7 @@ We extend this module with `/v2/` APIs to serve the timeline metadata needed by 
 | GET    | `/v2/hoodie/view/timeline/instants/all` | `basepath` (required)                                                 | `TimelineDTOV2` | All active instants (each with requested time, completion time, action, state), wrapped in a timeline DTO |
 | GET    | `/v2/hoodie/view/timeline/instant`      | `basepath`, `instant`, `instantaction`, `instantstate` (all required) | JSON string     | Deserialized content of a specific instant's metadata (Avro -> JSON)                         |
 | GET    | `/v2/hoodie/view/table/config`          | `basepath` (required)                                                 | JSON object     | The table's `hoodie.properties` (sorted)                                                     |
-| GET    | `/v2/hoodie/view/table/schema/history`  | `basepath` (required), `limit` (optional, default 200, max 1000)      | JSON object     | Current table schema plus schema-change history from recent commits                          |
+| GET    | `/v2/hoodie/view/table/schema/history`  | `basepath` (required), `limit` (optional, default 200, max 1000)      | JSON object     | Current schema, per-commit schema-change history from the last `limit` commits, and `.schema` internal-schema history when present |
 
 Static assets (JS, CSS, library files) are served from the classpath directory `src/main/resources/public/`, mounted
 under the `/ui/static/` URL prefix via Javalin's static-files `hostedPath` (e.g., `/ui/static/js/timeline.js`,
@@ -290,11 +290,36 @@ The v2 endpoints are served by the existing `TimelineHandler` (which already ser
 2. `getInstantDetails(basePath, instant, action, state)` - reads the instant's Avro content via the active timeline's
    `getInstantDetails()` and deserializes it to JSON. The instant is created with the timeline's own layout-aware
    `InstantGenerator`; a malformed `state`/`action` returns 400, a read failure is logged and returns 500.
-3. `getTableConfig(basePath)` / `getSchemaHistory(basePath, limit)` - serve the table-config and schema-history views.
-   Both reuse a `HoodieTableMetaClient` cached per basepath in a `ConcurrentHashMap` (built once on first access), so
-   repeated requests pay only the targeted read, not metaClient construction.
+3. `getTableConfig(basePath)` - returns the table's `hoodie.properties` as a sorted JSON object.
+4. `getSchemaHistory(basePath, limit)` - reconstructs schema evolution from two sources; see
+   [Schema-History Reconstruction](#schema-history-reconstruction) below.
+
+Both `getTableConfig` and `getSchemaHistory` reuse a `HoodieTableMetaClient` cached per basepath in a
+`ConcurrentHashMap` (built once on first access), so repeated requests pay only the targeted read, not metaClient
+construction.
 
 `UiHandler` registers `GET /ui`, returning `/public/index.html` from the classpath as the UI entry page.
+
+#### Schema-History Reconstruction
+
+`getSchemaHistory` combines both schema sources Hudi maintains, so it returns something useful whether or not the table
+uses schema evolution:
+
+- **`currentSchema`** - the current table schema from `TableSchemaResolver.getTableSchema()`; `null` if it cannot be
+  resolved.
+- **`history`** - walks the completed commits timeline (`commit`/`deltacommit`/`replacecommit`), the most recent `limit`
+  instants only (default 200, capped at 1000), reading each instant's `HoodieCommitMetadata` and taking the schema under
+  `HoodieCommitMetadata.SCHEMA_KEY` (the `schema` entry in commit `extraMetadata`). An entry (`instant`,
+  `completionTime`, `action`, `schema`) is recorded only when the schema differs from the previous instant's, so runs of
+  commits carrying the same schema collapse to one change entry. Instants whose metadata cannot be read are skipped.
+- **`internalSchemaHistory`** (optional) - when `InternalSchema` is in use, the `.hoodie/.schema/` history string from
+  `FileBasedInternalSchemaStorageManager.getHistorySchemaStr()` is added for richer evolution tracking. It is omitted
+  when the `.schema` directory is absent - the common case for tables that never enabled schema evolution.
+
+**Cost model:** one schema resolve, at most `limit` completed-commit metadata reads (bounded further by the active
+timeline, since the archived timeline is out of scope), and one `.schema` history-file read. A table that never evolved
+its schema resolves `currentSchema`, collapses `history` to a single entry (or none if no commit recorded a schema), and
+omits `internalSchemaHistory` - no extra scanning and no error.
 
 #### Registration in RequestHandler
 
