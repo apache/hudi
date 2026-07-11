@@ -29,6 +29,18 @@ import org.apache.spark.sql.functions.col
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
+/** Row shape written by these tests. A nested struct and an array are included so the legacy
+ * parquet read path is exercised on complex types -- the historically fragile vectorized
+ * nested-column branch (e.g. HUDI-7190), not just flat scalar columns. */
+private case class LegacyNested(a: Int, b: String)
+
+private case class LegacyTestRow(id: String,
+                                 ts: Long,
+                                 value: Long,
+                                 partition: String,
+                                 nested: LegacyNested,
+                                 tags: Seq[Int])
+
 /**
  * Functional tests for the legacy (pre-file-group-reader) Spark read path:
  * [[BaseFileOnlyRelation]], [[IncrementalRelationV1]], [[IncrementalRelationV2]] and the
@@ -58,8 +70,10 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase {
   )
 
   // Columns compared across the read paths; meta fields are persisted in the base files, so the
-  // record key and commit time must match exactly between the legacy and new readers.
-  private val comparedCols = Seq("_hoodie_commit_time", "_hoodie_record_key", "id", "ts", "value", "partition")
+  // record key and commit time must match exactly between the legacy and new readers. `nested` and
+  // `tags` force the legacy parquet reader through its complex-type (struct / array) branch.
+  private val comparedCols =
+    Seq("_hoodie_commit_time", "_hoodie_record_key", "id", "ts", "value", "partition", "nested", "tags")
 
   @BeforeEach override def setUp(): Unit = {
     setTableName("legacy_read_path_tbl")
@@ -74,11 +88,12 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase {
     spark = null
   }
 
-  private def makeRows(ids: Seq[Int], ts: Long, valueFn: Int => Long): Seq[(String, Long, Long, String)] =
-    ids.map(i => (i.toString, ts, valueFn(i), "p" + (i % 3)))
+  private def makeRows(ids: Seq[Int], ts: Long, valueFn: Int => Long): Seq[LegacyTestRow] =
+    ids.map(i => LegacyTestRow(i.toString, ts, valueFn(i), "p" + (i % 3),
+      LegacyNested(i, "v" + valueFn(i)), Seq(i, ts.toInt)))
 
-  private def writeBatch(rows: Seq[(String, Long, Long, String)], operation: String): Unit = {
-    spark.createDataFrame(rows).toDF("id", "ts", "value", "partition")
+  private def writeBatch(rows: Seq[LegacyTestRow], operation: String): Unit = {
+    spark.createDataFrame(rows)
       .write.format("hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, operation)
@@ -130,7 +145,7 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase {
   }
 
   private def collectSorted(df: DataFrame): Seq[Row] =
-    df.select(comparedCols.map(col): _*).collect().toSeq.sortBy(_.getString(2).toInt)
+    df.select(comparedCols.map(col): _*).collect().toSeq.sortBy(_.getAs[String]("id").toInt)
 
   private def assertSameRows(expected: DataFrame, actual: DataFrame): Unit = {
     val expectedRows = collectSorted(expected)
