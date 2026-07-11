@@ -295,13 +295,13 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   }
 
   /**
-   * Checks whether the last synced commit trails the midpoint of the active commits timeline.
-   * Under conditional sync, the marker advances only when a sync detects a schema, table
-   * property, or partition change; a sync that finds none of those leaves the marker in place,
-   * independent of whether the commit wrote data. Once the marker falls behind the start of the
-   * active timeline, every subsequent round reads the archived timeline to compute the written
-   * and dropped partitions since the marker. Advancing the marker when it crosses the midpoint
-   * bounds that staleness with an infrequent marker update.
+   * Checks whether last commit time synced trails the midpoint of the active commits timeline.
+   * Under conditional sync, last commit time synced advances only when a sync detects a schema,
+   * table property, or partition change; a sync that finds none of those leaves it unchanged,
+   * independent of whether the commit wrote data. Once last commit time synced falls behind the
+   * start of the active timeline, every subsequent round reads the archived timeline to compute
+   * the written and dropped partitions since that instant. Advancing it when it crosses the
+   * midpoint bounds that staleness with an infrequent table-property update.
    */
   private boolean isLastCommitTimeSyncedBehindTimelineMidpoint(String tableName) {
     Option<String> lastCommitTimeSynced = syncClient.getLastCommitTimeSynced(tableName);
