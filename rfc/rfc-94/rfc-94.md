@@ -303,8 +303,17 @@ The v2 endpoints are served by the existing `TimelineHandler` (which already ser
    [Schema-History Reconstruction](#schema-history-reconstruction) below.
 
 Both `getTableConfig` and `getSchemaHistory` reuse a `HoodieTableMetaClient` cached per basepath in a
-`ConcurrentHashMap` (built once on first access), so repeated requests pay only the targeted read, not metaClient
-construction.
+`ConcurrentHashMap`, so repeated requests skip full metaClient construction. A `HoodieTableMetaClient` snapshots its
+`tableConfig` and `activeTimeline` at construction and refreshes them only on demand, so a build-once cache would serve
+stale config/schema for the lifetime of a long-lived embedded driver. To avoid that, each config/schema request first
+reloads the relevant snapshot under a per-basepath guard - `reloadTableConfig()` for `getTableConfig`,
+`reloadActiveTimeline()` for `getSchemaHistory` - before reading. These are human-click-frequency views, so the reload
+cost (one `hoodie.properties` read plus one timeline listing) is negligible and the response is always current. A TTL is
+deliberately not used: at this request rate it would save no meaningful work and would only reintroduce a staleness
+window. The UI also surfaces a **Refresh** control on the Table Config and Schema History tabs to re-pull on demand;
+because the server reloads on every request, the button simply re-issues the fetch rather than busting a cache. The
+timeline and instant-detail views are unaffected - they read the server-synced `FileSystemView`, not the cached
+metaClient.
 
 `UiHandler` registers `GET /ui`, returning `/public/index.html` from the classpath as the UI entry page.
 
@@ -358,6 +367,8 @@ The permitted user actions are:
 7. User is able to click on a specific instant and the JSON string of the timeline details are rendered
 8. User is able to view the table's configuration (`hoodie.properties`) in the Table Config tab
 9. User is able to view the table's schema and schema-change history in the Schema History tab
+10. User is able to click a **Refresh** control on the Table Config and Schema History tabs to re-pull the latest values
+    (the server reloads the table config / active timeline on each request)
 
 Each action type occupies its own horizontal row so concurrent actions are visually separated. Completed instants appear
 as horizontal bars whose width represents duration (requested -> completed). Inflight and requested instants appear as
