@@ -42,6 +42,14 @@ spec:
           ports:
             - name: http
               containerPort: 8000
+          {{- with include "hudi-ai-gateway.secretName" . }}
+          # Every key in the Secret becomes an env var; keys use standard
+          # provider names (ANTHROPIC_API_KEY, OPENAI_API_KEY, TOGETHER_API_KEY,
+          # ...), so new providers need no chart changes.
+          envFrom:
+            - secretRef:
+                name: {{ . }}
+          {{- end }}
           env:
             - name: GATEWAY_LLM_PROVIDER
               value: {{ $g.provider | quote }}
@@ -60,20 +68,6 @@ spec:
             {{- with $g.systemPromptExtra }}
             - name: GATEWAY_SYSTEM_PROMPT_EXTRA
               value: {{ . | quote }}
-            {{- end }}
-            {{- with include "hudi-ai-gateway.secretName" . }}
-            - name: ANTHROPIC_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ . }}
-                  key: anthropic-api-key
-                  optional: true
-            - name: OPENAI_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ . }}
-                  key: openai-api-key
-                  optional: true
             {{- end }}
             - name: GATEWAY_TRINO_HOST
               value: {{ .Values.trino.host | quote }}

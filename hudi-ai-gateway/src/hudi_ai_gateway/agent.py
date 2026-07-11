@@ -62,6 +62,36 @@ def build_system_prompt(settings: GatewaySettings) -> str:
     )
 
 
+class AgentCache:
+    """Lazily builds one agent per model name (all sharing the same tools,
+    checkpointer, and prompt), so a deployment configured with one provider
+    can still serve any of that provider's models per request."""
+
+    _MAX_AGENTS = 8
+
+    def __init__(self, registry: ToolRegistry, checkpointer: BaseCheckpointSaver,
+                 settings: GatewaySettings) -> None:
+        self._registry = registry
+        self._checkpointer = checkpointer
+        self._settings = settings
+        self._agents: dict[str, Any] = {}
+
+    def get(self, model: str | None = None) -> Any:
+        from hudi_ai_gateway.llm import build_chat_model
+
+        name = model or self._settings.llm_model
+        if name not in self._agents:
+            if len(self._agents) >= self._MAX_AGENTS:
+                self._agents.pop(next(iter(self._agents)))
+            self._agents[name] = build_agent(
+                build_chat_model(self._settings, name),
+                self._registry,
+                self._checkpointer,
+                self._settings,
+            )
+        return self._agents[name]
+
+
 def build_agent(
     model: BaseChatModel,
     registry: ToolRegistry,

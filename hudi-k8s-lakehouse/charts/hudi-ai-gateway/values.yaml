@@ -37,7 +37,12 @@ gateway:
   systemPromptExtra: ""
   # Inline API keys are for development only -- they land in a chart-managed
   # Secret. For real deployments create a Secret yourself and set
-  # existingSecret (keys: anthropic-api-key, openai-api-key).
+  # existingSecret. The Secret is mounted with envFrom, and its keys must be
+  # the providers' STANDARD env-var names (ANTHROPIC_API_KEY, OPENAI_API_KEY;
+  # future providers -- TOGETHER_API_KEY, FIREWORKS_API_KEY, BASETEN_API_KEY,
+  # HF_TOKEN, ... -- work with no chart changes). Compatible with External
+  # Secrets Operator / Vault CSI: point existingSecret at the materialized
+  # Secret.
   anthropicApiKey: ""
   openaiApiKey: ""
   existingSecret: ""

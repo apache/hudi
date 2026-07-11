@@ -69,3 +69,18 @@ def test_system_prompt_interpolation(settings) -> None:
     assert "`hudi`" in prompt and "`default`" in prompt
     assert str(settings.sql_row_cap) in prompt
     assert "markdown tables" in prompt
+
+
+def test_agent_cache_builds_per_model_and_caps(settings, registry) -> None:
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    from hudi_ai_gateway.agent import AgentCache
+
+    cache = AgentCache(registry, InMemorySaver(), settings)
+    default_agent = cache.get(None)
+    assert cache.get(None) is default_agent            # cached
+    other = cache.get("some-other-model")
+    assert other is not default_agent                  # distinct per model
+    for i in range(10):                                # exceeds the cap without error
+        cache.get(f"m{i}")
+    assert cache.get("m9") is cache.get("m9")

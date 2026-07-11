@@ -48,6 +48,11 @@ curl -X POST localhost:8000/v1/chat -H 'Content-Type: application/json' \
 open http://localhost:8000/ui/
 ```
 
+`GET /v1/models` lists the models the configured provider offers (live:
+Anthropic and OpenAI model APIs, Ollama's local tags, vLLM's served models),
+and `POST /v1/chat` accepts an optional `"model"` to pick one per request —
+the chat UI exposes this as a model picker. Sessions survive model switches.
+
 For a fully local model, install [Ollama](https://ollama.com), pull a
 tool-capable model, and use the default provider:
 

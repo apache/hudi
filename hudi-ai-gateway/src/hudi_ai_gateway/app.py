@@ -29,10 +29,10 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from hudi_ai_gateway import __version__
-from hudi_ai_gateway.agent import build_agent
+from hudi_ai_gateway.agent import AgentCache
 from hudi_ai_gateway.api import chat, meta
 from hudi_ai_gateway.config import GatewaySettings
-from hudi_ai_gateway.llm import LLMReadiness, build_chat_model
+from hudi_ai_gateway.llm import LLMReadiness
 from hudi_ai_gateway.log import log_event, setup_logging
 from hudi_ai_gateway.mcp_server import build_mcp
 from hudi_ai_gateway.sessions import SessionStore
@@ -60,9 +60,7 @@ def create_app(settings: GatewaySettings | None = None) -> FastAPI:
         app.state.registry = registry
         app.state.llm_readiness = LLMReadiness(s)
         app.state.sessions = SessionStore(s)
-        app.state.agent = build_agent(
-            build_chat_model(s), registry, app.state.sessions.checkpointer, s
-        )
+        app.state.agents = AgentCache(registry, app.state.sessions.checkpointer, s)
         sweeper = asyncio.create_task(app.state.sessions.sweep_loop())
         log_event(
             logger,

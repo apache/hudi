@@ -13,23 +13,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-{{- $g := .Values.gateway }}
-{{- if and (not $g.existingSecret) (or $g.anthropicApiKey $g.openaiApiKey) }}
-apiVersion: v1
-kind: Secret
-metadata:
-  name: {{ include "hudi-ai-gateway.fullname" . }}-llm
-  labels:
-    {{- include "hudi-ai-gateway.labels" . | nindent 4 }}
-type: Opaque
-# Keys are standard provider env-var names: the deployment mounts this Secret
-# via envFrom, so adding a future provider (TOGETHER_API_KEY, FIREWORKS_API_KEY,
-# BASETEN_API_KEY, HF_TOKEN, ...) requires no chart changes.
-stringData:
-  {{- with $g.anthropicApiKey }}
-  ANTHROPIC_API_KEY: {{ . | quote }}
-  {{- end }}
-  {{- with $g.openaiApiKey }}
-  OPENAI_API_KEY: {{ . | quote }}
-  {{- end }}
-{{- end }}
+apiVersion: v2
+name: vllm
+description: >-
+  vLLM serving one open-weight model behind an OpenAI-compatible API, for use
+  as the hudi-ai-gateway's in-cluster LLM (gateway provider
+  "openai-compatible"). Requires a GPU node.
+type: application
+version: 0.1.0
+appVersion: "v0.25.0"
+keywords:
+  - vllm
+  - llm
+  - inference
+  - lakehouse
+home: https://hudi.apache.org
+sources:
+  - https://github.com/apache/hudi

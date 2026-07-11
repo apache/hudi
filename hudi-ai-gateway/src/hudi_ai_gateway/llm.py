@@ -14,14 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""LLM provider factory.
+"""LLM provider factory and provider-aware model discovery.
 
 Construction never touches the network, so the gateway always starts;
-connectivity is checked lazily and reported through ``/ready``.
+connectivity is checked lazily and reported through ``/ready``. Model
+discovery (``list_models``) asks the configured provider what it offers, so
+the UI's model picker always reflects reality instead of a hardcoded list.
 """
 
 from __future__ import annotations
 
+import logging
 import time
 
 import httpx
@@ -30,14 +33,17 @@ from pydantic import SecretStr
 
 from hudi_ai_gateway.config import GatewaySettings
 
+logger = logging.getLogger("hudi_ai_gateway.llm")
 
-def build_chat_model(settings: GatewaySettings) -> BaseChatModel:
+
+def build_chat_model(settings: GatewaySettings, model: str | None = None) -> BaseChatModel:
     provider = settings.llm_provider
+    model_name = model or settings.llm_model
     if provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
 
         return ChatAnthropic(  # type: ignore[call-arg]  # `model` is an init alias
-            model=settings.llm_model,
+            model=model_name,
             api_key=SecretStr(settings.anthropic_api_key),
             timeout=settings.llm_timeout_seconds,
         )
@@ -45,24 +51,84 @@ def build_chat_model(settings: GatewaySettings) -> BaseChatModel:
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(
-            model=settings.llm_model,
+            model=model_name,
             api_key=SecretStr(settings.openai_api_key),
             timeout=settings.llm_timeout_seconds,
         )
     if provider == "ollama":
         from langchain_ollama import ChatOllama
 
-        return ChatOllama(model=settings.llm_model, base_url=settings.ollama_base_url)
+        return ChatOllama(model=model_name, base_url=settings.ollama_base_url)
     if provider == "openai-compatible":
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(
-            model=settings.llm_model,
+            model=model_name,
             base_url=settings.openai_base_url,
             api_key=SecretStr(settings.openai_api_key or "unused"),
             timeout=settings.llm_timeout_seconds,
         )
     raise ValueError(f"unsupported provider: {provider}")  # unreachable; config validates
+
+
+async def list_models(settings: GatewaySettings, timeout: float = 5.0) -> list[str]:
+    """The models offered by the configured provider, default model first.
+
+    Falls back to just the configured default when the provider cannot be
+    listed -- the picker degrades to a single entry, chat keeps working.
+    """
+    try:
+        models = await _list_models_from_provider(settings, timeout)
+    except Exception as e:  # noqa: BLE001 - discovery must never break the API
+        logger.warning("model listing failed for provider %s: %s", settings.llm_provider, e)
+        models = []
+    default = settings.llm_model
+    ordered = [default] + sorted(m for m in models if m != default)
+    return ordered
+
+
+async def _list_models_from_provider(settings: GatewaySettings, timeout: float) -> list[str]:
+    provider = settings.llm_provider
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        if provider == "anthropic":
+            resp = await client.get(
+                "https://api.anthropic.com/v1/models",
+                headers={
+                    "x-api-key": settings.anthropic_api_key,
+                    "anthropic-version": "2023-06-01",
+                },
+                params={"limit": 100},
+            )
+            resp.raise_for_status()
+            return [m["id"] for m in resp.json().get("data", [])]
+        if provider == "openai":
+            resp = await client.get(
+                "https://api.openai.com/v1/models",
+                headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+            )
+            resp.raise_for_status()
+            ids = [m["id"] for m in resp.json().get("data", [])]
+            # Keep chat-capable families; drop embeddings/audio/image models.
+            return [
+                i
+                for i in ids
+                if (i.startswith("gpt-") or i.startswith("o"))
+                and not any(x in i for x in ("embedding", "audio", "tts", "image", "dall-e"))
+            ]
+        if provider == "ollama":
+            resp = await client.get(settings.ollama_base_url.rstrip("/") + "/api/tags")
+            resp.raise_for_status()
+            return [m["name"] for m in resp.json().get("models", [])]
+        if provider == "openai-compatible":
+            headers = {}
+            if settings.openai_api_key:
+                headers["Authorization"] = f"Bearer {settings.openai_api_key}"
+            resp = await client.get(
+                settings.openai_base_url.rstrip("/") + "/models", headers=headers
+            )
+            resp.raise_for_status()
+            return [m["id"] for m in resp.json().get("data", [])]
+    return []
 
 
 class LLMReadiness:

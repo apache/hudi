@@ -31,8 +31,12 @@
   var composerEl = document.getElementById("composer");
   var modelInfoEl = document.getElementById("model-info");
 
+  var modelSelectEl = document.getElementById("model-select");
+
   var SESSION_KEY = "hudi-ai-gateway.session";
+  var MODEL_KEY = "hudi-ai-gateway.model";
   var sessionId = localStorage.getItem(SESSION_KEY) || newSession();
+  var selectedModel = null;
   var busy = false;
 
   function newSession() {
@@ -43,9 +47,28 @@
   }
 
   fetch("../v1/info").then(function (r) { return r.json(); }).then(function (info) {
-    modelInfoEl.textContent = info.provider + " · " + info.model +
-      " · catalog " + info.catalog;
+    modelInfoEl.textContent = info.provider + " · catalog " + info.catalog;
   }).catch(function () { modelInfoEl.textContent = "gateway unreachable"; });
+
+  // Populate the model picker with whatever the configured provider offers.
+  fetch("../v1/models").then(function (r) { return r.json(); }).then(function (m) {
+    var remembered = localStorage.getItem(MODEL_KEY);
+    selectedModel = (remembered && m.models.indexOf(remembered) !== -1)
+      ? remembered : m.default;
+    m.models.forEach(function (name) {
+      var opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      if (name === selectedModel) opt.selected = true;
+      modelSelectEl.appendChild(opt);
+    });
+    modelSelectEl.hidden = false;
+    if (m.models.length <= 1) modelSelectEl.disabled = true;  // e.g. vLLM: one model
+    modelSelectEl.addEventListener("change", function () {
+      selectedModel = modelSelectEl.value;
+      localStorage.setItem(MODEL_KEY, selectedModel);
+    });
+  }).catch(function () { /* picker simply stays hidden */ });
 
   document.getElementById("new-chat").addEventListener("click", function () {
     sessionId = newSession();
@@ -127,10 +150,12 @@
       scrollToBottom();
     }
 
+    var payload = { message: text, session_id: sessionId, stream: true };
+    if (selectedModel) payload.model = selectedModel;
     fetch("../v1/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
-      body: JSON.stringify({ message: text, session_id: sessionId, stream: true })
+      body: JSON.stringify(payload)
     }).then(function (resp) {
       if (!resp.ok || !resp.body) {
         return resp.text().then(function (body) {

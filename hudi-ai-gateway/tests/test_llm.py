@@ -74,3 +74,41 @@ async def test_local_provider_unreachable_reports_not_ready() -> None:
     s = GatewaySettings(llm_provider="ollama", ollama_base_url="http://127.0.0.1:1")
     ok, detail = await LLMReadiness(s).check()
     assert not ok and "unreachable" in detail
+
+
+async def test_list_models_ollama(monkeypatch, httpx_ollama_tags=None) -> None:
+    import httpx
+
+    from hudi_ai_gateway import llm as llm_mod
+
+    async def fake_get(self, url, **kwargs):
+        assert url.endswith("/api/tags")
+        request = httpx.Request("GET", url)
+        return httpx.Response(
+            200, json={"models": [{"name": "qwen3:4b"}, {"name": "llama3.2:3b"}]}, request=request
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    s = GatewaySettings(llm_provider="ollama", llm_model="qwen3:4b")
+    models = await llm_mod.list_models(s)
+    assert models[0] == "qwen3:4b"          # configured default first
+    assert "llama3.2:3b" in models
+
+
+async def test_list_models_falls_back_to_default(monkeypatch) -> None:
+    import httpx
+
+    from hudi_ai_gateway import llm as llm_mod
+
+    async def exploding_get(self, url, **kwargs):
+        raise httpx.ConnectError("nope")
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", exploding_get)
+    s = GatewaySettings(llm_provider="ollama", llm_model="qwen3:4b")
+    assert await llm_mod.list_models(s) == ["qwen3:4b"]
+
+
+def test_build_chat_model_override() -> None:
+    s = GatewaySettings(llm_provider="ollama", llm_model="qwen3:4b")
+    model = build_chat_model(s, model="qwen3:8b")
+    assert model.model == "qwen3:8b"

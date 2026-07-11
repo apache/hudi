@@ -57,6 +57,12 @@ kubectl -n hudi-lakehouse exec deploy/hudi-trino -- \
 Consoles (via `kubectl -n hudi-lakehouse port-forward`):
 MinIO `svc/minio 9001`, Trino UI `svc/hudi-trino 8080`.
 
+## Optional: vLLM instead of Ollama
+
+If your cluster has a GPU node, `INSTALL_VLLM=1 ./scripts/up.sh` also installs
+the `vllm` chart (default model `Qwen/Qwen3-8B`, override with `VLLM_MODEL=`)
+and points the gateway at it instead of host Ollama.
+
 ## Notes
 
 - `apache/hive:3.1.3` is amd64-only; on Apple-silicon minikube it runs under

@@ -56,6 +56,24 @@ helm upgrade --install hudi-trino "$ROOT/charts/hudi-trino" \
   -f "$ROOT/charts/hudi-trino/values-local-dev.yaml" \
   --wait --timeout 10m
 
+if [[ "${INSTALL_VLLM:-0}" == 1 ]]; then
+  # Optional: serve an open-weight model in-cluster with vLLM (GPU required)
+  # and point the gateway at it instead of the default Ollama-on-host.
+  VLLM_MODEL="${VLLM_MODEL:-Qwen/Qwen3-8B}"
+  echo ">>> Installing vllm chart (model: $VLLM_MODEL; requires a GPU node)"
+  helm upgrade --install vllm "$ROOT/charts/vllm" \
+    --namespace "$NS" \
+    --set fullnameOverride=vllm \
+    --set model="$VLLM_MODEL"
+  GATEWAY_EXTRA_ARGS=(
+    --set gateway.provider=openai-compatible
+    --set gateway.openaiCompatible.baseUrl="http://vllm.$NS.svc.cluster.local:8000/v1"
+    --set gateway.model="$VLLM_MODEL"
+  )
+else
+  GATEWAY_EXTRA_ARGS=()
+fi
+
 if [[ "${INSTALL_AI_GATEWAY:-1}" == 1 ]]; then
   echo ">>> Installing hudi-ai-gateway chart with local-dev values"
   # No --wait: readiness deliberately reflects LLM reachability, and the
@@ -63,7 +81,8 @@ if [[ "${INSTALL_AI_GATEWAY:-1}" == 1 ]]; then
   # running yet. The pod goes Ready once `ollama serve` is reachable.
   helm upgrade --install hudi-ai-gateway "$ROOT/charts/hudi-ai-gateway" \
     --namespace "$NS" \
-    -f "$ROOT/charts/hudi-ai-gateway/values-local-dev.yaml"
+    -f "$ROOT/charts/hudi-ai-gateway/values-local-dev.yaml" \
+    "${GATEWAY_EXTRA_ARGS[@]}"
 fi
 
 echo ">>> Waiting for MinIO + Hive Metastore readiness"

@@ -96,9 +96,10 @@ async def chat(request: Request, body: ChatRequest) -> Any:
     if wants_stream:
         return EventSourceResponse(_stream_chat(request, body))
 
+    agent = state.agents.get(body.model)
     inputs = {"messages": [HumanMessage(body.message)]}
     try:
-        result = await state.agent.ainvoke(inputs, config=_agent_config(request, body.session_id))
+        result = await agent.ainvoke(inputs, config=_agent_config(request, body.session_id))
     except GraphRecursionError as e:
         raise HTTPException(
             status_code=422,
@@ -124,10 +125,11 @@ async def chat(request: Request, body: ChatRequest) -> Any:
 
 async def _stream_chat(request: Request, body: ChatRequest) -> AsyncIterator[ServerSentEvent]:
     state = request.app.state
+    agent = state.agents.get(body.model)
     inputs = {"messages": [HumanMessage(body.message)]}
     final_text_parts: list[str] = []
     try:
-        async for mode, chunk in state.agent.astream(
+        async for mode, chunk in agent.astream(
             inputs,
             config=_agent_config(request, body.session_id),
             stream_mode=["messages", "updates"],

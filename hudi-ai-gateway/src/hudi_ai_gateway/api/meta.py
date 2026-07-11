@@ -18,10 +18,18 @@
 
 from __future__ import annotations
 
+import time
+
 from fastapi import APIRouter, Request, Response
 
 from hudi_ai_gateway import __version__
-from hudi_ai_gateway.api.models import DependencyStatus, InfoResponse, ReadyResponse
+from hudi_ai_gateway.api.models import (
+    DependencyStatus,
+    InfoResponse,
+    ModelsResponse,
+    ReadyResponse,
+)
+from hudi_ai_gateway.llm import list_models
 
 router = APIRouter()
 
@@ -57,6 +65,22 @@ async def ready(request: Request, response: Response) -> ReadyResponse:
 @router.get("/v1/tools")
 async def list_tools(request: Request) -> dict[str, list[dict[str, object]]]:
     return {"tools": request.app.state.registry.listing()}
+
+
+@router.get("/v1/models", response_model=ModelsResponse)
+async def models(request: Request) -> ModelsResponse:
+    """Models offered by the configured provider (live-discovered, 60s cache)."""
+    state = request.app.state
+    cache = getattr(state, "models_cache", None)
+    if cache is None or time.monotonic() - cache[0] > 60.0:
+        listed = await list_models(state.settings)
+        cache = (time.monotonic(), listed)
+        state.models_cache = cache
+    return ModelsResponse(
+        provider=state.settings.llm_provider,
+        default=state.settings.llm_model,
+        models=cache[1],
+    )
 
 
 @router.get("/v1/info", response_model=InfoResponse, response_model_by_alias=True)

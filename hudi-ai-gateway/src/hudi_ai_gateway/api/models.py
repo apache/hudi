@@ -31,6 +31,11 @@ class ChatRequest(BaseModel):
         description="Conversation id; reuse it for multi-turn memory.",
     )
     stream: bool = Field(default=False, description="Stream the response as SSE.")
+    model: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Model to use (within the configured provider); default when omitted.",
+    )
 
 
 class ToolTraceEntry(BaseModel):
@@ -74,6 +79,12 @@ class DoneEvent(BaseModel):
 class ErrorEvent(BaseModel):
     code: Literal["llm_error", "agent_error", "recursion_limit"]
     message: str
+
+
+class ModelsResponse(BaseModel):
+    provider: str
+    default: str
+    models: list[str]
 
 
 class DependencyStatus(BaseModel):

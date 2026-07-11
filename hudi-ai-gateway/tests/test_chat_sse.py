@@ -26,7 +26,7 @@ from langchain_core.messages import AIMessage
 
 from hudi_ai_gateway.agent import build_agent
 from hudi_ai_gateway.app import create_app
-from tests.conftest import TOOL_CALL_THEN_ANSWER, scripted_model
+from tests.conftest import TOOL_CALL_THEN_ANSWER, FixedAgents, scripted_model
 
 
 @pytest.fixture()
@@ -37,11 +37,13 @@ async def client(settings, registry, fake_trino):
     ) as c, app.router.lifespan_context(app):
         app.state.trino_client = fake_trino
         app.state.registry = registry
-        app.state.agent = build_agent(
-            scripted_model(TOOL_CALL_THEN_ANSWER),
-            registry,
-            app.state.sessions.checkpointer,
-            settings,
+        app.state.agents = FixedAgents(
+            build_agent(
+                scripted_model(TOOL_CALL_THEN_ANSWER),
+                registry,
+                app.state.sessions.checkpointer,
+                settings,
+            )
         )
         yield c, app
 
@@ -113,8 +115,10 @@ async def test_streaming_error_event_on_model_failure(client, settings, registry
         async def _agenerate(self, *args, **kwargs):
             raise RuntimeError("model exploded")
 
-    app.state.agent = build_agent(
-        ExplodingModel(messages=iter([])), registry, app.state.sessions.checkpointer, settings
+    app.state.agents = FixedAgents(
+        build_agent(
+            ExplodingModel(messages=iter([])), registry, app.state.sessions.checkpointer, settings
+        )
     )
     resp = await c.post(
         "/v1/chat", json={"message": "boom", "session_id": "s-err", "stream": True}

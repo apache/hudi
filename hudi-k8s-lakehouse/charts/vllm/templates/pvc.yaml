@@ -13,23 +13,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-{{- $g := .Values.gateway }}
-{{- if and (not $g.existingSecret) (or $g.anthropicApiKey $g.openaiApiKey) }}
+{{- if .Values.persistence.enabled }}
 apiVersion: v1
-kind: Secret
+kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "hudi-ai-gateway.fullname" . }}-llm
+  name: {{ include "vllm.fullname" . }}-cache
   labels:
-    {{- include "hudi-ai-gateway.labels" . | nindent 4 }}
-type: Opaque
-# Keys are standard provider env-var names: the deployment mounts this Secret
-# via envFrom, so adding a future provider (TOGETHER_API_KEY, FIREWORKS_API_KEY,
-# BASETEN_API_KEY, HF_TOKEN, ...) requires no chart changes.
-stringData:
-  {{- with $g.anthropicApiKey }}
-  ANTHROPIC_API_KEY: {{ . | quote }}
-  {{- end }}
-  {{- with $g.openaiApiKey }}
-  OPENAI_API_KEY: {{ . | quote }}
+    {{- include "vllm.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+  {{- with .Values.persistence.storageClass }}
+  storageClassName: {{ . }}
   {{- end }}
 {{- end }}

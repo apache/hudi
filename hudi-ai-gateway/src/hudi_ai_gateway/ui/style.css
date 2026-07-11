@@ -75,6 +75,17 @@ header {
 }
 .brand strong { display: block; font-size: 15px; }
 .brand small { display: block; color: var(--muted); font-size: 12px; }
+#model-select {
+  margin-left: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 13px;
+  max-width: 260px;
+}
 #new-chat {
   border: 1px solid var(--border);
   background: transparent;

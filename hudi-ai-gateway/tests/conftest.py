@@ -117,6 +117,18 @@ def scripted_model(messages: list[AIMessage]) -> ScriptedChatModel:
     return ScriptedChatModel(messages=iter(messages))
 
 
+class FixedAgents:
+    """AgentCache stand-in that returns one prebuilt agent for any model."""
+
+    def __init__(self, agent: Any) -> None:
+        self.agent = agent
+        self.requested: list[str | None] = []
+
+    def get(self, model: str | None = None) -> Any:
+        self.requested.append(model)
+        return self.agent
+
+
 TOOL_CALL_THEN_ANSWER = [
     AIMessage(
         content="",

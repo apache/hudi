@@ -13,23 +13,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-{{- $g := .Values.gateway }}
-{{- if and (not $g.existingSecret) (or $g.anthropicApiKey $g.openaiApiKey) }}
 apiVersion: v1
-kind: Secret
+kind: Service
 metadata:
-  name: {{ include "hudi-ai-gateway.fullname" . }}-llm
+  name: {{ include "vllm.fullname" . }}
   labels:
-    {{- include "hudi-ai-gateway.labels" . | nindent 4 }}
-type: Opaque
-# Keys are standard provider env-var names: the deployment mounts this Secret
-# via envFrom, so adding a future provider (TOGETHER_API_KEY, FIREWORKS_API_KEY,
-# BASETEN_API_KEY, HF_TOKEN, ...) requires no chart changes.
-stringData:
-  {{- with $g.anthropicApiKey }}
-  ANTHROPIC_API_KEY: {{ . | quote }}
-  {{- end }}
-  {{- with $g.openaiApiKey }}
-  OPENAI_API_KEY: {{ . | quote }}
-  {{- end }}
-{{- end }}
+    {{- include "vllm.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+  selector:
+    {{- include "vllm.selectorLabels" . | nindent 4 }}
