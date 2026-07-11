@@ -56,6 +56,12 @@ PLUGIN_DIR=$(ls -d "$REPO_ROOT"/hudi-trino-plugin/target/trino-hudi-*/ 2>/dev/nu
 
 TRINO_IMAGE="${REGISTRY}hudi-lakehouse-trino:472"
 SPARK_IMAGE="${REGISTRY}hudi-lakehouse-spark:${SPARK_VERSION}"
+GATEWAY_IMAGE="${REGISTRY}hudi-lakehouse-ai-gateway:0.1.0"
+
+# The gateway image needs no maven artifacts -- its build context is the
+# python module itself.
+echo ">>> Building $GATEWAY_IMAGE"
+docker build -t "$GATEWAY_IMAGE" "$REPO_ROOT/hudi-ai-gateway"
 
 echo ">>> Staging trino plugin: $(basename "${PLUGIN_DIR%/}")"
 rm -rf "$HERE/images/trino/target" && mkdir -p "$HERE/images/trino/target"
@@ -78,6 +84,7 @@ if [[ "$PUSH" == 1 ]]; then
   [[ -n "$REGISTRY" ]] || { echo "ERROR: --push requires --registry" >&2; exit 1; }
   docker push "$TRINO_IMAGE"
   docker push "$SPARK_IMAGE"
+  docker push "$GATEWAY_IMAGE"
 fi
 
-echo ">>> Images ready: $TRINO_IMAGE, $SPARK_IMAGE"
+echo ">>> Images ready: $TRINO_IMAGE, $SPARK_IMAGE, $GATEWAY_IMAGE"

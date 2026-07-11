@@ -59,8 +59,9 @@ catalog, and query engines are independent. This directory keeps the
    | Chart | What it deploys | Points at |
    |---|---|---|
    | `hudi-trino` | Trino (server 472) with the Hudi connector built from this repository | your Hive Metastore or AWS Glue; your S3/GCS |
+   | `hudi-ai-gateway` | the [Hudi AI gateway](../hudi-ai-gateway): agent chat API (sessions + SSE), MCP server, and chat UI over guarded lakehouse tools | your `hudi-trino`; your LLM (Anthropic/OpenAI keys, Ollama, or any OpenAI-compatible endpoint like vLLM) |
 
-   (Planned siblings as the stack grows: vLLM wiring, the hudi-ai-gateway.)
+   (Planned siblings as the stack grows: vLLM serving.)
 
 2. **`local-dev/` — a laptop environment.** Minikube scaffolding that stands
    up everything the charts point at (MinIO, a Derby-backed Hive Metastore,

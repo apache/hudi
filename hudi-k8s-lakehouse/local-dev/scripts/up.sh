@@ -56,6 +56,16 @@ helm upgrade --install hudi-trino "$ROOT/charts/hudi-trino" \
   -f "$ROOT/charts/hudi-trino/values-local-dev.yaml" \
   --wait --timeout 10m
 
+if [[ "${INSTALL_AI_GATEWAY:-1}" == 1 ]]; then
+  echo ">>> Installing hudi-ai-gateway chart with local-dev values"
+  # No --wait: readiness deliberately reflects LLM reachability, and the
+  # default local-dev provider is Ollama on the host, which may not be
+  # running yet. The pod goes Ready once `ollama serve` is reachable.
+  helm upgrade --install hudi-ai-gateway "$ROOT/charts/hudi-ai-gateway" \
+    --namespace "$NS" \
+    -f "$ROOT/charts/hudi-ai-gateway/values-local-dev.yaml"
+fi
+
 echo ">>> Waiting for MinIO + Hive Metastore readiness"
 kubectl -n "$NS" rollout status deploy/minio --timeout=300s
 kubectl -n "$NS" rollout status deploy/hive-metastore --timeout=600s

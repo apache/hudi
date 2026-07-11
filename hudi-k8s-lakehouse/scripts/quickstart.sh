@@ -130,10 +130,11 @@ eval "$(minikube docker-env)"
 NEED_IMAGES=0
 docker image inspect hudi-lakehouse-trino:472 >/dev/null 2>&1 || NEED_IMAGES=1
 docker image inspect "hudi-lakehouse-spark:${SPARK_VERSION}" >/dev/null 2>&1 || NEED_IMAGES=1
+docker image inspect hudi-lakehouse-ai-gateway:0.1.0 >/dev/null 2>&1 || NEED_IMAGES=1
 if [[ "$NEED_IMAGES" == 1 || "$REBUILD_IMAGES" == 1 ]]; then
   "$HERE/scripts/build-images.sh" --spark-version "$SPARK_VERSION"
 else
-  echo "images present: hudi-lakehouse-trino:472, hudi-lakehouse-spark:${SPARK_VERSION}"
+  echo "images present: hudi-lakehouse-trino:472, hudi-lakehouse-spark:${SPARK_VERSION}, hudi-lakehouse-ai-gateway:0.1.0"
 fi
 
 # ------------------------------------------------------------------ bring-up
