@@ -205,8 +205,10 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
         columnNames.add(field.name());
       }
 
-      // Pinned to CONTENT: compaction/merge/log-replay need actual bytes to rewrite.
-      // The user-facing `hoodie.read.blob.inline.mode` is honored by SparkLanceReaderBase.
+      // Pinned to CONTENT: callers (LanceUtils stats/key reads, bloom-index lookups via
+      // HoodieReadHandle, old-base-file reads in the legacy HoodieWriteMergeHandle merge path)
+      // need actual bytes. Default-path compaction/merge reads go through SparkLanceReaderBase
+      // instead, which honors the user-facing `hoodie.read.blob.inline.mode`.
       FileReadOptions readOpts = FileReadOptions.builder().blobReadMode(BlobReadMode.CONTENT).build();
 
       // BLOB reads must be chunked to dodge a lance-core FFI abort (see LanceRecordIterator).

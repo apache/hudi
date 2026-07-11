@@ -131,10 +131,10 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
           null
         }
 
-        // Honor `hoodie.read.blob.inline.mode`. CONTENT (default) materializes INLINE bytes in
-        // the `data` column; DESCRIPTOR surfaces per-row {position, size} which the descriptor
-        // iterator rewrites into Hudi OUT_OF_LINE references. Non-blob Lance columns ignore
-        // the option regardless.
+        // Honor `hoodie.read.blob.inline.mode`. DESCRIPTOR (default) surfaces per-row
+        // {position, size} which the descriptor iterator turns into a synthesized `reference`
+        // while leaving `type = INLINE`; CONTENT is the opt-in mode that materializes INLINE
+        // bytes in the `data` column. Non-blob Lance columns ignore the option regardless.
         val blobMode = resolveBlobReadMode(storageConf)
         val readOpts = FileReadOptions.builder().blobReadMode(blobMode).build()
 

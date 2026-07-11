@@ -1303,12 +1303,22 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
   /**
    * Compaction must preserve INLINE blob bytes under the DESCRIPTOR default. MOR compaction reads
-   * the base file via {@link HoodieSparkLanceReader}, which hard-pins CONTENT regardless of the
-   * user-facing {@code hoodie.read.blob.inline.mode}. If that pin were to honor the default
-   * (DESCRIPTOR), compaction would read null {@code data} and rewrite a base file without bytes,
-   * silently corrupting untouched rows. This test inserts INLINE blobs, upserts a subset to force
-   * compaction, and asserts that touched rows carry the new bytes while untouched rows retain the
-   * originals.
+   * the base file through the internal write-side reader stack
+   * SparkReaderContextFactory -> SparkFileFormatInternalRowReaderContext -> SparkLanceReaderBase,
+   * not through HoodieSparkLanceReader (that reader serves LanceUtils stats/key reads,
+   * bloom-index key lookups, and legacy HoodieWriteMergeHandle merges, with its own CONTENT pin).
+   * SparkLanceReaderBase honors {@code hoodie.read.blob.inline.mode}, whose DESCRIPTOR default
+   * would read null {@code data} and rewrite a base file without bytes, silently corrupting
+   * untouched rows. Correctness now relies on SparkReaderContextFactory pinning
+   * {@code hoodie.read.blob.inline.mode=CONTENT} in the broadcast conf used by all internal reads.
+   * User-facing queries are unaffected because they build their own conf.
+   *
+   * The test forces all rows into a single file group (coalesce(1) plus bulk-insert/insert
+   * shuffle parallelism 1) so the untouched rows genuinely go through the compaction rewrite.
+   * Without that, untouched rows land in log-free file groups that compaction never rewrites,
+   * which is how the original bug (#19232) stayed masked. This test inserts INLINE blobs,
+   * upserts a subset to force compaction, and asserts that touched rows carry the new bytes while
+   * untouched rows retain the originals.
    */
   @Test
   def testBlobInlineCompactionRoundTrip(): Unit = {
@@ -1332,7 +1342,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     def asInlineDf(idToBytes: Seq[(Int, Array[Byte])]): DataFrame = {
       val rawDf = idToBytes.toDF("id", "bytes")
         .select($"id", BlobTestHelpers.inlineBlobStructCol("payload", $"bytes"))
-      spark.createDataFrame(rawDf.rdd, canonicalSchema)
+      spark.createDataFrame(rawDf.rdd, canonicalSchema).coalesce(1)
     }
 
     // First commit: bulk_insert ids 0..5 with the initial pattern. Lands in a base file.
@@ -1340,7 +1350,9 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       asInlineDf(initialPayloads.zipWithIndex.map { case (b, i) => (i, b) }),
       saveMode = SaveMode.Overwrite,
       operation = Some("bulk_insert"),
-      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id"))
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id",
+        "hoodie.bulkinsert.shuffle.parallelism" -> "1",
+        "hoodie.insert.shuffle.parallelism" -> "1"))
 
     assertLanceBlobEncoding(tablePath)
 
@@ -1366,9 +1378,9 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .getInstants.asScala
     val deltaCommits = completedInstants.filter(_.getAction == "deltacommit")
     assertTrue(deltaCommits.nonEmpty,
-      "Upsert must have written a deltacommit on MOR — without log files the compaction " +
+      "Upsert must have written a deltacommit on MOR -- without log files the compaction " +
         "round-trip below would be a no-op and the test would silently pass even if the " +
-        "CONTENT-pin in HoodieSparkLanceReader were broken.")
+        "CONTENT-pin in SparkReaderContextFactory were broken.")
     val compactionCommits = completedInstants.filter(_.getAction == "commit")
     assertTrue(compactionCommits.nonEmpty, "Compaction commit should be present after upsert")
 
@@ -1386,6 +1398,13 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     val fsView = viewManager.getFileSystemView(metaClient)
     try {
       fsView.loadAllPartitions()
+      // Pin the single-file-group invariant the whole test rests on. If rows ever spread across
+      // multiple file groups, the untouched ids could sit in log-free groups that compaction never
+      // rewrites, and the round-trip below would pass without exercising the regression (#19232).
+      assertEquals(1L, fsView.getAllFileGroups("").count(),
+        s"All rows must land in exactly one file group (coalesce(1) + shuffle parallelism 1) " +
+          s"at $tablePath; otherwise untouched ids may sit in log-free file groups that " +
+          s"compaction never rewrites and the regression is not exercised")
       val anyHadLogs = fsView.getAllFileGroups("").iterator().asScala.exists { fg =>
         fg.getAllFileSlices.iterator().asScala.exists(_.hasLogFiles)
       }
@@ -1422,11 +1441,34 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
         s"DESCRIPTOR default should populate reference on plain read (id=$id)")
     }
 
-    // read_blob() under CONTENT mode is what we use to verify the post-compaction bytes
-    // because read_blob() on INLINE rows throws under the DESCRIPTOR default. The bytes can
-    // only come back if HoodieSparkLanceReader's CONTENT pin held during the compactor's
-    // base-file read — otherwise untouched ids 3..5 would have been rewritten with null
-    // `data` and CONTENT-mode read would surface that.
+    // Byte check via a plain projection under CONTENT. A broken rewrite could produce two shapes:
+    // - {INLINE, null data, populated reference}: a DESCRIPTOR-mode read leaked into the write
+    //   path. HoodieSparkLanceWriter.validateBlobRow rejects this shape and fails the compaction
+    //   itself, so it can never reach the base file.
+    // - {INLINE, null data, null reference}: legitimate for an empty inline blob, so the writer
+    //   guard lets it through. If a rewrite dropped the bytes this way, only the null-data
+    //   assertion below would catch it.
+    // The CONTENT pin on internal reads is unit-tested in TestSparkReaderContextFactory.
+    val contentRows = spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .select($"id", $"payload")
+      .orderBy($"id")
+      .collect()
+    assertEquals(numRows, contentRows.length)
+    contentRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val payload = row.getStruct(row.fieldIndex("payload"))
+      assertFalse(payload.isNullAt(payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"null data under CONTENT: the compaction rewrite dropped the bytes (id=$id)")
+      assertArrayEquals(expected(id),
+        payload.getAs[Array[Byte]](payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"INLINE data bytes must survive the compaction rewrite (id=$id)")
+    }
+
+    // read_blob() under CONTENT verifies the same bytes through the SQL expression path
+    // (read_blob() on INLINE rows throws under the DESCRIPTOR default, so CONTENT is
+    // required here).
     val viewName = s"${tableName}_view"
     spark.read.format("hudi")
       .option("hoodie.read.blob.inline.mode", "CONTENT")
@@ -1440,6 +1482,313 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       val bytes = row.getAs[Array[Byte]]("bytes")
       assertArrayEquals(expected(id), bytes,
         s"read_blob() must return correct bytes post-compaction (id=$id)")
+    }
+  }
+
+  /**
+   * Clustering must preserve INLINE blob bytes under the DESCRIPTOR default. Clustering rewrites
+   * ALL rows through MultipleSparkJobExecutionStrategy.readRecordsForGroupAsRow, which reads base
+   * files through the same internal write-side reader context as compaction
+   * (SparkReaderContextFactory -> SparkFileFormatInternalRowReaderContext -> SparkLanceReaderBase).
+   * Before SparkReaderContextFactory pinned {@code hoodie.read.blob.inline.mode=CONTENT} for
+   * internal reads, the first clustering of a Lance table with INLINE blobs read null {@code data}
+   * (the DESCRIPTOR default) and rewrote every row's blob with null bytes, silently losing all
+   * blob content (#19232). This test bulk-inserts INLINE blobs, triggers inline clustering,
+   * asserts a replacecommit actually completed, and verifies every row's bytes survived.
+   */
+  @Test
+  def testBlobInlineClusteringRoundTrip(): Unit = {
+    val tableType = HoodieTableType.COPY_ON_WRITE
+    val tableName = "test_lance_blob_inline_cluster_cow"
+    val tablePath = s"$basePath/$tableName"
+
+    val payloadLen = 1024
+    val numRows = 5
+    val expectedPayloads: Seq[Array[Byte]] = (0 until numRows).map { i =>
+      (0 until payloadLen).map(j => ((i + j) % 256).toByte).toArray
+    }
+    val sparkSess = spark
+    import sparkSess.implicits._
+
+    val canonicalSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("payload", BlobType().asInstanceOf[StructType], nullable = true,
+        BlobTestHelpers.blobMetadata)
+    ))
+    def asInlineDf(idToBytes: Seq[(Int, Array[Byte])]): DataFrame = {
+      val rawDf = idToBytes.toDF("id", "bytes")
+        .select($"id", BlobTestHelpers.inlineBlobStructCol("payload", $"bytes"))
+      spark.createDataFrame(rawDf.rdd, canonicalSchema)
+    }
+
+    // First commit: bulk_insert ids 0..4 with the initial pattern into a base file.
+    writeDataframe(tableType, tableName, tablePath,
+      asInlineDf(expectedPayloads.zipWithIndex.map { case (b, i) => (i, b) }),
+      saveMode = SaveMode.Overwrite,
+      operation = Some("bulk_insert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id"))
+
+    assertLanceBlobEncoding(tablePath)
+
+    // Snapshot the first commit's base file(s); the disjointness check below uses them to prove
+    // clustering rewrote (not skipped) them, else the byte checks pass on stale bytes (#19232).
+    val metaClientAfterFirst = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+    val preClusterBaseFiles = latestBaseFileNames(metaClientAfterFirst, tablePath)
+    assertFalse(preClusterBaseFiles.isEmpty, "First commit should have written at least one base file")
+
+    // Second commit: a small bulk_insert that trips inline clustering (max.commits=1). Clustering
+    // rewrites the existing base file's rows through readRecordsForGroupAsRow, which must read the
+    // INLINE bytes as CONTENT, not the DESCRIPTOR default, or every rewritten row loses its bytes.
+    val extraPayloads = (numRows until numRows + 2).map { i =>
+      (i, (0 until payloadLen).map(j => ((i + j) % 256).toByte).toArray)
+    }
+    writeDataframe(tableType, tableName, tablePath,
+      asInlineDf(extraPayloads),
+      operation = Some("bulk_insert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id",
+        "hoodie.clustering.inline" -> "true",
+        "hoodie.clustering.inline.max.commits" -> "1"))
+
+    // Require a COMPLETED replacecommit. getLastClusteringInstant filters by action only, so a
+    // REQUESTED/INFLIGHT instant satisfies isPresent; isCompleted confirms the rewrite finished.
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+    val lastClustering = metaClient.getActiveTimeline.getLastClusteringInstant
+    assertTrue(lastClustering.isPresent && lastClustering.get.isCompleted,
+      "A COMPLETED clustering (replacecommit) instant must exist after inline clustering; without a " +
+        "completed rewrite the blob-loss regression below could not be exercised")
+
+    // ...and that it rewrote the base file(s) into new ones. Disjoint sets prove the rewrite ran
+    // instead of the byte checks reading untouched originals (#19232).
+    val postClusterBaseFiles = latestBaseFileNames(metaClient, tablePath)
+    assertTrue(preClusterBaseFiles.intersect(postClusterBaseFiles).isEmpty,
+      s"Post-clustering base files must be disjoint from the pre-clustering base file(s), proving the " +
+        s"rewrite ran (pre=$preClusterBaseFiles, post=$postClusterBaseFiles)")
+
+    // Read back in CONTENT mode and assert every row's bytes survived the clustering rewrite.
+    val allExpected: Map[Int, Array[Byte]] =
+      (expectedPayloads.zipWithIndex.map { case (b, i) => i -> b } ++ extraPayloads).toMap
+
+    // Byte check via a plain projection under CONTENT. As in the compaction test: a DESCRIPTOR
+    // leak already fails the rewrite in HoodieSparkLanceWriter.validateBlobRow, so what this
+    // catches is the guard-allowed empty-inline shape {INLINE, null data, null reference},
+    // where dropped bytes would persist silently.
+    val contentRows = spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .select($"id", $"payload")
+      .orderBy($"id")
+      .collect()
+    assertEquals(allExpected.size, contentRows.length)
+    contentRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val payload = row.getStruct(row.fieldIndex("payload"))
+      assertFalse(payload.isNullAt(payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"null data under CONTENT: the clustering rewrite dropped the bytes (id=$id)")
+      assertArrayEquals(allExpected(id),
+        payload.getAs[Array[Byte]](payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"INLINE data bytes must survive the clustering rewrite (id=$id)")
+    }
+
+    val viewName = s"${tableName}_view"
+    spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(viewName)
+    val materialized = spark.sql(
+      s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
+    assertEquals(allExpected.size, materialized.length)
+    materialized.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val bytes = row.getAs[Array[Byte]]("bytes")
+      assertArrayEquals(allExpected(id), bytes,
+        s"read_blob() must return correct bytes post-clustering (id=$id)")
+    }
+  }
+
+  /**
+   * A CoW upsert merge must preserve INLINE blob bytes under the DESCRIPTOR default.
+   *
+   * Compaction and clustering (covered above) obtain their reader through
+   * {@code HoodieEngineContext.getReaderContextFactory}. A CoW upsert takes a different path: it
+   * rewrites the base file through FileGroupReaderBasedMergeHandle, which resolves its reader
+   * through {@code getReaderContextFactoryForWrite}. That method branches on the record merger
+   * type: AvroReaderContextFactory for AVRO, SparkReaderContextFactory for SPARK (the datasource
+   * default, used here). A DESCRIPTOR leak on this branch would rewrite untouched rows with null
+   * {@code data}, the same silent loss as #19232.
+   *
+   * The test bulk-inserts INLINE blobs into a single file group, upserts a subset, proves the
+   * merge rewrote the base file, and verifies touched rows carry the new bytes while untouched
+   * rows keep the originals.
+   */
+  @Test
+  def testBlobInlineCowUpsertMergeRoundTrip(): Unit = {
+    val tableType = HoodieTableType.COPY_ON_WRITE
+    val tableName = "test_lance_blob_inline_upsert_merge_cow"
+    val tablePath = s"$basePath/$tableName"
+
+    val payloadLen = 1024
+    val numRows = 6
+    val initialPayloads: Seq[Array[Byte]] = (0 until numRows).map { i =>
+      (0 until payloadLen).map(j => ((i + j) % 256).toByte).toArray
+    }
+    val sparkSess = spark
+    import sparkSess.implicits._
+
+    val canonicalSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("payload", BlobType().asInstanceOf[StructType], nullable = true,
+        BlobTestHelpers.blobMetadata)
+    ))
+    def asInlineDf(idToBytes: Seq[(Int, Array[Byte])]): DataFrame = {
+      val rawDf = idToBytes.toDF("id", "bytes")
+        .select($"id", BlobTestHelpers.inlineBlobStructCol("payload", $"bytes"))
+      spark.createDataFrame(rawDf.rdd, canonicalSchema).coalesce(1)
+    }
+
+    // First commit: bulk_insert ids 0..5 into a single base file. A single file group is required
+    // so the untouched ids 3..5 genuinely pass through the merge rewrite; in their own group the
+    // upsert would never touch them and the byte checks below would pass vacuously.
+    writeDataframe(tableType, tableName, tablePath,
+      asInlineDf(initialPayloads.zipWithIndex.map { case (b, i) => (i, b) }),
+      saveMode = SaveMode.Overwrite,
+      operation = Some("bulk_insert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id",
+        "hoodie.bulkinsert.shuffle.parallelism" -> "1",
+        "hoodie.insert.shuffle.parallelism" -> "1"))
+
+    assertLanceBlobEncoding(tablePath)
+
+    val metaClientAfterFirst = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+    val preUpsertBaseFiles = latestBaseFileNames(metaClientAfterFirst, tablePath)
+    assertEquals(1, preUpsertBaseFiles.size,
+      s"All rows must land in exactly one base file (coalesce(1) + shuffle parallelism 1) at " +
+        s"$tablePath, got $preUpsertBaseFiles; otherwise untouched ids sit in file groups the " +
+        s"upsert never rewrites and the merge path is not exercised")
+
+    // Second commit: upsert ids 0..2 with all-0xEE payloads. On CoW this routes every existing
+    // file-group record through the merge handle's CONTENT-pinned base-file read and rewrite.
+    val updatedPayloadByte: Byte = 0xEE.toByte
+    val updatedIds = 0 until 3
+    val updatedPayloads = updatedIds.map(i => (i, Array.fill[Byte](payloadLen)(updatedPayloadByte)))
+    writeDataframe(tableType, tableName, tablePath,
+      asInlineDf(updatedPayloads),
+      operation = Some("upsert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id"))
+
+    // The upsert must have stayed on the CoW commit path: two completed commits, no deltacommits
+    // (a deltacommit would mean an append path that never rewrites the base file).
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+    val completedInstants = metaClient.reloadActiveTimeline().filterCompletedInstants()
+      .getInstants.asScala
+    assertEquals(2, completedInstants.count(_.getAction == "commit"),
+      "Expected exactly two completed commits (bulk_insert + upsert) on CoW")
+    assertTrue(completedInstants.forall(_.getAction != "deltacommit"),
+      "CoW upsert must not write deltacommits; the merge rewrite would not be exercised")
+
+    // The merge must also have replaced the base file: a single new name, disjoint from the
+    // pre-upsert one. If the old name were still the latest, the untouched ids were never
+    // merged and the byte checks below would read stale bytes.
+    val postUpsertBaseFiles = latestBaseFileNames(metaClient, tablePath)
+    assertEquals(1, postUpsertBaseFiles.size,
+      s"Upsert must keep all rows in one file group, got $postUpsertBaseFiles")
+    assertTrue(preUpsertBaseFiles.intersect(postUpsertBaseFiles).isEmpty,
+      s"Post-upsert base file must differ from the pre-upsert one, proving the merge rewrote it " +
+        s"(pre=$preUpsertBaseFiles, post=$postUpsertBaseFiles)")
+
+    val expected: Map[Int, Array[Byte]] = (
+      updatedIds.map(i => i -> Array.fill[Byte](payloadLen)(updatedPayloadByte)) ++
+        (updatedIds.length until numRows).map(i => i -> initialPayloads(i))
+      ).toMap
+
+    // Plain read yields the DESCRIPTOR shape, confirming the user-facing default end-to-end.
+    val readRows = spark.read.format("hudi")
+      .load(tablePath)
+      .select($"id", $"payload")
+      .orderBy($"id")
+      .collect()
+    assertEquals(numRows, readRows.length)
+    readRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val payload = row.getStruct(row.fieldIndex("payload"))
+      assertEquals(HoodieSchema.Blob.INLINE,
+        payload.getString(payload.fieldIndex(HoodieSchema.Blob.TYPE)),
+        s"Type must remain INLINE post-merge (id=$id)")
+      assertTrue(payload.isNullAt(payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"DESCRIPTOR default should null `data` on plain read (id=$id)")
+      assertNotNull(payload.getStruct(payload.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)),
+        s"DESCRIPTOR default should populate reference on plain read (id=$id)")
+    }
+
+    // Byte check via a plain projection under CONTENT. As in the compaction test: a DESCRIPTOR
+    // leak already fails the merge in HoodieSparkLanceWriter.validateBlobRow, so what this
+    // catches is the guard-allowed empty-inline shape {INLINE, null data, null reference},
+    // where dropped bytes would persist silently.
+    val contentRows = spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .select($"id", $"payload")
+      .orderBy($"id")
+      .collect()
+    assertEquals(numRows, contentRows.length)
+    contentRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val payload = row.getStruct(row.fieldIndex("payload"))
+      assertFalse(payload.isNullAt(payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"null data under CONTENT: the merge rewrite dropped the bytes (id=$id)")
+      assertArrayEquals(expected(id),
+        payload.getAs[Array[Byte]](payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"INLINE data bytes must survive the merge rewrite (id=$id)")
+    }
+
+    // read_blob() under CONTENT verifies the same bytes through the SQL expression path.
+    val viewName = s"${tableName}_view"
+    spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(viewName)
+    val materializedRows = spark.sql(
+      s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
+    assertEquals(numRows, materializedRows.length)
+    materializedRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val bytes = row.getAs[Array[Byte]]("bytes")
+      assertArrayEquals(expected(id), bytes,
+        s"read_blob() must return correct bytes post-merge (id=$id)")
+    }
+  }
+
+  /**
+   * Latest base file name per file group under {@code tablePath}. Snapshots taken before and
+   * after a rewriting table service (clustering, CoW upsert merge) are compared for disjointness
+   * to prove the rewrite actually replaced the base file(s).
+   */
+  private def latestBaseFileNames(mc: HoodieTableMetaClient, tablePath: String): Set[String] = {
+    val engineContext = new HoodieLocalEngineContext(mc.getStorageConf)
+    val metadataConfig = HoodieMetadataConfig.newBuilder.build
+    val viewManager = FileSystemViewManager.createViewManager(
+      engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
+      HoodieCommonConfig.newBuilder.build,
+      (m: HoodieTableMetaClient) => mc.getTableFormat
+        .getMetadataFactory.create(engineContext, m.getStorage, metadataConfig, tablePath))
+    val fsView = viewManager.getFileSystemView(mc)
+    try {
+      fsView.getLatestBaseFiles("")
+        .collect(Collectors.toList[org.apache.hudi.common.model.HoodieBaseFile])
+        .asScala.map(_.getFileName).toSet
+    } finally {
+      fsView.close()
     }
   }
 
