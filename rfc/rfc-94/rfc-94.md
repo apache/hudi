@@ -449,16 +449,42 @@ SparkContext stops / write client closes
         └─> HudiTimelineTab detached via SparkUI.detachTab()
 ```
 
-Registration happens in `EmbeddedTimelineService` after the embedded server has started successfully. The tab is
-detached during shutdown to ensure clean cleanup. If the Spark UI is not available (e.g., `spark.ui.enabled=false`), the
-tab registration is skipped silently.
+Registration is triggered by `EmbeddedTimelineService` after the embedded server has started successfully, through the
+provider SPI described in [Module Placement and Dependency Inversion](#module-placement-and-dependency-inversion) below
+(`EmbeddedTimelineService` itself holds no Spark types). The tab is detached during shutdown to ensure clean cleanup. If
+the Spark UI is not available (e.g., `spark.ui.enabled=false`), the tab registration is skipped silently.
 
-### Module Placement
+### Module Placement and Dependency Inversion
 
-The Spark UI tab implementation lives in `hudi-spark-client`, not `hudi-timeline-service`, because it depends on Spark
-APIs (`WebUITab`, `WebUIPage`) which are not available in the timeline service module. The `EmbeddedTimelineService`
-(also in `hudi-client-common`) coordinates the registration by calling into the Spark-specific tab class when running
-with a `HoodieSparkEngineContext`.
+The Spark UI tab implementation depends on Spark APIs (`WebUITab`, `WebUIPage`), so it must live in `hudi-spark-client`.
+`EmbeddedTimelineService`, however, lives in `hudi-client-common`, and the module dependency runs one way only:
+`hudi-spark-client` depends on `hudi-client-common`, never the reverse. `EmbeddedTimelineService` therefore cannot
+reference the Spark tab class - or even `HoodieSparkEngineContext` - directly; doing so would not compile.
+
+Registration is inverted through a `ServiceLoader` SPI, mirroring how `hudi-common` already discovers
+`HoodieTableFormat` implementations (`ServiceLoader.load(HoodieTableFormat.class)` in `HoodieTableConfig`):
+
+- An engine-agnostic provider interface is defined in `hudi-client-common` (no Spark types on its signature), e.g.:
+
+  ```java
+  // hudi-client-common: org.apache.hudi.client.embedded
+  public interface TimelineServerUITabProvider {
+    void register(HoodieEngineContext context, String serverHost, int serverPort);
+    void unregister();
+  }
+  ```
+
+- `hudi-spark-client` supplies the implementation (`SparkTimelineServerUITabProvider`), registered via
+  `META-INF/services/org.apache.hudi.client.embedded.TimelineServerUITabProvider`. Only this implementation touches
+  Spark APIs: it casts the `HoodieEngineContext` to `HoodieSparkEngineContext`, obtains the `SparkContext`/`SparkUI`,
+  and calls `attachTab()` / `detachTab()` with the `WebUITab`.
+- After the embedded server starts, `EmbeddedTimelineService` runs
+  `ServiceLoader.load(TimelineServerUITabProvider.class)` and invokes the single provider found, if any, passing the
+  started server's host and port. When no provider is on the classpath (non-Spark engines) or the Spark UI is
+  unavailable (handled inside the impl, e.g. `spark.ui.enabled=false`), registration is skipped silently. The loaded
+  provider instance is retained so the matching `unregister()` runs at shutdown.
+
+This keeps `hudi-client-common` free of any Spark compile-time dependency while letting the Spark module supply the tab.
 
 ## Dependency Impact
 
