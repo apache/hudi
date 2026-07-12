@@ -18,10 +18,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeGuard
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import trim_messages
+from langchain_core.messages import AIMessage, AnyMessage, trim_messages
 from langchain_core.messages.utils import count_tokens_approximately
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.prebuilt import create_react_agent
@@ -92,6 +92,36 @@ class AgentCache:
         return self._agents[name]
 
 
+def _is_broken_thinking_block(block: Any) -> TypeGuard[dict[str, Any]]:
+    return isinstance(block, dict) and block.get("type") == "thinking" and "thinking" not in block
+
+
+def repair_thinking_blocks(messages: list[AnyMessage]) -> list[AnyMessage]:
+    """Restore the `thinking` field on streamed adaptive-thinking blocks.
+
+    Anthropic's adaptive-thinking models can return a thinking block whose text
+    is empty (signature only). When such a turn is streamed, langchain-anthropic
+    merges the chunks into a block with no `thinking` key at all, and the API
+    rejects the message on the next agent-loop call with
+    "thinking.thinking: Field required". Re-adding the empty field is lossless.
+    """
+    repaired: list[AnyMessage] = []
+    for msg in messages:
+        content = msg.content
+        if (
+            isinstance(msg, AIMessage)
+            and isinstance(content, list)
+            and any(_is_broken_thinking_block(b) for b in content)
+        ):
+            blocks = [
+                {**b, "thinking": ""} if _is_broken_thinking_block(b) else b
+                for b in content
+            ]
+            msg = msg.model_copy(update={"content": blocks})
+        repaired.append(msg)
+    return repaired
+
+
 def build_agent(
     model: BaseChatModel,
     registry: ToolRegistry,
@@ -111,7 +141,7 @@ def build_agent(
             include_system=True,
             allow_partial=False,
         )
-        return {"llm_input_messages": trimmed}
+        return {"llm_input_messages": repair_thinking_blocks(trimmed)}
 
     return create_react_agent(
         model=model,

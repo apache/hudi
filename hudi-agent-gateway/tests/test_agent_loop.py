@@ -84,3 +84,60 @@ def test_agent_cache_builds_per_model_and_caps(settings, registry) -> None:
     for i in range(10):                                # exceeds the cap without error
         cache.get(f"m{i}")
     assert cache.get("m9") is cache.get("m9")
+
+
+async def test_loop_repairs_broken_thinking_block_before_next_model_call(
+    settings, registry
+) -> None:
+    """A streamed adaptive-thinking turn stored with a signature-only thinking
+    block must reach the model repaired on the following loop iteration."""
+    from typing import Any
+
+    from tests.conftest import ScriptedChatModel
+
+    seen: list[list[Any]] = []
+
+    class RecordingModel(ScriptedChatModel):
+        def _stream(self, messages: Any, stop: Any = None, run_manager: Any = None, **kwargs: Any):
+            seen.append(list(messages))
+            yield from super()._stream(messages, stop, run_manager, **kwargs)
+
+        def _generate(self, messages: Any, stop: Any = None, run_manager: Any = None, **kw: Any):
+            seen.append(list(messages))
+            return super()._generate(messages, stop=stop, run_manager=run_manager, **kw)
+
+    model = RecordingModel(messages=iter([
+        AIMessage(
+            content=[{"type": "thinking", "signature": "sig=="}],  # no `thinking` key
+            tool_calls=[{"id": "call_1", "name": "list_tables", "args": {}}],
+        ),
+        AIMessage(content="Answer grounded in the listing."),
+    ]))
+    agent = build_agent(model, registry, InMemorySaver(), settings)
+    await agent.ainvoke(
+        {"messages": [HumanMessage("What tables exist?")]},
+        config={"configurable": {"thread_id": "thinking-repair"}},
+    )
+
+    second_call_ai = [m for m in seen[1] if isinstance(m, AIMessage)]
+    blocks = second_call_ai[0].content
+    assert blocks[0]["type"] == "thinking" and blocks[0]["thinking"] == ""
+
+
+def test_repair_thinking_blocks_restores_missing_field() -> None:
+    from hudi_agent_gateway.agent import repair_thinking_blocks
+
+    broken = AIMessage(content=[
+        {"type": "thinking", "signature": "sig=="},           # streamed merge dropped `thinking`
+        {"type": "thinking", "thinking": "kept", "signature": "s2"},
+        {"type": "text", "text": "hi"},
+    ])
+    human = HumanMessage("q")
+    plain = AIMessage(content="just text")
+
+    out = repair_thinking_blocks([human, broken, plain])
+
+    assert out[0] is human and out[2] is plain                # untouched passthrough
+    assert out[1].content[0] == {"type": "thinking", "signature": "sig==", "thinking": ""}
+    assert out[1].content[1]["thinking"] == "kept"            # present field untouched
+    assert broken.content[0] == {"type": "thinking", "signature": "sig=="}  # original not mutated
