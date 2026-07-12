@@ -442,8 +442,10 @@ spark-shell \
 ```
 
 Once a write operation initializes the `EmbeddedTimelineService`, the UI becomes available at
-`http://<driver-host>:<embedded-server-port>/ui`. The embedded server port is logged at startup and can also be
-retrieved from the Spark configuration via the `hoodie.embed.timeline.server.port` property.
+`http://<driver-host>:<embedded-server-port>/ui`. The embedded server binds a free port by default
+(`hoodie.embed.timeline.server.port` = `0`), and the bound port is not written back to that property - read it from the
+startup log line (`Started embedded timeline server at <host>:<port>`), or from the resolved
+`FileSystemViewStorageConfig` remote-server port that `EmbeddedTimelineService` propagates it to.
 
 #### Starting from a Spark application (driver)
 
