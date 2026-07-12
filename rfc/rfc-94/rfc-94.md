@@ -644,6 +644,10 @@ Following the pattern established by `TestTimelineService.java`:
 - Verify `GET /v2/hoodie/view/timeline/instant` returns valid JSON for a completed instant.
 - Verify `GET /v2/hoodie/view/table/config` and `GET /v2/hoodie/view/table/schema/history` return valid JSON.
 - Verify `GET /ui` returns HTTP 200 with HTML content (static file serving works).
+- **Flag gating (negative case):** start `TimelineService` *without* `--enable-ui` (the default) and assert `GET /ui`,
+  `GET /ui/static/*` and every `GET /v2/hoodie/view/*` route return HTTP 404, while the existing `/v1/` routes still
+  respond. This is the assertion the Scope section's threat model rests on - the widened read surface must not exist
+  unless the flag is explicitly set.
 
 ### Manual Testing Checklist
 
