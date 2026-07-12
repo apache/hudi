@@ -67,7 +67,7 @@ class GatewaySettings(BaseSettings):
 
     # --- guardrails / shaping ---
     sql_row_cap: int = 200
-    sql_timeout_seconds: float = 60.0
+    sql_timeout_seconds: float = 120.0
     tool_result_max_bytes: int = 50_000
 
     # --- agent / sessions ---

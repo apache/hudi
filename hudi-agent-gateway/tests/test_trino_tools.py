@@ -47,6 +47,19 @@ async def test_query_lakehouse_trino_error_returned(registry: ToolRegistry, fake
     assert out["error"].startswith("query failed")
 
 
+async def test_query_lakehouse_timeout_gets_actionable_hint(
+    registry: ToolRegistry, fake_trino
+) -> None:
+    """Timeouts must NOT get the generic 'fix the SQL' hint -- the SQL is fine."""
+    from hudi_agent_gateway.tools.trino_client import TrinoTimeoutError
+
+    fake_trino.error = TrinoTimeoutError("query exceeded the 120s timeout")
+    out = await _call(registry, "query_lakehouse", sql="SELECT count(*) FROM trips")
+    assert out["error"].startswith("query failed")
+    assert "GATEWAY_SQL_TIMEOUT_SECONDS" in out["hint"]
+    assert "Fix the SQL" not in out["hint"]
+
+
 async def test_truncation_notice(registry: ToolRegistry, fake_trino) -> None:
     fake_trino.result = QueryResult(
         columns=["s"], rows=[["x" * 100] for _ in range(200)]

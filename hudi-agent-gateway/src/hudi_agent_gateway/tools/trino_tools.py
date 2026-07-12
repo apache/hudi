@@ -32,7 +32,12 @@ from pydantic import Field
 from hudi_agent_gateway.config import GatewaySettings
 from hudi_agent_gateway.tools.guardrails import enforce_guardrails
 from hudi_agent_gateway.tools.registry import ToolInputError, ToolRegistry
-from hudi_agent_gateway.tools.trino_client import QueryResult, TrinoClient, TrinoQueryError
+from hudi_agent_gateway.tools.trino_client import (
+    QueryResult,
+    TrinoClient,
+    TrinoQueryError,
+    TrinoTimeoutError,
+)
 
 _QUERY_DESC = (
     "Run a single read-only SELECT statement (Trino SQL) against the lakehouse "
@@ -106,6 +111,13 @@ def register(registry: ToolRegistry, client: TrinoClient, settings: GatewaySetti
             )
         except ToolInputError as e:
             return _error(str(e), e.hint)
+        except TrinoTimeoutError as e:
+            return _error(
+                f"query failed: {e}",
+                f"The query hit the gateway's {settings.sql_timeout_seconds:.0f}s limit -- "
+                "narrow it (partition filter, pre-aggregate, fewer columns) or raise "
+                "GATEWAY_SQL_TIMEOUT_SECONDS.",
+            )
         except TrinoQueryError as e:
             return _error(f"query failed: {e}", "Fix the SQL and try again.")
         return shape_result(result, max_bytes=settings.tool_result_max_bytes, sql=safe_sql)

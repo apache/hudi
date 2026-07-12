@@ -50,6 +50,9 @@
     modelInfoEl.textContent = info.provider + " · catalog " + info.catalog;
     var base = window.location.origin;
     document.getElementById("ep-trino").textContent = info.trino_url;
+    var trinoUi = document.getElementById("ep-trino-ui");
+    trinoUi.textContent = info.trino_ui_url;
+    trinoUi.href = info.trino_ui_url;
     document.getElementById("ep-chat").textContent = base + "/v1/chat";
     document.getElementById("ep-mcp").textContent = base + "/mcp/";
     document.getElementById("ep-mcp-hint").textContent =

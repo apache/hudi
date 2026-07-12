@@ -94,5 +94,6 @@ async def info(request: Request) -> InfoResponse:
         catalog=s.trino_catalog,
         schema=s.trino_schema,
         trino_url=f"http://{s.trino_host}:{s.trino_port}",
+        trino_ui_url=f"http://{s.trino_host}:{s.trino_port}/ui/",
         mcp_enabled=s.mcp_enabled,
     )

@@ -64,7 +64,7 @@ trino:
 
 guardrails:
   rowCap: 200
-  queryTimeoutSeconds: 60
+  queryTimeoutSeconds: 120
   resultMaxBytes: 50000
 
 sessions:
