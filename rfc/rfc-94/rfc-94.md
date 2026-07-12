@@ -173,9 +173,9 @@ There are two categories of requests:
 1. **Static file requests** - Javalin serves JavaScript, CSS, and library assets from the classpath
    (`src/main/resources/public/`) under the `/ui/static/` URL prefix; `UiHandler` serves `index.html` at `/ui`. No
    server-side rendering or template engine is needed.
-2. **REST API requests** (`/v2/hoodie/view/*`) - `TimelineHandler` processes these requests, reading from a per-basepath
-   `HoodieTableMetaClient` - its `getActiveTimeline()` for the timeline routes, and table config/schema for the
-   config/schema routes - and returning JSON.
+2. **REST API requests** (`/v2/hoodie/view/*`) - `TimelineHandler` processes these requests, reading from a short-lived
+   `HoodieTableMetaClient` built for the request's basepath - its `getActiveTimeline()` for the timeline routes, and
+   table config/schema for the config/schema routes - and returning JSON.
 
 ### Frontend
 
@@ -241,8 +241,7 @@ A `hudi-timeline-service` instance already serves filesystem metadata for multip
 `FileSystemView`s are cached in a map keyed by basepath.
 
 We extend this module with `/v2/` APIs that serve the UI's timeline, config and schema metadata, reading each table
-through a per-basepath `HoodieTableMetaClient` cached the same one-entry-per-basepath way (see
-[Handler Design](#handler-design)).
+through a short-lived `HoodieTableMetaClient` built per request (see [Handler Design](#handler-design)).
 
 #### API Specification
 
@@ -299,7 +298,7 @@ The v2 endpoints are served by the existing `TimelineHandler` (which already ser
 
 `TimelineHandler` methods:
 
-1. `getTimelineV2(basePath)` - maps the per-basepath `HoodieTableMetaClient`'s `getActiveTimeline()` to a
+1. `getTimelineV2(basePath)` - maps `getActiveTimeline()` from the request's `HoodieTableMetaClient` to a
    `TimelineDTOV2`. The active timeline carries every `VALID_ACTIONS_IN_TIMELINE` action in all states
    (requested/inflight/completed), which the vis-timeline groups and requested/inflight point items require. The
    `FileSystemView` timeline (`getFileSystemView(basePath).getTimeline()`) cannot be used here: it is the write timeline
@@ -307,24 +306,25 @@ The v2 endpoints are served by the existing `TimelineHandler` (which already ser
    and every requested/inflight state.
 2. `getInstantDetails(basePath, instant, action, state)` - reads the instant's Avro content via the active timeline's
    `getContentStream(instant)` (the non-deprecated reader method; `getInstantDetails()` is `@Deprecated`) and
-   deserializes it to JSON. The instant is built with the handler's metaClient via `metaClient.getInstantGenerator()`;
+   deserializes it to JSON. The instant is built with the request's metaClient via `metaClient.getInstantGenerator()`;
    a malformed `state`/`action` returns 400, a read failure is logged and returns 500.
 3. `getTableConfig(basePath)` - returns the table's `hoodie.properties` as a sorted JSON object.
 4. `getSchemaHistory(basePath, limit)` - reconstructs schema evolution from two sources; see
    [Schema-History Reconstruction](#schema-history-reconstruction) below.
 
-`getTimelineV2`, `getTableConfig` and `getSchemaHistory` all reuse a `HoodieTableMetaClient` cached per basepath in a
-`ConcurrentHashMap`, so repeated requests skip full metaClient construction. A `HoodieTableMetaClient` snapshots its
-`tableConfig` and `activeTimeline` at construction and refreshes them only on demand, so a build-once cache would serve
-stale timeline/config/schema for the lifetime of a long-lived embedded driver. To avoid that, each request first
-reloads the relevant snapshot under a per-basepath guard - `reloadActiveTimeline()` for `getTimelineV2` and
-`getSchemaHistory`, `reloadTableConfig()` for `getTableConfig` - before reading. These are human-click-frequency views,
-so the reload cost (one `hoodie.properties` read plus one timeline listing) is negligible and the response is always
-current. A TTL is deliberately not used: at this request rate it would save no meaningful work and would only
-reintroduce a staleness window. The UI also surfaces a **Refresh** control on the Table Config and Schema History tabs to re-pull on demand;
-because the server reloads on every request, the button simply re-issues the fetch rather than busting a cache. The
-timeline view reloads the active timeline on every request as well, so it stays current without the button; instant
-details are immutable once written and need no refresh.
+`getTimelineV2`, `getTableConfig` and `getSchemaHistory` each build a short-lived `HoodieTableMetaClient` for the
+request's basepath, read from it, and discard it - no metaClient is shared across Javalin's request threads. At
+human-click frequency the construction cost (one `hoodie.properties` read, plus one active-timeline listing for the
+timeline and schema routes) is negligible, and a fresh per-request instance is always current and keeps each request's
+read self-consistent. A long-lived per-basepath cache is deliberately avoided: the data must be re-read on every request
+anyway, so caching the metaClient would save little while forcing an in-place `reloadActiveTimeline()` /
+`reloadTableConfig()` on a mutable object shared across concurrent same-basepath requests. `HoodieTableMetaClient` marks
+its individual accessors `synchronized`, but a compound reload-then-read is not one critical section, so a concurrent
+reload could swap the snapshot between one request's reload and its read - a fresh instance sidesteps that entirely. A
+TTL is likewise avoided: at this request rate it would save no meaningful work and would only add a staleness window. The
+UI also surfaces a **Refresh** control on the Table Config and Schema History tabs; because the server reads fresh on
+every request, the button simply re-issues the fetch. The timeline view is fresh on every request too; instant details
+are immutable once written and need no refresh.
 
 `UiHandler` registers `GET /ui`, returning `/public/index.html` from the classpath as the UI entry page.
 
@@ -379,7 +379,7 @@ The permitted user actions are:
 8. User is able to view the table's configuration (`hoodie.properties`) in the Table Config tab
 9. User is able to view the table's schema and schema-change history in the Schema History tab
 10. User is able to click a **Refresh** control on the Table Config and Schema History tabs to re-pull the latest values
-    (the server reloads the table config / active timeline on each request)
+    (the server reads the table config / active timeline fresh on each request)
 
 Each action type occupies its own horizontal row so concurrent actions are visually separated. Completed instants appear
 as horizontal bars whose width represents duration (requested -> completed). Inflight and requested instants appear as
@@ -487,8 +487,8 @@ experience.
 A Spark application can write to multiple Hudi tables. The embedded timeline server is shared across them: when
 `hoodie.embed.timeline.server.reuse.enabled` is set, `EmbeddedTimelineService` keeps a single server per driver and
 tracks the set of basepaths using it (`EmbeddedTimelineService.basePaths`), adding each table on its first write. The
-backend already caches one `FileSystemView` per basepath, and the UI's per-basepath `HoodieTableMetaClient` cache is
-keyed the same way, so that single server serves every table.
+backend already caches one `FileSystemView` per basepath, and each UI request builds a `HoodieTableMetaClient` for its
+own basepath, so that single server serves every table.
 
 The tab therefore links to a single UI instance rather than registering one tab per table. The user selects which
 table to view inside the UI via the basepath input form (persisted in the `?path=` query parameter). Because the
