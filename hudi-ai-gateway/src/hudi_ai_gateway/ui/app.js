@@ -48,7 +48,30 @@
 
   fetch("../v1/info").then(function (r) { return r.json(); }).then(function (info) {
     modelInfoEl.textContent = info.provider + " · catalog " + info.catalog;
+    var base = window.location.origin;
+    document.getElementById("ep-trino").textContent = info.trino_url;
+    document.getElementById("ep-chat").textContent = base + "/v1/chat";
+    document.getElementById("ep-mcp").textContent = base + "/mcp/";
+    document.getElementById("ep-mcp-hint").textContent =
+      "for agents: claude mcp add --transport http hudi-lakehouse " + base + "/mcp/";
+    if (!info.mcp_enabled) document.getElementById("ep-mcp-row").hidden = true;
   }).catch(function () { modelInfoEl.textContent = "gateway unreachable"; });
+
+  var connectToggle = document.getElementById("connect-toggle");
+  var connectPanel = document.getElementById("connect-panel");
+  connectToggle.addEventListener("click", function () {
+    connectPanel.hidden = !connectPanel.hidden;
+    connectToggle.classList.toggle("open", !connectPanel.hidden);
+  });
+  document.querySelectorAll(".copy").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var text = document.getElementById(btn.dataset.copy).textContent;
+      navigator.clipboard.writeText(text).then(function () {
+        btn.textContent = "✓";
+        setTimeout(function () { btn.textContent = "⎘"; }, 1200);
+      });
+    });
+  });
 
   // Populate the model picker with whatever the configured provider offers.
   fetch("../v1/models").then(function (r) { return r.json(); }).then(function (m) {

@@ -88,3 +88,5 @@ async def test_info(client) -> None:
     assert body["provider"] == "ollama"
     assert body["catalog"] == "hudi"
     assert body["schema"] == "default"
+    assert body["trino_url"] == "http://fake-trino:8080"
+    assert body["mcp_enabled"] is False  # fixture disables MCP

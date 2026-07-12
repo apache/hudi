@@ -104,5 +104,8 @@ class InfoResponse(BaseModel):
     model: str
     catalog: str
     schema_: str = Field(alias="schema")
+    # In-cluster/network endpoints, for the UI's connect panel.
+    trino_url: str
+    mcp_enabled: bool
 
     model_config = {"populate_by_name": True}

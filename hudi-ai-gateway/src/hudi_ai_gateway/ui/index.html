@@ -33,8 +33,40 @@ limitations under the License.
       </span>
       <select id="model-select" title="Model (within the configured provider)" hidden></select>
     </div>
-    <button id="new-chat" title="Start a new conversation">New chat</button>
+    <div class="header-actions">
+      <button id="connect-toggle" title="Endpoints for SQL tools, apps, and agents">Connect</button>
+      <button id="new-chat" title="Start a new conversation">New chat</button>
+    </div>
   </header>
+
+  <section id="connect-panel" hidden>
+    <div class="endpoint">
+      <div>
+        <strong>Trino SQL</strong>
+        <small>point any SQL client / BI tool at the lakehouse directly</small>
+      </div>
+      <code id="ep-trino">&hellip;</code>
+      <button class="copy" data-copy="ep-trino" title="Copy">&#x2398;</button>
+    </div>
+    <div class="endpoint">
+      <div>
+        <strong>Inference API</strong>
+        <small>POST {"message", "session_id"} &mdash; the agent loop over your data</small>
+      </div>
+      <code id="ep-chat">&hellip;</code>
+      <button class="copy" data-copy="ep-chat" title="Copy">&#x2398;</button>
+    </div>
+    <div class="endpoint" id="ep-mcp-row">
+      <div>
+        <strong>MCP server</strong>
+        <small id="ep-mcp-hint">for agents: claude mcp add --transport http hudi-lakehouse &lt;url&gt;</small>
+      </div>
+      <code id="ep-mcp">&hellip;</code>
+      <button class="copy" data-copy="ep-mcp" title="Copy">&#x2398;</button>
+    </div>
+    <p class="endpoint-note">Trino is addressed by its in-cluster service name; from outside the
+    cluster, port-forward or expose the service. The inference and MCP URLs are this gateway.</p>
+  </section>
 
   <main id="messages" aria-live="polite">
     <div class="welcome" id="welcome">

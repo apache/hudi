@@ -86,7 +86,8 @@ header {
   font-size: 13px;
   max-width: 260px;
 }
-#new-chat {
+.header-actions { display: flex; gap: 8px; }
+#new-chat, #connect-toggle {
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text);
@@ -94,7 +95,50 @@ header {
   padding: 6px 12px;
   cursor: pointer;
 }
-#new-chat:hover { background: var(--accent-soft); }
+#new-chat:hover, #connect-toggle:hover { background: var(--accent-soft); }
+#connect-toggle.open { background: var(--accent-soft); border-color: var(--accent); }
+
+#connect-panel {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 18px;
+}
+.endpoint {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 900px;
+  margin: 0 auto 8px;
+}
+.endpoint > div { width: 220px; flex-shrink: 0; }
+.endpoint strong { display: block; font-size: 13.5px; }
+.endpoint small { color: var(--muted); font-size: 11.5px; }
+.endpoint code {
+  flex: 1;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.endpoint .copy {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 5px 9px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.endpoint .copy:hover { color: var(--accent); border-color: var(--accent); }
+.endpoint-note {
+  max-width: 900px;
+  margin: 4px auto 0;
+  color: var(--muted);
+  font-size: 11.5px;
+}
 
 main {
   flex: 1;
