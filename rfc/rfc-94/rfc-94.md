@@ -274,7 +274,7 @@ The v1 `InstantDTO` already carries everything needed to render range bars - `fr
 timeline DTO directly. The v2 DTOs are not about exposing new fields; they are a deliberate, low-cost choice to give the
 new `/v2/` API a cleaner JSON contract:
 
-- **`InstantDTO`** (`o.a.h.common.table.timeline.dto.v2`) - the same source fields as v1, with UI-oriented JSON keys:
+- **`InstantDTOV2`** (`o.a.h.common.table.timeline.dto.v2`) - the same source fields as v1, with UI-oriented JSON keys:
     - `action` - the action type (e.g., `commit`, `deltacommit`, `compaction`)
     - `requestedTime` (JSON `requestTs`) - requested timestamp (`HoodieInstant.requestedTime()`)
     - `completionTime` (JSON `completionTs`) - completion timestamp (`HoodieInstant.getCompletionTime()`), null for
@@ -283,8 +283,12 @@ new `/v2/` API a cleaner JSON contract:
 
   Versus v1, this renames `requestedTime`/`completionTime` to `requestTs`/`completionTs` and drops v1's redundant legacy
   `ts` field (a duplicate of the requested time that the UI does not need).
-- **`TimelineDTOV2`** - wraps a `List<InstantDTO>` (`instants`); this is what `/v2/hoodie/view/timeline/instants/all`
+- **`TimelineDTOV2`** - wraps a `List<InstantDTOV2>` (`instants`); this is what `/v2/hoodie/view/timeline/instants/all`
   returns.
+
+  Both v2 DTOs carry the `V2` suffix to mirror the repo's versioned-class convention (`versioning/v1`/`v2` with
+  `InstantGeneratorV1`/`V2`, `BaseTimelineV1`/`V2`) and to avoid a simple-name clash with the existing `dto.InstantDTO`
+  that `TimelineHandler` still imports for the v1 routes.
 
 #### Handler Design
 
@@ -612,7 +616,7 @@ Other features we can add later:
 
 ### Unit Tests
 
-- **`TimelineHandler.getTimelineV2()`**: Verify correct mapping from `HoodieInstant` to v2 `InstantDTO`, including:
+- **`TimelineHandler.getTimelineV2()`**: Verify correct mapping from `HoodieInstant` to `InstantDTOV2`, including:
     - All action types in `HoodieTimeline.VALID_ACTIONS_IN_TIMELINE` are mapped correctly.
     - `completionTime` is populated for completed instants and null for requested/inflight instants.
     - Instants are returned in timeline order.
