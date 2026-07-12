@@ -26,6 +26,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.types.{IntegerType, LongType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
@@ -288,5 +289,52 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase {
 
     assertSameRows(newReaderDf, legacyV1Df)
     assertSameRows(newReaderDf, legacyV2Df)
+  }
+
+  @Test
+  def testCowSnapshotReadWithImplicitTypeChange(): Unit = {
+    // The Hudi-specific reason these per-version parquet formats exist (vs stock ParquetFileFormat)
+    // is on-read type reconciliation: when a base file's physical column type is narrower than the
+    // table schema, HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo records the change
+    // and the vectorized read runs through Hudi's HoodieVectorizedParquetRecordReader (which widens
+    // the column vector) instead of Spark's stock VectorizedParquetRecordReader. Reproduce that:
+    //
+    //   commit 1 -- insert ids 1..30 with `value` written as INT32.
+    //   commit 2 -- upsert only the p0 rows (id % 3 == 0) with a widened LONG `value` too large for
+    //               an int, promoting the table schema to long.
+    //
+    // In COW, commit 2 rewrites just the p0 file group, so the p1/p2 base files keep the narrower
+    // physical int while the table schema is now long -- reading them exercises the type-change path.
+    spark.createDataFrame(makeRows(1 to 30, ts = 1L, i => i.toLong))
+      .withColumn("value", col("value").cast(IntegerType))
+      .write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val widened = 10000000000L // > Int.MaxValue, representable only as a long
+    writeBatch(makeRows((1 to 30).filter(_ % 3 == 0), ts = 2L, i => widened + i),
+      DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+
+    def expectedValue(i: Int): Long = if (i % 3 == 0) widened + i else i.toLong
+
+    // Vectorization must be on so the read takes the HoodieVectorizedParquetRecordReader branch
+    // rather than the row-based parquet-mr fallback (which reconciles types via a different path).
+    assertTrue(legacyFormatSupportsBatch,
+      "Vectorized reader must be engaged so the implicit type change runs through " +
+        "HoodieVectorizedParquetRecordReader")
+
+    val newReaderDf = fgReaderDf()
+    Seq(legacyRelationDf(), legacyFileFormatDf()).foreach { legacyDf =>
+      assertEquals(LongType, legacyDf.schema("value").dataType,
+        "Reading the promoted table must surface `value` as long")
+      val actual = legacyDf.select("id", "value").collect()
+        .map(r => (r.getString(0), r.getLong(1))).toSeq.sortBy(_._1.toInt)
+      // p1/p2 ids come from int base files widened on read; p0 ids carry the large long values.
+      assertEquals((1 to 30).map(i => (i.toString, expectedValue(i))), actual)
+      // The legacy path must still agree with the file-group reader on the promoted column.
+      assertSameRows(newReaderDf, legacyDf)
+    }
   }
 }
