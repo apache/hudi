@@ -306,8 +306,9 @@ The v2 endpoints are served by the existing `TimelineHandler` (which already ser
    filtered to completed plus (log)compaction instants, so it drops `clean`/`rollback`/`savepoint`/`restore`/`indexing`
    and every requested/inflight state.
 2. `getInstantDetails(basePath, instant, action, state)` - reads the instant's Avro content via the active timeline's
-   `getInstantDetails()` and deserializes it to JSON. The instant is created with the timeline's own layout-aware
-   `InstantGenerator`; a malformed `state`/`action` returns 400, a read failure is logged and returns 500.
+   `getContentStream(instant)` (the non-deprecated reader method; `getInstantDetails()` is `@Deprecated`) and
+   deserializes it to JSON. The instant is built with the handler's metaClient via `metaClient.getInstantGenerator()`;
+   a malformed `state`/`action` returns 400, a read failure is logged and returns 500.
 3. `getTableConfig(basePath)` - returns the table's `hoodie.properties` as a sorted JSON object.
 4. `getSchemaHistory(basePath, limit)` - reconstructs schema evolution from two sources; see
    [Schema-History Reconstruction](#schema-history-reconstruction) below.
