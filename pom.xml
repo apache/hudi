@@ -702,7 +702,6 @@
               <exclude>**/test/resources/**/.zip</exclude>
               <exclude>**/target/**</exclude>
               <exclude>**/generated-sources/**</exclude>
-              <exclude>**/py.typed</exclude>
               <exclude>.github/**</exclude>
               <exclude>**/banner.txt</exclude>
               <!-- local files not in version control -->
