@@ -87,7 +87,7 @@ header {
   max-width: 260px;
 }
 .header-actions { display: flex; gap: 8px; }
-#new-chat, #connect-toggle {
+#clear-chat, #connect-toggle {
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text);
@@ -95,7 +95,7 @@ header {
   padding: 6px 12px;
   cursor: pointer;
 }
-#new-chat:hover, #connect-toggle:hover { background: var(--accent-soft); }
+#clear-chat:hover, #connect-toggle:hover { background: var(--accent-soft); }
 #connect-toggle.open { background: var(--accent-soft); border-color: var(--accent); }
 
 #connect-panel {

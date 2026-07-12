@@ -93,7 +93,7 @@
     });
   }).catch(function () { /* picker simply stays hidden */ });
 
-  document.getElementById("new-chat").addEventListener("click", function () {
+  document.getElementById("clear-chat").addEventListener("click", function () {
     sessionId = newSession();
     messagesEl.querySelectorAll(".msg, .error-banner").forEach(function (el) { el.remove(); });
     if (welcomeEl) welcomeEl.style.display = "";
