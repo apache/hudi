@@ -1,13 +1,18 @@
 ---
 title: "Introducing Secondary Index in Apache Hudi Lakehouse Platform"
 excerpt: "What's & How's of Secondary indexes in Hudi 1.0"
+description: "What's & How's of Secondary indexes in Hudi 1.0"
 authors: [dipankar-mazumdar, aditya-goenka]
 category: deep-dive
 image: /assets/images/blog/sec-thumb.jpg
+last_update:
+  date: 2026-07-06
 tags:
 - indexing
 - performance
 ---
+
+A secondary index in Apache Hudi is an index on any column other than the record key (primary key), introduced in Hudi 1.0, that maps secondary key values to record keys so queries filtering on non-primary-key fields can skip irrelevant data files instead of scanning the whole table.
 
 :::tip TL;DR
 
@@ -29,6 +34,9 @@ Hudi's indexing mechanism is designed to efficiently manage record lookups and u
 
 This strategy allows Hudi to determine whether a record exists and pinpoint its exact location, enabling faster upserts and deletes.
 
+:::info Newer content available
+For a comprehensive tour of how secondary indexes fit into Hudi 1.x's broader indexing subsystem, see [Deep Dive Into Hudi's Indexing Subsystem Part 2](/blog/2025/11/12/deep-dive-into-hudis-indexing-subsystem-part-2-of-2).
+:::
 
 ## Apache Hudi's Multi-Modal Indexing System 
 
@@ -194,3 +202,13 @@ Indexing has been a core component of Apache Hudi since its inception, enabling 
 Additionally, to ensure that index maintenance does not introduce bottlenecks, Hudi’s *asynchronous indexing* service decouples index updates from ingestion, enabling seamless scaling while keeping indexes timeline-consistent and ACID-compliant. These advancements further solidify Hudi’s role as a high-performance lakehouse platform, making data structures such as secondary indexes more accessible.
 
 ---
+
+## FAQ
+
+<PostFAQ heading={null} items={[
+  {question: 'What is a secondary index in Apache Hudi?', answer: 'A secondary index, introduced in Hudi 1.0, lets users index columns that are not part of the record key. Hudi stores mappings between secondary key values and record keys in its metadata table, so queries filtering on non-primary-key fields can prune files via data skipping instead of scanning the full table.'},
+  {question: 'How do I create a secondary index in Hudi?', answer: 'On a table with the record index enabled, run a SQL statement such as CREATE INDEX idx_city ON hudi_table(city). Secondary indexes can also be configured through the Spark DataSource API using hoodie.metadata.index.secondary.enable and hoodie.datasource.write.secondarykey.column.'},
+  {question: 'How much does a secondary index improve query performance?', answer: 'In a TPCDS 1TB benchmark with an index on the web_sales table, the same join query ran about 33% faster on the first run and 58% faster on the second, while the data scanned dropped by roughly 90%, from 67GB across 5000 files to 7GB across 521 files.'},
+  {question: 'Which query engines support Hudi secondary indexes?', answer: 'In Hudi 1.0, secondary indexes are supported in Apache Spark, with support for Flink, Presto, and Trino planned for Hudi 1.1. Reduced data scans particularly benefit cloud query engines like AWS Athena that price by data scanned.'},
+  {question: 'Does maintaining a secondary index slow down ingestion?', answer: 'It does not have to. Hudi\'s asynchronous indexing service decouples index building from ingestion by scheduling an indexing action on the transactional timeline, so indexes are built in the background while remaining timeline-consistent and ACID-compliant. Indexes can be added or dropped without downtime.'},
+]} />

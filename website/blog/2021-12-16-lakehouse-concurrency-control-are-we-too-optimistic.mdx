@@ -1,18 +1,25 @@
 ---
 title: "Lakehouse Concurrency Control: Are we too optimistic?"
 excerpt: "Vinoth Chandar, original creator of Apache Hudi, dives into concurrency control mechanisms"
+description: "Vinoth Chandar, original creator of Apache Hudi, dives into concurrency control mechanisms"
 authors: [vinoth-chandar]
 category: deep-dive
 image: /assets/images/blog/concurrency/MultiWriter.gif
+last_update:
+  date: 2026-07-12
 tags:
 - concurrency control
 ---
 
 import SlackCommunity from '@site/src/components/SlackCommunity';
 
-Transactions on data lakes are now considered a key characteristic of a [Lakehouse](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/) these days. But what has actually been accomplished so far? What are the current approaches? How do they fare in real-world scenarios? These questions are the focus of this blog.
+Optimistic concurrency control (OCC) on a lakehouse lets concurrent jobs write without locks and simply checks for overlapping files at commit time, aborting the entire job if a conflict is found - an approach that struggles under real contention, because long-running jobs that touch overlapping files keep starving each other and burning hours of compute on failed retries. Transactions on data lakes are now considered a key characteristic of a [Lakehouse](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/) these days. But what has actually been accomplished so far? What are the current approaches? How do they fare in real-world scenarios? These questions are the focus of this blog.
 
 <!--truncate-->
+
+:::info Related reading
+For where these ideas landed in Hudi, see the [concurrency control docs](/docs/concurrency_control), a broader [survey of concurrency control across open table formats](/blog/2025/01/28/concurrency-control), and Hudi 1.0's [non-blocking concurrency control](/blog/2024/12/06/non-blocking-concurrency-control) that realizes the lock-free vision sketched at the end of this post.
+:::
 
 Having had the good fortune of working on diverse database projects - an RDBMS ([Oracle](https://www.oracle.com/database/)), a NoSQL key-value store ([Voldemort](https://www.slideshare.net/vinothchandar/voldemort-prototype-to-production-nectar-edits)), a streaming database ([ksqlDB](https://www.confluent.io/blog/ksqldb-pull-queries-high-availability/)), a closed-source real-time datastore and of course, Apache Hudi, I can safely say that the nature of workloads deeply influence the concurrency control mechanisms adopted in different databases. This blog will also describe how we rethought concurrency control for the data lake in Apache Hudi.
 
@@ -55,3 +62,13 @@ All this said, there are still many ways we can improve upon this foundation.
 *   Touching upon key constraints, Hudi is the only lake transactional layer that ensures unique [key](https://hudi.apache.org/docs/key_generation) constraints today, but limited to the record key of the table. We will be looking to expand this capability in a more general form to non-primary key fields, with the said newer concurrency models.
 
 Finally, for data lakes to transform successfully into lakehouses, we must learn from the failing of the "hadoop warehouse" vision, which shared similar goals with the new "[lakehouse](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/)" vision. Designers did not pay closer attention to the missing technology gaps against warehouses and created unrealistic expectations from the actual software. As transactions and database functionality finally goes mainstream on data lakes, we must apply these lessons and remain candid about the current shortcomings. If you are building a lakehouse, I hope this post encourages you to closely consider various operational and efficiency aspects around concurrency control. Join our fast growing community by trying out [Apache Hudi](https://hudi.apache.org/docs/overview) or join us in conversations on <SlackCommunity title="Slack" />.
+
+## FAQ
+
+<PostFAQ heading={null} items={[
+  {question: 'What is optimistic concurrency control (OCC) on a data lakehouse?', answer: 'OCC is a lock-free approach where each writer proceeds assuming no conflicts, then takes a table-level lock at commit time to check whether it touched files that overlap with another writer. If a conflict is detected, the job aborts its operation completely and must retry from scratch.'},
+  {question: 'Why does OCC struggle under contention?', answer: 'OCC assumes real contention never happens. When transactions are long-running - like a multi-hour GDPR deletion job overlapping a half-hourly ingest job - the probability of overlap rises with transaction length, so the longer job is almost guaranteed to starve and fail to commit each time, wasting hours of compute on every failed attempt.'},
+  {question: 'How does Apache Hudi approach concurrency control differently?', answer: 'Hudi implements a file-level, log-based concurrency control protocol on its timeline, borrowing from stream processing where events are serialized into a single ordered log instead of coordinated through locks. This supports deployment models with greater concurrency than pure OCC approaches that only track table snapshots.'},
+  {question: 'Does Hudi need locks to run table services like compaction and clustering?', answer: 'No. With a single writer, Hudi runs table services either inline after each write or asynchronously in the same process, with no locking at all. Execution plans are idempotent, persisted to the timeline, and auto-recover from failures.'},
+  {question: 'Does Hudi support multiple concurrent writers?', answer: 'Yes. With multiple distributed writers, Hudi offers optimistic concurrency control between the actual writers, while table services still execute lock-free and async. Because compaction does the heavy lifting of rewriting columnar data, writer transactions stay short and the wastage from any conflict is drastically lower.'},
+]} />

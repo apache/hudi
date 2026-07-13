@@ -1,20 +1,24 @@
 ---
 title: "Incremental Processing on the Data Lake"
 excerpt: "How Apache Hudi provides ability for incremental data processing."
+description: "How Apache Hudi provides ability for incremental data processing."
 author: vinoyang
 category: deep-dive
 image: /assets/images/blog/incr-processing/image7.png
+last_update:
+  date: 2026-07-06
 tags:
 - data lakehouse
 - incremental processing
 ---
 
-### NOTE: This article is a translation of the infoq.cn article, found [here](https://www.infoq.cn/article/CAgIDpfJBVcJHKJLSbhe), with minor edits
-
-Apache Hudi is a data lake framework which provides the ability to ingest, manage and query large analytical data sets on a distributed file system/cloud stores. 
+Incremental processing on a data lake is the ability to apply changes to tables at the record level (upserts) and let downstream consumers query only the records that changed since a point in time, instead of rewriting and rescanning entire partitions on every run. Apache Hudi is a data lake framework which provides exactly this ability to ingest, manage and query large analytical data sets on a distributed file system/cloud stores. 
 Hudi joined the Apache incubator for incubation in January 2019, and was promoted to the top Apache project in May 2020. This article mainly discusses the importance 
 of Hudi to the data lake from the perspective of "incremental processing". More information about Apache Hudi's framework functions, features, usage scenarios, and 
 latest developments can be found at [QCon Global Software Development Conference (Shanghai Station) 2020](https://qconplus.infoq.cn/2020/shanghai/presentation/2646).
+
+### NOTE: This article is a translation of the infoq.cn article, found [here](https://www.infoq.cn/article/CAgIDpfJBVcJHKJLSbhe), with minor edits
+
 <!--truncate-->
 Throughout the development of big data technology, Hadoop has steadily seized the opportunities of this era and has become the de-facto standard for enterprises to build big data infrastructure. 
 Among them, the distributed file system HDFS that supports the Hadoop ecosystem almost naturally has become the standard interface for big data storage systems. In recent years, with the rise of 
@@ -277,3 +281,13 @@ In the data warehouse, some "pain points" caused by the lack of incremental proc
 aspects: incremental processing of semantics of natural fit flow, the need for analytical scenarios, quasi-real-time scene resource/efficiency trade-offs, and unified lake architecture.
 
 Finally, we introduced the open source data lake storage framework Apache Hudi's support for incremental processing and simple cases.
+
+## FAQ
+
+<PostFAQ heading={null} items={[
+  {question: 'What is incremental processing on a data lake?', answer: 'Incremental processing is the ability to incorporate changes into existing data lake tables at the record level and to give downstream consumers a way to obtain only the data that changed since a point in time. It replaces the traditional pattern of rewriting entire immutable partitions and re-triggering full recomputation of every cascading task that consumed them.'},
+  {question: 'What are the two primitives needed for incremental processing?', answer: 'The first is upsert, the ability to update or insert records instead of rewriting whole partitions. The second is incremental consumption, a mechanism for downstream consumers to efficiently fetch just the records that changed since the last time they consumed the table. Together they enable end-to-end incremental pipelines on DFS or cloud storage.'},
+  {question: 'How does incremental processing improve efficiency over pure stream processing?', answer: 'In quasi-real-time scenarios, incremental batches let you use short-lived containers and merge accumulated changes in memory before updating the result store once, instead of keeping containers running continuously and issuing millions of fine-grained updates. This yields several times better CPU efficiency and orders of magnitude fewer writes to the result storage, because resources are acquired on demand.'},
+  {question: 'How does Apache Hudi support incremental processing?', answer: 'Hudi provides update and delete support using fine-grained file and record level indexes with transactional guarantees on writes, and it provides a first-class change stream so you can query all records inserted, updated or deleted in a table from a given point in time. This incremental view can be queried from Spark to build incremental data pipelines.'},
+  {question: 'How does incremental processing simplify Lambda and Kappa architectures?', answer: 'With incremental processing, the same SQL or Spark logic can run incrementally on new data for fast quasi-real-time views and periodically on the full data to correct results, all on one infrastructure, unifying the Lambda architecture\'s speed and batch layers. In a Kappa-style setup, fast upserts on the lake can make a separate speed serving layer unnecessary, reducing overall system complexity and resource consumption.'},
+]} />
