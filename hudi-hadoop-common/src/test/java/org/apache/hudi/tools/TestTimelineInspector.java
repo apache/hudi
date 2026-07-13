@@ -326,12 +326,9 @@ class TestTimelineInspector {
 
   @Test
   void showInstantMissingInstantPrintsNoInstantMessage() {
-    int code = runMainTrappingExit("--base-path", basePath, "--show-instant", "19990101000000000",
+    int code = runMainExpectingExit("--base-path", basePath, "--show-instant", "19990101000000000",
         "--no-archived");
-    // SecurityManager-trap catches every System.exit; main wraps the first exit(3) in its
-    // outer catch and ultimately fires exit(1). The user-observable signal is the stderr
-    // message itself, which is what we assert.
-    assertTrue(code == 1 || code == 3, "expected non-zero exit, got " + code);
+    assertTrue(code == 3, "expected exit code 3, got " + code);
     assertTrue(capturedAsString().contains("No instant found with time=19990101000000000"),
         capturedAsString());
   }
@@ -429,7 +426,7 @@ class TestTimelineInspector {
 
   @Test
   void commitStatsRejectsNonIngestionActionFilter() {
-    runMainTrappingExit("--base-path", basePath, "--commit-stats",
+    runMainExpectingExit("--base-path", basePath, "--commit-stats",
         "--actions", "clean", "--no-archived", "--quiet");
     assertTrue(capturedAsString().contains("--actions filter must include at least"),
         capturedAsString());
@@ -473,7 +470,7 @@ class TestTimelineInspector {
 
   @Test
   void commitStatsRejectsInvalidSortValue() {
-    runMainTrappingExit("--base-path", basePath, "--commit-stats",
+    runMainExpectingExit("--base-path", basePath, "--commit-stats",
         "--sort", "sideways", "--no-archived", "--quiet");
     assertTrue(capturedAsString().contains("--sort must be asc or desc"),
         capturedAsString());
@@ -657,20 +654,20 @@ class TestTimelineInspector {
 
   @Test
   void missingModePrintsUsage() {
-    runMainTrappingExit("--base-path", basePath);
+    runMainExpectingExit("--base-path", basePath);
     assertTrue(capturedAsString().contains("specify --show-instant"), capturedAsString());
   }
 
   @Test
   void invalidActionPrintsRejection() {
-    runMainTrappingExit("--base-path", basePath, "--find-file-id", "x",
+    runMainExpectingExit("--base-path", basePath, "--find-file-id", "x",
         "--actions", "ingest");
     assertTrue(capturedAsString().contains("unknown actions"), capturedAsString());
   }
 
   @Test
   void lifecycleWithoutFindFileIdPrintsRejection() {
-    runMainTrappingExit("--base-path", basePath, "--show-instant", INGEST_INSTANT,
+    runMainExpectingExit("--base-path", basePath, "--show-instant", INGEST_INSTANT,
         "--lifecycle");
     assertTrue(capturedAsString().contains("--lifecycle is only valid with --find-file-id"),
         capturedAsString());
@@ -680,27 +677,24 @@ class TestTimelineInspector {
 
   private void runMain(String... args) {
     captured.reset();
-    TimelineInspector.main(args);
+    try {
+      TimelineInspector.run(args);
+    } catch (TimelineInspector.ExitException e) {
+      // Swallow — tests that care about exit codes use runMainExpectingExit.
+    }
   }
 
   /**
-   * Variant that traps any {@code System.exit(N)} calls inside {@link TimelineInspector#main}
-   * so the test JVM survives. Returns the last exit status seen (which may be the inner
-   * exit's status or the outer catch's exit(1) -- callers that need a specific code should
-   * also assert on captured stderr text, since main's outer catch can re-wrap.
+   * Invokes {@link TimelineInspector#run} and returns the exit status from
+   * the thrown {@link TimelineInspector.ExitException}, or 0 if it returned normally.
    */
-  private int runMainTrappingExit(String... args) {
+  private int runMainExpectingExit(String... args) {
     captured.reset();
-    SecurityManager prior = System.getSecurityManager();
-    ExitInterceptingSecurityManager sm = new ExitInterceptingSecurityManager();
-    System.setSecurityManager(sm);
     try {
-      TimelineInspector.main(args);
+      TimelineInspector.run(args);
       return 0;
-    } catch (ExitTrappedException e) {
+    } catch (TimelineInspector.ExitException e) {
       return e.status;
-    } finally {
-      System.setSecurityManager(prior);
     }
   }
 
@@ -790,27 +784,6 @@ class TestTimelineInspector {
     System.out.flush();
     System.err.flush();
     return new String(captured.toByteArray(), StandardCharsets.UTF_8);
-  }
-
-  /** Trap System.exit so the test process survives non-zero exits. */
-  private static class ExitTrappedException extends SecurityException {
-    final int status;
-    ExitTrappedException(int status) {
-      super("System.exit(" + status + ")");
-      this.status = status;
-    }
-  }
-
-  private static class ExitInterceptingSecurityManager extends SecurityManager {
-    @Override
-    public void checkExit(int status) {
-      throw new ExitTrappedException(status);
-    }
-
-    @Override
-    public void checkPermission(java.security.Permission perm) {
-      // allow everything else
-    }
   }
 
 }

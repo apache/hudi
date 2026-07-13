@@ -67,8 +67,6 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -138,9 +136,30 @@ public class TimelineInspector {
       JsonUtils.getObjectMapper().copy().enable(SerializationFeature.INDENT_OUTPUT);
   private static final int DEFAULT_LIMIT = 100;
 
+  static class ExitException extends Exception {
+    final int status;
+
+    ExitException(int status, String message) {
+      super(message);
+      this.status = status;
+    }
+  }
+
   public static void main(String[] args) {
     try {
+      run(args);
+    } catch (ExitException e) {
+      System.exit(e.status);
+    }
+  }
+
+  static void run(String[] args) throws ExitException {
+    try {
       Args parsed = Args.parse(args);
+
+      if (parsed.helpRequested) {
+        return;
+      }
 
       // parse-filename is a pure decode utility -- no metaclient needed.
       if (parsed.mode == Mode.PARSE_FILENAME) {
@@ -154,21 +173,22 @@ public class TimelineInspector {
           .setBasePath(parsed.basePath)
           .build();
 
+      TimelineInspector inspector = new TimelineInspector();
       switch (parsed.mode) {
         case SHOW_INSTANT:
-          new TimelineInspector().showInstant(metaClient, parsed);
+          inspector.showInstant(metaClient, parsed);
           break;
         case FIND_FILE_ID:
-          new TimelineInspector().findFileId(metaClient, parsed);
+          inspector.findFileId(metaClient, parsed);
           break;
         case RAW_ARCHIVE:
-          new TimelineInspector().rawArchive(metaClient, parsed);
+          inspector.rawArchive(metaClient, parsed);
           break;
         case COMMIT_STATS:
-          new TimelineInspector().commitStats(metaClient, parsed);
+          inspector.commitStats(metaClient, parsed);
           break;
         case PHASE_TIMINGS:
-          new TimelineInspector().phaseTimings(metaClient, parsed);
+          inspector.phaseTimings(metaClient, parsed);
           break;
         default:
           throw new IllegalStateException("unknown mode " + parsed.mode);
@@ -177,11 +197,11 @@ public class TimelineInspector {
       System.err.println("ERROR: " + e.getMessage());
       System.err.println();
       Args.printUsage();
-      System.exit(2);
+      throw new ExitException(2, e.getMessage());
     } catch (Exception e) {
       System.err.println("ERROR: " + e.getClass().getSimpleName() + ": " + e.getMessage());
       e.printStackTrace(System.err);
-      System.exit(1);
+      throw new ExitException(1, e.getMessage());
     }
   }
 
@@ -259,45 +279,39 @@ public class TimelineInspector {
    * useful when {@code --show-instant} reports "(no body)" but you want to confirm
    * whether the archive actually carried the metadata under a different field name.
    */
-  private void rawArchive(HoodieTableMetaClient metaClient, Args parsed) throws IOException {
+  private void rawArchive(HoodieTableMetaClient metaClient, Args parsed) throws IOException, ExitException {
     String needle = parsed.rawArchiveInstant;
-    Path archiveDir = new Path(metaClient.getArchivePath().toString());
-    org.apache.hadoop.fs.FileSystem hadoopFs =
-        (org.apache.hadoop.fs.FileSystem) metaClient.getStorage().getFileSystem();
-    FileStatus[] files;
+    org.apache.hudi.storage.StoragePath archiveDir =
+        new org.apache.hudi.storage.StoragePath(metaClient.getArchivePath().toString());
+    org.apache.hudi.storage.HoodieStorage storage = metaClient.getStorage();
+    List<org.apache.hudi.storage.StoragePathInfo> files;
     try {
-      files = hadoopFs.listStatus(archiveDir);
+      files = storage.listDirectEntries(archiveDir);
     } catch (java.io.FileNotFoundException nf) {
-      System.err.println("ERROR: archive dir not found: " + archiveDir);
-      System.exit(3);
-      return;
+      throw new ExitException(3, "archive dir not found: " + archiveDir);
     }
-    if (files == null || files.length == 0) {
-      System.err.println("ERROR: archive dir is empty: " + archiveDir);
-      System.exit(3);
-      return;
+    if (files == null || files.isEmpty()) {
+      throw new ExitException(3, "archive dir is empty: " + archiveDir);
     }
     // Filter to archive log files.
-    List<FileStatus> archiveFiles = new ArrayList<>();
-    for (FileStatus fs : files) {
-      if (fs.getPath().getName().startsWith("commits")) {
-        archiveFiles.add(fs);
+    List<org.apache.hudi.storage.StoragePathInfo> archiveFiles = new ArrayList<>();
+    for (org.apache.hudi.storage.StoragePathInfo spi : files) {
+      if (spi.getPath().getName().startsWith("commits")) {
+        archiveFiles.add(spi);
       }
     }
     if (archiveFiles.isEmpty()) {
-      System.err.println("ERROR: no archive log files found in " + archiveDir);
-      System.exit(3);
-      return;
+      throw new ExitException(3, "no archive log files found in " + archiveDir);
     }
 
     List<Map<String, Object>> hits = new ArrayList<>();
-    for (FileStatus fs : archiveFiles) {
+    for (org.apache.hudi.storage.StoragePathInfo spi : archiveFiles) {
       if (!parsed.quiet) {
-        System.err.println("scanning " + fs.getPath().getName());
+        System.err.println("scanning " + spi.getPath().getName());
       }
       try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(
           metaClient,
-          new HoodieLogFile(fs.getPath().toString()),
+          new HoodieLogFile(spi.getPath().toString()),
           org.apache.hudi.common.schema.HoodieSchema.fromAvroSchema(
               HoodieArchivedMetaEntry.getClassSchema()))) {
         while (reader.hasNext()) {
@@ -313,7 +327,7 @@ public class TimelineInspector {
               Object ts = rec.get("commitTime");
               if (ts != null && ts.toString().equals(needle)) {
                 Map<String, Object> entry = new LinkedHashMap<>();
-                entry.put("archiveFile", fs.getPath().getName());
+                entry.put("archiveFile", spi.getPath().getName());
                 Map<String, Object> populatedFields = new LinkedHashMap<>();
                 Map<String, Object> nullFields = new LinkedHashMap<>();
                 for (Schema.Field f : rec.getSchema().getFields()) {
@@ -339,14 +353,14 @@ public class TimelineInspector {
         }
       } catch (Exception e) {
         if (!parsed.quiet) {
-          System.err.println("WARN: failed to read " + fs.getPath().getName() + ": " + e.getMessage());
+          System.err.println("WARN: failed to read " + spi.getPath().getName() + ": " + e.getMessage());
         }
       }
     }
 
     if (hits.isEmpty()) {
       System.out.println("(no archive entries with commitTime=" + needle + ")");
-      System.exit(3);
+      throw new ExitException(3, "no archive entries with commitTime=" + needle);
     }
 
     Map<String, Object> root = new LinkedHashMap<>();
@@ -403,7 +417,7 @@ public class TimelineInspector {
     rows.sort(byInstant);
     List<CommitStatsRow> capped = rows.size() > parsed.limit ? rows.subList(0, parsed.limit) : rows;
 
-    CommitStatsTotals totals = CommitStatsTotals.from(capped);
+    CommitStatsTotals totals = CommitStatsTotals.from(rows);
 
     if (parsed.output == OutputFormat.JSON) {
       Map<String, Object> root = new LinkedHashMap<>();
@@ -467,7 +481,7 @@ public class TimelineInspector {
     }
     System.out.println();
     System.out.printf("totals (over %d commits): inserts=%d updates=%d deletes=%d%n",
-        capped.size(), totals.totalInserts, totals.totalUpdates, totals.totalDeletes);
+        rows.size(), totals.totalInserts, totals.totalUpdates, totals.totalDeletes);
     System.out.printf("avg per commit:           inserts=%.2f updates=%.2f deletes=%.2f%n",
         totals.avgInserts(), totals.avgUpdates(), totals.avgDeletes());
   }
@@ -591,19 +605,26 @@ public class TimelineInspector {
       }
     }
 
-    org.apache.hadoop.fs.FileSystem fs =
-        (org.apache.hadoop.fs.FileSystem) metaClient.getStorage().getFileSystem();
-    Path dataMetaDir = new Path(metaClient.getTimelinePath().toString());
-    // MDT sub-table's timeline dir mirrors the data table's layout — under
-    // <base>/.hoodie/metadata/.hoodie/timeline/ for V2 layout tables.
-    Path mdtMetaDir = new Path(metaClient.getBasePath()
-        + Path.SEPARATOR + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH
-        + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME
-        + Path.SEPARATOR + HoodieTableMetaClient.TIMELINEFOLDER_NAME);
-    boolean mdtPresent;
+    org.apache.hudi.storage.HoodieStorage storage = metaClient.getStorage();
+    org.apache.hudi.storage.StoragePath dataMetaDir =
+        new org.apache.hudi.storage.StoragePath(metaClient.getTimelinePath().toString());
+    // Try to build an MDT metaClient so we resolve the correct timeline path for
+    // both V1 (`.hoodie/`) and V2 (`.hoodie/timeline/`) layout tables.
+    String mdtBasePath = metaClient.getBasePath()
+        + "/" + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH;
+    HoodieTableMetaClient mdtMetaClient = null;
+    org.apache.hudi.storage.StoragePath mdtMetaDir = null;
+    boolean mdtPresent = false;
     try {
-      mdtPresent = fs.exists(mdtMetaDir);
-    } catch (IOException ioe) {
+      mdtMetaClient = HoodieTableMetaClient.builder()
+          .setConf(metaClient.getStorageConf())
+          .setBasePath(mdtBasePath)
+          .build();
+      mdtMetaDir = new org.apache.hudi.storage.StoragePath(
+          mdtMetaClient.getTimelinePath().toString());
+      mdtPresent = storage.exists(mdtMetaDir);
+    } catch (Exception e) {
+      // MDT does not exist or its hoodie.properties is missing.
       mdtPresent = false;
     }
 
@@ -621,10 +642,9 @@ public class TimelineInspector {
     int skipped = 0;
 
     for (HoodieInstant instant : candidates) {
-      PhaseTimingRow row = buildPhaseTimingRow(metaClient, fs, dataMetaDir, mdtMetaDir, mdtPresent,
-          instant, parsed);
+      PhaseTimingRow row = buildPhaseTimingRow(metaClient, mdtMetaClient, storage, dataMetaDir,
+          mdtMetaDir, mdtPresent, instant, skipReasons);
       if (row == null) {
-        // Already counted via skipReasons inside the builder.
         skipped++;
         continue;
       }
@@ -659,12 +679,13 @@ public class TimelineInspector {
    * row falls back to the 3-phase view.
    */
   private PhaseTimingRow buildPhaseTimingRow(HoodieTableMetaClient metaClient,
-                                             org.apache.hadoop.fs.FileSystem fs,
-                                             Path dataMetaDir,
-                                             Path mdtMetaDir,
+                                             HoodieTableMetaClient mdtMetaClient,
+                                             org.apache.hudi.storage.HoodieStorage storage,
+                                             org.apache.hudi.storage.StoragePath dataMetaDir,
+                                             org.apache.hudi.storage.StoragePath mdtMetaDir,
                                              boolean mdtPresent,
                                              HoodieInstant completed,
-                                             Args parsed) {
+                                             Map<String, Integer> skipReasons) {
     String ts = completed.requestedTime();
     String action = completed.getAction();
     org.apache.hudi.common.table.timeline.InstantGenerator ig = metaClient.getInstantGenerator();
@@ -672,34 +693,34 @@ public class TimelineInspector {
     HoodieInstant requested = ig.createNewInstant(HoodieInstant.State.REQUESTED, action, ts);
     HoodieInstant inflight = ig.createNewInstant(HoodieInstant.State.INFLIGHT, action, ts);
 
-    Long t0 = mtimeOrNull(fs, new Path(dataMetaDir, fng.getFileName(requested)));
-    Long t1 = mtimeOrNull(fs, new Path(dataMetaDir, fng.getFileName(inflight)));
-    Long t5 = mtimeOrNull(fs, new Path(dataMetaDir, fng.getFileName(completed)));
+    Long t0 = mtimeOrNull(storage, new org.apache.hudi.storage.StoragePath(dataMetaDir, fng.getFileName(requested)));
+    Long t1 = mtimeOrNull(storage, new org.apache.hudi.storage.StoragePath(dataMetaDir, fng.getFileName(inflight)));
+    Long t5 = mtimeOrNull(storage, new org.apache.hudi.storage.StoragePath(dataMetaDir, fng.getFileName(completed)));
 
     if (t0 == null || t1 == null || t5 == null) {
       String reason = (t0 == null ? "requested-missing"
           : t1 == null ? "inflight-missing" : "completed-missing");
-      // Note: parsed.phaseTimingsSkipReasons is populated via side-effect on the caller
-      // because we can't return more than one value here without an extra wrapper.
-      // (The caller will read the field after this returns null.)
-      recordSkipReason(parsed, reason);
+      skipReasons.merge(reason, 1, Integer::sum);
       return null;
     }
 
     Long t2 = null;
     Long t3 = null;
     Long t4 = null;
-    if (mdtPresent) {
+    if (mdtPresent && mdtMetaClient != null) {
+      // Use the MDT metaClient's generators for correct filename construction.
+      org.apache.hudi.common.table.timeline.InstantGenerator mdtIg = mdtMetaClient.getInstantGenerator();
+      org.apache.hudi.common.table.timeline.InstantFileNameGenerator mdtFng = mdtMetaClient.getInstantFileNameGenerator();
       // MDT timeline always uses DELTA_COMMIT_ACTION regardless of data table type.
       String mdtAction = HoodieTimeline.DELTA_COMMIT_ACTION;
-      HoodieInstant mdtReq = ig.createNewInstant(HoodieInstant.State.REQUESTED, mdtAction, ts);
-      HoodieInstant mdtInf = ig.createNewInstant(HoodieInstant.State.INFLIGHT, mdtAction, ts);
-      t2 = mtimeOrNull(fs, new Path(mdtMetaDir, fng.getFileName(mdtReq)));
-      t3 = mtimeOrNull(fs, new Path(mdtMetaDir, fng.getFileName(mdtInf)));
+      HoodieInstant mdtReq = mdtIg.createNewInstant(HoodieInstant.State.REQUESTED, mdtAction, ts);
+      HoodieInstant mdtInf = mdtIg.createNewInstant(HoodieInstant.State.INFLIGHT, mdtAction, ts);
+      t2 = mtimeOrNull(storage, new org.apache.hudi.storage.StoragePath(mdtMetaDir, mdtFng.getFileName(mdtReq)));
+      t3 = mtimeOrNull(storage, new org.apache.hudi.storage.StoragePath(mdtMetaDir, mdtFng.getFileName(mdtInf)));
       // The completed MDT file carries a completion-time suffix in V2 layout
       // (<ts>_<completionTime>.deltacommit), which we don't know a priori. Match by
       // prefix + extension in the MDT timeline dir instead of synthesizing the full name.
-      t4 = mtimeByPrefixOrNull(fs, mdtMetaDir, ts, "." + mdtAction);
+      t4 = mtimeByPrefixOrNull(storage, mdtMetaDir, ts, "." + mdtAction);
       // Partial MDT state for this instant → fall back to the 3-phase view (treat as if
       // MDT wasn't present for this row). Don't skip the row.
       if (t2 == null || t3 == null || t4 == null) {
@@ -712,9 +733,10 @@ public class TimelineInspector {
     return new PhaseTimingRow(ts, action, t0, t1, t2, t3, t4, t5);
   }
 
-  private static Long mtimeOrNull(org.apache.hadoop.fs.FileSystem fs, Path p) {
+  private static Long mtimeOrNull(org.apache.hudi.storage.HoodieStorage storage,
+                                   org.apache.hudi.storage.StoragePath p) {
     try {
-      return fs.getFileStatus(p).getModificationTime();
+      return storage.getPathInfo(p).getModificationTime();
     } catch (java.io.FileNotFoundException nf) {
       return null;
     } catch (IOException ioe) {
@@ -728,14 +750,15 @@ public class TimelineInspector {
    * files in V2 layout, where the on-disk name embeds a completion-time we don't know
    * a priori (e.g., "20260601000000000_20260601000000234.deltacommit").
    */
-  private static Long mtimeByPrefixOrNull(org.apache.hadoop.fs.FileSystem fs, Path dir,
+  private static Long mtimeByPrefixOrNull(org.apache.hudi.storage.HoodieStorage storage,
+                                          org.apache.hudi.storage.StoragePath dir,
                                           String namePrefix, String nameSuffix) {
     try {
-      org.apache.hadoop.fs.FileStatus[] entries = fs.listStatus(dir);
+      List<org.apache.hudi.storage.StoragePathInfo> entries = storage.listDirectEntries(dir);
       if (entries == null) {
         return null;
       }
-      for (org.apache.hadoop.fs.FileStatus e : entries) {
+      for (org.apache.hudi.storage.StoragePathInfo e : entries) {
         String n = e.getPath().getName();
         if (n.startsWith(namePrefix) && n.endsWith(nameSuffix)) {
           return e.getModificationTime();
@@ -745,10 +768,6 @@ public class TimelineInspector {
     } catch (IOException ioe) {
       return null;
     }
-  }
-
-  private static void recordSkipReason(Args parsed, String reason) {
-    parsed.phaseTimingsSkipReasons.merge(reason, 1, Integer::sum);
   }
 
   private void emitPhaseTimingsTable(Args parsed, boolean mdtPresent,
@@ -765,7 +784,7 @@ public class TimelineInspector {
       System.out.println("(no ingestion instants with complete phase timings in range)");
       if (skipped > 0) {
         System.out.println("skipped " + skipped + " instant(s): "
-            + formatSkipReasons(parsed.phaseTimingsSkipReasons));
+            + formatSkipReasons(skipReasons));
       }
       return;
     }
@@ -854,7 +873,7 @@ public class TimelineInspector {
     if (skipped > 0) {
       System.out.println();
       System.out.println("skipped " + skipped + " instant(s) with incomplete state-marker files: "
-          + formatSkipReasons(parsed.phaseTimingsSkipReasons));
+          + formatSkipReasons(skipReasons));
     }
   }
 
@@ -903,7 +922,7 @@ public class TimelineInspector {
     root.put("aggregates", aggBlock);
     Map<String, Object> skip = new LinkedHashMap<>();
     skip.put("count", skipped);
-    skip.put("reasons", parsed.phaseTimingsSkipReasons);
+    skip.put("reasons", skipReasons);
     root.put("skipped", skip);
     System.out.println(JSON_MAPPER.writeValueAsString(root));
   }
@@ -933,7 +952,7 @@ public class TimelineInspector {
 
   // ---- show-instant ---------------------------------------------------------
 
-  private void showInstant(HoodieTableMetaClient metaClient, Args parsed) throws IOException {
+  private void showInstant(HoodieTableMetaClient metaClient, Args parsed) throws IOException, ExitException {
     String instantTime = parsed.showInstantTime;
     List<InstantLocator> located = findInstantStates(metaClient, instantTime, parsed.actionFilter,
         parsed.stateFilter, parsed.includeArchived);
@@ -942,7 +961,7 @@ public class TimelineInspector {
           + " in active or archived timeline (action filter="
           + (parsed.actionFilter.isEmpty() ? "<any>" : String.join(",", parsed.actionFilter))
           + (parsed.stateFilter == null ? "" : ", state=" + parsed.stateFilter) + ")");
-      System.exit(3);
+      throw new ExitException(3, "No instant found with time=" + instantTime);
     }
 
     if (parsed.output == OutputFormat.JSON) {
@@ -1215,7 +1234,7 @@ public class TimelineInspector {
 
     for (HoodieInstant instant : (Iterable<HoodieInstant>) instants::iterator) {
       if (out.size() >= hardCap * 4L) {
-        // hard scan cap so a runaway match doesn't OOM; *4 leaves headroom for sorting
+        // 4x headroom so events from both timelines can be collected and sorted before capping.
         break;
       }
       try {
@@ -2268,8 +2287,7 @@ public class TimelineInspector {
     boolean sortDescending = true;
     // phase-timings: opt-in inclusion of replacecommit instants (default off).
     boolean includeReplacecommit = false;
-    // phase-timings: accumulated skip reasons, populated by the row builder for the footer.
-    Map<String, Integer> phaseTimingsSkipReasons = new LinkedHashMap<>();
+    boolean helpRequested = false;
 
     static Args parse(String[] argv) {
       Args a = new Args();
@@ -2365,11 +2383,14 @@ public class TimelineInspector {
           case "--help":
           case "-h":
             printUsage();
-            System.exit(0);
-            break;
+            a.helpRequested = true;
+            return a;
           default:
             throw new IllegalArgumentException("unknown argument: " + k);
         }
+      }
+      if (a.helpRequested) {
+        return a;
       }
       if (a.mode == null) {
         throw new IllegalArgumentException(

@@ -211,7 +211,8 @@ considers **completed** commit / deltacommit / replacecommit instants.
 
 ### Footer
 
-Prints over the rows returned (after `--limit`):
+Prints totals and per-commit averages over **all** commits in the range
+(not just the rows returned after `--limit`):
 
 ```
 totals (over N commits): inserts=… updates=… deletes=…
