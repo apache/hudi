@@ -67,7 +67,7 @@
         </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-slf4j-impl</artifactId>
+            <artifactId>log4j-slf4j2-impl</artifactId>
             <version>${log4j2.version}</version>
             <scope>compile</scope>
         </dependency>
@@ -106,7 +106,7 @@
                                     <include>org.apache.logging.log4j:log4j-api</include>
                                     <include>org.apache.logging.log4j:log4j-core</include>
                                     <include>org.apache.logging.log4j:log4j-1.2-api</include>
-                                    <include>org.apache.logging.log4j:log4j-slf4j-impl</include>
+                                    <include>org.apache.logging.log4j:log4j-slf4j2-impl</include>
                                     <include>org.slf4j:slf4j-api</include>
                                     <include>org.slf4j:jul-to-slf4j</include>
                                     <include>org.mybatis:mybatis</include>

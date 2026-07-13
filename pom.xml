@@ -121,7 +121,7 @@
     <junit.platform.version>1.14.1</junit.platform.version>
     <mockito.jupiter.version>5.21.0</mockito.jupiter.version>
     <log4j2.version>2.25.4</log4j2.version>
-    <slf4j.version>1.7.36</slf4j.version>
+    <slf4j.version>2.0.7</slf4j.version>
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.10.2</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
@@ -833,7 +833,7 @@
       </dependency>
       <dependency>
         <groupId>org.apache.logging.log4j</groupId>
-        <artifactId>log4j-slf4j-impl</artifactId>
+        <artifactId>log4j-slf4j2-impl</artifactId>
         <version>${log4j2.version}</version>
         <scope>provided</scope>
       </dependency>
@@ -1026,6 +1026,11 @@
             <groupId>org.slf4j</groupId>
             <artifactId>*</artifactId>
           </exclusion>
+          <!-- Spark 3.3 pulls in the slf4j 1.x binding, which collides with log4j-slf4j2-impl -->
+          <exclusion>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+          </exclusion>
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
@@ -1073,6 +1078,11 @@
           <exclusion>
             <groupId>org.slf4j</groupId>
             <artifactId>*</artifactId>
+          </exclusion>
+          <!-- Spark 3.3 pulls in the slf4j 1.x binding, which collides with log4j-slf4j2-impl -->
+          <exclusion>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
           </exclusion>
           <exclusion>
             <groupId>log4j</groupId>
@@ -1467,6 +1477,11 @@
             <groupId>org.pentaho</groupId>
             <artifactId>*</artifactId>
           </exclusion>
+          <!-- Hive pulls in the slf4j 1.x binding, which collides with log4j-slf4j2-impl -->
+          <exclusion>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1487,6 +1502,11 @@
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-log4j12</artifactId>
           </exclusion>
+          <!-- Hive pulls in the slf4j 1.x binding, which collides with log4j-slf4j2-impl -->
+          <exclusion>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+          </exclusion>
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
@@ -1502,6 +1522,11 @@
           <exclusion>
             <groupId>javax.mail</groupId>
             <artifactId>mail</artifactId>
+          </exclusion>
+          <!-- Hive pulls in the slf4j 1.x binding, which collides with log4j-slf4j2-impl -->
+          <exclusion>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1530,6 +1555,11 @@
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
+          </exclusion>
+          <!-- Hive pulls in the slf4j 1.x binding, which collides with log4j-slf4j2-impl -->
+          <exclusion>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
           </exclusion>
           <exclusion>
             <groupId>org.apache.hbase</groupId>
