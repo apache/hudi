@@ -1051,6 +1051,11 @@
             <groupId>org.slf4j</groupId>
             <artifactId>*</artifactId>
           </exclusion>
+          <!-- Spark 3.3 pulls in the slf4j 1.x binding, which collides with log4j-slf4j2-impl -->
+          <exclusion>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+          </exclusion>
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
@@ -1098,6 +1103,11 @@
           <exclusion>
             <groupId>org.slf4j</groupId>
             <artifactId>*</artifactId>
+          </exclusion>
+          <!-- Spark 3.3 pulls in the slf4j 1.x binding, which collides with log4j-slf4j2-impl -->
+          <exclusion>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
           </exclusion>
           <exclusion>
             <groupId>log4j</groupId>
