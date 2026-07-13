@@ -28,15 +28,12 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * End-to-end coverage for {@code hoodie.meta.fields.mode} through the HoodieStreamer entrypoint.
@@ -78,24 +75,39 @@ public class TestHoodieStreamerMetaFieldsMode extends HoodieDeltaStreamerTestBas
     assertOnDiskMetaColumns(tablePath, mode);
   }
 
-  @Test
-  public void testStreamerRejectsMorWithSelectiveMode() throws Exception {
-    String tablePath = basePath + "/streamer_mor_selective_rejected";
+  /**
+   * MoR + selective mode is supported once the log-write path (HoodieAppendHandle) honors the
+   * mode. Streamer's first ingest emits base files via the create handle; the append handle is
+   * exercised on subsequent upserts. Both are covered in the datasource test TestMetaFieldsMode.
+   */
+  @ParameterizedTest
+  @EnumSource(value = MetaFieldsMode.class,
+      names = {"ALL", "NONE", "COMMIT_TIME_ONLY", "FILE_NAME_ONLY", "COMMIT_TIME_AND_FILE_NAME"})
+  public void testStreamerRespectsMetaFieldsModeOnMor(MetaFieldsMode mode) throws Exception {
+    String tablePath = basePath + "/streamer_mor_meta_fields_mode_" + mode.name();
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tablePath, WriteOperationType.BULK_INSERT);
     cfg.tableType = "MERGE_ON_READ";
-    cfg.configs.add(HoodieTableConfig.POPULATE_META_FIELDS.key() + "=false");
-    cfg.configs.add(HoodieTableConfig.META_FIELDS_MODE.key() + "=" + MetaFieldsMode.COMMIT_TIME_ONLY.name());
+    switch (mode) {
+      case ALL:
+        break;
+      case NONE:
+        cfg.configs.add(HoodieTableConfig.POPULATE_META_FIELDS.key() + "=false");
+        break;
+      default:
+        cfg.configs.add(HoodieTableConfig.POPULATE_META_FIELDS.key() + "=false");
+        cfg.configs.add(HoodieTableConfig.META_FIELDS_MODE.key() + "=" + mode.name());
+        break;
+    }
+    HoodieDeltaStreamer streamer = new HoodieDeltaStreamer(cfg, jsc);
+    streamer.getIngestionService().ingestOnce();
+    streamer.shutdownGracefully();
 
-    Throwable thrown = assertThrows(Throwable.class, () -> {
-      HoodieDeltaStreamer streamer = new HoodieDeltaStreamer(cfg, jsc);
-      streamer.getIngestionService().ingestOnce();
-      streamer.shutdownGracefully();
-    });
-
-    String rootMessage = rootMessageOf(thrown);
-    assertTrue(rootMessage.contains("COPY_ON_WRITE") || rootMessage.contains("MERGE_ON_READ")
-            || rootMessage.contains("MoR") || rootMessage.contains(HoodieTableConfig.META_FIELDS_MODE.key()),
-        "Expected MoR-restriction error, got: " + rootMessage);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
+    assertEquals(mode, metaClient.getTableConfig().getMetaFieldsMode(),
+        "streamer must persist mode=" + mode + " on hoodie.properties for MoR table");
+    // Bulk-insert on a fresh MoR table produces only base files; the log path is exercised in
+    // TestMetaFieldsMode's MoR upsert coverage.
+    assertOnDiskMetaColumns(tablePath, mode);
   }
 
   private void assertOnDiskMetaColumns(String tablePath, MetaFieldsMode expectedMode) {

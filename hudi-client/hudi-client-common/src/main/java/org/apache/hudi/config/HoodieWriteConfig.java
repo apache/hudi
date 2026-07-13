@@ -3931,16 +3931,9 @@ public class HoodieWriteConfig extends HoodieConfig {
           String.format("%s must be empty when %s=true. Disable populate.meta.fields or clear the mode.",
               HoodieTableConfig.META_FIELDS_MODE.key(),
               HoodieTableConfig.POPULATE_META_FIELDS.key()));
-      // Selective meta-field modes are CoW-only in this release. MoR log-write path does not yet
-      // respect the mode, which would silently produce log records with null meta columns.
-      boolean isSelective = metaFieldsMode != MetaFieldsMode.ALL && metaFieldsMode != MetaFieldsMode.NONE;
-      checkArgument(!(writeConfig.getTableType() == HoodieTableType.MERGE_ON_READ && isSelective),
-          String.format("%s=%s is currently supported for COPY_ON_WRITE tables only. MoR support is a follow-up. "
-                  + "For MoR either keep %s=true or use NONE mode.",
-              HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode,
-              HoodieTableConfig.POPULATE_META_FIELDS.key()));
       // Selective meta-field modes are wired only for the Spark writer path in this release. Flink
       // RowData / Java-client writers ignore the mode and would silently produce NONE-mode output.
+      boolean isSelective = metaFieldsMode != MetaFieldsMode.ALL && metaFieldsMode != MetaFieldsMode.NONE;
       checkArgument(!(engineType != EngineType.SPARK && isSelective),
           String.format("%s=%s is currently supported for the Spark writer only. Support for engine=%s is a follow-up. "
                   + "Either keep %s=true or use NONE mode.",

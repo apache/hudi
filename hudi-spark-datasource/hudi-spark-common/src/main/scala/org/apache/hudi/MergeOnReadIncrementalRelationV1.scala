@@ -267,14 +267,12 @@ trait HoodieIncrementalRelationV1Trait extends HoodieBaseRelation {
         s"option ${DataSourceReadOptions.START_COMMIT.key}")
     }
 
-    // MoR incremental relies on _hoodie_commit_time being present in BOTH base files AND log
-    // records. The base-file writer respects hoodie.meta.fields.mode, but the log-write path
-    // (HoodieAppendHandle) does not yet — until that gap is closed, MoR incremental must require
-    // populate.meta.fields=true to avoid silently dropping log-file rows whose commit_time is null.
-    if (!this.tableConfig.populateMetaFields()) {
-      throw new HoodieException("Incremental queries on MoR tables are not supported when "
-        + "hoodie.populate.meta.fields=false. Selective meta-field modes (hoodie.meta.fields.mode) "
-        + "are supported for CoW only in this release; MoR support is tracked as a follow-up.")
+    if (!this.tableConfig.isCommitTimePopulated()) {
+      throw new HoodieException("Incremental queries are not supported when _hoodie_commit_time is not populated. "
+        + "hoodie.meta.fields.mode is a physical-storage decision baked into files at write time and cannot be "
+        + "changed by flipping write options — setting it only takes effect at table creation. To enable incremental "
+        + "queries on this table, recreate it with hoodie.populate.meta.fields=true or hoodie.meta.fields.mode=COMMIT_TIME_ONLY "
+        + "(or COMMIT_TIME_AND_FILE_NAME).")
     }
 
     if (hollowCommitHandling == USE_TRANSITION_TIME && fullTableScan) {
