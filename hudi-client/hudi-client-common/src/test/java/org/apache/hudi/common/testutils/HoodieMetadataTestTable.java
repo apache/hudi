@@ -175,7 +175,17 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
       Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata,
       Option<HoodieCommitMetadata> inflightReplaceMetadata,
       HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
-    super.addReplaceCommit(instantTime, requestedReplaceMetadata, inflightReplaceMetadata, completeReplaceMetadata);
+    return addReplaceCommit(instantTime, Option.empty(), requestedReplaceMetadata, inflightReplaceMetadata, completeReplaceMetadata);
+  }
+
+  @Override
+  public HoodieTestTable addReplaceCommit(
+      String instantTime,
+      Option<String> completeTime,
+      Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata,
+      Option<HoodieCommitMetadata> inflightReplaceMetadata,
+      HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
+    super.addReplaceCommit(instantTime, completeTime, requestedReplaceMetadata, inflightReplaceMetadata, completeReplaceMetadata);
     if (writer != null) {
       writer.update(completeReplaceMetadata, instantTime);
     }

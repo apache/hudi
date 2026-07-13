@@ -621,11 +621,14 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
         }
       });
       commitWithMdt(commitInstant, part1ToFileId, testTable, config, true, true);
+      assertCompletedInstantCompletionTime(HoodieTimeline.COMMIT_ACTION, commitInstant);
       testTable = tearDownTestTableAndReinit(testTable, config);
 
-      testTable.addDeletePartitionCommit(deleteInstant1, p1, Arrays.asList(file1P1, file2P1));
+      testTable.addDeletePartitionCommit(deleteInstant1, Option.of(deleteInstant1), p1, Arrays.asList(file1P1, file2P1));
+      assertCompletedInstantCompletionTime(HoodieTimeline.REPLACE_COMMIT_ACTION, deleteInstant1);
       testTable = tearDownTestTableAndReinit(testTable, config);
-      testTable.addDeletePartitionCommit(deleteInstant2, p2, Arrays.asList(file1P2, file2P2));
+      testTable.addDeletePartitionCommit(deleteInstant2, Option.of(deleteInstant2), p2, Arrays.asList(file1P2, file2P2));
+      assertCompletedInstantCompletionTime(HoodieTimeline.REPLACE_COMMIT_ACTION, deleteInstant2);
 
       runCleaner(config);
 
@@ -1032,5 +1035,17 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
     HoodieCommitMetadata commitMeta = generateCommitMetadata(commitTimeTs, Collections.singletonMap(partition, Collections.singletonList(fileId)));
     createCommit(metaClient, metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitTimeTs,
         Option.of(commitTimeTs), Option.of(commitMeta));
+    assertCompletedInstantCompletionTime(HoodieTimeline.COMMIT_ACTION, commitTimeTs);
+  }
+
+  private void assertCompletedInstantCompletionTime(String action, String requestedTime) {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieInstant instant = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
+        .getInstantsAsStream()
+        .filter(i -> action.equals(i.getAction()) && requestedTime.equals(i.requestedTime()))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("Missing completed " + action + " instant " + requestedTime));
+    assertEquals(requestedTime, instant.getCompletionTime(),
+        "Synthetic " + action + " instant should preserve the requested completion time");
   }
 }
