@@ -53,9 +53,12 @@ It can also synchronize your data to half dozen data catalogs to keep table cons
 
 - [Migrating from Parquet to Hudi](https://hudi.apache.org/blog/2026/07/29/migrating-from-parquet-to-hudi): In-place bootstrap vs full rewrite for converting raw Parquet datasets into Hudi tables.
 - [Migrating from Hive to Hudi](https://hudi.apache.org/blog/2026/07/30/migrating-from-hive-to-hudi): Moving Hive tables to Hudi with bootstrap and catalog sync.
+- [Migrating from Delta Lake to Hudi](https://hudi.apache.org/blog/2026/08/04/migrating-from-delta-lake-to-hudi): Metadata conversion with Apache XTable or full rewrite, step by step.
+- [Migrating from Apache Iceberg to Hudi](https://hudi.apache.org/blog/2026/08/05/migrating-from-apache-iceberg-to-hudi): Keep Iceberg readers working via XTable while adopting Hudi's write path.
 
 ## Blog — Comparisons
 
+- [Hudi vs Iceberg for CDC Workloads](https://hudi.apache.org/blog/2026/08/06/hudi-vs-iceberg-for-cdc-workloads): Criteria-driven comparison for change-data-capture ingestion.
 - [Hudi vs Delta Lake vs Iceberg Feature Comparison](https://hudi.apache.org/blog/2023/01/11/Apache-Hudi-vs-Delta-Lake-vs-Apache-Iceberg-Lakehouse-Feature-Comparison): Feature-by-feature comparison of the three open table formats.
 
 ## Blog — Deep dives
