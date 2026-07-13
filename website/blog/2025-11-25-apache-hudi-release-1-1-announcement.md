@@ -1,6 +1,7 @@
 ---
 title: Apache Hudi 1.1 is Here—Building the Foundation for the Next Generation of Lakehouse
 excerpt: ''
+description: ''
 authors: [xushiyan]
 category: community
 image: /assets/images/blog/2025-11-25-apache-hudi-release-1-1-announcement/1-pluggable-TF.png

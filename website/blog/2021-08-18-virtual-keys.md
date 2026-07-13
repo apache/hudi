@@ -1,6 +1,7 @@
 ---
 title: "Adding support for Virtual Keys in Hudi"
 excerpt: "Supporting Virtual keys in Hudi for reducing storage overhead"
+description: "Supporting Virtual keys in Hudi for reducing storage overhead"
 authors: [sivabalan]
 category: deep-dive
 tags:

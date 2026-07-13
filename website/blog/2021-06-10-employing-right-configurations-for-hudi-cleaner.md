@@ -1,6 +1,7 @@
 ---
 title: "Employing correct configurations for Hudi's cleaner table service"
 excerpt: "Ensuring isolation between Hudi writers and readers using `HoodieCleaner.java`"
+description: "Ensuring isolation between Hudi writers and readers using `HoodieCleaner.java`"
 author: pratyakshsharma
 category: how-to
 image: /assets/images/blog/hoodie-cleaner/Initial_timeline.png

@@ -1,6 +1,7 @@
 ---
 title: "Registering sample dataset to Hive via beeline"
 excerpt: "How to manually register HUDI dataset into Hive using beeline"
+description: "How to manually register HUDI dataset into Hive using beeline"
 authors: [vinoth-chandar]
 category: how-to
 tags:

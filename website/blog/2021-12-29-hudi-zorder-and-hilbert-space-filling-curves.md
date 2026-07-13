@@ -1,6 +1,7 @@
 ---
 title: "Hudi Z-Order and Hilbert Space Filling Curves"
 excerpt: "Explore the benefits of new Apache Hudi Z-Order and Hilbert Curves"
+description: "Explore the benefits of new Apache Hudi Z-Order and Hilbert Curves"
 author: Alexey Kudinkin and Tao Meng
 category: deep-dive
 image: /assets/images/zordercurve.png

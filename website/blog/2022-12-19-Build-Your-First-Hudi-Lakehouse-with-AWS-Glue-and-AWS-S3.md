@@ -1,6 +1,7 @@
 ---
 title: "Build Your First Hudi Lakehouse with AWS S3 and AWS Glue"
 excerpt: "Follow this tutorial on building your first hudi lakehouse with AWS S3 & AWS Glue"
+description: "Follow this tutorial on building your first hudi lakehouse with AWS S3 & AWS Glue"
 authors: [nadine-farah]
 category: how-to
 image: /assets/images/blog/DataCouncil.jpg

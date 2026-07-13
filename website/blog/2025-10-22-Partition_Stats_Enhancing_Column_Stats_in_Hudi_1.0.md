@@ -1,6 +1,7 @@
 ---
 title: "Partition Stats: Enhancing Column Stats in Hudi 1.0"
 excerpt: ""
+description: ""
 authors: [aditya-goenka, xushiyan]
 category: deep-dive
 image: /assets/images/blog/2025-10-22-Partition_Stats_Enhancing_Column_Stats_in_Hudi_1.0/fig1.jpg

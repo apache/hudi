@@ -1,6 +1,7 @@
 ---
 title: "Column File Formats: How Hudi Leverages Parquet and ORC "
 excerpt: "Explains how Hudi uses Parquet and ORC"
+description: "Explains how Hudi uses Parquet and ORC"
 author: Albert Wong
 category: deep-dive
 image: /assets/images/blog/hudi-parquet-orc.png

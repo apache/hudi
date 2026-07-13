@@ -1,6 +1,7 @@
 ---
 title: "Export Hudi datasets as a copy or as different formats"
 excerpt: "Learn how to copy or export HUDI dataset in various formats."
+description: "Learn how to copy or export HUDI dataset in various formats."
 authors: [xushiyan]
 category: how-to
 tags:
