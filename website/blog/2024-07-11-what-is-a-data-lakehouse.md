@@ -21,6 +21,10 @@ A data lakehouse is a hybrid data architecture that combines the best attributes
 
 The lakehouse architecture supports the management of various data types, such as structured, semi-structured, and unstructured, and caters to a wide range of use cases, including business intelligence, machine learning, and real-time streaming. This flexibility enables businesses to move away from the traditional two-tier architecture—using warehouses for relational workloads and data lakes for machine learning and advanced analytics. As a result, organizations can reduce operational costs and streamline their data strategies by working on a single data store.
 
+:::info Related reading
+Newer companion explainers to this guide: [What is an Open Table Format?](/blog/2026/07/14/what-is-an-open-table-format), [Data Lakehouse vs Data Warehouse vs Data Lake](/blog/2026/07/23/lakehouse-vs-data-warehouse-vs-data-lake), and [Open Table Format vs Data Lakehouse](/blog/2026/07/24/open-table-format-vs-data-lakehouse).
+:::
+
 ## The Evolution of Data Storage Solutions: How did we go from Warehouses to Lakes to Lakehouses?
 Historically, organizations have been investing in building centralized and scalable data architectures to enable more data access and to support different types of analytical workloads. As demand for these workloads has grown, data architectures have evolved to address the complex needs of modern data processing and storage.
 
