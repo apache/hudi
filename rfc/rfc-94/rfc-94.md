@@ -238,8 +238,8 @@ config flag without changing this default.
 The timeline is configured with groups and items that map to Hudi's timeline model:
 
 - **Groups:** One row per *comparable* action - `commit`, `deltacommit`, `replacecommit`, `clean`, `rollback`,
-  `savepoint`, `restore`, `indexing`. This is `HoodieTimeline.VALID_ACTIONS_IN_TIMELINE` with `compaction`,
-  `logcompaction` and `clustering` folded into the action they complete as, exactly as Hudi itself already does:
+  `savepoint`, `restore`, `indexing`. Pending compaction, log-compaction and clustering are folded into the action they
+  complete as, exactly as Hudi itself already does:
 
   | Pending action | Completes as     |
   |----------------|------------------|
@@ -247,24 +247,18 @@ The timeline is configured with groups and items that map to Hudi's timeline mod
   | `logcompaction`| `deltacommit`    |
   | `clustering`   | `replacecommit`  |
 
-  This mapping is not a UI invention - it is `InstantComparatorV2.COMPARABLE_ACTIONS`, and the active timeline has
-  already applied it before the handler sees an instant. `HoodieTableMetaClient.getActiveTimeline()` builds an
-  `ActiveTimelineV2` with the layout filter enabled, which groups instants by `(requestedTime, comparableAction)` and
-  keeps only the highest state. So a completed compaction arrives as a *single* instant whose action is `commit` (its
-  completed file on disk is `<ts>_<ct>.commit`), and a raw `compaction` action only ever reaches the UI while the
-  instant is still pending. Giving `compaction`, `logcompaction` and `clustering` their own rows would therefore
-  produce rows that can never hold a completed instant. Grouping by comparable action instead keeps each row's pending
-  and completed items in the same lane, which is what makes a stalled instant legible (see **Items** below).
+  This is not a UI invention - Hudi's active timeline has already applied this mapping before the UI sees an instant, so
+  a completed compaction *arrives* as a `commit`. Giving compaction, log-compaction and clustering their own rows would
+  produce rows that can never hold a completed instant. See [A1](#a1-why-a-completed-compaction-arrives-as-a-commit).
 - **Items:** Completed instants are rendered as range bars spanning from `requestedTime` to `completionTime`.
   Non-completed instants (requested or inflight) are rendered as point items at `requestedTime`.
 
-  Items keep their *raw* action for labelling and colouring, so folding rows together does not erase the distinction:
-  a pending compaction is still labelled `compaction` and still sits in the `commit` row. This is precisely what the
-  stuck-compaction diagnosis in [Background](#background) needs - an inflight `compaction` point item with no
-  following range bar in that row is a compaction that never committed. A *completed* compaction does render as an
-  ordinary `commit` range bar, which is correct: on disk and to every other Hudi component, it is a commit. Users who
-  need to confirm the originating operation click the instant; the detail panel shows the `HoodieCommitMetadata`,
-  whose `operationType` reads `COMPACT` (or `CLUSTER`).
+  Items keep their *raw* action for labelling and colouring, so folding rows together does not erase the distinction: a
+  pending compaction is still labelled `compaction` while sitting in the `commit` row. This is what the stuck-compaction
+  diagnosis in [Background](#background) needs - an inflight `compaction` point item with no following range bar in that
+  row is a compaction that never committed. A *completed* compaction renders as an ordinary `commit` range bar, which is
+  correct: on disk and to every other Hudi component, it is a commit. Clicking it shows `operationType: COMPACT` in the
+  detail panel for anyone who needs to confirm the originating operation.
 - **Color coding:** Items are colored by state:
     - Green -> `COMPLETED`
     - Yellow -> `INFLIGHT`
@@ -316,26 +310,10 @@ new `/v2/` API a cleaner JSON contract:
 - **`InstantDTOV2`** (`o.a.h.common.table.timeline.dto.v2`) - the same source fields as v1, with UI-oriented JSON keys:
     - `action` - the instant's raw action (e.g., `commit`, `deltacommit`, `compaction`). Used to label and colour the
       item, and to address the instant on the `/v2/hoodie/view/timeline/instant` route.
-    - `comparableAction` - the action the instant completes (or would complete) as. Equal to `action` for everything
-      except pending `compaction`/`logcompaction`/`clustering`. This is the vis-timeline *group* key, and computing it
-      server-side keeps the mapping table in one place rather than duplicating it in JavaScript.
-
-      Concretely, this is `InstantComparatorV2.getComparableAction(action)`. Note there is no version-dispatched
-      accessor to call instead: `getComparableAction` is a `public static` on `InstantComparatorV1`/`V2`, the
-      `InstantComparator` interface declares only the three comparator getters, and the one place the mapper is
-      selected by layout version (`TimelineLayout.filterHoodieInstantsByLatestState`) is private.
-
-      Pinning the v2 static is safe for layout-v1 tables because the two maps are *equivalent over everything a v1
-      timeline can emit*. They agree on `compaction -> commit` and `logcompaction -> deltacommit`. The only difference
-      is v2's `clustering -> replacecommit` entry, and v1 has no `clustering` action to apply it to: in 0.x, clustering
-      and replace-commit shared a filename (`InstantFileNameGeneratorV1.makeRequestedClusteringFileName()` delegates to
-      `makeRequestedReplaceFileName()`), so a v1 clustering instant is written as `.replacecommit.requested` and already
-      carries `action=replacecommit`. The mapping is a no-op there, which is exactly why `InstantComparatorV1`'s map has
-      no `clustering` entry - there is nothing to map, not something missing.
-
-      If a second caller ever needs this mapping, lifting `getComparableAction` onto `InstantComparator` (or
-      `TimelineLayout`) is the clean follow-up; doing it here would mean changing a shared `hudi-common` interface for a
-      UI display field, which this RFC does not need.
+    - `comparableAction` - the action the instant completes (or would complete) as; the vis-timeline *group* key. Equal
+      to `action` for everything except pending `compaction`/`logcompaction`/`clustering`. Computed server-side from
+      Hudi's own mapping, so the table is not duplicated in JavaScript. See
+      [A2](#a2-where-the-comparable-action-mapping-comes-from).
     - `requestedTime` (JSON `requestTs`) - requested timestamp (`HoodieInstant.requestedTime()`)
     - `completionTime` (JSON `completionTs`) - completion timestamp (`HoodieInstant.getCompletionTime()`), null for
       non-completed instants
@@ -364,58 +342,38 @@ The v2 endpoints are served by the existing `TimelineHandler` (which already ser
    filtered to completed plus (log)compaction instants, so it drops `clean`/`rollback`/`savepoint`/`restore`/`indexing`
    and every requested/inflight state.
 
-   Note that the active timeline has already applied `TimelineLayout.filterHoodieInstantsByLatestState`, which collapses
-   each `(requestedTime, comparableAction)` group down to its highest state. The handler therefore sees at most one
-   instant per logical action, never a requested/inflight/completed triple, and a completed compaction reaches it as a
-   `commit`. This is the behaviour the UI's group model is built around, not something the handler should try to undo:
-   `getTimelineV2` populates `comparableAction` via `InstantComparatorV2.getComparableAction(action)` - the same mapping
-   the filter used (see [DTO Design](#dto-design)) - and leaves `action` as-is.
-2. `getInstantDetails(basePath, instant, action, state)` - reads the instant's Avro content via the active timeline's
-   `getContentStream(instant)` (the non-deprecated reader method; `getInstantDetails()` is `@Deprecated`) and
-   deserializes it to JSON. A malformed `state`/`action` returns 400, a read failure is logged and returns 500.
+   `getTimelineV2` populates `comparableAction` from the same mapping Hudi's own timeline filter used, and leaves
+   `action` as-is (see [A1](#a1-why-a-completed-compaction-arrives-as-a-commit)).
+2. `getInstantDetails(basePath, instant, action, state)` - reads the instant's content and deserializes it to JSON. A
+   malformed `state`/`action` returns 400; an instant not present in the timeline returns 404; a read failure returns 500.
 
-   **The requested instant must be resolved against the loaded active timeline, not reconstructed from the request
-   params.** Building a `HoodieInstant` straight from `instant`/`action`/`state` and handing it to the reader is a
-   path-traversal read: `getContentStream` resolves to
-   `new StoragePath(metaClient.getTimelinePath(), <instant>.<action>.<state>)`, and `StoragePath` runs
-   `URI.normalize()`, which collapses `..` segments. An `instant` of `../../../../tmp/x` therefore resolves cleanly
-   outside `.hoodie` and the handler reads whatever is there. The trailing `.<action>.<state>` suffix and the Avro
-   deserialization narrow what an attacker can actually retrieve, but this is an unvalidated attacker-controlled path
-   and should not ship as one.
-
-   The handler already loads the active timeline for this request, so the fix costs nothing: look the `(instant,
-   action, state)` triple up among the timeline's instants and read *that* `HoodieInstant`, returning 404 when no
-   instant matches. This is strictly stronger than regex-validating the timestamp - it also refuses well-formed
-   timestamps that simply do not exist in the table, so the route can only ever read instants the timeline itself
-   lists. The instant generator is then only used for instants that came from the timeline.
-
-   **Stream ownership applies to every timeline content read in this RFC, not just this one.** Unlike the deprecated
-   `getInstantDetails()`, which read into a `byte[]` and closed the stream itself, `getContentStream` hands back a raw
-   open stream (`metaClient.getStorage().open(...)`) that the caller owns. Every such read - this route, and the up-to
-   `limit` per-instant commit-metadata reads in [Schema-History Reconstruction](#schema-history-reconstruction) - goes
-   through a single shared helper that closes under try-with-resources, so the handle is released on the
-   deserialization-failure path and not only on success. The schema-history path is the one that actually matters: at up
-   to 1000 reads per request, with a Refresh control re-issuing the fetch, a leaked handle there exhausts file
-   descriptors quickly.
+   **The requested instant is resolved against the loaded active timeline, never reconstructed from the request
+   params.** The `instant` param is attacker-controlled and would otherwise land in a storage path, making this route an
+   arbitrary-path read rather than a timeline read. The handler already holds the active timeline, so it looks the
+   `(instant, action, state)` triple up among the timeline's instants and reads *that* `HoodieInstant`. The route can
+   therefore only ever read instants the timeline itself lists. See
+   [A3](#a3-why-the-instant-route-must-resolve-not-reconstruct).
 3. `getTableConfig(basePath)` - returns the table's `hoodie.properties` as a sorted JSON object.
 4. `getSchemaHistory(basePath, limit)` - reconstructs schema evolution from two sources; see
    [Schema-History Reconstruction](#schema-history-reconstruction) below.
 
-All four methods - `getTimelineV2`, `getInstantDetails`, `getTableConfig` and `getSchemaHistory` - build a short-lived
-`HoodieTableMetaClient` for the request's basepath, read from it, and discard it; no metaClient is shared across
-Javalin's request threads. At human-click frequency the construction cost is negligible: every route pays one
-`hoodie.properties` read, and all but `getTableConfig` additionally pay one active-timeline listing (`getTimelineV2` to
-map it, `getInstantDetails` to resolve the instant it reads through `getContentStream`, `getSchemaHistory` to walk the
-completed commits). `getInstantDetails` then reads a single instant file's content on top of that. A fresh per-request
-instance is always current and keeps each request's read self-consistent. A long-lived per-basepath cache is deliberately avoided: the data must be re-read on every request
-anyway, so caching the metaClient would save little while forcing an in-place `reloadActiveTimeline()` /
-`reloadTableConfig()` on a mutable object shared across concurrent same-basepath requests. `HoodieTableMetaClient` marks
-its individual accessors `synchronized`, but a compound reload-then-read is not one critical section, so a concurrent
-reload could swap the snapshot between one request's reload and its read - a fresh instance sidesteps that entirely. A
-TTL is likewise avoided: at this request rate it would save no meaningful work and would only add a staleness window. The
-UI also surfaces a **Refresh** control on the Table Config and Schema History tabs; because the server reads fresh on
-every request, the button simply re-issues the fetch. The timeline view is fresh on every request too; instant details
-are immutable once written and need no refresh.
+**Stream ownership.** Hudi's non-deprecated instant reader hands back a raw open stream that the caller owns. Every
+timeline content read in this RFC - the instant-detail route and the up-to-`limit` per-instant reads in schema-history -
+goes through a single shared helper that closes under try-with-resources, releasing the handle on the failure path and
+not only on success. Schema-history is the one that matters: at up to 1000 reads per request, with a Refresh control
+re-issuing the fetch, a leaked handle exhausts file descriptors quickly.
+
+**Per-request metaClient.** All four methods build a short-lived `HoodieTableMetaClient` for the request's basepath,
+read from it, and discard it; no metaClient is shared across Javalin's request threads. At human-click frequency the
+construction cost is negligible, a fresh instance is always current, and each request's reads stay self-consistent. A
+long-lived per-basepath cache is deliberately avoided - it would save little (the data must be re-read every request
+anyway) while introducing a reload-then-read race on a mutable object shared across concurrent same-basepath requests.
+A TTL is avoided for the same reason: no meaningful saving, plus a staleness window. See
+[A4](#a4-why-a-fresh-metaclient-per-request), which also breaks down what each route actually costs.
+
+Because the server reads fresh on every request, the **Refresh** control on the Table Config and Schema History tabs
+simply re-issues the fetch. The timeline view is fresh per request too; instant details are immutable once written and
+need no refresh.
 
 `UiHandler` registers `GET /ui`, returning `/public/index.html` from the classpath as the UI entry page.
 
@@ -424,56 +382,25 @@ are immutable once written and need no refresh.
 `getSchemaHistory` combines both schema sources Hudi maintains, so it returns something useful whether or not the table
 uses schema evolution:
 
-- **`currentSchema`** - the current table schema, resolved with
-  `TableSchemaResolver.getTableSchemaIfPresent(metaClient.getTableConfig().populateMetaFields())`; `null` when the
-  `Option` is empty.
-
-  Not `getTableSchema()`: that overload ends in `getTableSchemaInternal(...).orElseThrow(schemaNotFoundError())` and
-  raises `HoodieSchemaNotFoundException` on a table with no resolvable schema, so it cannot express "unresolved" as a
-  return value at all. `getTableSchemaIfPresent(boolean)` returns `Option<HoodieSchema>` and does not throw, which is
-  what this view needs - a brand-new table with no commits is a normal thing to point the UI at, not a 500. There is no
-  no-arg `getTableSchemaIfPresent`, so the call passes `populateMetaFields()` explicitly, which is exactly what the
-  no-arg `getTableSchema()` was supplying on our behalf.
+- **`currentSchema`** - the current table schema, resolved through the *non-throwing* `TableSchemaResolver` accessor, so
+  that a table with no resolvable schema yields `null` rather than an exception. A brand-new table with no commits is a
+  normal thing to point the UI at, not a 500. See
+  [A5](#a5-why-currentschema-resolves-through-the-non-throwing-accessor).
 - **`history`** - walks the completed commits timeline (`commit`/`deltacommit`/`replacecommit`), the most recent `limit`
   instants only (default 200, capped at 1000), reading each instant's `HoodieCommitMetadata` and taking the schema under
   `HoodieCommitMetadata.SCHEMA_KEY` (the `schema` entry in commit `extraMetadata`). An entry (`instant`,
   `completionTime`, `action`, `schema`) is recorded only when the schema differs from the previous instant's, so runs of
   commits carrying the same schema collapse to one change entry. Instants whose metadata cannot be read are skipped.
 - **`internalSchemaHistory`** (optional) - when `InternalSchema` is in use, the `.hoodie/.schema/` history string from
-  `FileBasedInternalSchemaStorageManager.getHistorySchemaStr()` is added for richer evolution tracking. It is omitted
-  when the `.schema` directory is absent - the common case for tables that never enabled schema evolution.
-
-  **Construct the manager with the request's metaClient**, i.e. the
-  `FileBasedInternalSchemaStorageManager(HoodieTableMetaClient)` overload - *not*
-  `FileBasedInternalSchemaStorageManager(HoodieStorage, StoragePath)`. The latter leaves its `metaClient` field null and
-  lazily builds an entirely separate `HoodieTableMetaClient` inside `getMetaClient()`, so every schema-history request
-  would pay a second `hoodie.properties` read and a second active-timeline listing on top of the one the handler already
-  did. Sharing the request's metaClient makes both free, since `getActiveTimeline()` is cached on it.
-
-  Note the `.schema` files are an append-only log: the newest valid `.schemacommit` already contains *all* prior schema
-  versions (`SerDeHelper.parseSchemas` parses it into a `TreeMap` keyed by version), so `getHistorySchemaStr()` reads
-  exactly one file - it sorts the valid `.schemacommit` names and opens only the last. The
-  `getCommitsTimeline().filterCompletedInstants()` walk it performs first is *not* history reconstruction; it exists to
-  discard residual `.schemacommit` files left behind by aborted schema changes, whose timestamps are not completed
-  commits. Do not "optimize" that away by taking the lexicographic max filename - it would resurrect uncommitted
-  schemas.
+  `FileBasedInternalSchemaStorageManager` is added for richer evolution tracking. It is omitted when the `.schema`
+  directory is absent - the common case for tables that never enabled schema evolution. The manager is constructed with
+  the request's metaClient, not a base path, so it does not silently build a second one. See
+  [A6](#a6-what-the-internal-schema-history-read-actually-does).
 
 **Cost model:** one schema resolve, at most `limit` completed-commit metadata reads (bounded further by the active
-timeline, since the archived timeline is out of scope), and - for `internalSchemaHistory` - one in-memory walk of the
-already-loaded completed-commits timeline, one `storage.exists(.schema)`, and, only when `.schema` is present, one
-directory listing plus one read of the newest valid `.schemacommit`.
-
-The timeline walk is worth being precise about, because `getHistorySchemaStr()` performs it *before* it checks whether
-`.schema` exists - a table with no schema evolution still pays it. It is cheap only because the manager is handed the
-request's metaClient, whose active timeline is already loaded and cached, making the walk an in-memory filter rather
-than a storage listing. Construct it with the `HoodieStorage`/`StoragePath` overload instead and the same call becomes a
-second metaClient build and a second timeline listing per request.
-
-A table that never evolved its schema therefore resolves `currentSchema`, collapses `history` to a single entry (or none
-if no commit recorded a schema), and omits `internalSchemaHistory` - one extra `exists()` call, no directory scan, no
-error. A table with *no* commits resolves `currentSchema` to `null` (empty `Option`) and `history` to `[]`; this is a
-200, not an error, which is only true because the resolve goes through `getTableSchemaIfPresent` rather than
-`getTableSchema`.
+timeline, since the archived timeline is out of scope), and one read of the `.schema` history file when present. A table
+that never evolved its schema pays one extra `exists()` call and no directory scan. A table with *no* commits returns
+`currentSchema: null` and `history: []` with a 200, not an error.
 
 #### Registration in RequestHandler
 
@@ -483,25 +410,19 @@ The v2 routes are registered following the existing pattern:
 - The v2 UI routes are registered in `registerTimelineV2API()`, called from `register()` only when `--enable-ui` is set.
   `UiHandler` (serving `/ui`) and the static-file serving are gated by the same flag.
 - **The flag alone is not a sufficient gate.** Stripping `public/**` from the engine bundles (see
-  [Dependency Impact](#dependency-impact)) removes the *assets* but not the *code*: `TimelineService` still ships in all
-  six bundles, so `--enable-ui` remains reachable from a bundle that has no assets. Javalin resolves a
-  classpath static-files directory eagerly at `Javalin.create()`, so registering `/public` when it is absent throws -
-  and `startServiceOnPort` treats any non-bind exception as a port problem, retrying 16 times and finally reporting a
-  port failure. A missing resource would surface as a misleading "could not start on port N" error.
-
-  Static-file registration is therefore conditional on the assets actually being present
-  (`TimelineService.class.getResource("/public") != null`), and enabling the UI without them fails fast with an explicit
-  "UI assets not bundled in this jar" message. The embedded follow-up sharpens this rather than removing it, since it
-  lifts the asset exclusion for some bundles and not others.
+  [Dependency Impact](#dependency-impact)) removes the *assets* but not the *code*, so `--enable-ui` stays reachable
+  from a bundle that has no assets - where it would otherwise fail in a thoroughly misleading way. Static-file
+  registration is therefore conditional on the assets actually being present, and enabling the UI without them fails
+  fast with an explicit "UI assets not bundled in this jar" message. The embedded follow-up sharpens this rather than
+  removing it, since it lifts the asset exclusion for some bundles and not others. See
+  [A7](#a7-why-the-ui-needs-an-asset-presence-gate).
 
 #### Error Handling
 
 - **Invalid basepath** -> HTTP 400 with a descriptive error message (e.g., "Not a valid Hudi table path").
 - **Empty timeline** -> Returns an empty list `[]`. The frontend displays "No instants found".
 - **Unresolvable table schema** (e.g. a table with no commits) -> HTTP 200 with `currentSchema: null` and
-  `history: []`, *not* an error. A freshly-created table is a legitimate thing to open the UI against. This is why the
-  schema-history view resolves through `getTableSchemaIfPresent`; `getTableSchema()` would throw
-  `HoodieSchemaNotFoundException` here and turn an empty table into a 500.
+  `history: []`, *not* an error. A freshly-created table is a legitimate thing to open the UI against.
 - **Instant not found in the active timeline** -> HTTP 404 (see [Handler Design](#handler-design)).
 - **Failed instant detail read** -> HTTP 500 with error details (e.g., Avro deserialization failure).
 
@@ -698,18 +619,15 @@ This keeps `hudi-client-common` free of any Spark compile-time dependency while 
     - **vis-timeline** (`lib/vis-timeline/`, ~575KB) - timeline rendering. Dual-licensed Apache-2.0 OR MIT.
     - **Bootstrap 5** (`lib/bootstrap/`, ~305KB) - layout and styling. MIT.
     - **renderjson** (`lib/renderjson/`, ~11KB) - collapsible JSON in the detail panel. ISC.
-- **The assets must be explicitly excluded from the engine bundles.** This does *not* come for free.
-  `hudi-timeline-service` is a compile-scope dependency of `hudi-client-common`, and six bundles list
-  `org.apache.hudi:hudi-timeline-service` in their shade `artifactSet`: `hudi-timeline-server-bundle` (intended) plus
-  `hudi-spark-bundle`, `hudi-flink-bundle`, `hudi-utilities-bundle`, `hudi-kafka-connect-bundle` and
-  `hudi-integ-test-bundle`. Their `<filters>` currently exclude only signature files, `META-INF/services/javax.*` and
-  `**/*.proto`, so *any* resource under `src/main/resources/` is unpacked into each shaded JAR. The module has no
-  `src/main/resources` today, which is exactly why this has never bitten us - the ~890KB of vendored assets would be
-  net-new payload in all six bundles, not just the server bundle.
+- **The assets must be explicitly excluded from the engine bundles.** This does *not* come for free. Six bundles shade
+  `hudi-timeline-service`, and their existing shade filters keep out nothing under `src/main/resources/`. Left alone,
+  the ~890KB of vendored assets lands in **all six** - `hudi-spark-bundle`, `hudi-flink-bundle`,
+  `hudi-utilities-bundle`, `hudi-kafka-connect-bundle` and `hudi-integ-test-bundle`, not just
+  `hudi-timeline-server-bundle`. See [A8](#a8-why-the-vendored-assets-reach-six-bundles).
 
-  The first cut is standalone-only, so the UI cannot even be served from an embedded timeline server inside a Spark or
-  Flink driver. Shipping ~890KB of unreachable JS/CSS in five engine bundles is pure bloat, and it would drag the
-  LICENSE obligations below into each of them. The five non-server bundle poms therefore add an explicit shade filter:
+  The first cut is standalone-only, so the UI cannot even be served from an embedded server inside a Spark or Flink
+  driver. Shipping ~890KB of unreachable JS/CSS in five engine bundles is pure bloat and would drag the LICENSE
+  obligations below into each of them. The five non-server bundle poms therefore add an explicit shade filter:
 
   ```xml
   <filter>
@@ -721,30 +639,21 @@ This keeps `hudi-client-common` free of any Spark compile-time dependency while 
   ```
 
   Only `hudi-timeline-server-bundle` ships the assets. When the embedded/Spark-UI follow-up lands, it must lift this
-  exclusion for the bundles that actually gain an embedded UI (`hudi-spark-bundle`, and `hudi-flink-bundle` if it
-  follows), and add the LICENSE stanzas below to those bundles at the same time. That is a deliberate, reviewable step
-  in the follow-up, not something to inherit silently here.
+  exclusion for the bundles that actually gain an embedded UI, and add the LICENSE stanzas below to those bundles at the
+  same time - a deliberate, reviewable step, not something inherited silently here.
 - **LICENSE/NOTICE obligations.** Each vendored library needs a "This product bundles ..." stanza in the source-release
   top-level `LICENSE` **and** in the LICENSE of every bundle whose JAR actually contains the assets, naming the library,
-  its license, and its copyright, with the full MIT/ISC license text inlined the same way existing bundled code is
-  handled in `LICENSE`. With the shade filter above, that set is exactly the source release plus
-  `hudi-timeline-server-bundle`; without it, it would be all six bundles. The minified files already carry their
-  upstream copyright headers, which must be preserved. No `NOTICE` changes are required: MIT and ISC do not mandate
-  NOTICE entries, and vis-timeline is taken under its MIT option (ASF policy discourages adding MIT/ISC copyrights to
-  `NOTICE`); were vis-timeline instead taken under Apache-2.0, any upstream `NOTICE` content it ships would have to be
-  propagated.
-- **Spark UI tab (planned follow-up):** Adds no new JARs - but it rests on Spark *internals*, not public `spark-core`
-  API, and the follow-up should go in with that understood. `WebUITab`, `WebUIPage`, `WebUI.attachTab`/`detachTab` and
-  `SparkContext.ui` are all `private[spark]`. Three consequences:
-    - The tab must be declared in an `org.apache.spark` package. The repo already does this elsewhere
-      (`HoodieSparkKryoRegistrar`, under `hudi-spark-client/src/main/scala/org/apache/spark/`).
-    - It must be **Scala**, not Java. Java can reach these symbols, since Scala's qualified-private erases to
-      bytecode-public, but `WebUIPage.render` returns `Seq[Node]`, which erases to `scala.collection.Seq` on Scala 2.12
-      and `scala.collection.immutable.Seq` on 2.13 - so no single Java source implements it for both profiles Hudi
-      cross-builds.
-    - These internals carry no cross-version stability guarantee across the Spark versions Hudi supports. The tab is a
-      convenience entry point, so if a future Spark release moves them, dropping the tab must remain an option that
-      leaves the standalone UI unaffected.
+  its license and its copyright, with the full MIT/ISC text inlined the way existing bundled code is handled. With the
+  shade filter above that set is exactly the source release plus `hudi-timeline-server-bundle`; without it, all six
+  bundles. The minified files carry upstream copyright headers, which must be preserved. No `NOTICE` changes are
+  required: MIT and ISC do not mandate NOTICE entries, and vis-timeline is taken under its MIT option (ASF policy
+  discourages adding MIT/ISC copyrights to `NOTICE`).
+- **Spark UI tab (planned follow-up):** Adds no new JARs, but rests on Spark *internals*, not public `spark-core` API -
+  `WebUITab`, `WebUIPage`, `attachTab`/`detachTab` and `SparkContext.ui` are all `private[spark]`. Consequences: the tab
+  must be **Scala**, declared in an `org.apache.spark` package (the repo already does this for
+  `HoodieSparkKryoRegistrar`), and it rests on symbols carrying no cross-version stability guarantee. It is a
+  convenience entry point, so if a future Spark release moves them, dropping the tab must remain an option that leaves
+  the standalone UI unaffected. See [A9](#a9-why-the-spark-ui-tab-must-be-scala).
 - **No frontend build pipeline.** No npm, webpack, or vite. The JS/CSS files are committed directly and served as-is.
 
 ## Additional Quality of Life (QoL) Features to be Considered
@@ -804,34 +713,30 @@ Other features we can add later:
 
 ### Unit Tests
 
-- **`TimelineHandler.getTimelineV2()`**: Verify correct mapping from `HoodieInstant` to `InstantDTOV2`, including:
-    - Every action the active timeline can actually surface is mapped correctly. Note this is *not* one instant per
-      entry in `VALID_ACTIONS_IN_TIMELINE`: the layout filter collapses `(requestedTime, comparableAction)` groups, so
-      a completed `compaction`/`logcompaction`/`clustering` can only ever arrive as `commit`/`deltacommit`/
-      `replacecommit`, and a test that expects a completed instant with action `compaction` will never pass.
-    - `comparableAction` folds the pending actions correctly: a *pending* compaction maps to
+- **`TimelineHandler.getTimelineV2()`**: correct mapping from `HoodieInstant` to `InstantDTOV2`:
+    - `comparableAction` folds the pending actions: a *pending* compaction maps to
       (`action=compaction`, `comparableAction=commit`); pending logcompaction to `deltacommit`; pending clustering to
       `replacecommit`. For every other action, `comparableAction` equals `action`.
-    - A compaction that has completed surfaces once, as `action=commit`, `state=COMPLETED` - not as three instants and
-      not with action `compaction`. Assert this against a table with a real completed compaction, since it is the case
-      the group model depends on.
+    - A *completed* compaction surfaces once, as `action=commit`, `state=COMPLETED` - not as three instants, and not
+      with action `compaction`. Assert against a table with a real completed compaction; this is the case the group
+      model depends on. Note the corollary: a test expecting one instant per `VALID_ACTIONS_IN_TIMELINE` entry, or a
+      *completed* instant with action `compaction`, can never pass. See
+      [A1](#a1-why-a-completed-compaction-arrives-as-a-commit).
     - `completionTime` is populated for completed instants and null for requested/inflight instants.
     - Instants are returned in timeline order.
-- **`TimelineHandler.getInstantDetails()`**: Verify correct Avro deserialization to JSON for various action types
-  (commit metadata, compaction plan, clean plan, etc.).
+- **`TimelineHandler.getInstantDetails()`**: correct deserialization to JSON for various action types (commit metadata,
+  compaction plan, clean plan, etc.).
 - **`getInstantDetails()` path traversal (negative case):** an `instant` param of `../../../../tmp/x` (and similar
   `..`-bearing values) must return 404 and must not read outside the table's timeline directory. Plant a readable file
-  at the traversal target and assert its content never appears in the response. A well-formed timestamp that is not in
-  the active timeline must also return 404.
+  at the traversal target and assert its content never appears in the response. A well-formed timestamp absent from the
+  active timeline must also 404.
 
-  **Pin this case to `instantstate=REQUESTED`/`INFLIGHT`.** A `COMPLETED` probe does not exercise the hole: a completed
-  `HoodieInstant` reconstructed from request params has a null completion time, and `getInstantFileName` already
-  resolves that against the timeline and throws before reaching `StoragePath`. A traversal test sent with
-  `instantstate=COMPLETED` would pass against the *unfixed* handler and prove nothing. The pending states are the ones
-  where the reconstructed instant goes straight to the file-name generator.
+  **Pin this case to `instantstate=REQUESTED`/`INFLIGHT`.** A `COMPLETED` probe is resolved against the timeline before
+  it can reach a storage path, so it would pass against the *unfixed* handler and prove nothing. See
+  [A3](#a3-why-the-instant-route-must-resolve-not-reconstruct).
 - **`TimelineHandler.getSchemaHistory()` on a table with no commits:** returns HTTP 200 with `currentSchema: null` and
-  `history: []`. Guards the `getTableSchemaIfPresent` vs `getTableSchema()` choice - the latter throws
-  `HoodieSchemaNotFoundException` on this input, so a regression here shows up as a 500 on a freshly-created table.
+  `history: []`. Guards the non-throwing-accessor choice; a regression here shows up as a 500 on a freshly-created
+  table. See [A5](#a5-why-currentschema-resolves-through-the-non-throwing-accessor).
 - **Error cases**: Invalid basepath returns an appropriate error. Empty timeline returns an empty list.
 
 ### Integration Tests
@@ -854,17 +759,14 @@ Following the pattern established by `TestTimelineService.java`:
 The `public/**` shade exclusion in [Dependency Impact](#dependency-impact) regresses silently: drop the filter and the
 assets simply reappear in every engine bundle, with nothing failing. It needs a guard asserting that
 `hudi-timeline-server-bundle` **contains** `public/index.html` and `public/lib/**`, and that the five engine bundles
-contain **no** `public/**` entries. The negative assertion is the load-bearing one - it is what keeps the LICENSE
-obligations scoped to the server bundle, and what the embedded-UI follow-up must consciously relax rather than silently
-break.
+contain **no** `public/**` entries. The negative assertion is the load-bearing one - it keeps the LICENSE obligations
+scoped to the server bundle, and it is what the embedded-UI follow-up must consciously relax rather than silently break.
 
-**This guard is net-new tooling, not a small addition to an existing pattern.** `packaging/bundle-validation` cannot
-host it as-is: `ci_run.sh` copies only the flink, kafka-connect, metaserver-server, cli, hadoop-mr, spark, utilities and
-utilities-slim bundles into the validation image, so neither `hudi-timeline-server-bundle` (the positive assertion) nor
-`hudi-integ-test-bundle` (one negative assertion) has a bundle to run against. The harness is also a Docker *runtime*
-smoke test and has no jar-content assertion primitive - there is no `jar tf` or `unzip -l` anywhere under it. Landing
-this check therefore means wiring two bundles into that job and adding a content-inspection step, or siting the check
-somewhere jar contents are already inspectable. Sizing it honestly here so it is not discovered during implementation.
+**Sizing this honestly: it is net-new tooling, not a small addition to an existing pattern.**
+`packaging/bundle-validation` cannot host it as-is - it does not build the two bundles the assertions need, and it has
+no jar-content inspection step at all. Landing this check means extending that job, or siting the check somewhere jar
+contents are already inspectable. Called out here so it is not discovered mid-implementation. See
+[A10](#a10-why-the-packaging-guard-is-net-new-tooling).
 
 ### Manual Testing Checklist
 
@@ -877,3 +779,179 @@ somewhere jar contents are already inspectable. Sizing it honestly here so it is
 - Empty table basepath shows "No instants found" message gracefully.
 - Invalid basepath shows a user-friendly error message.
 - No external calls: UI loads fully from bundled assets (vis-timeline, Bootstrap, renderjson) with no network access.
+
+## Appendix: Implementation Notes
+
+These notes record the code-level facts behind decisions made in the body. They are reference material for the
+implementer and for reviewers who want to check the reasoning - they are **not** part of the design, and they will go
+stale as the code moves. Where the body and this appendix disagree, the body is the contract.
+
+### A1. Why a completed compaction arrives as a `commit`
+
+`HoodieTableMetaClient.getActiveTimeline()` builds an `ActiveTimelineV2` with the layout filter enabled, which runs
+`TimelineLayout.filterHoodieInstantsByLatestState`. That groups instants by `(requestedTime, getComparableAction(action))`
+and keeps only the highest state. `InstantComparatorV2.COMPARABLE_ACTIONS` maps `compaction -> commit`,
+`logcompaction -> deltacommit` and `clustering -> replacecommit`.
+
+So for a compaction that has completed, the `requested`, `inflight` and `commit` files all collapse into one group and
+the completed instant wins - and its action is `commit`, because its completed file on disk is `<ts>_<ct>.commit`. The
+handler never sees a requested/inflight/completed triple, and a raw `compaction` action only reaches the UI while the
+instant is still pending.
+
+Consequences the design depends on:
+
+- Dedicated `compaction`/`logcompaction`/`clustering` rows could never hold a completed instant.
+- A unit test expecting a *completed* instant with action `compaction`, or one instant per `VALID_ACTIONS_IN_TIMELINE`
+  entry, cannot pass.
+- Stuck-compaction diagnosis still works, because a stuck compaction is by definition *pending* and therefore retains
+  `action=compaction`.
+
+### A2. Where the comparable-action mapping comes from
+
+`comparableAction` is `InstantComparatorV2.getComparableAction(action)`.
+
+There is no version-dispatched accessor to call instead. `getComparableAction` is a `public static` on
+`InstantComparatorV1`/`V2`; the `InstantComparator` interface declares only `actionOnlyComparator`,
+`requestedTimeOrderedComparator` and `completionTimeOrderedComparator`; and the one place the mapper is selected by
+layout version (`TimelineLayout.filterHoodieInstantsByLatestState`) is private. Java statics are not reachable through
+an interface-typed reference, so "the table's `InstantComparator`" has no such method.
+
+**Pinning the v2 static is safe for layout-v1 tables**, because the two maps are equivalent over everything a v1 timeline
+can emit. They agree on `compaction -> commit` and `logcompaction -> deltacommit`. The only difference is v2's
+`clustering -> replacecommit` entry - and v1 has no `clustering` action to apply it to. In 0.x, clustering and
+replace-commit shared a filename (`InstantFileNameGeneratorV1.makeRequestedClusteringFileName()` delegates to
+`makeRequestedReplaceFileName()`), so a v1 clustering instant is written as `.replacecommit.requested` and already
+carries `action=replacecommit`. `InstantComparatorV1`'s map has no `clustering` entry because there is nothing to map -
+not because something is missing.
+
+If a second caller ever needs this mapping, lifting `getComparableAction` onto `InstantComparator` or `TimelineLayout`
+is the clean follow-up. Doing it here would mean changing a shared `hudi-common` interface to serve a UI display field.
+
+### A3. Why the instant route must resolve, not reconstruct
+
+Building a `HoodieInstant` straight from the `instant`/`action`/`state` request params and handing it to the reader is a
+path-traversal read. `getContentStream` resolves to `new StoragePath(metaClient.getTimelinePath(),
+"<instant>.<action>.<state>")`, and `StoragePath` runs `URI.normalize()`, which collapses `..` segments. An `instant` of
+`../../../../tmp/x` therefore resolves cleanly outside `.hoodie`, and the handler opens whatever is there. The trailing
+`.<action>.<state>` suffix and the deserialization step narrow what an attacker can retrieve, so it is not a general
+file-read primitive - but it is an unvalidated, attacker-controlled path.
+
+Resolving against the timeline is strictly stronger than regex-validating the timestamp: it also refuses well-formed
+timestamps that simply do not exist in the table, so no caller-supplied string ever reaches `StoragePath`.
+
+**For the negative test:** only `REQUESTED`/`INFLIGHT` probes exercise the hole. `ActiveTimelineV2.getInstantFileName`
+already resolves a `COMPLETED` instant against the timeline when its completion time is null - exactly what a
+reconstructed-from-params completed instant looks like - and throws `HoodieIOException` before reaching `StoragePath`. A
+traversal probe sent with `instantstate=COMPLETED` would pass against the *unfixed* handler.
+
+### A4. Why a fresh metaClient per request
+
+Per-route cost of the per-request `HoodieTableMetaClient`:
+
+| Route | `hoodie.properties` read | Active-timeline listing | Extra |
+|-------|--------------------------|-------------------------|-------|
+| `getTimelineV2`     | yes | yes (maps it) | - |
+| `getInstantDetails` | yes | yes (resolves the instant) | one instant-file read |
+| `getTableConfig`    | yes | no | - |
+| `getSchemaHistory`  | yes | yes (walks completed commits) | up to `limit` metadata reads, `.schema` read |
+
+A long-lived per-basepath cache is avoided because the data must be re-read on every request anyway, so it would save
+little while forcing an in-place `reloadActiveTimeline()` / `reloadTableConfig()` on a mutable object shared across
+concurrent same-basepath requests. `HoodieTableMetaClient` marks its individual accessors `synchronized`, but a compound
+reload-then-read is not one critical section, so a concurrent reload could swap the snapshot between one request's
+reload and its read. A fresh instance sidesteps that entirely.
+
+### A5. Why `currentSchema` resolves through the non-throwing accessor
+
+`TableSchemaResolver.getTableSchema()` **cannot return null**. It delegates to `getTableSchema(boolean)`, which ends in
+`getTableSchemaInternal(...).orElseThrow(schemaNotFoundError())` and raises `HoodieSchemaNotFoundException`. On a table
+with no commits it throws - so it cannot express "unresolved" as a return value at all, and using it would turn a
+freshly-created table into a 500.
+
+`getTableSchemaIfPresent(boolean)` returns `Option<HoodieSchema>` and does not throw. There is no no-arg overload, so the
+call must pass `metaClient.getTableConfig().populateMetaFields()` explicitly - which is exactly what the no-arg
+`getTableSchema()` was supplying implicitly. Passing it keeps the `includeMetadataFields` semantics unchanged.
+
+### A6. What the internal-schema-history read actually does
+
+`FileBasedInternalSchemaStorageManager.getHistorySchemaStr()` is *not* simply "one `.schema` file read".
+
+It delegates to `getHistorySchemaStrByGivenValidCommits(EMPTY_LIST)`, which calls `getValidInstants()` - a walk of
+`getCommitsTimeline().filterCompletedInstants()` - **before** it checks `storage.exists(baseSchemaPath)`. So even a table
+with no `.schema` directory pays that walk. It is cheap only because the manager is handed the request's metaClient,
+whose active timeline is already loaded and cached, making the walk an in-memory filter rather than a storage listing.
+
+This is why the constructor choice matters. `FileBasedInternalSchemaStorageManager(HoodieStorage, StoragePath)` leaves
+its `metaClient` field null and lazily builds an entirely separate `HoodieTableMetaClient` inside `getMetaClient()` - a
+second `hoodie.properties` read and a second timeline listing on every request. Use the
+`FileBasedInternalSchemaStorageManager(HoodieTableMetaClient)` overload.
+
+**The walk is not history reconstruction.** The `.schema` files are an append-only log: the newest valid `.schemacommit`
+already contains *all* prior schema versions (`SerDeHelper.parseSchemas` parses it into a `TreeMap` keyed by version), so
+only one file is ever opened - the implementation sorts the valid names and reads the last. The completed-commits filter
+exists to discard residual `.schemacommit` files left behind by aborted schema changes, whose timestamps are not
+completed commits. Do not "optimize" it into a lexicographic max filename: that would resurrect uncommitted schemas.
+
+### A7. Why the UI needs an asset-presence gate
+
+The `public/**` shade exclusion (see [A8](#a8-why-the-vendored-assets-reach-six-bundles)) removes the *assets* from the
+engine bundles but not the *code* - `TimelineService` and its `main()` still ship in all six - so `--enable-ui` remains
+reachable from a bundle that has no assets.
+
+The resulting failure is badly misleading. Javalin 4.6.7 resolves a `Location.CLASSPATH` static-files directory eagerly,
+in `ConfigurableHandler`'s constructor via `getResourceBase`, throwing
+`JavalinException("Static resource directory with path: '/public' does not exist.")` at `Javalin.create()` - i.e. inside
+`TimelineService.createApp()`. `startServiceOnPort` catches every `Exception`; since this is not a `JavalinBindException`
+it logs *"Timeline server start failed on port N. Attempting port N + 1"*, retries `START_SERVICE_MAX_RETRIES` (16)
+times, and finally throws `IOException("Timeline server start failed on port N, after retry 16 times")`. A missing
+classpath resource surfaces as a port failure.
+
+Hence: register static files only when `TimelineService.class.getResource("/public") != null`, and fail fast with an
+explicit "UI assets not bundled in this jar" message otherwise.
+
+### A8. Why the vendored assets reach six bundles
+
+`hudi-timeline-service` is a **compile-scope** dependency of `hudi-client-common`, and six bundle poms list
+`org.apache.hudi:hudi-timeline-service` in their shade `artifactSet`:
+
+```
+$ grep -ln "org.apache.hudi:hudi-timeline-service" packaging/*/pom.xml
+packaging/hudi-flink-bundle/pom.xml
+packaging/hudi-kafka-connect-bundle/pom.xml
+packaging/hudi-utilities-bundle/pom.xml
+packaging/hudi-timeline-server-bundle/pom.xml
+packaging/hudi-spark-bundle/pom.xml
+packaging/hudi-integ-test-bundle/pom.xml
+```
+
+Their `<filters>` blocks are `<artifact>*:*</artifact>` excluding only `META-INF/*.SF|DSA|RSA`,
+`META-INF/services/javax.*` and `**/*.proto`. Nothing excludes resources, so everything under `src/main/resources/` is
+unpacked into each shaded JAR. The module has no `src/main/resources` today, which is precisely why this has never
+bitten us before.
+
+### A9. Why the Spark UI tab must be Scala
+
+`WebUITab`, `WebUIPage`, `WebUI.attachTab`/`detachTab` and `SparkContext.ui` are all `private[spark]` in Spark's
+`WebUI.scala` / `SparkContext.scala` - Spark internals, not public `spark-core` API.
+
+Scala code outside an `org.apache.spark` package cannot reference them at all, so the tab must be declared in an
+`org.apache.spark` package. The repo already does this for `HoodieSparkKryoRegistrar`, under
+`hudi-spark-client/src/main/scala/org/apache/spark/`.
+
+Java *can* reach them, since Scala's qualified-private erases to bytecode-public - but `WebUIPage.render` returns
+`Seq[Node]`, which erases to `scala.collection.Seq` in `spark-core_2.12` and `scala.collection.immutable.Seq` in
+`spark-core_2.13`. No single Java source can implement it for both Scala profiles Hudi cross-builds. Hence Scala.
+
+### A10. Why the packaging guard is net-new tooling
+
+`packaging/bundle-validation` cannot host the assertions as written:
+
+- `ci_run.sh` copies only the flink, kafka-connect, metaserver-server, cli, hadoop-mr, spark, utilities and
+  utilities-slim bundles into the validation image. Neither `hudi-timeline-server-bundle` (which the *positive*
+  assertion needs) nor `hudi-integ-test-bundle` (one of the negative ones) is wired in.
+- The harness has no jar-content assertion primitive. `validate.sh` is a Docker runtime smoke test
+  (`test_spark_hadoop_mr_bundles`, `test_utilities_bundle`, `test_flink_bundle`, ...), and there is no `jar tf` or
+  `unzip -l` anywhere under `packaging/bundle-validation`.
+
+So the guard means wiring two bundles into that job plus adding a content-inspection step, or siting the check somewhere
+jar contents are already inspectable.
