@@ -20,6 +20,7 @@ import json
 
 from hudi_agent_gateway.tools.registry import ToolRegistry
 from hudi_agent_gateway.tools.trino_client import QueryResult
+from hudi_agent_gateway.tools.trino_tools import shape_result
 
 
 async def _call(registry: ToolRegistry, name: str, **kwargs: object) -> dict:
@@ -98,3 +99,27 @@ async def test_describe_missing_table(registry: ToolRegistry, fake_trino) -> Non
     fake_trino.result = QueryResult(columns=["column_name"], rows=[])
     out = await _call(registry, "describe_table", table="ghost")
     assert "not found" in out["error"]
+
+
+async def test_identifier_injection_rejected(registry: ToolRegistry, fake_trino) -> None:
+    """Quoted breakouts in catalog/schema/table params return errors, never reach Trino."""
+    out = await _call(registry, "list_tables", catalog='hudi" --', schema_name="default")
+    assert "invalid catalog name" in out["error"]
+    out = await _call(registry, "list_tables", schema_name="x' OR '1'='1")
+    assert "invalid schema name" in out["error"]
+    out = await _call(registry, "describe_table", table="a.b.c'; DROP TABLE t --")
+    assert "invalid table name" in out["error"]
+    assert fake_trino.executed == []  # nothing was ever sent
+
+
+async def test_shape_result_failsafe_when_metadata_exceeds_cap() -> None:
+    """Zero rows left but payload still too big -> bounded fallback payload."""
+    result = QueryResult(columns=[f"col_{i}" for i in range(500)], rows=[["v"] * 500])
+    text = shape_result(result, max_bytes=400, sql="SELECT " + "x" * 5000)
+    assert len(text.encode()) <= 400
+    body = json.loads(text)
+    assert body["truncated"] is True and body["rows"] == []
+    assert body["column_count"] == 500
+    # extreme cap: degrades to a bare bounded error payload
+    tiny = shape_result(result, max_bytes=80, sql="SELECT 1")
+    assert len(tiny.encode()) <= 80 and json.loads(tiny)["truncated"] is True

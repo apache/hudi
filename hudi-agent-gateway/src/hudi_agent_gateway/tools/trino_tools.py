@@ -25,6 +25,7 @@ clients get a useful result instead of a protocol error.
 from __future__ import annotations
 
 import json
+import re
 from typing import Annotated, Any
 
 from pydantic import Field
@@ -74,6 +75,20 @@ def shape_result(result: QueryResult, *, max_bytes: int, sql: str) -> str:
             "to fit the size limit. Narrow the query (filters, aggregation, fewer columns)."
         )
         text = json.dumps(payload, default=str)
+    if len(text.encode()) > max_bytes:
+        # Fail-safe: even zero rows can bust the limit (huge sql text, very
+        # many columns, or a tiny configured cap). Return a bounded payload.
+        text = json.dumps({
+            "sql": sql[:100],
+            "column_count": len(result.columns),
+            "rows": [],
+            "row_count": result.row_count,
+            "truncated": True,
+            "notice": "Result exceeded the size limit; rows and column names omitted. "
+            "Narrow the query or raise the result size limit.",
+        })
+        if len(text.encode()) > max_bytes:
+            text = json.dumps({"error": "result exceeded the size limit", "truncated": True})
     return text
 
 
@@ -82,6 +97,24 @@ def _error(message: str, hint: str = "") -> str:
     if hint:
         payload["hint"] = hint
     return json.dumps(payload)
+
+
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$-]*$")
+
+
+def _validate_identifier(value: str, kind: str) -> str:
+    """Reject anything that could escape quoting when interpolated into SQL.
+
+    catalog/schema/table names arrive over HTTP and MCP; only plain
+    identifiers are accepted -- everything else is an input error.
+    """
+    if not _IDENTIFIER_RE.match(value):
+        raise ToolInputError(
+            f"invalid {kind} name {value!r}",
+            hint="Names may contain only letters, digits, '_', '$' or '-', "
+            "and must not start with a digit.",
+        )
+    return value
 
 
 def _split_table_name(table: str, settings: GatewaySettings) -> tuple[str, str, str]:
@@ -131,8 +164,11 @@ def register(registry: ToolRegistry, client: TrinoClient, settings: GatewaySetti
             str, Field(description="Schema to list from; empty for the default.")
         ] = "",
     ) -> str:
-        cat = catalog or settings.trino_catalog
-        sch = schema_name or settings.trino_schema
+        try:
+            cat = _validate_identifier(catalog or settings.trino_catalog, "catalog")
+            sch = _validate_identifier(schema_name or settings.trino_schema, "schema")
+        except ToolInputError as e:
+            return _error(str(e), e.hint)
         sql = (
             f'SELECT table_schema, table_name, table_type FROM "{cat}".information_schema.tables '
             f"WHERE table_schema = '{sch}' ORDER BY table_name"
@@ -153,6 +189,9 @@ def register(registry: ToolRegistry, client: TrinoClient, settings: GatewaySetti
     ) -> str:
         try:
             cat, sch, tbl = _split_table_name(table, settings)
+            _validate_identifier(cat, "catalog")
+            _validate_identifier(sch, "schema")
+            _validate_identifier(tbl, "table")
         except ToolInputError as e:
             return _error(str(e), e.hint)
         sql = (

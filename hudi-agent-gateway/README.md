@@ -89,7 +89,7 @@ Environment variables (prefix `GATEWAY_` except the standard key names):
 | `GATEWAY_TRINO_HOST` / `_PORT` | `hudi-trino.hudi-lakehouse.svc` / `8080` | Trino coordinator |
 | `GATEWAY_TRINO_CATALOG` / `_SCHEMA` / `_USER` | `hudi` / `default` / `hudi-agent-gateway` | query defaults |
 | `GATEWAY_SQL_ROW_CAP` | `200` | LIMIT enforced on every query |
-| `GATEWAY_SQL_TIMEOUT_SECONDS` | `60` | per-query timeout |
+| `GATEWAY_SQL_TIMEOUT_SECONDS` | `120` | per-query timeout |
 | `GATEWAY_TOOL_RESULT_MAX_BYTES` | `50000` | tool results truncated beyond this (with notice) |
 | `GATEWAY_AGENT_MAX_ITERATIONS` | `25` | agent loop recursion limit |
 | `GATEWAY_SESSION_TTL_SECONDS` / `GATEWAY_MAX_SESSIONS` | `3600` / `1000` | session store bounds |
