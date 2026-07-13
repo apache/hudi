@@ -14,6 +14,10 @@ last_update:
 
 We will look at how to migrate a large parquet table to Hudi without having to rewrite the entire dataset. 
 
+:::info Updated guide available
+For a current, step-by-step walkthrough of all migration paths — including bootstrap and full rewrite — see [Migrating from Parquet to Apache Hudi](/blog/2026/07/29/migrating-from-parquet-to-hudi).
+:::
+
 <!--truncate-->
 ## Motivation:
 
