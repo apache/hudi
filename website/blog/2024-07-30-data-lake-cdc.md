@@ -14,6 +14,10 @@ tags:
 
 Data lake change data capture (CDC) is a technique that continuously identifies and captures changes—inserts, updates, and deletes—from source databases and applies them to a data lake, keeping lake tables fresh and consistent with operational systems. Combining CDC with data lakes addresses several challenges commonly faced by ETL pipelines delivering data from transactional databases to analytical systems: maintaining data freshness, ensuring consistency, and improving efficiency in data handling. This article explores the integration between data lakes and CDC, the main change detection methods, and how tools like Apache Hudi streamline the process.
 
+:::info Related reading
+For a beginner-friendly 2026 companion to this deep dive, see [What is CDC on a Data Lake?](/blog/2026/07/22/what-is-cdc-on-a-data-lake)
+:::
+
 ## Introduction
 In data management, two concepts have garnered significant attention: data lakes and change data capture (CDC).
 ### Data Lake

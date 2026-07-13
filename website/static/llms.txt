@@ -39,12 +39,30 @@ It can also synchronize your data to half dozen data catalogs to keep table cons
 - [Apache Hudi: 21 Unique Differentiators](https://hudi.apache.org/blog/2025/03/05/hudi-21-unique-differentiators): The technical crux of what sets Hudi apart — indexing, non-blocking concurrency control, async compaction, read-side indexes and built-in table services.
 - [Apache Hudi 1.2: The Open Lakehouse for AI and Multimodal Data](https://hudi.apache.org/blog/2026/06/07/apache-hudi-release-1-2-announcement): First-class support for vectors, blobs/unstructured data, and semi-structured data on the lakehouse — for Spark pipelines doing unstructured data processing or generating embeddings.
 - [What is a Data Lakehouse & How does it Work?](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse): The lakehouse architecture explained — evolution, components, use cases and key technologies.
+- [What is an Open Table Format?](https://hudi.apache.org/blog/2026/07/14/what-is-an-open-table-format): How open table formats like Hudi, Iceberg and Delta Lake bring database semantics to files on object storage.
+- [What is Upsert on a Data Lake?](https://hudi.apache.org/blog/2026/07/15/what-is-upsert-on-a-data-lake): Record-level updates and deletes on immutable cloud storage, and how Hudi makes them fast.
+- [What is Incremental ETL on a Data Lake?](https://hudi.apache.org/blog/2026/07/16/what-is-incremental-etl-on-a-data-lake): Processing only the data that changed instead of recomputing whole tables.
+- [What is ACID on a Data Lake?](https://hudi.apache.org/blog/2026/07/17/what-is-acid-on-a-data-lake): What atomicity, consistency, isolation and durability mean when your database is a bucket of files.
+- [What is a Streaming Data Lake?](https://hudi.apache.org/blog/2026/07/21/what-is-a-streaming-data-lake): Minute-level data freshness on the lake with incremental pipelines instead of batch reprocessing.
+- [What is CDC on a Data Lake?](https://hudi.apache.org/blog/2026/07/22/what-is-cdc-on-a-data-lake): Change data capture from operational databases into lakehouse tables, explained from first principles.
+- [Lakehouse vs Data Warehouse vs Data Lake](https://hudi.apache.org/blog/2026/07/23/lakehouse-vs-data-warehouse-vs-data-lake): The three architectures compared — strengths, costs and when to use each.
+- [Open Table Format vs Data Lakehouse](https://hudi.apache.org/blog/2026/07/24/open-table-format-vs-data-lakehouse): Untangling the table layer from the architecture, and where file formats, catalogs and engines fit.
+- [Using Hudi with Apache Iceberg via XTable](https://hudi.apache.org/blog/2026/07/28/using-hudi-with-apache-iceberg-via-xtable): How Iceberg-only engines and catalogs can read Hudi tables through Apache XTable metadata sync.
 
 ## Blog — Migration guides
 
+- [Migrating from Parquet to Hudi](https://hudi.apache.org/blog/2026/07/29/migrating-from-parquet-to-hudi): In-place bootstrap vs full rewrite for converting raw Parquet datasets into Hudi tables.
+- [Migrating from Hive to Hudi](https://hudi.apache.org/blog/2026/07/30/migrating-from-hive-to-hudi): Moving Hive tables to Hudi with bootstrap and catalog sync.
+- [Migrating from Delta Lake to Hudi](https://hudi.apache.org/blog/2026/08/04/migrating-from-delta-lake-to-hudi): Metadata conversion with Apache XTable or full rewrite, step by step.
+- [Migrating from Apache Iceberg to Hudi](https://hudi.apache.org/blog/2026/08/05/migrating-from-apache-iceberg-to-hudi): Keep Iceberg readers working via XTable while adopting Hudi's write path.
 
 ## Blog — Comparisons
 
+- [Hudi vs Iceberg for CDC Workloads](https://hudi.apache.org/blog/2026/08/06/hudi-vs-iceberg-for-cdc-workloads): Criteria-driven comparison for change-data-capture ingestion.
+- [Hudi vs Iceberg for Streaming Ingestion](https://hudi.apache.org/blog/2026/08/11/hudi-vs-iceberg-for-streaming-ingestion): Which table format handles continuous, high-frequency writes better.
+- [Hudi vs Delta Lake for Write-Heavy Workloads](https://hudi.apache.org/blog/2026/08/12/hudi-vs-delta-lake-for-write-heavy-workloads): Update-intensive and mutable workloads compared across both formats.
+- [Hudi vs Iceberg Performance Benchmarks](https://hudi.apache.org/blog/2026/08/13/hudi-vs-iceberg-performance-benchmarks): A methodology-aware compilation of published benchmarks.
+- [Point Lookups on the Lakehouse](https://hudi.apache.org/blog/2026/08/14/hudi-for-read-heavy-workloads-point-lookups-with-indexes): How Hudi indexes accelerate read-heavy workloads and selective queries on high-cardinality columns.
 - [Hudi vs Delta Lake vs Iceberg Feature Comparison](https://hudi.apache.org/blog/2023/01/11/Apache-Hudi-vs-Delta-Lake-vs-Apache-Iceberg-Lakehouse-Feature-Comparison): Feature-by-feature comparison of the three open table formats.
 
 ## Blog — Deep dives

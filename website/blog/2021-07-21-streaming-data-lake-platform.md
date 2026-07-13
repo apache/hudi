@@ -28,6 +28,10 @@ But first, we needed to tackle the basics - transactions and mutability - on the
 
 This is going to be a rather long post, but we will do our best to make it worth your time. Let’s roll.
 
+:::info Related reading
+For a 2026 explainer companion to this essay, see [What is a Streaming Data Lake?](/blog/2026/07/21/what-is-a-streaming-data-lake)
+:::
+
 ## Data Lake Platform
 
 We have noticed that, Hudi is sometimes positioned as a “[table format](https://cloud.google.com/blog/products/data-analytics/getting-started-with-new-table-formats-on-dataproc)” or “transactional layer”. While this is not incorrect, this does not do full justice to all that Hudi has to offer. 
