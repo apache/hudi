@@ -1,14 +1,19 @@
 ---
 title: "Apache Hudi 1.1 Deep Dive: Optimizing Streaming Ingestion with Apache Flink"
 excerpt: ''
+description: "How Apache Hudi 1.1 optimizes streaming ingestion with Apache Flink: Flink-native writers, faster operator SerDe, lower GC pressure, and benchmarks vs Hudi 1.0 and Apache Paimon."
 authors: [shuo-cheng]
 category: deep-dive
 image: /assets/images/blog/2025-12-10-apache-hudi-11-deep-dive-optimizing-streaming-ingestion-with-flink/benchmark-string-schemas.png
+last_update:
+  date: 2026-07-12
 tags:
 - apache flink
 - apache paimon
 - performance
 ---
+
+Apache Hudi 1.1 optimizes streaming ingestion with Apache Flink through three writer-side changes - a Flink-native record representation that avoids Kryo serialization during operator shuffles, a new write path that operates directly on Flink's `RowData` instead of converting records to Avro, and the elimination of record-level bytes copy when writing MOR log files - delivering about 3.5x the ingestion throughput of Hudi 1.0 in benchmarks. This post walks through each optimization and the benchmark results. If you are new to writing Hudi tables from Flink, start with the [Flink quick start guide](/docs/flink-quick-start-guide).
 
 ---
 
@@ -129,3 +134,13 @@ Additionally, the schema of a table also has a significant impact on write perfo
 ## Summary
 
 The optimizations in Hudi 1.1 around writer performance for Flink have brought significant, multi-fold improvements to streaming ingestion throughput. These enhancements are transparent and backward-compatible, allowing users to seamlessly upgrade their jobs from earlier Hudi versions to the latest version and enjoy the substantial performance gains without any additional operational overhead.
+
+## FAQ
+
+<PostFAQ heading={null} items={[
+  {question: 'How much faster is Flink streaming ingestion in Hudi 1.1 compared to Hudi 1.0?', answer: 'In benchmarks on a merge-on-read table with UPSERT operation and bucket index, Hudi 1.1 achieved about 3.5 times the streaming ingestion throughput of Hudi 1.0 on a numeric-heavy schema. The optimized shuffle SerDe alone (RFC-84) boosts average throughput by about 25%.'},
+  {question: 'Why was Avro a bottleneck in the older Flink write path?', answer: 'Before Hudi 1.1, Flink RowData was converted to Avro records and serialized to Avro bytes, then deserialized again during log writing - redundant SerDe overhead at every step. The in-memory buffer of intermediate Avro objects also increased heap usage and GC pressure, and shuffles of the generic HoodieRecord type fell back to Flink\'s Kryo serializer, which is slow.'},
+  {question: 'What is the Flink-native write path introduced in Hudi 1.1?', answer: 'RFC-87 makes the Flink writer wrap RowData directly inside a specialized HoodieFlinkRecord instead of converting it to an Avro record, so the entire write path operates on RowData. It adds a self-managed, reusable binary buffer that reduces GC pressure under high-throughput workloads, and supports both Avro (default, row-oriented) and Parquet (columnar) data blocks for MOR log files.'},
+  {question: 'How does Hudi 1.1 compare with Apache Paimon for streaming ingestion?', answer: 'On the numeric-heavy Schema1 from the Paimon cluster benchmark, Paimon\'s throughput was slightly higher than Hudi 1.1, mainly because each HoodieRecord carries 5 extra String-type metadata fields by default. On string-heavy schemas, which are more common in production, Hudi 1.1 achieved the best throughput, since writing row-based Avro log files avoids the Parquet compression overhead Paimon incurs at write time.'},
+  {question: 'Do I need to change my Flink jobs to get these improvements?', answer: 'No. The optimizations are transparent and backward-compatible, so existing jobs can upgrade from earlier Hudi versions and get the performance gains without additional operational overhead.'},
+]} />

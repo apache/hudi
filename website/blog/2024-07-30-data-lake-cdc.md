@@ -1,13 +1,18 @@
 ---
 title: "Understanding Data Lake Change Data Capture"
 excerpt: "Explains the concept of CDC in data lakes"
+description: "Explains the concept of CDC in data lakes"
 authors: [sagar-lakshmipathy]
 category: deep-dive
 image: /assets/images/blog/data-lake-cdc/hudi-cdc.jpg
+last_update:
+  date: 2026-07-06
 tags:
 - data lakehouse
 - cdc
 ---
+
+Data lake change data capture (CDC) is a technique that continuously identifies and captures changes—inserts, updates, and deletes—from source databases and applies them to a data lake, keeping lake tables fresh and consistent with operational systems. Combining CDC with data lakes addresses several challenges commonly faced by ETL pipelines delivering data from transactional databases to analytical systems: maintaining data freshness, ensuring consistency, and improving efficiency in data handling. This article explores the integration between data lakes and CDC, the main change detection methods, and how tools like Apache Hudi streamline the process.
 
 ## Introduction
 In data management, two concepts have garnered significant attention: data lakes and change data capture (CDC).
@@ -100,6 +105,16 @@ Combining data lakes with Change Data Capture (CDC) techniques offers a powerful
 Several methods exist for implementing CDC, including timestamp-based, trigger-based, and log-based approaches, each with its own advantages and drawbacks. Log-based CDC, in particular, stands out for its minimal performance impact on source databases and support for various transactions, though it requires handling different database vendors' transaction log formats.
 
 Using tools like Apache Hudi can significantly enhance the CDC process by streamlining incremental data processing and data pipeline development. Hudi provides efficient storage management, supports record-level operations for privacy regulations, and offers near real-time access to data. It also simplifies the management of streaming data and ingestion pipelines by automatically tracking changes and optimizing file sizes, thereby reducing the need for custom solutions.
+
+## FAQ
+
+<PostFAQ heading={null} items={[
+  {question: 'What is change data capture (CDC)?', answer: 'Change data capture is a technique used to identify and capture data changes—inserts, updates, and deletes—from a source system so they can be applied to downstream systems. It ensures data remains fresh and consistent across various systems without repeatedly transferring entire datasets.'},
+  {question: 'What are the main methods of implementing CDC?', answer: 'The three common approaches are timestamp-based (querying a LAST_UPDATED column), trigger-based (database triggers writing changes to shadow tables), and log-based (reading the database transaction log). Each has trade-offs: timestamp-based is simple but cannot track deletes, trigger-based adds maintenance and performance overhead, and log-based requires handling vendor-specific log formats.'},
+  {question: 'Why is log-based CDC generally preferred?', answer: 'Log-based CDC reads changes directly from the database transaction log, so it has minimal performance impact on the source database. It supports all transaction types including inserts, updates, and deletes, and requires no schema changes in the source system. Its main drawback is the lack of standardization in transaction log formats across database vendors.'},
+  {question: 'Why combine CDC with a data lake?', answer: 'Data lakes offer flexibility and lower storage costs than warehouses, supporting structured, semi-structured, and unstructured data queryable from multiple engines. CDC streamlines ETL by continuously capturing and applying only the changed data, reducing complexity, processing overhead, and load on source systems.'},
+  {question: 'How does Apache Hudi help with CDC on a data lake?', answer: 'Apache Hudi streamlines incremental data processing and supports record-level insert, update, upsert, and delete operations, which simplifies compliance with privacy regulations like GDPR and CCPA. Starting with release 0.13.0, Hudi natively supports CDC by logging before and after images of changed records along with the write operation type. It also automatically manages file sizes and integrates with engines like Presto, Trino, Spark, and Flink for near real-time access.'},
+]} />
 
 
 

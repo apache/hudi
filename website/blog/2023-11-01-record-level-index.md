@@ -1,13 +1,25 @@
 ---
 title: "Record Level Index: Hudi's blazing fast indexing for large-scale datasets"
 excerpt: "Announcing the Record Level Index in Apache Hudi"
+description: "Announcing the Record Level Index in Apache Hudi"
 authors: [xushiyan, sivabalan]
 category: deep-dive
 image: /assets/images/blog/record-level-index/03.RLI_bulkinsert.png
+last_update:
+  date: 2026-07-06
 tags:
 - indexing
 - metadata
 ---
+
+The Record Level Index (RLI) is a global index in Apache Hudi, introduced in [Hudi 0.14.0](https://hudi.apache.org/releases/release-0.14#release-0140), that stores the mapping
+from each record key to its file group inside Hudi's metadata table, dramatically speeding up writes as well as key-matching queries without
+any external system to operate. This post walks through RLI's design and workflows, benchmarks it against other Hudi index types, and closes
+with future work.
+
+:::info Newer content available
+RLI has evolved since this 2023 post. For the current (1.x) picture, see [Deep Dive Into Hudi's Indexing Subsystem Part 2](/blog/2025/11/12/deep-dive-into-hudis-indexing-subsystem-part-2-of-2), and [Introducing Secondary Index in Apache Hudi](/blog/2025/04/02/secondary-index) for indexing beyond the record key.
+:::
 
 ## Introduction
 
@@ -229,3 +241,13 @@ by Hudi metadata tables.
 [^3] As of now, query engine integration is only available for Spark, with plans to support additional engines in the future.
 
 [^4] The query improvement is specific to record-key-matching queries and does not reflect a general reduction in latency by enabling RLI. In the case of the single record-key query, 99.995% of file groups (19999 out of 20000) were pruned during query execution.
+
+## FAQ
+
+<PostFAQ heading={null} items={[
+  {question: 'What is the Record Level Index in Apache Hudi?', answer: 'The Record Level Index (RLI) is a global index introduced in Hudi 0.14.0 that stores one-to-one mappings between record keys and their file groups in a dedicated partition of Hudi\'s metadata table. It lets writers and readers locate the exact file group for a record key, drastically reducing the number of files that need to be scanned.'},
+  {question: 'How do I enable the Record Level Index in Hudi?', answer: 'On current releases, set hoodie.metadata.global.record.level.index.enable=true and hoodie.index.type=GLOBAL_RECORD_LEVEL_INDEX, with the metadata table enabled via hoodie.metadata.enable=true (hoodie.metadata.record.index.enable and RECORD_INDEX are the deprecated pre-1.1 names). Since the number of file groups in the RLI partition is fixed at initialization, it is recommended to configure the file group count and size settings appropriately for the expected data volume.'},
+  {question: 'How much faster is RLI compared to other Hudi index types?', answer: 'In benchmarks on a 1TB dataset of 2 billion records, RLI improved average write latency and index look-up latency by 72% over the Global Simple Index, while shuffling 92% less data. On the read side, a query on a single record key dropped from 977 seconds to 12 seconds, a 98% latency reduction.'},
+  {question: 'How much storage does the Record Level Index consume?', answer: 'With Gzip compression and a 4MB block size, an individual RLI record averages only 48 bytes. For a 100TB table with about 1 billion records, the RLI partition needs roughly 48GB, which is less than 0.05% of the total data size.'},
+  {question: 'When should I use the Record Level Index, and what are its limitations?', answer: 'RLI shines for write-heavy workloads such as GDPR deletes and for key-matching queries like tracing lookups. As a global index, it requires record keys to be unique across all partitions, its initialization can take time on large tables, and the current design fixes the number of file groups once the partition is created, so extremely skewed workloads may not achieve the desired performance.'},
+]} />

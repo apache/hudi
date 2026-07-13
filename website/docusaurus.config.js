@@ -342,6 +342,10 @@ module.exports = {
               label: "Integrations",
               to: "/ecosystem",
             },
+            {
+              label: "Vendors",
+              to: "/vendors",
+            },
           ],
         },
         { to: "/releases/download", label: "Download", position: "left" },
@@ -447,6 +451,10 @@ module.exports = {
             {
               label: "Get Involved",
               to: "/community/get-involved",
+            },
+            {
+              label: "Vendors",
+              to: "/vendors",
             },
             {
               label: "Slack",
@@ -584,8 +592,20 @@ module.exports = {
             title: "Apache Hudi: User-Facing Analytics",
           },
           showReadingTime: true,
+          // emits dateModified in the BlogPosting structured data (sourced
+          // from front-matter last_update or git history)
+          showLastUpdateTime: true,
           onUntruncatedBlogPosts: "ignore",
           onInlineAuthors: "ignore",
+        },
+        sitemap: {
+          lastmod: "date",
+          changefreq: null,
+          priority: null,
+        },
+        pages: {
+          // emits FAQPage JSON-LD on the src/pages/faq/* pages
+          remarkPlugins: [require("./plugins/remark-faq-structured-data")],
         },
         theme: {
           customCss: require.resolve("./src/css/custom.css"),

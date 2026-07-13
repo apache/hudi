@@ -1,14 +1,18 @@
 ---
 title: "Apache Hudi Key Generators"
 excerpt: "Different key generators available with Apache Hudi"
+description: "Different key generators available with Apache Hudi"
 authors: [sivabalan]
 category: how-to
+last_update:
+  date: 2026-07-06
 tags:
 - key generation
 ---
 
-Every record in Hudi is uniquely identified by a primary key, which is a pair of record key and partition path where
-the record belongs to. Using primary keys, Hudi can impose a) partition level uniqueness integrity constraint
+Key generators in Apache Hudi are pluggable classes that derive each record's primary key - a pair of record key and
+partition path - from the fields of the incoming record. Every record in Hudi is uniquely identified by such a primary key.
+Using primary keys, Hudi can impose a) partition level uniqueness integrity constraint
 b) enable fast updates and deletes on records. One should choose the partitioning scheme wisely as it could be a
 determining factor for your ingestion and query latency.
 <!--truncate-->
@@ -16,6 +20,10 @@ In general, Hudi supports both partitioned and global indexes. For a dataset wit
 commonly used), each record is uniquely identified by a pair of record key and partition path. But for a dataset with
 global index, each record is uniquely identified by just the record key. There won't be any duplicate record keys across
 partitions.
+
+:::info Newer content available
+For an updated walkthrough of the key generators shipped with recent Hudi releases, see [Out-of-box key generators in Hudi](/blog/2025/01/15/outofbox-key-generators-in-hudi).
+:::
 
 ## Key Generators
 
@@ -196,4 +204,14 @@ If your hudi dataset is not partitioned, you could use this “NonpartitionedKey
 partition for all records. In other words, all records go to the same partition (which is empty “”) 
 
 Hope this blog gave you a good understanding of different types of Key Generators available in Apache Hudi. Thanks for your continued support for Hudi's community. 
+
+## FAQ
+
+<PostFAQ heading={null} items={[
+  {question: 'What is a key generator in Apache Hudi?', answer: 'A key generator is a class that produces the primary key for every incoming record, namely the pair of record key and partition path. Hudi ships several key generators out of the box and also exposes a pluggable KeyGenerator interface so users can implement their own.'},
+  {question: 'Which key generators does Hudi provide out of the box?', answer: 'Hudi provides SimpleKeyGenerator for single-field keys and partition paths, ComplexKeyGenerator for keys or partition paths built from multiple fields, TimestampBasedKeyGenerator for timestamp-based partition paths, CustomKeyGenerator for mixing simple and timestamp partition fields, GlobalDeleteKeyGenerator for deletes with a global index, and NonpartitionedKeyGenerator for unpartitioned datasets.'},
+  {question: 'What configs are required to set up a key generator?', answer: 'Three configs are mandatory: hoodie.datasource.write.recordkey.field for the record key field, hoodie.datasource.write.partitionpath.field for the partition path field, and hoodie.datasource.write.keygenerator.class for the key generator class. Optional configs control URL encoding of partition paths and hive style partitioning, and TimestampBasedKeyGenerator needs a few more configs for timestamp type, formats, and timezone.'},
+  {question: 'When should I use TimestampBasedKeyGenerator?', answer: 'Use it when your partition field is a timestamp. The field values are interpreted as timestamps rather than converted to strings as is, with configs specifying the timestamp type, input and output date formats, and timezone. The record key is still chosen by field name as usual.'},
+  {question: 'What if my Hudi dataset is not partitioned?', answer: 'Use NonpartitionedKeyGenerator, which returns an empty partition path for all records. In other words, all records go to the same, empty partition.'},
+]} />
 

@@ -1,6 +1,7 @@
 ---
 title: "How nClouds Helps Accelerate Data Delivery with Apache Hudi on Amazon EMR"
 excerpt: "Solution to set up a new data and analytics platform using Apache Hudi on Amazon EMR and other managed services, including Amazon QuickSight for data visualization."
+description: "Solution to set up a new data and analytics platform using Apache Hudi on Amazon EMR and other managed services, including Amazon QuickSight for data visualization."
 author: nclouds
 category: case-study
 image: /assets/images/blog/2020-10-06-cdc-solution-using-hudi-by-nclouds.jpg

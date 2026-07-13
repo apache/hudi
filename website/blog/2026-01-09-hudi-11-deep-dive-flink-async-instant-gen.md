@@ -1,6 +1,7 @@
 ---
 title: "Apache Hudi 1.1 Deep Dive: Async Instant Time Generation for Flink Writers"
 excerpt: "Explore how Hudi 1.1 introduces asynchronous instant generation for Flink writers to eliminate throughput fluctuations in streaming ingestion."
+description: "Explore how Hudi 1.1 introduces asynchronous instant generation for Flink writers to eliminate throughput fluctuations in streaming ingestion."
 authors: [shuo-cheng]
 category: deep-dive
 image: /assets/images/blog/2026-01-09-hudi-11-deep-dive-flink-async-instant-gen/async-instant-gen.png

@@ -21,9 +21,11 @@ jobs:
       - uses: actions/checkout@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          # For PR: need enough commits for diff (100 should cover most PRs)
-          # For push: only need latest commit
-          fetch-depth: ${{ github.event_name == 'pull_request' && 100 || 1 }}
+          # Full history (blobless) so git-derived last-update timestamps are
+          # real: a shallow clone makes Docusaurus stamp every page with the
+          # deploy date in sitemap lastmod and BlogPosting dateModified
+          fetch-depth: 0
+          filter: blob:none
           # Skip tags - this saves significant time
           fetch-tags: false
       - name: Check for files in content/

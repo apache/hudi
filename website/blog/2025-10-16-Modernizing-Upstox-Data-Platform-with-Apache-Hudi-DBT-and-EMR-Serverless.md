@@ -1,6 +1,7 @@
 ---
 title: "Modernizing Upstox's Data Platform with Apache Hudi, dbt, and EMR Serverless"
 excerpt: ""
+description: "How Upstox modernized its data platform with Apache Hudi, dbt and EMR Serverless."
 author: The Hudi Community
 category: case-study
 image: /assets/images/blog/2025-10-16-Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless/fig1.png

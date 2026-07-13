@@ -1,6 +1,7 @@
 ---
 title: "Deep Dive Into Hudi’s Indexing Subsystem (Part 1 of 2)"
 excerpt: ""
+description: "Part 1 of a deep dive into Hudi's indexing subsystem: files, column stats and bloom filter indexes in the metadata table."
 authors: [xushiyan]
 category: deep-dive
 image: /assets/images/blog/2025-10-29-deep-dive-into-hudis-indexing-subsystem-part-1-of-2/fig1.png

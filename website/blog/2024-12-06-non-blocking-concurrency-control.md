@@ -1,13 +1,22 @@
 ---
 title: "Introducing Hudi's Non-blocking Concurrency Control for streaming, high-frequency writes"
 excerpt: "Announcing the Non-blocking Concurrency Control in Apache Hudi"
+description: "Announcing the Non-blocking Concurrency Control in Apache Hudi"
 authors: [danny-chan]
 category: deep-dive
 image: /assets/images/blog/non-blocking-concurrency-control/lsm_archive_timeline.png
+last_update:
+  date: 2026-07-12
 tags:
 - streaming
 - concurrency control
 ---
+
+Non-blocking Concurrency Control (NBCC) is a multi-writer concurrency model introduced in Apache Hudi 1.0 that lets multiple streaming writers ingest into the same table simultaneously, without any conflict-resolution overhead at write time - conflicts are instead resolved later by the compaction service and query readers, while preserving event-time ordering semantics. This post explains the storage layout and timeline changes that make NBCC possible, walks through its design, and shows a working Flink SQL demo.
+
+:::info Related reading
+See the [concurrency control docs](/docs/concurrency_control) for configuration details, the [survey of concurrency control across open table formats](/blog/2025/01/28/concurrency-control) for how NBCC fits alongside OCC and MVCC, and [Lakehouse Concurrency Control: Are we too optimistic?](/blog/2021/12/16/lakehouse-concurrency-control-are-we-too-optimistic/) for the motivation behind moving past OCC.
+:::
 
 ## Introduction
 
@@ -162,3 +171,13 @@ here are some plans that improve the Hudi core features:
 ---
 
 [^1] [RFC-66](https://github.com/apache/hudi/blob/master/rfc/rfc-66/rfc-66.md) well-explained the completion time based file slicing with a pseudocode.
+
+## FAQ
+
+<PostFAQ heading={null} items={[
+  {question: 'What is non-blocking concurrency control (NBCC) in Apache Hudi?', answer: 'NBCC is a general-purpose concurrency model, introduced in Hudi 1.0.0, aimed at stream processing and high-contention or frequent-writing scenarios. It allows multiple streaming writers to write to the same Hudi table without any conflict-resolution overhead, while keeping event-time ordering semantics and supporting asynchronous table services like compaction, archiving, and cleaning.'},
+  {question: 'How is NBCC different from optimistic concurrency control (OCC)?', answer: 'Under OCC, writers abort the transaction if there is a hint of contention. Under NBCC, concurrent writers all proceed: the log writers append records without coordinating, and the compaction table service takes care of conflict resolution. Readers can merge records in either natural (processing time) order or event-time order.'},
+  {question: 'What storage changes in Hudi 1.0 made NBCC possible?', answer: 'Hudi 1.0 introduced a new file layout based on both requested and completion times of actions, treating them as an interval. Log file names now carry the write\'s own requested instant time instead of the base instant time, so writers no longer query the file layout before flushing, and compaction can be scheduled at any time without blocking writers. An LSM-tree-based archived timeline supports the fast instant-to-completion-time lookups this requires.'},
+  {question: 'How do I enable NBCC?', answer: 'Set hoodie.write.concurrency.mode to NON_BLOCKING_CONCURRENCY_CONTROL. The initial implementation works with the simple bucket index on a merge-on-read table for Flink. When running multiple jobs against the same table, enable table services such as compaction and cleaning on one job and disable them on the others.'},
+  {question: 'What are the current limitations and future plans for NBCC?', answer: 'NBCC currently relies on the bucket index on MOR tables. The roadmap includes NBCC support for the metadata table, for clustering, and for other index types.'},
+]} />

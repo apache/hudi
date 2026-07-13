@@ -2,7 +2,7 @@
 title: Bootstrapping
 keywords: [ hudi, migration, use case]
 summary: In this page, we will discuss some available tools for migrating your existing table into a Hudi table
-last_modified_at: 2019-12-30T15:59:57-04:00
+last_modified_at: 2026-07-06T12:00:00-07:00
 toc: true
 toc_min_heading_level: 2
 toc_max_heading_level: 4
@@ -96,6 +96,15 @@ fired by via `cd hudi-cli && ./hudi-cli.sh`.
 hudi->bootstrap run --srcPath /tmp/source_table --targetPath /tmp/hoodie/bootstrap_table --tableName bootstrap_table --tableType COPY_ON_WRITE --rowKeyField ${KEY_FIELD} --partitionPathField ${PARTITION_FIELD} --sparkMaster local --hoodieConfigs hoodie.datasource.write.hive_style_partitioning=true --selectorClass org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector
 ```
 Unlike Hudi Streamer, FULL_RECORD or METADATA_ONLY is set with --selectorClass, see details with help "bootstrap run".
+
+### Migrating from Delta Lake or Apache Iceberg
+
+Tables already managed by Delta Lake or Apache Iceberg store their data as Parquet files, so they can be migrated to
+Hudi without rewriting data by translating their metadata with [Apache XTable](https://xtable.apache.org). XTable reads
+the source table's metadata and generates Hudi metadata alongside the existing data files, and it can also run in the
+reverse direction — keeping an Iceberg or Delta view of a Hudi table in sync so existing readers continue to work
+during and after the migration. See [Syncing to XTable](syncing_xtable.md) for the Hudi-side setup. For a full rewrite
+instead, read the source table with Spark and write it to Hudi using the approaches above.
 
 
 ## Configs

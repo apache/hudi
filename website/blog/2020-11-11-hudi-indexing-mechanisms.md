@@ -1,22 +1,25 @@
 ---
 title: "Employing the right indexes for fast updates, deletes in Apache Hudi"
 excerpt: "Detailing different indexing mechanisms in Hudi and when to use each of them"
+description: "Detailing different indexing mechanisms in Hudi and when to use each of them"
 authors: [vinoth-chandar]
 category: how-to
 image: /assets/images/blog/hudi-indexes/with-and-without-index.png
+last_update:
+  date: 2026-07-06
 tags:
 - indexing
 ---
 
-Apache Hudi employs an index to locate the file group, that an update/delete belongs to. For Copy-On-Write tables, this enables
+An index in Apache Hudi maps a record key + an optional partition path to the file group ID on storage that the record belongs to, letting writers
+route updates and deletes directly to the right files instead of joining against the entire dataset. For Copy-On-Write tables, this enables
 fast upsert/delete operations, by avoiding the need to join against the entire dataset to determine which files to rewrite.
 For Merge-On-Read tables, this design allows Hudi to bound the amount of records any given base file needs to be merged against.
 Specifically, a given base file needs to merged only against updates for records that are part of that base file. In contrast,
 designs without an indexing component (e.g: [Apache Hive ACID](https://cwiki.apache.org/confluence/display/Hive/Hive+Transactions)),
 could end up having to merge all the base files against all incoming updates/delete records.
 <!--truncate-->
-At a high level, an index maps a record key + an optional partition path to a file group ID on storage (explained
-more in detail [here](/docs/concepts)) and during write operations, we lookup this mapping to route an incoming update/delete
+During write operations, we lookup this key-to-file-group mapping (explained more in detail [here](/docs/concepts)) to route an incoming update/delete
 to a log file attached to the base file (MOR) or to the latest base file that now needs to be merged against (COW). The index also enables 
 Hudi to enforce unique constraints based on the record keys.
 
@@ -26,6 +29,10 @@ _Figure: Comparison of merge cost for updates (yellow blocks) against base files
 Given that Hudi already supports few different indexing techniques and is also continuously improving/adding more to its toolkit, the rest of the blog 
 attempts to explain different categories of workloads, from our experience and suggests what index types to use for each. We will also interlace 
 commentary on existing limitations, upcoming work and optimizations/tradeoffs along the way. 
+
+:::info Newer content available
+This 2020 post predates Hudi 1.x. For the modern (1.x) indexing subsystem, see [Deep Dive Into Hudi's Indexing Subsystem Part 1](/blog/2025/10/29/deep-dive-into-hudis-indexing-subsystem-part-1-of-2) and [Part 2](/blog/2025/11/12/deep-dive-into-hudis-indexing-subsystem-part-2-of-2).
+:::
 
 ## Index Types in Hudi
 
@@ -122,6 +129,16 @@ Some interesting work underway in this area:
 
 Going forward, this will remain an area of active investment for the project. we are always looking for contributors who can drive these roadmap items forward.
 Please [engage](/community/get-involved) with our community if you want to get involved.
+
+## FAQ
+
+<PostFAQ heading={null} items={[
+  {question: 'What is an index in Apache Hudi?', answer: 'An index in Hudi maps a record key, plus an optional partition path, to the file group on storage that the record belongs to. During writes, Hudi looks up this mapping to route each incoming update or delete to the right base file or log file, avoiding a join against the entire dataset. The index also lets Hudi enforce unique constraints on record keys.'},
+  {question: 'What index types does Apache Hudi support?', answer: 'At the time of this post, Hudi supports the Bloom index (the default), which uses bloom filters and optional key-range pruning; the Simple index, which performs a lean join of incoming records against keys extracted from storage; and the HBase index, which stores the mapping in an external Apache HBase table. A custom index implementation can also be plugged in via the hoodie.index.class config.'},
+  {question: 'What is the difference between global and non-global indexes in Hudi?', answer: 'A global index enforces key uniqueness across all partitions of the table, but its update and delete cost grows with the size of the table. A non-global index enforces uniqueness only within a partition and relies on the writer to supply a consistent partition path, but the lookup cost scales with the number of records updated or deleted, so it performs much better at high write volumes.'},
+  {question: 'Which Hudi index works best for late-arriving updates to fact tables?', answer: 'The Bloom index performs well for fact-table workloads, since the lookup prunes a lot of data files using well-sized bloom filters. If keys are constructed with an ordering, such as a timestamp prefix, range pruning cuts the number of files compared even further. Dynamic bloom filters can be enabled to keep the false positive ratio in check as file sizes vary.'},
+  {question: 'Which Hudi index should I use for random updates to dimension tables?', answer: 'For random writes that touch most files in the table, bloom filters return true positives almost everywhere, so the Simple index is a better fit because it directly joins incoming records against the interested fields from every data file. The HBase index gives even faster lookups if its operational overhead is acceptable. With a global index, also consider enabling the update.partition.path configs to handle records whose partition value changes.'},
+]} />
  
 
 

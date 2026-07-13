@@ -1,14 +1,23 @@
 ---
 title: "Concurrency Control in Open Data Lakehouse"
 excerpt: "How various concurrency control techniques works in Apache Hudi, Apache Iceberg & Delta Lake"
+description: "How various concurrency control techniques works in Apache Hudi, Apache Iceberg & Delta Lake"
 authors: [dipankar-mazumdar]
 category: deep-dive
 image: /assets/images/blog/concurrency_control/concurrency_blog_thumb.jpg
+last_update:
+  date: 2026-07-12
 tags:
 - concurrency control
 - apache iceberg
 - delta lake
 ---
+
+Concurrency control in an open data lakehouse determines how multiple writers, table services, and readers can safely operate on the same table at once, and open table formats implement it using methods adapted from database systems: optimistic concurrency control (OCC), multi-version concurrency control (MVCC), and - in Apache Hudi - non-blocking concurrency control (NBCC). This post covers the database foundations of these methods, then examines how Apache Hudi, Apache Iceberg, and Delta Lake apply them.
+
+:::info Related reading
+See the [Hudi concurrency control docs](/docs/concurrency_control) for configuration reference, [Lakehouse Concurrency Control: Are we too optimistic?](/blog/2021/12/16/lakehouse-concurrency-control-are-we-too-optimistic/) for a critique of OCC under contention, and the [NBCC deep dive](/blog/2024/12/06/non-blocking-concurrency-control) for how non-blocking multi-writer support works.
+:::
 
 ## Introduction
 
@@ -209,3 +218,13 @@ Additionally, Delta Lake employs Multi-Version Concurrency Control (MVCC) within
 Concurrency control is critical for Open lakehouse architectures, especially when your architecture has multiple concurrent pipelines interacting with the same table. Open table formats such as Apache Hudi bring well-established concurrency control methods from traditional database systems into the Lakehouse architecture to handle these operations while maintaining data consistency and scalability. Apache Hudi’s unique design to distinguish between writers, table services, and readers ensures snapshot isolation across all three processes. By supporting multiple concurrency control methods, such as OCC for managing writer conflicts, MVCC for isolating background table services and writers, and a novel NBCC for non-blocking, real-time ingestion, Hudi offers greater flexibility with complex workloads.
 
 ---
+
+## FAQ
+
+<PostFAQ heading={null} items={[
+  {question: 'What concurrency control methods do open table formats use?', answer: 'The main methods, adapted from database systems, are pessimistic locking (2PL), optimistic concurrency control (OCC), and multi-version concurrency control (MVCC). Apache Iceberg and Delta Lake rely on OCC for concurrent writes, with Delta Lake also using MVCC to separate reads from writes. Apache Hudi supports OCC between writers, MVCC between writers and table services, and additionally non-blocking concurrency control (NBCC).'},
+  {question: 'When does optimistic concurrency control become a problem?', answer: 'OCC assumes conflicts are rare, so it suits simple, append-only jobs. With frequent updates or deletes, a detected conflict aborts the job entirely. For example, an ingest job writing every 30 minutes and a deletion job running every two hours may often overlap, causing the deletion job to fail repeatedly - and with long-running transactions the chance of conflict grows over time.'},
+  {question: 'How does Apache Hudi reduce contention between writers and table services?', answer: 'Hudi distinguishes between writers, table services, and readers, providing snapshot isolation across all three. It uses MVCC between writers and table services, so operations like compaction and clustering run without blocking active writes. Locks are acquired only at critical points, such as during a commit, rather than across the whole transaction, and OCC conflict detection works at the file level so non-overlapping writes both succeed.'},
+  {question: 'What is non-blocking concurrency control (NBCC)?', answer: 'NBCC is a concurrency mode introduced in Hudi 1.0 where multiple writers operate on the same table simultaneously, with conflicts resolved automatically by query readers and the compactor rather than by aborting writers. The only lock needed is for writing commit metadata to the timeline, and the final serialization of writes is determined by completion times using Hudi\'s TrueTime semantics.'},
+  {question: 'Do I need an external lock provider to run multiple Hudi writers?', answer: 'For multi-writer setups using OCC, yes - an external lock provider such as Amazon DynamoDB, Zookeeper, or Hive Metastore coordinates concurrent access, together with hoodie.write.concurrency.mode=optimistic_concurrency_control and a LAZY failed-writes cleaning policy. Table services can still run lock-free and asynchronously when they operate in the same process as the writer.'},
+]} />

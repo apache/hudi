@@ -1,6 +1,7 @@
 ---
 title: Deep Dive Into Hudi's Indexing Subsystem (Part 2 of 2)
 excerpt: 'Explore advanced indexing in Apache Hudi: record and secondary indexes for fast point lookups, expression indexes for transformed predicates, and async indexing for building indexes without blocking writes.'
+description: 'Explore advanced indexing in Apache Hudi: record and secondary indexes for fast point lookups, expression indexes for transformed predicates, and async indexing for building indexes without blocking writes.'
 authors: [xushiyan]
 category: deep-dive
 image: /assets/images/blog/2025-11-12-deep-dive-into-hudis-indexing-subsystem-part-2-of-2/fig1.png

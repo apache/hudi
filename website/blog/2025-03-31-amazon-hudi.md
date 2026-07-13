@@ -1,6 +1,7 @@
 ---
 title: "Powering Amazon Unit Economics at Scale Using Apache Hudi"
 excerpt: "How Amazon's Profit Intelligence team uses Apache Hudi to power hundreds of pipelines"
+description: "How Amazon's Profit Intelligence team uses Apache Hudi to power hundreds of pipelines"
 author: Jason, Abhishek, Sethu in collaboration with Dipankar 
 category: case-study
 image: /assets/images/blog/amz-1200x600.jpg

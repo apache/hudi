@@ -1,17 +1,21 @@
 ---
 title: "Asynchronous Clustering using Hudi"
 excerpt: "How to setup Hudi for asynchronous clustering"
+description: "How to setup Hudi for asynchronous clustering"
 authors: [sagar-sumit]
 category: deep-dive
 image: /assets/images/blog/clustering/example_perf_improvement.png
+last_update:
+  date: 2026-07-06
 tags:
 - clustering
 ---
 
-In one of the [previous blog](/blog/2021/01/27/hudi-clustering-intro) posts, we introduced a new
-kind of table service called clustering to reorganize data for improved query performance without compromising on
-ingestion speed. We learnt how to setup inline clustering. In this post, we will discuss what has changed since then and
-see how asynchronous clustering can be setup using HoodieClusteringJob as well as DeltaStreamer utility.
+Asynchronous clustering is a way to run Hudi's clustering table service in the background, reorganizing data for improved query performance while writers continue ingesting into the table without being blocked. In one of the [previous blog](/blog/2021/01/27/hudi-clustering-intro) posts, we introduced clustering and learnt how to setup inline clustering. In this post, we will discuss what has changed since then and see how asynchronous clustering can be setup using HoodieClusteringJob as well as DeltaStreamer utility.
+
+:::info
+For a newer, format-agnostic take on this topic, see our 2025 [clustering post](/blog/2025/03/26/clustering) on what clustering means in an open data lakehouse.
+:::
 
 <!--truncate-->
 
@@ -219,3 +223,13 @@ over yet and future work entails:
 Please follow this [JIRA](https://issues.apache.org/jira/browse/HUDI-1042) to learn more about active development on
 this issue. We look forward to contributions from the community. Hope you enjoyed this post. Put your Hudi on and keep
 streaming!
+
+## FAQ
+
+<PostFAQ heading={null} items={[
+  {question: 'What is asynchronous clustering in Apache Hudi?', answer: 'Asynchronous clustering runs Hudi\'s clustering table service in the background while regular writers keep ingesting into the table. Hudi\'s multi-writer support provides snapshot isolation between table services, so data can be reorganized for better query performance without compromising ingestion speed.'},
+  {question: 'What clustering plan strategies does Hudi provide?', answer: 'Hudi ships three pluggable plan strategies. SparkSizeBasedClusteringPlanStrategy groups small file slices up to a max size per group, SparkRecentDaysClusteringPlanStrategy (the default when this post was written; current releases default to SparkSizeBasedClusteringPlanStrategy) clusters small files in the previous N days of partitions, and SparkSelectedPartitionsClusteringPlanStrategy clusters only partitions within a configured begin and end range.'},
+  {question: 'What are the modes of HoodieClusteringJob?', answer: 'Since Hudi 0.9.0, HoodieClusteringJob supports three modes passed via the -m option. The schedule mode makes a clustering plan and returns an instant, the execute mode runs a plan at a given instant time, and scheduleAndExecute does both in one step.'},
+  {question: 'How do I enable asynchronous clustering with DeltaStreamer?', answer: 'Set hoodie.clustering.async.enabled to true and put the other clustering configs in the properties file passed via the props option, then run DeltaStreamer in continuous mode. The same config also enables async clustering with a Spark structured streaming sink.'},
+  {question: 'Can clustering run on a table that is receiving updates?', answer: 'By default no, clustering can only be scheduled for tables or partitions not receiving concurrent updates, and the default SparkRejectUpdateStrategy throws an exception if a file group gets updates during clustering. If updates are sparse, you can set the update strategy to SparkAllowUpdateStrategy, and running HoodieClusteringJob alongside a writer requires enabling optimistic concurrency control with a lock provider.'},
+]} />
