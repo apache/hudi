@@ -1,7 +1,7 @@
 ---
 title: "Build Open Lakehouse using Apache Hudi & dbt"
-excerpt: "How to style blog focused projects on teaching how to build an open Lakehouse using Apache Hudi & dbt"
-description: "How to style blog focused projects on teaching how to build an open Lakehouse using Apache Hudi & dbt"
+excerpt: "A hands-on tutorial for building an open lakehouse using Apache Hudi and dbt."
+description: "A hands-on tutorial for building an open lakehouse using Apache Hudi and dbt."
 author: Vinoth Govindarajan
 category: how-to
 image: /assets/images/blog/hudi_dbt_lakehouse.png

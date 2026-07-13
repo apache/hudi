@@ -1,7 +1,7 @@
 ---
 title: Apache Hudi 1.1 is Here—Building the Foundation for the Next Generation of Lakehouse
 excerpt: ''
-description: ''
+description: "Apache Hudi 1.1 release highlights: partitioned record-level index, Flink writer overhaul, and foundations for the next generation of the lakehouse."
 authors: [xushiyan]
 category: community
 image: /assets/images/blog/2025-11-25-apache-hudi-release-1-1-announcement/1-pluggable-TF.png

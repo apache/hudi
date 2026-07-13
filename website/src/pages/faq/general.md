@@ -27,7 +27,7 @@ Combined with a storage format that balances write speed and query performance, 
 
 The two projects were engineered around different workloads. Iceberg's design centers on the traditional batch, scan-oriented workloads that Apache Hive served — large periodic rewrites and full-table scans. Hudi was engineered for fast-moving, mutable data: streaming ingestion, CDC, record-level upserts and deletes, and incremental pipelines that process only what changed. Choosing between them is a question of workload fit, not either/or on data access.
 
-That is because Hudi tables (copy-on-write) are fully format-compatible with Iceberg readers. [Apache XTable](/docs/syncing_xtable) (incubating) translates Hudi table metadata into Iceberg metadata in place — no data is copied or rewritten — so a single copy of data on cloud storage is readable as both Hudi and Iceberg. You can ingest and manage tables with Hudi's write-side strengths while any Iceberg-only engine, BI tool or catalog queries the same data.
+That is because both formats store data as Parquet files, and [Apache XTable](/docs/syncing_xtable) (incubating) translates Hudi table metadata into Iceberg metadata in place — no data is copied or rewritten — making Hudi copy-on-write tables fully format-compatible with Iceberg readers: a single copy of data on cloud storage is readable as both Hudi and Iceberg. (Merge-on-read tables expose their compacted read-optimized view to Iceberg readers.) You can ingest and manage tables with Hudi's write-side strengths while any Iceberg-only engine, BI tool or catalog queries the same data.
 
 ### What are some non-goals for Hudi?
 
