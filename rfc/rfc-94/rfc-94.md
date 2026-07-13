@@ -316,10 +316,19 @@ new `/v2/` API a cleaner JSON contract:
 - **`InstantDTOV2`** (`o.a.h.common.table.timeline.dto.v2`) - the same source fields as v1, with UI-oriented JSON keys:
     - `action` - the instant's raw action (e.g., `commit`, `deltacommit`, `compaction`). Used to label and colour the
       item, and to address the instant on the `/v2/hoodie/view/timeline/instant` route.
-    - `comparableAction` - the action the instant completes (or would complete) as, derived server-side from the
-      table's `InstantComparator` (`getComparableAction`). Equal to `action` for everything except pending
-      `compaction`/`logcompaction`/`clustering`. This is the vis-timeline *group* key, and computing it server-side
-      keeps the mapping table in one place rather than duplicating it in JavaScript.
+    - `comparableAction` - the action the instant completes (or would complete) as. Equal to `action` for everything
+      except pending `compaction`/`logcompaction`/`clustering`. This is the vis-timeline *group* key, and computing it
+      server-side keeps the mapping table in one place rather than duplicating it in JavaScript.
+
+      Concretely, this is `InstantComparatorV2.getComparableAction(action)`. Note there is no version-dispatched
+      accessor to call instead: `getComparableAction` is a `public static` on `InstantComparatorV1`/`V2`, the
+      `InstantComparator` interface declares only the three comparator getters, and the one place the mapper is
+      selected by layout version (`TimelineLayout.filterHoodieInstantsByLatestState`) is private. Pinning the v2 static
+      is safe for layout-v1 tables too: `InstantComparatorV1`'s map omits `clustering`, but
+      `ActiveTimelineV1.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE` omits the clustering extensions as well, so a layout-v1
+      timeline can never surface an instant on which the two maps disagree. If a second caller ever needs this mapping,
+      lifting `getComparableAction` onto `InstantComparator` (or `TimelineLayout`) is the clean follow-up; doing it
+      here would mean changing a shared `hudi-common` interface for a UI display field, which this RFC does not need.
     - `requestedTime` (JSON `requestTs`) - requested timestamp (`HoodieInstant.requestedTime()`)
     - `completionTime` (JSON `completionTs`) - completion timestamp (`HoodieInstant.getCompletionTime()`), null for
       non-completed instants
@@ -352,7 +361,8 @@ The v2 endpoints are served by the existing `TimelineHandler` (which already ser
    each `(requestedTime, comparableAction)` group down to its highest state. The handler therefore sees at most one
    instant per logical action, never a requested/inflight/completed triple, and a completed compaction reaches it as a
    `commit`. This is the behaviour the UI's group model is built around, not something the handler should try to undo:
-   `getTimelineV2` populates `comparableAction` from the same mapping the filter used, and leaves `action` as-is.
+   `getTimelineV2` populates `comparableAction` via `InstantComparatorV2.getComparableAction(action)` - the same mapping
+   the filter used (see [DTO Design](#dto-design)) - and leaves `action` as-is.
 2. `getInstantDetails(basePath, instant, action, state)` - reads the instant's Avro content via the active timeline's
    `getContentStream(instant)` (the non-deprecated reader method; `getInstantDetails()` is `@Deprecated`) and
    deserializes it to JSON. A malformed `state`/`action` returns 400, a read failure is logged and returns 500.
