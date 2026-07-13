@@ -149,10 +149,9 @@
             <scope>provided</scope>
         </dependency>
 
-        <dependency>
-            <groupId>org.locationtech.jts</groupId>
-            <artifactId>jts-core</artifactId>
-            <scope>provided</scope>
-        </dependency>
+        <!-- NOTE: unlike the upstream 482-SNAPSHOT shim, jts-core must NOT be
+             declared provided here: it is not part of the Trino 481 SPI surface
+             and SpiDependencyChecker rejects provided scope for it. It ships
+             inside the plugin dir at its transitive scope instead. -->
     </dependencies>
 </project>
