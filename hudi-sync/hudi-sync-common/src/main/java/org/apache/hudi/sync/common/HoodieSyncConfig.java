@@ -215,12 +215,14 @@ public class HoodieSyncConfig extends HoodieConfig {
     // Normalize the table base path so that downstream metastore LOCATION values never carry
     // consecutive or trailing slashes. Strict object-store filesystems (e.g. GCS) reject "//",
     // and this keeps the synced location consistent with the Hudi table base path (which is
-    // itself normalized through org.apache.hadoop.fs.Path on the write path).
-    if (contains(META_SYNC_BASE_PATH)) {
-      String basePath = getString(META_SYNC_BASE_PATH);
-      if (!StringUtils.isNullOrEmpty(basePath)) {
-        setValue(META_SYNC_BASE_PATH, new Path(basePath).toString());
-      }
+    // itself normalized through org.apache.hadoop.fs.Path on the write path). Note that
+    // empty-authority URIs such as file:///x and hdfs:///x are reshaped to their canonical
+    // single-slash form (file:/x); this is harmless and consistent with the write-path base path.
+    // setDefaults() above always writes the "" default for META_SYNC_BASE_PATH, so the empty
+    // check is the only guard needed here.
+    String basePath = getString(META_SYNC_BASE_PATH);
+    if (!StringUtils.isNullOrEmpty(basePath)) {
+      setValue(META_SYNC_BASE_PATH, new Path(basePath).toString());
     }
   }
 

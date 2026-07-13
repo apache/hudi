@@ -192,10 +192,19 @@ class TestHoodieSyncConfig {
     HoodieSyncConfig gcsConfig = new HoodieSyncConfig(gcsProps, new Configuration());
     assertEquals("gs://bucket/base/ho_set_data_pymt_pgm", gcsConfig.getAbsoluteBasePath());
 
-    // A well-formed base path is left unchanged.
+    // A path already in canonical form (non-empty authority, single slashes) is left unchanged.
     Properties cleanProps = new Properties();
     cleanProps.setProperty(META_SYNC_BASE_PATH.key(), "gs://bucket/base/tbl");
     HoodieSyncConfig cleanConfig = new HoodieSyncConfig(cleanProps, new Configuration());
     assertEquals("gs://bucket/base/tbl", cleanConfig.getAbsoluteBasePath());
+
+    // Empty-authority URIs (e.g. file:///, hdfs:///) are reshaped to their canonical
+    // single-slash form. This is deliberate and harmless: path comparisons in the sync tools
+    // (e.g. FSUtils.comparePathsWithoutScheme) re-parse both operands, so the reshaped LOCATION
+    // still compares equal to a pre-existing file:/// LOCATION and no table is recreated.
+    Properties fileProps = new Properties();
+    fileProps.setProperty(META_SYNC_BASE_PATH.key(), "file:///tmp/tbl");
+    HoodieSyncConfig fileConfig = new HoodieSyncConfig(fileProps, new Configuration());
+    assertEquals("file:/tmp/tbl", fileConfig.getAbsoluteBasePath());
   }
 }
