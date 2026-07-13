@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.testcontainers.containers.ComposeContainer;
 import org.testcontainers.containers.ContainerState;
+import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -83,6 +84,13 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
     String composeProfiles = System.getProperty(SystemProps.COMPOSE_PROFILES_PROP, "");
     if (!composeProfiles.isEmpty()) {
       environment.withEnv("COMPOSE_PROFILES", composeProfiles);
+      if (composeProfiles.contains(SystemProps.TRINO_PROFILE)) {
+        // Stream the coordinator's log into the test output. When Trino dies during
+        // startup (plugin load or config errors) the container is torn down with the
+        // stack, so this stream is the only place the root cause survives.
+        environment.withLogConsumer(Containers.TRINOCOORDINATOR,
+            new Slf4jLogConsumer(log).withPrefix(Containers.TRINOCOORDINATOR));
+      }
     }
     // Point the compose stack at a host-built Trino plugin dir when supplied. The compose
     // file falls back to an empty overlay when TRINO_PLUGIN_DIR is unset.

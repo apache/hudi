@@ -92,8 +92,38 @@ jobs:
         run:
           mvn $MVN_ARGS -f docker/trino/shim/pom.xml clean package -DskipTests
       - name: Build apachehudi/hudi-trino_481 image
-        run:
+        run: |
           docker/trino/build_image.sh --plugin-dir docker/trino/shim/target/trino-hudi-481
+          # Sanity: the shim must have produced a populated plugin dir with a
+          # service descriptor jar, or Trino cannot load the plugin at boot.
+          echo "plugin dir jar count: $(ls docker/trino/shim/target/trino-hudi-481 | wc -l)"
+          ls docker/trino/shim/target/trino-hudi-481/*services*.jar
+      - name: Smoke-boot the Trino image standalone
+        # Catches image-level boot failures (plugin load errors, bad etc/ config)
+        # ~30 min before the IT step would, with the full boot log on screen.
+        # --hostname trinocoordinator makes the baked discovery.uri self-resolve.
+        run: |
+          docker run -d --name trino-smoke --hostname trinocoordinator \
+            apachehudi/hudi-trino_481:latest
+          ok=""
+          for i in $(seq 1 18); do
+            if [ "$(docker inspect -f '{{.State.Running}}' trino-smoke)" != "true" ]; then
+              echo "trino-smoke container died during startup" >&2
+              break
+            fi
+            if docker exec trino-smoke trino --server localhost:8080 \
+                --execute "SELECT 1" >/dev/null 2>&1; then
+              ok=1; echo "Trino answered SELECT 1 (attempt $i)"; break
+            fi
+            sleep 10
+          done
+          if [ -z "$ok" ]; then
+            echo "==== trino-smoke boot log ===="
+            docker logs trino-smoke 2>&1 | tail -200
+            docker rm -f trino-smoke >/dev/null 2>&1 || true
+            exit 1
+          fi
+          docker rm -f trino-smoke
       - name: Set up JDK 17 (restore for the IT run)
         # setup-java resets JAVA_HOME on each call; hudi-integ-test needs 17.
         uses: actions/setup-java@v5

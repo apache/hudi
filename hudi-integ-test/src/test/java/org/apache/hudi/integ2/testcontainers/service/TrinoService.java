@@ -24,6 +24,7 @@ import org.apache.hudi.integ2.testcontainers.command.CommandExecutor;
 import org.apache.hudi.integ2.testcontainers.command.CommandResult;
 
 import lombok.extern.slf4j.Slf4j;
+import org.testcontainers.containers.ContainerState;
 
 /**
  * Service wrapper for the Trino coordinator. Mirrors {@link HiveService} in shape, but
@@ -48,10 +49,11 @@ public class TrinoService {
   private static final String DEFAULT_SCHEMA = "default";
 
   private final CommandExecutor executor;
+  private final ContainerState container;
 
   public TrinoService(ContainerProvider provider) {
-    this.executor = new CommandExecutor(
-        provider.getContainer(TestcontainersConfig.Containers.TRINOCOORDINATOR));
+    this.container = provider.getContainer(TestcontainersConfig.Containers.TRINOCOORDINATOR);
+    this.executor = new CommandExecutor(container);
   }
 
   /**
@@ -93,6 +95,13 @@ public class TrinoService {
         log.info("Trino coordinator is ready (attempt {}/{})", i, max);
         return;
       } catch (Throwable t) {
+        if (!container.isRunning()) {
+          // No point retrying against a dead container; the boot log streamed by the
+          // ITTestBaseTestcontainers log consumer holds the root cause.
+          throw new RuntimeException(
+              "trinocoordinator container is not running -- Trino likely crashed at startup;"
+                  + " see the trinocoordinator-prefixed log lines above", t);
+        }
         if (i == max) {
           throw new RuntimeException(
               "Trino coordinator did not become ready after " + max + " retries", t);
