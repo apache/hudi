@@ -355,6 +355,11 @@ The v2 endpoints are served by the existing `TimelineHandler` (which already ser
    `getContentStream(instant)` (the non-deprecated reader method; `getInstantDetails()` is `@Deprecated`) and
    deserializes it to JSON. The instant is built with the request's metaClient via `metaClient.getInstantGenerator()`;
    a malformed `state`/`action` returns 400, a read failure is logged and returns 500.
+
+   Unlike the deprecated `getInstantDetails()`, which read into a `byte[]` and closed the stream itself,
+   `getContentStream` hands back a raw open stream (`metaClient.getStorage().open(...)`) that the caller owns. The
+   handler must read it under try-with-resources so the handle is released on the deserialization-failure path too, not
+   just on success.
 3. `getTableConfig(basePath)` - returns the table's `hoodie.properties` as a sorted JSON object.
 4. `getSchemaHistory(basePath, limit)` - reconstructs schema evolution from two sources; see
    [Schema-History Reconstruction](#schema-history-reconstruction) below.
