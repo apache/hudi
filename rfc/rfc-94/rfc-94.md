@@ -605,17 +605,43 @@ This keeps `hudi-client-common` free of any Spark compile-time dependency while 
     - **vis-timeline** (`lib/vis-timeline/`, ~575KB) - timeline rendering. Dual-licensed Apache-2.0 OR MIT.
     - **Bootstrap 5** (`lib/bootstrap/`, ~305KB) - layout and styling. MIT.
     - **renderjson** (`lib/renderjson/`, ~11KB) - collapsible JSON in the detail panel. ISC.
+- **The assets must be explicitly excluded from the engine bundles.** This does *not* come for free.
+  `hudi-timeline-service` is a compile-scope dependency of `hudi-client-common`, and six bundles list
+  `org.apache.hudi:hudi-timeline-service` in their shade `artifactSet`: `hudi-timeline-server-bundle` (intended) plus
+  `hudi-spark-bundle`, `hudi-flink-bundle`, `hudi-utilities-bundle`, `hudi-kafka-connect-bundle` and
+  `hudi-integ-test-bundle`. Their `<filters>` currently exclude only signature files, `META-INF/services/javax.*` and
+  `**/*.proto`, so *any* resource under `src/main/resources/` is unpacked into each shaded JAR. The module has no
+  `src/main/resources` today, which is exactly why this has never bitten us - the ~890KB of vendored assets would be
+  net-new payload in all six bundles, not just the server bundle.
+
+  The first cut is standalone-only, so the UI cannot even be served from an embedded timeline server inside a Spark or
+  Flink driver. Shipping ~890KB of unreachable JS/CSS in five engine bundles is pure bloat, and it would drag the
+  LICENSE obligations below into each of them. The five non-server bundle poms therefore add an explicit shade filter:
+
+  ```xml
+  <filter>
+    <artifact>org.apache.hudi:hudi-timeline-service</artifact>
+    <excludes>
+      <exclude>public/**</exclude>
+    </excludes>
+  </filter>
+  ```
+
+  Only `hudi-timeline-server-bundle` ships the assets. When the embedded/Spark-UI follow-up lands, it must lift this
+  exclusion for the bundles that actually gain an embedded UI (`hudi-spark-bundle`, and `hudi-flink-bundle` if it
+  follows), and add the LICENSE stanzas below to those bundles at the same time. That is a deliberate, reviewable step
+  in the follow-up, not something to inherit silently here.
 - **LICENSE/NOTICE obligations.** Each vendored library needs a "This product bundles ..." stanza in the source-release
-  top-level `LICENSE` (and in the `hudi-timeline-server-bundle` LICENSE, since the assets ship inside that JAR) naming
-  the library, its license, and its copyright, with the full MIT/ISC license text inlined the same way existing bundled
-  code is handled in `LICENSE`. The minified files already carry their upstream copyright headers, which must be
-  preserved. No `NOTICE` changes are required: MIT and ISC do not mandate NOTICE entries, and vis-timeline is taken
-  under its MIT option (ASF policy discourages adding MIT/ISC copyrights to `NOTICE`); were vis-timeline instead taken
-  under Apache-2.0, any upstream `NOTICE` content it ships would have to be propagated.
+  top-level `LICENSE` **and** in the LICENSE of every bundle whose JAR actually contains the assets, naming the library,
+  its license, and its copyright, with the full MIT/ISC license text inlined the same way existing bundled code is
+  handled in `LICENSE`. With the shade filter above, that set is exactly the source release plus
+  `hudi-timeline-server-bundle`; without it, it would be all six bundles. The minified files already carry their
+  upstream copyright headers, which must be preserved. No `NOTICE` changes are required: MIT and ISC do not mandate
+  NOTICE entries, and vis-timeline is taken under its MIT option (ASF policy discourages adding MIT/ISC copyrights to
+  `NOTICE`); were vis-timeline instead taken under Apache-2.0, any upstream `NOTICE` content it ships would have to be
+  propagated.
 - **Spark UI tab (planned follow-up):** Will use existing `spark-core` APIs (`WebUITab`, `WebUIPage`), already provided
   in `hudi-spark-client`. No new JARs are added.
-- **No impact on Spark/Flink bundles.** `hudi-timeline-server-bundle` is a separate artifact; adding static resources
-  does not affect engine-specific bundles.
 - **No frontend build pipeline.** No npm, webpack, or vite. The JS/CSS files are committed directly and served as-is.
 
 ## Additional Quality of Life (QoL) Features to be Considered
@@ -706,6 +732,18 @@ Following the pattern established by `TestTimelineService.java`:
   `GET /ui/static/*` and every `GET /v2/hoodie/view/*` route return HTTP 404, while the existing `/v1/` routes still
   respond. This is the assertion the Scope section's threat model rests on - the widened read surface must not exist
   unless the flag is explicitly set.
+
+### Bundle Packaging
+
+The `public/**` shade exclusion in [Dependency Impact](#dependency-impact) is silent when it regresses: drop the filter
+and the assets simply reappear in every engine bundle, with nothing failing. Guard it in `packaging/bundle-validation`:
+
+- Assert `hudi-timeline-server-bundle` **contains** `public/index.html` and `public/lib/**`.
+- Assert `hudi-spark-bundle`, `hudi-flink-bundle`, `hudi-utilities-bundle`, `hudi-kafka-connect-bundle` and
+  `hudi-integ-test-bundle` contain **no** `public/**` entries.
+
+The second assertion is the one that matters - it is what keeps the LICENSE obligations scoped to the server bundle, and
+it is what the embedded-UI follow-up must consciously relax rather than silently break.
 
 ### Manual Testing Checklist
 
