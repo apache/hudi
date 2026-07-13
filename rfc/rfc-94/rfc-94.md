@@ -235,11 +235,34 @@ config flag without changing this default.
 
 The timeline is configured with groups and items that map to Hudi's timeline model:
 
-- **Groups:** One row per action type - `commit`, `deltacommit`, `compaction`, `clean`, `rollback`, `clustering`,
-  `savepoint`, `logcompaction`, `indexing`, `restore`, `replacecommit`. These correspond to the actions in
-  `HoodieTimeline.VALID_ACTIONS_IN_TIMELINE`.
+- **Groups:** One row per *comparable* action - `commit`, `deltacommit`, `replacecommit`, `clean`, `rollback`,
+  `savepoint`, `restore`, `indexing`. This is `HoodieTimeline.VALID_ACTIONS_IN_TIMELINE` with `compaction`,
+  `logcompaction` and `clustering` folded into the action they complete as, exactly as Hudi itself already does:
+
+  | Pending action | Completes as     |
+  |----------------|------------------|
+  | `compaction`   | `commit`         |
+  | `logcompaction`| `deltacommit`    |
+  | `clustering`   | `replacecommit`  |
+
+  This mapping is not a UI invention - it is `InstantComparatorV2.COMPARABLE_ACTIONS`, and the active timeline has
+  already applied it before the handler sees an instant. `HoodieTableMetaClient.getActiveTimeline()` builds an
+  `ActiveTimelineV2` with the layout filter enabled, which groups instants by `(requestedTime, comparableAction)` and
+  keeps only the highest state. So a completed compaction arrives as a *single* instant whose action is `commit` (its
+  completed file on disk is `<ts>_<ct>.commit`), and a raw `compaction` action only ever reaches the UI while the
+  instant is still pending. Giving `compaction`, `logcompaction` and `clustering` their own rows would therefore
+  produce rows that can never hold a completed instant. Grouping by comparable action instead keeps each row's pending
+  and completed items in the same lane, which is what makes a stalled instant legible (see **Items** below).
 - **Items:** Completed instants are rendered as range bars spanning from `requestedTime` to `completionTime`.
   Non-completed instants (requested or inflight) are rendered as point items at `requestedTime`.
+
+  Items keep their *raw* action for labelling and colouring, so folding rows together does not erase the distinction:
+  a pending compaction is still labelled `compaction` and still sits in the `commit` row. This is precisely what the
+  stuck-compaction diagnosis in [Background](#background) needs - an inflight `compaction` point item with no
+  following range bar in that row is a compaction that never committed. A *completed* compaction does render as an
+  ordinary `commit` range bar, which is correct: on disk and to every other Hudi component, it is a commit. Users who
+  need to confirm the originating operation click the instant; the detail panel shows the `HoodieCommitMetadata`,
+  whose `operationType` reads `COMPACT` (or `CLUSTER`).
 - **Color coding:** Items are colored by state:
     - Green -> `COMPLETED`
     - Yellow -> `INFLIGHT`
@@ -289,14 +312,19 @@ timeline DTO directly. The v2 DTOs are not about exposing new fields; they are a
 new `/v2/` API a cleaner JSON contract:
 
 - **`InstantDTOV2`** (`o.a.h.common.table.timeline.dto.v2`) - the same source fields as v1, with UI-oriented JSON keys:
-    - `action` - the action type (e.g., `commit`, `deltacommit`, `compaction`)
+    - `action` - the instant's raw action (e.g., `commit`, `deltacommit`, `compaction`). Used to label and colour the
+      item, and to address the instant on the `/v2/hoodie/view/timeline/instant` route.
+    - `comparableAction` - the action the instant completes (or would complete) as, derived server-side from the
+      table's `InstantComparator` (`getComparableAction`). Equal to `action` for everything except pending
+      `compaction`/`logcompaction`/`clustering`. This is the vis-timeline *group* key, and computing it server-side
+      keeps the mapping table in one place rather than duplicating it in JavaScript.
     - `requestedTime` (JSON `requestTs`) - requested timestamp (`HoodieInstant.requestedTime()`)
     - `completionTime` (JSON `completionTs`) - completion timestamp (`HoodieInstant.getCompletionTime()`), null for
       non-completed instants
     - `state` - the instant state (`REQUESTED`, `INFLIGHT`, `COMPLETED`)
 
-  Versus v1, this renames `requestedTime`/`completionTime` to `requestTs`/`completionTs` and drops v1's redundant legacy
-  `ts` field (a duplicate of the requested time that the UI does not need).
+  Versus v1, this adds `comparableAction`, renames `requestedTime`/`completionTime` to `requestTs`/`completionTs`, and
+  drops v1's redundant legacy `ts` field (a duplicate of the requested time that the UI does not need).
 - **`TimelineDTOV2`** - wraps a `List<InstantDTOV2>` (`instants`); this is what `/v2/hoodie/view/timeline/instants/all`
   returns.
 
@@ -317,6 +345,12 @@ The v2 endpoints are served by the existing `TimelineHandler` (which already ser
    `FileSystemView` timeline (`getFileSystemView(basePath).getTimeline()`) cannot be used here: it is the write timeline
    filtered to completed plus (log)compaction instants, so it drops `clean`/`rollback`/`savepoint`/`restore`/`indexing`
    and every requested/inflight state.
+
+   Note that the active timeline has already applied `TimelineLayout.filterHoodieInstantsByLatestState`, which collapses
+   each `(requestedTime, comparableAction)` group down to its highest state. The handler therefore sees at most one
+   instant per logical action, never a requested/inflight/completed triple, and a completed compaction reaches it as a
+   `commit`. This is the behaviour the UI's group model is built around, not something the handler should try to undo:
+   `getTimelineV2` populates `comparableAction` from the same mapping the filter used, and leaves `action` as-is.
 2. `getInstantDetails(basePath, instant, action, state)` - reads the instant's Avro content via the active timeline's
    `getContentStream(instant)` (the non-deprecated reader method; `getInstantDetails()` is `@Deprecated`) and
    deserializes it to JSON. The instant is built with the request's metaClient via `metaClient.getInstantGenerator()`;
@@ -640,7 +674,16 @@ Other features we can add later:
 ### Unit Tests
 
 - **`TimelineHandler.getTimelineV2()`**: Verify correct mapping from `HoodieInstant` to `InstantDTOV2`, including:
-    - All action types in `HoodieTimeline.VALID_ACTIONS_IN_TIMELINE` are mapped correctly.
+    - Every action the active timeline can actually surface is mapped correctly. Note this is *not* one instant per
+      entry in `VALID_ACTIONS_IN_TIMELINE`: the layout filter collapses `(requestedTime, comparableAction)` groups, so
+      a completed `compaction`/`logcompaction`/`clustering` can only ever arrive as `commit`/`deltacommit`/
+      `replacecommit`, and a test that expects a completed instant with action `compaction` will never pass.
+    - `comparableAction` folds the pending actions correctly: a *pending* compaction maps to
+      (`action=compaction`, `comparableAction=commit`); pending logcompaction to `deltacommit`; pending clustering to
+      `replacecommit`. For every other action, `comparableAction` equals `action`.
+    - A compaction that has completed surfaces once, as `action=commit`, `state=COMPLETED` - not as three instants and
+      not with action `compaction`. Assert this against a table with a real completed compaction, since it is the case
+      the group model depends on.
     - `completionTime` is populated for completed instants and null for requested/inflight instants.
     - Instants are returned in timeline order.
 - **`TimelineHandler.getInstantDetails()`**: Verify correct Avro deserialization to JSON for various action types
