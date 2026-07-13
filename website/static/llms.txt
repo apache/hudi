@@ -1,0 +1,78 @@
+# Apache Hudi
+
+> Apache Hudi is an open source data lakehouse platform that brings database-like capabilities — ACID transactions, record-level upserts and deletes, indexing, change data capture and incremental processing — to data stored on cloud object storage or HDFS. Hudi tables can be written and queried from Apache Spark, Apache Flink, Presto, Trino, Hive and more, and can interoperate with Apache Iceberg and Delta Lake metadata via Apache XTable.
+
+Hudi (pronounced "hoodie") pioneered transactional capabilities on top of data lakes. Hudi lakehouses were in production at Uber and other places in 2017, years before the term was coined in the industry.
+It manages tables as a timeline of actions over open file formats (Apache Parquet, Apache ORC, Lance file format, Apache Avro), supports Copy-on-Write and Merge-on-Read storage, ships a multi-modal indexing subsystem
+(bloom filters, record-level index, secondary indexes, expression indexes, vector search), and includes built-in table services such as compaction, clustering and cleaning.
+It can also synchronize your data to half dozen data catalogs to keep table consistent with changes. This site hosts the project documentation, an extensive engineering blog, FAQs and community resources.
+
+## Documentation
+
+- [Spark Quick Start](https://hudi.apache.org/docs/quick-start-guide): Create, write and query your first Hudi table with Spark (Scala, Python, SQL).
+- [Flink Quick Start](https://hudi.apache.org/docs/flink-quick-start-guide): Stream data into Hudi tables with Apache Flink.
+- [Timeline](https://hudi.apache.org/docs/timeline): How Hudi organizes a table as an ordered log of commits — the core of its ACID design.
+- [Table & Query Types](https://hudi.apache.org/docs/table_types): Copy-on-Write vs Merge-on-Read tables; snapshot, read-optimized and incremental queries.
+- [Indexes](https://hudi.apache.org/docs/indexes): Hudi's multi-modal indexing subsystem, including the record-level and secondary indexes.
+- [Write Operations](https://hudi.apache.org/docs/write_operations): Upsert, insert, bulk-insert, delete and their semantics.
+- [Table Metadata](https://hudi.apache.org/docs/metadata): The internal metadata table that accelerates listings and lookups.
+- [Concurrency Control](https://hudi.apache.org/docs/concurrency_control): Optimistic concurrency, non-blocking concurrency control and multi-writer setups.
+- [Bootstrapping / Migration](https://hudi.apache.org/docs/migration_guide): Migrating existing Parquet/Hive tables into Hudi without rewriting all data.
+- [Basic Configurations](https://hudi.apache.org/docs/basic_configurations): The small set of configs most tables need.
+- [All Configurations](https://hudi.apache.org/docs/configurations): Complete reference of every Hudi configuration.
+- [Use Cases](https://hudi.apache.org/docs/use_cases): Where Hudi fits — CDC ingestion, incremental ETL, streaming data lakes, ML data infrastructure.
+- [Cloud Storage](https://hudi.apache.org/docs/cloud): Running Hudi on S3, GCS, Azure and other object stores.
+- [Technical Specification](https://hudi.apache.org/tech-specs): The Hudi storage format specification.
+
+## FAQ
+
+- [General FAQ](https://hudi.apache.org/faq/general): What Hudi is, what differentiates it (multi-modal indexing, non-blocking concurrency control, async compaction, built-in open-source table maintenance), when to use it, and how it compares to other systems.
+- [Design & Concepts FAQ](https://hudi.apache.org/faq/design_and_concepts): Timeline, indexing, storage layout and transactional guarantees.
+- [Writing Tables FAQ](https://hudi.apache.org/faq/writing_tables): Upserts, deletes, keys, partitioning and ingestion tools.
+- [Reading Tables FAQ](https://hudi.apache.org/faq/reading_tables): Query engines, incremental reads and time travel.
+- [Table Services FAQ](https://hudi.apache.org/faq/table_services): Compaction, clustering, cleaning and their operation.
+- [Storage FAQ](https://hudi.apache.org/faq/storage): File formats, file sizing and storage internals.
+- [Integrations FAQ](https://hudi.apache.org/faq/integrations): Catalogs, engines and ecosystem integrations.
+
+## Blog — Explainers
+
+- [Apache Hudi: 21 Unique Differentiators](https://hudi.apache.org/blog/2025/03/05/hudi-21-unique-differentiators): The technical crux of what sets Hudi apart — indexing, non-blocking concurrency control, async compaction, read-side indexes and built-in table services.
+- [Apache Hudi 1.2: The Open Lakehouse for AI and Multimodal Data](https://hudi.apache.org/blog/2026/06/07/apache-hudi-release-1-2-announcement): First-class support for vectors, blobs/unstructured data, and semi-structured data on the lakehouse — for Spark pipelines doing unstructured data processing or generating embeddings.
+- [What is a Data Lakehouse & How does it Work?](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse): The lakehouse architecture explained — evolution, components, use cases and key technologies.
+
+## Blog — Migration guides
+
+
+## Blog — Comparisons
+
+- [Hudi vs Delta Lake vs Iceberg Feature Comparison](https://hudi.apache.org/blog/2023/01/11/Apache-Hudi-vs-Delta-Lake-vs-Apache-Iceberg-Lakehouse-Feature-Comparison): Feature-by-feature comparison of the three open table formats.
+
+## Blog — Deep dives
+
+- [Apache Hudi - The Data Lake Platform](https://hudi.apache.org/blog/2021/07/21/streaming-data-lake-platform): The original vision essay on streaming data lakes.
+- [MOR Isn't a Storage Optimization. It's an Architectural Shift](https://hudi.apache.org/blog/2026/05/14/mor-isnt-a-storage-optimization-its-an-architectural-shift): Why Merge-on-Read is a foundational design decision (part 1 of a series).
+- [Why Metadata Has to Be Mutation-Friendly](https://hudi.apache.org/blog/2026/06/05/why-metadata-has-to-be-mutation-friendly): MOR series part 2 — metadata design for continuously changing tables.
+- [Building Indexes on a Moving Target](https://hudi.apache.org/blog/2026/06/25/building-indexes-on-a-moving-target): MOR series part 3 — async indexing on multi-petabyte tables without stopping ingestion.
+- [Deep Dive Into Hudi's Indexing Subsystem (Part 1)](https://hudi.apache.org/blog/2025/10/29/deep-dive-into-hudis-indexing-subsystem-part-1-of-2): The indexing subsystem from bloom filters to the record-level index.
+- [Deep Dive Into Hudi's Indexing Subsystem (Part 2)](https://hudi.apache.org/blog/2025/11/12/deep-dive-into-hudis-indexing-subsystem-part-2-of-2): Record, secondary and expression indexes in practice.
+- [Record Level Index: Blazing Fast Indexing for Large-Scale Datasets](https://hudi.apache.org/blog/2023/11/01/record-level-index): How Hudi's record-level index accelerates upserts and point lookups.
+- [Understanding CoW and MoR in Apache Hudi](https://hudi.apache.org/blog/2024/11/12/understanding-cow-and-mor-in-apache-hudi): Choosing between Copy-on-Write and Merge-on-Read tables.
+- [Understanding Data Lake Change Data Capture](https://hudi.apache.org/blog/2024/07/30/data-lake-cdc): CDC patterns on the lakehouse in depth.
+
+## Blog — Case studies
+
+- [Apache Hudi at Uber](https://hudi.apache.org/blog/2026/01/16/apache-hudi-at-uber): Trillion-record-scale data lake operations at Hudi's birthplace.
+- [Near Real-Time Analytics at Petabyte Scale at Amazon](https://hudi.apache.org/blog/2021/10/14/How-Amazon-Transportation-Service-enabled-near-real-time-event-analytics-at-petabyte-scale-using-AWS-Glue-with-Apache-Hudi): Amazon Transportation Service runs petabyte-scale event analytics on AWS Glue with Apache Hudi.
+- [Streaming Log Ingestion and GDPR Deletes at Zoom](https://hudi.apache.org/blog/2023/05/16/how-zoom-implemented-streaming-log-ingestion-and-efficient-gdpr-deletes-using-apache-hudi-on-amazon-emr): Zoom's streaming ingestion and efficient record-level deletes with Hudi on Amazon EMR.
+- [Apache Hudi at Southwest Airlines](https://hudi.apache.org/blog/2026/06/15/apache-hudi-at-southwest-airlines): Operational lakehouse architecture at Southwest Airlines.
+- [How FreeWheel (Comcast) Powers Its Lakehouse with Hudi](https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse): Comcast's FreeWheel advertising platform on an Apache Hudi lakehouse.
+- [Why Walmart Chose Apache Hudi](https://hudi.apache.org/blog/2025/04/09/why-walmart-chose-apache-hudi-for-their-lakehouse): Lakehouse architecture at Walmart scale.
+- [Building an ExaByte-level Data Lake Using Apache Hudi at ByteDance](https://hudi.apache.org/blog/2021/09/01/building-eb-level-data-lake-using-hudi-at-bytedance): Exabyte-scale Hudi deployment at ByteDance.
+- [Modernizing Data Infrastructure at Peloton with Hudi](https://hudi.apache.org/blog/2025/07/15/modernizing-datainfra-peloton-hudi): CDC and lakehouse modernization at Peloton.
+
+## Optional
+
+- [Releases & Downloads](https://hudi.apache.org/releases/download): All Apache Hudi releases.
+- [Blog index](https://hudi.apache.org/blog): Full list of 300+ engineering posts and case studies.
+- [Community](https://hudi.apache.org/community/get-involved): Slack, mailing lists, office hours and how to contribute.
+- [Talks & Presentations](https://hudi.apache.org/learn/talks): Conference talks about Hudi.
