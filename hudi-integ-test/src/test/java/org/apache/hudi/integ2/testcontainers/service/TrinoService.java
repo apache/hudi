@@ -76,6 +76,9 @@ public class TrinoService {
         "--catalog", catalog,
         "--schema", schema,
         "--output-format", "CSV_UNQUOTED",
+        // On failure the CLI prints the full server-side stack to stderr, which
+        // CommandResult embeds in the assertion message. No effect on success output.
+        "--debug",
         "--execute", sql
     };
     return executor.executeCommand(cmd);

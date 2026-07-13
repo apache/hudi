@@ -144,3 +144,14 @@ jobs:
             -Dcompose.profiles=trino \
             -Dspark.docker.compose.prefix=$COMPOSE_PREFIX \
             $MVN_ARGS
+      - name: Dump failsafe test outputs on failure
+        # Surefire redirects test stdout (incl. the streamed trinocoordinator
+        # boot/query logs) into per-class output files; print their tails so
+        # server-side failures are readable straight from the workflow log.
+        if: failure()
+        run: |
+          for f in hudi-integ-test/target/failsafe-reports/*-output.txt; do
+            [ -f "$f" ] || continue
+            echo "===== $f (last 400 lines) ====="
+            tail -n 400 "$f"
+          done
