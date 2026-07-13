@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.transform.embedding;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -27,7 +28,6 @@ import org.apache.hudi.utilities.transform.Transformer;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SparkSession;
@@ -78,11 +78,12 @@ public class EmbeddingTransformer implements Transformer {
     int sourceIndex = inputSchema.fieldIndex(sourceColumn);
     StructType outputSchema = withVectorColumn(inputSchema, targetColumn, dimension);
 
+    // Encoders.row(schema) only exists on Spark 3.5+; the adapter covers 3.3/3.4/4.x too
     Dataset<Row> withVectors = rowDataset.mapPartitions(
         (org.apache.spark.api.java.function.MapPartitionsFunction<Row, Row>) partition ->
             new EmbeddingIterator(partition, providerClass, properties, sourceIndex,
                 dimension, batchSize, inputMaxChars),
-        Encoders.row(outputSchema));
+        SparkAdapterSupport$.MODULE$.sparkAdapter().getCatalystExpressionUtils().getEncoder(outputSchema));
     // the row encoder drops StructField metadata; re-attach VECTOR(dim) so the
     // writer detects the column (and StreamSync deduces the right target schema)
     Metadata vectorMetadata = outputSchema.apply(targetColumn).metadata();
