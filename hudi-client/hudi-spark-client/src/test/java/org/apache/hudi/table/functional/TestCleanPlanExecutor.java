@@ -69,7 +69,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_COMPARATOR;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createCommit;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -1030,10 +1030,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
     testTable.addInflightCommit(commitTimeTs);
     testTable.withBaseFilesInPartition(partition, fileId);
     HoodieCommitMetadata commitMeta = generateCommitMetadata(commitTimeTs, Collections.singletonMap(partition, Collections.singletonList(fileId)));
-    metaClient.getActiveTimeline().saveAsComplete(
-        true,
-        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTimeTs, INSTANT_COMPARATOR.completionTimeOrderedComparator()),
-        Option.of(commitMeta),
-        Option.of(commitTimeTs));
+    createCommit(metaClient, metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitTimeTs,
+        Option.of(commitTimeTs), Option.of(commitMeta));
   }
 }

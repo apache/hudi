@@ -133,6 +133,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THA
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToAvro;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createCommit;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
@@ -502,11 +503,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       commitMeta = generateCommitMetadata(instantTime, partToFileIds);
       metadataWriter.performTableServices(Option.of(instantTime), true);
       metadataWriter.update(commitMeta, instantTime);
-      metaClient.getActiveTimeline().saveAsComplete(
-          true,
-          INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
-          Option.of(commitMeta),
-          Option.of(instantTime));
+      createCommit(metaClient, metaClient.getTimelineLayout().getCommitMetadataSerDe(), instantTime,
+          Option.of(instantTime), Option.of(commitMeta));
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);
     return INSTANT_GENERATOR.createNewInstant(
