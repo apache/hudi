@@ -44,6 +44,7 @@ import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
 import org.apache.hudi.sink.utils.EventBuffers;
+import org.apache.hudi.sink.utils.EventBuffersStateSerializer;
 import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.storage.HoodieStorage;
@@ -174,9 +175,14 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.notifyCheckpointComplete(1);
     coordinator.resetToCheckpoint(1, future.get());
 
-    EventBuffers.EventBuffer eventBuffer = coordinator.getEventBuffer();
-    assertEquals(2, eventBuffer.getDataWriteEventBuffer().length);
-    assertEquals(isStreamingIndexWriteEnabled ? 2 : 0, eventBuffer.getIndexWriteEventBuffer().length);
+    if (isStreamingIndexWriteEnabled) {
+      // instant will be recommitted during resetToCheckpoint if streaming RLI is enabled, so event buffers will be empty.
+      assertNull(coordinator.getEventBuffer());
+    } else {
+      EventBuffers.EventBuffer eventBuffer = coordinator.getEventBuffer();
+      assertEquals(2, eventBuffer.getDataWriteEventBuffer().length);
+      assertEquals(0, eventBuffer.getIndexWriteEventBuffer().length);
+    }
   }
 
   @Test
@@ -194,11 +200,11 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.checkpointCoordinator(1, future);
     coordinator.notifyCheckpointComplete(1);
 
-    Map<Long, Pair<String, EventBuffers.EventBuffer>> eventBuffers = SerializationUtils.deserialize(future.get());
+    Map<Long, Pair<String, ?>> eventBuffers = EventBuffersStateSerializer.deserialize(future.get());
     // convert to legacy event buffers
     Map<Long, Pair<String, WriteMetadataEvent[]>> legacyEventBuffers = new HashMap<>();
     eventBuffers.forEach((ckpId, eventBuffer) -> {
-      legacyEventBuffers.put(ckpId, Pair.of(eventBuffer.getLeft(), eventBuffer.getRight().getDataWriteEventBuffer()));
+      legacyEventBuffers.put(ckpId, Pair.of(eventBuffer.getLeft(), ((EventBuffers.EventBuffer) eventBuffer.getRight()).getDataWriteEventBuffer()));
     });
     // simulate recovering from legacy state
     coordinator.resetToCheckpoint(1, SerializationUtils.serialize(legacyEventBuffers));
@@ -753,7 +759,7 @@ public class TestStreamWriteOperatorCoordinator {
       boolean trackSuccessRecords,
       double failureFraction,
       boolean isMetadataTable) {
-    final WriteStatus writeStatus = new WriteStatus(trackSuccessRecords, failureFraction);
+    final WriteStatus writeStatus = new WriteStatus(trackSuccessRecords, failureFraction, isMetadataTable);
     writeStatus.setPartitionPath(partitionPath);
 
     HoodieWriteStat writeStat = new HoodieWriteStat();

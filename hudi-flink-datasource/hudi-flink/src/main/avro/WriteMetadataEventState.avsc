@@ -1,0 +1,362 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+{
+  "type": "record",
+  "name": "WriteMetadataEvent",
+  "namespace": "org.apache.hudi.sink.avro.model",
+  "fields": [
+    {
+      "name": "writeStatuses",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "WriteStatus",
+          "fields": [
+            {
+              "name": "stat",
+              "type": [
+                {
+                  "type": "record",
+                  "name": "HoodieWriteStat",
+                  "fields": [
+                    {"name": "fileId", "type": ["null", "string"], "default": null},
+                    {"name": "path", "type": ["null", "string"], "default": null},
+                    {"name": "prevCommit", "type": ["null", "string"], "default": null},
+                    {"name": "numWrites", "type": ["null", "long"], "default": null},
+                    {"name": "numDeletes", "type": ["null", "long"], "default": null},
+                    {"name": "numUpdateWrites", "type": ["null", "long"], "default": null},
+                    {"name": "totalWriteBytes", "type": ["null", "long"], "default": null},
+                    {"name": "totalWriteErrors", "type": ["null", "long"], "default": null},
+                    {"name": "partitionPath", "type": ["null", "string"], "default": null},
+                    {"name": "totalLogRecords", "type": ["null", "long"], "default": null},
+                    {"name": "totalUpdatedRecordsCompacted", "type": ["null", "long"], "default": null},
+                    {"name": "numInserts", "type": ["null", "long"], "default": null},
+                    {"name": "totalLogBlocks", "type": ["null", "long"], "default": null},
+                    {"name": "totalCorruptLogBlock", "type": ["null", "long"], "default": null},
+                    {"name": "totalRollbackBlocks", "type": ["null", "long"], "default": null},
+                    {"name": "fileSizeInBytes", "type": ["null", "long"], "default": null},
+                    {"name": "prevBaseFile", "type": ["null", "string"], "default": null},
+                    {
+                      "name": "cdcStats",
+                      "type": ["null", {"type": "map", "values": "long"}],
+                      "default": null
+                    },
+                    {"name": "minEventTime", "type": ["null", "long"], "default": null},
+                    {"name": "maxEventTime", "type": ["null", "long"], "default": null},
+                    {
+                      "name": "runtimeStats",
+                      "type": [
+                        "null",
+                        {
+                          "type": "record",
+                          "name": "RuntimeStats",
+                          "fields": [
+                            {"name": "totalScanTime", "type": ["null", "long"], "default": null},
+                            {"name": "totalCreateTime", "type": ["null", "long"], "default": null},
+                            {"name": "totalUpsertTime", "type": ["null", "long"], "default": null}
+                          ]
+                        }
+                      ],
+                      "default": null
+                    },
+                    {"name": "totalLogFilesCompacted", "type": ["null", "long"], "default": null},
+                    {"name": "totalLogReadTimeMs", "type": ["null", "long"], "default": null},
+                    {"name": "totalLogSizeCompacted", "type": ["null", "long"], "default": null},
+                    {"name": "tempPath", "type": ["null", "string"], "default": null},
+                    {"name": "numUpdates", "type": ["null", "long"], "default": null}
+                  ]
+                },
+                {
+                  "type": "record",
+                  "name": "HoodieDeltaWriteStat",
+                  "fields": [
+                    {"name": "fileId", "type": ["null", "string"], "default": null},
+                    {"name": "path", "type": ["null", "string"], "default": null},
+                    {"name": "prevCommit", "type": ["null", "string"], "default": null},
+                    {"name": "numWrites", "type": ["null", "long"], "default": null},
+                    {"name": "numDeletes", "type": ["null", "long"], "default": null},
+                    {"name": "numUpdateWrites", "type": ["null", "long"], "default": null},
+                    {"name": "totalWriteBytes", "type": ["null", "long"], "default": null},
+                    {"name": "totalWriteErrors", "type": ["null", "long"], "default": null},
+                    {"name": "partitionPath", "type": ["null", "string"], "default": null},
+                    {"name": "totalLogRecords", "type": ["null", "long"], "default": null},
+                    {"name": "totalUpdatedRecordsCompacted", "type": ["null", "long"], "default": null},
+                    {"name": "numInserts", "type": ["null", "long"], "default": null},
+                    {"name": "totalLogBlocks", "type": ["null", "long"], "default": null},
+                    {"name": "totalCorruptLogBlock", "type": ["null", "long"], "default": null},
+                    {"name": "totalRollbackBlocks", "type": ["null", "long"], "default": null},
+                    {"name": "fileSizeInBytes", "type": ["null", "long"], "default": null},
+                    {"name": "prevBaseFile", "type": ["null", "string"], "default": null},
+                    {"name": "logVersion", "type": ["null", "int"], "default": null},
+                    {"name": "logOffset", "type": ["null", "long"], "default": null},
+                    {"name": "baseFile", "type": ["null", "string"], "default": null},
+                    {
+                      "name": "logFiles",
+                      "type": ["null", {"type": "array", "items": "string"}],
+                      "default": null
+                    },
+                    {
+                      "name": "cdcStats",
+                      "type": ["null", {"type": "map", "values": "long"}],
+                      "default": null
+                    },
+                    {"name": "minEventTime", "type": ["null", "long"], "default": null},
+                    {"name": "maxEventTime", "type": ["null", "long"], "default": null},
+                    {
+                      "name": "runtimeStats",
+                      "type": ["null", "RuntimeStats"],
+                      "default": null
+                    },
+                    {"name": "totalLogFilesCompacted", "type": ["null", "long"], "default": null},
+                    {"name": "totalLogReadTimeMs", "type": ["null", "long"], "default": null},
+                    {"name": "totalLogSizeCompacted", "type": ["null", "long"], "default": null},
+                    {"name": "tempPath", "type": ["null", "string"], "default": null},
+                    {"name": "numUpdates", "type": ["null", "long"], "default": null}
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "errors",
+              "type": {
+                "type": "array",
+                "items": {
+                  "type": "record",
+                  "name": "ErrorEntry",
+                  "fields": [
+                    {
+                      "name": "key",
+                      "type": {
+                        "type": "record",
+                        "name": "HoodieKey",
+                        "fields": [
+                          {
+                            "name": "recordKey",
+                            "type": ["null", "string"],
+                            "default": null
+                          },
+                          {
+                            "name": "partitionPath",
+                            "type": ["null", "string"],
+                            "default": null
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "name": "error",
+                      "type": [
+                        "null",
+                        {
+                          "type": "record",
+                          "name": "Throwable",
+                          "fields": [
+                            {
+                              "name": "className",
+                              "type": ["null", "string"],
+                              "default": null
+                            },
+                            {
+                              "name": "message",
+                              "type": ["null", "string"],
+                              "default": null
+                            },
+                            {
+                              "name": "stackTrace",
+                              "type": {
+                                "type": "array",
+                                "items": {
+                                  "type": "record",
+                                  "name": "StackTraceElement",
+                                  "fields": [
+                                    {
+                                      "name": "className",
+                                      "type": ["null", "string"],
+                                      "default": null
+                                    },
+                                    {
+                                      "name": "methodName",
+                                      "type": ["null", "string"],
+                                      "default": null
+                                    },
+                                    {
+                                      "name": "fileName",
+                                      "type": ["null", "string"],
+                                      "default": null
+                                    },
+                                    {
+                                      "name": "lineNumber",
+                                      "type": "int",
+                                      "default": -1
+                                    }
+                                  ]
+                                }
+                              },
+                              "default": []
+                            }
+                          ]
+                        }
+                      ],
+                      "default": null
+                    }
+                  ]
+                }
+              },
+              "default": []
+            },
+            {
+              "name": "globalError",
+              "type": ["null", "Throwable"],
+              "default": null
+            },
+            {
+              "name": "fileId",
+              "type": ["null", "string"],
+              "default": null
+            },
+            {
+              "name": "partitionPath",
+              "type": ["null", "string"],
+              "default": null
+            },
+            {
+              "name": "totalRecords",
+              "type": "long",
+              "default": 0
+            },
+            {
+              "name": "totalErrorRecords",
+              "type": "long",
+              "default": 0
+            },
+            {
+              "name": "recordsStats",
+              "type": [
+                "null",
+                {
+                  "type": "map",
+                  "values": {
+                    "type": "record",
+                    "name": "ColumnRange",
+                    "fields": [
+                      {
+                        "name": "filePath",
+                        "type": ["null", "string"],
+                        "default": null
+                      },
+                      {
+                        "name": "columnName",
+                        "type": ["null", "string"],
+                        "default": null
+                      },
+                      {
+                        "name": "minValue",
+                        "type": [
+                          "null",
+                          {
+                            "type": "record",
+                            "name": "TypedValue",
+                            "fields": [
+                              {"name": "type", "type": "string", "default": "NULL"},
+                              {"name": "stringValue", "type": ["null", "string"], "default": null},
+                              {"name": "longValue", "type": ["null", "long"], "default": null},
+                              {"name": "intValue", "type": ["null", "int"], "default": null},
+                              {"name": "floatValue", "type": ["null", "float"], "default": null},
+                              {"name": "doubleValue", "type": ["null", "double"], "default": null},
+                              {"name": "booleanValue", "type": ["null", "boolean"], "default": null},
+                              {"name": "bytesValue", "type": ["null", "bytes"], "default": null},
+                              {"name": "nanoValue", "type": ["null", "long"], "default": null},
+                              {"name": "extraValue", "type": ["null", "int"], "default": null}
+                            ]
+                          }
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "maxValue",
+                        "type": ["null", "TypedValue"],
+                        "default": null
+                      },
+                      {"name": "nullCount", "type": "long", "default": 0},
+                      {"name": "valueCount", "type": "long", "default": 0},
+                      {"name": "totalSize", "type": "long", "default": 0},
+                      {"name": "totalUncompressedSize", "type": "long", "default": 0},
+                      {
+                        "name": "valueMetadata",
+                        "type": [
+                          "null",
+                          {
+                            "type": "record",
+                            "name": "ValueMetadata",
+                            "fields": [
+                              {"name": "kind", "type": "string", "default": "NULL"},
+                              {"name": "typeOrdinal", "type": "int", "default": -1},
+                              {"name": "additionalInfo", "type": ["null", "string"], "default": null}
+                            ]
+                          }
+                        ],
+                        "default": null
+                      }
+                    ]
+                  }
+                }
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "default": []
+    },
+    {
+      "name": "taskId",
+      "type": "int"
+    },
+    {
+      "name": "checkpointId",
+      "type": "long",
+      "default": -1
+    },
+    {
+      "name": "instantTime",
+      "type": "string"
+    },
+    {
+      "name": "lastBatch",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "endInput",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "bootstrap",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "metadataTable",
+      "type": "boolean",
+      "default": false
+    }
+  ]
+}

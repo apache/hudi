@@ -107,6 +107,10 @@ public class WriteMetadataEvent implements OperatorEvent {
     return new Builder();
   }
 
+  public void setIsMetadataTable(boolean isMetadataTable) {
+    this.isMetadataTable = isMetadataTable;
+  }
+
   /**
    * Merges this event with given {@link WriteMetadataEvent} {@code other}.
    *
