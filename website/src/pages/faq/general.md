@@ -7,9 +7,27 @@ keywords: [hudi, writing, reading]
 
 ### When is Hudi useful for me or my organization?
 
-If you are looking to quickly ingest data onto HDFS or cloud storage, Hudi provides you [tools](/docs/hoodie_streaming_ingestion). Also, if you have ETL/hive/spark jobs which are slow/taking up a lot of resources, Hudi can potentially help by providing an incremental approach to reading and writing data.
+If you are looking to quickly ingest data onto HDFS or cloud storage, Hudi provides you [tools](/docs/hoodie_streaming_ingestion). Also, if you have ETL/hive/spark jobs which are slow/taking up a lot of resources, Hudi can potentially help by providing an incremental approach to reading and writing data. Hudi remains the de facto lakehouse format for fast incremental writes and reads, and it ships with automated table maintenance built in, so tables stay optimized without external orchestration.
 
 As an organization, Hudi can help you build an [efficient data lake](https://docs.google.com/presentation/d/1FHhsvh70ZP6xXlHdVsAI0g__B_6Mpto5KQFlZ0b8-mM/edit#slide=id.p), solving some of the most complex, low-level storage management problems, while putting data into hands of your data analysts, engineers and scientists much quicker.
+
+### What makes Hudi different from other lakehouse formats?
+
+Hudi offers a set of core capabilities today that other lakehouse formats do not. The [21 unique differentiators](/blog/2025/03/05/hudi-21-unique-differentiators) post covers the technical crux in depth; the highlights are:
+
+*   **_Multi-modal indexing:_** Hudi maintains a range of [indexes](/docs/indexes) — record-level indexes, bloom filters, bucket indexes and more — that speed up upserts and deletes on the write side, plus read-side secondary indexes (including expression indexes on columns) that prune queries, much like a relational database.
+*   **_Non-blocking concurrency control:_** Hudi's MVCC-based [concurrency control](/docs/concurrency_control#non-blocking-concurrency-control) lets multiple writers and table services modify a table concurrently without failing or blocking each other, avoiding wasted compute from retries and livelocks.
+*   **_Async compaction and built-in table services:_** compaction, clustering, cleaning, file sizing, indexing and archival are scheduled and executed automatically alongside writes — no external orchestration or manual maintenance commands. Hudi is the only lakehouse project that can rapidly ingest data while handling small-file compaction without blocking those writes. This kind of table maintenance is something you typically pay a vendor for; in Hudi it is open source and built in.
+*   **_Ingestion utilities:_** production-ready [ingestion tools](/docs/hoodie_streaming_ingestion) like Hudi Streamer and the Flink writer build lakehouse tables from Kafka, Pulsar, S3/GCS and popular CDC formats (Debezium, AWS DMS, Mongo) with a single command.
+*   **_Blob/unstructured data support:_** starting with Hudi 1.2, tables can manage blob and unstructured data alongside structured records, extending the lakehouse beyond tabular workloads.
+
+Combined with a storage format that balances write speed and query performance, these capabilities make Hudi the leader in incremental write performance and the de facto format for fast incremental writes and reads.
+
+### How does Hudi relate to Apache Iceberg? Are Hudi tables compatible with Iceberg?
+
+The two projects were engineered around different workloads. Iceberg's design centers on the traditional batch, scan-oriented workloads that Apache Hive served — large periodic rewrites and full-table scans. Hudi was engineered for fast-moving, mutable data: streaming ingestion, CDC, record-level upserts and deletes, and incremental pipelines that process only what changed. Choosing between them is a question of workload fit, not either/or on data access.
+
+That is because Hudi tables (copy-on-write) are fully format-compatible with Iceberg readers. [Apache XTable](/docs/syncing_xtable) (incubating) translates Hudi table metadata into Iceberg metadata in place — no data is copied or rewritten — so a single copy of data on cloud storage is readable as both Hudi and Iceberg. You can ingest and manage tables with Hudi's write-side strengths while any Iceberg-only engine, BI tool or catalog queries the same data.
 
 ### What are some non-goals for Hudi?
 
