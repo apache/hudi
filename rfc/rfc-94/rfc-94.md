@@ -118,7 +118,9 @@ The following are **out of scope**:
     - **Instant detail** (`/v2/hoodie/view/timeline/instant`) has no `/v1` counterpart at all - no existing route
       returns instant *content*. It returns deserialized instant metadata, e.g. a `HoodieCommitMetadata` carrying
       per-partition write stats (file paths, record counts) and the table schema under the `schema` key of
-      `extraMetadata`.
+      `extraMetadata`. Its `instant` param is attacker-controlled and lands in a storage path, so the route resolves
+      the requested instant against the active timeline rather than reconstructing it from the params; see
+      [Handler Design](#handler-design). Without that, it is an arbitrary-path read, not a timeline read.
     - **Table config** (`/v2/hoodie/view/table/config`) returns the full `hoodie.properties` via
       `HoodieTableConfig.getProps()`.
     - **Schema history** (`/v2/hoodie/view/table/schema/history`) exposes current and historical table schemas - the
@@ -284,7 +286,7 @@ through a short-lived `HoodieTableMetaClient` built per request (see [Handler De
 | Method | Path                                    | Parameters                                                            | Response        | Description                                                                                  |
 |--------|-----------------------------------------|-----------------------------------------------------------------------|-----------------|----------------------------------------------------------------------------------------------|
 | GET    | `/v2/hoodie/view/timeline/instants/all` | `basepath` (required)                                                 | `TimelineDTOV2` | All active instants (each with requested time, completion time, action, state), wrapped in a timeline DTO |
-| GET    | `/v2/hoodie/view/timeline/instant`      | `basepath`, `instant`, `instantaction`, `instantstate` (all required) | JSON string     | Deserialized content of a specific instant's metadata (Avro -> JSON)                         |
+| GET    | `/v2/hoodie/view/timeline/instant`      | `basepath`, `instant`, `instantaction`, `instantstate` (all required) | JSON string     | Deserialized content of a specific instant's metadata (Avro -> JSON). The triple must match an instant in the active timeline, else 404 - see [Handler Design](#handler-design) |
 | GET    | `/v2/hoodie/view/table/config`          | `basepath` (required)                                                 | JSON object     | The table's `hoodie.properties` (sorted)                                                     |
 | GET    | `/v2/hoodie/view/table/schema/history`  | `basepath` (required), `limit` (optional, default 200, max 1000)      | JSON object     | Current schema, per-commit schema-change history from the last `limit` commits, and `.schema` internal-schema history when present |
 
@@ -353,8 +355,22 @@ The v2 endpoints are served by the existing `TimelineHandler` (which already ser
    `getTimelineV2` populates `comparableAction` from the same mapping the filter used, and leaves `action` as-is.
 2. `getInstantDetails(basePath, instant, action, state)` - reads the instant's Avro content via the active timeline's
    `getContentStream(instant)` (the non-deprecated reader method; `getInstantDetails()` is `@Deprecated`) and
-   deserializes it to JSON. The instant is built with the request's metaClient via `metaClient.getInstantGenerator()`;
-   a malformed `state`/`action` returns 400, a read failure is logged and returns 500.
+   deserializes it to JSON. A malformed `state`/`action` returns 400, a read failure is logged and returns 500.
+
+   **The requested instant must be resolved against the loaded active timeline, not reconstructed from the request
+   params.** Building a `HoodieInstant` straight from `instant`/`action`/`state` and handing it to the reader is a
+   path-traversal read: `getContentStream` resolves to
+   `new StoragePath(metaClient.getTimelinePath(), <instant>.<action>.<state>)`, and `StoragePath` runs
+   `URI.normalize()`, which collapses `..` segments. An `instant` of `../../../../tmp/x` therefore resolves cleanly
+   outside `.hoodie` and the handler reads whatever is there. The trailing `.<action>.<state>` suffix and the Avro
+   deserialization narrow what an attacker can actually retrieve, but this is an unvalidated attacker-controlled path
+   and should not ship as one.
+
+   The handler already loads the active timeline for this request, so the fix costs nothing: look the `(instant,
+   action, state)` triple up among the timeline's instants and read *that* `HoodieInstant`, returning 404 when no
+   instant matches. This is strictly stronger than regex-validating the timestamp - it also refuses well-formed
+   timestamps that simply do not exist in the table, so the route can only ever read instants the timeline itself
+   lists. The instant generator is then only used for instants that came from the timeline.
 
    Unlike the deprecated `getInstantDetails()`, which read into a `byte[]` and closed the stream itself,
    `getContentStream` hands back a raw open stream (`metaClient.getStorage().open(...)`) that the caller owns. The
@@ -721,6 +737,11 @@ Other features we can add later:
     - Instants are returned in timeline order.
 - **`TimelineHandler.getInstantDetails()`**: Verify correct Avro deserialization to JSON for various action types
   (commit metadata, compaction plan, clean plan, etc.).
+- **`getInstantDetails()` path traversal (negative case):** an `instant` param of `../../../../tmp/x` (and similar
+  `..`-bearing values) must return 404 and must not read outside the table's timeline directory. Plant a readable file
+  at the traversal target and assert its content never appears in the response. A well-formed timestamp that is not in
+  the active timeline must also return 404. This is the assertion the instant-detail route's safety rests on: it can
+  only read instants the timeline actually lists.
 - **Error cases**: Invalid basepath returns an appropriate error. Empty timeline returns an empty list.
 
 ### Integration Tests
