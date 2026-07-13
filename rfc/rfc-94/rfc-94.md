@@ -323,12 +323,19 @@ new `/v2/` API a cleaner JSON contract:
       Concretely, this is `InstantComparatorV2.getComparableAction(action)`. Note there is no version-dispatched
       accessor to call instead: `getComparableAction` is a `public static` on `InstantComparatorV1`/`V2`, the
       `InstantComparator` interface declares only the three comparator getters, and the one place the mapper is
-      selected by layout version (`TimelineLayout.filterHoodieInstantsByLatestState`) is private. Pinning the v2 static
-      is safe for layout-v1 tables too: `InstantComparatorV1`'s map omits `clustering`, but
-      `ActiveTimelineV1.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE` omits the clustering extensions as well, so a layout-v1
-      timeline can never surface an instant on which the two maps disagree. If a second caller ever needs this mapping,
-      lifting `getComparableAction` onto `InstantComparator` (or `TimelineLayout`) is the clean follow-up; doing it
-      here would mean changing a shared `hudi-common` interface for a UI display field, which this RFC does not need.
+      selected by layout version (`TimelineLayout.filterHoodieInstantsByLatestState`) is private.
+
+      Pinning the v2 static is safe for layout-v1 tables because the two maps are *equivalent over everything a v1
+      timeline can emit*. They agree on `compaction -> commit` and `logcompaction -> deltacommit`. The only difference
+      is v2's `clustering -> replacecommit` entry, and v1 has no `clustering` action to apply it to: in 0.x, clustering
+      and replace-commit shared a filename (`InstantFileNameGeneratorV1.makeRequestedClusteringFileName()` delegates to
+      `makeRequestedReplaceFileName()`), so a v1 clustering instant is written as `.replacecommit.requested` and already
+      carries `action=replacecommit`. The mapping is a no-op there, which is exactly why `InstantComparatorV1`'s map has
+      no `clustering` entry - there is nothing to map, not something missing.
+
+      If a second caller ever needs this mapping, lifting `getComparableAction` onto `InstantComparator` (or
+      `TimelineLayout`) is the clean follow-up; doing it here would mean changing a shared `hudi-common` interface for a
+      UI display field, which this RFC does not need.
     - `requestedTime` (JSON `requestTs`) - requested timestamp (`HoodieInstant.requestedTime()`)
     - `completionTime` (JSON `completionTs`) - completion timestamp (`HoodieInstant.getCompletionTime()`), null for
       non-completed instants
