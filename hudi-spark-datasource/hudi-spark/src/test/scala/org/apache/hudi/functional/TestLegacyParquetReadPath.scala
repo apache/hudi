@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{BaseFileOnlyRelation, DataSourceReadOptions, DataSourceWriteOptions, IncrementalRelationV1, IncrementalRelationV2}
+import org.apache.hudi.{BaseFileOnlyRelation, DataSourceReadOptions, DataSourceWriteOptions, IncrementalRelationV1, IncrementalRelationV2, ScalaAssertionSupport}
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.log.InstantRange.RangeType
@@ -25,7 +25,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
-import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.functions.{col, lit, struct}
 import org.apache.spark.sql.types.{IntegerType, LongType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -54,8 +54,12 @@ private case class LegacyTestRow(id: String,
  * them functionally here, the legacy relations are constructed directly (with the flag set to
  * false in their options, matching how the streaming sources invoke them) and their results are
  * compared row-by-row against the file-group-reader-enabled reads of the same table.
+ *
+ * `DefaultSource#resolveBaseFileOnlyRelation` returns [[BaseFileOnlyRelation]] itself only under
+ * schema-on-read and converts it to a `HadoopFsRelation` otherwise, so the relation's own
+ * `buildScan` ships only in the schema-on-read shape; both scan shapes are exercised below.
  */
-class TestLegacyParquetReadPath extends HoodieSparkClientTestBase {
+class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAssertionSupport {
 
   var spark: SparkSession = _
 
@@ -100,10 +104,11 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase {
     ids.map(i => LegacyTestRow(i.toString, ts, valueFn(i), "p" + (i % 3),
       LegacyNested(i, "v" + valueFn(i)), Seq(i, ts.toInt)))
 
-  private def writeBatch(rows: Seq[LegacyTestRow], operation: String): Unit = {
+  private def writeBatch(rows: Seq[LegacyTestRow], operation: String,
+                         extraWriteOpts: Map[String, String] = Map.empty): Unit = {
     spark.createDataFrame(rows)
       .write.format("hudi")
-      .options(writeOpts)
+      .options(writeOpts ++ extraWriteOpts)
       .option(DataSourceWriteOptions.OPERATION.key, operation)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -113,6 +118,42 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase {
   private def writeTwoCommits(): Unit = {
     writeBatch(makeRows(1 to 30, ts = 1L, i => i * 10L), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
     writeBatch(makeRows(1 to 10, ts = 2L, i => i * 100L), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+  }
+
+  // > Int.MaxValue, so a widened value is representable only as a long
+  private val widenedBase = 10000000000L
+
+  /**
+   * Commit 1: insert ids 1..30 with `value` written as INT32; commit 2: upsert only the p0 rows
+   * (id % 3 == 0) with a LONG `value` too large for an int, promoting the table schema to long.
+   * In COW, commit 2 rewrites just the p0 file group, so the p1/p2 base files keep the narrower
+   * physical int while the table schema is now long -- reading them exercises the legacy format's
+   * type-change reconciliation. Updating a single partition is deliberate: upserting across all
+   * partitions would rewrite every file group and leave no narrow base files behind.
+   */
+  private def writeIntToLongCommits(extraWriteOpts: Map[String, String] = Map.empty): Unit = {
+    spark.createDataFrame(makeRows(1 to 30, ts = 1L, i => i.toLong))
+      .withColumn("value", col("value").cast(IntegerType))
+      .write.format("hudi")
+      .options(writeOpts ++ extraWriteOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    writeBatch(makeRows((1 to 30).filter(_ % 3 == 0), ts = 2L, i => widenedBase + i),
+      DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL, extraWriteOpts)
+  }
+
+  /**
+   * Asserts the promoted `value` column of a [[writeIntToLongCommits]] table: p1/p2 ids come from
+   * int base files widened on read, p0 ids carry the large long values written in commit 2.
+   */
+  private def assertWidenedValues(df: DataFrame): Unit = {
+    assertEquals(LongType, df.schema("value").dataType,
+      "Reading the promoted table must surface `value` as long")
+    val actual = df.select("id", "value").collect()
+      .map(r => (r.getString(0), r.getLong(1))).toSeq.sortBy(_._1.toInt)
+    val expected = (1 to 30).map(i => (i.toString, if (i % 3 == 0) widenedBase + i else i.toLong))
+    assertEquals(expected, actual)
   }
 
   private def fgReaderDf(extraOpts: Map[String, String] = Map.empty): DataFrame =
@@ -297,27 +338,8 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase {
     // is on-read type reconciliation: when a base file's physical column type is narrower than the
     // table schema, HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo records the change
     // and the vectorized read runs through Hudi's HoodieVectorizedParquetRecordReader (which widens
-    // the column vector) instead of Spark's stock VectorizedParquetRecordReader. Reproduce that:
-    //
-    //   commit 1 -- insert ids 1..30 with `value` written as INT32.
-    //   commit 2 -- upsert only the p0 rows (id % 3 == 0) with a widened LONG `value` too large for
-    //               an int, promoting the table schema to long.
-    //
-    // In COW, commit 2 rewrites just the p0 file group, so the p1/p2 base files keep the narrower
-    // physical int while the table schema is now long -- reading them exercises the type-change path.
-    spark.createDataFrame(makeRows(1 to 30, ts = 1L, i => i.toLong))
-      .withColumn("value", col("value").cast(IntegerType))
-      .write.format("hudi")
-      .options(writeOpts)
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .mode(SaveMode.Append)
-      .save(basePath)
-
-    val widened = 10000000000L // > Int.MaxValue, representable only as a long
-    writeBatch(makeRows((1 to 30).filter(_ % 3 == 0), ts = 2L, i => widened + i),
-      DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
-
-    def expectedValue(i: Int): Long = if (i % 3 == 0) widened + i else i.toLong
+    // the column vector) instead of Spark's stock VectorizedParquetRecordReader.
+    writeIntToLongCommits()
 
     // Vectorization must be on so the read takes the HoodieVectorizedParquetRecordReader branch
     // rather than the row-based parquet-mr fallback (which reconciles types via a different path).
@@ -327,13 +349,124 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase {
 
     val newReaderDf = fgReaderDf()
     Seq(legacyRelationDf(), legacyFileFormatDf()).foreach { legacyDf =>
-      assertEquals(LongType, legacyDf.schema("value").dataType,
-        "Reading the promoted table must surface `value` as long")
-      val actual = legacyDf.select("id", "value").collect()
-        .map(r => (r.getString(0), r.getLong(1))).toSeq.sortBy(_._1.toInt)
-      // p1/p2 ids come from int base files widened on read; p0 ids carry the large long values.
-      assertEquals((1 to 30).map(i => (i.toString, expectedValue(i))), actual)
+      assertWidenedValues(legacyDf)
       // The legacy path must still agree with the file-group reader on the promoted column.
+      assertSameRows(newReaderDf, legacyDf)
+    }
+  }
+
+  @Test
+  def testCowSnapshotReadWithImplicitTypeChangeWithoutVectorizedReader(): Unit = {
+    writeIntToLongCommits()
+
+    val vectorizedKey = "spark.sql.parquet.enableVectorizedReader"
+    val previous = spark.conf.get(vectorizedKey, "true")
+    spark.conf.set(vectorizedKey, "false")
+    try {
+      // With the vectorized reader off, the legacy format reconciles the type change on its
+      // row-based branch instead: a Cast from the file's narrower type compiled into a
+      // GenerateUnsafeProjection -- an implementation separate from
+      // HoodieVectorizedParquetRecordReader, so it needs its own coverage.
+      assertFalse(legacyFormatSupportsBatch,
+        "Disabling the vectorized reader must force the legacy parquet format onto the row-based path")
+      val newReaderDf = fgReaderDf()
+      Seq(legacyRelationDf(), legacyFileFormatDf()).foreach { legacyDf =>
+        assertWidenedValues(legacyDf)
+        assertSameRows(newReaderDf, legacyDf)
+      }
+    } finally {
+      spark.conf.set(vectorizedKey, previous)
+    }
+  }
+
+  @Test
+  def testCowSnapshotReadWithNestedTypeChange(): Unit = {
+    // Same int->long promotion, but inside the `nested` struct. The changed top-level column is
+    // then non-atomic, which the legacy format cannot reconcile in vectorized mode: it must fail
+    // fast with the documented IllegalArgumentException instead of returning corrupt columns, and
+    // the workaround the exception advertises (disabling the vectorized reader) must actually read
+    // the promoted struct correctly through the row-based Cast branch.
+    writeBatch(makeRows(1 to 30, ts = 1L, i => i * 10L), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+    spark.createDataFrame(makeRows((1 to 30).filter(_ % 3 == 0), ts = 2L, i => i * 100L))
+      .withColumn("nested",
+        struct((col("nested.a") + lit(widenedBase)).as("a"), col("nested.b").as("b")))
+      .write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    assertTrue(legacyFormatSupportsBatch,
+      "Vectorized reader must be engaged so the non-atomic type change hits the legacy format's rejection")
+    Seq(legacyRelationDf(), legacyFileFormatDf()).foreach { legacyDf =>
+      val thrown = assertThrows(classOf[Throwable]) {
+        legacyDf.collect()
+      }
+      val causes = Iterator.iterate(thrown: Throwable)(_.getCause).takeWhile(_ != null).take(10).toSeq
+      assertTrue(causes.exists(c => c.isInstanceOf[IllegalArgumentException]
+        && String.valueOf(c.getMessage).contains("cannot be read in vectorized mode")),
+        s"Expected the non-atomic type-change rejection but got: $thrown")
+    }
+
+    val vectorizedKey = "spark.sql.parquet.enableVectorizedReader"
+    val previous = spark.conf.get(vectorizedKey, "true")
+    spark.conf.set(vectorizedKey, "false")
+    try {
+      assertFalse(legacyFormatSupportsBatch,
+        "Disabling the vectorized reader must force the legacy parquet format onto the row-based path")
+      val newReaderDf = fgReaderDf()
+      Seq(legacyRelationDf(), legacyFileFormatDf()).foreach { legacyDf =>
+        val actual = legacyDf.select("id", "nested").collect()
+          .map(r => (r.getString(0), r.getStruct(1).getLong(0))).toSeq.sortBy(_._1.toInt)
+        val expected = (1 to 30).map(i => (i.toString, if (i % 3 == 0) widenedBase + i else i.toLong))
+        assertEquals(expected, actual)
+        assertSameRows(newReaderDf, legacyDf)
+      }
+    } finally {
+      spark.conf.set(vectorizedKey, previous)
+    }
+  }
+
+  @Test
+  def testCowSnapshotReadWithSchemaOnRead(): Unit = {
+    // Schema-on-read is the one production shape in which DefaultSource#resolveBaseFileOnlyRelation
+    // returns BaseFileOnlyRelation itself instead of converting it to a HadoopFsRelation, making
+    // the relation's own buildScan the shipped scan path. It also flips
+    // BaseFileOnlyRelation.shouldExtractPartitionValuesFromPartitionPath (defined as
+    // internalSchemaOpt.isEmpty) to false -- the only way the legacy parquet format is constructed
+    // with shouldAppendPartitionValues = false -- and drives the format's explicit internal-schema
+    // branch (InternalSchemaCache lookup + InternalSchemaMerger) instead of the implicit
+    // footer-based reconciliation.
+    //
+    // No ALTER TABLE is needed to get an InternalSchema into commit metadata: with
+    // hoodie.schema.on.read.enable plus hoodie.datasource.write.reconcile.schema on the writes,
+    // HoodieSparkSqlWriter seeds the internal schema on the first commit and evolves it with the
+    // int->long promotion on the second.
+    writeIntToLongCommits(Map(
+      DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key -> "true",
+      DataSourceWriteOptions.RECONCILE_SCHEMA.key -> "true"))
+
+    val readOpts = Map(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key -> "true")
+    val metaClient = createMetaClient(spark, basePath)
+    val schemaOnReadRelation = BaseFileOnlyRelation(sqlContext, metaClient, legacyReadOpts(readOpts), None)
+    assertTrue(schemaOnReadRelation.hasSchemaOnRead,
+      "The writes must have recorded an InternalSchema in commit metadata for schema-on-read to engage")
+    // Pin the flipped partition-values branch: under schema-on-read the relation reads partition
+    // columns from the data files (empty partition schema) instead of re-appending them from the
+    // partition path, unlike every other case in this suite.
+    assertTrue(schemaOnReadRelation.toHadoopFsRelation.partitionSchema.isEmpty,
+      "Schema-on-read must flip shouldExtractPartitionValuesFromPartitionPath off")
+    assertTrue(BaseFileOnlyRelation(sqlContext, metaClient, legacyReadOpts(Map.empty), None)
+      .toHadoopFsRelation.partitionSchema.nonEmpty,
+      "Without schema-on-read the converted relation appends partition values from the path")
+
+    assertTrue(legacyFormatSupportsBatch,
+      "Vectorized reader must be engaged so the explicit type change runs through " +
+        "HoodieVectorizedParquetRecordReader")
+
+    val newReaderDf = fgReaderDf(readOpts)
+    Seq(legacyRelationDf(readOpts), legacyFileFormatDf(readOpts)).foreach { legacyDf =>
+      assertWidenedValues(legacyDf)
       assertSameRows(newReaderDf, legacyDf)
     }
   }
