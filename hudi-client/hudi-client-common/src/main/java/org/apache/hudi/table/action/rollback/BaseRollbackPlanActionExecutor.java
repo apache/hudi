@@ -103,8 +103,7 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
     final HoodieInstant rollbackInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, startRollbackTime);
     try {
       List<HoodieRollbackRequest> rollbackRequests = new ArrayList<>();
-      if (!instantToRollback.isRequested()
-          || HoodieTimeline.COMPACTION_ACTION.equals(instantToRollback.getAction())) {
+      if (shouldGenerateRollbackRequests(instantToRollback)) {
         rollbackRequests.addAll(getRollbackStrategy().getRollbackRequests(instantToRollback));
       }
       HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan(new HoodieInstantInfo(instantToRollback.requestedTime(),
@@ -128,5 +127,12 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
   public Option<HoodieRollbackPlan> execute() {
     // Plan a new rollback action
     return requestRollback(instantTime);
+  }
+
+  private boolean shouldGenerateRollbackRequests(HoodieInstant instantToRollback) {
+    // Requested write instants only require timeline cleanup. Requested compaction still has a compaction
+    // plan and may have files associated with the compaction instant.
+    return !instantToRollback.isRequested()
+        || HoodieTimeline.COMPACTION_ACTION.equals(instantToRollback.getAction());
   }
 }

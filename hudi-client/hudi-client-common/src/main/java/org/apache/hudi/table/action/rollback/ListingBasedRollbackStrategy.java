@@ -81,7 +81,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
 
   protected final String instantTime;
 
-  protected final Boolean isRestore;
+  protected final boolean isRestore;
 
   public ListingBasedRollbackStrategy(HoodieTable<?, ?, ?, ?> table,
                                       HoodieEngineContext context,
@@ -104,9 +104,9 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       String baseFileExtension = table.getBaseFileExtension();
       Option<HoodieCommitMetadata> commitMetadataOptional =
           !instantToRollback.isCompleted() ? Option.empty() : getHoodieCommitMetadata(metaClient, instantToRollback);
-      Boolean isCommitMetadataCompleted = checkCommitMetadataCompleted(instantToRollback, commitMetadataOptional);
+      boolean isCommitMetadataCompleted = checkCommitMetadataCompleted(instantToRollback, commitMetadataOptional);
       List<String> partitionPaths = isCommitMetadataCompleted
-          ? getPartitionPathFromCommitMetadata(commitMetadataOptional.get())
+          ? getPartitionPathsFromCommitMetadata(commitMetadataOptional.get())
           : FSUtils.getAllPartitionPaths(context, table.getMetaClient(), false);
       int numPartitions = Math.max(Math.min(partitionPaths.size(), config.getRollbackParallelism()), 1);
 
@@ -163,10 +163,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                 // after the compaction will already be queued for removal and therefore, only the files from the compaction commit must be deleted.
                 hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
               } else {
-                HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-                boolean higherDeltaCommits = !activeTimeline.getDeltaCommitTimeline()
-                    .findInstantsAfter(instantToRollback.requestedTime(), 1).empty();
-                if (higherDeltaCommits) {
+                if (hasLaterDeltaCommits(metaClient.getActiveTimeline(), instantToRollback)) {
                   // Later delta commits may have written log files on top of this compaction base commit, so do not
                   // delete log files with the same base commit while rolling back the compaction itself.
                   hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath,
@@ -186,7 +183,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
               // We do not know fileIds for inserts (first inserts are either log files or base files),
               // delete all files for the corresponding failed commit, if present (same as COW)
               hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
-              if (isTableVersionLessThanEight) {
+              if (isTableVersionLessThanEight && instantToRollback.isCompleted()) {
 
                 // --------------------------------------------------------------------------------------------------
                 // (A) The following cases are possible if index.canIndexLogFiles and/or index.isGlobal
@@ -289,7 +286,12 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     return hoodieRollbackRequests;
   }
 
-  private List<String> getPartitionPathFromCommitMetadata(HoodieCommitMetadata commitMetadata) {
+  private static boolean hasLaterDeltaCommits(HoodieActiveTimeline activeTimeline, HoodieInstant instantToRollback) {
+    return !activeTimeline.getDeltaCommitTimeline()
+        .findInstantsAfter(instantToRollback.requestedTime(), 1).empty();
+  }
+
+  private static List<String> getPartitionPathsFromCommitMetadata(HoodieCommitMetadata commitMetadata) {
     return new ArrayList<>(commitMetadata.getWritePartitionPaths());
   }
 
@@ -384,7 +386,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     return pathInfos.stream().map(StoragePathInfo::getPath).collect(Collectors.toList());
   }
 
-  private Boolean checkCommitMetadataCompleted(HoodieInstant instantToRollback,
+  private boolean checkCommitMetadataCompleted(HoodieInstant instantToRollback,
                                                Option<HoodieCommitMetadata> commitMetadataOptional) {
     return commitMetadataOptional.isPresent() && instantToRollback.isCompleted()
         && !WriteOperationType.UNKNOWN.equals(commitMetadataOptional.get().getOperationType());

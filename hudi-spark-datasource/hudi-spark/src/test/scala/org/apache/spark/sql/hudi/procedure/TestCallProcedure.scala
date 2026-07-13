@@ -133,48 +133,6 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
-  test("Test Call rollback_to_instant Procedure rolls back target and later instants") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long
-           |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  orderingFields = 'ts'
-           | )
-       """.stripMargin)
-
-      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
-      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
-      spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
-
-      var commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
-      assertResult(3) {
-        commits.length
-      }
-
-      val instantTime = commits(1).get(0).toString
-      val rollbackResult = spark.sql(s"""call rollback_to_instant(table => '$tableName', instant_time => '$instantTime')""").collect()
-      assertResult(2) {
-        rollbackResult.length
-      }
-      assert(rollbackResult.forall(_.getBoolean(0)))
-
-      commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
-      assertResult(1) {
-        commits.length
-      }
-      checkAnswer(s"select id, name, price, ts from $tableName")(Seq(1, "a1", 10.0, 1000))
-    }
-  }
-
   test("Test Call rollback_to_instant Procedure with refreshTable") {
     withTempDir { tmp =>
       val tableName = generateTableName

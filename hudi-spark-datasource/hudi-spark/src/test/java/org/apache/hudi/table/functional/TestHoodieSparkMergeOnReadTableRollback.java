@@ -28,6 +28,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -37,6 +38,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -379,22 +381,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
 
   @Test
   void testRollbackCompactionCleansFilesAfterHigherInflightDeltaRollback() throws Exception {
-    HoodieWriteConfig.Builder cfgBuilder = getHoodieWriteConfigWithSmallFileHandlingOffBuilder(true)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
-        .withMarkersType(MarkerType.DIRECT.name());
-    addConfigsForPopulateMetaFields(cfgBuilder, true);
-    HoodieWriteConfig cfg = cfgBuilder.build();
-    cfg.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, "6");
-
-    Properties properties = CollectionUtils.copy(cfg.getProps());
-    properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
-    properties.setProperty(HoodieTableConfig.VERSION.key(), "6");
-    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "6");
-    properties.setProperty(HoodieTableConfig.TIMELINE_LAYOUT_VERSION.key(),
-        Integer.toString(TimelineLayoutVersion.LAYOUT_VERSION_1.getVersion()));
-
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, properties);
+    HoodieWriteConfig cfg = getTableVersionSixRollbackConfig();
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, getTableVersionSixProperties(cfg));
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 
     String firstCommitTime = "000000001";
@@ -448,6 +436,102 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       assertFalse(metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().containsInstant(compactionCommitTime));
       assertFilesForInstant(hoodieTable, compactionCommitTime, true);
     }
+  }
+
+  @Test
+  void testRollbackRequestedCompactionExecutesRollbackPlan() throws Exception {
+    HoodieWriteConfig cfg = getTableVersionSixRollbackConfig();
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, getTableVersionSixProperties(cfg));
+
+    String partition = "partition_0";
+    String fileId = "file-0";
+    String compactionInstantTime = "000000003";
+    String rollbackInstantTime = "000000004";
+
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    testTable.addRequestedCompaction(compactionInstantTime, new FileSlice(partition, compactionInstantTime, fileId));
+    testTable.withPartitionMetaFiles(partition);
+    testTable.withBaseFilesInPartition(partition, fileId);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+    HoodieInstant requestedCompaction = metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().get();
+    assertTrue(requestedCompaction.isRequested());
+    assertFilesForInstant(hoodieTable, compactionInstantTime, false);
+
+    Option<HoodieRollbackPlan> rollbackPlan = hoodieTable.scheduleRollback(
+        context(), rollbackInstantTime, requestedCompaction, false, false, false);
+    assertTrue(rollbackPlan.isPresent());
+    assertFalse(rollbackPlan.get().getRollbackRequests().isEmpty());
+
+    hoodieTable.rollback(context(), rollbackInstantTime, requestedCompaction, true, false);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+    assertFalse(metaClient.getActiveTimeline().filterPendingCompactionTimeline().containsInstant(compactionInstantTime));
+    assertFilesForInstant(hoodieTable, compactionInstantTime, true);
+  }
+
+  @Test
+  void testRollbackPlanningPrunesPartitionsFromCompletedCommitMetadata() throws Exception {
+    HoodieWriteConfig cfg = getTableVersionSixRollbackConfig();
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, getTableVersionSixProperties(cfg));
+
+    String instantTime = "000000001";
+    String rollbackInstantTime = "000000002";
+    String writtenPartition = "partition_0";
+    String unrelatedPartition = "partition_1";
+    String writtenFileId = "file-0";
+    String unrelatedFileId = "file-1";
+
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    testTable.addInflightDeltaCommit(instantTime);
+    List<String> writtenFiles = testTable.withBaseFilesInPartition(writtenPartition, writtenFileId).getValue();
+    testTable.withBaseFilesInPartition(unrelatedPartition, unrelatedFileId);
+    HoodieCommitMetadata commitMetadata = createCommitMetadata(
+        instantTime, WriteOperationType.UPSERT, writtenPartition, writtenFileId, writtenFiles.get(0));
+    testTable.moveInflightCommitToComplete(instantTime, commitMetadata);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+    HoodieInstant instantToRollback = metaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant().get();
+    Option<HoodieRollbackPlan> rollbackPlan = hoodieTable.scheduleRollback(
+        context(), rollbackInstantTime, instantToRollback, true, false, false);
+
+    assertTrue(rollbackPlan.isPresent());
+    List<String> rollbackPartitions = rollbackPlan.get().getRollbackRequests().stream()
+        .map(request -> request.getPartitionPath())
+        .distinct()
+        .collect(Collectors.toList());
+    assertEquals(1, rollbackPartitions.size());
+    assertEquals(writtenPartition, rollbackPartitions.get(0));
+  }
+
+  @Test
+  void testRollbackPlanningToleratesMissingPartitionPath() throws Exception {
+    HoodieWriteConfig cfg = getTableVersionSixRollbackConfig();
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, getTableVersionSixProperties(cfg));
+
+    String compactionInstantTime = "000000003";
+    String rollbackInstantTime = "000000004";
+    String missingPartition = "missing_partition";
+    String fileId = "missing-file";
+    HoodieCommitMetadata compactionMetadata = createCommitMetadata(
+        compactionInstantTime, WriteOperationType.COMPACT, missingPartition, fileId,
+        baseFilePath(missingPartition, compactionInstantTime, fileId));
+
+    HoodieTestTable.of(metaClient).addCompaction(compactionInstantTime, compactionMetadata);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+    HoodieInstant compactionInstant = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline()
+        .filterCompletedInstants().lastInstant().get();
+
+    Option<HoodieRollbackPlan> rollbackPlan = hoodieTable.scheduleRollback(
+        context(), rollbackInstantTime, compactionInstant, true, false, false);
+
+    assertTrue(rollbackPlan.isPresent());
+    assertTrue(rollbackPlan.get().getRollbackRequests().isEmpty());
   }
 
   @ParameterizedTest
@@ -943,6 +1027,56 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
     } else {
       assertFalse(remainingFiles.isEmpty(), "Files for instant " + instantTime + " should exist");
     }
+  }
+
+  private HoodieWriteConfig getTableVersionSixRollbackConfig() {
+    HoodieWriteConfig.Builder cfgBuilder = getHoodieWriteConfigWithSmallFileHandlingOffBuilder(true)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withMarkersType(MarkerType.DIRECT.name());
+    addConfigsForPopulateMetaFields(cfgBuilder, true);
+    HoodieWriteConfig cfg = cfgBuilder.build();
+    cfg.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, "6");
+    return cfg;
+  }
+
+  private Properties getTableVersionSixProperties(HoodieWriteConfig cfg) {
+    Properties properties = CollectionUtils.copy(cfg.getProps());
+    properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
+    properties.setProperty(HoodieTableConfig.VERSION.key(), "6");
+    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "6");
+    properties.setProperty(HoodieTableConfig.TIMELINE_LAYOUT_VERSION.key(),
+        Integer.toString(TimelineLayoutVersion.LAYOUT_VERSION_1.getVersion()));
+    return properties;
+  }
+
+  private HoodieCommitMetadata createCommitMetadata(String instantTime,
+                                                    WriteOperationType operationType,
+                                                    String partition,
+                                                    String fileId,
+                                                    String filePath) {
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setPartitionPath(partition);
+    writeStat.setPath(toRelativePartitionPath(partition, filePath));
+    writeStat.setFileId(fileId);
+    writeStat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
+    writeStat.setTotalWriteBytes(1);
+    writeStat.setFileSizeInBytes(1);
+
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, TRIP_EXAMPLE_SCHEMA);
+    metadata.setOperationType(operationType);
+    metadata.addWriteStat(partition, writeStat);
+    return metadata;
+  }
+
+  private String toRelativePartitionPath(String partition, String filePath) {
+    return partition + "/" + new File(filePath).getName();
+  }
+
+  private String baseFilePath(String partition, String instantTime, String fileId) {
+    return partition + "/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", fileId,
+        HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension());
   }
 
   private void assertRecords(List<HoodieRecord> inputRecords, List<GenericRecord> recordsRead) {
