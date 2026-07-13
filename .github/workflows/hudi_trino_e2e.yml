@@ -5,6 +5,9 @@ on:
     branches:
       - master
       - 'release-*'
+      # TEMPORARY: validate the workflow on the dev branch; drop this line
+      # (and the commit that added it) before merging upstream.
+      - trino-e2e-testcontainers
     paths:
       - 'hudi-trino/**'
       - 'docker/trino/**'
