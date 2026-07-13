@@ -155,53 +155,57 @@ public class TimelineInspector {
 
   static void run(String[] args) throws ExitException {
     try {
-      Args parsed = Args.parse(args);
-
-      if (parsed.helpRequested) {
-        return;
-      }
-
-      // parse-filename is a pure decode utility -- no metaclient needed.
-      if (parsed.mode == Mode.PARSE_FILENAME) {
-        new TimelineInspector().parseFilename(parsed);
-        return;
-      }
-
-      Configuration hadoopConf = new Configuration();
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-          .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf))
-          .setBasePath(parsed.basePath)
-          .build();
-
-      TimelineInspector inspector = new TimelineInspector();
-      switch (parsed.mode) {
-        case SHOW_INSTANT:
-          inspector.showInstant(metaClient, parsed);
-          break;
-        case FIND_FILE_ID:
-          inspector.findFileId(metaClient, parsed);
-          break;
-        case RAW_ARCHIVE:
-          inspector.rawArchive(metaClient, parsed);
-          break;
-        case COMMIT_STATS:
-          inspector.commitStats(metaClient, parsed);
-          break;
-        case PHASE_TIMINGS:
-          inspector.phaseTimings(metaClient, parsed);
-          break;
-        default:
-          throw new IllegalStateException("unknown mode " + parsed.mode);
-      }
+      runInternal(args);
     } catch (IllegalArgumentException e) {
       System.err.println("ERROR: " + e.getMessage());
       System.err.println();
       Args.printUsage();
       throw new ExitException(2, e.getMessage());
-    } catch (Exception e) {
+    } catch (IOException | RuntimeException e) {
       System.err.println("ERROR: " + e.getClass().getSimpleName() + ": " + e.getMessage());
       e.printStackTrace(System.err);
       throw new ExitException(1, e.getMessage());
+    }
+  }
+
+  private static void runInternal(String[] args) throws ExitException, IOException {
+    Args parsed = Args.parse(args);
+
+    if (parsed.helpRequested) {
+      return;
+    }
+
+    // parse-filename is a pure decode utility -- no metaclient needed.
+    if (parsed.mode == Mode.PARSE_FILENAME) {
+      new TimelineInspector().parseFilename(parsed);
+      return;
+    }
+
+    Configuration hadoopConf = new Configuration();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf))
+        .setBasePath(parsed.basePath)
+        .build();
+
+    TimelineInspector inspector = new TimelineInspector();
+    switch (parsed.mode) {
+      case SHOW_INSTANT:
+        inspector.showInstant(metaClient, parsed);
+        break;
+      case FIND_FILE_ID:
+        inspector.findFileId(metaClient, parsed);
+        break;
+      case RAW_ARCHIVE:
+        inspector.rawArchive(metaClient, parsed);
+        break;
+      case COMMIT_STATS:
+        inspector.commitStats(metaClient, parsed);
+        break;
+      case PHASE_TIMINGS:
+        inspector.phaseTimings(metaClient, parsed);
+        break;
+      default:
+        throw new IllegalStateException("unknown mode " + parsed.mode);
     }
   }
 
@@ -608,8 +612,9 @@ public class TimelineInspector {
     org.apache.hudi.storage.HoodieStorage storage = metaClient.getStorage();
     org.apache.hudi.storage.StoragePath dataMetaDir =
         new org.apache.hudi.storage.StoragePath(metaClient.getTimelinePath().toString());
-    // Try to build an MDT metaClient so we resolve the correct timeline path for
-    // both V1 (`.hoodie/`) and V2 (`.hoodie/timeline/`) layout tables.
+    // Resolve the MDT timeline directory. Try building an MDT metaClient first (handles
+    // both V1 and V2 layout correctly); if that fails (e.g. no hoodie.properties in the
+    // MDT directory), probe known paths directly.
     String mdtBasePath = metaClient.getBasePath()
         + "/" + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH;
     HoodieTableMetaClient mdtMetaClient = null;
@@ -624,8 +629,24 @@ public class TimelineInspector {
           mdtMetaClient.getTimelinePath().toString());
       mdtPresent = storage.exists(mdtMetaDir);
     } catch (Exception e) {
-      // MDT does not exist or its hoodie.properties is missing.
-      mdtPresent = false;
+      // MDT hoodie.properties missing — probe known paths directly.
+      // Try V2 path (<base>/.hoodie/metadata/.hoodie/timeline/) first, then V1 (<base>/.hoodie/metadata/.hoodie/).
+      org.apache.hudi.storage.StoragePath v2 = new org.apache.hudi.storage.StoragePath(
+          mdtBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME
+              + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME);
+      org.apache.hudi.storage.StoragePath v1 = new org.apache.hudi.storage.StoragePath(
+          mdtBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME);
+      try {
+        if (storage.exists(v2)) {
+          mdtMetaDir = v2;
+          mdtPresent = true;
+        } else if (storage.exists(v1)) {
+          mdtMetaDir = v1;
+          mdtPresent = true;
+        }
+      } catch (IOException ioe) {
+        // leave mdtPresent = false
+      }
     }
 
     // Collect candidate completed instants from the active timeline.
@@ -707,10 +728,13 @@ public class TimelineInspector {
     Long t2 = null;
     Long t3 = null;
     Long t4 = null;
-    if (mdtPresent && mdtMetaClient != null) {
-      // Use the MDT metaClient's generators for correct filename construction.
-      org.apache.hudi.common.table.timeline.InstantGenerator mdtIg = mdtMetaClient.getInstantGenerator();
-      org.apache.hudi.common.table.timeline.InstantFileNameGenerator mdtFng = mdtMetaClient.getInstantFileNameGenerator();
+    if (mdtPresent) {
+      // Use MDT metaClient's generators when available; fall back to data table's generators
+      // (safe because MDT always shares the same table version as the data table).
+      org.apache.hudi.common.table.timeline.InstantGenerator mdtIg =
+          mdtMetaClient != null ? mdtMetaClient.getInstantGenerator() : ig;
+      org.apache.hudi.common.table.timeline.InstantFileNameGenerator mdtFng =
+          mdtMetaClient != null ? mdtMetaClient.getInstantFileNameGenerator() : fng;
       // MDT timeline always uses DELTA_COMMIT_ACTION regardless of data table type.
       String mdtAction = HoodieTimeline.DELTA_COMMIT_ACTION;
       HoodieInstant mdtReq = mdtIg.createNewInstant(HoodieInstant.State.REQUESTED, mdtAction, ts);
@@ -2388,9 +2412,6 @@ public class TimelineInspector {
           default:
             throw new IllegalArgumentException("unknown argument: " + k);
         }
-      }
-      if (a.helpRequested) {
-        return a;
       }
       if (a.mode == null) {
         throw new IllegalArgumentException(
