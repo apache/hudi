@@ -359,11 +359,13 @@ The v2 endpoints are served by the existing `TimelineHandler` (which already ser
 4. `getSchemaHistory(basePath, limit)` - reconstructs schema evolution from two sources; see
    [Schema-History Reconstruction](#schema-history-reconstruction) below.
 
-`getTimelineV2`, `getTableConfig` and `getSchemaHistory` each build a short-lived `HoodieTableMetaClient` for the
-request's basepath, read from it, and discard it - no metaClient is shared across Javalin's request threads. At
-human-click frequency the construction cost (one `hoodie.properties` read, plus one active-timeline listing for the
-timeline and schema routes) is negligible, and a fresh per-request instance is always current and keeps each request's
-read self-consistent. A long-lived per-basepath cache is deliberately avoided: the data must be re-read on every request
+All four methods - `getTimelineV2`, `getInstantDetails`, `getTableConfig` and `getSchemaHistory` - build a short-lived
+`HoodieTableMetaClient` for the request's basepath, read from it, and discard it; no metaClient is shared across
+Javalin's request threads. At human-click frequency the construction cost is negligible: every route pays one
+`hoodie.properties` read, and all but `getTableConfig` additionally pay one active-timeline listing (`getTimelineV2` to
+map it, `getInstantDetails` to resolve the instant it reads through `getContentStream`, `getSchemaHistory` to walk the
+completed commits). `getInstantDetails` then reads a single instant file's content on top of that. A fresh per-request
+instance is always current and keeps each request's read self-consistent. A long-lived per-basepath cache is deliberately avoided: the data must be re-read on every request
 anyway, so caching the metaClient would save little while forcing an in-place `reloadActiveTimeline()` /
 `reloadTableConfig()` on a mutable object shared across concurrent same-basepath requests. `HoodieTableMetaClient` marks
 its individual accessors `synchronized`, but a compound reload-then-read is not one critical section, so a concurrent
