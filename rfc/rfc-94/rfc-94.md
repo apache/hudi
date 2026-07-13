@@ -420,8 +420,16 @@ are immutable once written and need no refresh.
 `getSchemaHistory` combines both schema sources Hudi maintains, so it returns something useful whether or not the table
 uses schema evolution:
 
-- **`currentSchema`** - the current table schema from `TableSchemaResolver.getTableSchema()`; `null` if it cannot be
-  resolved.
+- **`currentSchema`** - the current table schema, resolved with
+  `TableSchemaResolver.getTableSchemaIfPresent(metaClient.getTableConfig().populateMetaFields())`; `null` when the
+  `Option` is empty.
+
+  Not `getTableSchema()`: that overload ends in `getTableSchemaInternal(...).orElseThrow(schemaNotFoundError())` and
+  raises `HoodieSchemaNotFoundException` on a table with no resolvable schema, so it cannot express "unresolved" as a
+  return value at all. `getTableSchemaIfPresent(boolean)` returns `Option<HoodieSchema>` and does not throw, which is
+  what this view needs - a brand-new table with no commits is a normal thing to point the UI at, not a 500. There is no
+  no-arg `getTableSchemaIfPresent`, so the call passes `populateMetaFields()` explicitly, which is exactly what the
+  no-arg `getTableSchema()` was supplying on our behalf.
 - **`history`** - walks the completed commits timeline (`commit`/`deltacommit`/`replacecommit`), the most recent `limit`
   instants only (default 200, capped at 1000), reading each instant's `HoodieCommitMetadata` and taking the schema under
   `HoodieCommitMetadata.SCHEMA_KEY` (the `schema` entry in commit `extraMetadata`). An entry (`instant`,
@@ -434,7 +442,9 @@ uses schema evolution:
 **Cost model:** one schema resolve, at most `limit` completed-commit metadata reads (bounded further by the active
 timeline, since the archived timeline is out of scope), and one `.schema` history-file read. A table that never evolved
 its schema resolves `currentSchema`, collapses `history` to a single entry (or none if no commit recorded a schema), and
-omits `internalSchemaHistory` - no extra scanning and no error.
+omits `internalSchemaHistory` - no extra scanning and no error. A table with *no* commits resolves `currentSchema` to
+`null` (empty `Option`) and `history` to `[]`; this is a 200, not an error, which is only true because the resolve goes
+through `getTableSchemaIfPresent` rather than `getTableSchema`.
 
 #### Registration in RequestHandler
 
@@ -448,6 +458,11 @@ The v2 routes are registered following the existing pattern:
 
 - **Invalid basepath** -> HTTP 400 with a descriptive error message (e.g., "Not a valid Hudi table path").
 - **Empty timeline** -> Returns an empty list `[]`. The frontend displays "No instants found".
+- **Unresolvable table schema** (e.g. a table with no commits) -> HTTP 200 with `currentSchema: null` and
+  `history: []`, *not* an error. A freshly-created table is a legitimate thing to open the UI against. This is why the
+  schema-history view resolves through `getTableSchemaIfPresent`; `getTableSchema()` would throw
+  `HoodieSchemaNotFoundException` here and turn an empty table into a 500.
+- **Instant not found in the active timeline** -> HTTP 404 (see [Handler Design](#handler-design)).
 - **Failed instant detail read** -> HTTP 500 with error details (e.g., Avro deserialization failure).
 
 ### Feature
@@ -759,6 +774,9 @@ Other features we can add later:
   at the traversal target and assert its content never appears in the response. A well-formed timestamp that is not in
   the active timeline must also return 404. This is the assertion the instant-detail route's safety rests on: it can
   only read instants the timeline actually lists.
+- **`TimelineHandler.getSchemaHistory()` on a table with no commits:** returns HTTP 200 with `currentSchema: null` and
+  `history: []`. Guards the `getTableSchemaIfPresent` vs `getTableSchema()` choice - the latter throws
+  `HoodieSchemaNotFoundException` on this input, so a regression here shows up as a 500 on a freshly-created table.
 - **Error cases**: Invalid basepath returns an appropriate error. Empty timeline returns an empty list.
 
 ### Integration Tests
