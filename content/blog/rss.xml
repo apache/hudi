@@ -121,7 +121,7 @@
             <link>https://hudi.apache.org/blog/2026/06/25/building-indexes-on-a-moving-target</link>
             <guid>https://hudi.apache.org/blog/2026/06/25/building-indexes-on-a-moving-target</guid>
             <pubDate>Thu, 25 Jun 2026 00:00:00 GMT</pubDate>
-            <description><![CDATA[---]]></description>
+            <description><![CDATA[Async indexing in Hudi lets you add a new index to a multi-petabyte table without stopping ingestion — and the design only works because MOR put the right primitives in place years earlier.]]></description>
             <content:encoded><![CDATA[<hr>
 <p><em>This is the third post in a series on Merge-On-Read as an architectural shift in Apache Hudi. The <a class="" href="https://hudi.apache.org/blog/2026/05/14/mor-isnt-a-storage-optimization-its-an-architectural-shift">first post</a> made the broad case; the <a class="" href="https://hudi.apache.org/blog/2026/06/05/why-metadata-has-to-be-mutation-friendly">second</a> showed how the metadata table inherits the same append-first model; this one follows the pattern one step further — into how new indexes can be added to a live table without stopping it.</em></p>
 <hr>
@@ -141,7 +141,7 @@
             <link>https://hudi.apache.org/blog/2026/06/15/apache-hudi-at-metica</link>
             <guid>https://hudi.apache.org/blog/2026/06/15/apache-hudi-at-metica</guid>
             <pubDate>Mon, 15 Jun 2026 00:00:00 GMT</pubDate>
-            <description><![CDATA[---]]></description>
+            <description><![CDATA[Metica built its first lakehouse from scratch on Apache Hudi and Amazon EMR — scaling from ~16 GB to billions of events without re-architecting, where every growth milestone became a config change, not a migration.]]></description>
             <content:encoded><![CDATA[<hr>
 <p><em>This blog post summarizes Metica's presentation led by Subash Prabanantham at the Apache Hudi Community Sync. Watch the recording on <a href="https://www.youtube.com/watch?v=6B2hMK9FuoQ" target="_blank" rel="noopener noreferrer" class="">YouTube</a>.</em></p>
 <hr>
@@ -227,7 +227,7 @@
             <link>https://hudi.apache.org/blog/2026/06/15/apache-hudi-at-penn-interactive</link>
             <guid>https://hudi.apache.org/blog/2026/06/15/apache-hudi-at-penn-interactive</guid>
             <pubDate>Mon, 15 Jun 2026 00:00:00 GMT</pubDate>
-            <description><![CDATA[---]]></description>
+            <description><![CDATA[How Penn Interactive, the online sports betting arm of Penn Entertainment, modernized its data platform using Apache Hudi HudiStreamer to ingest CDC from thousands of Kafka topics, orchestrate 100+ concurrent jobs with Argo Workflows, and deliver near real-time data freshness across thousands of tables.]]></description>
             <content:encoded><![CDATA[<hr>
 <p><em>This blog post summarizes Penn Entertainment's presentation led by Senior Data Engineer Sydney Horan at the Apache Hudi Community Sync. Watch the recording on <a href="https://www.youtube.com/watch?v=ZVN6t8zWeZ4" target="_blank" rel="noopener noreferrer" class="">YouTube</a>.</em></p>
 <p><strong>Note:</strong> The video presentation references DeltaStreamer, which was the legacy name for the tool. It has since been renamed to <a href="https://hudi.apache.org/docs/hoodie_streaming_ingestion#hudi-streamer" target="_blank" rel="noopener noreferrer" class="">Hudi Streamer</a>.</p>
@@ -320,7 +320,7 @@ The system also handles non-CDC data sources, such as:</p>
             <link>https://hudi.apache.org/blog/2026/06/15/apache-hudi-at-southwest-airlines</link>
             <guid>https://hudi.apache.org/blog/2026/06/15/apache-hudi-at-southwest-airlines</guid>
             <pubDate>Mon, 15 Jun 2026 00:00:00 GMT</pubDate>
-            <description><![CDATA[---]]></description>
+            <description><![CDATA[Southwest Airlines migrated its reservation data pipeline from an on-premise Ab Initio warehouse to an AWS lakehouse on Apache Hudi and EMR — implementing SCD Type 2 at scale and cutting job runtime from ~5 hours to ~1.5.]]></description>
             <content:encoded><![CDATA[<hr>
 <p><em>This blog post summarizes Southwest Airlines's presentation <strong>led by Tech Lead Data Engineer Koti Darla</strong> at the Apache Hudi Community Sync. Watch the recording on <a href="https://www.youtube.com/watch?v=X3FW4IYmYE4" target="_blank" rel="noopener noreferrer" class="">YouTube</a>.</em></p>
 <hr>
@@ -413,7 +413,7 @@ Here is an inside look at their architectural transition, key performance challe
             <link>https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0</link>
             <guid>https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0</guid>
             <pubDate>Wed, 10 Jun 2026 00:00:00 GMT</pubDate>
-            <description><![CDATA[Motivation]]></description>
+            <description><![CDATA[How Hudi 1.2.0's Record Level Index brings stateless global upserts to Flink — replacing multi-hundred-GB keyed state with a table-backed, engine-agnostic index.]]></description>
             <content:encoded><![CDATA[<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="motivation">Motivation<a href="https://hudi.apache.org/blog/2026/06/10/stateless-global-upserts-for-flink-streaming-in-apache-hudi-1-2-0#motivation" class="hash-link" aria-label="Direct link to Motivation" title="Direct link to Motivation" translate="no">​</a></h2>
 <p><a href="https://hudi.apache.org/releases/download#release-120" target="_blank" rel="noopener noreferrer" class="">Apache Hudi 1.2.0</a> introduces <a href="https://github.com/apache/hudi/pull/17610" target="_blank" rel="noopener noreferrer" class="">Record Level Index</a> (RLI) support for Flink writers, bringing scalable global upserts to streaming ingestion for the first time.</p>
 <p>Until now, Flink users had to choose between two indexing options. The <a href="https://hudi.apache.org/docs/ingestion_flink/#using-bucket-index" target="_blank" rel="noopener noreferrer" class="">bucket index</a> is fast and scalable, but only within a partition. The flink_state index can perform global lookups, but its index lives entirely inside Flink state, growing with table cardinality and becoming increasingly expensive to checkpoint, recover, and migrate.</p>
@@ -527,7 +527,7 @@ doesn't replay the index.
             <link>https://hudi.apache.org/blog/2026/06/07/apache-hudi-release-1-2-announcement</link>
             <guid>https://hudi.apache.org/blog/2026/06/07/apache-hudi-release-1-2-announcement</guid>
             <pubDate>Sun, 07 Jun 2026 00:00:00 GMT</pubDate>
-            <description><![CDATA[The Apache Hudi community is excited to announce the release of Apache Hudi 1.2, a major milestone that makes the open lakehouse ready for the next generation of data and AI. By introducing first-class support for semi-structured data, vectors, and binary objects, Hudi 1.2 unifies multimodal data for Analytics and AI-native applications into a single transactional lakehouse table, eliminating the need to duplicate data across multiple storage silos.]]></description>
+            <description><![CDATA[Apache Hudi 1.2 makes the open lakehouse a unified foundation for analytics and AI, with first-class support for vectors, binary objects, and semi-structured data alongside the records you already manage.]]></description>
             <content:encoded><![CDATA[<p>The Apache Hudi community is excited to announce the release of <a href="https://hudi.apache.org/releases/release-1.2" target="_blank" rel="noopener noreferrer" class="">Apache Hudi 1.2</a>, a major milestone that makes the open lakehouse ready for the next generation of data and AI. By introducing first-class support for semi-structured data, vectors, and binary objects, Hudi 1.2 unifies multimodal data for Analytics and AI-native applications into a single transactional lakehouse table, eliminating the need to duplicate data across multiple storage silos.</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="unified-data-foundation-for-analytics-and-ai">Unified Data Foundation for Analytics and AI<a href="https://hudi.apache.org/blog/2026/06/07/apache-hudi-release-1-2-announcement#unified-data-foundation-for-analytics-and-ai" class="hash-link" aria-label="Direct link to Unified Data Foundation for Analytics and AI" title="Direct link to Unified Data Foundation for Analytics and AI" translate="no">​</a></h2>
 <p><strong>Embracing Multimodal Data</strong>: AI-native applications increasingly combine structured records, semi-structured data, embeddings, and binary assets within a single workflow. These data representations are no longer peripheral artifacts. They are becoming core business assets that power search, recommendations, retrieval-augmented generation (RAG), observability, and intelligent applications.</p>
@@ -617,7 +617,7 @@ doesn't replay the index.
             <link>https://hudi.apache.org/blog/2026/06/05/why-metadata-has-to-be-mutation-friendly</link>
             <guid>https://hudi.apache.org/blog/2026/06/05/why-metadata-has-to-be-mutation-friendly</guid>
             <pubDate>Fri, 05 Jun 2026 00:00:00 GMT</pubDate>
-            <description><![CDATA[---]]></description>
+            <description><![CDATA[The Hudi metadata table is itself a Merge-on-Read table — here's why MOR's append-first mutation model is what makes a continuously evolving, indexing-rich metadata layer scale.]]></description>
             <content:encoded><![CDATA[<hr>
 <p><em>This post is the second in a series on Merge-On-Read as an architectural shift in Apache Hudi. The <a class="" href="https://hudi.apache.org/blog/2026/05/14/mor-isnt-a-storage-optimization-its-an-architectural-shift">first post</a> made the broad case; this one focuses on the place where the argument becomes impossible to ignore — the metadata table.</em></p>
 <hr>
@@ -641,7 +641,7 @@ where planning queries can take <a href="https://medium.com/the-data-therapy/how
             <link>https://hudi.apache.org/blog/2026/05/14/mor-isnt-a-storage-optimization-its-an-architectural-shift</link>
             <guid>https://hudi.apache.org/blog/2026/05/14/mor-isnt-a-storage-optimization-its-an-architectural-shift</guid>
             <pubDate>Thu, 14 May 2026 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <description><![CDATA[Why Merge-on-Read is a foundational design decision, not a storage tuning knob — and how it reshapes everything from concurrency to metadata.]]></description>
             <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/@simpsons/mor-isnt-a-storage-optimization-it-s-an-architectural-shift-75b3e46d39d2">here</a></span>]]></content:encoded>
             <category>mor</category>
             <category>merge on read</category>
@@ -655,7 +655,7 @@ where planning queries can take <a href="https://medium.com/the-data-therapy/how
             <link>https://hudi.apache.org/blog/2026/01/22/apache-hudi-at-applied-intuition</link>
             <guid>https://hudi.apache.org/blog/2026/01/22/apache-hudi-at-applied-intuition</guid>
             <pubDate>Thu, 22 Jan 2026 00:00:00 GMT</pubDate>
-            <description><![CDATA[---]]></description>
+            <description><![CDATA[How Applied Intuition reduced query times from 10 minutes to under 25 seconds and achieved 20x storage compression by migrating to an Apache Hudi-powered data lakehouse.]]></description>
             <content:encoded><![CDATA[<hr>
 <p><em>This post summarizes Applied Intuition's talk from the Apache Hudi community sync. Watch the recording on <a href="https://www.youtube.com/watch?v=gWw6hOcM-Fg" target="_blank" rel="noopener noreferrer" class="">YouTube</a>.</em></p>
 <hr>
@@ -719,7 +719,7 @@ where planning queries can take <a href="https://medium.com/the-data-therapy/how
             <link>https://hudi.apache.org/blog/2026/01/15/funding-circle</link>
             <guid>https://hudi.apache.org/blog/2026/01/15/funding-circle</guid>
             <pubDate>Thu, 15 Jan 2026 00:00:00 GMT</pubDate>
-            <description><![CDATA[---]]></description>
+            <description><![CDATA[How Funding Circle modernized its legacy data platform into an Apache Hudi lakehouse.]]></description>
             <content:encoded><![CDATA[<hr>
 <p><em>This post summarizes Funding Circle's presentation at the Apache Hudi Community Sync. Watch the recording on <a href="https://www.youtube.com/watch?v=P29dfaxUdTU" target="_blank" rel="noopener noreferrer" class="">YouTube</a>.</em></p>
 <hr>
@@ -833,7 +833,7 @@ where planning queries can take <a href="https://medium.com/the-data-therapy/how
             <link>https://hudi.apache.org/blog/2026/01/09/hudi-11-deep-dive-flink-async-instant-gen</link>
             <guid>https://hudi.apache.org/blog/2026/01/09/hudi-11-deep-dive-flink-async-instant-gen</guid>
             <pubDate>Fri, 09 Jan 2026 00:00:00 GMT</pubDate>
-            <description><![CDATA[---]]></description>
+            <description><![CDATA[Explore how Hudi 1.1 introduces asynchronous instant generation for Flink writers to eliminate throughput fluctuations in streaming ingestion.]]></description>
             <content:encoded><![CDATA[<hr>
 <p><em>This blog was translated from the <a href="https://mp.weixin.qq.com/s/3r06DFdkaiGkF1_7NiovZw" target="_blank" rel="noopener noreferrer" class="">original blog in Chinese</a>.</em></p>
 <hr>
@@ -949,7 +949,7 @@ where planning queries can take <a href="https://medium.com/the-data-therapy/how
             <link>https://hudi.apache.org/blog/2025/12/29/apache-hudi-2025-a-year-in-review</link>
             <guid>https://hudi.apache.org/blog/2025/12/29/apache-hudi-2025-a-year-in-review</guid>
             <pubDate>Mon, 29 Dec 2025 00:00:00 GMT</pubDate>
-            <description><![CDATA[As we close out 2025, it's clear that this has been a transformative year for Apache Hudi. The community continued to grow, delivered major advances in interoperability and performance, published "The Definitive Guide" book, and expanded our global reach through meetups, conferences, and adoption worldwide.]]></description>
+            <description><![CDATA[A look back at Apache Hudi in 2025: releases, community growth and ecosystem milestones.]]></description>
             <content:encoded><![CDATA[<img src="https://hudi.apache.org/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/00-og.png" alt="drawing" style="width:100%;display:block;margin-left:auto;margin-right:auto;margin-top:18pt;margin-bottom:18pt">
 <p>As we close out 2025, it's clear that this has been a transformative year for Apache Hudi. The community continued to grow, delivered major advances in interoperability and performance, published "The Definitive Guide" book, and expanded our global reach through meetups, conferences, and adoption worldwide.</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="community-and-growth">Community and Growth<a href="https://hudi.apache.org/blog/2025/12/29/apache-hudi-2025-a-year-in-review#community-and-growth" class="hash-link" aria-label="Direct link to Community and Growth" title="Direct link to Community and Growth" translate="no">​</a></h2>
@@ -1037,7 +1037,7 @@ where planning queries can take <a href="https://medium.com/the-data-therapy/how
             <link>https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi</link>
             <guid>https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi</guid>
             <pubDate>Mon, 22 Dec 2025 00:00:00 GMT</pubDate>
-            <description><![CDATA[---]]></description>
+            <description><![CDATA[How Zupee, India's largest skill-based Ludo platform, reduced S3 costs by 60% and achieved 15-minute ingestion SLAs using Apache Hudi's Metadata Table and Hudi Streamer.]]></description>
             <content:encoded><![CDATA[<hr>
 <p><em>This post summarizes Zupee's talk from the Apache Hudi community sync. Watch the recording on <a href="https://www.youtube.com/watch?v=Mpj8hnaZbe0" target="_blank" rel="noopener noreferrer" class="">YouTube</a>.</em></p>
 <hr>
@@ -1159,7 +1159,7 @@ where planning queries can take <a href="https://medium.com/the-data-therapy/how
             <link>https://hudi.apache.org/blog/2025/12/16/maximizing-throughput-nbcc</link>
             <guid>https://hudi.apache.org/blog/2025/12/16/maximizing-throughput-nbcc</guid>
             <pubDate>Tue, 16 Dec 2025 00:00:00 GMT</pubDate>
-            <description><![CDATA[Data lakehouses often run multiple concurrent writers—streaming ingestion, batch ETL, maintenance jobs. The default approach, Optimistic Concurrency Control (OCC), assumes conflicts are rare and handles them through retries. That assumption breaks down in increasingly common scenarios, such as running maintenance batch jobs on tables receiving streaming writes. When conflicts become the norm, retries pile up with OCC, and the write throughput tanks.]]></description>
+            <description><![CDATA[Learn how Hudi's Non-Blocking Concurrency Control eliminates retry storms for concurrent writers, maximizing throughput in streaming and mixed workloads.]]></description>
             <content:encoded><![CDATA[<p>Data lakehouses often run multiple concurrent writers—streaming ingestion, batch ETL, maintenance jobs. The default approach, Optimistic Concurrency Control (OCC), assumes conflicts are rare and handles them through retries. That assumption breaks down in increasingly common scenarios, such as running maintenance batch jobs on tables receiving streaming writes. When conflicts become the norm, retries pile up with OCC, and the write throughput tanks.</p>
 <p>Hudi introduced <a href="https://hudi.apache.org/docs/concurrency_control#non-blocking-concurrency-control" target="_blank" rel="noopener noreferrer" class="">Non-Blocking Concurrency Control (NBCC)</a> in release 1.0, solving this problem by allowing writers to append data files in parallel and using the write completion time to determine the serialization order for reads or merges. We'll explore why OCC struggles under real-world concurrency, how NBCC works under the hood, and how to configure NBCC in your pipelines.</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="the-problem-with-retries">The Problem with Retries<a href="https://hudi.apache.org/blog/2025/12/16/maximizing-throughput-nbcc#the-problem-with-retries" class="hash-link" aria-label="Direct link to The Problem with Retries" title="Direct link to The Problem with Retries" translate="no">​</a></h2>
@@ -1240,8 +1240,9 @@ where planning queries can take <a href="https://medium.com/the-data-therapy/how
             <link>https://hudi.apache.org/blog/2025/12/10/apache-hudi-11-deep-dive-optimizing-streaming-ingestion-with-flink</link>
             <guid>https://hudi.apache.org/blog/2025/12/10/apache-hudi-11-deep-dive-optimizing-streaming-ingestion-with-flink</guid>
             <pubDate>Wed, 10 Dec 2025 00:00:00 GMT</pubDate>
-            <description><![CDATA[---]]></description>
-            <content:encoded><![CDATA[<hr>
+            <description><![CDATA[How Apache Hudi 1.1 optimizes streaming ingestion with Apache Flink: Flink-native writers, faster operator SerDe, lower GC pressure, and benchmarks vs Hudi 1.0 and Apache Paimon.]]></description>
+            <content:encoded><![CDATA[<p>Apache Hudi 1.1 optimizes streaming ingestion with Apache Flink through three writer-side changes - a Flink-native record representation that avoids Kryo serialization during operator shuffles, a new write path that operates directly on Flink's <code>RowData</code> instead of converting records to Avro, and the elimination of record-level bytes copy when writing MOR log files - delivering about 3.5x the ingestion throughput of Hudi 1.0 in benchmarks. This post walks through each optimization and the benchmark results. If you are new to writing Hudi tables from Flink, start with the <a class="" href="https://hudi.apache.org/docs/flink-quick-start-guide">Flink quick start guide</a>.</p>
+<hr>
 <p><em>This blog was translated from the <a href="https://mp.weixin.qq.com/s/ek80Fzw30FOawk1qeWxtCw" target="_blank" rel="noopener noreferrer" class="">original blog in Chinese</a>.</em></p>
 <hr>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="background">Background<a href="https://hudi.apache.org/blog/2025/12/10/apache-hudi-11-deep-dive-optimizing-streaming-ingestion-with-flink#background" class="hash-link" aria-label="Direct link to Background" title="Direct link to Background" translate="no">​</a></h2>
@@ -1327,7 +1328,9 @@ where planning queries can take <a href="https://medium.com/the-data-therapy/how
 </ul>
 <p><img decoding="async" loading="lazy" alt="Benchmark results for string-heavy schemas" src="https://hudi.apache.org/assets/images/benchmark-string-schemas-52fce427657dee18c89ea3bd4c54e9c6.png" width="1622" height="1081" class="img_ev3q"></p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="summary">Summary<a href="https://hudi.apache.org/blog/2025/12/10/apache-hudi-11-deep-dive-optimizing-streaming-ingestion-with-flink#summary" class="hash-link" aria-label="Direct link to Summary" title="Direct link to Summary" translate="no">​</a></h2>
-<p>The optimizations in Hudi 1.1 around writer performance for Flink have brought significant, multi-fold improvements to streaming ingestion throughput. These enhancements are transparent and backward-compatible, allowing users to seamlessly upgrade their jobs from earlier Hudi versions to the latest version and enjoy the substantial performance gains without any additional operational overhead.</p>]]></content:encoded>
+<p>The optimizations in Hudi 1.1 around writer performance for Flink have brought significant, multi-fold improvements to streaming ingestion throughput. These enhancements are transparent and backward-compatible, allowing users to seamlessly upgrade their jobs from earlier Hudi versions to the latest version and enjoy the substantial performance gains without any additional operational overhead.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="faq">FAQ<a href="https://hudi.apache.org/blog/2025/12/10/apache-hudi-11-deep-dive-optimizing-streaming-ingestion-with-flink#faq" class="hash-link" aria-label="Direct link to FAQ" title="Direct link to FAQ" translate="no">​</a></h2>
+<section><details style="margin-bottom:0.75rem"><summary><strong>How much faster is Flink streaming ingestion in Hudi 1.1 compared to Hudi 1.0?</strong></summary><p style="margin-top:0.5rem">In benchmarks on a merge-on-read table with UPSERT operation and bucket index, Hudi 1.1 achieved about 3.5 times the streaming ingestion throughput of Hudi 1.0 on a numeric-heavy schema. The optimized shuffle SerDe alone (RFC-84) boosts average throughput by about 25%.</p></details><details style="margin-bottom:0.75rem"><summary><strong>Why was Avro a bottleneck in the older Flink write path?</strong></summary><p style="margin-top:0.5rem">Before Hudi 1.1, Flink RowData was converted to Avro records and serialized to Avro bytes, then deserialized again during log writing - redundant SerDe overhead at every step. The in-memory buffer of intermediate Avro objects also increased heap usage and GC pressure, and shuffles of the generic HoodieRecord type fell back to Flink's Kryo serializer, which is slow.</p></details><details style="margin-bottom:0.75rem"><summary><strong>What is the Flink-native write path introduced in Hudi 1.1?</strong></summary><p style="margin-top:0.5rem">RFC-87 makes the Flink writer wrap RowData directly inside a specialized HoodieFlinkRecord instead of converting it to an Avro record, so the entire write path operates on RowData. It adds a self-managed, reusable binary buffer that reduces GC pressure under high-throughput workloads, and supports both Avro (default, row-oriented) and Parquet (columnar) data blocks for MOR log files.</p></details><details style="margin-bottom:0.75rem"><summary><strong>How does Hudi 1.1 compare with Apache Paimon for streaming ingestion?</strong></summary><p style="margin-top:0.5rem">On the numeric-heavy Schema1 from the Paimon cluster benchmark, Paimon's throughput was slightly higher than Hudi 1.1, mainly because each HoodieRecord carries 5 extra String-type metadata fields by default. On string-heavy schemas, which are more common in production, Hudi 1.1 achieved the best throughput, since writing row-based Avro log files avoids the Parquet compression overhead Paimon incurs at write time.</p></details><details style="margin-bottom:0.75rem"><summary><strong>Do I need to change my Flink jobs to get these improvements?</strong></summary><p style="margin-top:0.5rem">No. The optimizations are transparent and backward-compatible, so existing jobs can upgrade from earlier Hudi versions and get the performance gains without additional operational overhead.</p></details></section>]]></content:encoded>
             <category>apache flink</category>
             <category>apache paimon</category>
             <category>performance</category>
