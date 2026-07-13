@@ -282,7 +282,7 @@ through a short-lived `HoodieTableMetaClient` built per request (see [Handler De
 | GET    | `/v2/hoodie/view/timeline/instants/all` | `basepath` (required)                                                 | `TimelineDTOV2` | All active instants (each with requested time, completion time, action, state), wrapped in a timeline DTO |
 | GET    | `/v2/hoodie/view/timeline/instant`      | `basepath`, `instant`, `instantaction`, `instantstate` (all required) | JSON string     | Deserialized content of a specific instant's metadata (Avro -> JSON). The triple must match an instant in the active timeline, else 404 - see [Handler Design](#handler-design) |
 | GET    | `/v2/hoodie/view/table/config`          | `basepath` (required)                                                 | JSON object     | The table's `hoodie.properties` (sorted)                                                     |
-| GET    | `/v2/hoodie/view/table/schema/history`  | `basepath` (required), `limit` (optional, default 200, max 1000)      | JSON object     | Current schema, per-commit schema-change history from the last `limit` commits, and `.schema` internal-schema history when present |
+| GET    | `/v2/hoodie/view/table/schema/history`  | `basepath` (required), `limit` (optional, default 200, max 1000)      | JSON object     | Current schema; schema-change history over the last `limit` commits, oldest entry typed `baseline` rather than `change`; the scanned `window` (with a `truncated` flag); and `.schema` internal-schema history when present |
 
 Static assets (JS, CSS, library files) are served from the classpath directory `src/main/resources/public/`, mounted
 under the `/ui/static/` URL prefix via Javalin's static-files `hostedPath` (e.g., `/ui/static/js/timeline.js`,
@@ -391,6 +391,15 @@ uses schema evolution:
   `HoodieCommitMetadata.SCHEMA_KEY` (the `schema` entry in commit `extraMetadata`). An entry (`instant`,
   `completionTime`, `action`, `schema`) is recorded only when the schema differs from the previous instant's, so runs of
   commits carrying the same schema collapse to one change entry. Instants whose metadata cannot be read are skipped.
+
+  **The oldest entry is a baseline, not a change.** It has no predecessor inside the scanned window, so emitting it as a
+  schema *change* would invent one - on a table with more than `limit` commits the schema may have been stable long
+  before it. It is therefore typed `baseline` ("the schema as of the oldest commit scanned"); every later entry is typed
+  `change`. This is a real distinction to the user, not a cosmetic one: the Schema History tab exists precisely to say
+  when the schema changed.
+- **`window`** - `{ oldestInstantScanned, truncated }`. `truncated` is true when completed commits exist older than the
+  scanned window, i.e. the `baseline` is the window edge rather than the table's first schema. Without this the
+  truncation is silent and the UI cannot distinguish the two, so it must be part of the response rather than inferred.
 - **`internalSchemaHistory`** (optional) - when `InternalSchema` is in use, the `.hoodie/.schema/` history string from
   `FileBasedInternalSchemaStorageManager` is added for richer evolution tracking. It is omitted when the `.schema`
   directory is absent - the common case for tables that never enabled schema evolution. The manager is constructed with
