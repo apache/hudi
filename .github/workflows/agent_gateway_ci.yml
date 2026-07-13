@@ -72,9 +72,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
-        with:
-          version: 'v3.16.4'
+      # helm is preinstalled on GitHub-hosted ubuntu runners. Do NOT add
+      # azure/setup-helm or other third-party actions here: the apache org
+      # allowlist only permits GitHub-created actions (actions/*) and a
+      # curated set, and anything else startup-fails the whole workflow.
       - name: Lint charts
         run: |
           # hudi-trino intentionally fails fast on default values (metastore
