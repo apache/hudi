@@ -439,12 +439,37 @@ uses schema evolution:
   `FileBasedInternalSchemaStorageManager.getHistorySchemaStr()` is added for richer evolution tracking. It is omitted
   when the `.schema` directory is absent - the common case for tables that never enabled schema evolution.
 
+  **Construct the manager with the request's metaClient**, i.e. the
+  `FileBasedInternalSchemaStorageManager(HoodieTableMetaClient)` overload - *not*
+  `FileBasedInternalSchemaStorageManager(HoodieStorage, StoragePath)`. The latter leaves its `metaClient` field null and
+  lazily builds an entirely separate `HoodieTableMetaClient` inside `getMetaClient()`, so every schema-history request
+  would pay a second `hoodie.properties` read and a second active-timeline listing on top of the one the handler already
+  did. Sharing the request's metaClient makes both free, since `getActiveTimeline()` is cached on it.
+
+  Note the `.schema` files are an append-only log: the newest valid `.schemacommit` already contains *all* prior schema
+  versions (`SerDeHelper.parseSchemas` parses it into a `TreeMap` keyed by version), so `getHistorySchemaStr()` reads
+  exactly one file - it sorts the valid `.schemacommit` names and opens only the last. The
+  `getCommitsTimeline().filterCompletedInstants()` walk it performs first is *not* history reconstruction; it exists to
+  discard residual `.schemacommit` files left behind by aborted schema changes, whose timestamps are not completed
+  commits. Do not "optimize" that away by taking the lexicographic max filename - it would resurrect uncommitted
+  schemas.
+
 **Cost model:** one schema resolve, at most `limit` completed-commit metadata reads (bounded further by the active
-timeline, since the archived timeline is out of scope), and one `.schema` history-file read. A table that never evolved
-its schema resolves `currentSchema`, collapses `history` to a single entry (or none if no commit recorded a schema), and
-omits `internalSchemaHistory` - no extra scanning and no error. A table with *no* commits resolves `currentSchema` to
-`null` (empty `Option`) and `history` to `[]`; this is a 200, not an error, which is only true because the resolve goes
-through `getTableSchemaIfPresent` rather than `getTableSchema`.
+timeline, since the archived timeline is out of scope), and - for `internalSchemaHistory` - one in-memory walk of the
+already-loaded completed-commits timeline, one `storage.exists(.schema)`, and, only when `.schema` is present, one
+directory listing plus one read of the newest valid `.schemacommit`.
+
+The timeline walk is worth being precise about, because `getHistorySchemaStr()` performs it *before* it checks whether
+`.schema` exists - a table with no schema evolution still pays it. It is cheap only because the manager is handed the
+request's metaClient, whose active timeline is already loaded and cached, making the walk an in-memory filter rather
+than a storage listing. Construct it with the `HoodieStorage`/`StoragePath` overload instead and the same call becomes a
+second metaClient build and a second timeline listing per request.
+
+A table that never evolved its schema therefore resolves `currentSchema`, collapses `history` to a single entry (or none
+if no commit recorded a schema), and omits `internalSchemaHistory` - one extra `exists()` call, no directory scan, no
+error. A table with *no* commits resolves `currentSchema` to `null` (empty `Option`) and `history` to `[]`; this is a
+200, not an error, which is only true because the resolve goes through `getTableSchemaIfPresent` rather than
+`getTableSchema`.
 
 #### Registration in RequestHandler
 
