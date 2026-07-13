@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
 import java.time.ZonedDateTime;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -51,7 +52,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 
@@ -153,15 +153,9 @@ public class CleanerUtils {
       ZonedDateTime latestDateTime = ZonedDateTime.ofInstant(latestInstant, timeZone.getZoneId());
       String earliestTimeToRetain = TimelineUtils.formatDate(Date.from(latestDateTime.minusHours(hoursRetained).toInstant()));
       earliestCommitToRetain = Option.fromJavaOptional(completedCommitsTimeline.getInstantsAsStream()
-          .filter(i -> compareTimestamps(i.requestedTime(), GREATER_THAN_OR_EQUALS, earliestTimeToRetain))
-          .findFirst());
-
-      Option<HoodieInstant> earliestPendingCommit = commitsTimeline.filter(s -> !s.isCompleted()).firstInstant();
-      if (earliestPendingCommit.isPresent()
-          && earliestCommitToRetain.isPresent()
-          && compareTimestamps(earliestPendingCommit.get().requestedTime(), LESSER_THAN, earliestCommitToRetain.get().requestedTime())) {
-        earliestCommitToRetain = completedCommitsTimeline.findInstantsBefore(earliestPendingCommit.get().requestedTime()).lastInstant();
-      }
+          .filter(i -> compareTimestamps(getCompletionTimeOrRequestedTime(i), GREATER_THAN_OR_EQUALS, earliestTimeToRetain))
+          // ECTR remains a requested-time boundary, so choose the earliest requested instant still in the completion-time window.
+          .min(Comparator.comparing(HoodieInstant::requestedTime)));
     }
 
     // Apply maxCommitsToClean cap if configured and applicable
@@ -174,6 +168,10 @@ public class CleanerUtils {
     }
 
     return earliestCommitToRetain;
+  }
+
+  private static String getCompletionTimeOrRequestedTime(HoodieInstant instant) {
+    return StringUtils.isNullOrEmpty(instant.getCompletionTime()) ? instant.requestedTime() : instant.getCompletionTime();
   }
 
   /**

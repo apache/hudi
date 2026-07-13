@@ -211,6 +211,7 @@ public class FlinkWriteClients {
                 .build())
             .withArchivalConfig(HoodieArchivalConfig.newBuilder()
                 .archiveCommitsWith(conf.get(FlinkOptions.ARCHIVE_MIN_COMMITS), conf.get(FlinkOptions.ARCHIVE_MAX_COMMITS))
+                .withBlockArchivalOnCleanECTR(conf.get(FlinkOptions.ARCHIVE_BLOCK_ON_CLEAN_ECTR))
                 .build())
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                 .withTargetIOPerCompactionInMB(conf.get(FlinkOptions.COMPACTION_TARGET_IO))

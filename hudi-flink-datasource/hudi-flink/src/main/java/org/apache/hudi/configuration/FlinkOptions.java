@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -1093,6 +1094,12 @@ public class FlinkOptions extends HoodieConfig {
       .intType()
       .defaultValue(40)// default min 40 commits
       .withDescription("Min number of commits to keep before archiving older commits into a sequential log, default 40");
+
+  public static final ConfigOption<Boolean> ARCHIVE_BLOCK_ON_CLEAN_ECTR = ConfigOptions
+      .key(HoodieArchivalConfig.BLOCK_ARCHIVAL_ON_LATEST_CLEAN_ECTR.key())
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether archival should keep commits at or after the earliest commit to retain from the latest completed clean.");
 
   // ------------------------------------------------------------------------
   //  Clustering Options

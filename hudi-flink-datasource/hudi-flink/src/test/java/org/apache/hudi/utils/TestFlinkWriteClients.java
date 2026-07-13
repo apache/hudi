@@ -300,6 +300,7 @@ public class TestFlinkWriteClients {
     conf.set(FlinkOptions.CLEAN_RETAIN_HOURS, 48);
     conf.set(FlinkOptions.CLEAN_MAX_COMMITS_TO_CLEAN, 7L);
     conf.set(FlinkOptions.CLEAN_EMPTY_INTERVAL_HOURS, 2L);
+    conf.set(FlinkOptions.ARCHIVE_BLOCK_ON_CLEAN_ECTR, true);
     StreamerUtil.initTableIfNotExists(conf);
 
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
@@ -308,6 +309,7 @@ public class TestFlinkWriteClients {
     assertEquals(48, writeConfig.getCleanerHoursRetained());
     assertEquals(7L, writeConfig.getMaxCommitsToClean());
     assertEquals(2L, writeConfig.getIntervalToCreateEmptyCleanHours());
+    assertTrue(writeConfig.shouldBlockArchivalOnCleanECTR());
   }
 
   @Test
