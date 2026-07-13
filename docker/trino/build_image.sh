@@ -16,10 +16,14 @@
 # limitations under the License.
 
 # Builds the apachehudi/hudi-trino_<version> image with a locally-built
-# trino-hudi plugin baked in. The plugin dir (e.g.
-# hudi-trino-plugin/target/trino-hudi-<v>) is staged into the build context at
-# docker/trino/plugin/ (gitignored), then baked into the image.
+# trino-hudi plugin baked in. The plugin dir (typically the in-repo shim's
+# docker/trino/shim/target/trino-hudi-<v>, see docker/trino/shim/pom.xml) is
+# staged into the build context at docker/trino/plugin/ (gitignored), then
+# baked into the image.
 # Usage: ./build_image.sh --plugin-dir <path> [--trino-version <v>] [--image-tag <t>]
+# Typical: ./build_image.sh --plugin-dir "$(dirname "$0")/shim/target/trino-hudi-481"
+# Note: --trino-version must match the shim pom's parent version and the root
+# pom's trino.version property.
 
 set -e
 

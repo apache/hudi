@@ -18,8 +18,9 @@
 # under the License.
 #
 # Overlay-aware Trino entrypoint. If a plugin overlay is bind-mounted at
-# /opt/hudi-plugin-overlay (set TRINO_PLUGIN_DIR to the Trino repo's
-# plugin/trino-hudi/target/trino-hudi-<ver> build output), fully replace the
+# /opt/hudi-plugin-overlay (set TRINO_PLUGIN_DIR to the in-repo shim's
+# docker/trino/shim/target/trino-hudi-<ver> build output, or to a trinodb/trino
+# checkout's plugin/trino-hudi/target/trino-hudi-<ver>), fully replace the
 # image's baked-in trino-hudi plugin with it (rm -rf then copy), so plugin
 # iterations need only a rebuild of that dir plus a container restart, not a
 # docker image rebuild. Otherwise the image-baked plugin is used as-is.
@@ -38,6 +39,14 @@ if [ -d "$OVERLAY" ] && [ -n "$(find "$OVERLAY" -name '*.jar' -print -quit 2>/de
   cp -r "$OVERLAY"/. "$PLUGIN_DIR"/
 else
   echo "No plugin overlay found at $OVERLAY; using the image-baked trino-hudi plugin as-is."
+fi
+
+# Overlays built from the in-repo shim (docker/trino/shim/target/trino-hudi-<ver>)
+# lack the hdfs/ loader dir that fs.hadoop.enabled=true needs; restore the copy
+# the image preserved from the stock plugin (see Dockerfile).
+if [ ! -d "$PLUGIN_DIR/hdfs" ] && [ -d /opt/hudi-hdfs-lib ]; then
+  echo "Restoring hdfs/ loader dir into $PLUGIN_DIR from /opt/hudi-hdfs-lib"
+  cp -r /opt/hudi-hdfs-lib "$PLUGIN_DIR/hdfs"
 fi
 
 exec /usr/lib/trino/bin/run-trino

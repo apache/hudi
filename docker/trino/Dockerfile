@@ -22,8 +22,22 @@ USER root
 
 # Replace the bundled hudi plugin with the locally-built trino-hudi plugin
 # staged into the build context at plugin/ (see build_image.sh).
-RUN rm -rf /usr/lib/trino/plugin/hudi
+#
+# The staged plugin dir carries only the connector's top-level runtime jars.
+# fs.hadoop.enabled=true additionally needs the isolated HDFS loader jar set at
+# <plugin>/hdfs (io.trino.filesystem.manager.HdfsFileSystemLoader). That jar set
+# is only distributed inside the trino-server tarball / base image
+# (io.trino:trino-hdfs:zip is not on Maven Central), so preserve the stock hudi
+# plugin's version-matched copy before replacing it, and re-attach it when the
+# staged plugin dir lacks one. /opt/hudi-hdfs-lib stays in the image so the
+# overlay entrypoint can do the same for bind-mounted plugin overlays.
+RUN cp -r /usr/lib/trino/plugin/hudi/hdfs /opt/hudi-hdfs-lib \
+    && rm -rf /usr/lib/trino/plugin/hudi
 COPY --chown=trino:trino plugin/ /usr/lib/trino/plugin/hudi/
+RUN if [ ! -d /usr/lib/trino/plugin/hudi/hdfs ]; then \
+        cp -r /opt/hudi-hdfs-lib /usr/lib/trino/plugin/hudi/hdfs; \
+    fi \
+    && chown -R trino:trino /usr/lib/trino/plugin/hudi /opt/hudi-hdfs-lib
 
 # Bake the Hudi E2E Trino config (coordinator, catalog, hadoop-conf) into the image.
 COPY --chown=trino:trino etc/ /etc/trino/
