@@ -389,10 +389,14 @@ The v2 endpoints are served by the existing `TimelineHandler` (which already ser
    timestamps that simply do not exist in the table, so the route can only ever read instants the timeline itself
    lists. The instant generator is then only used for instants that came from the timeline.
 
-   Unlike the deprecated `getInstantDetails()`, which read into a `byte[]` and closed the stream itself,
-   `getContentStream` hands back a raw open stream (`metaClient.getStorage().open(...)`) that the caller owns. The
-   handler must read it under try-with-resources so the handle is released on the deserialization-failure path too, not
-   just on success.
+   **Stream ownership applies to every timeline content read in this RFC, not just this one.** Unlike the deprecated
+   `getInstantDetails()`, which read into a `byte[]` and closed the stream itself, `getContentStream` hands back a raw
+   open stream (`metaClient.getStorage().open(...)`) that the caller owns. Every such read - this route, and the up-to
+   `limit` per-instant commit-metadata reads in [Schema-History Reconstruction](#schema-history-reconstruction) - goes
+   through a single shared helper that closes under try-with-resources, so the handle is released on the
+   deserialization-failure path and not only on success. The schema-history path is the one that actually matters: at up
+   to 1000 reads per request, with a Refresh control re-issuing the fetch, a leaked handle there exhausts file
+   descriptors quickly.
 3. `getTableConfig(basePath)` - returns the table's `hoodie.properties` as a sorted JSON object.
 4. `getSchemaHistory(basePath, limit)` - reconstructs schema evolution from two sources; see
    [Schema-History Reconstruction](#schema-history-reconstruction) below.
@@ -478,6 +482,17 @@ The v2 routes are registered following the existing pattern:
 - The v1 timeline routes remain registered unconditionally in `registerTimelineAPI()`.
 - The v2 UI routes are registered in `registerTimelineV2API()`, called from `register()` only when `--enable-ui` is set.
   `UiHandler` (serving `/ui`) and the static-file serving are gated by the same flag.
+- **The flag alone is not a sufficient gate.** Stripping `public/**` from the engine bundles (see
+  [Dependency Impact](#dependency-impact)) removes the *assets* but not the *code*: `TimelineService` still ships in all
+  six bundles, so `--enable-ui` remains reachable from a bundle that has no assets. Javalin resolves a
+  classpath static-files directory eagerly at `Javalin.create()`, so registering `/public` when it is absent throws -
+  and `startServiceOnPort` treats any non-bind exception as a port problem, retrying 16 times and finally reporting a
+  port failure. A missing resource would surface as a misleading "could not start on port N" error.
+
+  Static-file registration is therefore conditional on the assets actually being present
+  (`TimelineService.class.getResource("/public") != null`), and enabling the UI without them fails fast with an explicit
+  "UI assets not bundled in this jar" message. The embedded follow-up sharpens this rather than removing it, since it
+  lifts the asset exclusion for some bundles and not others.
 
 #### Error Handling
 
@@ -718,8 +733,18 @@ This keeps `hudi-client-common` free of any Spark compile-time dependency while 
   NOTICE entries, and vis-timeline is taken under its MIT option (ASF policy discourages adding MIT/ISC copyrights to
   `NOTICE`); were vis-timeline instead taken under Apache-2.0, any upstream `NOTICE` content it ships would have to be
   propagated.
-- **Spark UI tab (planned follow-up):** Will use existing `spark-core` APIs (`WebUITab`, `WebUIPage`), already provided
-  in `hudi-spark-client`. No new JARs are added.
+- **Spark UI tab (planned follow-up):** Adds no new JARs - but it rests on Spark *internals*, not public `spark-core`
+  API, and the follow-up should go in with that understood. `WebUITab`, `WebUIPage`, `WebUI.attachTab`/`detachTab` and
+  `SparkContext.ui` are all `private[spark]`. Three consequences:
+    - The tab must be declared in an `org.apache.spark` package. The repo already does this elsewhere
+      (`HoodieSparkKryoRegistrar`, under `hudi-spark-client/src/main/scala/org/apache/spark/`).
+    - It must be **Scala**, not Java. Java can reach these symbols, since Scala's qualified-private erases to
+      bytecode-public, but `WebUIPage.render` returns `Seq[Node]`, which erases to `scala.collection.Seq` on Scala 2.12
+      and `scala.collection.immutable.Seq` on 2.13 - so no single Java source implements it for both profiles Hudi
+      cross-builds.
+    - These internals carry no cross-version stability guarantee across the Spark versions Hudi supports. The tab is a
+      convenience entry point, so if a future Spark release moves them, dropping the tab must remain an option that
+      leaves the standalone UI unaffected.
 - **No frontend build pipeline.** No npm, webpack, or vite. The JS/CSS files are committed directly and served as-is.
 
 ## Additional Quality of Life (QoL) Features to be Considered
@@ -797,8 +822,13 @@ Other features we can add later:
 - **`getInstantDetails()` path traversal (negative case):** an `instant` param of `../../../../tmp/x` (and similar
   `..`-bearing values) must return 404 and must not read outside the table's timeline directory. Plant a readable file
   at the traversal target and assert its content never appears in the response. A well-formed timestamp that is not in
-  the active timeline must also return 404. This is the assertion the instant-detail route's safety rests on: it can
-  only read instants the timeline actually lists.
+  the active timeline must also return 404.
+
+  **Pin this case to `instantstate=REQUESTED`/`INFLIGHT`.** A `COMPLETED` probe does not exercise the hole: a completed
+  `HoodieInstant` reconstructed from request params has a null completion time, and `getInstantFileName` already
+  resolves that against the timeline and throws before reaching `StoragePath`. A traversal test sent with
+  `instantstate=COMPLETED` would pass against the *unfixed* handler and prove nothing. The pending states are the ones
+  where the reconstructed instant goes straight to the file-name generator.
 - **`TimelineHandler.getSchemaHistory()` on a table with no commits:** returns HTTP 200 with `currentSchema: null` and
   `history: []`. Guards the `getTableSchemaIfPresent` vs `getTableSchema()` choice - the latter throws
   `HoodieSchemaNotFoundException` on this input, so a regression here shows up as a 500 on a freshly-created table.
@@ -821,15 +851,20 @@ Following the pattern established by `TestTimelineService.java`:
 
 ### Bundle Packaging
 
-The `public/**` shade exclusion in [Dependency Impact](#dependency-impact) is silent when it regresses: drop the filter
-and the assets simply reappear in every engine bundle, with nothing failing. Guard it in `packaging/bundle-validation`:
+The `public/**` shade exclusion in [Dependency Impact](#dependency-impact) regresses silently: drop the filter and the
+assets simply reappear in every engine bundle, with nothing failing. It needs a guard asserting that
+`hudi-timeline-server-bundle` **contains** `public/index.html` and `public/lib/**`, and that the five engine bundles
+contain **no** `public/**` entries. The negative assertion is the load-bearing one - it is what keeps the LICENSE
+obligations scoped to the server bundle, and what the embedded-UI follow-up must consciously relax rather than silently
+break.
 
-- Assert `hudi-timeline-server-bundle` **contains** `public/index.html` and `public/lib/**`.
-- Assert `hudi-spark-bundle`, `hudi-flink-bundle`, `hudi-utilities-bundle`, `hudi-kafka-connect-bundle` and
-  `hudi-integ-test-bundle` contain **no** `public/**` entries.
-
-The second assertion is the one that matters - it is what keeps the LICENSE obligations scoped to the server bundle, and
-it is what the embedded-UI follow-up must consciously relax rather than silently break.
+**This guard is net-new tooling, not a small addition to an existing pattern.** `packaging/bundle-validation` cannot
+host it as-is: `ci_run.sh` copies only the flink, kafka-connect, metaserver-server, cli, hadoop-mr, spark, utilities and
+utilities-slim bundles into the validation image, so neither `hudi-timeline-server-bundle` (the positive assertion) nor
+`hudi-integ-test-bundle` (one negative assertion) has a bundle to run against. The harness is also a Docker *runtime*
+smoke test and has no jar-content assertion primitive - there is no `jar tf` or `unzip -l` anywhere under it. Landing
+this check therefore means wiring two bundles into that job and adding a content-inspection step, or siting the check
+somewhere jar contents are already inspectable. Sizing it honestly here so it is not discovered during implementation.
 
 ### Manual Testing Checklist
 
