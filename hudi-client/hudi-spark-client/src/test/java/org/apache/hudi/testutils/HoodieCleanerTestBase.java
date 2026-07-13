@@ -224,8 +224,10 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
       metadataWriter.performTableServices(Option.of(instantTime), true);
       metadataWriter.update(commitMeta, instantTime);
       metaClient.getActiveTimeline().saveAsComplete(
+          true,
           INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
-          Option.of(commitMeta));
+          Option.of(commitMeta),
+          Option.of(instantTime));
       metaClient = HoodieTableMetaClient.reload(metaClient);
     }
   }

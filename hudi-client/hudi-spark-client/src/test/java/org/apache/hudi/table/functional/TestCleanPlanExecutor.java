@@ -1031,7 +1031,9 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
     testTable.withBaseFilesInPartition(partition, fileId);
     HoodieCommitMetadata commitMeta = generateCommitMetadata(commitTimeTs, Collections.singletonMap(partition, Collections.singletonList(fileId)));
     metaClient.getActiveTimeline().saveAsComplete(
+        true,
         new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTimeTs, INSTANT_COMPARATOR.completionTimeOrderedComparator()),
-        Option.of(commitMeta));
+        Option.of(commitMeta),
+        Option.of(commitTimeTs));
   }
 }
