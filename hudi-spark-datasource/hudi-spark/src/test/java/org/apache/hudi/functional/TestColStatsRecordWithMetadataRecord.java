@@ -219,7 +219,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     List<HoodieRecord<HoodieMetadataPayload>> allRecords = new ArrayList<>();
     while (itr.hasNext()) {
       GenericRecord genericRecord = (GenericRecord) ((HoodieRecord) itr.next()).getData();
-      HoodieRecord<HoodieMetadataPayload> mdtRec = HoodieAvroUtils.convertToHoodieRecordPayload(genericRecord,
+      HoodieRecord<HoodieMetadataPayload> mdtRec = HoodieAvroUtils.convertToRecord(genericRecord,
           mdtWriteConfig.getPayloadClass(), new String[0],
           Pair.of(mdtMetaClient.getTableConfig().getRecordKeyFieldProp(), mdtMetaClient.getTableConfig().getPartitionFieldProp()),
           false, Option.of(COLUMN_STATS.getPartitionPath()), Option.empty());

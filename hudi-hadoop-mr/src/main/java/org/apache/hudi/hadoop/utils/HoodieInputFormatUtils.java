@@ -75,6 +75,7 @@ import org.apache.hadoop.mapreduce.JobContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -404,7 +405,13 @@ public class HoodieInputFormatUtils {
   public static HoodieTableMetaClient getTableMetaClientForBasePathUnchecked(Configuration conf, Path partitionPath) throws IOException {
     HoodieStorage storage = HoodieStorageUtils.getStorage(
         partitionPath.toString(), HadoopFSUtils.getStorageConf(conf));
-    Option<StoragePath> baseDir = TablePathUtils.getTablePath(storage, convertToStoragePath(partitionPath));
+    Option<StoragePath> baseDir;
+    try {
+      baseDir = TablePathUtils.getTablePath(storage, convertToStoragePath(partitionPath));
+    } catch (FileNotFoundException e) {
+      // preserve the historical contract: a nonexistent input path surfaces as table-not-found
+      throw new TableNotFoundException(partitionPath.toString());
+    }
     if (!baseDir.isPresent()) {
       throw new TableNotFoundException(partitionPath.toString());
     }

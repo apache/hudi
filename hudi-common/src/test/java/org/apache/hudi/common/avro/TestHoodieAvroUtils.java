@@ -61,9 +61,11 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
@@ -1150,5 +1152,43 @@ public class TestHoodieAvroUtils {
         Arguments.of(HoodieDeleteRecordList.class),
         Arguments.of(HoodieCommitMetadata.class)
     );
+  }
+
+  /**
+   * Verifies convertToRecord: key/partition extraction from meta fields, ordering value from the
+   * preCombine field, explicit partition-name override, and meta-field stripping via
+   * schemaWithoutMetaFields.
+   */
+  @Test
+  public void testConvertToRecord() throws IOException {
+    Schema schema = new Schema.Parser().parse(EXAMPLE_SCHEMA_WITH_META_FIELDS);
+    GenericRecord rec = new GenericData.Record(schema);
+    rec.put("_hoodie_commit_time", "001");
+    rec.put("_hoodie_commit_seqno", "001_1_1");
+    rec.put("_hoodie_record_key", "key1");
+    rec.put("_hoodie_partition_path", "2024/01/01");
+    rec.put("_hoodie_file_name", "f1");
+    rec.put("timestamp", 3.5);
+    rec.put("_row_key", "key1");
+    rec.put("non_pii_col", "val1");
+    rec.put("pii_col", "val2");
+
+    // key and partition come from the meta fields; ordering value from the preCombine field
+    HoodieRecord<OverwriteWithLatestAvroPayload> record = HoodieAvroUtils.convertToRecord(
+        rec, OverwriteWithLatestAvroPayload.class.getName(), new String[] {"timestamp"}, false);
+    assertEquals(new HoodieKey("key1", "2024/01/01"), record.getKey());
+    assertNull(record.getOperation());
+    assertEquals(3.5, ((Double) record.getData().getOrderingValue()).doubleValue());
+
+    // explicit partition name wins over the meta field; meta fields stripped from the payload
+    HoodieSchema schemaWithoutMetaFields = HoodieSchema.parse(EXAMPLE_SCHEMA);
+    HoodieRecord<OverwriteWithLatestAvroPayload> overridden = HoodieAvroUtils.convertToRecord(
+        rec, OverwriteWithLatestAvroPayload.class.getName(), new String[] {"timestamp"}, false,
+        Option.of("override_partition"), Option.of(schemaWithoutMetaFields));
+    assertEquals(new HoodieKey("key1", "override_partition"), overridden.getKey());
+    GenericRecord stripped =
+        (GenericRecord) overridden.getData().getInsertValue(schemaWithoutMetaFields.toAvroSchema()).get();
+    assertEquals(NUM_FIELDS_IN_EXAMPLE_SCHEMA, stripped.getSchema().getFields().size());
+    assertEquals("key1", stripped.get("_row_key").toString());
   }
 }

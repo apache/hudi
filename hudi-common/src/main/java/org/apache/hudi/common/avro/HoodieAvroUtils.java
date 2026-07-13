@@ -1412,13 +1412,13 @@ public class HoodieAvroUtils {
       boolean populateMetaFields,
       Option<HoodieSchema> schemaWithoutMetaFields) {
     if (populateMetaFields) {
-      return convertToHoodieRecordPayload((GenericRecord) data,
+      return convertToRecord((GenericRecord) data,
           payloadClass, preCombineFields, withOperation);
     } else if (simpleKeyGenFieldsOpt.isPresent()) {
-      return convertToHoodieRecordPayload((GenericRecord) data,
+      return convertToRecord((GenericRecord) data,
           payloadClass, preCombineFields, simpleKeyGenFieldsOpt.get(), withOperation, partitionNameOp, schemaWithoutMetaFields);
     } else {
-      return convertToHoodieRecordPayload((GenericRecord) data,
+      return convertToRecord((GenericRecord) data,
           payloadClass, preCombineFields, withOperation, partitionNameOp, schemaWithoutMetaFields);
     }
   }
@@ -1426,18 +1426,18 @@ public class HoodieAvroUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
-  public static <R> HoodieRecord<R> convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz, String[] preCombineFields, boolean withOperationField) {
-    return convertToHoodieRecordPayload(rec, payloadClazz, preCombineFields,
+  public static <R> HoodieRecord<R> convertToRecord(GenericRecord rec, String payloadClazz, String[] preCombineFields, boolean withOperationField) {
+    return convertToRecord(rec, payloadClazz, preCombineFields,
         Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
         withOperationField, Option.empty(), Option.empty());
   }
 
-  public static <R> HoodieRecord<R> convertToHoodieRecordPayload(GenericRecord record, String payloadClazz,
+  public static <R> HoodieRecord<R> convertToRecord(GenericRecord record, String payloadClazz,
                                                                  String[] preCombineFields,
                                                                  boolean withOperationField,
                                                                  Option<String> partitionName,
                                                                  Option<HoodieSchema> schemaWithoutMetaFields) {
-    return convertToHoodieRecordPayload(record, payloadClazz, preCombineFields,
+    return convertToRecord(record, payloadClazz, preCombineFields,
         Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
         withOperationField, partitionName, schemaWithoutMetaFields);
   }
@@ -1445,7 +1445,7 @@ public class HoodieAvroUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
-  public static <R> HoodieRecord<R> convertToHoodieRecordPayload(GenericRecord record, String payloadClazz,
+  public static <R> HoodieRecord<R> convertToRecord(GenericRecord record, String payloadClazz,
                                                                  String[] preCombineFields,
                                                                  Pair<String, String> recordKeyPartitionPathFieldPair,
                                                                  boolean withOperationField,
