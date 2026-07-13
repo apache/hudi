@@ -106,19 +106,32 @@ The following are **out of scope**:
 - **Authentication/authorization:** No access control is added. The timeline server is assumed to run in a trusted
   network, same as today.
 
-  **Threat model:** The timeline and instant-detail views are `/v1`-parity - they read the same active-timeline and
-  filesystem metadata the existing `/v1/` REST APIs already serve, on the same network interface (the server binds to
-  all interfaces on the driver/standalone host). Two views widen the read surface beyond `/v1`, whose routes serve only
-  file-slice/base-file/timeline DTOs: the table-config view (`/v2/hoodie/view/table/config`) returns the full
-  `hoodie.properties` via `HoodieTableConfig.getProps()`, and the schema-history view
-  (`/v2/hoodie/view/table/schema/history`) exposes current and historical table schemas. Table properties can reference
-  sensitive material - KMS endpoints, lock-provider connection strings, external key/vault paths - though they rarely
-  embed secrets directly. The first cut serves table config unfiltered (sorted, as-is); the same content is already
-  readable by anyone with filesystem access to `.hoodie/hoodie.properties`. The primary control is that all UI routes,
-  including these two, are gated behind `--enable-ui` (off by default), with the server assumed to run on a trusted
-  network; a redacting/allowlisted config view is a possible future refinement for less-trusted interfaces. The UI adds
-  no write or mutation capability. Operators on untrusted networks should front the server with a reverse proxy or
-  restrict it to a private interface / localhost via network policy.
+  **Threat model:** None of the four UI views is `/v1`-parity. The existing `/v1/` routes serve only
+  file-slice/base-file DTOs plus filename-level instant DTOs (action, requested/completion time, state); every `/v2`
+  view widens the read surface beyond that:
+
+    - **Timeline** (`/v2/hoodie/view/timeline/instants/all`) is a superset of `/v1`'s `timeline/instants/all`. The
+      `/v1` route is served from the `FileSystemView`'s write timeline, which is restricted to completed instants plus
+      pending (log)compaction, and to write actions only. The `/v2` route reads the full active timeline, so it
+      additionally exposes `clean`, `rollback`, `savepoint`, `restore` and `indexing` instants, and every
+      requested/inflight state.
+    - **Instant detail** (`/v2/hoodie/view/timeline/instant`) has no `/v1` counterpart at all - no existing route
+      returns instant *content*. It returns deserialized instant metadata, e.g. a `HoodieCommitMetadata` carrying
+      per-partition write stats (file paths, record counts) and the table schema under the `schema` key of
+      `extraMetadata`.
+    - **Table config** (`/v2/hoodie/view/table/config`) returns the full `hoodie.properties` via
+      `HoodieTableConfig.getProps()`.
+    - **Schema history** (`/v2/hoodie/view/table/schema/history`) exposes current and historical table schemas - the
+      same schema content the instant-detail view can surface via `extraMetadata`.
+
+  All of it is read-only and already readable by anyone with filesystem access to `.hoodie/`; the UI adds no write or
+  mutation capability, and opens no new network interface (the server binds to all interfaces on the
+  driver/standalone host, as it does today). The most sensitive of the four is table config: properties can reference
+  KMS endpoints, lock-provider connection strings or external key/vault paths, though they rarely embed secrets
+  directly. The first cut serves table config unfiltered (sorted, as-is); a redacting/allowlisted config view is a
+  possible future refinement for less-trusted interfaces. The primary control is that all UI routes are gated behind
+  `--enable-ui` (off by default), with the server assumed to run on a trusted network. Operators on untrusted networks
+  should front the server with a reverse proxy or restrict it to a private interface / localhost via network policy.
 
 ## Implementation
 
