@@ -40,9 +40,10 @@ filenames is tedious.
 
 This RFC proposes a UI-based timeline visualization tool that parses these metadata files, groups related actions, and
 renders them in a time-ordered, interactive view. Users can track the lifecycle of each operation, see concurrency
-patterns, and spot anomalies or long-running tasks. The implementation extends `hudi-timeline-service` with new `/v2/`
-REST APIs and a static HTML + JavaScript frontend powered by [vis-timeline](https://github.com/visjs/vis-timeline),
-served via Javalin's built-in static file serving with zero new Java compile-time dependencies.
+patterns, and spot anomalies or long-running tasks. The implementation extends `hudi-timeline-service` with a new
+`/ui/` surface - entry page, static assets and REST API - built on a static HTML + JavaScript frontend powered by
+[vis-timeline](https://github.com/visjs/vis-timeline), served via Javalin's built-in static file serving with zero new
+Java compile-time dependencies.
 
 ## Background
 
@@ -107,23 +108,23 @@ The following are **out of scope**:
   network, same as today.
 
   **Threat model:** None of the four UI views is `/v1`-parity. The existing `/v1/` routes serve only
-  file-slice/base-file DTOs plus filename-level instant DTOs (action, requested/completion time, state); every `/v2`
+  file-slice/base-file DTOs plus filename-level instant DTOs (action, requested/completion time, state); every UI
   view widens the read surface beyond that:
 
-    - **Timeline** (`/v2/hoodie/view/timeline/instants/all`) is a superset of `/v1`'s `timeline/instants/all`. The
+    - **Timeline** (`/ui/api/timeline/instants/all`) is a superset of `/v1`'s `timeline/instants/all`. The
       `/v1` route is served from the `FileSystemView`'s write timeline, which is restricted to completed instants plus
-      pending (log)compaction, and to write actions only. The `/v2` route reads the full active timeline, so it
+      pending (log)compaction, and to write actions only. The UI route reads the full active timeline, so it
       additionally exposes `clean`, `rollback`, `savepoint`, `restore` and `indexing` instants, and every
       requested/inflight state.
-    - **Instant detail** (`/v2/hoodie/view/timeline/instant`) has no `/v1` counterpart at all - no existing route
+    - **Instant detail** (`/ui/api/timeline/instant`) has no `/v1` counterpart at all - no existing route
       returns instant *content*. It returns deserialized instant metadata, e.g. a `HoodieCommitMetadata` carrying
       per-partition write stats (file paths, record counts) and the table schema under the `schema` key of
       `extraMetadata`. Its `instant` param is attacker-controlled and lands in a storage path, so the route resolves
       the requested instant against the active timeline rather than reconstructing it from the params; see
       [Handler Design](#handler-design). Without that, it is an arbitrary-path read, not a timeline read.
-    - **Table config** (`/v2/hoodie/view/table/config`) returns the full `hoodie.properties` via
+    - **Table config** (`/ui/api/table/config`) returns the full `hoodie.properties` via
       `HoodieTableConfig.getProps()`.
-    - **Schema history** (`/v2/hoodie/view/table/schema/history`) exposes current and historical table schemas - the
+    - **Schema history** (`/ui/api/table/schema/history`) exposes current and historical table schemas - the
       same schema content the instant-detail view can surface via `extraMetadata`.
 
   All of it is read-only and already readable by anyone with filesystem access to `.hoodie/`; the UI adds no write or
@@ -162,7 +163,7 @@ graph LR
     subgraph Driver["Standalone / Spark Driver"]
         subgraph TimelineServer["Javalin (Timeline Server)"]
             Static["/ui entry + /ui/static/*\n(HTML, JS, CSS)"]
-            API["/v2/hoodie/view/* - TimelineHandler"]
+            API["/ui/api/* - TimelineHandler"]
             Meta["HoodieTableMetaClient\n(active timeline, config, schema)"]
 
             API --> Meta
@@ -188,7 +189,7 @@ There are two categories of requests:
 1. **Static file requests** - Javalin serves JavaScript, CSS, and library assets from the classpath
    (`src/main/resources/public/`) under the `/ui/static/` URL prefix; `UiHandler` serves `index.html` at `/ui`. No
    server-side rendering or template engine is needed.
-2. **REST API requests** (`/v2/hoodie/view/*`) - `TimelineHandler` processes these requests, reading from a short-lived
+2. **REST API requests** (`/ui/api/*`) - `TimelineHandler` processes these requests, reading from a short-lived
    `HoodieTableMetaClient` built for the request's basepath - its `getActiveTimeline()` for the timeline routes, and
    table config/schema for the config/schema routes - and returning JSON.
 
@@ -264,7 +265,7 @@ The timeline is configured with groups and items that map to Hudi's timeline mod
     - Yellow -> `INFLIGHT`
     - Red -> `REQUESTED`
 - **Tooltip:** On hover, shows the action type, requested time, completion time, and duration.
-- **Click handler:** Clicking an instant fetches its detail via `/v2/hoodie/view/timeline/instant` and shows the
+- **Click handler:** Clicking an instant fetches its detail via `/ui/api/timeline/instant` and shows the
   deserialized JSON in a detail panel below the timeline.
 
 ### Backend
@@ -272,26 +273,34 @@ The timeline is configured with groups and items that map to Hudi's timeline mod
 A `hudi-timeline-service` instance already serves filesystem metadata for multiple table basePaths since the
 `FileSystemView`s are cached in a map keyed by basepath.
 
-We extend this module with `/v2/` APIs that serve the UI's timeline, config and schema metadata, reading each table
+We extend this module with `/ui/api/` routes that serve the UI's timeline, config and schema metadata, reading each table
 through a short-lived `HoodieTableMetaClient` built per request (see [Handler Design](#handler-design)).
 
 #### API Specification
 
 | Method | Path                                    | Parameters                                                            | Response        | Description                                                                                  |
 |--------|-----------------------------------------|-----------------------------------------------------------------------|-----------------|----------------------------------------------------------------------------------------------|
-| GET    | `/v2/hoodie/view/timeline/instants/all` | `basepath` (required)                                                 | `TimelineDTOV2` | All active instants (each with requested time, completion time, action, state), wrapped in a timeline DTO |
-| GET    | `/v2/hoodie/view/timeline/instant`      | `basepath`, `instant`, `instantaction`, `instantstate` (all required) | JSON string     | Deserialized content of a specific instant's metadata (Avro -> JSON). The triple must match an instant in the active timeline, else 404 - see [Handler Design](#handler-design) |
-| GET    | `/v2/hoodie/view/table/config`          | `basepath` (required)                                                 | JSON object     | The table's `hoodie.properties` (sorted)                                                     |
-| GET    | `/v2/hoodie/view/table/schema/history`  | `basepath` (required), `limit` (optional, default 200, max 1000)      | JSON object     | Current schema; schema-change history over the last `limit` commits, oldest entry typed `baseline` rather than `change`; the scanned `window` (with a `truncated` flag); and `.schema` internal-schema history when present |
+| GET    | `/ui/api/timeline/instants/all` | `basepath` (required)                                                 | `UiTimelineDTO` | All active instants (each with requested time, completion time, action, state), wrapped in a timeline DTO |
+| GET    | `/ui/api/timeline/instant`      | `basepath`, `instant`, `instantaction`, `instantstate` (all required) | JSON string     | Deserialized content of a specific instant's metadata (Avro -> JSON). The triple must match an instant in the active timeline, else 404 - see [Handler Design](#handler-design) |
+| GET    | `/ui/api/table/config`          | `basepath` (required)                                                 | JSON object     | The table's `hoodie.properties` (sorted)                                                     |
+| GET    | `/ui/api/table/schema/history`  | `basepath` (required), `limit` (optional, default 200, max 1000)      | JSON object     | Current schema; schema-change history over the last `limit` commits, oldest entry typed `baseline` rather than `change`; the scanned `window` (with a `truncated` flag); and `.schema` internal-schema history when present |
 
 Static assets (JS, CSS, library files) are served from the classpath directory `src/main/resources/public/`, mounted
 under the `/ui/static/` URL prefix via Javalin's static-files `hostedPath` (e.g., `/ui/static/js/timeline.js`,
-`/ui/static/lib/...`). Namespacing everything UI under `/ui` keeps the UI surface from colliding with `/v1/`, `/v2/`, or
-any future module-registered routes on the same Javalin instance, rather than reserving root prefixes like `/js`,
-`/css`, and `/lib`. `UiHandler` additionally registers `GET /ui`, which returns `index.html` (with asset links pointing
-at `/ui/static/...`) to give the UI a stable entry URL.
+`/ui/static/lib/...`). `UiHandler` additionally registers `GET /ui`, which returns `index.html` (with asset links
+pointing at `/ui/static/...`) to give the UI a stable entry URL.
 
-**On response size and pagination:** `GET /v2/hoodie/view/timeline/instants/all` returns the full active timeline. The
+**Why `/ui/api/` and not `/v2/hoodie/view/`.** `/v1/hoodie/view` is not a public REST API - it is the RPC namespace of
+`RemoteHoodieTableFileSystemView`, the wire protocol the file-system-view client speaks to this server. Mounting the UI
+at `/v2/hoodie/view/` would therefore read as *version 2 of the FSV protocol*, which it is not, and would consume the
+URL space a genuine FSV v2 will one day want. The UI is a different API for a different consumer (a browser, with
+UI-shaped DTOs), so it gets its own namespace rather than a version bump of someone else's.
+
+Putting the routes under `/ui` alongside the page and the assets also makes the whole feature **one prefix**: everything
+under `/ui` is the UI, and `--enable-ui` gates exactly that subtree. The alternative left the flag gating three
+unrelated prefixes (`/ui`, `/ui/static/*`, `/v2/hoodie/view/*`) for one feature.
+
+**On response size and pagination:** `GET /ui/api/timeline/instants/all` returns the full active timeline. The
 active timeline is bounded by archiving (the unbounded archived timeline is out of scope), so instant counts are
 typically modest. The first cut intentionally returns all active instants and relies on client-side zoom/scroll and
 filtering for navigation. If active-timeline sizes become a concern, the endpoint can be extended additively with
@@ -299,17 +308,17 @@ optional `from`/`to` time-range query params (and/or a `limit`) without breaking
 
 #### DTO Design
 
-The UI's timeline endpoint returns a `TimelineDTOV2` built from two v2 DTOs in a `v2` package, leaving the existing
-`/v1/` API contract untouched.
+The UI's timeline endpoint returns a `UiTimelineDTO` built from two UI DTOs in a `dto.ui` package, leaving the existing
+`/v1/` FSV protocol contract untouched.
 
 The v1 `InstantDTO` already carries everything needed to render range bars - `fromInstant` populates both
 `requestedTime` and `completionTime` from `HoodieInstant` (added under HUDI-9332) - so the UI could consume the v1
-timeline DTO directly. The v2 DTOs are not about exposing new fields; they are a deliberate, low-cost choice to give the
-new `/v2/` API a cleaner JSON contract:
+timeline DTO directly. The UI DTOs are not about exposing new fields; they are a deliberate, low-cost choice to give the
+UI API a cleaner JSON contract:
 
-- **`InstantDTOV2`** (`o.a.h.common.table.timeline.dto.v2`) - the same source fields as v1, with UI-oriented JSON keys:
+- **`UiInstantDTO`** (`o.a.h.common.table.timeline.dto.ui`) - the same source fields as v1, with UI-oriented JSON keys:
     - `action` - the instant's raw action (e.g., `commit`, `deltacommit`, `compaction`). Used to label and colour the
-      item, and to address the instant on the `/v2/hoodie/view/timeline/instant` route.
+      item, and to address the instant on the `/ui/api/timeline/instant` route.
     - `comparableAction` - the action the instant completes (or would complete) as; the vis-timeline *group* key. Equal
       to `action` for everything except pending `compaction`/`logcompaction`/`clustering`. Computed server-side from
       Hudi's own mapping, so the table is not duplicated in JavaScript. See
@@ -321,12 +330,12 @@ new `/v2/` API a cleaner JSON contract:
 
   Versus v1, this adds `comparableAction`, renames `requestedTime`/`completionTime` to `requestTs`/`completionTs`, and
   drops v1's redundant legacy `ts` field (a duplicate of the requested time that the UI does not need).
-- **`TimelineDTOV2`** - wraps a `List<InstantDTOV2>` (`instants`); this is what `/v2/hoodie/view/timeline/instants/all`
+- **`UiTimelineDTO`** - wraps a `List<UiInstantDTO>` (`instants`); this is what `/ui/api/timeline/instants/all`
   returns.
 
-  Both v2 DTOs carry the `V2` suffix to mirror the repo's versioned-class convention (`versioning/v1`/`v2` with
-  `InstantGeneratorV1`/`V2`, `BaseTimelineV1`/`V2`) and to avoid a simple-name clash with the existing `dto.InstantDTO`
-  that `TimelineHandler` still imports for the v1 routes.
+  Both carry a `Ui` prefix rather than a `V2` suffix. They are not version 2 of anything - they are the UI's DTOs, and
+  naming them `V2` would imply a successor to the FSV protocol's `InstantDTO`, which they are not. The prefix also
+  avoids a simple-name clash with the existing `dto.InstantDTO` that `TimelineHandler` still imports for the v1 routes.
 
 #### Handler Design
 
@@ -335,14 +344,14 @@ The v2 endpoints are served by the existing `TimelineHandler` (which already ser
 
 `TimelineHandler` methods:
 
-1. `getTimelineV2(basePath)` - maps `getActiveTimeline()` from the request's `HoodieTableMetaClient` to a
-   `TimelineDTOV2`. The active timeline carries every `VALID_ACTIONS_IN_TIMELINE` action in all states
+1. `getUiTimeline(basePath)` - maps `getActiveTimeline()` from the request's `HoodieTableMetaClient` to a
+   `UiTimelineDTO`. The active timeline carries every `VALID_ACTIONS_IN_TIMELINE` action in all states
    (requested/inflight/completed), which the vis-timeline groups and requested/inflight point items require. The
    `FileSystemView` timeline (`getFileSystemView(basePath).getTimeline()`) cannot be used here: it is the write timeline
    filtered to completed plus (log)compaction instants, so it drops `clean`/`rollback`/`savepoint`/`restore`/`indexing`
    and every requested/inflight state.
 
-   `getTimelineV2` populates `comparableAction` from the same mapping Hudi's own timeline filter used, and leaves
+   `getUiTimeline` populates `comparableAction` from the same mapping Hudi's own timeline filter used, and leaves
    `action` as-is (see [A1](#a1-why-a-completed-compaction-arrives-as-a-commit)).
 2. `getInstantDetails(basePath, instant, action, state)` - reads the instant's content and deserializes it to JSON. A
    malformed `state`/`action` returns 400; an instant not present in the timeline returns 404; a read failure returns 500.
@@ -413,10 +422,10 @@ that never evolved its schema pays one extra `exists()` call and no directory sc
 
 #### Registration in RequestHandler
 
-The v2 routes are registered following the existing pattern:
+The UI routes are registered following the existing pattern:
 
 - The v1 timeline routes remain registered unconditionally in `registerTimelineAPI()`.
-- The v2 UI routes are registered in `registerTimelineV2API()`, called from `register()` only when `--enable-ui` is set.
+- The UI API routes are registered in `registerUiApi()`, called from `register()` only when `--enable-ui` is set.
   `UiHandler` (serving `/ui`) and the static-file serving are gated by the same flag.
 - **The flag alone is not a sufficient gate.** Stripping `public/**` from the engine bundles (see
   [Dependency Impact](#dependency-impact)) removes the *assets* but not the *code*, so `--enable-ui` stays reachable
@@ -486,7 +495,7 @@ java -cp hudi-timeline-server-bundle-*.jar \
 Once started, the UI is accessible at `http://localhost:26754/ui`.
 
 The server port is configurable via the existing `--server-port` (or `-p`) flag (default: `26754`). The `--enable-ui`
-flag controls whether the UI static files, the `/ui` page, and the `/v2/hoodie/view/` UI API endpoints are registered.
+flag controls whether the UI static files, the `/ui` page, and the `/ui/api/` UI API endpoints are registered.
 When the flag is not set, the timeline server behaves exactly as it does today - no UI-related routes are added.
 
 ### Embedded Mode (Spark-Shell / Spark Driver)
@@ -710,7 +719,7 @@ Other features we can add later:
 ## Rollout/Adoption Plan
 
 - **Backward compatibility:** Additive change only. All existing `/v1/` endpoints remain unchanged. UI endpoints are
-  under `/v2/hoodie/view/` and the UI entry page at `/ui`. No existing behavior changes.
+  under `/ui/api/` and the UI entry page at `/ui`. No existing behavior changes.
 - **Release target:** 1.2.x
 - **Documentation:** A new page on hudi.apache.org under the "Operations" section with screenshots, a startup guide, and
   a debugging walkthrough showing how to use the timeline UI to diagnose common issues (stuck compactions, long-running
@@ -722,7 +731,7 @@ Other features we can add later:
 
 ### Unit Tests
 
-- **`TimelineHandler.getTimelineV2()`**: correct mapping from `HoodieInstant` to `InstantDTOV2`:
+- **`TimelineHandler.getUiTimeline()`**: correct mapping from `HoodieInstant` to `UiInstantDTO`:
     - `comparableAction` folds the pending actions: a *pending* compaction maps to
       (`action=compaction`, `comparableAction=commit`); pending logcompaction to `deltacommit`; pending clustering to
       `replacecommit`. For every other action, `comparableAction` equals `action`.
@@ -754,14 +763,15 @@ Following the pattern established by `TestTimelineService.java`:
 
 - Start `TimelineService` with the UI enabled (`--enable-ui`).
 - Create synthetic instants via `HoodieTestUtils` covering multiple action types and states.
-- Verify `GET /v2/hoodie/view/timeline/instants/all` returns the expected list of instants with correct fields.
-- Verify `GET /v2/hoodie/view/timeline/instant` returns valid JSON for a completed instant.
-- Verify `GET /v2/hoodie/view/table/config` and `GET /v2/hoodie/view/table/schema/history` return valid JSON.
+- Verify `GET /ui/api/timeline/instants/all` returns the expected list of instants with correct fields.
+- Verify `GET /ui/api/timeline/instant` returns valid JSON for a completed instant.
+- Verify `GET /ui/api/table/config` and `GET /ui/api/table/schema/history` return valid JSON.
 - Verify `GET /ui` returns HTTP 200 with HTML content (static file serving works).
-- **Flag gating (negative case):** start `TimelineService` *without* `--enable-ui` (the default) and assert `GET /ui`,
-  `GET /ui/static/*` and every `GET /v2/hoodie/view/*` route return HTTP 404, while the existing `/v1/` routes still
-  respond. This is the assertion the Scope section's threat model rests on - the widened read surface must not exist
-  unless the flag is explicitly set.
+- **Flag gating (negative case):** start `TimelineService` *without* `--enable-ui` (the default) and assert that
+  **nothing under `/ui` responds** - the entry page, `GET /ui/static/*` and every `GET /ui/api/*` route all return
+  HTTP 404 - while the existing `/v1/` FSV routes still respond. This is the assertion the Scope section's threat model
+  rests on: the widened read surface must not exist unless the flag is explicitly set. Keeping the whole UI under one
+  prefix is what makes this a single, checkable claim.
 
 ### Bundle Packaging
 
@@ -859,7 +869,7 @@ Per-route cost of the per-request `HoodieTableMetaClient`:
 
 | Route | `hoodie.properties` read | Active-timeline listing | Extra |
 |-------|--------------------------|-------------------------|-------|
-| `getTimelineV2`     | yes | yes (maps it) | - |
+| `getUiTimeline`     | yes | yes (maps it) | - |
 | `getInstantDetails` | yes | yes (resolves the instant) | one instant-file read |
 | `getTableConfig`    | yes | no | - |
 | `getSchemaHistory`  | yes | yes (walks completed commits) | up to `limit` metadata reads, `.schema` read |
