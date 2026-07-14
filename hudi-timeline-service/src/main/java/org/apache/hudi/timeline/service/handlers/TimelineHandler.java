@@ -134,6 +134,10 @@ public class TimelineHandler extends Handler {
       throw new BadRequestResponse("Invalid instant state: " + state);
     }
 
+    if (!Arrays.asList(HoodieTimeline.VALID_ACTIONS_IN_TIMELINE).contains(action)) {
+      throw new BadRequestResponse("Invalid instant action: " + action);
+    }
+
     HoodieTableMetaClient metaClient = createMetaClient(basePath);
     HoodieTimeline activeTimeline = metaClient.getActiveTimeline();
     CommitMetadataSerDe serde = metaClient.getCommitMetadataSerDe();

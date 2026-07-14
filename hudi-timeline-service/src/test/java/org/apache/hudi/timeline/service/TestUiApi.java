@@ -18,11 +18,15 @@
 
 package org.apache.hudi.timeline.service;
 
+import org.apache.hudi.avro.model.HoodieActionInstant;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -48,6 +52,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -56,6 +61,7 @@ import java.util.UUID;
 
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.BASEPATH_PARAM;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.LAST_INSTANT_URL;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCleanFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -158,6 +164,15 @@ class TestUiApi extends HoodieCommonTestHarness {
     return commitMetadata(mc, basePath, ts, extra);
   }
 
+  // Writes an EMPTY requested instant file straight into the timeline directory for actions with no
+  // HoodieTestTable helper. The instants/all route only lists instants, so the content is never read.
+  private void createEmptyRequestedInstantFile(HoodieTableMetaClient mc, String ts, String extension)
+      throws IOException {
+    Path timelineDir = Paths.get(mc.getTimelinePath().toUri().getPath());
+    Files.createDirectories(timelineDir);
+    Files.createFile(timelineDir.resolve(ts + extension));
+  }
+
   // ---------------------------------------------------------------------------
   // HTTP helpers
   // ---------------------------------------------------------------------------
@@ -234,6 +249,8 @@ class TestUiApi extends HoodieCommonTestHarness {
     String commitTs = "20240101000001";
     String compactionTs = "20240101000002";
     String cleanTs = "20240101000003";
+    String logCompactionTs = "20240101000004";
+    String clusteringTs = "20240101000005";
 
     HoodieTestTable table = HoodieTestTable.of(mc);
     table.addCommit(commitTs, Option.of(commitMetadata(mc, base, commitTs, Collections.emptyMap())));
@@ -241,6 +258,12 @@ class TestUiApi extends HoodieCommonTestHarness {
     table.addRequestedCompaction(compactionTs);
     // A clean: a non-foldable action whose comparableAction equals its action.
     table.addClean(cleanTs);
+    // Two more pending instants that pin the remaining comparable-action folds
+    // (logcompaction -> deltacommit, clustering -> replacecommit). No HoodieTestTable helper writes a
+    // requested logcompaction and the clustering helper needs Avro metadata, so write empty requested
+    // instant files directly; the instants/all route never reads their content.
+    createEmptyRequestedInstantFile(mc, logCompactionTs, HoodieTimeline.REQUESTED_LOG_COMPACTION_EXTENSION);
+    createEmptyRequestedInstantFile(mc, clusteringTs, HoodieTimeline.REQUESTED_CLUSTERING_COMMIT_EXTENSION);
 
     JsonNode root = getJsonOk(UI_TIMELINE_URL, params(BASEPATH_PARAM, base));
     JsonNode instants = root.get("instants");
@@ -267,6 +290,22 @@ class TestUiApi extends HoodieCommonTestHarness {
     assertNotNull(clean, root.toString());
     assertEquals("clean", clean.get("action").asText());
     assertEquals("clean", clean.get("comparableAction").asText());
+
+    // Pending logcompaction: action=logcompaction, comparableAction folds to deltacommit, completionTs null.
+    JsonNode logCompaction = findInstant(root, logCompactionTs);
+    assertNotNull(logCompaction, root.toString());
+    assertEquals("logcompaction", logCompaction.get("action").asText());
+    assertEquals("deltacommit", logCompaction.get("comparableAction").asText());
+    assertEquals("REQUESTED", logCompaction.get("state").asText());
+    assertTrue(isJsonNull(logCompaction.get("completionTs")), "pending logcompaction must have null completionTs");
+
+    // Pending clustering: action=clustering, comparableAction folds to replacecommit, completionTs null.
+    JsonNode clustering = findInstant(root, clusteringTs);
+    assertNotNull(clustering, root.toString());
+    assertEquals("clustering", clustering.get("action").asText());
+    assertEquals("replacecommit", clustering.get("comparableAction").asText());
+    assertEquals("REQUESTED", clustering.get("state").asText());
+    assertTrue(isJsonNull(clustering.get("completionTs")), "pending clustering must have null completionTs");
 
     // Instants returned in timeline (request-time ascending) order.
     String previous = "";
@@ -304,6 +343,18 @@ class TestUiApi extends HoodieCommonTestHarness {
     assertEquals(1, matches, "completed compaction must surface exactly once: " + root);
   }
 
+  @Test
+  void testUiTimelineEmptyTableReturnsEmptyList() throws Exception {
+    HoodieTableMetaClient mc = initTable("empty-timeline");
+    String base = mc.getBasePath().toString();
+
+    JsonNode root = getJsonOk(UI_TIMELINE_URL, params(BASEPATH_PARAM, base));
+    JsonNode instants = root.get("instants");
+    assertNotNull(instants, root.toString());
+    assertTrue(instants.isArray(), root.toString());
+    assertEquals(0, instants.size(), root.toString());
+  }
+
   // ---------------------------------------------------------------------------
   // 2. getInstantDetails
   // ---------------------------------------------------------------------------
@@ -337,15 +388,42 @@ class TestUiApi extends HoodieCommonTestHarness {
   }
 
   @Test
-  void testGetInstantDetailsMalformedStateReturns400() throws Exception {
+  void testGetInstantDetailsCleanPlan() throws Exception {
+    HoodieTableMetaClient mc = initTable("instant-clean-plan");
+    String base = mc.getBasePath().toString();
+    String ts = "20240101000024";
+    // A REQUESTED-only clean carrying a HoodieCleanerPlan built the way HoodieTestTable.addClean does,
+    // but with a recognizable policy string. Requested-only is deliberate: the active timeline keeps only
+    // the highest state per instant, so writing inflight/completed files too would surface the completed
+    // HoodieCleanMetadata instead of the plan.
+    HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""), "",
+        "KEEP_LATEST_COMMITS", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(),
+        new ArrayList<>(), Collections.emptyMap());
+    createRequestedCleanFile(mc, ts, cleanerPlan);
+
+    JsonNode root = getJsonOk(UI_INSTANT_URL,
+        params(BASEPATH_PARAM, base, INSTANT_PARAM, ts, INSTANT_ACTION_PARAM, "clean", INSTANT_STATE_PARAM, "REQUESTED"));
+    // The server converts the Avro HoodieCleanerPlan to a Map, so field names are the Avro field names.
+    assertEquals("KEEP_LATEST_COMMITS", root.get("policy").asText(), root.toString());
+    assertTrue(root.has("version"), "clean plan must expose version: " + root);
+  }
+
+  @Test
+  void testGetInstantDetailsMalformedStateOrActionReturns400() throws Exception {
     HoodieTableMetaClient mc = initTable("instant-bad-state");
     String base = mc.getBasePath().toString();
     String ts = "20240101000023";
     HoodieTestTable.of(mc).addCommit(ts, Option.of(commitMetadata(mc, base, ts, Collections.emptyMap())));
 
-    Http r = httpGet(port, UI_INSTANT_URL,
+    // A malformed state is rejected before the timeline lookup.
+    Http badState = httpGet(port, UI_INSTANT_URL,
         params(BASEPATH_PARAM, base, INSTANT_PARAM, ts, INSTANT_ACTION_PARAM, "commit", INSTANT_STATE_PARAM, "NOT_A_STATE"));
-    assertEquals(400, r.code, r.body);
+    assertEquals(400, badState.code, badState.body);
+
+    // A valid state but an action outside VALID_ACTIONS_IN_TIMELINE is likewise a 400, not a 404.
+    Http badAction = httpGet(port, UI_INSTANT_URL,
+        params(BASEPATH_PARAM, base, INSTANT_PARAM, ts, INSTANT_ACTION_PARAM, "NOT_AN_ACTION", INSTANT_STATE_PARAM, "COMPLETED"));
+    assertEquals(400, badAction.code, badAction.body);
   }
 
   @Test
