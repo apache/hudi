@@ -29,7 +29,7 @@ import java.util.Iterator;
 /**
  * Spark-specific append-handle factory for native logs.
  *
- * <p>It selects {@link SparkNativeLogAppendHandle} only after native logs are enabled. The handle then uses the
+ * <p>It selects {@link SparkNativeLogAppendHandle} only when native logs are enabled. The handle then uses the
  * write config's record type to decide whether delete records must be represented as Spark rows or Avro records.</p>
  */
 public class SparkAppendHandleFactory<T, I, K, O> extends AppendHandleFactory<T, I, K, O> {
