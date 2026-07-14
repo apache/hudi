@@ -21,15 +21,12 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
-import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
@@ -142,19 +139,6 @@ public class CommonClientUtils {
    */
   public static boolean shouldWriteNativeLogs(HoodieWriteConfig writeConfig) {
     return writeConfig.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.TEN);
-  }
-
-  public static String generateWriteToken(TaskContextSupplier taskContextSupplier) {
-    try {
-      return FSUtils.makeWriteToken(
-          taskContextSupplier.getPartitionIdSupplier().get(),
-          taskContextSupplier.getStageIdSupplier().get(),
-          taskContextSupplier.getAttemptIdSupplier().get()
-      );
-    } catch (Throwable t) {
-      log.warn("Error generating write token, using default.", t);
-      return HoodieLogFormat.DEFAULT_WRITE_TOKEN;
-    }
   }
 
   public static <O> HoodieWriteMetadata stitchCompactionHoodieWriteStats(HoodieWriteMetadata<O> writeMetadata, List<HoodieWriteStat> writeStats) {

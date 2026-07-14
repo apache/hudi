@@ -52,7 +52,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.AppendMarkerHandler;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
-import org.apache.hudi.util.CommonClientUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -320,7 +319,7 @@ public class RollbackHelperV1 extends RollbackHelper {
           HoodieLogFormatWriter.HoodieLogFormatWriterBuilder writerBuilder = HoodieLogFormatWriter.builder()
               .withParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath))
               .withLogFileId(fileId)
-              .withLogWriteToken(CommonClientUtils.generateWriteToken(taskContextSupplier))
+              .withLogWriteToken(FSUtils.makeWriteToken(taskContextSupplier))
               .withInstantTime(tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
                   ? instantToRollback.requestedTime() : rollbackRequest.getLatestBaseInstant()
               )
@@ -330,7 +329,7 @@ public class RollbackHelperV1 extends RollbackHelper {
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION);
 
           // Apply pre-computed log version if available. Always keep the per-task write token
-          // generated above (via CommonClientUtils.generateWriteToken) so that retried/repeated
+          // generated above (via FSUtils.makeWriteToken) so that retried/repeated
           // rollbacks do not collide on UNKNOWN_WRITE_TOKEN or inherit a prior log's write token.
           //
           // When doDelete=true, we actually create a new rollback log file: explicitly bump the

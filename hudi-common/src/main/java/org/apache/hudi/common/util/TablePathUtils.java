@@ -118,7 +118,10 @@ public class TablePathUtils {
     }
   }
 
-  private static StoragePath getNthParent(StoragePath path, int n) {
+  /**
+   * Returns the n-th parent of the given path (n=0 returns the path itself).
+   */
+  public static StoragePath getNthParent(StoragePath path, int n) {
     StoragePath parent = path;
     for (int i = 0; i < n; i++) {
       parent = parent.getParent();

@@ -20,7 +20,6 @@
 
 package org.apache.hudi.utils;
 
-import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -90,16 +89,6 @@ class TestCommonClientUtils {
         Arguments.of(HoodieTableVersion.NINE, true),
         Arguments.of(HoodieTableVersion.TEN, false)
     );
-  }
-
-  @Test
-  void testGenerateTokenOnError() {
-    // given: a task context supplies that throws errors.
-    TaskContextSupplier taskContextSupplier = mock(TaskContextSupplier.class);
-    when(taskContextSupplier.getPartitionIdSupplier()).thenThrow(new RuntimeException("generated under testing"));
-
-    // when:
-    assertEquals("0-0-0", CommonClientUtils.generateWriteToken(taskContextSupplier));
   }
 
   @ParameterizedTest(name = "Write version {0} should write native log format: {1}")

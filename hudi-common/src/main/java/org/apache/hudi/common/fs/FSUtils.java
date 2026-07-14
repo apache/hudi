@@ -23,11 +23,13 @@ import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.LogExtensions;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -101,6 +103,22 @@ public class FSUtils {
    */
   public static String makeWriteToken(int taskPartitionId, int stageId, long taskAttemptId) {
     return String.format("%d-%d-%d", taskPartitionId, stageId, taskAttemptId);
+  }
+
+  /**
+   * Makes a write token from the engine's task context, falling back to the default
+   * token if the context is unavailable (e.g. on the driver).
+   */
+  public static String makeWriteToken(TaskContextSupplier taskContextSupplier) {
+    try {
+      return makeWriteToken(
+          taskContextSupplier.getPartitionIdSupplier().get(),
+          taskContextSupplier.getStageIdSupplier().get(),
+          taskContextSupplier.getAttemptIdSupplier().get());
+    } catch (Throwable t) {
+      log.warn("Error generating write token, using default.", t);
+      return HoodieLogFormat.DEFAULT_WRITE_TOKEN;
+    }
   }
 
   public static String makeBaseFileName(String instantTime, String writeToken, String fileId, String fileExtension) {

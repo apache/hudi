@@ -19,6 +19,7 @@
 package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -72,6 +73,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests file system utils.
@@ -794,5 +797,16 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
   private StoragePath getHoodieTempDir() {
     return new StoragePath(baseUri.toString(), ".hoodie/.temp");
+  }
+
+  /**
+   * makeWriteToken(TaskContextSupplier) falls back to the default token when the
+   * task context is unavailable.
+   */
+  @Test
+  public void testMakeWriteTokenOnError() {
+    TaskContextSupplier taskContextSupplier = mock(TaskContextSupplier.class);
+    when(taskContextSupplier.getPartitionIdSupplier()).thenThrow(new RuntimeException("generated under testing"));
+    assertEquals("0-0-0", FSUtils.makeWriteToken(taskContextSupplier));
   }
 }
