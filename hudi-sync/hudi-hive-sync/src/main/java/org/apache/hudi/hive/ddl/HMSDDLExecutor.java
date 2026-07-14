@@ -52,12 +52,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
@@ -110,6 +112,12 @@ public class HMSDDLExecutor implements DDLExecutor {
         String partitionKeyType = HiveSchemaUtil.getPartitionKeyType(mapSchema, partitionKey);
         return new FieldSchema(partitionKey, partitionKeyType.toLowerCase(), "");
       }).collect(Collectors.toList());
+
+      if (syncConfig.getBoolean(HIVE_SYNC_COMMENT)) {
+        Map<String, String> fieldDocs = HiveSchemaUtil.getFieldDocs(storageSchema);
+        applyFieldDocs(fieldSchema, fieldDocs);
+        applyFieldDocs(partitionSchema, fieldDocs);
+      }
       Table newTb = new Table();
       newTb.setDbName(databaseName);
       newTb.setTableName(tableName);
@@ -266,19 +274,33 @@ public class HMSDDLExecutor implements DDLExecutor {
     try {
       Table table = client.getTable(databaseName, tableName);
       StorageDescriptor sd = new StorageDescriptor(table.getSd());
-      for (FieldSchema fieldSchema : sd.getCols()) {
-        if (alterSchema.containsKey(fieldSchema.getName())) {
-          String comment = alterSchema.get(fieldSchema.getName()).getRight();
-          fieldSchema.setComment(comment);
-        }
-      }
+      applyFieldComments(sd.getCols(), alterSchema);
       table.setSd(sd);
+      applyFieldComments(table.getPartitionKeys(), alterSchema);
       EnvironmentContext environmentContext = new EnvironmentContext();
       client.alter_table_with_environmentContext(databaseName, tableName, table, environmentContext);
       sd.clear();
     } catch (Exception e) {
       log.error("Failed to update table comments for {}", tableName, e);
       throw new HoodieHiveSyncException("Failed to update table comments for " + tableName, e);
+    }
+  }
+
+  private static void applyFieldComments(List<FieldSchema> fields, Map<String, Pair<String, String>> alterSchema) {
+    for (FieldSchema fieldSchema : fields) {
+      if (alterSchema.containsKey(fieldSchema.getName())) {
+        String comment = alterSchema.get(fieldSchema.getName()).getRight();
+        fieldSchema.setComment(comment);
+      }
+    }
+  }
+
+  private static void applyFieldDocs(List<FieldSchema> fields, Map<String, String> fieldDocs) {
+    for (FieldSchema fieldSchema : fields) {
+      String doc = fieldDocs.get(fieldSchema.getName().toLowerCase(Locale.ROOT));
+      if (doc != null) {
+        fieldSchema.setComment(doc);
+      }
     }
   }
 

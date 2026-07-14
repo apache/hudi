@@ -142,8 +142,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
       String name = field.getKey();
       StringBuilder sql = new StringBuilder();
       String type = field.getValue().getLeft();
-      String comment = field.getValue().getRight();
-      comment = comment.replace("'","");
+      String comment = HiveSchemaUtil.escapeSqlString(field.getValue().getRight());
       sql.append("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
               .append(databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
               .append(HIVE_ESCAPE_CHARACTER).append(tableName)
@@ -152,6 +151,13 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
               .append("` ").append(type).append(" comment '").append(comment).append("' ");
       runSQL(sql.toString());
     }
+  }
+
+  @Override
+  public boolean supportsUpdatingPartitionColumnComments() {
+    // ALTER TABLE ... CHANGE COLUMN fails on partition columns and HiveQL has no
+    // other DDL to modify them, only the HMS based executor can update their comments
+    return false;
   }
 
   private List<String> constructAddPartitions(String tableName, List<String> partitions) {

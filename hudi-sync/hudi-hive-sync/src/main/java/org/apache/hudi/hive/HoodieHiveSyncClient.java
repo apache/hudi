@@ -697,6 +697,17 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
         }
       }
     });
+    if (!ddlExecutor.supportsUpdatingPartitionColumnComments()) {
+      List<String> skippedPartitionFields = config.getSplitStrings(META_SYNC_PARTITION_FIELDS).stream()
+          .map(partitionField -> partitionField.toLowerCase(Locale.ROOT))
+          .filter(alterComments::containsKey)
+          .collect(Collectors.toList());
+      if (!skippedPartitionFields.isEmpty()) {
+        log.debug("Cannot update comments of partition columns {} of {} in query based sync modes, use hms sync mode instead",
+            skippedPartitionFields, tableName);
+        skippedPartitionFields.forEach(alterComments::remove);
+      }
+    }
     if (alterComments.isEmpty()) {
       log.info("No comment difference of {} ", tableName);
       return false;
