@@ -40,9 +40,10 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.HadoopReadOptions;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
-import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.MessageType;
 import org.apache.spark.sql.HoodieInternalRowUtils$;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
@@ -66,10 +67,14 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
 
   @Override
   HoodieSchema getSchema(StoragePath sourceFilePath) throws IOException {
-    ParquetMetadata readFooter = ParquetFileReader.readFooter(
-        (Configuration) table.getStorageConf().unwrap(), new Path(sourceFilePath.toUri()),
-        ParquetMetadataConverter.NO_FILTER);
-    MessageType parquetSchema = readFooter.getFileMetaData().getSchema();
+    Configuration conf = (Configuration) table.getStorageConf().unwrap();
+    Path path = new Path(sourceFilePath.toUri());
+    MessageType parquetSchema;
+    try (ParquetFileReader reader = ParquetFileReader.open(
+        HadoopInputFile.fromPath(path, conf),
+        HadoopReadOptions.builder(conf, path).withMetadataFilter(ParquetMetadataConverter.NO_FILTER).build())) {
+      parquetSchema = reader.getFooter().getFileMetaData().getSchema();
+    }
     return getAvroSchemaConverter((Configuration) table.getStorageConf().unwrap()).convert(parquetSchema);
   }
 
@@ -138,4 +143,3 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
 
   }
 }
-

@@ -30,8 +30,10 @@ import org.apache.hudi.io.util.FileIOUtils
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.hadoop.fs.Path
+import org.apache.parquet.HadoopReadOptions
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
 import org.apache.parquet.hadoop.ParquetFileReader
+import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
@@ -215,7 +217,12 @@ class RepairClusteringPlanProcedure extends BaseProcedure with ProcedureBuilder 
         var isInvalid = false
         if (path.endsWith(".parquet")) {
           try {
-            ParquetFileReader.readFooter(serHadoopConf.value, new Path(path), SKIP_ROW_GROUPS).getFileMetaData
+            val conf = serHadoopConf.value
+            val filePath = new Path(path)
+            val reader = ParquetFileReader.open(
+              HadoopInputFile.fromPath(filePath, conf),
+              HadoopReadOptions.builder(conf, filePath).withMetadataFilter(SKIP_ROW_GROUPS).build())
+            try reader.getFooter.getFileMetaData finally reader.close()
           } catch {
             case e: Exception =>
               isInvalid = Option(e.getMessage).exists(_.contains("is not a Parquet file"))

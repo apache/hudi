@@ -28,10 +28,12 @@ import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.HadoopReadOptions;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
@@ -194,7 +196,7 @@ public class TestHoodieRowParquetWriteSupportVariant {
     assertTrue(hasTypedValue, "typed_value field should be present in shredded variant");
 
     // Check parquet metadata in the footer that shredded schemas are created
-    ParquetMetadata fileFooter = ParquetFileReader.readFooter(new Configuration(), new Path(outputFile.toURI()), ParquetMetadataConverter.NO_FILTER);
+    ParquetMetadata fileFooter = readParquetMetadata(outputFile);
     MessageType footerSchema = fileFooter.getFileMetaData().getSchema();
     assertEquals(INT32, footerSchema.getType("v", "typed_value", "a", "typed_value").asPrimitiveType().getPrimitiveTypeName());
     assertEquals(LogicalTypeAnnotation.stringType(), footerSchema.getType("v", "typed_value", "b", "typed_value").getLogicalTypeAnnotation());
@@ -234,7 +236,7 @@ public class TestHoodieRowParquetWriteSupportVariant {
     writeRows(outputFile, sparkSchema, recordSchema, row);
 
     // Verify Parquet Structure
-    ParquetMetadata fileFooter = ParquetFileReader.readFooter(new Configuration(), new Path(outputFile.toURI()), ParquetMetadataConverter.NO_FILTER);
+    ParquetMetadata fileFooter = readParquetMetadata(outputFile);
     MessageType footerSchema = fileFooter.getFileMetaData().getSchema();
     GroupType vGroup = footerSchema.getType("v").asGroupType();
 
@@ -273,9 +275,17 @@ public class TestHoodieRowParquetWriteSupportVariant {
   }
 
   private MessageType readParquetSchema(File file) throws IOException {
+    return readParquetMetadata(file).getFileMetaData().getSchema();
+  }
+
+  private ParquetMetadata readParquetMetadata(File file) throws IOException {
     Configuration conf = new Configuration();
-    ParquetMetadata metadata = ParquetFileReader.readFooter(conf, new Path(file.getAbsolutePath()));
-    return metadata.getFileMetaData().getSchema();
+    Path path = new Path(file.toURI());
+    try (ParquetFileReader reader = ParquetFileReader.open(
+        HadoopInputFile.fromPath(path, conf),
+        HadoopReadOptions.builder(conf, path).withMetadataFilter(ParquetMetadataConverter.NO_FILTER).build())) {
+      return reader.getFooter();
+    }
   }
 
   /**

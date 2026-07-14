@@ -540,12 +540,17 @@ public class TestHoodieParquetFileBinaryCopier {
   }
 
   private ParquetMetadata getFileMetaData(String file) throws IOException {
-    return ParquetFileReader.readFooter(conf, new Path(file));
+    Path path = new Path(file);
+    try (ParquetFileReader reader = ParquetFileReader.open(
+        HadoopInputFile.fromPath(path, conf),
+        HadoopReadOptions.builder(conf, path).withMetadataFilter(ParquetMetadataConverter.NO_FILTER).build())) {
+      return reader.getFooter();
+    }
   }
 
   private void verify(MessageType requiredSchema, CompressionCodecName expectedCodec) throws Exception {
     // Verify the schema are not changed for the columns not pruned
-    ParquetMetadata pmd = ParquetFileReader.readFooter(conf, new Path(outputFile), ParquetMetadataConverter.NO_FILTER);
+    ParquetMetadata pmd = getFileMetaData(outputFile);
     MessageType fileSchema = pmd.getFileMetaData().getSchema();
     assertEquals(requiredSchema, fileSchema);
 
@@ -942,4 +947,3 @@ public class TestHoodieParquetFileBinaryCopier {
     return Arrays.stream(path).collect(Collectors.joining("."));
   }
 }
-

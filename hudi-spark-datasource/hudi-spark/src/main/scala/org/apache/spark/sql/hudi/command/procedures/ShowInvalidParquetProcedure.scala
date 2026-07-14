@@ -27,8 +27,10 @@ import org.apache.hudi.metadata.{HoodieTableMetadata, NativeTableMetadataFactory
 
 import collection.JavaConverters._
 import org.apache.hadoop.fs.Path
+import org.apache.parquet.HadoopReadOptions
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
 import org.apache.parquet.hadoop.ParquetFileReader
+import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
@@ -89,7 +91,13 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
         val filePath = HadoopFSUtils.convertToHadoopPath(status.getPath)
         var isInvalid = false
         if (filePath.toString.endsWith(".parquet")) {
-          try ParquetFileReader.readFooter(storageConf.unwrap(), filePath, SKIP_ROW_GROUPS).getFileMetaData catch {
+          try {
+            val conf = storageConf.unwrap()
+            val reader = ParquetFileReader.open(
+              HadoopInputFile.fromPath(filePath, conf),
+              HadoopReadOptions.builder(conf, filePath).withMetadataFilter(SKIP_ROW_GROUPS).build())
+            try reader.getFooter.getFileMetaData finally reader.close()
+          } catch {
             case e: Exception =>
               isInvalid = e.getMessage.contains("is not a Parquet file")
               if (isInvalid && needDelete) {

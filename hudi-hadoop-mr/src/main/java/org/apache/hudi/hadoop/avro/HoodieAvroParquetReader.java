@@ -30,16 +30,19 @@ import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
+import org.apache.parquet.HadoopReadOptions;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetInputSplit;
 import org.apache.parquet.hadoop.ParquetRecordReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
@@ -59,8 +62,13 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
       baseSchema = dataSchema.get();
     } else {
       // get base schema
-      ParquetMetadata fileFooter =
-          ParquetFileReader.readFooter(conf, ((ParquetInputSplit) inputSplit).getPath(), ParquetMetadataConverter.NO_FILTER);
+      Path path = ((ParquetInputSplit) inputSplit).getPath();
+      ParquetMetadata fileFooter;
+      try (ParquetFileReader reader = ParquetFileReader.open(
+          HadoopInputFile.fromPath(path, conf),
+          HadoopReadOptions.builder(conf, path).withMetadataFilter(ParquetMetadataConverter.NO_FILTER).build())) {
+        fileFooter = reader.getFooter();
+      }
       MessageType messageType = fileFooter.getFileMetaData().getSchema();
       baseSchema = getAvroSchemaConverter(conf).convert(messageType);
 

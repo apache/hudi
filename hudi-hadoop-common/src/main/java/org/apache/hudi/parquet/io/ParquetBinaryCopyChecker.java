@@ -26,10 +26,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.HadoopReadOptions;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.FileMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.MessageTypeParser;
@@ -172,13 +174,13 @@ public class ParquetBinaryCopyChecker {
       Configuration conf,
       Path parquetFilePath,
       ParquetMetadataConverter.MetadataFilter filter) {
-    ParquetMetadata footer;
-    try {
-      footer = ParquetFileReader.readFooter(conf, parquetFilePath, filter);
+    try (ParquetFileReader reader = ParquetFileReader.open(
+        HadoopInputFile.fromPath(parquetFilePath, conf),
+        HadoopReadOptions.builder(conf, parquetFilePath).withMetadataFilter(filter).build())) {
+      return reader.getFooter();
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath, e);
     }
-    return footer;
   }
 
   /**

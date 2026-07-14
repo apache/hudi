@@ -45,6 +45,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.HadoopReadOptions;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.column.statistics.Statistics;
@@ -55,6 +56,7 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.MessageType;
@@ -118,15 +120,16 @@ public class ParquetUtils extends FileFormatUtils {
 
   private static ParquetMetadata readMetadata(HoodieStorage storage, StoragePath parquetFilePath, ParquetMetadataConverter.MetadataFilter metadataFilter) {
     Path parquetFileHadoopPath = new Path(parquetFilePath.toUri());
-    ParquetMetadata footer;
-    try {
+    Configuration conf = storage.newInstance(
+        parquetFilePath, storage.getConf()).getConf().unwrapAs(Configuration.class);
+    try (ParquetFileReader reader = ParquetFileReader.open(
+        HadoopInputFile.fromPath(parquetFileHadoopPath, conf),
+        HadoopReadOptions.builder(conf, parquetFileHadoopPath).withMetadataFilter(metadataFilter).build())) {
       // TODO(vc): Should we use the parallel reading version here?
-      footer = ParquetFileReader.readFooter(storage.newInstance(
-          parquetFilePath, storage.getConf()).getConf().unwrapAs(Configuration.class), parquetFileHadoopPath, metadataFilter);
+      return reader.getFooter();
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read footer for parquet " + parquetFileHadoopPath, e);
     }
-    return footer;
   }
 
   /**

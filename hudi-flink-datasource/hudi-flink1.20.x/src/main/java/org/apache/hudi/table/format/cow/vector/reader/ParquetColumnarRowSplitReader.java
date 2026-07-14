@@ -34,6 +34,7 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.HadoopReadOptions;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.page.PageReadStore;
 import org.apache.parquet.filter.UnboundRecordFilter;
@@ -42,6 +43,7 @@ import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.io.ColumnIOFactory;
 import org.apache.parquet.io.MessageColumnIO;
 import org.apache.parquet.schema.GroupType;
@@ -63,7 +65,6 @@ import static org.apache.hudi.table.format.cow.ParquetSplitReaderUtil.createWrit
 import static org.apache.parquet.filter2.compat.FilterCompat.get;
 import static org.apache.parquet.filter2.compat.RowGroupFilter.filterRowGroups;
 import static org.apache.parquet.format.converter.ParquetMetadataConverter.range;
-import static org.apache.parquet.hadoop.ParquetFileReader.readFooter;
 
 /**
  * This reader is used to read a {@link VectorizedColumnBatch} from input split.
@@ -144,7 +145,13 @@ public class ParquetColumnarRowSplitReader implements Closeable {
     this.utcTimestamp = utcTimestamp;
     this.batchSize = batchSize;
     // then we need to apply the predicate push down filter
-    ParquetMetadata footer = readFooter(conf, path, range(splitStart, splitStart + splitLength));
+    ParquetMetadata footer;
+    try (ParquetFileReader footerReader = ParquetFileReader.open(
+        HadoopInputFile.fromPath(path, conf),
+        HadoopReadOptions.builder(conf, path)
+            .withMetadataFilter(range(splitStart, splitStart + splitLength)).build())) {
+      footer = footerReader.getFooter();
+    }
     MessageType fileSchema = footer.getFileMetaData().getSchema();
     FilterCompat.Filter filter = get(filterPredicate, recordFilter);
     List<BlockMetaData> blocks = filterRowGroups(filter, footer.getBlocks(), fileSchema);
@@ -424,4 +431,3 @@ public class ParquetColumnarRowSplitReader implements Closeable {
     VectorizedColumnBatch generate(ColumnVector[] readVectors);
   }
 }
-
