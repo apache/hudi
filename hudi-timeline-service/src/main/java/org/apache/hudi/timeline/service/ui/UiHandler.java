@@ -27,7 +27,7 @@ import java.nio.charset.StandardCharsets;
 /**
  * Main User Interface (UI) Handler class that is responsible for registering UI routes.
  * Static files (HTML, JS, CSS) are served by Javalin's built-in static file serving
- * from the classpath at /public/.
+ * from the classpath /public/ directory, hosted under /ui/static.
  */
 public class UiHandler {
 
@@ -40,7 +40,7 @@ public class UiHandler {
   public void register() {
     // Read /public/index.html from the classpath as an InputStream and write its contents
     // directly into the response body with ctx.result(...). From the browser's perspective,
-    // the server responded to /ui with HTML content — no redirect happened, so the URL
+    // the server responded to /ui with HTML content: no redirect happened, so the URL
     // stays as /ui.
     app.get("/ui", ctx -> {
       InputStream is = getClass().getResourceAsStream("/public/index.html");

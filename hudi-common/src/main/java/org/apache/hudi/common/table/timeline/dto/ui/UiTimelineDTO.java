@@ -16,12 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.table.timeline.dto.v2;
+package org.apache.hudi.common.table.timeline.dto.ui;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantGenerator;
-import org.apache.hudi.common.table.timeline.TimelineFactory;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -30,25 +27,17 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * The data transfer object of timeline.
+ * Timeline DTO for the Timeline UI API (/ui/api). Not part of the filesystem-view RPC protocol.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class TimelineDTOV2 {
+public class UiTimelineDTO {
 
   @JsonProperty("instants")
-  public List<InstantDTO> instants;
+  public List<UiInstantDTO> instants;
 
-  public static TimelineDTOV2 fromTimeline(HoodieTimeline timeline) {
-    TimelineDTOV2 dto = new TimelineDTOV2();
-    dto.instants = timeline.getInstantsAsStream().map(InstantDTO::fromInstant).collect(Collectors.toList());
+  public static UiTimelineDTO fromTimeline(HoodieTimeline timeline) {
+    UiTimelineDTO dto = new UiTimelineDTO();
+    dto.instants = timeline.getInstantsAsStream().map(UiInstantDTO::fromInstant).collect(Collectors.toList());
     return dto;
-  }
-
-  public static HoodieTimeline toTimeline(TimelineDTOV2 dto, HoodieTableMetaClient metaClient) {
-    InstantGenerator instantGenerator = metaClient.getInstantGenerator();
-    TimelineFactory factory = metaClient.getTimelineLayout().getTimelineFactory();
-    // TODO: For Now, we will assume, only active-timeline will be transferred.
-    return factory.createDefaultTimeline(dto.instants.stream().map(d -> InstantDTO.toInstant(d, instantGenerator)),
-        metaClient.getActiveTimeline());
   }
 }
