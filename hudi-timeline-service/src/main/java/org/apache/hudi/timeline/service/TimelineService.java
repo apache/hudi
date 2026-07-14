@@ -31,7 +31,6 @@ import org.apache.hudi.timeline.service.ui.UiHandler;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
-import io.javalin.core.compression.CompressionStrategy;
 import io.javalin.core.util.JavalinBindException;
 import io.javalin.http.staticfiles.Location;
 import lombok.AllArgsConstructor;
@@ -127,7 +126,7 @@ public class TimelineService {
     public boolean enableMarkerRequests = false;
 
     @Builder.Default
-    @Parameter(names = {"--enable-ui"}, description = "Enable the Timeline UI (/ui) and its /v2/hoodie/view/ UI API endpoints")
+    @Parameter(names = {"--enable-ui"}, description = "Enable the Timeline UI: the /ui page, /ui/static assets, and /ui/api endpoints")
     public boolean enableUi = false;
 
     @Builder.Default
@@ -238,13 +237,24 @@ public class TimelineService {
     ScheduledExecutorScheduler scheduler = new ScheduledExecutorScheduler("TimelineService-JettyScheduler", true, 8);
     server.addBean(scheduler);
 
+    if (timelineServerConf.enableUi && TimelineService.class.getResource("/public/index.html") == null) {
+      // Javalin.create resolves classpath static dirs eagerly; a missing dir otherwise surfaces as a
+      // misleading port-retry-x16 failure, so fail fast with an actionable message before creating the app.
+      throw new IllegalStateException("UI assets not bundled in this jar. The Timeline UI requires the public/ "
+          + "resources (shipped in hudi-timeline-server-bundle); rebuild with UI assets or start without --enable-ui.");
+    }
+
     app = Javalin.create(c -> {
       if (!timelineServerConf.compress) {
-        c.compressionStrategy(CompressionStrategy.NONE);
+        c.compressionStrategy(io.javalin.core.compression.CompressionStrategy.NONE);
       }
       c.server(() -> server);
       if (timelineServerConf.enableUi) {
-        c.addStaticFiles("/public", Location.CLASSPATH);
+        c.addStaticFiles(staticFiles -> {
+          staticFiles.hostedPath = "/ui/static";
+          staticFiles.directory = "/public";
+          staticFiles.location = Location.CLASSPATH;
+        });
       }
     });
 
@@ -264,10 +274,8 @@ public class TimelineService {
 
   public static FileSystemViewManager buildFileSystemViewManager(Config config, StorageConfiguration<?> conf) {
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(conf);
-    // Disable the metadata table for the standalone timeline server (which backs the Timeline UI):
-    // it serves read-only timeline data for arbitrary basepaths, so it should not require each table
-    // to have a metadata table present/bootstrapped. File listings fall back to direct storage listing.
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(false).build();
+    // Just use defaults for now
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
     HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().build();
 
     switch (config.viewStorageType) {

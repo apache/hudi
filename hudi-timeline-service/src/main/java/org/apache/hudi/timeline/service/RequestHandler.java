@@ -29,7 +29,7 @@ import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.timeline.dto.InstantDTO;
 import org.apache.hudi.common.table.timeline.dto.TimelineDTO;
-import org.apache.hudi.common.table.timeline.dto.v2.TimelineDTOV2;
+import org.apache.hudi.common.table.timeline.dto.ui.UiTimelineDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -77,6 +77,17 @@ public class RequestHandler {
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
   private static final TypeReference<List<String>> LIST_TYPE_REFERENCE = new TypeReference<List<String>>() {
   };
+
+  // Timeline UI API routes, gated behind --enable-ui.
+  private static final String UI_API_BASE = "/ui/api";
+  private static final String UI_TIMELINE_URL = String.format("%s/%s", UI_API_BASE, "timeline/instants/all");
+  private static final String UI_INSTANT_DETAILS_URL = String.format("%s/%s", UI_API_BASE, "timeline/instant");
+  private static final String UI_TABLE_CONFIG_URL = String.format("%s/%s", UI_API_BASE, "table/config");
+  private static final String UI_SCHEMA_HISTORY_URL = String.format("%s/%s", UI_API_BASE, "table/schema/history");
+
+  // Query-param names used only by the Timeline UI API.
+  private static final String INSTANT_ACTION_PARAM = "instantaction";
+  private static final String INSTANT_STATE_PARAM = "instantstate";
 
   private final TimelineService.Config timelineServiceConfig;
   private final FileSystemViewManager viewManager;
@@ -177,11 +188,11 @@ public class RequestHandler {
   }
 
   private static String getInstantActionParam(Context ctx) {
-    return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INSTANT_ACTION_PARAM, String.class).getOrThrow(e -> new BadRequestResponse("INSTANT_ACTION_PARAM is required"));
+    return ctx.queryParamAsClass(INSTANT_ACTION_PARAM, String.class).getOrThrow(e -> new BadRequestResponse("INSTANT_ACTION_PARAM is required"));
   }
 
   private static String getInstantStateParam(Context ctx) {
-    return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INSTANT_STATE_PARAM, String.class).getOrThrow(e -> new BadRequestResponse("INSTANT_STATE_PARAM is required"));
+    return ctx.queryParamAsClass(INSTANT_STATE_PARAM, String.class).getOrThrow(e -> new BadRequestResponse("INSTANT_STATE_PARAM is required"));
   }
 
   private static String getMarkerDirParam(Context ctx) {
@@ -199,7 +210,7 @@ public class RequestHandler {
     registerFileSlicesAPI();
     registerTimelineAPI();
     if (timelineServiceConfig.enableUi) {
-      registerTimelineV2API();
+      registerUiApi();
     }
     if (markerHandler != null) {
       registerMarkerAPI();
@@ -259,37 +270,40 @@ public class RequestHandler {
   }
 
   /**
-   * Register v2 Timeline API calls used by the Timeline UI. Gated behind --enable-ui.
+   * Register the Timeline UI API calls (under /ui/api). Gated behind --enable-ui.
    */
-  private void registerTimelineV2API() {
-    app.get(RemoteHoodieTableFileSystemView.TIMELINE_V2_URL, new ViewHandler(ctx -> {
-      metricsRegistry.add("TIMELINE_V2", 1);
-      TimelineDTOV2 dto = instantHandler.getTimelineV2(getBasePathParam(ctx));
+  private void registerUiApi() {
+    app.get(UI_TIMELINE_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("UI_TIMELINE", 1);
+      UiTimelineDTO dto = instantHandler.getUiTimeline(getBasePathParam(ctx));
       writeValueAsString(ctx, dto);
     }, false));
 
-    app.get(RemoteHoodieTableFileSystemView.INSTANT_DETAILS_URL, new ViewHandler(ctx -> {
-      metricsRegistry.add("INSTANT_DETAILS", 1);
+    app.get(UI_INSTANT_DETAILS_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("UI_INSTANT_DETAILS", 1);
       Object instantDetails = instantHandler.getInstantDetails(getBasePathParam(ctx),
           getInstantParam(ctx), getInstantActionParam(ctx), getInstantStateParam(ctx));
       writeValueAsString(ctx, instantDetails);
     }, false));
 
-    app.get(RemoteHoodieTableFileSystemView.TABLE_CONFIG_V2_URL, new ViewHandler(ctx -> {
-      metricsRegistry.add("TABLE_CONFIG", 1);
+    app.get(UI_TABLE_CONFIG_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("UI_TABLE_CONFIG", 1);
       writeValueAsString(ctx, instantHandler.getTableConfig(getBasePathParam(ctx)));
     }, false));
 
-    app.get(RemoteHoodieTableFileSystemView.SCHEMA_HISTORY_V2_URL, new ViewHandler(ctx -> {
-      metricsRegistry.add("SCHEMA_HISTORY", 1);
+    app.get(UI_SCHEMA_HISTORY_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("UI_SCHEMA_HISTORY", 1);
       int limit;
       try {
         limit = Integer.parseInt(ctx.queryParamAsClass("limit", String.class).getOrDefault("200"));
       } catch (NumberFormatException e) {
         throw new BadRequestResponse("limit must be an integer");
       }
-      if (limit <= 0 || limit > 1000) {
-        throw new BadRequestResponse("limit must be between 1 and 1000");
+      if (limit <= 0) {
+        throw new BadRequestResponse("limit must be positive");
+      }
+      if (limit > 1000) {
+        limit = 1000;
       }
       writeValueAsString(ctx, instantHandler.getSchemaHistory(getBasePathParam(ctx), limit));
     }, false));

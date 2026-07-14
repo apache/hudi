@@ -21,10 +21,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hudi Timeline Explorer</title>
   <!-- Bootstrap 5 CSS (bundled) -->
-  <link id="bootstrap-css" href="/lib/bootstrap/bootstrap.min.css" rel="stylesheet" />
+  <link id="bootstrap-css" href="/ui/static/lib/bootstrap/bootstrap.min.css" rel="stylesheet" />
   <!-- vis-timeline CSS (bundled) -->
-  <link id="vis-css" href="/lib/vis-timeline/vis-timeline-graph2d.min.css" rel="stylesheet" type="text/css" />
-  <link rel="stylesheet" href="/css/style.css" />
+  <link id="vis-css" href="/ui/static/lib/vis-timeline/vis-timeline-graph2d.min.css" rel="stylesheet" type="text/css" />
+  <link rel="stylesheet" href="/ui/static/css/style.css" />
 </head>
 <body>
 
@@ -255,6 +255,9 @@
 
         <!-- Table Config tab -->
         <div class="tab-pane fade" id="tabConfig" role="tabpanel" aria-labelledby="tab-config">
+          <div class="d-flex justify-content-end mb-2">
+            <button id="configRefreshBtn" class="btn btn-sm btn-outline-secondary" type="button" title="Re-pull the latest table config">Refresh</button>
+          </div>
           <div id="configLoading" class="text-center py-5 d-none">
             <div class="spinner-border text-primary mb-2" role="status"></div>
             <p class="text-muted">Loading table configuration...</p>
@@ -283,6 +286,9 @@
 
         <!-- Schema History tab -->
         <div class="tab-pane fade" id="tabSchema" role="tabpanel" aria-labelledby="tab-schema">
+          <div class="d-flex justify-content-end mb-2">
+            <button id="schemaRefreshBtn" class="btn btn-sm btn-outline-secondary" type="button" title="Re-pull the latest schema history">Refresh</button>
+          </div>
           <div id="schemaLoading" class="text-center py-5 d-none">
             <div class="spinner-border text-primary mb-2" role="status"></div>
             <p class="text-muted">Loading schema history...</p>
@@ -318,11 +324,11 @@
   </div>
 
   <!-- vis-timeline JS (bundled) -->
-  <script src="/lib/vis-timeline/vis-timeline-graph2d.min.js"></script>
+  <script src="/ui/static/lib/vis-timeline/vis-timeline-graph2d.min.js"></script>
   <!-- renderjson (bundled) -->
-  <script src="/lib/renderjson/renderjson.js"></script>
+  <script src="/ui/static/lib/renderjson/renderjson.js"></script>
   <!-- Bootstrap 5 JS (bundled) -->
-  <script src="/lib/bootstrap/bootstrap.bundle.min.js"></script>
-  <script src="/js/timeline.js"></script>
+  <script src="/ui/static/lib/bootstrap/bootstrap.bundle.min.js"></script>
+  <script src="/ui/static/js/timeline.js"></script>
 </body>
 </html>

@@ -18,6 +18,9 @@
 (function () {
   'use strict';
 
+  // Base path for the Timeline UI REST endpoints (served by Javalin under /ui/api).
+  var API_BASE = '/ui/api';
+
   // DOM references
   var stateEmpty = document.getElementById('stateEmpty');
   var stateLoading = document.getElementById('stateLoading');
@@ -45,25 +48,34 @@
   var tableConfigData = null;
   var schemaHistoryData = null;
 
-  // Maps each Hudi action type to a group row.
-  // Matches HoodieTimeline.VALID_ACTIONS_IN_TIMELINE.
-  var actionToGroupId = {
+  // Maps each comparable action to a group row: one row per comparable action.
+  // Pending compaction/logcompaction/clustering fold into the row of the action
+  // they complete as (compaction -> commit, logcompaction -> deltacommit,
+  // clustering -> replacecommit), mirroring Hudi's own timeline mapping. The
+  // comparableAction is computed server-side and sent on each instant; items
+  // keep their raw action for the visible label, colors and detail fetch.
+  var comparableActionToGroupId = {
     'commit': 0,
     'deltacommit': 1,
-    'clean': 2,
-    'savepoint': 3,
-    'restore': 4,
-    'rollback': 5,
-    'compaction': 6,
-    'logcompaction': 7,
-    'replacecommit': 8,
-    'clustering': 9,
-    'indexing': 10
+    'replacecommit': 2,
+    'clean': 3,
+    'rollback': 4,
+    'savepoint': 5,
+    'restore': 6,
+    'indexing': 7
   };
 
-  var groups = Object.keys(actionToGroupId).map(function (action) {
-    return { id: actionToGroupId[action], content: action };
+  var groups = Object.keys(comparableActionToGroupId).map(function (action) {
+    return { id: comparableActionToGroupId[action], content: action };
   });
+
+  // Preferred display order for the raw-action filter pills. Filtering is always
+  // by raw action (what the user sees on each item), even though several raw
+  // actions can share a single comparable-action group row.
+  var RAW_ACTION_ORDER = [
+    'commit', 'deltacommit', 'replacecommit', 'compaction', 'logcompaction',
+    'clustering', 'clean', 'rollback', 'savepoint', 'restore', 'indexing'
+  ];
 
   // State management
   var STATES = {EMPTY: 'EMPTY', LOADING: 'LOADING', ERROR: 'ERROR', LOADED: 'LOADED'};
@@ -231,12 +243,21 @@
     instantCount.textContent = total + ' instants';
   }
 
-  // Build action filter pills dynamically based on loaded data
+  // Build action filter pills dynamically from the raw actions present in the
+  // loaded data. Pills are per raw action so a pending compaction can be toggled
+  // independently of the completed commits sharing its group row.
   function buildActionFilters() {
     var container = document.getElementById('actionFilters');
     container.innerHTML = '';
-    Object.keys(actionToGroupId).forEach(function (action) {
-      if (!allLoadedActions.has(action)) return;
+    var ordered = [];
+    RAW_ACTION_ORDER.forEach(function (action) {
+      if (allLoadedActions.has(action)) ordered.push(action);
+    });
+    // Append any loaded actions not covered by the known order list.
+    allLoadedActions.forEach(function (action) {
+      if (ordered.indexOf(action) === -1) ordered.push(action);
+    });
+    ordered.forEach(function (action) {
       var btn = document.createElement('button');
       btn.className = 'btn btn-sm filter-pill active';
       btn.setAttribute('data-filter-action', action);
@@ -302,7 +323,7 @@
       bootstrap.Tab.getOrCreateInstance(timelineTab).show();
     }
 
-    fetch('/v2/hoodie/view/timeline/instants/all?basepath=' + encodeURIComponent(tablePath))
+    fetch(API_BASE + '/timeline/instants/all?basepath=' + encodeURIComponent(tablePath))
       .then(function (res) {
         if (!res.ok) {
           throw new Error('HTTP ' + res.status + ': ' + res.statusText);
@@ -323,7 +344,12 @@
           var completionTs = instant.completionTs;
           var action = instant.action;
           var state = instant.state;
-          var groupId = actionToGroupId[action] !== undefined ? actionToGroupId[action] : -1;
+          // Group by the server-provided comparable action (fall back to the raw
+          // action if absent, then to -1 for anything unknown). The item keeps its
+          // raw action below for the label, colors and detail fetch.
+          var comparableAction = instant.comparableAction || action;
+          var groupId = comparableActionToGroupId[comparableAction] !== undefined
+            ? comparableActionToGroupId[comparableAction] : -1;
 
           var effectiveRequestTs = (requestTs === '00000000000000000') ? completionTs : requestTs;
           var requestTsFormatted = parseHudiTimestamp(effectiveRequestTs);
@@ -443,7 +469,7 @@
     loadingEl.innerHTML = '<div class="spinner-border spinner-border-sm me-2" role="status"></div>Loading instant details...';
     detailBody.appendChild(loadingEl);
 
-    var url = '/v2/hoodie/view/timeline/instant?basepath=' + encodeURIComponent(tablePath)
+    var url = API_BASE + '/timeline/instant?basepath=' + encodeURIComponent(tablePath)
       + '&instant=' + item.requestTs
       + '&instantaction=' + item.action
       + '&instantstate=' + item.state;
@@ -470,7 +496,7 @@
         if (cleanPolicy === 'KEEP_LATEST_COMMITS' && json.earliestCommitToRetain) {
           var prevClean = findPreviousCompletedClean(item.requestTs);
           if (prevClean) {
-            var prevUrl = '/v2/hoodie/view/timeline/instant?basepath=' + encodeURIComponent(tablePath)
+            var prevUrl = API_BASE + '/timeline/instant?basepath=' + encodeURIComponent(tablePath)
               + '&instant=' + prevClean.requestTs
               + '&instantaction=' + prevClean.action
               + '&instantstate=' + prevClean.state;
@@ -520,6 +546,22 @@
     }
   });
 
+  // Refresh controls: drop the cached tab data and re-pull the latest values.
+  var configRefreshBtn = document.getElementById('configRefreshBtn');
+  if (configRefreshBtn) {
+    configRefreshBtn.addEventListener('click', function () {
+      tableConfigData = null;
+      loadTableConfig();
+    });
+  }
+  var schemaRefreshBtn = document.getElementById('schemaRefreshBtn');
+  if (schemaRefreshBtn) {
+    schemaRefreshBtn.addEventListener('click', function () {
+      schemaHistoryData = null;
+      loadSchemaHistory();
+    });
+  }
+
   function loadTableConfig() {
     if (!currentTablePath) return;
     if (tableConfigData) {
@@ -531,7 +573,7 @@
     document.getElementById('configContent').classList.add('d-none');
     document.getElementById('configError').classList.add('d-none');
 
-    fetch('/v2/hoodie/view/table/config?basepath=' + encodeURIComponent(currentTablePath))
+    fetch(API_BASE + '/table/config?basepath=' + encodeURIComponent(currentTablePath))
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + res.statusText);
         return res.json();
@@ -586,7 +628,7 @@
     document.getElementById('schemaContent').classList.add('d-none');
     document.getElementById('schemaError').classList.add('d-none');
 
-    fetch('/v2/hoodie/view/table/schema/history?basepath=' + encodeURIComponent(currentTablePath))
+    fetch(API_BASE + '/table/schema/history?basepath=' + encodeURIComponent(currentTablePath))
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + res.statusText);
         return res.json();
@@ -732,6 +774,19 @@
       return;
     }
 
+    // Truncation notice: when the scanned window is truncated, completed commits
+    // exist older than the oldest scanned instant, so the baseline entry is the
+    // window edge, not necessarily the table's first schema.
+    if (data.window && data.window.truncated) {
+      var truncNotice = document.createElement('div');
+      truncNotice.className = 'alert alert-warning py-2 small';
+      var oldestScanned = data.window.oldestInstantScanned || 'unknown';
+      truncNotice.textContent = 'History truncated: older completed commits exist beyond the scanned window'
+        + ' (oldest scanned: ' + oldestScanned + '). The baseline entry is the window edge,'
+        + ' not necessarily the first table schema.';
+      historyList.appendChild(truncNotice);
+    }
+
     // Build diff cards in reverse chronological order
     for (var i = history.length - 1; i >= 0; i--) {
       var entry = history[i];
@@ -750,6 +805,27 @@
 
       header.appendChild(tsCode);
       header.appendChild(actionBadge);
+
+      // Entry type badge: baseline (oldest recorded / window edge) vs later change.
+      if (entry.type === 'baseline') {
+        var baselineBadge = document.createElement('span');
+        baselineBadge.className = 'badge bg-secondary';
+        baselineBadge.textContent = 'baseline';
+        header.appendChild(baselineBadge);
+      } else if (entry.type === 'change') {
+        var changeBadge = document.createElement('span');
+        changeBadge.className = 'badge bg-light text-dark border';
+        changeBadge.textContent = 'change';
+        header.appendChild(changeBadge);
+      }
+
+      // Completion time alongside the instant, when available.
+      if (entry.completionTime) {
+        var completionSpan = document.createElement('span');
+        completionSpan.className = 'text-muted small';
+        completionSpan.textContent = 'completed: ' + entry.completionTime;
+        header.appendChild(completionSpan);
+      }
 
       // Compute diff with previous schema if available
       if (i > 0) {
@@ -786,10 +862,14 @@
         card.appendChild(header);
         card.appendChild(collapseDiv);
       } else {
-        var initialBadge = document.createElement('span');
-        initialBadge.className = 'badge bg-secondary ms-auto';
-        initialBadge.textContent = 'Initial schema';
-        header.appendChild(initialBadge);
+        // Oldest entry: no previous schema to diff against. Fall back to an
+        // "Initial schema" marker only when the server did not tag it baseline.
+        if (entry.type !== 'baseline') {
+          var initialBadge = document.createElement('span');
+          initialBadge.className = 'badge bg-secondary ms-auto';
+          initialBadge.textContent = 'Initial schema';
+          header.appendChild(initialBadge);
+        }
         card.appendChild(header);
       }
 

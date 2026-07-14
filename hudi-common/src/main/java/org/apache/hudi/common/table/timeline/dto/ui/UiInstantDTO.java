@@ -16,22 +16,24 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.table.timeline.dto.v2;
+package org.apache.hudi.common.table.timeline.dto.ui;
 
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
- * The data transfer object of instant.
+ * Instant DTO for the Timeline UI API (/ui/api). Not part of the filesystem-view RPC protocol.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class InstantDTO {
+public class UiInstantDTO {
 
   @JsonProperty("action")
   public String action;
+  @JsonProperty("comparableAction")
+  public String comparableAction;
   @JsonProperty("requestTs")
   public String requestedTime;
   @JsonProperty("completionTs")
@@ -39,25 +41,17 @@ public class InstantDTO {
   @JsonProperty("state")
   public String state;
 
-  public static InstantDTO fromInstant(HoodieInstant instant) {
+  public static UiInstantDTO fromInstant(HoodieInstant instant) {
     if (null == instant) {
       return null;
     }
 
-    InstantDTO dto = new InstantDTO();
+    UiInstantDTO dto = new UiInstantDTO();
     dto.action = instant.getAction();
+    dto.comparableAction = InstantComparatorV2.getComparableAction(instant.getAction());
     dto.requestedTime = instant.requestedTime();
     dto.completionTime = instant.getCompletionTime();
     dto.state = instant.getState().toString();
     return dto;
-  }
-
-  public static HoodieInstant toInstant(InstantDTO dto, InstantGenerator factory) {
-    if (null == dto) {
-      return null;
-    }
-
-    return factory.createNewInstant(HoodieInstant.State.valueOf(dto.state), dto.action,
-        dto.requestedTime, dto.completionTime);
   }
 }
