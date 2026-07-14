@@ -439,7 +439,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   }
 
   @Test
-  void testRollbackRequestedCompactionExecutesRollbackPlan() throws Exception {
+  void testRollbackPartiallyMaterializedRequestedCompactionExecutesRollbackPlan() throws Exception {
     HoodieWriteConfig cfg = getTableVersionSixRollbackConfig();
     HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, getTableVersionSixProperties(cfg));
 
@@ -451,6 +451,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     testTable.addRequestedCompaction(compactionInstantTime, new FileSlice(partition, compactionInstantTime, fileId));
     testTable.withPartitionMetaFiles(partition);
+    // Simulate a stale requested compaction whose file output was already materialized.
     testTable.withBaseFilesInPartition(partition, fileId);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);

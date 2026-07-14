@@ -130,8 +130,8 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
   }
 
   private boolean shouldGenerateRollbackRequests(HoodieInstant instantToRollback) {
-    // Requested write instants only require timeline cleanup. Requested compaction still has a compaction
-    // plan and may have files associated with the compaction instant.
+    // Requested write instants only require timeline cleanup. A stale or partially materialized requested
+    // compaction can still have files associated with the compaction instant, so plan cleanup for it.
     return !instantToRollback.isRequested()
         || HoodieTimeline.COMPACTION_ACTION.equals(instantToRollback.getAction());
   }

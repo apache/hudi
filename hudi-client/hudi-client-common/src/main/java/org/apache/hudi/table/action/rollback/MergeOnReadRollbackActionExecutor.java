@@ -79,8 +79,8 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
     // NOTE {@link HoodieCompactionConfig#withCompactionLazyBlockReadEnabled} needs to be set to TRUE. This is
     // required to avoid OOM when merging multiple LogBlocks performed during nested rollbacks.
 
-    // Requested write instants only require timeline cleanup. Requested compaction still needs to execute
-    // the rollback plan because table files can be associated with the compaction instant.
+    // Requested write instants only require timeline cleanup. A stale or partially materialized requested
+    // compaction still needs to execute its rollback plan to remove files associated with the compaction instant.
     if (shouldExecuteRollback(resolvedInstant)) {
       log.info("Unpublished {}", resolvedInstant);
       allRollbackStats = executeRollback(instantToRollback, hoodieRollbackPlan);
