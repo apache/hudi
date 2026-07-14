@@ -174,8 +174,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                       TaskContextSupplier taskContextSupplier) throws IOException {
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
         table.getStorageConf(), table.getMetaClient().getTableConfig(), instantRange, Option.empty(), writeConfig.getProps());
-    HoodieAppendHandle<IndexedRecord, ?, ?, ?> appendHandle = CommonClientUtils.shouldWriteNativeLogs(
-        writeConfig, table.getMetaClient().getTableConfig())
+    HoodieAppendHandle<IndexedRecord, ?, ?, ?> appendHandle = CommonClientUtils.shouldWriteNativeLogs(writeConfig)
         ? new FileGroupReaderBasedNativeLogAppendHandle<>(writeConfig, instantTime, table, operation, taskContextSupplier, readerContext)
         : new FileGroupReaderBasedInlineLogAppendHandle<>(writeConfig, instantTime, table, operation, taskContextSupplier, readerContext);
     appendHandle.doAppend();

@@ -21,7 +21,6 @@
 package org.apache.hudi.utils;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -37,7 +36,6 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.util.CommonClientUtils.areTableVersionsCompatible;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -104,40 +102,23 @@ class TestCommonClientUtils {
     assertEquals("0-0-0", CommonClientUtils.generateWriteToken(taskContextSupplier));
   }
 
-  @ParameterizedTest(name = "Write version {0} with base file format {1} should write native log format: {2}")
+  @ParameterizedTest(name = "Write version {0} should write native log format: {1}")
   @MethodSource("provideWriteVersionNativeLogExpectations")
-  void testShouldWriteNativeLogs(HoodieTableVersion writeVersion, HoodieFileFormat baseFileFormat, boolean expected) {
+  void testShouldWriteNativeLogs(HoodieTableVersion writeVersion, boolean expected) {
     HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
-    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(writeConfig.getWriteVersion()).thenReturn(writeVersion);
-    when(tableConfig.getBaseFileFormat()).thenReturn(baseFileFormat);
 
-    assertEquals(expected, CommonClientUtils.shouldWriteNativeLogs(writeConfig, tableConfig));
+    assertEquals(expected, CommonClientUtils.shouldWriteNativeLogs(writeConfig));
   }
 
   private static Stream<Arguments> provideWriteVersionNativeLogExpectations() {
-    // Native log format is the default for write version >= TEN, except for Lance base files.
+    // Native log format is the default for write version >= TEN.
     return Stream.of(
-        Arguments.of(HoodieTableVersion.SIX, HoodieFileFormat.PARQUET, false),
-        Arguments.of(HoodieTableVersion.EIGHT, HoodieFileFormat.PARQUET, false),
-        Arguments.of(HoodieTableVersion.NINE, HoodieFileFormat.PARQUET, false),
-        Arguments.of(HoodieTableVersion.TEN, HoodieFileFormat.PARQUET, true),
-        Arguments.of(HoodieTableVersion.TEN, HoodieFileFormat.ORC, true),
-        Arguments.of(HoodieTableVersion.TEN, HoodieFileFormat.LANCE, false)
+        Arguments.of(HoodieTableVersion.SIX, false),
+        Arguments.of(HoodieTableVersion.EIGHT, false),
+        Arguments.of(HoodieTableVersion.NINE, false),
+        Arguments.of(HoodieTableVersion.TEN, true)
     );
-  }
-
-  @Test
-  void testShouldWriteInlineLogFormatForMultiFormatLanceWrites() {
-    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
-    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
-    when(writeConfig.getWriteVersion()).thenReturn(HoodieTableVersion.TEN);
-    when(writeConfig.contains(HoodieWriteConfig.BASE_FILE_FORMAT)).thenReturn(true);
-    when(writeConfig.getBaseFileFormat()).thenReturn(HoodieFileFormat.LANCE);
-    when(tableConfig.isMultipleBaseFileFormatsEnabled()).thenReturn(true);
-    when(tableConfig.getBaseFileFormat()).thenReturn(HoodieFileFormat.PARQUET);
-
-    assertFalse(CommonClientUtils.shouldWriteNativeLogs(writeConfig, tableConfig));
   }
 
   @ParameterizedTest(name = "Table version {0} with write version {1} should be valid: {2}")

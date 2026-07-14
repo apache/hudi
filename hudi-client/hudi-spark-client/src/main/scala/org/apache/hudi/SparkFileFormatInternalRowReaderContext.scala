@@ -144,10 +144,9 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     // Parquet stores VECTOR as FIXED_LEN_BYTE_ARRAY, so the reader needs BinaryType
     // and we decode back to ArrayType below. Lance returns ArrayType natively, so skip
     // the rewrite only for Lance base files; log files always go through the rewrite path.
-    val isLogFile = FSUtils.isLogFile(filePath)
-    val isLanceBaseFile = !isLogFile && FSUtils.isBaseFile(filePath) &&
-      tableConfig.getBaseFileFormat == HoodieFileFormat.LANCE
-    val vectorColumnInfo: Map[Int, HoodieSchema.Vector] = if (isLanceBaseFile) {
+    val isInlineLog = FSUtils.isInlineLogFile(filePath)
+    val isLanceFile = !isInlineLog && tableConfig.getBaseFileFormat == HoodieFileFormat.LANCE
+    val vectorColumnInfo: Map[Int, HoodieSchema.Vector] = if (isLanceFile) {
       Map.empty
     } else {
       SparkFileFormatInternalRowReaderContext.detectVectorColumns(requiredSchema)
@@ -159,7 +158,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     }
 
     val (readSchema, readFilters) = getSchemaAndFiltersForRead(parquetReadStructType, hasRowIndexField)
-    if (isLogFile) {
+    if (FSUtils.isLogFile(filePath)) {
       // NOTE: now only primary key based filtering is supported for log files
       // Position-based merging pairs log records with the RECORD_POSITIONS bitmap by index (see
       // PositionBasedFileGroupRecordBuffer), which requires the record stream to contain every
@@ -169,7 +168,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       // Variant alignment happens later via getLogBlockRecordProjection in the merge buffer.
       // Log files reach this method either as an inline parquet data block or as a native log file.
       // Inline paths do not carry the parquet extension, so resolve them by the log block contract.
-      val fileFormat = if (FSUtils.isInlineLogFile(filePath.getName)) {
+      val fileFormat = if (isInlineLog) {
         HoodieFileFormat.PARQUET
       } else {
         HoodieFileFormat.fromFileExtension(filePath.getFileExtension)

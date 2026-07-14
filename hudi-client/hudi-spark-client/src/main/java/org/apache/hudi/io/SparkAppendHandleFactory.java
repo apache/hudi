@@ -26,31 +26,37 @@ import org.apache.hudi.util.CommonClientUtils;
 
 import java.util.Iterator;
 
-public class AppendHandleFactory<T, I, K, O> extends WriteHandleFactory<T, I, K, O> {
+/**
+ * Spark-specific append-handle factory for native logs.
+ *
+ * <p>It selects {@link SparkNativeLogAppendHandle} only after native logs are enabled. The handle then uses the
+ * write config's record type to decide whether delete records must be represented as Spark rows or Avro records.</p>
+ */
+public class SparkAppendHandleFactory<T, I, K, O> extends AppendHandleFactory<T, I, K, O> {
 
   @Override
-  public HoodieAppendHandle<T, I, K, O> create(final HoodieWriteConfig hoodieConfig, final String commitTime,
-                                               final HoodieTable<T, I, K, O> hoodieTable, final String partitionPath,
-                                               final String fileIdPrefix, final TaskContextSupplier sparkTaskContextSupplier) {
-
+  public HoodieAppendHandle<T, I, K, O> create(HoodieWriteConfig hoodieConfig, String commitTime,
+                                                HoodieTable<T, I, K, O> hoodieTable, String partitionPath,
+                                                String fileIdPrefix, TaskContextSupplier taskContextSupplier) {
     String fileId = getNextFileId(fileIdPrefix);
     if (CommonClientUtils.shouldWriteNativeLogs(hoodieConfig)) {
-      return new HoodieNativeLogAppendHandle<>(hoodieConfig, commitTime, hoodieTable, partitionPath,
-          fileId, sparkTaskContextSupplier);
+      return new SparkNativeLogAppendHandle<>(hoodieConfig, commitTime, hoodieTable, partitionPath,
+          fileId, taskContextSupplier);
     }
     return new HoodieInlineLogAppendHandle<>(hoodieConfig, commitTime, hoodieTable, partitionPath,
-        fileId, sparkTaskContextSupplier);
+        fileId, taskContextSupplier);
   }
 
-  public HoodieAppendHandle<T, I, K, O> create(final HoodieWriteConfig hoodieConfig, final String commitTime,
-                                               final HoodieTable<T, I, K, O> hoodieTable, final String partitionPath,
-                                               final String fileId, final Iterator<HoodieRecord<T>> recordItr,
-                                               final TaskContextSupplier sparkTaskContextSupplier) {
+  @Override
+  public HoodieAppendHandle<T, I, K, O> create(HoodieWriteConfig hoodieConfig, String commitTime,
+                                                HoodieTable<T, I, K, O> hoodieTable, String partitionPath,
+                                                String fileId, Iterator<HoodieRecord<T>> recordItr,
+                                                TaskContextSupplier taskContextSupplier) {
     if (CommonClientUtils.shouldWriteNativeLogs(hoodieConfig)) {
-      return new HoodieNativeLogAppendHandle<>(hoodieConfig, commitTime, hoodieTable, partitionPath,
-          fileId, recordItr, sparkTaskContextSupplier);
+      return new SparkNativeLogAppendHandle<>(hoodieConfig, commitTime, hoodieTable, partitionPath,
+          fileId, recordItr, taskContextSupplier);
     }
     return new HoodieInlineLogAppendHandle<>(hoodieConfig, commitTime, hoodieTable, partitionPath,
-        fileId, recordItr, sparkTaskContextSupplier);
+        fileId, recordItr, taskContextSupplier);
   }
 }

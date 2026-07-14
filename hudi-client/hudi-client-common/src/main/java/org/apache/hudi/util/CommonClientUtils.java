@@ -133,22 +133,14 @@ public class CommonClientUtils {
   /**
    * Whether log blocks should be written in the native (v2) log format (standalone native
    * files written via {@code HoodieNativeLogFormatWriter}) instead of the legacy inline
-   * log format. The native format is the default for write version &gt;= {@link HoodieTableVersion#TEN},
-   * except for Lance base files.
+   * log format. The native format is the default for write version &gt;= {@link HoodieTableVersion#TEN}.
    *
-   * <p>This decision is keyed on the effective write version (i.e. {@code HoodieWriteConfig#getWriteVersion()})
-   * and the effective base file format, consistent with how the inline log block layout is
-   * selected, so that the on-disk format follows what the writer is targeting during
-   * upgrade/downgrade windows. Lance remains on the legacy inline log format until native Lance log
-   * support is complete.
+   * <p>This decision is keyed on the effective write version (i.e. {@code HoodieWriteConfig#getWriteVersion()}),
+   * so that the on-disk format follows what the writer is targeting during upgrade/downgrade windows.
    *
    * @param writeConfig the writer configuration.
-   * @param tableConfig the persisted table configuration.
    */
-  public static boolean shouldWriteNativeLogs(HoodieWriteConfig writeConfig, HoodieTableConfig tableConfig) {
-    if (getBaseFileFormat(writeConfig, tableConfig) == HoodieFileFormat.LANCE) {
-      return false;
-    }
+  public static boolean shouldWriteNativeLogs(HoodieWriteConfig writeConfig) {
     return writeConfig.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.TEN);
   }
 

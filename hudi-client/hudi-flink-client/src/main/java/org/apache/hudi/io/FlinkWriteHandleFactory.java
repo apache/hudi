@@ -328,7 +328,7 @@ public class FlinkWriteHandleFactory {
       final String fileID = bucketInfo.getFileIdPrefix();
       final String partitionPath = bucketInfo.getPartitionPath();
       final TaskContextSupplier contextSupplier = table.getTaskContextSupplier();
-      if (CommonClientUtils.shouldWriteNativeLogs(config, table.getMetaClient().getTableConfig())) {
+      if (CommonClientUtils.shouldWriteNativeLogs(config)) {
         if (table.requireSortedRecords()) {
           recordItr = HoodieRecordUtils.sortRecordsByRecordKey(recordItr);
         }
@@ -359,7 +359,7 @@ public class FlinkWriteHandleFactory {
         String instantTime,
         HoodieTable<T, I, K, O> table,
         Iterator<HoodieRecord<T>> recordIterator) {
-      if (CommonClientUtils.shouldWriteNativeLogs(config, table.getMetaClient().getTableConfig())) {
+      if (CommonClientUtils.shouldWriteNativeLogs(config)) {
         return new RowDataNativeLogWriteHandle<>(
             config,
             instantTime,

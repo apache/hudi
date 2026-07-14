@@ -55,7 +55,7 @@ public final class HoodieCDCLogWriterFactory {
       TaskContextSupplier taskContextSupplier,
       Supplier<HoodieLogFormat.Writer> logWriterSupplier) {
     HoodieTableConfig tableConfig = hoodieTable.getMetaClient().getTableConfig();
-    if (CommonClientUtils.shouldWriteNativeLogs(config, tableConfig)) {
+    if (CommonClientUtils.shouldWriteNativeLogs(config)) {
       return new HoodieAvroNativeCDCLogger(
           instantTime,
           config,

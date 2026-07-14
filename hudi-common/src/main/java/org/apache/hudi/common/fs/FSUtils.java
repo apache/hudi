@@ -456,8 +456,11 @@ public class FSUtils {
         .orElse(false);
   }
 
-  public static boolean isInlineLogFile(String fileName) {
-    return !isNativeLogFile(fileName);
+  public static boolean isInlineLogFile(StoragePath filePath) {
+    String scheme = filePath.toUri().getScheme();
+    String fileName = InLineFSUtils.SCHEME.equals(scheme)
+        ? InLineFSUtils.getOuterFilePathFromInlinePath(filePath).getName() : filePath.getName();
+    return FileNameParser.parseInlineLogFile(fileName).isPresent();
   }
 
   public static boolean isNativeLogFile(String fileName) {
