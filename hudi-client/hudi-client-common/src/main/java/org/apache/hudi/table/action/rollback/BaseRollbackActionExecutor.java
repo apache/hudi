@@ -65,7 +65,6 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
   protected final HoodieInstant instantToRollback;
   protected final boolean deleteInstants;
   protected final boolean skipTimelinePublish;
-  protected final boolean isRestore;
   private final TransactionManager txnManager;
   private final boolean skipLocking;
 
@@ -77,9 +76,8 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
                                     String instantTime,
                                     HoodieInstant instantToRollback,
                                     boolean deleteInstants,
-                                    boolean skipLocking,
-                                    boolean isRestore) {
-    this(context, config, table, instantTime, instantToRollback, deleteInstants, false, skipLocking, isRestore);
+                                    boolean skipLocking) {
+    this(context, config, table, instantTime, instantToRollback, deleteInstants, false, skipLocking);
   }
 
   public BaseRollbackActionExecutor(HoodieEngineContext context,
@@ -89,13 +87,12 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
       HoodieInstant instantToRollback,
       boolean deleteInstants,
       boolean skipTimelinePublish,
-      boolean skipLocking, boolean isRestore) {
+      boolean skipLocking) {
     super(context, config, table, instantTime);
     this.instantToRollback = instantToRollback;
     this.resolvedInstant = instantToRollback;
     this.deleteInstants = deleteInstants;
     this.skipTimelinePublish = skipTimelinePublish;
-    this.isRestore = isRestore;
     this.skipLocking = skipLocking;
     this.txnManager = new TransactionManager(config, table.getStorage());
   }

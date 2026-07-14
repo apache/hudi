@@ -71,8 +71,7 @@ public class MergeOnReadRestoreActionExecutor<T, I, K, O>
         instantToRollback,
         true,
         true,
-        false,
-        true);
+        false);
 
     // TODO : Get file status and create a rollback stat and file
     // TODO : Delete the .aux files along with the instant file, okay for now since the archival process will

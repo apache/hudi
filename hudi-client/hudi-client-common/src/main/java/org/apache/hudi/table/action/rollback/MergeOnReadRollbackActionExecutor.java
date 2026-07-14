@@ -23,7 +23,6 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -43,7 +42,7 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
                                            HoodieInstant commitInstant,
                                            boolean deleteInstants,
                                            boolean skipLocking) {
-    super(context, config, table, instantTime, commitInstant, deleteInstants, skipLocking, false);
+    super(context, config, table, instantTime, commitInstant, deleteInstants, skipLocking);
   }
 
   public MergeOnReadRollbackActionExecutor(HoodieEngineContext context,
@@ -54,19 +53,7 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
                                            boolean deleteInstants,
                                            boolean skipTimelinePublish,
                                            boolean skipLocking) {
-    this(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, skipLocking, false);
-  }
-
-  public MergeOnReadRollbackActionExecutor(HoodieEngineContext context,
-                                           HoodieWriteConfig config,
-                                           HoodieTable<T, I, K, O> table,
-                                           String instantTime,
-                                           HoodieInstant commitInstant,
-                                           boolean deleteInstants,
-                                           boolean skipTimelinePublish,
-                                           boolean skipLocking,
-                                           boolean isRestore) {
-    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, skipLocking, isRestore);
+    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, skipLocking);
   }
 
   @Override
@@ -91,9 +78,8 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
     // NOTE {@link HoodieCompactionConfig#withCompactionLazyBlockReadEnabled} needs to be set to TRUE. This is
     // required to avoid OOM when merging multiple LogBlocks performed during nested rollbacks.
 
-    // Requested write instants only require timeline cleanup. Restore can still need to clean up a stale or
-    // partially materialized requested compaction whose files are already associated with the compaction instant.
-    if (shouldExecuteRollback(resolvedInstant)) {
+    // Requested write instants only require timeline cleanup.
+    if (!resolvedInstant.isRequested()) {
       log.info("Unpublished {}", resolvedInstant);
       allRollbackStats = executeRollback(instantToRollback, hoodieRollbackPlan);
     }
@@ -102,10 +88,5 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
 
     log.info("Time(in ms) taken to finish rollback {}", rollbackTimer.endTimer());
     return allRollbackStats;
-  }
-
-  private boolean shouldExecuteRollback(HoodieInstant resolvedInstant) {
-    return !resolvedInstant.isRequested()
-        || (isRestore && HoodieTimeline.COMPACTION_ACTION.equals(instantToRollback.getAction()));
   }
 }
