@@ -54,7 +54,19 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
                                            boolean deleteInstants,
                                            boolean skipTimelinePublish,
                                            boolean skipLocking) {
-    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, skipLocking, false);
+    this(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, skipLocking, false);
+  }
+
+  public MergeOnReadRollbackActionExecutor(HoodieEngineContext context,
+                                           HoodieWriteConfig config,
+                                           HoodieTable<T, I, K, O> table,
+                                           String instantTime,
+                                           HoodieInstant commitInstant,
+                                           boolean deleteInstants,
+                                           boolean skipTimelinePublish,
+                                           boolean skipLocking,
+                                           boolean isRestore) {
+    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, skipLocking, isRestore);
   }
 
   @Override
@@ -79,8 +91,8 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
     // NOTE {@link HoodieCompactionConfig#withCompactionLazyBlockReadEnabled} needs to be set to TRUE. This is
     // required to avoid OOM when merging multiple LogBlocks performed during nested rollbacks.
 
-    // Requested write instants only require timeline cleanup. A stale or partially materialized requested
-    // compaction still needs to execute its rollback plan to remove files associated with the compaction instant.
+    // Requested write instants only require timeline cleanup. Restore can still need to clean up a stale or
+    // partially materialized requested compaction whose files are already associated with the compaction instant.
     if (shouldExecuteRollback(resolvedInstant)) {
       log.info("Unpublished {}", resolvedInstant);
       allRollbackStats = executeRollback(instantToRollback, hoodieRollbackPlan);
@@ -94,6 +106,6 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
 
   private boolean shouldExecuteRollback(HoodieInstant resolvedInstant) {
     return !resolvedInstant.isRequested()
-        || HoodieTimeline.COMPACTION_ACTION.equals(instantToRollback.getAction());
+        || (isRestore && HoodieTimeline.COMPACTION_ACTION.equals(instantToRollback.getAction()));
   }
 }

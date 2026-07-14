@@ -439,7 +439,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   }
 
   @Test
-  void testRollbackPartiallyMaterializedRequestedCompactionExecutesRollbackPlan() throws Exception {
+  void testRestoreRollbackPartiallyMaterializedRequestedCompactionExecutesRollbackPlan() throws Exception {
     HoodieWriteConfig cfg = getTableVersionSixRollbackConfig();
     HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, getTableVersionSixProperties(cfg));
 
@@ -460,12 +460,18 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
     assertTrue(requestedCompaction.isRequested());
     assertFilesForInstant(hoodieTable, compactionInstantTime, false);
 
+    Option<HoodieRollbackPlan> nonRestoreRollbackPlan = hoodieTable.scheduleRollback(
+        context(), rollbackInstantTime, requestedCompaction, true, false, false);
+    assertTrue(nonRestoreRollbackPlan.isPresent());
+    assertTrue(nonRestoreRollbackPlan.get().getRollbackRequests().isEmpty());
+
     Option<HoodieRollbackPlan> rollbackPlan = hoodieTable.scheduleRollback(
-        context(), rollbackInstantTime, requestedCompaction, false, false, false);
+        context(), rollbackInstantTime, requestedCompaction, false, false, true);
     assertTrue(rollbackPlan.isPresent());
     assertFalse(rollbackPlan.get().getRollbackRequests().isEmpty());
 
-    hoodieTable.rollback(context(), rollbackInstantTime, requestedCompaction, true, false);
+    new MergeOnReadRollbackActionExecutor<>(
+        context(), cfg, hoodieTable, rollbackInstantTime, requestedCompaction, true, true, false, true).execute();
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);

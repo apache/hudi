@@ -63,7 +63,7 @@ public class MergeOnReadRestoreActionExecutor<T, I, K, O>
       }
     }
     table.getMetaClient().reloadActiveTimeline();
-    MergeOnReadRollbackActionExecutor rollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
+    MergeOnReadRollbackActionExecutor<T, I, K, O> rollbackActionExecutor = new MergeOnReadRollbackActionExecutor<>(
         context,
         config,
         table,
@@ -71,7 +71,8 @@ public class MergeOnReadRestoreActionExecutor<T, I, K, O>
         instantToRollback,
         true,
         true,
-        false);
+        false,
+        true);
 
     // TODO : Get file status and create a rollback stat and file
     // TODO : Delete the .aux files along with the instant file, okay for now since the archival process will
