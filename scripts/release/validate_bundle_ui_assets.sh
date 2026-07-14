@@ -105,10 +105,12 @@ fi
 
 # --- Negative assertion: engine bundles must NOT carry any UI assets ---
 # One pattern per bundle so it stays obvious which bundle maps to which expectation.
+# Spark and utilities jar names carry a scala suffix (hudi-spark3.5-bundle_2.12-*.jar,
+# hudi-utilities-bundle_2.12-*.jar), so their patterns must not assume "-bundle-".
 enginePatterns=(
-  'hudi-spark*-bundle-*.jar'
+  'hudi-spark*-bundle*.jar'
   'hudi-flink*-bundle-*.jar'
-  'hudi-utilities-bundle-*.jar'
+  'hudi-utilities-bundle_*.jar'
   'hudi-kafka-connect-bundle-*.jar'
   'hudi-integ-test-bundle-*.jar'
 )

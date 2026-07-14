@@ -120,6 +120,29 @@
     return html;
   }
 
+  // Composes a descriptive Error from a non-OK fetch Response and returns a
+  // Promise that rejects with it. The server sends human-readable bodies on
+  // errors (e.g. "Not a valid Hudi table path: ..."), so prefer the body over
+  // the terse statusText; fall back to statusText when the body is empty. The
+  // body is capped at ~300 chars so DOM alerts stay readable. Every caller
+  // surfaces the message via textContent, so the server text is never treated
+  // as HTML.
+  function httpError(res) {
+    return res.text().then(function (body) {
+      var message = 'HTTP ' + res.status;
+      var detail = (body || '').trim();
+      if (detail) {
+        if (detail.length > 300) {
+          detail = detail.slice(0, 300) + '...';
+        }
+        message += ': ' + detail;
+      } else if (res.statusText) {
+        message += ': ' + res.statusText;
+      }
+      throw new Error(message);
+    });
+  }
+
   var options = {
     width: '100%',
     height: '100%',
@@ -326,7 +349,7 @@
     fetch(API_BASE + '/timeline/instants/all?basepath=' + encodeURIComponent(tablePath))
       .then(function (res) {
         if (!res.ok) {
-          throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+          return httpError(res);
         }
         return res.json();
       })
@@ -477,7 +500,7 @@
     fetch(url)
       .then(function (res) {
         if (!res.ok) {
-          throw new Error('HTTP ' + res.status);
+          return httpError(res);
         }
         return res.json();
       })
@@ -575,7 +598,7 @@
 
     fetch(API_BASE + '/table/config?basepath=' + encodeURIComponent(currentTablePath))
       .then(function (res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+        if (!res.ok) return httpError(res);
         return res.json();
       })
       .then(function (data) {
@@ -630,7 +653,7 @@
 
     fetch(API_BASE + '/table/schema/history?basepath=' + encodeURIComponent(currentTablePath))
       .then(function (res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+        if (!res.ok) return httpError(res);
         return res.json();
       })
       .then(function (data) {
@@ -687,90 +710,30 @@
     var historyList = document.getElementById('schemaHistoryList');
     historyList.innerHTML = '';
 
-    // Prefer internal schema history from .schema directory (richer evolution tracking)
+    // Always render the commit-metadata history first: the window truncation
+    // notice and the baseline/change typing are mandatory UI-visible signals
+    // (RFC-94), so they must appear even when the richer internal schema history
+    // from the .schema directory is also available.
+    renderCommitHistory(data, historyList);
+
+    // When present, render the internal schema evolution (.schema directory) as
+    // an additional, clearly-labelled section below the commit-schema history.
     if (data.internalSchemaHistory) {
-      try {
-        var internalData = JSON.parse(data.internalSchemaHistory);
-        var schemas = (internalData.schemas || []).slice();
-        // Sort by version_id ascending (oldest first)
-        schemas.sort(function (a, b) { return a.version_id - b.version_id; });
-
-        if (schemas.length === 0) {
-          historyList.innerHTML = '<div class="alert alert-info">No schema changes found</div>';
-          document.getElementById('schemaContent').classList.remove('d-none');
-          return;
-        }
-
-        // Build diff cards in reverse chronological order (newest first)
-        for (var i = schemas.length - 1; i >= 0; i--) {
-          var schema = schemas[i];
-          var card = document.createElement('div');
-          card.className = 'card mb-2';
-
-          var header = document.createElement('div');
-          header.className = 'card-header d-flex align-items-center gap-2';
-
-          var tsCode = document.createElement('code');
-          tsCode.textContent = schema.version_id === 0 ? 'Initial' : String(schema.version_id);
-
-          header.appendChild(tsCode);
-
-          if (i > 0) {
-            var diff = diffInternalSchemas(schemas[i - 1], schema);
-            var summaryParts = [];
-            if (diff.added.length > 0) summaryParts.push(diff.added.length + ' added');
-            if (diff.removed.length > 0) summaryParts.push(diff.removed.length + ' removed');
-            if (diff.changed.length > 0) summaryParts.push(diff.changed.length + ' changed');
-
-            if (summaryParts.length > 0) {
-              var summarySpan = document.createElement('span');
-              summarySpan.className = 'text-muted small ms-auto';
-              summarySpan.textContent = summaryParts.join(', ');
-              header.appendChild(summarySpan);
-            }
-
-            var collapseId = 'schemaDiff' + i;
-            var toggleBtn = document.createElement('button');
-            toggleBtn.className = 'btn btn-sm btn-outline-secondary ms-2';
-            toggleBtn.setAttribute('data-bs-toggle', 'collapse');
-            toggleBtn.setAttribute('data-bs-target', '#' + collapseId);
-            toggleBtn.textContent = 'Details';
-            header.appendChild(toggleBtn);
-
-            var collapseDiv = document.createElement('div');
-            collapseDiv.className = 'collapse';
-            collapseDiv.id = collapseId;
-            var collapseBody = document.createElement('div');
-            collapseBody.className = 'card-body';
-            collapseBody.appendChild(renderDiffDetail(diff));
-            collapseDiv.appendChild(collapseBody);
-
-            card.appendChild(header);
-            card.appendChild(collapseDiv);
-          } else {
-            var initialBadge = document.createElement('span');
-            initialBadge.className = 'badge bg-secondary ms-auto';
-            initialBadge.textContent = 'Initial schema';
-            header.appendChild(initialBadge);
-            card.appendChild(header);
-          }
-
-          historyList.appendChild(card);
-        }
-
-        document.getElementById('schemaContent').classList.remove('d-none');
-        return;
-      } catch (e) {
-        // Fall through to commit metadata history
-      }
+      renderInternalSchemaHistory(data, historyList);
     }
 
-    // Fallback: use commit metadata history
+    document.getElementById('schemaContent').classList.remove('d-none');
+  }
+
+  // Renders the commit-metadata schema history into historyList: an optional
+  // truncation notice followed by one card per recorded schema change (newest
+  // first), each tagged with its baseline/change type badge. Shows an empty-state
+  // message when the server reported no recorded changes.
+  function renderCommitHistory(data, historyList) {
     var history = data.history || [];
 
     if (history.length === 0) {
       historyList.innerHTML = '<div class="alert alert-info">No schema changes found</div>';
-      document.getElementById('schemaContent').classList.remove('d-none');
       return;
     }
 
@@ -875,8 +838,93 @@
 
       historyList.appendChild(card);
     }
+  }
 
-    document.getElementById('schemaContent').classList.remove('d-none');
+  // Renders the internal schema evolution recorded in the .schema directory as a
+  // labelled section appended to historyList: one card per version_id (newest
+  // first) with field-level diffs between consecutive versions. Uses its own
+  // collapse-id namespace so its Details toggles never collide with the
+  // commit-history cards. Skipped silently when the payload cannot be parsed.
+  function renderInternalSchemaHistory(data, historyList) {
+    var internalData;
+    try {
+      internalData = JSON.parse(data.internalSchemaHistory);
+    } catch (e) {
+      return;
+    }
+    var schemas = (internalData.schemas || []).slice();
+    // Sort by version_id ascending (oldest first)
+    schemas.sort(function (a, b) { return a.version_id - b.version_id; });
+
+    var heading = document.createElement('h6');
+    heading.className = 'mt-4 mb-2';
+    heading.textContent = 'Internal schema history (.schema)';
+    historyList.appendChild(heading);
+
+    if (schemas.length === 0) {
+      var emptyEl = document.createElement('div');
+      emptyEl.className = 'alert alert-info';
+      emptyEl.textContent = 'No schema changes found';
+      historyList.appendChild(emptyEl);
+      return;
+    }
+
+    // Build diff cards in reverse chronological order (newest first)
+    for (var i = schemas.length - 1; i >= 0; i--) {
+      var schema = schemas[i];
+      var card = document.createElement('div');
+      card.className = 'card mb-2';
+
+      var header = document.createElement('div');
+      header.className = 'card-header d-flex align-items-center gap-2';
+
+      var tsCode = document.createElement('code');
+      tsCode.textContent = schema.version_id === 0 ? 'Initial' : String(schema.version_id);
+
+      header.appendChild(tsCode);
+
+      if (i > 0) {
+        var diff = diffInternalSchemas(schemas[i - 1], schema);
+        var summaryParts = [];
+        if (diff.added.length > 0) summaryParts.push(diff.added.length + ' added');
+        if (diff.removed.length > 0) summaryParts.push(diff.removed.length + ' removed');
+        if (diff.changed.length > 0) summaryParts.push(diff.changed.length + ' changed');
+
+        if (summaryParts.length > 0) {
+          var summarySpan = document.createElement('span');
+          summarySpan.className = 'text-muted small ms-auto';
+          summarySpan.textContent = summaryParts.join(', ');
+          header.appendChild(summarySpan);
+        }
+
+        var collapseId = 'internalSchemaDiff' + i;
+        var toggleBtn = document.createElement('button');
+        toggleBtn.className = 'btn btn-sm btn-outline-secondary ms-2';
+        toggleBtn.setAttribute('data-bs-toggle', 'collapse');
+        toggleBtn.setAttribute('data-bs-target', '#' + collapseId);
+        toggleBtn.textContent = 'Details';
+        header.appendChild(toggleBtn);
+
+        var collapseDiv = document.createElement('div');
+        collapseDiv.className = 'collapse';
+        collapseDiv.id = collapseId;
+        var collapseBody = document.createElement('div');
+        collapseBody.className = 'card-body';
+        collapseBody.appendChild(renderDiffDetail(diff));
+        collapseDiv.appendChild(collapseBody);
+
+        card.appendChild(header);
+        card.appendChild(collapseDiv);
+      } else {
+        var initialBadge = document.createElement('span');
+        initialBadge.className = 'badge bg-secondary ms-auto';
+        initialBadge.textContent = 'Initial schema';
+        header.appendChild(initialBadge);
+        card.appendChild(header);
+      }
+
+      historyList.appendChild(card);
+    }
   }
 
   function formatAvroType(type) {
