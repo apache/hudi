@@ -39,6 +39,7 @@ import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.SerDeInfo;
@@ -411,7 +412,9 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     if (lastCommitSynced.isPresent()) {
       try {
         Table table = client.getTable(databaseName, tableName);
-        String basePath = config.getString(META_SYNC_BASE_PATH);
+        // Canonicalize (drop consecutive/trailing slashes) so the updated LOCATION and serde path
+        // stay valid for strict object stores such as GCS.
+        String basePath = new Path(config.getString(META_SYNC_BASE_PATH)).toString();
         StorageDescriptor sd = table.getSd();
         sd.setLocation(basePath);
         SerDeInfo serdeInfo = sd.getSerdeInfo();

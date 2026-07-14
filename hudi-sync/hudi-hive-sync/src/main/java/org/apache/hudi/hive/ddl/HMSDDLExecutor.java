@@ -121,7 +121,11 @@ public class HMSDDLExecutor implements DDLExecutor {
       storageDescriptor.setCols(fieldSchema);
       storageDescriptor.setInputFormat(inputFormatClass);
       storageDescriptor.setOutputFormat(outputFormatClass);
-      storageDescriptor.setLocation(syncConfig.getString(META_SYNC_BASE_PATH));
+      // Canonicalize the base path so the metastore LOCATION never carries consecutive or
+      // trailing slashes (strict object stores such as GCS reject "//"). This is applied at the
+      // boundary, independent of META_SYNC_BASE_PATH normalization, and mirrors what partition
+      // locations already do via FSUtils#constructAbsolutePath.
+      storageDescriptor.setLocation(new Path(syncConfig.getString(META_SYNC_BASE_PATH)).toString());
       serdeProperties.put("serialization.format", "1");
       storageDescriptor.setSerdeInfo(new SerDeInfo(null, serdeClass, serdeProperties));
       newTb.setSd(storageDescriptor);
