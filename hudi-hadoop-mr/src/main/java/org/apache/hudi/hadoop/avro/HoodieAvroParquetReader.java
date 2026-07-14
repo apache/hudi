@@ -35,14 +35,11 @@ import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
-import org.apache.parquet.HadoopReadOptions;
 import org.apache.parquet.avro.AvroReadSupport;
-import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetInputSplit;
 import org.apache.parquet.hadoop.ParquetRecordReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
-import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
@@ -63,12 +60,7 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
     } else {
       // get base schema
       Path path = ((ParquetInputSplit) inputSplit).getPath();
-      ParquetMetadata fileFooter;
-      try (ParquetFileReader reader = ParquetFileReader.open(
-          HadoopInputFile.fromPath(path, conf),
-          HadoopReadOptions.builder(conf, path).withMetadataFilter(ParquetMetadataConverter.NO_FILTER).build())) {
-        fileFooter = reader.getFooter();
-      }
+      ParquetMetadata fileFooter = readParquetFooter(conf, path);
       MessageType messageType = fileFooter.getFileMetaData().getSchema();
       baseSchema = getAvroSchemaConverter(conf).convert(messageType);
 
@@ -91,6 +83,14 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
       }
     }
     parquetRecordReader = new ParquetRecordReader<>(new AvroReadSupport<>(), getFilter(conf));
+  }
+
+  @SuppressWarnings("deprecation")
+  private static ParquetMetadata readParquetFooter(Configuration conf, Path path) throws IOException {
+    // Hive 2.3 MapReduce tasks can load Parquet 1.8.x, which does not provide the
+    // InputFile-based ParquetFileReader.open API. Keep this compatibility path
+    // until the minimum Hive Parquet runtime is upgraded.
+    return ParquetFileReader.readFooter(conf, path);
   }
 
   @Override
