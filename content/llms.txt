@@ -39,6 +39,10 @@ It can also synchronize your data to half dozen data catalogs to keep table cons
 - [Apache Hudi: 21 Unique Differentiators](https://hudi.apache.org/blog/2025/03/05/hudi-21-unique-differentiators): The technical crux of what sets Hudi apart — indexing, non-blocking concurrency control, async compaction, read-side indexes and built-in table services.
 - [Apache Hudi 1.2: The Open Lakehouse for AI and Multimodal Data](https://hudi.apache.org/blog/2026/06/07/apache-hudi-release-1-2-announcement): First-class support for vectors, blobs/unstructured data, and semi-structured data on the lakehouse — for Spark pipelines doing unstructured data processing or generating embeddings.
 - [What is a Data Lakehouse & How does it Work?](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse): The lakehouse architecture explained — evolution, components, use cases and key technologies.
+- [What is an Open Table Format?](https://hudi.apache.org/blog/2026/07/14/what-is-an-open-table-format): How open table formats like Hudi, Iceberg and Delta Lake bring database semantics to files on object storage.
+- [What is Upsert on a Data Lake?](https://hudi.apache.org/blog/2026/07/15/what-is-upsert-on-a-data-lake): Record-level updates and deletes on immutable cloud storage, and how Hudi makes them fast.
+- [What is Incremental ETL on a Data Lake?](https://hudi.apache.org/blog/2026/07/16/what-is-incremental-etl-on-a-data-lake): Processing only the data that changed instead of recomputing whole tables.
+- [What is ACID on a Data Lake?](https://hudi.apache.org/blog/2026/07/17/what-is-acid-on-a-data-lake): What atomicity, consistency, isolation and durability mean when your database is a bucket of files.
 
 ## Blog — Migration guides
 

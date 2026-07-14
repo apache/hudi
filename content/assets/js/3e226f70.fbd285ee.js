@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[85806],{45006:t=>{t.exports=JSON.parse('{"tag":{"label":"etl","permalink":"/blog/tags/etl","allTagsPath":"/blog/tags","count":2,"unlisted":false},"listMetadata":{"permalink":"/blog/tags/etl","page":1,"postsPerPage":12,"totalPages":1,"totalCount":2,"blogDescription":"Blog","blogTitle":"Blogs List Page"}}')}}]);
