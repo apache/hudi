@@ -3,16 +3,17 @@
 | **Syntax** | **Description** |
 | ---|-----------------|
 | Last Updated | Jul 2026        |
-| [Table Version](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableVersion.java) | 9               |
-| Reflects release | Hudi 1.2.0 (May 2026) |
+| [Table Version](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableVersion.java) | 10              |
+| Reflects release | Hudi 1.3.0 (in development) |
 
 :::note
-This document specifies the current storage format — **table version 9**, as shipped through Hudi 1.2.0.
-Table version 9 was introduced in Hudi 1.1.0 and remains current through the 1.x release line, layering
-additions on top of the version 8 format that was introduced in Hudi 1.0.0. For the older format that
-predates 1.0 see [here](/learn/tech-specs-0-point-x). Version 9 readers can correctly read any version-8 subset of a
-table; version-8 readers cannot in general read version-9 features (new column types, V2 secondary index
-encoding, Lance base files).
+This document specifies the current storage format — **table version 10**, targeted for Hudi 1.3.0.
+Table version 10 adds the native log format and the optional LSM-tree storage layout described in
+[RFC-103](https://github.com/apache/hudi/blob/master/rfc/rfc-103/rfc-103.md). It layers these changes on
+table version 9, which shipped in Hudi 1.1.0 and 1.2.0. Version 10 readers can read version-9 file groups,
+including file groups that still contain inline log files after an upgrade. Version-9 readers cannot read
+version-10 native log files. For the format that predates 1.0, see
+[Tech Specs (pre-1.0)](/learn/tech-specs-0-point-x).
 :::
 
 Hudi brings database capabilities (tables, transactions, mutability, indexes, storage layouts) along with an incremental stream processing model (incremental merges, change streams, out-of-order data) 
@@ -80,6 +81,22 @@ Log files store deltas (partial or complete), deletes, change logs and other rec
 into logical concepts called **_file groups_**, uniquely identified by a **_file id_**. Each record in the table is identified by an unique key and mapped to a single file group 
 at any given time. Within a file group, data files are further split into **_file slices_**, where each file slice contains an optional base file and a list of log files, that 
 constitute the state of all records in the file group at a given time. These constructs allows Hudi to efficiently support incremental operations, as will be evident later.
+
+### Physical Storage Layouts
+
+The `hoodie.table.storage.layout` table property selects how records are organized inside each file group. It is independent
+of the Copy-on-Write or Merge-on-Read table type.
+
+| Layout | Table property value | File-group organization |
+| --- | --- | --- |
+| Default | `default` | Base and log files have no additional physical ordering requirement. Readers apply the table's merge semantics while buffering or scanning records from the file slice. |
+| LSM tree | `lsm_tree` | Log files form level 0 (L0), and the optional base file forms level 1 (L1). Every base and log file is sorted by record key. Reads, log compaction (L0 to L0), and full compaction (L0 to L1) use a sorted k-way merge. |
+
+The LSM-tree layout requires table version 10 or later because it depends on native log files. Writers must reject
+`hoodie.table.storage.layout=lsm_tree` when `hoodie.write.table.version` is less than 10. Native log files do not,
+however, require the LSM-tree layout: a version-10 table using the default layout still writes and reads native logs.
+The current LSM file-group reader expects native Parquet logs. Write-operation semantics, record-merger semantics, and
+reader and writer indexes remain the same under both layouts.
 
 ## Timeline
 
@@ -192,7 +209,7 @@ where,
 
 Note that a single file group can contain base files with different extensions when `hoodie.table.multiple.base.file.formats.enable` is set on the table.
 
-**Base file formats supported in table version 9**: Apache Parquet (`.parquet`), Apache ORC (`.orc`), Hudi's own HFile (`.hfile`),
+**Base file formats supported in table version 9 and later**: Apache Parquet (`.parquet`), Apache ORC (`.orc`), Hudi's own HFile (`.hfile`),
 and [Lance](https://lancedb.com/) (`.lance`). Lance is currently supported for base file reads and Copy-on-Write writes only;
 column stats and partition stats are not populated for Lance base files (readers should not rely on these indexes for Lance-backed
 file groups).
@@ -201,7 +218,7 @@ file groups).
 
 The user table schema is expressed in Avro. In addition to the primitive Avro types and the standard Avro logical types
 (`decimal`, `date`, `time-millis`, `time-micros`, `timestamp-millis`, `timestamp-micros`, `local-timestamp-*`, `uuid`),
-table version 9 recognizes the following Hudi-specific logical types. Each is identified by the `logicalType` attribute
+table version 9 introduced the following Hudi-specific logical types. Each is identified by the `logicalType` attribute
 on the Avro schema and layered on a physical Avro type.
 
 | Type       | Physical Avro type | `logicalType` name | Description                                                                                                                                                     |
@@ -216,24 +233,55 @@ meaningful for them.
 
 ### Log Files
 
-The log files contain different type of blocks, that encode delta updates, deletes or change logs against the base file. They are named with the convention
+Log files encode inserts, updates, deletes, or change logs against a file group. Hudi supports two physical log formats,
+and a file slice may contain both formats after a table-version upgrade.
 
-**_.\[file\_id\]\_\[requested\_instant\_time\].log.\[version\]\_\[write\_token\]_**.
+**Inline log file format (v0/v1)**
 
+Inline logs use the following hidden-file naming convention:
 
+**_.\[file\_id\]\_\[requested\_instant\_time\].log.\[version\]\_\[write\_token\]_**
 
-*   **file\_id** - File Id of the base file in the slice
-*   **requested\_instant\_time** \- Time at which the write operation that produced this log file was requested.
-*   **version** - Current version of the log file format, to order deltas against the base file.
-*   **write\_token** - Monotonically increasing token for every attempt to write the log file. This should help uniquely identifying the log file when there are failures and retries. 
-    Cleaner can clean-up partial log files if the write token is not the latest in the file slice.
+An inline log file is appendable and can contain multiple Hudi-framed blocks. Inline CDC data uses the optional `.cdc`
+suffix after the write token.
+
+**Native log file format (v2)**
+
+Native logs use a visible, write-once file with this naming convention:
+
+**_\[file\_id\]\_\[write\_token\]\_\[requested\_instant\_time\]\_\[version\].\[log\_type\].\[native\_format\]_**
+
+| Log type | File-name component | Parquet example |
+| --- | --- | --- |
+| Data | `log` | `<file_id>_<write_token>_<instant>_<version>.log.parquet` |
+| Delete | `deletes` | `<file_id>_<write_token>_<instant>_<version>.deletes.parquet` |
+| Change data capture | `cdc` | `<file_id>_<write_token>_<instant>_<version>.cdc.parquet` |
+
+The fields used by both conventions are:
+
+* **file_id** - ID of the file group to which the log belongs.
+* **requested_instant_time** - Begin time of the write action that produced the log.
+* **version** - Sequence number that orders log files for the same file group and instant. This is distinct from the
+  physical log-format version stored in the block envelope or native-file footer.
+* **write_token** - Token identifying the task and attempt that produced the file. It distinguishes retries and lets
+  cleaning remove unsuccessful attempts.
+* **native_format** - Storage format of a native log file, such as `parquet`, `orc`, or `hfile`. The current writer uses
+  the effective base-file format; Lance is the exception described below.
+
+Table versions below 10 write inline logs. Writers targeting table version 10 or later write native logs by default,
+except for Lance-backed tables, which continue to use inline logs until native Lance log support is available.
 
 ### Log Format
 
-The Log file format structure is a Hudi native format. The actual content bytes are serialized into one of Apache Avro, Apache Parquet or Apache HFile file formats based 
-on configuration and the other metadata in the block is serialized using primitive types and byte arrays.
+The log format version selects both the physical framing and the way Hudi block metadata is encoded. The logical merge
+semantics do not change between versions.
 
-Hudi Log format specification is as follows.
+#### Inline Log Format (v0/v1)
+
+The inline log format uses a Hudi-specific binary envelope. The content of each block is serialized as Apache Avro,
+Apache Parquet, or Apache HFile, while the envelope metadata uses primitive types and byte arrays.
+
+The inline log format specification is as follows.
 
 | Section | #Bytes | Description |
 | ---| ---| --- |
@@ -249,10 +297,53 @@ Hudi Log format specification is as follows.
 | **footer** | variable | Similar to Header. Map of footer metadata entries. |
 | **total block length** | 8 | Total size of the block including the magic bytes. This is used to determine if a block is corrupt by comparing to the block size in the header. Each log block assumes that the block size will be last data written in a block. Any data if written after is just ignored. |
 
+#### Native Log Format (v2)
+
+The native log format stores records directly in a standard native file rather than embedding that file inside a Hudi
+binary envelope. Each native file represents one logical data, delete, or CDC block. Parquet, the primary example from
+RFC-103, has the following layout:
+
+```text
+Row group 1 (records)
+Row group 2 (records)
+...
+Parquet footer
+  - schema and row-group metadata
+  - key-value metadata
+      hudi.log.format.metadata = <JSON object>
+```
+
+The `hudi.log.format.metadata` footer value is a JSON object keyed by the symbolic header names listed in
+[Headers](#headers). The writer always adds `VERSION=2` and also persists the applicable values such as `INSTANT_TIME`,
+`SCHEMA`, `RECORD_POSITIONS`, `BLOCK_IDENTIFIER`, `IS_PARTIAL`, and
+`BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS`. Readers ignore unknown symbolic header names for forward compatibility but
+reject a `VERSION` greater than the highest log format they support.
+
+Native block payloads have the following schemas and behavior:
+
+* **Data logs** use the table schema, including Hudi metadata columns. The schema is stored in the Parquet footer and in
+  the synthetic block's `SCHEMA` metadata used by Hudi readers.
+* **Delete logs** store `_hoodie_record_key` followed by the table's configured ordering fields. Ordering fields are
+  nullable in the delete-log schema so a tombstone without an ordering value remains distinguishable from a real value.
+* **CDC logs** use the CDC schema described in [CDC Block](#cdc-block-id-6).
+* Command and corrupted blocks are inline-format concepts and are not written as native log files. Native log files are
+  write-once and do not support reverse block traversal.
+
+For Parquet native logs, readers can use native column pruning, predicate pushdown, row-group statistics, vectorized
+decoding, and compression without first locating an embedded block or translating offsets through an inline-filesystem
+abstraction. Other native formats expose their corresponding format-level capabilities.
+
 ### Versioning
 
-Log file format versioning refers to a set of feature flags associated with a log format. The current version is `1`. Versions are changed when the log format changes.
-The feature flags determine the behavior of the log file reader. The following are the feature flags associated with the log file format.
+The current log format is version `2`.
+
+| Log format version | Physical representation | Table versions that write it |
+| --- | --- | --- |
+| 0/1 | Appendable Hudi binary envelope containing one or more embedded blocks | Table versions below 10; Lance-backed version-10 tables |
+| 2 | Write-once native file with Hudi metadata in the native footer | Table version 10 and later by default |
+
+Versions 0 and 1 use feature flags to determine how an inline reader decodes the block envelope. These flags do not
+describe the native v2 representation.
 
 | Flag              | Version 0 | Version 1 | Default |
 |-------------------|-----------|-----------|---------|
@@ -267,7 +358,8 @@ The feature flags determine the behavior of the log file reader. The following a
 
 ### Headers
 
-Metadata key mapping from Integer to actual metadata is as follows:
+For inline logs, header keys are serialized as integer enum ordinals. Native logs instead use the symbolic names in the
+`hudi.log.format.metadata` JSON object; readers must not interpret the numeric IDs when decoding a native footer.
 
 | Header Metadata                                  | Encoding ID | Description                                                                                                                                                                                                                                              |
 |--------------------------------------------------|-------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -280,11 +372,13 @@ Metadata key mapping from Integer to actual metadata is as follows:
 | BLOCK\_IDENTIFIER                                | 6           | Block sequence number used to detect duplicate log blocks (e.g. due to task retries).                                                                                                                                                                    |
 | IS\_PARTIAL                                      | 7           | Boolean indicating whether the data block encodes partial updates.                                                                                                                                                                                       |
 | BASE\_FILE\_INSTANT\_TIME\_OF\_RECORD\_POSITIONS | 8           | Begin (requested) instant time of the base file that the `RECORD_POSITIONS` bitmap is relative to. Used by the reader to validate that positions still refer to the same base file when reconstructing a file slice.                                     |
+| VERSION                                          | 9           | Physical log-format version. Native log writers always add this value to `hudi.log.format.metadata`.                                                                                                                                                    |
 
 
 ### Block types
 
-The following are the possible block types used in Hudi Log Format:
+The following block types and numeric IDs are serialized by the inline log format. Native files encode their logical type
+in the file-name component (`log`, `deletes`, or `cdc`) and do not serialize this integer field.
 
 ### Command Block (Id: 0)
 
@@ -357,7 +451,8 @@ Below is the list of most commonly persisted properties that are stored in this 
 | hoodie.table.partition.fields                      | Comma-separated list of fields used for partitioning the table. Optional.                                                                                 |
 | hoodie.table.ordering.fields                       | Comma-separated list of fields used to break ties when two records have the same value for the record key. Optional. Replaces the legacy single `hoodie.table.precombine.field`. |
 | hoodie.table.base.file.format                      | Base file format used by the table (e.g. `PARQUET`, `ORC`, `HFILE`).                                                                                      |
-| hoodie.table.log.file.format                       | Log file format used by the table.                                                                                                                        |
+| hoodie.table.log.file.format                       | Persisted logical log format. Physical inline-vs-native selection follows the target table version; v10 native logs use the effective base-file format. |
+| hoodie.table.storage.layout                        | Physical file-group layout: `default` or `lsm_tree` (version 10+). The LSM-tree layout requires sorted base and log files and native logs.               |
 | hoodie.table.cdc.enabled                           | Whether change-data-capture is enabled on the table.                                                                                                      |
 | hoodie.table.cdc.supplemental.logging.mode         | Supplemental logging mode for CDC (`OP_KEY_ONLY`, `DATA_BEFORE`, `DATA_BEFORE_AFTER`) when CDC is enabled.                                                |
 | hoodie.table.partial.update.mode                   | Whether partial updates are accepted, and if so how they are merged (`NONE`, `IGNORE_DEFAULTS`, `FILL_DEFAULTS`).                                         |
@@ -579,6 +674,8 @@ Writers generate a begin time for their actions, proceed to create new base and 
    Writer also records the latest completion time on the timeline (let's call this the **_snapshot write time_**).
 2. Writer produces new base and log files with updated, deleted, and inserted records, while ensuring updates/deletes reach the correct file group by looking up an index as
    of the snapshot write time (see appendix for an alternative encoding that treats updates as deletes to an existing file group plus inserts into a new file group, with the associated performance trade-offs).
+   A version-10 writer produces write-once native log files unless the base-file format is Lance. When the table uses the
+   LSM-tree layout, the writer must sort every base-file and log-file output by record key before publishing it.
 3. Writer then grabs the distributed lock and performs the following steps within the critical section to finalize the write or fail/abort:
    1. Obtain metadata about all actions that have completed with completion time greater than the snapshot write time. This defines the **_concurrent set_** of
       actions against which the writer must check for conflicting concurrent writes or table-service actions.
@@ -622,19 +719,32 @@ to construct file slices out of file groups that are of interest to the read, ba
 Readers need to determine the correct file slice (an optional base file plus an ordered list of log files) to read in order to construct the snapshot state, using the following steps:
 
 1. Reader picks an instant in the timeline — the latest completion time on the timeline or a specific time explicitly specified. Call this the **_snapshot read time_**.
-2. Reader computes all file groups in the table by listing all files that are part of the table, grouping them by `file_id`, and eliminating files that don't belong to any completed write action on the timeline.
+2. Reader computes all file groups in the table by listing all files that are part of the table, grouping them by `file_id`, and eliminating files that don't belong to any completed write action on the timeline. File-name parsing must recognize both inline and native log-file conventions.
 3. Reader then eliminates replaced file groups, by removing any file groups that are part of any **_replacecommit_** actions completed on or before the snapshot read time.
 4. For each remaining file group, the reader determines the correct file slice as follows:
    1. Find the base file with the greatest requested instant time less than or equal to the snapshot read time.
    2. Obtain all log files with completion time less than or equal to the snapshot read time, sorted by completion time.
 5. For each file slice obtained, the reader merges the base and log files:
-   1. Scan log blocks in order. Each block carries an `INSTANT_TIME` header; a `COMMAND_BLOCK` of type `ROLLBACK_BLOCK`
-      causes the immediately preceding block to be discarded (this is how partial/aborted appends are masked out without rewriting the log file).
-      Blocks whose `INSTANT_TIME` no longer corresponds to a completed instant on the timeline are also skipped. `BLOCK_IDENTIFIER`
-      is used to deduplicate blocks produced by task retries within the same instant.
-   2. When the base file is scanned, for every record the reader has to look up whether there is a newer version of the record available in the surviving log blocks and merge it into the record iterator.
-      When `RECORD_POSITIONS` is present, this merge can be done positionally against the base file identified by `BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS` rather than via key lookup.
-   3. Compaction-produced blocks may set the `COMPACTED_BLOCK_TIMES` header listing the instant times of the (minor-compacted) blocks they replace; the reader skips any earlier blocks whose instant time is covered.
+   1. Detect each log's physical format from its file name and route it to the inline or native read path. A version-10
+      reader must support inline-only, native-only, and mixed file slices.
+   2. For inline logs, scan blocks in order. Each block carries an `INSTANT_TIME` header; a `COMMAND_BLOCK` of type
+      `ROLLBACK_BLOCK` causes the immediately preceding block to be discarded. Blocks whose `INSTANT_TIME` no longer
+      corresponds to a completed instant are skipped, and `BLOCK_IDENTIFIER` deduplicates blocks produced by task retries.
+   3. For native logs, read `hudi.log.format.metadata` from the native footer and expose the file as one synthetic data,
+      delete, or CDC block. Native files have no rollback command blocks; timeline state and completed write metadata
+      determine whether the file belongs to the slice.
+   4. When the base file is scanned, for every record the reader looks up whether a newer version is available in the
+      surviving logs and applies the table's record-merger semantics. When `RECORD_POSITIONS` is present, this merge can
+      be done positionally against the base file identified by `BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS` rather than
+      via key lookup.
+   5. Compaction-produced logs may set `COMPACTED_BLOCK_TIMES` to list the instant times they replace; the reader skips
+      any earlier log blocks whose instant time is covered.
+
+For an `lsm_tree` table whose file group contains only native logs, readers can merge the sorted base and log streams with
+a loser-tree-based k-way merge. At most one current record from each of the `k` input streams is retained, giving `O(k)`
+merge state and `O(N log k)` comparisons for `N` input records. Record key is the primary comparison key; a stable source
+index breaks ties so same-key merge order is deterministic. A mixed inline/native file group uses the general file-group
+reader until compaction removes the legacy inline logs.
 
 Obtaining the listings from storage can be slow or inefficient. It can be further optimized by caching in memory, by consulting the `files` partition of the metadata table, or with the support of an external timeline-serving system.
 
@@ -664,6 +774,10 @@ Process in charge of running the table management tasks asynchronously looks for
 Compaction is the process that efficiently updates a file slice (base and log files) for efficient querying. It applies all the batched up updates 
 in the log files and writes a new file slice. The logic to apply the updates to the base file follows the same set of rules listed in the Reader expectations.
 
+Under the LSM-tree layout, full compaction is an L0-to-L1 operation: it performs a sorted k-way merge of the log streams
+and the existing base-file stream, then writes a new base file sorted by record key. The default storage layout may use
+the existing hash/buffer-based merge path instead.
+
 ### Log Compaction
 
 Log compaction is a minor compaction operation that stitches together log files into a single large log file, thus
@@ -671,6 +785,8 @@ reducing write amplification. This process involves introducing a new action in 
 timeline. The log-compacted file is written to the same file group as the log files being compacted. Additionally, the
 log-compacted log block header contains the `COMPACTED_BLOCK_TIMES` and the log file reader can skip log blocks that
 have been compacted, thus reducing read amplification as well.
+For the LSM-tree layout, log compaction is an L0-to-L0 sorted merge and its output native log file must remain sorted by
+record key.
 See [RFC-48](https://github.com/apache/hudi/blob/master/rfc/rfc-48/rfc-48.md) for more details.
 
 ### Re-writing
@@ -726,9 +842,37 @@ Compatibility between different readers and writers is enforced through the `hoo
 compatible way for readers, where newer readers can read older table versions correctly. However older readers may be required to upgrade in order to read higher table versions. 
 Hence, we recommend upgrading readers first, before upgrading writers when the table version evolves.
 
+The writer must honor `hoodie.write.table.version` across every file group; running a newer Hudi binary does not by
+itself permit newer artifacts in a table targeted at an older version. The version-9/version-10 boundary has the following
+additional rules:
+
+| Scenario | Required behavior |
+| --- | --- |
+| Upgrade v9 to v10 | No full compaction is required. Existing inline logs remain readable, and later writes may add native logs to the same file group. |
+| v10 reader, default layout | Read inline, native, or mixed file slices with per-file format detection. |
+| v10 reader, LSM-tree layout | Use sorted merge for pure-native file groups; fall back to the general reader for a mixed file group. |
+| v9 reader, v10 native logs | Not supported. Upgrade the reader or keep writers targeted below table version 10. |
+| Downgrade v10 to v9 | Roll back failed writes and fully compact file groups so no native logs remain, then remove the v10-only storage-layout property. |
+
 ## Change Log
 
-### version 9 — current (Hudi 1.1.0 → 1.2.0)
+### version 10 — current (Hudi 1.3.0)
+
+Version 10 implements the storage-format portion of
+[RFC-103](https://github.com/apache/hudi/blob/master/rfc/rfc-103/rfc-103.md):
+
+* Native log format v2 stores data, delete, and CDC logs as visible, write-once native-format files, with Hudi log metadata
+  in the `hudi.log.format.metadata` footer entry. Parquet is the primary layout defined by RFC-103.
+* Native log file names distinguish data, delete, and CDC payloads; for Parquet these suffixes are `.log.parquet`,
+  `.deletes.parquet`, and `.cdc.parquet`.
+* The optional `hoodie.table.storage.layout=lsm_tree` layout requires records in every base and log file to be sorted by
+  record key and uses sorted k-way merge for reads and compaction.
+* Version-10 readers accept mixed v1/v2 file slices, which permits a v9-to-v10 upgrade without first compacting every
+  file group. A v10-to-v9 downgrade must fully compact native logs before older readers access the table.
+* Native log v2 is independent of LSM-tree layout: version-10 tables use it with the default layout as well. Lance-backed
+  tables remain on inline logs until native Lance log support is available.
+
+### version 9 (Hudi 1.1.0 → 1.2.0)
 
 Version 9 is a non-breaking evolution of version 8 in the framing/timeline layer, but it introduces new column types,
 new base-file-format support, and a new secondary-index encoding. Version 9 readers can correctly read the version 8 subset
