@@ -17,6 +17,10 @@ Hudi joined the Apache incubator for incubation in January 2019, and was promote
 of Hudi to the data lake from the perspective of "incremental processing". More information about Apache Hudi's framework functions, features, usage scenarios, and 
 latest developments can be found at [QCon Global Software Development Conference (Shanghai Station) 2020](https://qconplus.infoq.cn/2020/shanghai/presentation/2646).
 
+:::info
+For a current, ground-up explainer of this idea, see [What is Incremental ETL on a Data Lake?](/blog/2026/07/16/what-is-incremental-etl-on-a-data-lake).
+:::
+
 ### NOTE: This article is a translation of the infoq.cn article, found [here](https://www.infoq.cn/article/CAgIDpfJBVcJHKJLSbhe), with minor edits
 
 <!--truncate-->
