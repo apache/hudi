@@ -19,8 +19,8 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieArchivedTimeline, HoodieInstant, HoodieTimeline}
+import org.apache.hudi.core.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.timeline.{HoodieActiveTimeline, HoodieArchivedTimeline, HoodieInstant, HoodieTimeline}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.table.HoodieSparkTable
 

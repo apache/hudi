@@ -26,9 +26,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
+import org.apache.hudi.core.read.BufferedRecord;
+import org.apache.hudi.core.table.HoodieTableConfig;
 import org.apache.hudi.util.OrderingValueEngineTypeConverter;
 
 import org.apache.spark.sql.HoodieInternalRowUtils;

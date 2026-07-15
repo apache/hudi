@@ -22,12 +22,12 @@ import org.apache.hudi.common.avro.AvroRecordContext;
 import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.avro.JoinedGenericRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.read.DeleteContext;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.read.DeleteContext;
+import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -44,7 +44,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
+import static org.apache.hudi.core.table.HoodieTableConfig.POPULATE_META_FIELDS;
 
 /**
  * This only use by reader returning.

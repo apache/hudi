@@ -20,10 +20,10 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.HoodieConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.table.checkpoint.Checkpoint;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.config.PulsarSourceConfig;
@@ -53,10 +53,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
-import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
-import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.table.checkpoint.CheckpointUtils.createCheckpoint;
+import static org.apache.hudi.core.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.core.util.ConfigUtils.getLongWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.PulsarSourceConfig.PULSAR_SOURCE_ADMIN_ENDPOINT_URL;
 import static org.apache.hudi.utilities.config.PulsarSourceConfig.PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD;
 import static org.apache.hudi.utilities.config.PulsarSourceConfig.PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY;

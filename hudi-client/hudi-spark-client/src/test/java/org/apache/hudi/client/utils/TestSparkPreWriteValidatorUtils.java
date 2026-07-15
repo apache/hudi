@@ -25,10 +25,10 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodiePreWriteValidatorConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 

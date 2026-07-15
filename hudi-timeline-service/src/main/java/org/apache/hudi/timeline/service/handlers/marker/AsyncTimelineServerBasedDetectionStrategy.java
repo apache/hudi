@@ -18,8 +18,8 @@
 
 package org.apache.hudi.timeline.service.handlers.marker;
 
-import org.apache.hudi.common.conflict.detection.TimelineServerBasedDetectionStrategy;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.transaction.conflict.detection.TimelineServerBasedDetectionStrategy;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;

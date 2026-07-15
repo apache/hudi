@@ -22,7 +22,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.utilities.UtilHelpers;
 
 import org.apache.spark.launcher.SparkLauncher;

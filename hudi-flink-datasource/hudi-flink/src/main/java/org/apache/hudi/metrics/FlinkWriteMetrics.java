@@ -19,7 +19,7 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
+import org.apache.hudi.core.table.timeline.HoodieInstantTimeGenerator;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.metrics.MetricGroup;

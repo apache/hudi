@@ -25,8 +25,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -34,6 +32,8 @@ import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.core.read.HoodieFileGroupReader;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -45,11 +45,11 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Properties;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
-import static org.apache.hudi.common.table.HoodieTableConfig.RECORDKEY_FIELDS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.ROW_KEY;
+import static org.apache.hudi.core.table.HoodieTableConfig.POPULATE_META_FIELDS;
+import static org.apache.hudi.core.table.HoodieTableConfig.RECORDKEY_FIELDS;
 
 public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
   protected static final String PARTITION_PATH = "any-partition-path";

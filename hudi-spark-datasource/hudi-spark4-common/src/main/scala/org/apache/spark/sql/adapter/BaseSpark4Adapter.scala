@@ -19,8 +19,8 @@ package org.apache.spark.sql.adapter
 
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieFileScanRDD, HoodieSchemaConversionUtils}
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
+import org.apache.hudi.core.table.HoodieTableMetaClient
 import org.apache.hudi.spark.internal.ReflectUtil
 import org.apache.hudi.storage.StorageConfiguration
 

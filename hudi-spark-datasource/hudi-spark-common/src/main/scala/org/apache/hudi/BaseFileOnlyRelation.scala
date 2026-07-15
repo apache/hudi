@@ -20,7 +20,7 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX
 import org.apache.hudi.HoodieBaseRelation.projectReader
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 

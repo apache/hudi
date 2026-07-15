@@ -20,8 +20,8 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.HoodieStorageUtils
+import org.apache.hudi.core.util.ConfigUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.StoragePath
 

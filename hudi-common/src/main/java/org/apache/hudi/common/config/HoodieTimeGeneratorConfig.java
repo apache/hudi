@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.config;
 
-import org.apache.hudi.common.table.timeline.TimeGeneratorType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.timeline.TimeGeneratorType;
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 
 import java.util.Properties;

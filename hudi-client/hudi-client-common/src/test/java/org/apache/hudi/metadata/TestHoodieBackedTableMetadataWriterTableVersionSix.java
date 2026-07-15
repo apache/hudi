@@ -18,14 +18,14 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantGenerator;
-import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
-import org.apache.hudi.common.table.timeline.versioning.v1.InstantGeneratorV1;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.table.timeline.InstantGenerator;
+import org.apache.hudi.core.table.timeline.versioning.v1.ActiveTimelineV1;
+import org.apache.hudi.core.table.timeline.versioning.v1.InstantGeneratorV1;
 
 import org.junit.jupiter.api.Test;
 

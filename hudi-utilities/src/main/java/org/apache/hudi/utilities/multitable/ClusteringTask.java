@@ -20,7 +20,7 @@
 package org.apache.hudi.utilities.multitable;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 
 import lombok.AccessLevel;

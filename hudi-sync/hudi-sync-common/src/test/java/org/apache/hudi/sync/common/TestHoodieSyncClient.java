@@ -18,7 +18,7 @@
 
 package org.apache.hudi.sync.common;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import org.apache.hadoop.conf.Configuration;

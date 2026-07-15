@@ -30,8 +30,8 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.transaction.lock.LockProvider;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 
@@ -214,7 +214,7 @@ public class HoodieLockConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("Lock provider class name, user can provide their own implementation of LockProvider "
-          + "which should be subclass of org.apache.hudi.common.lock.LockProvider");
+          + "which should be subclass of org.apache.hudi.core.transaction.lock.LockProvider");
 
   // Pluggable strategies to use when resolving conflicts
   public static final ConfigProperty<String> WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME = ConfigProperty

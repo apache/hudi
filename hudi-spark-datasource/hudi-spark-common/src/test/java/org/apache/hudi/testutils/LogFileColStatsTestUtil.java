@@ -20,9 +20,9 @@ package org.apache.hudi.testutils;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.TableSchemaResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;

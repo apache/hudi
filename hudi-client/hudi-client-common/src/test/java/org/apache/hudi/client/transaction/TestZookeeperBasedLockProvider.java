@@ -23,8 +23,8 @@ import org.apache.hudi.client.transaction.lock.ZookeeperBasedImplicitBasePathLoc
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.core.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.StorageConfiguration;
 

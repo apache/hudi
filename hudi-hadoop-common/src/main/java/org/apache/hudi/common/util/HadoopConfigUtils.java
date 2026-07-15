@@ -20,6 +20,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.core.util.ConfigUtils;
 
 import org.apache.hadoop.conf.Configuration;
 

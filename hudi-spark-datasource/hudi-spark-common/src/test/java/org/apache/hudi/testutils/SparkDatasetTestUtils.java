@@ -22,11 +22,11 @@ import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.index.HoodieIndex;
 
 import org.apache.spark.sql.Dataset;

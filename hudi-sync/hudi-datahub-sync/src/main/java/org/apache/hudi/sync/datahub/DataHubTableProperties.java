@@ -22,8 +22,8 @@ package org.apache.hudi.sync.datahub;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 

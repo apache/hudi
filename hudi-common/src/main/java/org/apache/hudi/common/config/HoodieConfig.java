@@ -18,10 +18,10 @@
 
 package org.apache.hudi.common.config;
 
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import lombok.Getter;
@@ -33,8 +33,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
-import static org.apache.hudi.common.util.ConfigUtils.getRawValueWithAltKeys;
-import static org.apache.hudi.common.util.ConfigUtils.loadGlobalProperties;
+import static org.apache.hudi.core.util.ConfigUtils.getRawValueWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.loadGlobalProperties;
 
 /**
  * This class deals with {@link ConfigProperty} and provides get/set functionalities.

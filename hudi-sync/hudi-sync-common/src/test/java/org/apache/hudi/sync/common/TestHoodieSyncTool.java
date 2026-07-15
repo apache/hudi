@@ -19,8 +19,8 @@
 package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;

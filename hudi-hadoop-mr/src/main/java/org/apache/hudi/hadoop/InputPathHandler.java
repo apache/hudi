@@ -18,8 +18,8 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;

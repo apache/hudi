@@ -20,8 +20,8 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.testutils.AvroBinaryTestPayload;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.common.util.HoodieCommonKryoRegistrar;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.util.HoodieCommonKryoRegistrar;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;

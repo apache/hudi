@@ -22,9 +22,9 @@ import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.core.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.metadata.MetadataPartitionType;
 

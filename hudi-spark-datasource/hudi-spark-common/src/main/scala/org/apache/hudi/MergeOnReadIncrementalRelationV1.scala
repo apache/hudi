@@ -20,12 +20,12 @@ package org.apache.hudi
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.table.timeline.TimelineUtils.{concatTimeline, getCommitMetadata, handleHollowCommitIfNeeded, HollowCommitHandling}
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.core.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.core.table.timeline.TimelineUtils.{concatTimeline, getCommitMetadata, handleHollowCommitIfNeeded, HollowCommitHandling}
+import org.apache.hudi.core.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
+import org.apache.hudi.core.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.listAffectedFilesForCommits
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getWritePartitionPaths

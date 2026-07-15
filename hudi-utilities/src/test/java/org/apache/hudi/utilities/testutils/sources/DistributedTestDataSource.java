@@ -19,9 +19,9 @@
 package org.apache.hudi.utilities.testutils.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.checkpoint.Checkpoint;
+import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.utilities.config.SourceTestConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
@@ -35,7 +35,7 @@ import org.apache.spark.sql.SparkSession;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
+import static org.apache.hudi.core.table.checkpoint.CheckpointUtils.createCheckpoint;
 
 /**
  * A Test DataSource which scales test-data generation by using spark parallelism.

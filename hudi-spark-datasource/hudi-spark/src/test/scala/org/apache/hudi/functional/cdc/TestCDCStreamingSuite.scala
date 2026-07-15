@@ -18,9 +18,9 @@
 package org.apache.hudi.functional.cdc
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, SparkAdapterSupport}
-import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.table.HoodieTableConfig
+import org.apache.hudi.core.table.cdc.HoodieCDCSupplementalLoggingMode
 
 import org.apache.spark.sql.{Dataset, Row, SaveMode}
 import org.apache.spark.sql.QueryTest.checkAnswer

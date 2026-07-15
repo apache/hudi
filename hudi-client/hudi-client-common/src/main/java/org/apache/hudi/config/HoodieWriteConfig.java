@@ -52,22 +52,22 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.table.marker.MarkerType;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
-import org.apache.hudi.common.util.ConfigUtils;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.queue.DisruptorWaitStrategyType;
 import org.apache.hudi.common.util.queue.ExecutorType;
+import org.apache.hudi.core.table.HoodieTableConfig;
+import org.apache.hudi.core.table.HoodieTableVersion;
+import org.apache.hudi.core.table.log.block.HoodieLogBlock;
+import org.apache.hudi.core.table.marker.MarkerType;
+import org.apache.hudi.core.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.core.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.core.table.view.FileSystemViewStorageType;
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.core.util.ConfigUtils;
+import org.apache.hudi.core.util.HoodieRecordUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.execution.estimator.AverageRecordSizeEstimator;
@@ -114,11 +114,11 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
-import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
 import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD;
+import static org.apache.hudi.core.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1;
 import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarlyConflictDetectionStrategy;
 
 /**
@@ -854,7 +854,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       })
       .withDocumentation("The class name of the early conflict detection strategy to use. "
           + "This should be a subclass of "
-          + "`org.apache.hudi.common.conflict.detection.EarlyConflictDetectionStrategy`.");
+          + "`org.apache.hudi.core.transaction.conflict.detection.EarlyConflictDetectionStrategy`.");
 
   public static final ConfigProperty<Boolean> EARLY_CONFLICT_DETECTION_ENABLE = ConfigProperty
       .key(CONCURRENCY_PREFIX + "early.conflict.detection.enable")

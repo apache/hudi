@@ -20,7 +20,7 @@
 package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.common.model.HoodiePayloadProps;
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.core.table.HoodieTableConfig;
 
 import org.junit.jupiter.params.provider.Arguments;
 

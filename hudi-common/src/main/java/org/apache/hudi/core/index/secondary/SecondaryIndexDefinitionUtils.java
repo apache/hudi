@@ -19,8 +19,8 @@
 
 package org.apache.hudi.core.index.secondary;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieSecondaryIndexException;
 

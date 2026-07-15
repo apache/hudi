@@ -18,9 +18,9 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.util.ConfigUtils
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sql.InsertMode
 

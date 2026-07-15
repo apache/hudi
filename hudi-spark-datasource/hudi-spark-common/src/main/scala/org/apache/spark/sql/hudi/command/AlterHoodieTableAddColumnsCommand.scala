@@ -20,9 +20,10 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.{DataSourceUtils, HoodieSchemaConversionUtils, HoodieWriterUtils, SparkAdapterSupport}
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
-import org.apache.hudi.common.table.timeline.HoodieInstant.State
-import org.apache.hudi.common.util.{CommitUtils, Option}
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig}
+import org.apache.hudi.core.table.timeline.HoodieInstant.State
+import org.apache.hudi.core.util.CommitUtils
 import org.apache.hudi.table.HoodieSparkTable
 
 import org.apache.spark.api.java.JavaSparkContext

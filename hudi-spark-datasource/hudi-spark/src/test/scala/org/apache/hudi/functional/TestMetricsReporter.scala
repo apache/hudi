@@ -21,10 +21,10 @@ import org.apache.hudi.{DataSourceWriteOptions, SparkDatasetMixin}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.config.metrics.{HoodieMetricsConfig, HoodieMetricsDatadogConfig}
-import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.table.HoodieTableConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 

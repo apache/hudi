@@ -24,10 +24,10 @@ import org.apache.hudi.common.avro.AvroRecordSerializer;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.read.BufferedRecord;
-import org.apache.hudi.common.table.read.BufferedRecordSerializer;
-import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.core.read.BufferedRecord;
+import org.apache.hudi.core.read.BufferedRecordSerializer;
+import org.apache.hudi.core.read.BufferedRecords;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;

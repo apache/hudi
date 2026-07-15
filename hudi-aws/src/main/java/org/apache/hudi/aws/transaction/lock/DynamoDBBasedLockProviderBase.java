@@ -21,10 +21,10 @@ package org.apache.hudi.aws.transaction.lock;
 import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 import org.apache.hudi.aws.utils.DynamoTableUtils;
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.lock.LockProvider;
-import org.apache.hudi.common.lock.LockState;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.DynamoDbBasedLockConfig;
+import org.apache.hudi.core.transaction.lock.LockProvider;
+import org.apache.hudi.core.transaction.lock.LockState;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.StorageConfiguration;
 

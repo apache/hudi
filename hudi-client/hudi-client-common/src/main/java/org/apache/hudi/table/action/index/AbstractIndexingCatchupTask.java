@@ -25,11 +25,11 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.util.CleanerUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -41,10 +41,10 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 
-import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.RESTORE_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
+import static org.apache.hudi.core.table.timeline.HoodieInstant.State.COMPLETED;
+import static org.apache.hudi.core.table.timeline.HoodieTimeline.CLEAN_ACTION;
+import static org.apache.hudi.core.table.timeline.HoodieTimeline.RESTORE_ACTION;
+import static org.apache.hudi.core.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.table.action.index.RunIndexActionExecutor.TIMELINE_RELOAD_INTERVAL_MILLIS;
 
 /**

@@ -41,7 +41,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
-import static org.apache.hudi.common.util.HoodieRecordUtils.sortRecordsByRecordKey;
+import static org.apache.hudi.core.util.HoodieRecordUtils.sortRecordsByRecordKey;
 
 @Slf4j
 public class JavaUpsertPreppedDeltaCommitActionExecutor<T> extends BaseJavaDeltaCommitActionExecutor<T> {

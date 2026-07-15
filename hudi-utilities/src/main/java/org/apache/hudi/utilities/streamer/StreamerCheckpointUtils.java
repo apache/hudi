@@ -22,21 +22,21 @@ package org.apache.hudi.utilities.streamer;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
-import org.apache.hudi.common.table.checkpoint.UnresolvedStreamerCheckpointBasedOnCfg;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.HoodieTableVersion;
+import org.apache.hudi.core.table.checkpoint.Checkpoint;
+import org.apache.hudi.core.table.checkpoint.CheckpointUtils;
+import org.apache.hudi.core.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.core.table.checkpoint.UnresolvedStreamerCheckpointBasedOnCfg;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.table.timeline.TimelineUtils;
+import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
@@ -46,13 +46,13 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 
-import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.DATASOURCES_NOT_SUPPORTED_WITH_CKPT_V2;
-import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.HOODIE_INCREMENTAL_SOURCES;
-import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
-import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_RESET_KEY_V2;
-import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
-import static org.apache.hudi.common.util.ConfigUtils.removeConfigFromProps;
+import static org.apache.hudi.core.table.checkpoint.CheckpointUtils.DATASOURCES_NOT_SUPPORTED_WITH_CKPT_V2;
+import static org.apache.hudi.core.table.checkpoint.CheckpointUtils.HOODIE_INCREMENTAL_SOURCES;
+import static org.apache.hudi.core.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
+import static org.apache.hudi.core.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_RESET_KEY_V2;
+import static org.apache.hudi.core.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.core.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.core.util.ConfigUtils.removeConfigFromProps;
 import static org.apache.hudi.table.upgrade.UpgradeDowngrade.needsUpgradeOrDowngrade;
 
 @Slf4j
@@ -150,7 +150,7 @@ public class StreamerCheckpointUtils {
   /**
    * Process previous commit metadata and checkpoint configs set by user to determine the checkpoint to resume from.
    * The function consults various checkpoint related configurations and set the right
-   * `org.apache.hudi.common.table.checkpoint.Checkpoint#checkpointKey` value in the returned object.
+   * `org.apache.hudi.core.table.checkpoint.Checkpoint#checkpointKey` value in the returned object.
    *
    * @param commitsTimeline commits timeline of interest, including .commit and .deltacommit.
    *

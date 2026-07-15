@@ -19,10 +19,10 @@
 package org.apache.hudi.integ.testsuite.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.table.checkpoint.Checkpoint;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
@@ -40,8 +40,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.table.checkpoint.CheckpointUtils.createCheckpoint;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * A custom dfs path selector used only for the hudi test suite. To be used only if workload is not run inline.

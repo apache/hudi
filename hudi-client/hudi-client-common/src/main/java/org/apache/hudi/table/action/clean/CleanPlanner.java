@@ -34,18 +34,18 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantComparison;
-import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
-import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.table.view.SyncableFileSystemView;
-import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.table.timeline.InstantComparison;
+import org.apache.hudi.core.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
+import org.apache.hudi.core.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
+import org.apache.hudi.core.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.core.table.view.SyncableFileSystemView;
+import org.apache.hudi.core.util.CleanerUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.storage.StoragePath;
@@ -67,10 +67,10 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.core.table.timeline.InstantComparison.GREATER_THAN;
+import static org.apache.hudi.core.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.core.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.core.table.timeline.InstantComparison.compareTimestamps;
 
 /**
  * Cleaner is responsible for garbage collecting older files in a given partition path. Such that

@@ -19,8 +19,8 @@
 package org.apache.hudi.common.serialization;
 
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
-import org.apache.hudi.common.util.SerializationUtils;
+import org.apache.hudi.core.table.timeline.dto.FileSliceDTO;
+import org.apache.hudi.core.util.SerializationUtils;
 
 import java.io.IOException;
 import java.util.List;

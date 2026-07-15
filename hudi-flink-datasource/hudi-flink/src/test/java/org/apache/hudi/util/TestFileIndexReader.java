@@ -20,9 +20,9 @@ package org.apache.hudi.util;
 
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.source.FileIndex;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.storage.StoragePath;

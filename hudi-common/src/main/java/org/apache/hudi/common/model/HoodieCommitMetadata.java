@@ -46,7 +46,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
+import static org.apache.hudi.core.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 
 /**
  * All the metadata that gets stored along with a commit.
@@ -55,7 +55,7 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deseri
  * src/main/avro/HoodieCommitMetadata.avsc file!!!!!
  *
  * For any newly added subclass, make sure we add corresponding handler in
- * org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2#deserialize method.
+ * org.apache.hudi.core.table.timeline.versioning.v2.CommitMetadataSerDeV2#deserialize method.
  * ***************************
  */
 @JsonIgnoreProperties(ignoreUnknown = true)

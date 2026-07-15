@@ -20,10 +20,10 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.view.SyncableFileSystemView;
 import org.apache.hudi.exception.HoodieDeletePartitionException;
 import org.apache.hudi.table.HoodieTable;
 

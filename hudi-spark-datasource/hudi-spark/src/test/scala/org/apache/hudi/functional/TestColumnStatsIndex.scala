@@ -28,13 +28,13 @@ import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, 
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, IOType}
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
-import org.apache.hudi.common.table.timeline.versioning.v1.InstantFileNameGeneratorV1
-import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
 import org.apache.hudi.common.util.{ParquetUtils, StringUtils}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.core.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.core.table.timeline.versioning.v1.InstantFileNameGeneratorV1
+import org.apache.hudi.core.table.view.FileSystemViewManager
 import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams, WrapperCreator}
 import org.apache.hudi.metadata.HoodieIndexVersion
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS

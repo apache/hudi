@@ -20,8 +20,8 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodiePartitionMetadata
-import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.Option
+import org.apache.hudi.core.table.HoodieTableConfig
 import org.apache.hudi.exception.HoodieIOException
 import org.apache.hudi.storage.StoragePath
 

@@ -22,8 +22,8 @@ package org.apache.hudi.gcp.bigquery;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.TableSchemaResolver;
 
 import com.google.cloud.bigquery.Field;
 import com.google.cloud.bigquery.Schema;

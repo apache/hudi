@@ -24,8 +24,8 @@ import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload
 import org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.core.table.{HoodieTableConfig, HoodieTableVersion}
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.validateTableConfig

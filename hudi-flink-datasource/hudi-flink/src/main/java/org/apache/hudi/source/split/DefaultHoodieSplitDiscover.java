@@ -18,8 +18,8 @@
 
 package org.apache.hudi.source.split;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.source.HoodieScanContext;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.util.StreamerUtil;

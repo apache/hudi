@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.common.model.{HoodieRecordMerger, OverwriteWithLatestAvroPayload}
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.core.table.HoodieTableConfig
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.spark.sql.hudi.HoodieOptionConfig

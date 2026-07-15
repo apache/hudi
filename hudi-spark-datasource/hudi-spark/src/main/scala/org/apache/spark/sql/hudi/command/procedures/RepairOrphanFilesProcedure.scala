@@ -20,8 +20,8 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.HoodieStorageUtils
+import org.apache.hudi.core.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.{FileSystemBackedTableMetadata, HoodieBackedTableMetadata}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.table.repair.RepairUtils

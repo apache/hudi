@@ -18,9 +18,9 @@
 
 package org.apache.hudi.client.heartbeat;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -30,7 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 
-import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.getLastHeartbeatTime;
+import static org.apache.hudi.core.transaction.heartbeat.HoodieHeartbeatUtils.getLastHeartbeatTime;
 
 /**
  * Helper class to delete heartbeat for completed or failed instants with expired heartbeats.

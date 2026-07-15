@@ -21,10 +21,10 @@ package org.apache.hudi.functional
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
+import org.apache.hudi.core.table.HoodieTableConfig
+import org.apache.hudi.core.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql._

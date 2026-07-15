@@ -18,8 +18,8 @@
 
 package org.apache.hudi.table.format.cdc;
 
-import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
 import lombok.Getter;

@@ -19,7 +19,7 @@
 package org.apache.hudi.util
 
 import org.apache.hudi.common.config.ConfigProperty
-import org.apache.hudi.common.util.ConfigUtils
+import org.apache.hudi.core.util.ConfigUtils
 
 object SparkConfigUtils {
 

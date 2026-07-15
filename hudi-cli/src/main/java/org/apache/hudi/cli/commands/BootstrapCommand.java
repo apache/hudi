@@ -27,7 +27,7 @@ import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.UtilHelpers;
 

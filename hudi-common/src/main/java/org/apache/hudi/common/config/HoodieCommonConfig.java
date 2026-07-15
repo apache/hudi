@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.config;
 
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.core.table.timeline.TimelineUtils.HollowCommitHandling;
 
 import java.io.File;
 import java.io.FileReader;
@@ -28,7 +28,7 @@ import java.util.Arrays;
 import java.util.Locale;
 import java.util.Properties;
 
-import static org.apache.hudi.common.util.ConfigUtils.enumNames;
+import static org.apache.hudi.core.util.ConfigUtils.enumNames;
 
 /**
  * Hudi configs used across engines.

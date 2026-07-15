@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.catalog
 
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.core.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}

@@ -21,9 +21,9 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, ScalaAsse
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.table.HoodieTableConfig
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction

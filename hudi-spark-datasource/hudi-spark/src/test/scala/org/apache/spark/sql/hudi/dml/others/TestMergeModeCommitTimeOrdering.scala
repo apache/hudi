@@ -22,8 +22,8 @@ package org.apache.spark.sql.hudi.dml.others
 import org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING
 import org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.core.table.{HoodieTableConfig, HoodieTableVersion}
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.validateTableConfig

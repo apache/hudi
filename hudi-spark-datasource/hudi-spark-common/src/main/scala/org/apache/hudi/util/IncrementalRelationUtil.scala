@@ -18,7 +18,7 @@
 package org.apache.hudi.util
 
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.HoodieTableMetaClient
 
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.types.StructType

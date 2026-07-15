@@ -25,10 +25,10 @@ import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.core.table.timeline.HoodieInstant.State;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.launcher.SparkLauncher;
@@ -42,7 +42,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
+import static org.apache.hudi.core.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 
 /**
  * CLI command to display rollback options.

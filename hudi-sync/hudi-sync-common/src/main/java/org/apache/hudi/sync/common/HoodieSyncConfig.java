@@ -25,11 +25,11 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HadoopConfigUtils;
-import org.apache.hudi.common.util.HoodieTableConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.core.table.HoodieTableConfig;
+import org.apache.hudi.core.util.HoodieTableConfigUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -50,11 +50,11 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
 import static org.apache.hudi.common.config.HoodieCommonConfig.META_SYNC_BASE_PATH_KEY;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
-import static org.apache.hudi.common.table.HoodieTableConfig.BASE_FILE_FORMAT;
-import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
-import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
-import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
+import static org.apache.hudi.core.table.HoodieTableConfig.BASE_FILE_FORMAT;
+import static org.apache.hudi.core.table.HoodieTableConfig.DATABASE_NAME;
+import static org.apache.hudi.core.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
+import static org.apache.hudi.core.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
+import static org.apache.hudi.core.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
 
 /**
  * Configs needed to sync data into external meta stores, catalogs, etc.

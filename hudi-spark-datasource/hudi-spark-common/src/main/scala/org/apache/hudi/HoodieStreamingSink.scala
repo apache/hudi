@@ -23,12 +23,12 @@ import org.apache.hudi.async.{AsyncClusteringService, AsyncCompactService, Spark
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.HoodieCommitMetadata
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.table.marker.MarkerType
-import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.core.table.marker.MarkerType
+import org.apache.hudi.core.table.timeline.HoodieInstant
+import org.apache.hudi.core.util.{ClusteringUtils, CommitUtils, CompactionUtils}
 import org.apache.hudi.exception.{HoodieCorruptedDataException, HoodieException, TableNotFoundException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 

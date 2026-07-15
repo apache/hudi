@@ -29,9 +29,9 @@ import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE;
-import static org.apache.hudi.common.table.HoodieTableConfig.BOOTSTRAP_INDEX_TYPE;
+import static org.apache.hudi.core.table.HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME;
+import static org.apache.hudi.core.table.HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE;
+import static org.apache.hudi.core.table.HoodieTableConfig.BOOTSTRAP_INDEX_TYPE;
 
 @AllArgsConstructor(access = AccessLevel.PACKAGE)
 @Getter

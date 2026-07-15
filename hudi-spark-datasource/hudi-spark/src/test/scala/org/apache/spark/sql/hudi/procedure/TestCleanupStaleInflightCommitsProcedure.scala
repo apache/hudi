@@ -17,9 +17,9 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.core.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import java.text.SimpleDateFormat

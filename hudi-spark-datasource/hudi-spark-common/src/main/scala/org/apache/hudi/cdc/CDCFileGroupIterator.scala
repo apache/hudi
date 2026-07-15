@@ -31,17 +31,18 @@ import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecordMerge
 import org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.serialization.DefaultSerializer
-import org.apache.hudi.common.table.{HoodieTableMetaClient, PartialUpdateMode}
-import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCUtils}
-import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase._
-import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
-import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
-import org.apache.hudi.common.table.log.{HoodieCDCEngineRecordAccessor, HoodieCDCInlineLogRecordIterator, HoodieCDCLogRecord, HoodieCDCLogRecordIterator, HoodieCDCNativeLogRecordIterator, HoodieMergedLogRecordReader}
-import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecordMerger, BufferedRecordMergerFactory, BufferedRecords, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, IteratorMode, UpdateProcessor}
-import org.apache.hudi.common.table.read.buffer.KeyBasedFileGroupRecordBuffer
-import org.apache.hudi.common.util.{DefaultSizeEstimator, HoodieRecordUtils, Option, ValidationUtils}
+import org.apache.hudi.common.util.{DefaultSizeEstimator, Option, ValidationUtils}
 import org.apache.hudi.common.util.collection.{ClosableIterator, ExternalSpillableMap}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.read.{BufferedRecord, BufferedRecordMerger, BufferedRecordMergerFactory, BufferedRecords, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, IteratorMode, UpdateProcessor}
+import org.apache.hudi.core.read.buffer.KeyBasedFileGroupRecordBuffer
+import org.apache.hudi.core.table.{HoodieTableMetaClient, PartialUpdateMode}
+import org.apache.hudi.core.table.cdc.{HoodieCDCFileSplit, HoodieCDCUtils}
+import org.apache.hudi.core.table.cdc.HoodieCDCInferenceCase._
+import org.apache.hudi.core.table.cdc.HoodieCDCOperation._
+import org.apache.hudi.core.table.cdc.HoodieCDCSupplementalLoggingMode._
+import org.apache.hudi.core.table.log.{HoodieCDCEngineRecordAccessor, HoodieCDCInlineLogRecordIterator, HoodieCDCLogRecord, HoodieCDCLogRecordIterator, HoodieCDCNativeLogRecordIterator, HoodieMergedLogRecordReader}
+import org.apache.hudi.core.util.HoodieRecordUtils
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.io.util.FileIOUtils
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}

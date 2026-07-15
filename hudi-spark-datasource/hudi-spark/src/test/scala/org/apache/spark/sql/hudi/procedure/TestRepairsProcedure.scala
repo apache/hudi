@@ -19,10 +19,10 @@ package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, SchemaTestUtil}
 import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
+import org.apache.hudi.core.table.{HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.core.table.view.HoodieTableFileSystemView
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient

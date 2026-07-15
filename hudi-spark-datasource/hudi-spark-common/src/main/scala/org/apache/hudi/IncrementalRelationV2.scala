@@ -25,12 +25,13 @@ import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, Hoo
 import org.apache.hudi.common.schema.HoodieSchemaType
 import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
-import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
 import org.apache.hudi.common.util.HoodieStorageUtils
+import org.apache.hudi.common.util.HoodieTimer
+import org.apache.hudi.core.read.IncrementalQueryAnalyzer
+import org.apache.hudi.core.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.core.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.core.util.InternalSchemaCache
 import org.apache.hudi.exception.{HoodieException, HoodieIncrementalPathNotFoundException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.StoragePath

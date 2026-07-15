@@ -19,10 +19,10 @@
 package org.apache.hudi.cli.utils;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.table.timeline.TimelineUtils;
 
 import java.io.IOException;
 import java.time.ZonedDateTime;

@@ -21,8 +21,8 @@ package org.apache.hudi.cli.functional;
 
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.core.table.HoodieTableConfig;
+import org.apache.hudi.core.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.testutils.HoodieClientTestUtils;

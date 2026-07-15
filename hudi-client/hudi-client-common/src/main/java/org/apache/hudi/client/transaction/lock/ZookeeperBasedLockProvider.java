@@ -19,9 +19,9 @@
 package org.apache.hudi.client.transaction.lock;
 
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.lock.LockProvider;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.core.transaction.lock.LockProvider;
+import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import javax.annotation.concurrent.NotThreadSafe;

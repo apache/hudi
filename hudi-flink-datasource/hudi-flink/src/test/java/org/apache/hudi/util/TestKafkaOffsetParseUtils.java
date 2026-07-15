@@ -19,9 +19,9 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.table.timeline.TimelineUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import org.junit.jupiter.api.Test;

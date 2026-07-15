@@ -27,7 +27,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_CONNECTION_URL;
 import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_DBTABLE;
 import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_DRIVER_TYPE;

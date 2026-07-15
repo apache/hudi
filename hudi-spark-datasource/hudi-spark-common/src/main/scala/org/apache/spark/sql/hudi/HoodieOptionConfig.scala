@@ -20,9 +20,9 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.avro.HoodieAvroUtils.getRootLevelFieldName
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.ValidationUtils
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.core.table.HoodieTableConfig
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.StructType

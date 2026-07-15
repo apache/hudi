@@ -25,8 +25,8 @@ import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.core.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.core.table.view.HoodieTableFileSystemView
 import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
 import org.apache.hudi.storage.StoragePath
 

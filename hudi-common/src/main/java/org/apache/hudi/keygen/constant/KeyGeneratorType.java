@@ -22,8 +22,8 @@ import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.core.util.ConfigUtils;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -39,8 +39,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
+import static org.apache.hudi.core.table.HoodieTableConfig.KEY_GENERATOR_CLASS_NAME;
+import static org.apache.hudi.core.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
 
 /**
  * Types of {@link org.apache.hudi.keygen.KeyGenerator}.

@@ -22,16 +22,16 @@ package org.apache.hudi.common.bootstrap.index;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
 
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.core.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.core.table.timeline.InstantComparison.compareTimestamps;
 
 /**
  * Bootstrap Index Interface.

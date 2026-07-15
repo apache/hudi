@@ -56,7 +56,7 @@ import lombok.extern.slf4j.Slf4j;
  * - Checkpoint format (SPARK_KAFKA, FLINK_KAFKA, etc.)
  * - Checkpoint metadata key (optional — when omitted, the validator auto-resolves the
  *   active streamer key from commit metadata using
- *   {@link org.apache.hudi.common.table.checkpoint.CheckpointUtils#getCheckpoint(HoodieCommitMetadata)},
+ *   {@link org.apache.hudi.core.table.checkpoint.CheckpointUtils#getCheckpoint(HoodieCommitMetadata)},
  *   which prefers V2 and falls back to V1. Subclasses that read a custom non-streamer key
  *   (e.g. Flink's HOODIE_METADATA_KEY) must pass it explicitly.)
  * - Source-specific parsing logic (if needed)
@@ -75,7 +75,7 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
 
   /**
    * Create a streaming offset validator that auto-resolves the checkpoint key from commit
-   * metadata using {@link org.apache.hudi.common.table.checkpoint.CheckpointUtils#getCheckpoint(HoodieCommitMetadata)}.
+   * metadata using {@link org.apache.hudi.core.table.checkpoint.CheckpointUtils#getCheckpoint(HoodieCommitMetadata)}.
    *
    * <p>Use this constructor for streamer pipelines (V1 or V2 checkpoint keys). The validator
    * will prefer V2 (table version 8+) and fall back to V1 transparently, so subclasses don't
@@ -251,7 +251,7 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
    * Resolve the checkpoint string from commit metadata.
    *
    * <p>When the validator was constructed with an explicit {@code checkpointKey}, that key
-   * is read directly. Otherwise, {@link org.apache.hudi.common.table.checkpoint.CheckpointUtils#getCheckpoint(HoodieCommitMetadata)}
+   * is read directly. Otherwise, {@link org.apache.hudi.core.table.checkpoint.CheckpointUtils#getCheckpoint(HoodieCommitMetadata)}
    * is used to locate the active streamer checkpoint (V2 first, V1 fallback), so callers
    * don't need to know which key the writer used.</p>
    *
@@ -268,7 +268,7 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
     }
     try {
       return Option.ofNullable(
-          org.apache.hudi.common.table.checkpoint.CheckpointUtils.getCheckpoint(metadata)
+          org.apache.hudi.core.table.checkpoint.CheckpointUtils.getCheckpoint(metadata)
               .getCheckpointKey());
     } catch (HoodieException e) {
       // No V1 or V2 streamer checkpoint key present in extraMetadata.

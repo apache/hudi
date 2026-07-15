@@ -18,8 +18,8 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.{HoodieCLIUtils, SparkAdapterSupport}
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, TimelineLayout}
+import org.apache.hudi.core.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.timeline.{HoodieInstant, TimelineLayout}
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.spark.internal.Logging
@@ -202,7 +202,7 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
     }
   }
 
-  private def getSortedCleanInstants(timeline: org.apache.hudi.common.table.timeline.HoodieTimeline): Seq[HoodieInstant] = {
+  private def getSortedCleanInstants(timeline: org.apache.hudi.core.table.timeline.HoodieTimeline): Seq[HoodieInstant] = {
     // Get both inflight and completed clean instants
     val cleanInstants = timeline.getCleanerTimeline.getInstants.asScala.toSeq
     val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
@@ -212,7 +212,7 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
   }
 
   private def processCleanPlan(metaClient: HoodieTableMetaClient,
-                               timeline: org.apache.hudi.common.table.timeline.HoodieTimeline,
+                               timeline: org.apache.hudi.core.table.timeline.HoodieTimeline,
                                cleanInstant: HoodieInstant): Row = {
     Try {
       val requestedCleanInstant = metaClient.getInstantGenerator.createNewInstant(

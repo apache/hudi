@@ -19,8 +19,8 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.checkpoint.Checkpoint;
 import org.apache.hudi.utilities.config.KinesisSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
@@ -51,8 +51,8 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ThreadLocalRandom;
 
-import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
-import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.core.table.checkpoint.CheckpointUtils.createCheckpoint;
+import static org.apache.hudi.core.util.ConfigUtils.getBooleanWithAltKeys;
 
 @Slf4j
 public abstract class KinesisSource<T> extends Source<T> {

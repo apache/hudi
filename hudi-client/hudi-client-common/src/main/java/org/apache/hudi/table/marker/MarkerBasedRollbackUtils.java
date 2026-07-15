@@ -20,8 +20,8 @@
 package org.apache.hudi.table.marker;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.marker.MarkerType;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
@@ -36,11 +36,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.marker.MarkerType.DIRECT;
-import static org.apache.hudi.common.table.marker.MarkerType.TIMELINE_SERVER_BASED;
-import static org.apache.hudi.common.util.MarkerUtils.MARKER_TYPE_FILENAME;
-import static org.apache.hudi.common.util.MarkerUtils.readMarkerType;
-import static org.apache.hudi.common.util.MarkerUtils.readTimelineServerBasedMarkersFromFileSystem;
+import static org.apache.hudi.core.table.marker.MarkerType.DIRECT;
+import static org.apache.hudi.core.table.marker.MarkerType.TIMELINE_SERVER_BASED;
+import static org.apache.hudi.core.util.MarkerUtils.MARKER_TYPE_FILENAME;
+import static org.apache.hudi.core.util.MarkerUtils.readMarkerType;
+import static org.apache.hudi.core.util.MarkerUtils.readTimelineServerBasedMarkersFromFileSystem;
 
 /**
  * A utility class for marker-based rollback.

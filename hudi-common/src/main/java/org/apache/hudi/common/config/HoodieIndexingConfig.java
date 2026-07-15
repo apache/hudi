@@ -21,7 +21,7 @@ package org.apache.hudi.common.config;
 
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.util.BinaryUtil;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.core.util.ConfigUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
@@ -40,9 +40,9 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
 
-import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
-import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.core.util.ConfigUtils.fetchConfigs;
+import static org.apache.hudi.core.util.ConfigUtils.recoverIfNeeded;
 
 @Immutable
 @ConfigClassProperty(name = "Common Index Configs",

@@ -23,9 +23,10 @@ import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.schema.{HoodieAvroSchemaCache, HoodieSchema, HoodieSchemaUtils}
-import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, HoodieRecordUtils, Option => HOption, OrderingValues, StringUtils, ValidationUtils}
+import org.apache.hudi.common.util.{BinaryUtil, Option => HOption, OrderingValues, StringUtils, ValidationUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.util.{ConfigUtils, HoodieRecordUtils}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.util.JFunction

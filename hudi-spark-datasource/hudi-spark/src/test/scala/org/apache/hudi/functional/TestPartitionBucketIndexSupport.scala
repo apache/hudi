@@ -21,9 +21,9 @@ import org.apache.hudi.{HoodieFileIndex, HoodieSparkUtils, PartitionBucketIndexS
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, PartitionBucketIndexHashingConfig}
-import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieIndexConfig
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex
+import org.apache.hudi.core.table.HoodieTableConfig
 import org.apache.hudi.index.bucket.BucketIdentifier
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions

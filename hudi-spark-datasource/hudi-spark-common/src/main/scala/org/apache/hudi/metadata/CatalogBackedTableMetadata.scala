@@ -22,8 +22,8 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.schema.internal.Types
-import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.core.table.HoodieTableConfig
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 
 import org.apache.spark.internal.Logging

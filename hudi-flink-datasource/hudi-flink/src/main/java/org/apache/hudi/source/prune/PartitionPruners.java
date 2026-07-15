@@ -18,8 +18,8 @@
 
 package org.apache.hudi.source.prune;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.source.ExpressionEvaluators;
 import org.apache.hudi.source.ExpressionEvaluators.Evaluator;
 import org.apache.hudi.source.stats.ColumnStats;

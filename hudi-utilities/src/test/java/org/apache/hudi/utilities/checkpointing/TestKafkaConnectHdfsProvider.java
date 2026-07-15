@@ -19,9 +19,9 @@
 package org.apache.hudi.utilities.checkpointing;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.core.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import org.junit.jupiter.api.Test;

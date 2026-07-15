@@ -21,7 +21,7 @@ package org.apache.hudi.index.expression;
 
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
-import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.core.table.HoodieTableVersion;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 

@@ -22,8 +22,8 @@ import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.OptimisticConsistencyGuard;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
+import org.apache.hudi.core.table.HoodieTableConfig;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 

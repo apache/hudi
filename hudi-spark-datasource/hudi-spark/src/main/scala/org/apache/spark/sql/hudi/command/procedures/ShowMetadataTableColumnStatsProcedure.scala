@@ -24,8 +24,8 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.model.FileSlice
-import org.apache.hudi.common.table.TableSchemaResolver
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.core.table.TableSchemaResolver
+import org.apache.hudi.core.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.avro.generic.IndexedRecord

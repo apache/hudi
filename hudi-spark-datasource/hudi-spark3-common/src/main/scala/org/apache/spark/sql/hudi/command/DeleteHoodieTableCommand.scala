@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.core.table.HoodieTableConfig
 import org.apache.hudi.keygen.KeyGenUtils
 
 import org.apache.spark.sql._

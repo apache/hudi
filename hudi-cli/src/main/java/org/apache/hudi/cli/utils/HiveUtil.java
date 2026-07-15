@@ -18,7 +18,7 @@
 
 package org.apache.hudi.cli.utils;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 
 import org.joda.time.DateTime;
 

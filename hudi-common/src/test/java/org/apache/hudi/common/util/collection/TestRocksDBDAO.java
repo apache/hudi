@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util.collection;
 
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.core.table.view.FileSystemViewStorageConfig;
 
 import lombok.Value;
 import org.junit.jupiter.api.AfterEach;

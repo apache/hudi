@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.read.HoodieReadStats;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 

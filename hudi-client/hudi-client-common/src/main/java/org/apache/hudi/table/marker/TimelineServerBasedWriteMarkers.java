@@ -21,14 +21,14 @@ package org.apache.hudi.table.marker;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.TimelineServiceClient;
-import org.apache.hudi.common.table.timeline.TimelineServiceClientBase.RequestMethod;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.core.table.timeline.TimelineServiceClient;
+import org.apache.hudi.core.table.timeline.TimelineServiceClientBase.RequestMethod;
+import org.apache.hudi.core.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.storage.StoragePath;
@@ -45,14 +45,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.marker.MarkerOperation.ALL_MARKERS_URL;
-import static org.apache.hudi.common.table.marker.MarkerOperation.CREATE_AND_MERGE_MARKERS_URL;
-import static org.apache.hudi.common.table.marker.MarkerOperation.CREATE_MARKER_URL;
-import static org.apache.hudi.common.table.marker.MarkerOperation.DELETE_MARKER_DIR_URL;
-import static org.apache.hudi.common.table.marker.MarkerOperation.MARKERS_DIR_EXISTS_URL;
-import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_BASEPATH_PARAM;
-import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_DIR_PATH_PARAM;
-import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PARAM;
+import static org.apache.hudi.core.table.marker.MarkerOperation.ALL_MARKERS_URL;
+import static org.apache.hudi.core.table.marker.MarkerOperation.CREATE_AND_MERGE_MARKERS_URL;
+import static org.apache.hudi.core.table.marker.MarkerOperation.CREATE_MARKER_URL;
+import static org.apache.hudi.core.table.marker.MarkerOperation.DELETE_MARKER_DIR_URL;
+import static org.apache.hudi.core.table.marker.MarkerOperation.MARKERS_DIR_EXISTS_URL;
+import static org.apache.hudi.core.table.marker.MarkerOperation.MARKER_BASEPATH_PARAM;
+import static org.apache.hudi.core.table.marker.MarkerOperation.MARKER_DIR_PATH_PARAM;
+import static org.apache.hudi.core.table.marker.MarkerOperation.MARKER_NAME_PARAM;
 
 /**
  * Marker operations of using timeline server as a proxy to create and delete markers.

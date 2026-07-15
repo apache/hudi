@@ -36,9 +36,9 @@ import javax.annotation.concurrent.Immutable;
 
 import java.util.Properties;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
-import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
+import static org.apache.hudi.core.table.HoodieTableConfig.DATABASE_NAME;
+import static org.apache.hudi.core.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
+import static org.apache.hudi.core.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
 import static org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier.DEFAULT_DATAHUB_ENV;
 import static org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier.DEFAULT_HOODIE_DATAHUB_PLATFORM_NAME;
 

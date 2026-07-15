@@ -31,16 +31,16 @@ import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils => HoodieC
 import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
 import org.apache.hudi.common.schema.internal.utils.{InternalSchemaUtils, SerDeHelper}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.{HoodieTimeline, TimelineLayout}
-import org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.core.table.timeline.{HoodieTimeline, TimelineLayout}
+import org.apache.hudi.core.table.timeline.TimelineUtils.validateTimestampAsOf
+import org.apache.hudi.core.table.view.HoodieTableFileSystemView
+import org.apache.hudi.core.util.ConfigUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath

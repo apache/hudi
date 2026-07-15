@@ -18,9 +18,9 @@
 
 package org.apache.hudi.client.heartbeat;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieHeartbeatException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -46,7 +46,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.getLastHeartbeatTime;
+import static org.apache.hudi.core.transaction.heartbeat.HoodieHeartbeatUtils.getLastHeartbeatTime;
 
 /**
  * This class creates heartbeat for hudi client. This heartbeat is used to ascertain whether the running job is or not.

@@ -18,10 +18,10 @@
 
 package org.apache.hudi.util;
 
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.core.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StoragePath;
@@ -37,7 +37,7 @@ import java.io.OutputStream;
 import java.util.Date;
 import java.util.Properties;
 
-import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER_NAME;
+import static org.apache.hudi.core.table.HoodieTableMetaClient.AUXILIARYFOLDER_NAME;
 
 /**
  * Helper class to read/write {@link FileSystemViewStorageConfig}.

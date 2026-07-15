@@ -22,7 +22,7 @@ package org.apache.spark.sql.hudi.procedure
 import org.apache.hudi.{DefaultSparkRecordMerger, HoodieDataSourceHelpers}
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieRecordMerger
-import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.core.table.timeline.HoodieTimeline
 
 import org.apache.hadoop.fs.Path
 

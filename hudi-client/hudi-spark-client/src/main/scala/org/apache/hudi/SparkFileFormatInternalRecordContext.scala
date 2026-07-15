@@ -22,7 +22,7 @@ package org.apache.hudi
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hudi.common.engine.RecordContext
 import org.apache.hudi.common.schema.{HoodieAvroSchemaCache, HoodieSchema}
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.core.table.HoodieTableConfig
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow

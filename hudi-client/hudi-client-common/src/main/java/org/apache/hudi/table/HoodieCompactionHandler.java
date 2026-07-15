@@ -22,7 +22,7 @@ package org.apache.hudi.table;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.core.table.log.block.HoodieLogBlock;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import java.io.IOException;

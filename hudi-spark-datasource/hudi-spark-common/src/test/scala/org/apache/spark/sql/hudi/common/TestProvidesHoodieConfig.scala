@@ -21,7 +21,7 @@ package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.core.table.HoodieTableConfig
 import org.apache.hudi.hive.HiveSyncConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator}
 

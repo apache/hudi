@@ -55,7 +55,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD;
-import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER_NAME;
+import static org.apache.hudi.core.table.HoodieTableMetaClient.AUXILIARYFOLDER_NAME;
 
 /**
  * Helper class to read/write flink table options as a map.

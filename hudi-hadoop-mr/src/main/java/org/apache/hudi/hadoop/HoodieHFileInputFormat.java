@@ -18,7 +18,7 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 
 import org.apache.hadoop.fs.FileSystem;

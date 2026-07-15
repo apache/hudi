@@ -29,7 +29,7 @@ import org.apache.hudi.common.util.KafkaCheckpointUtils.CheckpointFormat;
  * <p>Validates that the number of records written matches the Kafka offset difference
  * between the current and previous HoodieStreamer checkpoints. The active checkpoint key
  * (V1 {@code deltastreamer.checkpoint.key} or V2 {@code streamer.checkpoint.key.v2}) is
- * resolved at validation time via {@link org.apache.hudi.common.table.checkpoint.CheckpointUtils#getCheckpoint},
+ * resolved at validation time via {@link org.apache.hudi.core.table.checkpoint.CheckpointUtils#getCheckpoint},
  * so this validator works against tables written with either checkpoint key version.</p>
  *
  * <p>Configuration:

@@ -19,19 +19,19 @@
 package org.apache.hudi.tableformat;
 
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
-import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieInstantReader;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineFactory;
-import org.apache.hudi.common.table.timeline.versioning.v2.ArchivedTimelineLoaderV2;
-import org.apache.hudi.common.table.timeline.versioning.v2.ArchivedTimelineV2;
-import org.apache.hudi.common.table.timeline.versioning.v2.BaseTimelineV2;
-import org.apache.hudi.common.table.timeline.versioning.v2.CompletionTimeQueryViewV2;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.timeline.ArchivedTimelineLoader;
+import org.apache.hudi.core.table.timeline.CompletionTimeQueryView;
+import org.apache.hudi.core.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.core.table.timeline.HoodieArchivedTimeline;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieInstantReader;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.table.timeline.TimelineFactory;
+import org.apache.hudi.core.table.timeline.versioning.v2.ArchivedTimelineLoaderV2;
+import org.apache.hudi.core.table.timeline.versioning.v2.ArchivedTimelineV2;
+import org.apache.hudi.core.table.timeline.versioning.v2.BaseTimelineV2;
+import org.apache.hudi.core.table.timeline.versioning.v2.CompletionTimeQueryViewV2;
 
 import java.util.stream.Stream;
 

@@ -18,10 +18,10 @@
 
 package org.apache.hudi;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieInstantTimeGenerator;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

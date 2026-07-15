@@ -19,13 +19,13 @@
 package org.apache.hudi.tableformat;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
-import org.apache.hudi.common.HoodieTableFormat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineFactory;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.format.HoodieTableFormat;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.TimelineFactory;
+import org.apache.hudi.core.table.view.FileSystemViewManager;
 import org.apache.hudi.metadata.TableMetadataFactory;
 
 import lombok.NoArgsConstructor;

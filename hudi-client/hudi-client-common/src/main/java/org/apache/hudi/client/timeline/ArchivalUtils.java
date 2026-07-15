@@ -21,13 +21,13 @@
 package org.apache.hudi.client.timeline;
 
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.util.CleanerUtils;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
@@ -35,14 +35,14 @@ import lombok.extern.slf4j.Slf4j;
 import java.text.ParseException;
 import java.time.Instant;
 
-import static org.apache.hudi.common.table.timeline.TimelineUtils.NOT_PARSABLE_TIMESTAMPS;
-import static org.apache.hudi.common.table.timeline.TimelineUtils.parseDateFromInstantTime;
 import static org.apache.hudi.config.HoodieArchivalConfig.MAX_COMMITS_TO_KEEP;
 import static org.apache.hudi.config.HoodieArchivalConfig.MIN_COMMITS_TO_KEEP;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_COMMITS_RETAINED;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_FILE_VERSIONS_RETAINED;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_HOURS_RETAINED;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
+import static org.apache.hudi.core.table.timeline.TimelineUtils.NOT_PARSABLE_TIMESTAMPS;
+import static org.apache.hudi.core.table.timeline.TimelineUtils.parseDateFromInstantTime;
 
 /**
  * Provides utilities for timeline archival service.

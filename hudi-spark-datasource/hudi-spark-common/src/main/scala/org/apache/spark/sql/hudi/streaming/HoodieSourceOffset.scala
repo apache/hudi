@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.streaming
 
 import org.apache.hudi.SparkAdapterSupport
-import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.core.table.timeline.HoodieTimeline
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}

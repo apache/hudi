@@ -27,20 +27,20 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
-import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.core.table.view.FileSystemViewManager;
+import org.apache.hudi.core.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.core.table.view.FileSystemViewStorageType;
+import org.apache.hudi.core.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieBackedTestDelayedTableMetadata;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
@@ -66,14 +66,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
-import static org.apache.hudi.common.table.view.FileSystemViewStorageConfig.REMOTE_PORT_NUM;
+import static org.apache.hudi.core.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.core.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.core.table.view.FileSystemViewStorageConfig.REMOTE_PORT_NUM;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests the {@link RemoteHoodieTableFileSystemView} with metadata table enabled, using
- * {@link org.apache.hudi.common.table.view.HoodieTableFileSystemView} on the timeline server.
+ * {@link org.apache.hudi.core.table.view.HoodieTableFileSystemView} on the timeline server.
  */
 @Slf4j
 public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClientTestHarness {

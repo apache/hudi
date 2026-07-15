@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}

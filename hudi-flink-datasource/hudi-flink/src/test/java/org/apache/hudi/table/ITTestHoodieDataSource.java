@@ -23,19 +23,19 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
-import org.apache.hudi.common.table.marker.MarkerType;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.core.table.HoodieTableConfig;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.HoodieTableVersion;
+import org.apache.hudi.core.table.cdc.HoodieCDCSupplementalLoggingMode;
+import org.apache.hudi.core.table.marker.MarkerType;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.table.timeline.TimelineUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -860,7 +860,7 @@ public class ITTestHoodieDataSource {
    *
    * <p>This complements {@link #testStreamReadMorTableWithCompactionFromEarliest(boolean)}
    * which only exercises the streaming code path. Without the fix, building the
-   * {@link org.apache.hudi.common.table.view.HoodieTableFileSystemView} with a
+   * {@link org.apache.hudi.core.table.view.HoodieTableFileSystemView} with a
    * compaction-filtered timeline would mis-classify file slice boundaries and
    * lose log files.
    */

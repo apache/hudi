@@ -18,12 +18,12 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import org.apache.hudi.common.HoodieRollbackStat;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.core.table.HoodieRollbackStat;
+import org.apache.hudi.core.table.HoodieTableConfig;
+import org.apache.hudi.core.table.log.block.HoodieLogBlock;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 

@@ -30,7 +30,7 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.ExceptionWrappingIterator
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.core.table.HoodieTableConfig
 import org.apache.hudi.sync.common.model.PartitionValueExtractor
 
 import org.apache.spark.SPARK_VERSION

@@ -31,7 +31,7 @@ import org.apache.kafka.common.header.Headers;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_VALUE_DESERIALIZER_SCHEMA;
 
 /**

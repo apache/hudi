@@ -20,8 +20,8 @@ package org.apache.hudi.metaserver.client;
 
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
 import org.apache.hudi.metaserver.thrift.Table;
 
 import java.io.Serializable;

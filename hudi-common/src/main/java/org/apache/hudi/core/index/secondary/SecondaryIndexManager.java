@@ -20,11 +20,11 @@
 package org.apache.hudi.core.index.secondary;
 
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.HoodieTableConfig;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.TableSchemaResolver;
 import org.apache.hudi.exception.HoodieSecondaryIndexException;
 
 import lombok.AccessLevel;

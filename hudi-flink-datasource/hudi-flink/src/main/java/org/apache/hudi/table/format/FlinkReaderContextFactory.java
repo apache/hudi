@@ -20,8 +20,8 @@ package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 
 import org.apache.flink.table.data.RowData;
 

@@ -19,7 +19,7 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.model.HoodieIndexDefinition;
-import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.core.table.HoodieTableVersion;
 import org.apache.hudi.exception.HoodieException;
 
 /**

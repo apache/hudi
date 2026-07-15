@@ -22,8 +22,8 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.core.table.HoodieTableVersion;
 
 import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.standard.ShellComponent;

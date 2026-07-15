@@ -20,8 +20,8 @@ package org.apache.spark
 
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.{HoodieKey, HoodieSparkRecord}
-import org.apache.hudi.common.util.HoodieCommonKryoRegistrar
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.util.HoodieCommonKryoRegistrar
 import org.apache.hudi.io.HoodieKeyLookupResult
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.table.{HoodieSparkCopyOnWriteTable, HoodieSparkMergeOnReadTable}

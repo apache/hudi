@@ -20,9 +20,9 @@ package org.apache.hudi.common.avro;
 
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.core.read.BufferedRecord;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;

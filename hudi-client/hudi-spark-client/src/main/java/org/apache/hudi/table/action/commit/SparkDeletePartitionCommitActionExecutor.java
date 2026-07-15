@@ -22,10 +22,10 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.exception.HoodieDeletePartitionException;
 import org.apache.hudi.storage.StoragePath;
@@ -39,8 +39,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
+import static org.apache.hudi.core.table.timeline.HoodieInstant.State.REQUESTED;
+import static org.apache.hudi.core.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
 public class SparkDeletePartitionCommitActionExecutor<T>
     extends SparkInsertOverwriteCommitActionExecutor<T> {

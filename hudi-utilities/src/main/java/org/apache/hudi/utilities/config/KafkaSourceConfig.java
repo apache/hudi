@@ -28,8 +28,8 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 
 import javax.annotation.concurrent.Immutable;
 
-import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
-import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.core.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.core.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
 
 /**
  * Cloud Source Configs

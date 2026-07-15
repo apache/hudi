@@ -17,8 +17,8 @@
  */
 
 import org.apache.spark.sql.SaveMode
-import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.core.table.HoodieTableConfig
 import spark.implicits._
 
 val tableName = "${TABLE_NAME}"  // Backticks for SQL identifiers with hyphens

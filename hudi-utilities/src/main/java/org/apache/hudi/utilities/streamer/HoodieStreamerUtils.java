@@ -31,17 +31,17 @@ import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.read.DeleteContext;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Either;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.read.DeleteContext;
+import org.apache.hudi.core.table.HoodieTableConfig;
+import org.apache.hudi.core.util.ConfigUtils;
+import org.apache.hudi.core.util.HoodieRecordUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieKeyException;
@@ -72,8 +72,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.WriteOperationType.isChangingRecords;
-import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_RECORD_CREATION;
+import static org.apache.hudi.core.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
 
 /**
  * Util class for HoodieStreamer.

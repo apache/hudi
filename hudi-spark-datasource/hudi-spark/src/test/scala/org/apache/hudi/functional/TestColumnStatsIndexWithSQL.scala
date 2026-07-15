@@ -26,10 +26,10 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.core.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.core.table.timeline.{HoodieInstant, MetadataConversionUtils}
+import org.apache.hudi.core.table.view.HoodieTableFileSystemView
 import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams}
 import org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY
 import org.apache.hudi.io.util.FileIOUtils

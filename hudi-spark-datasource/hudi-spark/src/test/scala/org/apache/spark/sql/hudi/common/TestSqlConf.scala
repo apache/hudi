@@ -20,9 +20,9 @@ package org.apache.spark.sql.hudi.common
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadataConfig}
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.HoodieStorageUtils
+import org.apache.hudi.core.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 

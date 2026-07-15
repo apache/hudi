@@ -22,9 +22,9 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.core.table.HoodieTableConfig
+import org.apache.hudi.core.table.view.{FileSystemViewManager, FileSystemViewStorageConfig}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.bucket.BucketIdentifier

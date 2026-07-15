@@ -38,18 +38,18 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.HoodieLogFormat;
-import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.log.HoodieLogFormat;
+import org.apache.hudi.core.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.core.table.log.block.HoodieLogBlock;
+import org.apache.hudi.core.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.core.table.timeline.HoodieArchivedTimeline;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
+import org.apache.hudi.core.util.ClusteringUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -709,8 +709,8 @@ public class TimelineInspector {
                                              Map<String, Integer> skipReasons) {
     String ts = completed.requestedTime();
     String action = completed.getAction();
-    org.apache.hudi.common.table.timeline.InstantGenerator ig = metaClient.getInstantGenerator();
-    org.apache.hudi.common.table.timeline.InstantFileNameGenerator fng = metaClient.getInstantFileNameGenerator();
+    org.apache.hudi.core.table.timeline.InstantGenerator ig = metaClient.getInstantGenerator();
+    org.apache.hudi.core.table.timeline.InstantFileNameGenerator fng = metaClient.getInstantFileNameGenerator();
     HoodieInstant requested = ig.createNewInstant(HoodieInstant.State.REQUESTED, action, ts);
     HoodieInstant inflight = ig.createNewInstant(HoodieInstant.State.INFLIGHT, action, ts);
 
@@ -731,9 +731,9 @@ public class TimelineInspector {
     if (mdtPresent) {
       // Use MDT metaClient's generators when available; fall back to data table's generators
       // (safe because MDT always shares the same table version as the data table).
-      org.apache.hudi.common.table.timeline.InstantGenerator mdtIg =
+      org.apache.hudi.core.table.timeline.InstantGenerator mdtIg =
           mdtMetaClient != null ? mdtMetaClient.getInstantGenerator() : ig;
-      org.apache.hudi.common.table.timeline.InstantFileNameGenerator mdtFng =
+      org.apache.hudi.core.table.timeline.InstantFileNameGenerator mdtFng =
           mdtMetaClient != null ? mdtMetaClient.getInstantFileNameGenerator() : fng;
       // MDT timeline always uses DELTA_COMMIT_ACTION regardless of data table type.
       String mdtAction = HoodieTimeline.DELTA_COMMIT_ACTION;

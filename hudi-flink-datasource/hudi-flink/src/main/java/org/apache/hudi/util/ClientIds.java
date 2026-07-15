@@ -44,7 +44,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER_NAME;
+import static org.apache.hudi.core.table.HoodieTableMetaClient.AUXILIARYFOLDER_NAME;
 
 /**
  * This class creates a client id heartbeat for a new driver.

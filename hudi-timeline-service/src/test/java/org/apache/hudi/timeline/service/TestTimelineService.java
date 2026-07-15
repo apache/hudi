@@ -18,8 +18,8 @@
 
 package org.apache.hudi.timeline.service;
 
-import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.core.table.view.FileSystemViewManager;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import com.sun.net.httpserver.HttpExchange;

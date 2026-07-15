@@ -19,9 +19,9 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{BaseFileOnlyRelation, DataSourceReadOptions, DataSourceWriteOptions, IncrementalRelationV1, IncrementalRelationV2, ScalaAssertionSupport}
 import org.apache.hudi.common.config.HoodieReaderConfig
-import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.core.table.HoodieTableConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}

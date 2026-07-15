@@ -19,7 +19,7 @@
 
 package org.apache.hudi.table.action.index;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 
 import lombok.NoArgsConstructor;
 

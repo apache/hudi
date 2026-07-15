@@ -20,11 +20,11 @@
 package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.util.HFileUtils;
 import org.apache.hudi.common.util.LanceUtils;
 import org.apache.hudi.common.util.OrcUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
+import org.apache.hudi.core.util.HFileUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.hadoop.HoodieHadoopIOFactory;
 import org.apache.hudi.storage.HoodieStorage;

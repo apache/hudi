@@ -22,11 +22,11 @@ package org.apache.hudi.execution.estimator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.timeline.CommitMetadataSerDe;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
+import org.apache.hudi.core.table.timeline.HoodieTimeline;
 import org.apache.hudi.storage.StoragePath;
 
 import lombok.extern.slf4j.Slf4j;
@@ -35,9 +35,9 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.Set;
 
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.core.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.core.table.timeline.HoodieTimeline.COMPACTION_ACTION;
+import static org.apache.hudi.core.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 
 /**
  * Default Implementation for the {@link RecordSizeEstimator}.

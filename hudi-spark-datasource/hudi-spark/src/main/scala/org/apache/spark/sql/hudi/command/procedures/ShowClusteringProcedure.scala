@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.{HoodieCLIUtils, SparkAdapterSupport}
-import org.apache.hudi.common.util.ClusteringUtils
+import org.apache.hudi.core.util.ClusteringUtils
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row

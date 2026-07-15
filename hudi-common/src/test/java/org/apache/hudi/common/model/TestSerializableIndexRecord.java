@@ -20,7 +20,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.avro.HoodieAvroUtils;
-import org.apache.hudi.common.util.SerializationUtils;
+import org.apache.hudi.core.util.SerializationUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;

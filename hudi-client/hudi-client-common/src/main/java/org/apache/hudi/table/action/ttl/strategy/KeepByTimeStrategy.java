@@ -19,10 +19,10 @@
 package org.apache.hudi.table.action.ttl.strategy;
 
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
@@ -34,8 +34,8 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.fixInstantTimeCompatibility;
-import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimePlusMillis;
+import static org.apache.hudi.core.table.timeline.HoodieInstantTimeGenerator.fixInstantTimeCompatibility;
+import static org.apache.hudi.core.table.timeline.HoodieInstantTimeGenerator.instantTimePlusMillis;
 
 /**
  * KeepByTimeStrategy will return expired partitions by their lastCommitTime.

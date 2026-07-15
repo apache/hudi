@@ -19,9 +19,9 @@
 package org.apache.hudi.source.reader.function;
 
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
-import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.cdc.HoodieCDCFileSplit;
+import org.apache.hudi.core.table.cdc.HoodieCDCInferenceCase;
 import org.apache.hudi.source.split.HoodieCdcSourceSplit;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.table.format.InternalSchemaManager;

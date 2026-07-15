@@ -19,8 +19,8 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.HoodieTableVersion;
 import org.apache.hudi.table.HoodieTable;
 
 /**

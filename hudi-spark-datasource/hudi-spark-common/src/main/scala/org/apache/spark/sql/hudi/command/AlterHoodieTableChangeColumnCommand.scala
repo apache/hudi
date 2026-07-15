@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.HoodieSchemaConversionUtils
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCompatibility, HoodieSchemaUtils}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.core.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.spark.sql.{Row, SparkSession}

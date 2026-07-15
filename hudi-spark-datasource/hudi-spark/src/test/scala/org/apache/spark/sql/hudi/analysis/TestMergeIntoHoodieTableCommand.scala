@@ -21,8 +21,8 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.config.RecordMergeMode
-import org.apache.hudi.common.table.{HoodieTableConfig, PartialUpdateMode}
 import org.apache.hudi.config.HoodieIndexConfig
+import org.apache.hudi.core.table.{HoodieTableConfig, PartialUpdateMode}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.HoodieIndex
 

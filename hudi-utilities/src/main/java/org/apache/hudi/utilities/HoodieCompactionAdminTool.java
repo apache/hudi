@@ -23,7 +23,7 @@ import org.apache.hudi.client.CompactionAdminClient.RenameOpResult;
 import org.apache.hudi.client.CompactionAdminClient.ValidationOpResult;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import com.beust.jcommander.JCommander;

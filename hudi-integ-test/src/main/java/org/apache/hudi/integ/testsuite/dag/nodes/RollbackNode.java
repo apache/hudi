@@ -18,11 +18,11 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.core.table.HoodieTableMetaClient;
+import org.apache.hudi.core.table.checkpoint.Checkpoint;
+import org.apache.hudi.core.table.timeline.HoodieInstant;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
@@ -33,7 +33,7 @@ import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 
 import lombok.extern.slf4j.Slf4j;
 
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * A rollback node in the DAG helps to perform rollback operations.

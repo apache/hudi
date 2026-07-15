@@ -20,8 +20,8 @@
 package org.apache.hudi.client.timeline;
 
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 

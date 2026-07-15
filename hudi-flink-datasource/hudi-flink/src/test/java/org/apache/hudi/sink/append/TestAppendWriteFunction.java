@@ -19,8 +19,8 @@
 package org.apache.hudi.sink.append;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.core.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;

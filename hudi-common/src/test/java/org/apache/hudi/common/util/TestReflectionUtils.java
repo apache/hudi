@@ -19,9 +19,9 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.conflict.detection.DirectMarkerBasedDetectionStrategy;
-import org.apache.hudi.common.conflict.detection.EarlyConflictDetectionStrategy;
-import org.apache.hudi.common.conflict.detection.TimelineServerBasedDetectionStrategy;
+import org.apache.hudi.core.transaction.conflict.detection.DirectMarkerBasedDetectionStrategy;
+import org.apache.hudi.core.transaction.conflict.detection.EarlyConflictDetectionStrategy;
+import org.apache.hudi.core.transaction.conflict.detection.TimelineServerBasedDetectionStrategy;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;

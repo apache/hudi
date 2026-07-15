@@ -24,14 +24,14 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.read.BufferedRecordMerger;
-import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.core.read.BufferedRecordMerger;
+import org.apache.hudi.core.read.BufferedRecordMergerFactory;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.sink.buffer.RowDataBucket;
@@ -76,7 +76,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
-import static org.apache.hudi.common.util.HoodieRecordUtils.getOrderingFieldNames;
+import static org.apache.hudi.core.util.HoodieRecordUtils.getOrderingFieldNames;
 
 /**
  * Sink function to write the data to the underneath filesystem.

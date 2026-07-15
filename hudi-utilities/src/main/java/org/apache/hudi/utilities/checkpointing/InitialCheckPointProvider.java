@@ -31,7 +31,7 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.core.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * Provide the initial checkpoint for Hudi Streamer.

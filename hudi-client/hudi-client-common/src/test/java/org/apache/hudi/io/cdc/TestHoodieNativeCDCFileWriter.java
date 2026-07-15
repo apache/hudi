@@ -23,12 +23,12 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.log.LogFileCreationCallback;
-import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.core.table.log.LogFileCreationCallback;
+import org.apache.hudi.core.table.log.NativeLogFooterMetadata;
+import org.apache.hudi.core.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 

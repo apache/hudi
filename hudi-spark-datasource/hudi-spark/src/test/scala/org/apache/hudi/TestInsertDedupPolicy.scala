@@ -21,8 +21,8 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
-import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.core.table.HoodieTableConfig
 import org.apache.hudi.exception.HoodieUpsertException
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 

@@ -19,9 +19,9 @@ package org.apache.spark.sql.hudi.ddl
 
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, WriteOperationType}
-import org.apache.hudi.common.table.TableSchemaResolver
-import org.apache.hudi.common.table.timeline.HoodieInstant.State
-import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.core.table.TableSchemaResolver
+import org.apache.hudi.core.table.timeline.HoodieInstant.State
+import org.apache.hudi.core.table.timeline.HoodieTimeline
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 

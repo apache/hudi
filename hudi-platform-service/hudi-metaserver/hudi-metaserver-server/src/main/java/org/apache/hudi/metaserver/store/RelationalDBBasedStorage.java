@@ -18,8 +18,8 @@
 
 package org.apache.hudi.metaserver.store;
 
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.metaserver.store.bean.InstantBean;
 import org.apache.hudi.metaserver.store.bean.TableBean;
 import org.apache.hudi.metaserver.store.jdbc.WrapperDao;
@@ -36,10 +36,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.core.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.core.table.timeline.InstantComparison.compareTimestamps;
 
 /**
  * Metadata store based on relation database.

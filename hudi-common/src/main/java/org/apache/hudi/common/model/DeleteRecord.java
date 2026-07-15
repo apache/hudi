@@ -28,7 +28,7 @@ import java.io.Serializable;
 
 /**
  * Delete record is a combination of HoodieKey and ordering value.
- * The record is used for {@link org.apache.hudi.common.table.log.block.HoodieDeleteBlock}
+ * The record is used for {@link org.apache.hudi.core.table.log.block.HoodieDeleteBlock}
  * to support per-record deletions. The deletion block is always appended after the data block,
  * we need to keep the ordering val to combine with the data records when merging, or the data loss
  * may occur if there are intermediate deletions for the inputs

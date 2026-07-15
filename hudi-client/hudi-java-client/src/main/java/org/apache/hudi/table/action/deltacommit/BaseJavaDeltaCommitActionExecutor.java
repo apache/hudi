@@ -42,7 +42,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.util.HoodieRecordUtils.sortRecordsByRecordKey;
+import static org.apache.hudi.core.util.HoodieRecordUtils.sortRecordsByRecordKey;
 
 @Slf4j
 abstract class BaseJavaDeltaCommitActionExecutor<T> extends BaseJavaCommitActionExecutor<T> {

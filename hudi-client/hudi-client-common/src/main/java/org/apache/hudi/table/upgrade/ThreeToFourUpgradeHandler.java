@@ -21,18 +21,18 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.table.HoodieTableConfig;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
 import java.util.Collections;
 import java.util.Hashtable;
 import java.util.Map;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
-import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
+import static org.apache.hudi.core.table.HoodieTableConfig.DATABASE_NAME;
+import static org.apache.hudi.core.table.HoodieTableConfig.TABLE_CHECKSUM;
+import static org.apache.hudi.core.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 
 /**

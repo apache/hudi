@@ -19,7 +19,7 @@
 
 package org.apache.hudi.table.marker;
 
-import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.core.table.marker.MarkerType;
 import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy;
 
 /**

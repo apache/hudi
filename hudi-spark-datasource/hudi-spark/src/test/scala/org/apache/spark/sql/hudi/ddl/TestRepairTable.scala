@@ -20,9 +20,9 @@
 package org.apache.spark.sql.hudi.ddl
 
 import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, PARTITIONPATH_FIELD, RECORDKEY_FIELD}
-import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
+import org.apache.hudi.core.table.HoodieTableConfig
+import org.apache.hudi.core.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE
 
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase

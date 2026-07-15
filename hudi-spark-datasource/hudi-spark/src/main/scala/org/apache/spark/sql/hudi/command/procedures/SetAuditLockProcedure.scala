@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.client.transaction.lock.StorageLockClient
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.core.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
 
 import com.fasterxml.jackson.databind.ObjectMapper
