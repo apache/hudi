@@ -587,6 +587,13 @@
                     <source>${hudi.trino.java.version}</source>
                     <target>${hudi.trino.java.version}</target>
                     <release>${hudi.trino.java.version}</release>
+                    <!-- hudi-trino uses no annotation processors. The root pom declares Lombok in
+                         annotationProcessorPaths (parallel-build deflake), but Lombok does not run
+                         on the JDK 25 toolchain this module compiles with (it crashes javac with
+                         ExceptionInInitializerError: com.sun.tools.javac.code.TypeTag :: UNKNOWN),
+                         so disable processing and drop the inherited processor path. -->
+                    <proc>none</proc>
+                    <annotationProcessorPaths combine.self="override"/>
                 </configuration>
             </plugin>
             <plugin>
