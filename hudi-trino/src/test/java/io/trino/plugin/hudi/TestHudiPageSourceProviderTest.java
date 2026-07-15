@@ -15,6 +15,7 @@ package io.trino.plugin.hudi;
 
 import io.trino.metastore.HiveType;
 import io.trino.plugin.hive.HiveColumnHandle;
+import io.trino.spi.TrinoException;
 import io.trino.spi.type.BigintType;
 import io.trino.spi.type.Type;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
@@ -93,9 +94,10 @@ class TestHudiPageSourceProviderTest
                 createDummyHandle("COL_A", 0, HiveType.HIVE_INT, INTEGER), // This will mismatch
                 createDummyHandle("col_b", 1, HiveType.HIVE_STRING, VARCHAR));
 
-        // Perform remapping (case-sensitive) - Expect NPE because "COL_A" won't be found
+        // Perform remapping (case-sensitive) - "COL_A" won't be found
         assertThatThrownBy(() -> remapColumnIndicesToPhysical(fileSchema, requestedColumns, true))
-                .isInstanceOf(NullPointerException.class); // Check the exception type
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Column 'COL_A' not found in parquet file schema");
     }
 
     @Test
@@ -181,9 +183,10 @@ class TestHudiPageSourceProviderTest
                 // Not in schema
                 createDummyHandle("col_x", 1, HiveType.HIVE_STRING, VARCHAR));
 
-        // Perform remapping (case-insensitive) - Expect NPE because "col_x" won't be found
+        // Perform remapping (case-insensitive) - "col_x" won't be found
         assertThatThrownBy(() -> remapColumnIndicesToPhysical(fileSchema, requestedColumns, false))
-                .isInstanceOf(NullPointerException.class);
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Column 'col_x' not found in parquet file schema");
     }
 
     /**

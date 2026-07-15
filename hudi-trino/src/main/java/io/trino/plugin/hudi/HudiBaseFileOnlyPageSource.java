@@ -15,7 +15,7 @@ package io.trino.plugin.hudi;
 
 import com.google.common.collect.ImmutableList;
 import io.trino.plugin.hive.HiveColumnHandle;
-import io.trino.plugin.hudi.util.SynthesizedColumnHandler;
+import io.trino.plugin.hudi.util.PrefilledColumnValues;
 import io.trino.spi.Page;
 import io.trino.spi.block.Block;
 import io.trino.spi.connector.ConnectorPageSource;
@@ -38,8 +38,8 @@ public class HudiBaseFileOnlyPageSource
 {
     private final ConnectorPageSource dataPageSource;
     private final List<HiveColumnHandle> allOutputColumns;
-    private final SynthesizedColumnHandler synthesizedColumnHandler;
-    // Maps output channel to physical source channel, or -1 if synthesized
+    private final PrefilledColumnValues prefilledColumnValues;
+    // Maps output channel to physical source channel, or -1 if prefilled
     private final int[] physicalSourceChannelMap;
 
     public HudiBaseFileOnlyPageSource(
@@ -47,12 +47,13 @@ public class HudiBaseFileOnlyPageSource
             List<HiveColumnHandle> allOutputColumns,
             // Columns provided by dataPageSource
             List<HiveColumnHandle> dataColumns,
-            // Handler to manage synthesized/virtual in Hudi tables such as partition columns and metadata, i.e. file size (not hudi metadata)
-            SynthesizedColumnHandler synthesizedColumnHandler)
+            // Per-split constant values for columns not present in the data file, such as partition
+            // columns and Trino's hidden metadata columns, e.g. file size (not hudi metadata)
+            PrefilledColumnValues prefilledColumnValues)
     {
         this.dataPageSource = requireNonNull(dataPageSource, "dataPageSource is null");
         this.allOutputColumns = ImmutableList.copyOf(requireNonNull(allOutputColumns, "allOutputColumns is null"));
-        this.synthesizedColumnHandler = requireNonNull(synthesizedColumnHandler, "synthesizedColumnHandler is null");
+        this.prefilledColumnValues = requireNonNull(prefilledColumnValues, "prefilledColumnValues is null");
 
         // Create a mapping from the channel index in the output page to the channel index in the physicalDataPageSource's page
         this.physicalSourceChannelMap = new int[allOutputColumns.size()];
@@ -93,11 +94,6 @@ public class HudiBaseFileOnlyPageSource
         }
 
         int positionCount = physicalSourcePage.getPositionCount();
-        if (positionCount == 0 && synthesizedColumnHandler.getSynthesizedColumnCount() == 0) {
-            // If only physical columns and page is empty
-            return physicalSourcePage;
-        }
-
         if (allOutputColumns.isEmpty()) {
             // Forward the zero-block page so positionCount survives -- new Page(new Block[0]) would infer positionCount=0.
             return physicalSourcePage;
@@ -110,8 +106,8 @@ public class HudiBaseFileOnlyPageSource
                 outputBlocks[i] = physicalSourcePage.getBlock(physicalSourceChannelMap[i]);
             }
             else {
-                // Column is synthesized
-                outputBlocks[i] = synthesizedColumnHandler.createRleSynthesizedBlock(outputColumn, positionCount);
+                // Column is not in the data file; fill with the split's constant value
+                outputBlocks[i] = prefilledColumnValues.toRleBlock(outputColumn, positionCount);
             }
         }
         return SourcePage.create(new Page(outputBlocks));
