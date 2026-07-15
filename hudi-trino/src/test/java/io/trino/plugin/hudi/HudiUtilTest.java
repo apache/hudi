@@ -18,7 +18,6 @@ import io.trino.metastore.HiveType;
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 
-import java.io.UncheckedIOException;
 import java.util.List;
 
 import static io.trino.plugin.hudi.HudiUtil.constructSchema;
@@ -96,9 +95,13 @@ class HudiUtilTest
     @Test
     void testConstructSchemaWithEmptyColumns()
     {
-        assertThatThrownBy(() -> constructSchema(emptyList(), emptyList()))
-                .isInstanceOf(UncheckedIOException.class)
-                .hasMessageContaining("Failed to construct Avro schema");
+        // A count(*)-style query projects no columns; the schema is an empty record instead of an
+        // error (AvroHiveFileUtils.determineSchemaOrThrowException rejects an empty column list)
+        Schema schema = constructSchema(emptyList(), emptyList());
+
+        assertThat(schema.getType()).isEqualTo(Schema.Type.RECORD);
+        assertThat(schema.getName()).isEqualTo("baseRecord");
+        assertThat(schema.getFields()).isEmpty();
     }
 
     @Test

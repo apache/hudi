@@ -112,23 +112,66 @@ public class HudiAvroSerializer
     private final List<HiveColumnHandle> columnHandles;
     private final List<Type> columnTypes;
     private final Schema schema;
+    // serialize() writes page channel i at record position channelToFieldPosition[i]. -1 marks a
+    // hidden column: a Trino synthesized metadata column ($path, $file_size, $file_modified_time,
+    // $partition) with no counterpart in the data file or table schema -- its value is prefilled
+    // per split from PrefilledColumnValues -- so it has no record field and its channel is skipped.
+    private final int[] channelToFieldPosition;
 
     public HudiAvroSerializer(List<HiveColumnHandle> columnHandles, PrefilledColumnValues prefilledColumnValues)
     {
         this.columnHandles = columnHandles;
         this.columnTypes = columnHandles.stream().map(HiveColumnHandle::getType).toList();
-        // Fetches projected schema
+        // The record schema carries only columns that exist in the data: hidden (synthesized
+        // metadata) columns are answered from the split by PrefilledColumnValues, not read from
+        // the file, and cannot be described as Avro fields
         this.schema = constructSchema(columnHandles.stream().filter(ch -> !ch.isHidden()).map(HiveColumnHandle::getName).toList(),
                 columnHandles.stream().filter(ch -> !ch.isHidden()).map(HiveColumnHandle::getHiveType).toList());
         this.prefilledColumnValues = prefilledColumnValues;
+        // With hidden columns excluded from the schema, the remaining channels map to sequential
+        // field positions; hidden channels map to -1
+        int[] mapping = new int[columnHandles.size()];
+        int fieldPosition = 0;
+        for (int i = 0; i < columnHandles.size(); i++) {
+            mapping[i] = columnHandles.get(i).isHidden() ? -1 : fieldPosition++;
+        }
+        this.channelToFieldPosition = mapping;
+    }
+
+    /**
+     * Builds a serializer whose {@link #serialize} records carry {@code recordSchema} -- the exact
+     * schema hudi-common tracks for the records of this read (the file-group reader's required
+     * schema) -- instead of a schema reconstructed from the projection's Hive types. The
+     * reconstruction differs from the table's real schema (every Hive column becomes a nullable
+     * union, fields follow projection order), and payload-based merging round-trips the record
+     * through Avro BINARY with the tracked schema ({@code BaseAvroPayload}), where any structural
+     * difference misaligns the decode and yields garbage values. Page channels are matched to
+     * record fields BY NAME, so the projection may order columns differently from the schema;
+     * every projected column must be a field of {@code recordSchema}.
+     */
+    public HudiAvroSerializer(List<HiveColumnHandle> columnHandles, PrefilledColumnValues prefilledColumnValues, Schema recordSchema)
+    {
+        this.columnHandles = columnHandles;
+        this.columnTypes = columnHandles.stream().map(HiveColumnHandle::getType).toList();
+        this.schema = recordSchema;
+        this.prefilledColumnValues = prefilledColumnValues;
+        int[] mapping = new int[columnHandles.size()];
+        for (int i = 0; i < columnHandles.size(); i++) {
+            mapping[i] = getFieldFromSchema(columnHandles.get(i).getName(), recordSchema).pos();
+        }
+        this.channelToFieldPosition = mapping;
     }
 
     public IndexedRecord serialize(Page sourcePage, int position)
     {
         IndexedRecord record = new GenericData.Record(schema);
         for (int i = 0; i < columnTypes.size(); i++) {
-            Object value = getValue(sourcePage, i, position);
-            record.put(i, value);
+            int fieldPosition = channelToFieldPosition[i];
+            if (fieldPosition < 0) {
+                // hidden (synthesized) column: prefilled per split, absent from the record schema
+                continue;
+            }
+            record.put(fieldPosition, getValue(sourcePage, i, position));
         }
         return record;
     }

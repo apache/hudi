@@ -272,6 +272,12 @@ public final class HudiUtil
 
     public static Schema constructSchema(List<String> columnNames, List<HiveType> columnTypes)
     {
+        // A count(*)-style query projects no columns at all; determineSchemaOrThrowException rejects
+        // an empty column list, so build the empty record schema directly.
+        if (columnNames.isEmpty()) {
+            return SchemaBuilder.record("baseRecord").fields().endRecord();
+        }
+
         // Convert lists into the format expected by the utility class
         String columnNamesString = String.join(",", columnNames);
         String columnTypesString = columnTypes.stream()
@@ -651,8 +657,13 @@ public final class HudiUtil
         // Delete markers and the operation field decide record deletion at merge time
         requiredColumnNames.add(HOODIE_IS_DELETED_FIELD);
         requiredColumnNames.add(OPERATION_METADATA_FIELD);
-        String deleteKey = tableConfig.getProps().getProperty(DELETE_KEY);
-        String deleteMarker = tableConfig.getProps().getProperty(DELETE_MARKER);
+        // Resolve the delete key/marker the way the file-group reader does (ConfigUtils.getMergeProps):
+        // table merge properties first -- v9+ tables persist these PREFIXED (hoodie.record.merge.property.*)
+        // and getTableMergeProperties() strips the prefix and bridges legacy delete payloads -- falling back
+        // to the raw table props, where pre-prefix tables and reader/write configs carry the plain keys.
+        Map<String, String> tableMergeProps = tableConfig.getTableMergeProperties();
+        String deleteKey = tableMergeProps.getOrDefault(DELETE_KEY, tableConfig.getProps().getProperty(DELETE_KEY));
+        String deleteMarker = tableMergeProps.getOrDefault(DELETE_MARKER, tableConfig.getProps().getProperty(DELETE_MARKER));
         // DeleteContext only honors a custom delete key when the marker value is also set
         if (!StringUtils.isNullOrEmpty(deleteKey) && !StringUtils.isNullOrEmpty(deleteMarker)) {
             requiredColumnNames.add(deleteKey);
@@ -715,14 +726,19 @@ public final class HudiUtil
     /**
      * Builds {@link HiveColumnHandle}s, preserving physical (data-column) index, for the data columns whose names
      * appear in {@code columnNames}. Names that are not data columns (e.g. Hudi meta fields) or whose types are not
-     * supported by the storage format are skipped.
+     * supported by the storage format are skipped. Matching is case-insensitive: predicted merge columns carry the
+     * table schema's field casing (e.g. the {@code Op} delete key of DMS tables) while metastore column names are
+     * lowercased.
      */
     private static List<HiveColumnHandle> buildColumnHandles(Table table, TypeManager typeManager, Set<String> columnNames, HiveTimestampPrecision timestampPrecision)
     {
+        Set<String> lowercaseColumnNames = columnNames.stream()
+                .map(name -> name.toLowerCase(Locale.ROOT))
+                .collect(Collectors.toSet());
         ImmutableList.Builder<HiveColumnHandle> columns = ImmutableList.builder();
         int hiveColumnIndex = 0;
         for (Column field : table.getDataColumns()) {
-            if (columnNames.contains(field.getName())) {
+            if (lowercaseColumnNames.contains(field.getName().toLowerCase(Locale.ROOT))) {
                 HiveType hiveType = field.getType();
                 // ignore unsupported types rather than failing
                 if (typeSupported(hiveType.getTypeInfo(), table.getStorage().getStorageFormat())) {
