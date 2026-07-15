@@ -20,11 +20,16 @@ package org.apache.hudi.timeline.service;
 
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
+import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
@@ -61,6 +66,7 @@ import java.util.UUID;
 
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.BASEPATH_PARAM;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.LAST_INSTANT_URL;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCompaction;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCleanFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -94,6 +100,10 @@ class TestUiApi extends HoodieCommonTestHarness {
   private static final String SCHEMA_B =
       "{\"type\":\"record\",\"name\":\"R\",\"fields\":[{\"name\":\"id\",\"type\":\"long\"},"
           + "{\"name\":\"name\",\"type\":[\"null\",\"string\"],\"default\":null}]}";
+  private static final String SCHEMA_C =
+      "{\"type\":\"record\",\"name\":\"R\",\"fields\":[{\"name\":\"id\",\"type\":\"long\"},"
+          + "{\"name\":\"name\",\"type\":[\"null\",\"string\"],\"default\":null},"
+          + "{\"name\":\"amount\",\"type\":[\"null\",\"double\"],\"default\":null}]}";
 
   private Configuration configuration;
   private TimelineService server;
@@ -164,9 +174,10 @@ class TestUiApi extends HoodieCommonTestHarness {
     return commitMetadata(mc, basePath, ts, extra);
   }
 
-  // Writes an EMPTY requested instant file straight into the timeline directory for actions with no
-  // HoodieTestTable helper. The instants/all route only lists instants, so the content is never read.
-  private void createEmptyRequestedInstantFile(HoodieTableMetaClient mc, String ts, String extension)
+  // Writes an EMPTY instant file (any requested/inflight extension) straight into the timeline
+  // directory for actions with no HoodieTestTable helper. The instants/all route only lists instants,
+  // and the production inflight files of plan-carrying actions are empty by design.
+  private void createEmptyInstantFile(HoodieTableMetaClient mc, String ts, String extension)
       throws IOException {
     Path timelineDir = Paths.get(mc.getTimelinePath().toUri().getPath());
     Files.createDirectories(timelineDir);
@@ -262,8 +273,8 @@ class TestUiApi extends HoodieCommonTestHarness {
     // (logcompaction -> deltacommit, clustering -> replacecommit). No HoodieTestTable helper writes a
     // requested logcompaction and the clustering helper needs Avro metadata, so write empty requested
     // instant files directly; the instants/all route never reads their content.
-    createEmptyRequestedInstantFile(mc, logCompactionTs, HoodieTimeline.REQUESTED_LOG_COMPACTION_EXTENSION);
-    createEmptyRequestedInstantFile(mc, clusteringTs, HoodieTimeline.REQUESTED_CLUSTERING_COMMIT_EXTENSION);
+    createEmptyInstantFile(mc, logCompactionTs, HoodieTimeline.REQUESTED_LOG_COMPACTION_EXTENSION);
+    createEmptyInstantFile(mc, clusteringTs, HoodieTimeline.REQUESTED_CLUSTERING_COMMIT_EXTENSION);
 
     JsonNode root = getJsonOk(UI_TIMELINE_URL, params(BASEPATH_PARAM, base));
     JsonNode instants = root.get("instants");
@@ -409,6 +420,76 @@ class TestUiApi extends HoodieCommonTestHarness {
   }
 
   @Test
+  void testGetInstantDetailsCompletedReplaceCommit() throws Exception {
+    HoodieTableMetaClient mc = initTable("instant-replacecommit");
+    String base = mc.getBasePath().toString();
+    String ts = "20240101000025";
+    // A completed replacecommit is avro HoodieReplaceCommitMetadata on disk; reading it as plain
+    // HoodieCommitMetadata previously 500ed on the avro record-name mismatch. The POJO carries
+    // partitionToReplaceFileIds, surfaced directly (POJO, so no avro->Map conversion).
+    HoodieReplaceCommitMetadata completeReplaceMetadata = new HoodieReplaceCommitMetadata();
+    completeReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
+    completeReplaceMetadata.addReplaceFileId("par", "file-1");
+    HoodieTestTable.of(mc).addReplaceCommit(ts, Option.empty(), Option.empty(), completeReplaceMetadata);
+
+    // A completed replacecommit surfaces in the folded active timeline as action=replacecommit
+    // (unlike compaction, which completes as commit).
+    JsonNode root = getJsonOk(UI_INSTANT_URL, params(BASEPATH_PARAM, base, INSTANT_PARAM, ts,
+        INSTANT_ACTION_PARAM, "replacecommit", INSTANT_STATE_PARAM, "COMPLETED"));
+    JsonNode replaced = root.get("partitionToReplaceFileIds");
+    assertNotNull(replaced, root.toString());
+    assertEquals("file-1", replaced.get("par").get(0).asText(), root.toString());
+  }
+
+  @Test
+  void testGetInstantDetailsCompletedIndexing() throws Exception {
+    HoodieTableMetaClient mc = initTable("instant-indexing");
+    String base = mc.getBasePath().toString();
+    String ts = "20240101000026";
+    // No HoodieTestTable helper writes an indexing instant. Lay down the empty requested+inflight
+    // pending files, then complete it exactly as RunIndexActionExecutor does. A completed indexing
+    // instant stores avro HoodieIndexCommitMetadata, not HoodieCommitMetadata; reading it as the
+    // latter previously 500ed.
+    createEmptyInstantFile(mc, ts, HoodieTimeline.REQUESTED_INDEX_COMMIT_EXTENSION);
+    createEmptyInstantFile(mc, ts, HoodieTimeline.INFLIGHT_INDEX_COMMIT_EXTENSION);
+    HoodieIndexPartitionInfo partitionInfo =
+        new HoodieIndexPartitionInfo(1, "column_stats", ts, Collections.emptyMap());
+    HoodieIndexCommitMetadata indexCommitMetadata = HoodieIndexCommitMetadata.newBuilder()
+        .setVersion(1).setIndexPartitionInfos(Collections.singletonList(partitionInfo)).build();
+    // saveAsComplete checks the inflight file straight against storage; reloading the active timeline
+    // makes it observe the just-written pending files.
+    mc.reloadActiveTimeline().saveAsComplete(false,
+        mc.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.INDEXING_ACTION, ts),
+        Option.of(indexCommitMetadata));
+
+    JsonNode root = getJsonOk(UI_INSTANT_URL, params(BASEPATH_PARAM, base, INSTANT_PARAM, ts,
+        INSTANT_ACTION_PARAM, "indexing", INSTANT_STATE_PARAM, "COMPLETED"));
+    // The avro metadata is converted to a Map with avro field names.
+    JsonNode infos = root.get("indexPartitionInfos");
+    assertNotNull(infos, root.toString());
+    assertTrue(infos.isArray() && infos.size() >= 1, root.toString());
+    assertEquals("column_stats", infos.get(0).get("metadataPartitionPath").asText(), root.toString());
+  }
+
+  @Test
+  void testGetInstantDetailsInflightCompactionReturnsPlan() throws Exception {
+    HoodieTableMetaClient mc = initTable("instant-inflight-compaction");
+    String base = mc.getBasePath().toString();
+    String ts = "20240101000027";
+    // addRequestedCompaction writes a real HoodieCompactionPlan into the requested file;
+    // createInflightCompaction writes the production-like EMPTY inflight file. This pins the
+    // requested-twin read: the inflight compaction file is empty by design, so reading the plan from
+    // the inflight instant previously 500ed - it must be read from the requested twin.
+    HoodieTestTable.of(mc).addRequestedCompaction(ts);
+    createInflightCompaction(mc, ts);
+
+    JsonNode root = getJsonOk(UI_INSTANT_URL, params(BASEPATH_PARAM, base, INSTANT_PARAM, ts,
+        INSTANT_ACTION_PARAM, "compaction", INSTANT_STATE_PARAM, "INFLIGHT"));
+    assertTrue(root.has("operations"), "inflight compaction must expose its plan operations: " + root);
+    assertTrue(root.get("operations").isArray());
+  }
+
+  @Test
   void testGetInstantDetailsMalformedStateOrActionReturns400() throws Exception {
     HoodieTableMetaClient mc = initTable("instant-bad-state");
     String base = mc.getBasePath().toString();
@@ -494,14 +575,21 @@ class TestUiApi extends HoodieCommonTestHarness {
     HoodieTableMetaClient mc = initTable("schema-history");
     String base = mc.getBasePath().toString();
     HoodieTestTable table = HoodieTestTable.of(mc);
-    // schema A, A, B: only two distinct schema states -> baseline then change.
+    // schema A, A, B, then C via a replacecommit: baseline, change, change (the A,A repeat is folded).
     table.addCommit("20240101000101", Option.of(commitMetadataWithSchema(mc, base, "20240101000101", SCHEMA_A)));
     table.addCommit("20240101000102", Option.of(commitMetadataWithSchema(mc, base, "20240101000102", SCHEMA_A)));
     table.addCommit("20240101000103", Option.of(commitMetadataWithSchema(mc, base, "20240101000103", SCHEMA_B)));
+    // A schema change delivered via an insert_overwrite replacecommit: its completed file is avro
+    // HoodieReplaceCommitMetadata, which getSchemaHistory must read as the POJO or the SCHEMA_C change
+    // is silently skipped.
+    HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
+    replaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
+    replaceMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, SCHEMA_C);
+    table.addReplaceCommit("20240101000104", Option.empty(), Option.empty(), replaceMetadata);
 
     JsonNode root = getJsonOk(UI_SCHEMA_URL, params(BASEPATH_PARAM, base));
     JsonNode history = root.get("history");
-    assertEquals(2, history.size(), root.toString());
+    assertEquals(3, history.size(), root.toString());
 
     JsonNode baseline = history.get(0);
     assertEquals("baseline", baseline.get("type").asText());
@@ -514,6 +602,13 @@ class TestUiApi extends HoodieCommonTestHarness {
     assertEquals(SCHEMA_B, change.get("schema").asText());
     assertEquals("20240101000103", change.get("instant").asText());
     assertFalse(isJsonNull(change.get("completionTime")));
+
+    // The insert_overwrite schema change is not skipped: it lands as a third "change" entry.
+    JsonNode overwrite = history.get(2);
+    assertEquals("change", overwrite.get("type").asText());
+    assertEquals(SCHEMA_C, overwrite.get("schema").asText());
+    assertEquals("20240101000104", overwrite.get("instant").asText());
+    assertFalse(isJsonNull(overwrite.get("completionTime")));
   }
 
   @Test

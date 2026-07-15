@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.timeline.dto.InstantDTO;
 import org.apache.hudi.common.table.timeline.dto.TimelineDTO;
-import org.apache.hudi.common.table.timeline.dto.ui.UiTimelineDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -44,6 +43,7 @@ import org.apache.hudi.timeline.service.handlers.FileSliceHandler;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 import org.apache.hudi.timeline.service.handlers.RemotePartitionerHandler;
 import org.apache.hudi.timeline.service.handlers.TimelineHandler;
+import org.apache.hudi.timeline.service.ui.UiTimelineDTO;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;

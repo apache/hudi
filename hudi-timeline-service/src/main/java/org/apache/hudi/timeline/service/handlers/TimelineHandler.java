@@ -21,6 +21,7 @@ package org.apache.hudi.timeline.service.handlers;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -29,6 +30,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.schema.internal.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -37,13 +39,13 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.dto.InstantDTO;
 import org.apache.hudi.common.table.timeline.dto.TimelineDTO;
-import org.apache.hudi.common.table.timeline.dto.ui.UiTimelineDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
+import org.apache.hudi.timeline.service.ui.UiTimelineDTO;
 
 import io.javalin.http.BadRequestResponse;
 import io.javalin.http.NotFoundResponse;
@@ -102,13 +104,27 @@ public class TimelineHandler extends Handler {
 
   private HoodieCommitMetadata readCommitMetadata(CommitMetadataSerDe serde, HoodieTimeline timeline,
                                                   HoodieInstant instant) throws IOException {
-    return readInstantContent(timeline, instant,
-        in -> serde.deserialize(instant, in, () -> timeline.isEmpty(instant), HoodieCommitMetadata.class));
+    return readAs(serde, timeline, instant, HoodieCommitMetadata.class);
   }
 
-  private <T> T readNonEmpty(CommitMetadataSerDe serde, HoodieTimeline timeline, HoodieInstant instant, Class<T> clazz)
+  // The empty-tolerant supplier () -> timeline.isEmpty(instant) is correct here: a legitimately empty
+  // pending file (an inflight twin, or an insert_overwrite replacecommit with an empty requested file)
+  // deserializes to an empty instance instead of erroring, while a genuinely corrupt non-empty file
+  // still surfaces as an error.
+  private <T> T readAs(CommitMetadataSerDe serde, HoodieTimeline timeline, HoodieInstant instant, Class<T> clazz)
       throws IOException {
-    return readInstantContent(timeline, instant, in -> serde.deserialize(instant, in, () -> false, clazz));
+    return readInstantContent(timeline, instant,
+        in -> serde.deserialize(instant, in, () -> timeline.isEmpty(instant), clazz));
+  }
+
+  // Plans for table-service actions live in the requested file; the inflight files of these
+  // plan-carrying actions (clean, rollback, restore, compaction, logcompaction, clustering,
+  // replacecommit, indexing) are empty by design. Read the requested twin so an in-progress instant
+  // that the active timeline folds to INFLIGHT still surfaces its plan. Only timeline-resolved fields
+  // flow into the twin, so the path-traversal defense on the resolved instant is preserved.
+  private HoodieInstant requestedTwin(HoodieTableMetaClient metaClient, HoodieInstant instant) {
+    return instant.isRequested() ? instant
+        : metaClient.createNewInstant(HoodieInstant.State.REQUESTED, instant.getAction(), instant.requestedTime());
   }
 
   public List<InstantDTO> getLastInstant(String basePath) {
@@ -162,38 +178,44 @@ public class TimelineHandler extends Handler {
           break;
         case HoodieTimeline.CLEAN_ACTION:
           result = instant.isCompleted()
-              ? readNonEmpty(serde, activeTimeline, instant, HoodieCleanMetadata.class)
-              : readNonEmpty(serde, activeTimeline, instant, HoodieCleanerPlan.class);
+              ? readAs(serde, activeTimeline, instant, HoodieCleanMetadata.class)
+              : readAs(serde, activeTimeline, requestedTwin(metaClient, instant), HoodieCleanerPlan.class);
           break;
         case HoodieTimeline.ROLLBACK_ACTION:
           result = instant.isCompleted()
-              ? readNonEmpty(serde, activeTimeline, instant, HoodieRollbackMetadata.class)
-              : readNonEmpty(serde, activeTimeline, instant, HoodieRollbackPlan.class);
+              ? readAs(serde, activeTimeline, instant, HoodieRollbackMetadata.class)
+              : readAs(serde, activeTimeline, requestedTwin(metaClient, instant), HoodieRollbackPlan.class);
           break;
         case HoodieTimeline.RESTORE_ACTION:
           result = instant.isCompleted()
-              ? readNonEmpty(serde, activeTimeline, instant, HoodieRestoreMetadata.class)
-              : readNonEmpty(serde, activeTimeline, instant, HoodieRestorePlan.class);
+              ? readAs(serde, activeTimeline, instant, HoodieRestoreMetadata.class)
+              : readAs(serde, activeTimeline, requestedTwin(metaClient, instant), HoodieRestorePlan.class);
           break;
         case HoodieTimeline.SAVEPOINT_ACTION:
-          result = readNonEmpty(serde, activeTimeline, instant, HoodieSavepointMetadata.class);
+          // Savepoint has no requested state (inflight then completed); its inflight file is empty and
+          // now deserializes to an empty instance, so always read the instant itself.
+          result = readAs(serde, activeTimeline, instant, HoodieSavepointMetadata.class);
           break;
         case HoodieTimeline.COMPACTION_ACTION:
         case HoodieTimeline.LOG_COMPACTION_ACTION:
           result = instant.isCompleted()
               ? readCommitMetadata(serde, activeTimeline, instant)
-              : readNonEmpty(serde, activeTimeline, instant, HoodieCompactionPlan.class);
+              : readAs(serde, activeTimeline, requestedTwin(metaClient, instant), HoodieCompactionPlan.class);
           break;
         case HoodieTimeline.REPLACE_COMMIT_ACTION:
         case HoodieTimeline.CLUSTERING_ACTION:
+          // A completed replacecommit/clustering file is avro HoodieReplaceCommitMetadata on disk;
+          // reading it as avro HoodieCommitMetadata fails avro record-name resolution. Read the POJO
+          // HoodieReplaceCommitMetadata: the serde deserializes the avro record and converts it to POJO.
           result = instant.isCompleted()
-              ? readCommitMetadata(serde, activeTimeline, instant)
-              : readNonEmpty(serde, activeTimeline, instant, HoodieRequestedReplaceMetadata.class);
+              ? readAs(serde, activeTimeline, instant, HoodieReplaceCommitMetadata.class)
+              : readAs(serde, activeTimeline, requestedTwin(metaClient, instant), HoodieRequestedReplaceMetadata.class);
           break;
         case HoodieTimeline.INDEXING_ACTION:
+          // A completed indexing instant stores avro HoodieIndexCommitMetadata, not HoodieCommitMetadata.
           result = instant.isCompleted()
-              ? readCommitMetadata(serde, activeTimeline, instant)
-              : readNonEmpty(serde, activeTimeline, instant, HoodieIndexPlan.class);
+              ? readAs(serde, activeTimeline, instant, HoodieIndexCommitMetadata.class)
+              : readAs(serde, activeTimeline, requestedTwin(metaClient, instant), HoodieIndexPlan.class);
           break;
         default:
           throw new BadRequestResponse("Unsupported action: " + action);
@@ -251,7 +273,14 @@ public class TimelineHandler extends Handler {
 
     for (HoodieInstant instant : scanned) {
       try {
-        HoodieCommitMetadata commitMetadata = readCommitMetadata(serde, commitsTimeline, instant);
+        // Mirror TimelineUtils.getCommitMetadata: a completed replacecommit/clustering file is avro
+        // HoodieReplaceCommitMetadata, not HoodieCommitMetadata. Read it as the POJO (which extends
+        // HoodieCommitMetadata) or a schema change delivered by insert_overwrite is silently skipped.
+        HoodieCommitMetadata commitMetadata =
+            (instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)
+                || instant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION))
+                ? readAs(serde, commitsTimeline, instant, HoodieReplaceCommitMetadata.class)
+                : readCommitMetadata(serde, commitsTimeline, instant);
         String schemaStr = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
         if (schemaStr != null && !schemaStr.isEmpty() && !schemaStr.equals(previousSchema)) {
           Map<String, String> entry = new LinkedHashMap<>();

@@ -110,13 +110,13 @@
   };
 
   function displayInstantDetails(item) {
-    var html = '<p>Start: ' + item.start + '</p>';
+    var html = '<p>Start: ' + escapeHtml(String(item.start)) + '</p>';
     if (item.end !== undefined) {
-      html += '<p>End: ' + item.end + '</p>';
+      html += '<p>End: ' + escapeHtml(String(item.end)) + '</p>';
       var duration = localize(timeDiff(item.end, item.start));
-      html += '<p>Duration: ' + duration + '</p>';
+      html += '<p>Duration: ' + escapeHtml(duration) + '</p>';
     }
-    html += '<p>Instant: ' + item.content + '</p>';
+    html += '<p>Instant: ' + escapeHtml(item.content) + '</p>';
     return html;
   }
 
@@ -374,7 +374,7 @@
           var groupId = comparableActionToGroupId[comparableAction] !== undefined
             ? comparableActionToGroupId[comparableAction] : -1;
 
-          var effectiveRequestTs = (requestTs === '00000000000000000') ? completionTs : requestTs;
+          var effectiveRequestTs = /^0+$/.test(requestTs) ? completionTs : requestTs;
           var requestTsFormatted = parseHudiTimestamp(effectiveRequestTs);
           var completionTsFormatted = completionTs ? parseHudiTimestamp(completionTs) : null;
 
@@ -1170,14 +1170,23 @@
     }
   });
 
-  // Parses a Hudi timestamp (yyyyMMddHHmmssSSS) to a readable date string.
+  // Parses a Hudi timestamp (17-digit yyyyMMddHHmmssSSS or legacy 14-digit
+  // yyyyMMddHHmmss) to a readable date string.
   function parseHudiTimestamp(ts) {
     if (!ts) return ts;
     var pattern = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{3})$/;
     var match = ts.match(pattern);
-    if (!match) return ts;
-    return match[1] + '-' + match[2] + '-' + match[3]
-      + ' ' + match[4] + ':' + match[5] + ':' + match[6];
+    if (match) {
+      return match[1] + '-' + match[2] + '-' + match[3]
+        + ' ' + match[4] + ':' + match[5] + ':' + match[6];
+    }
+    var legacyPattern = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/;
+    var legacyMatch = ts.match(legacyPattern);
+    if (legacyMatch) {
+      return legacyMatch[1] + '-' + legacyMatch[2] + '-' + legacyMatch[3]
+        + ' ' + legacyMatch[4] + ':' + legacyMatch[5] + ':' + legacyMatch[6];
+    }
+    return ts;
   }
 
   // Computes the time difference between two date strings.
