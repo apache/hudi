@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.table.timeline.dto.ui;
+package org.apache.hudi.timeline.service.ui;
 
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 

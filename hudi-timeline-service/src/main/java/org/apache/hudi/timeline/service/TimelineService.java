@@ -126,7 +126,8 @@ public class TimelineService {
     public boolean enableMarkerRequests = false;
 
     @Builder.Default
-    @Parameter(names = {"--enable-ui"}, description = "Enable the Timeline UI: the /ui page, /ui/static assets, and /ui/api endpoints")
+    @Parameter(names = {"--enable-ui"}, description = "Enable the Timeline UI: the /ui page, /ui/static assets, and /ui/api endpoints."
+        + " The timeline service has no authentication; enable the UI only on trusted networks.")
     public boolean enableUi = false;
 
     @Builder.Default
