@@ -65,6 +65,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BL
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 
 @Slf4j
@@ -95,8 +96,42 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     if (indexType.equals(PARTITION_NAME_SECONDARY_INDEX) || indexType.equals(PARTITION_NAME_BLOOM_FILTERS)
         || indexType.equals(PARTITION_NAME_COLUMN_STATS)) {
       createExpressionOrSecondaryIndex(metaClient, userIndexName, indexType, columns, options, tableProperties);
+    } else if (indexType.equals(PARTITION_NAME_VECTOR_INDEX)) {
+      createVectorIndex(metaClient, userIndexName, columns, options);
     } else {
       createRecordIndex(metaClient, userIndexName, indexType, options);
+    }
+  }
+
+  private void createVectorIndex(HoodieTableMetaClient metaClient,
+                                 String userIndexName,
+                                 Map<String, Map<String, String>> columns,
+                                 Map<String, String> options) throws Exception {
+    HoodieIndexDefinition indexDefinition = HoodieIndexUtils.getVectorIndexDefinition(metaClient, userIndexName, columns, options);
+    if (!metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()
+        || !metaClient.getIndexForMetadataPartition(indexDefinition.getIndexName()).isPresent()) {
+      log.info("Index definition is not present. Registering index: {} of type: {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
+      register(metaClient, indexDefinition);
+    }
+
+    ValidationUtils.checkState(metaClient.getIndexMetadata().isPresent(), "Index definition is not present");
+
+    log.info("Creating vector index {}", indexDefinition);
+    Option<HoodieIndexDefinition> indexDefinitionOpt = Option.of(indexDefinition);
+    try (SparkRDDWriteClient writeClient = getWriteClient(metaClient, indexDefinitionOpt, Option.of(PARTITION_NAME_VECTOR_INDEX), Collections.emptyMap())) {
+      HoodieIndexVersion currentVersion = HoodieIndexVersion.getCurrentVersion(
+          metaClient.getTableConfig().getTableVersion(), MetadataPartitionType.VECTOR_INDEX);
+      Option<String> indexInstantTime = doSchedule(
+          writeClient, metaClient, indexDefinition.getIndexName(), MetadataPartitionType.VECTOR_INDEX, currentVersion);
+      if (indexInstantTime.isPresent()) {
+        writeClient.index(indexInstantTime.get());
+      } else {
+        throw new HoodieMetadataIndexException("Scheduling of index action did not return any instant.");
+      }
+    } catch (Throwable t) {
+      log.error("Error while creating vector index: {}. Index will be dropped.", indexDefinition.getIndexName(), t);
+      drop(metaClient, indexDefinition.getIndexName(), Option.of(indexDefinition));
+      throw t;
     }
   }
 
