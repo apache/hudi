@@ -185,8 +185,9 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
                                       sqlConf: SQLConf,
                                       options: Map[String, String],
                                       hadoopConf: Configuration): Option[SparkColumnarFileReader] = {
-    // Vortex requires Java 17 (vortex-jni ships Java 17 bytecode) and is wired only through the
-    // Spark 4.x adapters. Spark 3.5 runs on Java 11, where SparkVortexReaderBase is not compiled.
+    // The Vortex datasource reader is wired only through the Spark 4.x adapters. This adapter must
+    // stay compilable on the Java 11 Spark 3.5 CI builds, where SparkVortexReaderBase is excluded
+    // (vortex-jni ships Java 17 bytecode), so it cannot reference the class even on JDK 17.
     None
   }
 

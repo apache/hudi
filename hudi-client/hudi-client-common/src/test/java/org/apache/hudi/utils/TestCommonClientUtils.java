@@ -24,6 +24,8 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.util.CommonClientUtils;
@@ -116,14 +118,36 @@ class TestCommonClientUtils {
   }
 
   private static Stream<Arguments> provideWriteVersionNativeLogExpectations() {
-    // Native log format is the default for write version >= TEN, except for Lance base files.
+    // Native log format is the default for write version >= TEN, except for Lance and Vortex base files.
     return Stream.of(
         Arguments.of(HoodieTableVersion.SIX, HoodieFileFormat.PARQUET, false),
         Arguments.of(HoodieTableVersion.EIGHT, HoodieFileFormat.PARQUET, false),
         Arguments.of(HoodieTableVersion.NINE, HoodieFileFormat.PARQUET, false),
         Arguments.of(HoodieTableVersion.TEN, HoodieFileFormat.PARQUET, true),
         Arguments.of(HoodieTableVersion.TEN, HoodieFileFormat.ORC, true),
-        Arguments.of(HoodieTableVersion.TEN, HoodieFileFormat.LANCE, false)
+        Arguments.of(HoodieTableVersion.TEN, HoodieFileFormat.LANCE, false),
+        Arguments.of(HoodieTableVersion.TEN, HoodieFileFormat.VORTEX, false)
+    );
+  }
+
+  @ParameterizedTest(name = "Base file format {0} should use log block type {1}")
+  @MethodSource("provideLogBlockTypeExpectations")
+  void testGetLogBlockType(HoodieFileFormat baseFileFormat, HoodieLogBlock.HoodieLogBlockType expected) {
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(writeConfig.getLogDataBlockFormat()).thenReturn(Option.empty());
+    when(tableConfig.getBaseFileFormat()).thenReturn(baseFileFormat);
+
+    assertEquals(expected, CommonClientUtils.getLogBlockType(writeConfig, tableConfig));
+  }
+
+  private static Stream<Arguments> provideLogBlockTypeExpectations() {
+    return Stream.of(
+        Arguments.of(HoodieFileFormat.PARQUET, HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK),
+        Arguments.of(HoodieFileFormat.ORC, HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK),
+        Arguments.of(HoodieFileFormat.LANCE, HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK),
+        Arguments.of(HoodieFileFormat.VORTEX, HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK),
+        Arguments.of(HoodieFileFormat.HFILE, HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK)
     );
   }
 

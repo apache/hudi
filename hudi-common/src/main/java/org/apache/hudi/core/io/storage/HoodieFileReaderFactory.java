@@ -99,6 +99,8 @@ public class HoodieFileReaderFactory {
         return newOrcFileReader(pathInfo.getPath());
       case LANCE:
         return newLanceFileReader(hoodieConfig, pathInfo.getPath());
+      case VORTEX:
+        return newVortexFileReader(hoodieConfig, pathInfo.getPath());
       default:
         throw new UnsupportedOperationException(format + " format not supported yet.");
     }

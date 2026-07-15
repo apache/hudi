@@ -20,10 +20,14 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.client.SparkTaskContextSupplier;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.core.io.storage.HoodieFileReader;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -135,6 +139,40 @@ public class TestVortexReaderWriterRoundTrip {
           count++;
         }
         assertEquals(3, count, "projected rows");
+      }
+    }
+  }
+
+  @Test
+  public void testFactoryStoragePathInfoDispatch() throws Exception {
+    SparkTaskContextSupplier taskContextSupplier = new SparkTaskContextSupplier();
+
+    StructType schema = new StructType().add("id", DataTypes.LongType, false);
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/dispatch.vortex");
+    try (HoodieStorage storage = HoodieTestUtils.getStorage(tempDir.getAbsolutePath())) {
+      try (HoodieSparkVortexWriter writer = HoodieSparkVortexWriter.builder()
+          .file(path).sparkSchema(schema).instantTime("20251201120000000")
+          .taskContextSupplier(taskContextSupplier).storage(storage).populateMetaFields(false).build()) {
+        for (int i = 0; i < 3; i++) {
+          writer.writeRow(new GenericInternalRow(new Object[] {(long) i}));
+        }
+      }
+
+      // Read back through the StoragePathInfo factory overload so the VORTEX dispatch case
+      // (used by base-file readers that start from a listed StoragePathInfo) is covered.
+      try (HoodieFileReader<InternalRow> reader =
+               (HoodieFileReader<InternalRow>) new HoodieSparkFileReaderFactory(storage).getFileReader(
+                   ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER, storage.getPathInfo(path),
+                   HoodieFileFormat.VORTEX, Option.empty())) {
+        assertEquals(3, reader.getTotalRecords(), "row count via StoragePathInfo dispatch");
+        int count = 0;
+        try (ClosableIterator<HoodieRecord<InternalRow>> it = reader.getRecordIterator()) {
+          while (it.hasNext()) {
+            assertEquals(count, it.next().getData().getLong(0), "id at row " + count);
+            count++;
+          }
+        }
+        assertEquals(3, count, "rows read via StoragePathInfo dispatch");
       }
     }
   }
