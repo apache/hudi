@@ -940,6 +940,18 @@
     return JSON.stringify(type);
   }
 
+  // Formats an internal-schema type (SerDeHelper JSON: arrays use "element",
+  // maps use "key"/"value") to a readable string.
+  function formatInternalType(type) {
+    if (typeof type === 'string') return type;
+    if (type && type.type) {
+      if (type.type === 'array') return 'array<' + formatInternalType(type.element) + '>';
+      if (type.type === 'map') return 'map<' + formatInternalType(type.key) + ', ' + formatInternalType(type.value) + '>';
+      return type.type;
+    }
+    return JSON.stringify(type);
+  }
+
   function isNullable(type) {
     if (Array.isArray(type)) {
       return type.indexOf('null') !== -1;
@@ -1006,22 +1018,23 @@
 
     newerFields.forEach(function (f) {
       if (!olderMap[f.name]) {
-        result.added.push({ name: f.name, type: f.type });
+        result.added.push({ name: f.name, type: formatInternalType(f.type) });
       }
     });
 
     olderFields.forEach(function (f) {
       if (!newerMap[f.name]) {
-        result.removed.push({ name: f.name, type: f.type });
+        result.removed.push({ name: f.name, type: formatInternalType(f.type) });
       }
     });
 
     newerFields.forEach(function (f) {
-      if (olderMap[f.name] && olderMap[f.name].type !== f.type) {
+      if (olderMap[f.name]
+          && JSON.stringify(olderMap[f.name].type) !== JSON.stringify(f.type)) {
         result.changed.push({
           name: f.name,
-          oldType: String(olderMap[f.name].type),
-          newType: String(f.type)
+          oldType: formatInternalType(olderMap[f.name].type),
+          newType: formatInternalType(f.type)
         });
       }
     });
