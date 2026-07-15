@@ -65,6 +65,10 @@ public class FileGroupReaderBasedNativeLogAppendHandle<T, I, K, O> extends Hoodi
     super(config, instantTime, hoodieTable, operation.getPartitionPath(), operation.getFileId(), taskContextSupplier);
     this.operation = operation;
     this.readerContext = readerContext;
+    // File-group reader output is materialized with the writer schema, including Hudi meta fields.
+    // Treating it as a regular append would prepend another meta-field overlay and shift all data ordinals.
+    this.isLogCompaction = true;
+    this.useWriterSchema = true;
   }
 
   @Override

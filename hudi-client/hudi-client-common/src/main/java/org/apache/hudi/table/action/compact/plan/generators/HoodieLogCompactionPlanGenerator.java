@@ -23,7 +23,6 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieCompactionStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -76,22 +75,8 @@ public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, 
   @Override
   protected boolean filterFileSlice(FileSlice fileSlice, String lastCompletedInstantTime,
                                     Set<HoodieFileGroupId> pendingFileGroupIds, Option<InstantRange> instantRange) {
-    if (hasNativeLanceLog(fileSlice)) {
-      // Log compaction currently reads records through HoodieAvroReaderContext. Lance native logs
-      // require a Spark record context, which cannot be constructed reliably on executors.
-      // Exclude this slice before persisting a log-compaction plan that cannot be executed.
-      // See https://github.com/apache/hudi/issues/19287.
-      log.warn("Skipping log compaction for fileId {} in partition {} because native Lance logs are not supported",
-          fileSlice.getFileId(), fileSlice.getPartitionPath());
-      return false;
-    }
     return super.filterFileSlice(fileSlice, lastCompletedInstantTime, pendingFileGroupIds, instantRange)
         && isFileSliceEligibleForLogCompaction(fileSlice, lastCompletedInstantTime, instantRange);
-  }
-
-  private boolean hasNativeLanceLog(FileSlice fileSlice) {
-    return fileSlice.getLogFiles().anyMatch(logFile -> logFile.isNativeLogFile()
-        && HoodieFileFormat.fromFileExtension("." + logFile.getSuffix()) == HoodieFileFormat.LANCE);
   }
 
   @Override

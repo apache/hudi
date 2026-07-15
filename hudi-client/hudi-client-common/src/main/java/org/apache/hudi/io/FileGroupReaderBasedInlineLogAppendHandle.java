@@ -69,6 +69,10 @@ public class FileGroupReaderBasedInlineLogAppendHandle<T, I, K, O> extends Hoodi
     super(config, instantTime, hoodieTable, operation.getPartitionPath(), operation.getFileId(), taskContextSupplier);
     this.operation = operation;
     this.readerContext = readerContext;
+    // File-group reader output already conforms to the writer schema. Preserve its metadata fields
+    // instead of prepending another metadata overlay and shifting the data-field ordinals.
+    this.isLogCompaction = true;
+    this.useWriterSchema = true;
   }
 
   @Override

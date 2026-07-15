@@ -35,6 +35,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
@@ -1280,5 +1281,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     // question: should we just return null when context is serialized as null? the mismatch reader context would throw anyway.
     return (ReaderContextFactory<T>) getContext().getReaderContextFactoryForWrite(metaClient, config.getRecordMerger().getRecordType(),
         config.getProps());
+  }
+
+  /**
+   * Returns the record context used by the write path.
+   */
+  public RecordContext<?> getRecordContextForWrite() {
+    return getReaderContextFactoryForWrite().getContext().getRecordContext();
   }
 }

@@ -17,8 +17,8 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.{DefaultSparkRecordMerger, HoodieCLIUtils}
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.DefaultSparkRecordMerger
 import org.apache.hudi.blob.BlobTestHelpers
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
@@ -27,6 +27,7 @@ import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig}
 import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.io.storage.HoodieSparkLanceReader
 import org.apache.hudi.metadata.MetadataPartitionType
@@ -2005,6 +2006,31 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       assertCompactionCommitPresence(tablePath, expectPresent = false,
         "No compaction commit should be present before max.delta.commits=6 threshold is reached")
+
+      // The update and delete above create native Lance log files. Execute log compaction explicitly to
+      // verify that its executor-side reader context can read those logs and its writer keeps Spark records.
+      spark.sql(s"alter table $tableName set tblproperties (" +
+        "'hoodie.log.compaction.enable' = 'true', " +
+        "'hoodie.log.compaction.blocks.threshold' = '1')")
+      val client = HoodieCLIUtils.createHoodieWriteClient(spark, tablePath, Map.empty, Option(tableName))
+      val logCompactionInstant = client.scheduleLogCompaction(HOption.empty())
+      assertTrue(logCompactionInstant.isPresent, "Native Lance log files should be scheduled for log compaction")
+      client.logCompact(logCompactionInstant.get(), true)
+
+      val tableFiles = Files.walk(Paths.get(tablePath))
+      try {
+        assertTrue(tableFiles.anyMatch(path => path.toString.contains(logCompactionInstant.get())
+          && path.toString.endsWith(".log.lance")),
+          "Log compaction should produce a native Lance log file")
+      } finally {
+        tableFiles.close()
+      }
+
+      checkAnswer(s"select id, name, age, score, dt from $tableName order by id")(
+        Seq(1, "Alice", 31, 99.9, "2025-01-01"),
+        Seq(2, "Bob", 25, 87.3, "2025-01-02"),
+        Seq(4, "Diana", 40, null, "2025-01-01")
+      )
     }
 
     // Test 6: INSERT with static partition (only for partitioned tables)

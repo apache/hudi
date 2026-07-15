@@ -21,23 +21,15 @@ package org.apache.hudi.table.action.compact;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.compact.plan.generators.HoodieCompactionPlanGenerator;
-import org.apache.hudi.table.action.compact.plan.generators.HoodieLogCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.strategy.LogFileNumBasedCompactionStrategy;
 
 import org.junit.jupiter.api.Assertions;
@@ -47,7 +39,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
-import java.util.Collections;
 
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
 import static org.mockito.Mockito.when;
@@ -74,16 +65,6 @@ class TestScheduleCompactionActionExecutor extends HoodieCommonTestHarness {
     Assertions.assertEquals(1, TestCompactionPlanGenerator.getCount());
   }
 
-  @Test
-  void testNativeLanceLogsAreExcludedFromLogCompactionPlan() {
-    FileSlice fileSlice = new FileSlice("partition", "20260714120000", "fileId");
-    fileSlice.addLogFile(new HoodieLogFile(new StoragePath(FSUtils.makeNativeLogFileName(
-        "fileId", "1-0-1", "20260714120100", 1, "log", HoodieFileFormat.LANCE))));
-
-    TestLogCompactionPlanGenerator generator = new TestLogCompactionPlanGenerator(table, context, config, null);
-    Assertions.assertFalse(generator.isFileSliceEligible(fileSlice));
-  }
-
   public static class TestCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, O> extends HoodieCompactionPlanGenerator<T, I, K, O> {
     private static int count = 0;
 
@@ -94,17 +75,6 @@ class TestScheduleCompactionActionExecutor extends HoodieCommonTestHarness {
 
     public static int getCount() {
       return count;
-    }
-  }
-
-  private static class TestLogCompactionPlanGenerator extends HoodieLogCompactionPlanGenerator {
-    TestLogCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig,
-                                   BaseTableServicePlanActionExecutor executor) {
-      super(table, engineContext, writeConfig, executor);
-    }
-
-    boolean isFileSliceEligible(FileSlice fileSlice) {
-      return filterFileSlice(fileSlice, "20260714120100", Collections.<HoodieFileGroupId>emptySet(), Option.<InstantRange>empty());
     }
   }
 }

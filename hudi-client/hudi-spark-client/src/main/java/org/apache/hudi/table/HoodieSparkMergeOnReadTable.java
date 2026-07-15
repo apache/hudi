@@ -40,8 +40,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.HoodieInlineLogAppendHandle;
+import org.apache.hudi.io.HoodieNativeLogAppendHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
-import org.apache.hudi.io.SparkNativeLogAppendHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.SparkBootstrapDeltaCommitActionExecutor;
@@ -204,7 +204,7 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
                                                           Map<String, HoodieRecord<?>> recordMap,
                                                           Map<HoodieLogBlock.HeaderMetadataType, String> header) {
     HoodieWriteHandle appendHandle = CommonClientUtils.shouldWriteNativeLogs(config)
-        ? new SparkNativeLogAppendHandle(config, instantTime, this,
+        ? new HoodieNativeLogAppendHandle(config, instantTime, this,
             partitionPath, fileId, recordMap.values().iterator(), taskContextSupplier, header)
         : new HoodieInlineLogAppendHandle(config, instantTime, this,
             partitionPath, fileId, recordMap.values().iterator(), taskContextSupplier, header);

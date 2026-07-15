@@ -18,11 +18,15 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.DefaultSparkRecordMerger;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -31,6 +35,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.marker.WriteMarkers;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -40,9 +45,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Properties;
 import java.util.Set;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -53,6 +60,31 @@ import static org.mockito.Mockito.when;
 public class TestHoodieSparkTable extends HoodieCommonTestHarness {
 
   private static final StorageConfiguration<?> CONF = getDefaultStorageConf();
+
+  @Test
+  void testRecordContextForWriteUsesConfiguredRecordType() throws IOException {
+    initPath();
+    Properties tableProps = new Properties();
+    tableProps.setProperty(HoodieTableConfig.NAME.key(), "record-context-test");
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        CONF, basePath, HoodieTableType.COPY_ON_WRITE, tableProps);
+
+    HoodieWriteConfig sparkRecordConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withRecordMergeImplClasses(DefaultSparkRecordMerger.class.getName())
+        .build();
+    HoodieSparkTable sparkRecordTable = HoodieSparkTable.create(sparkRecordConfig, getEngineContext(), metaClient);
+    assertEquals(HoodieRecord.HoodieRecordType.SPARK,
+        sparkRecordTable.getRecordContextForWrite().getEngineRecordType());
+
+    HoodieWriteConfig avroRecordConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withRecordMergeImplClasses(HoodieAvroRecordMerger.class.getName())
+        .build();
+    HoodieSparkTable avroRecordTable = HoodieSparkTable.create(avroRecordConfig, getEngineContext(), metaClient);
+    assertEquals(HoodieRecord.HoodieRecordType.AVRO,
+        avroRecordTable.getRecordContextForWrite().getEngineRecordType());
+  }
 
   @ParameterizedTest
   @EnumSource(DeleteFailureType.class)

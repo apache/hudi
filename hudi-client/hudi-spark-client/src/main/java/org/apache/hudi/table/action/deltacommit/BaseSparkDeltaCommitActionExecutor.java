@@ -26,8 +26,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
+import org.apache.hudi.io.AppendHandleFactory;
 import org.apache.hudi.io.HoodieAppendHandle;
-import org.apache.hudi.io.SparkAppendHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
@@ -77,7 +77,7 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
       log.info("Small file corrections for updates for commit {} for file {}", instantTime, fileId);
       return super.handleUpdate(partitionPath, fileId, recordItr);
     } else {
-      HoodieAppendHandle<?, ?, ?, ?> appendHandle = new SparkAppendHandleFactory()
+      HoodieAppendHandle<?, ?, ?, ?> appendHandle = new AppendHandleFactory()
           .create(config, instantTime, table, partitionPath, fileId, recordItr, taskContextSupplier);
       appendHandle.doAppend();
       return Collections.singletonList(appendHandle.close()).iterator();
@@ -89,7 +89,7 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
     // If canIndexLogFiles, write inserts to log files else write inserts to base files
     if (table.getIndex().canIndexLogFiles()) {
       return new SparkLazyInsertIterable<>(recordItr, true, config, instantTime, table,
-          idPfx, taskContextSupplier, new SparkAppendHandleFactory<>());
+          idPfx, taskContextSupplier, new AppendHandleFactory<>());
     } else {
       return super.handleInsert(idPfx, recordItr);
     }

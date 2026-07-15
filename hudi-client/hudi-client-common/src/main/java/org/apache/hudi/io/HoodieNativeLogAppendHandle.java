@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -108,24 +107,13 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
           hoodieTable.getBaseFileFormat(),
           writeSchemaWithMetaFields,
           taskContextSupplier,
-          getRecordContextForNativeLog(),
+          hoodieTable.getRecordContextForWrite(),
           orderingFields,
           baseFileInstantTimeOfPositions);
     } catch (IOException e) {
       throw new HoodieException("Creating native log writer with fileId: " + fileId + ", "
           + "delta commit time: " + instantTime + " error", e);
     }
-  }
-
-  /**
-   * Returns the record context used to materialize delete records for the native log writer.
-   *
-   * <p>The writer must receive records compatible with the record type selected by the write path. Engine-specific
-   * handles can override this when a serialized table context cannot recreate that engine's record context on an
-   * executor.</p>
-   */
-  protected RecordContext<?> getRecordContextForNativeLog() {
-    return hoodieTable.getReaderContextFactoryForWrite().getContext().getRecordContext();
   }
 
   @Override

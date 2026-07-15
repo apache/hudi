@@ -18,9 +18,11 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.SparkFileFormatInternalRecordContext;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -81,6 +83,16 @@ public abstract class HoodieSparkTable<T>
   @Override
   protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
     return SparkHoodieIndexFactory.createIndex(config);
+  }
+
+  @Override
+  public RecordContext<?> getRecordContextForWrite() {
+    if (config.getRecordMerger().getRecordType() == HoodieRecord.HoodieRecordType.SPARK) {
+      // The engine context is transient and a serialized table falls back to HoodieLocalEngineContext on executors.
+      // Select the Spark record context from the configured record type instead of the table's runtime context.
+      return SparkFileFormatInternalRecordContext.getFieldAccessorInstance();
+    }
+    return super.getRecordContextForWrite();
   }
 
   /**
