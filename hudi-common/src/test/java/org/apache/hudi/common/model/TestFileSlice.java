@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
@@ -163,5 +165,27 @@ public class TestFileSlice {
     assertEquals(fileSlice.getFileGroupId(), fileSliceAfterFilterPart.getFileGroupId());
     assertEquals(fileSlice.getBaseFile(), fileSliceAfterFilterPart.getBaseFile());
     assertEquals(fileSlice.getBaseInstantTime(), fileSliceAfterFilterPart.getBaseInstantTime());
+  }
+
+  @Test
+  void testGetTotalFileSizeAsParquetFormat() {
+    FileSlice fileSlice = new FileSlice(PARTITION_PATH, BASE_INSTANT, "file-id");
+    fileSlice.addLogFile(new HoodieLogFile(
+        new StoragePath(PARTITION_PATH + "/.file-id_002.log.1_1-0-1"), 1000L));
+    fileSlice.addLogFile(new HoodieLogFile(
+        new StoragePath(PARTITION_PATH + "/file-id_1-0-1_002_2.log.parquet"), 2000L));
+
+    assertEquals(2100L, fileSlice.getTotalFileSizeAsParquetFormat(createLogConfig("avro", 0.1)));
+    assertEquals(3000L, fileSlice.getTotalFileSizeAsParquetFormat(createLogConfig("parquet", 0.1)));
+    assertEquals(3000L, fileSlice.getTotalFileSizeAsParquetFormat(createLogConfig("hfile", 0.1)));
+  }
+
+  private static HoodieConfig createLogConfig(String logDataBlockFormat, double logFileFraction) {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT, logDataBlockFormat);
+    config.setValue(
+        HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION,
+        String.valueOf(logFileFraction));
+    return config;
   }
 }
