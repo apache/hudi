@@ -526,6 +526,9 @@
             fetch(prevUrl)
               .then(function (res) { return res.ok ? res.json() : null; })
               .then(function (prevJson) {
+                // Skip stale responses: the selection may have changed or been
+                // cleared while this fetch was in flight.
+                if (timeline.getSelection()[0] !== item.id) return;
                 if (prevJson && prevJson.earliestCommitToRetain) {
                   var rangeStart = parseHudiTimestamp(prevJson.earliestCommitToRetain);
                   var rangeEnd = parseHudiTimestamp(json.earliestCommitToRetain);
