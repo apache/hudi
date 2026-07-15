@@ -88,6 +88,10 @@ public class RequestHandler {
   // Query-param names used only by the Timeline UI API.
   private static final String INSTANT_ACTION_PARAM = "instantaction";
   private static final String INSTANT_STATE_PARAM = "instantstate";
+  private static final String LIMIT_PARAM = "limit";
+
+  private static final int DEFAULT_SCHEMA_HISTORY_LIMIT = 200;
+  private static final int MAX_SCHEMA_HISTORY_LIMIT = 1000;
 
   private final TimelineService.Config timelineServiceConfig;
   private final FileSystemViewManager viewManager;
@@ -195,6 +199,21 @@ public class RequestHandler {
     return ctx.queryParamAsClass(INSTANT_STATE_PARAM, String.class).getOrThrow(e -> new BadRequestResponse("INSTANT_STATE_PARAM is required"));
   }
 
+  // Rejects non-numeric and non-positive limits with a 400; values above the cap are clamped, not rejected.
+  private static int getLimitParam(Context ctx) {
+    int limit;
+    try {
+      limit = Integer.parseInt(
+          ctx.queryParamAsClass(LIMIT_PARAM, String.class).getOrDefault(String.valueOf(DEFAULT_SCHEMA_HISTORY_LIMIT)));
+    } catch (NumberFormatException e) {
+      throw new BadRequestResponse("limit must be an integer");
+    }
+    if (limit <= 0) {
+      throw new BadRequestResponse("limit must be positive");
+    }
+    return Math.min(limit, MAX_SCHEMA_HISTORY_LIMIT);
+  }
+
   private static String getMarkerDirParam(Context ctx) {
     return ctx.queryParamAsClass(MarkerOperation.MARKER_DIR_PATH_PARAM, String.class).getOrDefault("");
   }
@@ -293,19 +312,7 @@ public class RequestHandler {
 
     app.get(UI_SCHEMA_HISTORY_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("UI_SCHEMA_HISTORY", 1);
-      int limit;
-      try {
-        limit = Integer.parseInt(ctx.queryParamAsClass("limit", String.class).getOrDefault("200"));
-      } catch (NumberFormatException e) {
-        throw new BadRequestResponse("limit must be an integer");
-      }
-      if (limit <= 0) {
-        throw new BadRequestResponse("limit must be positive");
-      }
-      if (limit > 1000) {
-        limit = 1000;
-      }
-      writeValueAsString(ctx, instantHandler.getSchemaHistory(getBasePathParam(ctx), limit));
+      writeValueAsString(ctx, instantHandler.getSchemaHistory(getBasePathParam(ctx), getLimitParam(ctx)));
     }, false));
   }
 
