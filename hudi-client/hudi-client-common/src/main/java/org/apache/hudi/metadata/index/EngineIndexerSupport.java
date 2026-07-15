@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.model.FileInfoAndPartition;
+import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -96,4 +97,27 @@ public interface EngineIndexerSupport {
       HoodieIndexDefinition indexDefinition,
       String indexPartition,
       String instantTime);
+
+  /**
+   * Generates the metadata records that bootstrap a vector index partition.
+   * <p>
+   * The vector index reads the source VECTOR column from the latest base-table file slices,
+   * runs IVF clustering and RaBitQ quantization, and emits the MDT posting/manifest/centroid
+   * records for the partition. This is engine-specific work (Spark RDD + KMeans), so it is
+   * dispatched through the engine support interface while the common {@code VectorIndexer}
+   * owns partition sizing and plan assembly.
+   *
+   * @param indexDefinition definition of the vector index (source field, options)
+   * @param dataMetaClient  {@link HoodieTableMetaClient} for the data table
+   * @param fileSlices      latest merged file slices of the data table to read vectors from
+   * @param tableSchema     resolved data-table schema
+   * @param generation      index generation id (always 1 for initial bootstrap)
+   * @return vector index metadata records to commit to the MDT partition
+   */
+  HoodieData<HoodieRecord> generateVectorIndexRecords(
+      HoodieIndexDefinition indexDefinition,
+      HoodieTableMetaClient dataMetaClient,
+      List<FileSliceAndPartition> fileSlices,
+      HoodieSchema tableSchema,
+      int generation);
 }
