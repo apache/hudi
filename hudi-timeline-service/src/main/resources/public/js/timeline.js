@@ -748,7 +748,7 @@
       truncNotice.className = 'alert alert-warning py-2 small';
       var oldestScanned = data.window.oldestInstantScanned || 'unknown';
       truncNotice.textContent = 'History truncated: older completed commits exist beyond the scanned window'
-        + ' (oldest scanned: ' + oldestScanned + '). The baseline entry is the window edge,'
+        + ' (oldest scanned: ' + oldestScanned + '). The oldest entry is the window edge,'
         + ' not necessarily the first table schema.';
       historyList.appendChild(truncNotice);
     }
@@ -772,11 +772,13 @@
       header.appendChild(tsCode);
       header.appendChild(actionBadge);
 
-      // Entry type badge: baseline (oldest recorded / window edge) vs later change.
+      // Entry type badge: baseline (oldest recorded) vs later change. When the
+      // scan window is truncated, the oldest entry is only the window edge, so
+      // label it 'oldest scanned' instead of presenting it as the baseline.
       if (entry.type === 'baseline') {
         var baselineBadge = document.createElement('span');
         baselineBadge.className = 'badge bg-secondary';
-        baselineBadge.textContent = 'baseline';
+        baselineBadge.textContent = (data.window && data.window.truncated) ? 'oldest scanned' : 'baseline';
         header.appendChild(baselineBadge);
       } else if (entry.type === 'change') {
         var changeBadge = document.createElement('span');
