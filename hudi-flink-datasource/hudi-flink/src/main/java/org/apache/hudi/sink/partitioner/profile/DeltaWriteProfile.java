@@ -23,13 +23,11 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.action.commit.SmallFile;
-import org.apache.hudi.util.CommonClientUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -116,7 +114,7 @@ public class DeltaWriteProfile extends WriteProfile {
   }
 
   private long getTotalFileSize(FileSlice fileSlice) {
-    return fileSlice.getTotalFileSizeAsParquetFormat(config);
+    return fileSlice.getTotalFileSizeAsParquetFormat(logFileToParquetCompressionRatio());
   }
 
   private boolean isSmallFile(FileSlice fileSlice) {
@@ -125,8 +123,7 @@ public class DeltaWriteProfile extends WriteProfile {
   }
 
   private double logFileToParquetCompressionRatio() {
-    if (config.getWriteVersion().lesserThan(HoodieTableVersion.TEN)
-        && CommonClientUtils.getLogBlockType(config, metaClient.getTableConfig()) == HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK) {
+    if (config.getWriteVersion().lesserThan(HoodieTableVersion.TEN)) {
       return config.getLogFileToParquetCompressionRatio();
     }
     return 1D;
