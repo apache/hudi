@@ -106,7 +106,7 @@ case class HoodieFileIndex(spark: SparkSession,
 
   @transient protected var hasPushedDownPartitionPredicates: Boolean = false
 
-  private lazy val fileSliceSizeConfig =
+  private lazy val hoodieConfig =
     new HoodieConfig(TypedProperties.fromMap(options.filter(_._2 != null).asJava))
 
   /** True when any partition column is a nested field path (e.g. "nested_record.level"). */
@@ -222,7 +222,7 @@ case class HoodieFileIndex(spark: SparkSession,
           PartitionDirectoryConverter.convertFileSliceToPartitionDirectory(
             partitionValues,
             fileSlice,
-            fileSliceSizeConfig)
+            hoodieConfig)
         } else {
           val baseFileStatusOpt = getBaseFileInfo(Option.apply(fileSlice.getBaseFile.orElse(null)))
           val logPathInfoStream = fileSlice.getLogFiles.map[StoragePathInfo](JFunction.toJavaFunction[HoodieLogFile, StoragePathInfo](lf => lf.getPathInfo))
