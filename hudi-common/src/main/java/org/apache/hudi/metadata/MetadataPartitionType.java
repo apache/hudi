@@ -35,7 +35,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.core.index.expression.HoodieExpressionIndex;
 import org.apache.hudi.metadata.stats.ValueMetadata;
 
-import lombok.Getter;
 import org.apache.avro.generic.GenericRecord;
 
 import java.nio.ByteBuffer;
@@ -77,18 +76,19 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_BLO
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_RECORD_INDEX;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_SECONDARY_INDEX;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_VECTOR_INDEX;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_NAME_METADATA;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_FIELD_IS_DELETED;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.combineFileSystemMetadata;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.mergeColumnStatsRecords;
 
 /**
  * Partition types for metadata table.
  */
-@Getter
 public enum MetadataPartitionType {
   FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-", 2) {
     @Override
@@ -244,6 +244,42 @@ public enum MetadataPartitionType {
       return HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(indexVersion.greaterThanOrEquals(HoodieIndexVersion.V2));
     }
   },
+  VECTOR_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX_PREFIX, "vector-index-", 8) {
+    @Override
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
+      // Vector index is enabled explicitly via CREATE INDEX, not via metadata config flags.
+      return false;
+    }
+
+    @Override
+    public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
+      if (metaClient.getIndexMetadata().isPresent()) {
+        return metaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+            .anyMatch(indexDef -> indexDef.getIndexName().startsWith(PARTITION_NAME_VECTOR_INDEX_PREFIX));
+      }
+      return false;
+    }
+
+    @Override
+    public void constructMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {
+      GenericRecord vectorIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_VECTOR_INDEX);
+      checkState(vectorIndexRecord != null,
+          "Valid VectorIndexMetadata record expected for type: " + MetadataPartitionType.VECTOR_INDEX.getRecordType());
+      payload.vectorIndexMetadata = vectorIndexRecord;
+    }
+
+    @Override
+    public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
+      return metaClient.getIndexForMetadataPartition(indexName)
+          .map(HoodieIndexDefinition::getIndexName)
+          .orElseThrow(() -> new IllegalArgumentException("Index definition is not present for index: " + indexName));
+    }
+
+    @Override
+    public SerializableBiFunction<String, Integer, Integer> getFileGroupMappingFunction(HoodieIndexVersion indexVersion) {
+      return HoodieTableMetadataUtil::mapVectorPostingKeyToFileGroupIndex;
+    }
+  },
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-", 6) {
     @Override
     public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
@@ -383,6 +419,24 @@ public enum MetadataPartitionType {
     this.partitionPath = partitionPath;
     this.fileIdPrefix = fileIdPrefix;
     this.recordType = recordType;
+  }
+
+  /**
+   * Base partition path (or prefix) for this metadata partition type.
+   * <p>
+   * Explicit accessors are required because Lombok does not emit a no-arg {@code getPartitionPath()}
+   * when a {@link #getPartitionPath(HoodieTableMetaClient, String)} overload exists.
+   */
+  public String getPartitionPath() {
+    return partitionPath;
+  }
+
+  public String getFileIdPrefix() {
+    return fileIdPrefix;
+  }
+
+  public int getRecordType() {
+    return recordType;
   }
 
   /**

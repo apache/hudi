@@ -208,10 +208,77 @@ public class HoodieTableMetadataUtil {
   // for block size (1MB), compression (GZ) and disabling the hudi metadata fields.
   public static final int RECORD_INDEX_AVERAGE_RECORD_SIZE = 48;
 
+  public static final String PARTITION_NAME_VECTOR_INDEX = "vector_index";
+  public static final String PARTITION_NAME_VECTOR_INDEX_PREFIX = "vector_index_";
+  /** Special record key inside a vector-index MDT partition that holds serialised centroids. */
+  public static final String VECTOR_INDEX_CENTROIDS_KEY = "__centroids__";
+  /** Special record key inside a vector-index MDT partition that holds quantizer metadata. */
+  public static final String VECTOR_INDEX_QUANTIZER_KEY = "__quantizer__";
+  /** Special record key inside a vector-index MDT partition that points to the active MDT posting generation. */
+  public static final String VECTOR_INDEX_MANIFEST_KEY = "__manifest__";
+  /** Fixed-width key family prefix for immutable generation manifest rows. */
+  public static final String VECTOR_INDEX_GENERATION_MANIFEST_KEY_PREFIX = "M|";
+  /** Fixed-width key family prefix for cluster metadata rows. */
+  public static final String VECTOR_INDEX_CLUSTER_KEY_PREFIX = "C|";
+  /** Fixed-width key family prefix for MDT-native posting rows. */
+  public static final String VECTOR_INDEX_POSTING_KEY_PREFIX = "P|";
   public static final Set<String> SUPPORTED_META_FIELDS_PARTITION_STATS = new HashSet<>(Arrays.asList(
       HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName(),
       HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName(),
       HoodieRecord.HoodieMetadataField.COMMIT_TIME_METADATA_FIELD.getFieldName()));
+
+  public static String getVectorIndexGenerationManifestKey(int generationId) {
+    return VectorIndexMetadataKey.manifest(generationId);
+  }
+
+  public static boolean isVectorIndexGenerationManifestKey(String recordKey) {
+    return recordKey != null && recordKey.startsWith(VectorIndexMetadataKey.manifest(0).substring(0, 1));
+  }
+
+  public static String getVectorIndexClusterKey(int generationId, int clusterId) {
+    return VectorIndexMetadataKey.clusterStats(generationId, clusterId);
+  }
+
+  public static boolean isVectorIndexClusterKey(String recordKey) {
+    return recordKey != null && recordKey.startsWith(VECTOR_INDEX_CLUSTER_KEY_PREFIX);
+  }
+
+  public static String getVectorIndexPostingKey(int generationId, int clusterId, int shardId, String recordKey) {
+    return VectorIndexMetadataKey.postingDelta(generationId, clusterId, shardId, recordKey);
+  }
+
+  public static String getVectorIndexPostingPrefix(int generationId, int clusterId) {
+    return VectorIndexMetadataKey.postingPrefix(generationId, clusterId, 0).substring(0, 9);
+  }
+
+  public static int toVectorGenerationId(String generationId) {
+    try {
+      int parsed = Integer.parseInt(generationId);
+      if (parsed <= 0) {
+        throw new IllegalArgumentException(
+            "Vector generation id must be a positive ordinal, got: " + generationId);
+      }
+      return parsed;
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException(
+          "Vector generation id must be a positive integer ordinal, got: " + generationId, e);
+    }
+  }
+
+  public static String getVectorIndexPostingPrefix(int generationId, int clusterId, int shardId) {
+    return VectorIndexMetadataKey.postingPrefix(generationId, clusterId, shardId);
+  }
+
+  public static boolean isVectorIndexPostingKey(String recordKey) {
+    return recordKey != null && !recordKey.isEmpty()
+        && VectorIndexMetadataKey.decode(recordKey)[0] == (byte) VectorIndexMetadataKey.FAMILY_POSTING;
+  }
+
+  public static String getVectorIndexPostingRecordKey(String metadataRecordKey) {
+    return isVectorIndexPostingKey(metadataRecordKey)
+        ? VectorIndexMetadataKey.postingRecordKey(metadataRecordKey)
+        : null;
+  }
 
   // The maximum allowed precision and scale as per the payload schema. See DecimalWrapper in HoodieMetadata.avsc:
   // https://github.com/apache/hudi/blob/45dedd819e56e521148bde51a3dfa4e472ea70cd/hudi-common/src/main/avro/HoodieMetadata.avsc#L247
@@ -958,6 +1025,39 @@ public class HoodieTableMetadataUtil {
     }
 
     return Math.abs(Math.abs(h) % numFileGroups);
+  }
+
+  public static int mapVectorPostingKeyToFileGroupIndex(String recordKey, int numFileGroups) {
+    if (numFileGroups <= 1) {
+      return 0;
+    }
+    // Route by the IVF cluster id so that all postings of a cluster (every shard, every
+    // record key) land in the same MDT file group. With fileGroupCount == num_clusters this
+    // yields exactly one cluster per file group; with fewer file groups, clusters are spread
+    // round-robin (clusterId % numFileGroups) while a single cluster still stays whole.
+    int clusterId = extractVectorClusterId(recordKey);
+    if (clusterId < 0) {
+      // Not a cluster-bearing posting key (e.g. manifest/centroid rows): fall back to stable
+      // string hashing on the routing key prefix.
+      return mapRecordKeyToFileGroupIndex(getVectorIndexPostingRoutingKey(recordKey), numFileGroups);
+    }
+    return Math.floorMod(clusterId, numFileGroups);
+  }
+
+  /**
+   * Extract the IVF cluster id from a vector posting key/prefix of the form
+   * {@code P|<generation>|<cluster>|...}. Returns {@code -1} when {@code recordKey} is not a
+   * vector posting key or the cluster segment cannot be parsed.
+   */
+  public static int extractVectorClusterId(String recordKey) {
+    return isVectorIndexPostingKey(recordKey) ? VectorIndexMetadataKey.postingClusterId(recordKey) : -1;
+  }
+
+  public static String getVectorIndexPostingRoutingKey(String metadataRecordKey) {
+    if (!isVectorIndexPostingKey(metadataRecordKey)) {
+      return metadataRecordKey;
+    }
+    return metadataRecordKey.length() >= 9 ? metadataRecordKey.substring(0, 9) : metadataRecordKey;
   }
 
   /**
@@ -2487,6 +2587,10 @@ public class HoodieTableMetadataUtil {
         PARTITION_NAME_SECONDARY_INDEX_PREFIX,
         PARTITION_NAME_SECONDARY_INDEX
     );
+  }
+
+  public static Set<String> getVectorIndexPartitionsToInit(MetadataPartitionType partitionType, HoodieTableMetaClient dataMetaClient) {
+    return getIndexPartitionsToInitBasedOnIndexDefinition(partitionType, dataMetaClient);
   }
 
   /**
