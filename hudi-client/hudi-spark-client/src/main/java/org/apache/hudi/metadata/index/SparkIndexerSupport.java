@@ -19,35 +19,67 @@
 
 package org.apache.hudi.metadata.index;
 
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.SparkMetadataWriterUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
+import org.apache.hudi.common.index.vector.VectorIndexOptions;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.SparkVectorIndexBootstrap;
 import org.apache.hudi.metadata.model.FileInfoAndPartition;
+import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.catalyst.InternalRow;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
+import static org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 
 /**
  * Spark implementation of {@link EngineIndexerSupport}.
  */
 public class SparkIndexerSupport implements EngineIndexerSupport {
+  private static final Logger LOG = LoggerFactory.getLogger(SparkIndexerSupport.class);
+
   private final HoodieEngineContext engineContext;
   private final HoodieWriteConfig dataWriteConfig;
 
@@ -104,5 +136,155 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
             commitMetadata, indexPartition, engineContext, tableMetadata, dataMetaClient, dataWriteConfig.getMetadataConfig(),
             Option.of(dataWriteConfig.getRecordMerger().getRecordType()), instantTime, dataWriteConfig)
         .flatMapValues(List::iterator);
+  }
+
+  @Override
+  public HoodieData<HoodieRecord> generateVectorIndexRecords(
+      HoodieIndexDefinition indexDefinition,
+      HoodieTableMetaClient dataMetaClient,
+      List<FileSliceAndPartition> fileSlices,
+      HoodieSchema tableSchema,
+      int generation) {
+    try {
+      String vectorColumn = indexDefinition.getSourceFields().get(0);
+      HoodieSchemaField fieldSchema = HoodieSchemaUtils.getNestedField(tableSchema, vectorColumn)
+          .orElseThrow(() -> new HoodieMetadataException("Vector column not found in table schema: " + vectorColumn))
+          .getRight();
+      HoodieSchema vectorSchema = fieldSchema.schema().getNonNullType();
+      ValidationUtils.checkState(vectorSchema.getType() == HoodieSchemaType.VECTOR,
+          "Vector index can only be bootstrapped from VECTOR columns: " + vectorColumn);
+
+      HoodieSchema.Vector resolvedVectorType = (HoodieSchema.Vector) vectorSchema;
+      int configuredDimension = VectorIndexOptions.getDimension(indexDefinition.getIndexOptions());
+      ValidationUtils.checkState(resolvedVectorType.getDimension() == configuredDimension,
+          String.format("Vector dimension mismatch for %s: schema=%s, configured=%s",
+              vectorColumn, resolvedVectorType.getDimension(), configuredDimension));
+
+      JavaRDD<SparkVectorIndexBootstrap.VectorRow> vectorRows = buildVectorRowsRDD(
+          dataMetaClient, tableSchema, vectorColumn, indexDefinition.getIndexName(), fileSlices);
+
+      JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
+      long lastUpdatedTs = System.currentTimeMillis();
+      return SparkVectorIndexBootstrap.bootstrap(
+          jsc, vectorRows, indexDefinition, resolvedVectorType.getVectorElementType(),
+          generation, lastUpdatedTs);
+    } catch (Exception e) {
+      throw new HoodieMetadataException("Failed to bootstrap vector index records", e);
+    }
+  }
+
+  /**
+   * Reads all vectors from the provided latest base-table file slices into a lightweight RDD of
+   * (recordKey, partitionPath, fileId, baseInstantTime, vectorBytes, rowPosition) tuples,
+   * without DataFrame/UDF overhead.
+   */
+  private JavaRDD<SparkVectorIndexBootstrap.VectorRow> buildVectorRowsRDD(
+      HoodieTableMetaClient dataMetaClient,
+      HoodieSchema tableSchema,
+      String vectorColumn,
+      String indexName,
+      List<FileSliceAndPartition> fileSlices) {
+    JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
+    if (fileSlices.isEmpty()) {
+      LOG.warn("Vector index bootstrap found no latest file slices for {}", dataMetaClient.getBasePath());
+      return jsc.emptyRDD();
+    }
+    LOG.info("Vector index bootstrap discovered {} latest file slices for {}", fileSlices.size(), indexName);
+
+    Option<String> instantTime = dataMetaClient.getActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants()
+        .lastInstant()
+        .map(instant -> instant.requestedTime());
+    if (!instantTime.isPresent()) {
+      return jsc.emptyRDD();
+    }
+
+    HoodieSchema requestedSchema = buildVectorBootstrapRequestedSchema(dataMetaClient, tableSchema, vectorColumn);
+    ReaderContextFactory<InternalRow> readerContextFactory = engineContext.getReaderContextFactory(dataMetaClient);
+    Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(dataWriteConfig.getInternalSchema());
+    String latestCommitTime = instantTime.get();
+    int parallelism = fileSlices.size();
+
+    return jsc.parallelize(fileSlices, parallelism)
+        .flatMap(fileSliceAndPartition -> {
+          String partitionPath = fileSliceAndPartition.getPartitionPath();
+          FileSlice fileSlice = fileSliceAndPartition.getFileSlice();
+          HoodieReaderContext<InternalRow> readerContext = readerContextFactory.getContext();
+          try (HoodieFileGroupReader<InternalRow> fileGroupReader = HoodieFileGroupReader.<InternalRow>builder()
+              .withReaderContext(readerContext)
+              .withHoodieTableMetaClient(dataMetaClient)
+              .withLatestCommitTime(latestCommitTime)
+              .withDataSchema(tableSchema)
+              .withRequestedSchema(requestedSchema)
+              .withInternalSchemaOpt(internalSchemaOption)
+              .withBaseFileOption(fileSlice.getBaseFile())
+              .withLogFiles(fileSlice.getLogFiles())
+              .withPartitionPath(partitionPath)
+              .withShouldUseRecordPosition(true)
+              .withProps(dataMetaClient.getTableConfig().getProps())
+              .build();
+               ClosableIterator<InternalRow> iterator = fileGroupReader.getClosableIterator()) {
+            List<SparkVectorIndexBootstrap.VectorRow> rows = new ArrayList<>();
+            while (iterator.hasNext()) {
+              InternalRow record = iterator.next();
+              Object vectorValue = readerContext.getRecordContext().getValue(record, requestedSchema, vectorColumn);
+              if (vectorValue == null) {
+                continue;
+              }
+              String recordKey = readerContext.getRecordContext().getRecordKey(record, requestedSchema);
+              byte[] vectorBytes;
+              if (vectorValue instanceof byte[]) {
+                vectorBytes = (byte[]) vectorValue;
+              } else if (vectorValue instanceof org.apache.spark.sql.catalyst.util.ArrayData) {
+                // VECTOR columns may be returned as float arrays by the reader context when the schema
+                // resolves the column as ArrayType(FloatType) instead of BinaryType.
+                org.apache.spark.sql.catalyst.util.ArrayData arrayData =
+                    (org.apache.spark.sql.catalyst.util.ArrayData) vectorValue;
+                int numElements = arrayData.numElements();
+                ByteBuffer buf = ByteBuffer.allocate(numElements * Float.BYTES).order(ByteOrder.LITTLE_ENDIAN);
+                for (int i = 0; i < numElements; i++) {
+                  buf.putFloat(arrayData.getFloat(i));
+                }
+                vectorBytes = buf.array();
+              } else {
+                throw new HoodieMetadataException(
+                    "Expected byte[] or ArrayData for VECTOR column, got: " + vectorValue.getClass().getName());
+              }
+              long rowPosition = readerContext.getRecordContext().extractRecordPosition(
+                  record, requestedSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME, -1L);
+              rows.add(new SparkVectorIndexBootstrap.VectorRow(
+                  recordKey, partitionPath, fileSlice.getFileId(),
+                  fileSlice.getBaseInstantTime(), vectorBytes, rowPosition));
+            }
+            return rows.iterator();
+          }
+        });
+  }
+
+  private HoodieSchema buildVectorBootstrapRequestedSchema(
+      HoodieTableMetaClient dataMetaClient, HoodieSchema tableSchema, String vectorColumn) {
+    LinkedHashSet<String> projectedFields = new LinkedHashSet<>();
+    if (dataMetaClient.getTableConfig().populateMetaFields()) {
+      projectedFields.add(RECORD_KEY_METADATA_FIELD);
+    } else {
+      projectedFields.addAll(Arrays.asList(dataMetaClient.getTableConfig().getRecordKeyFields()
+          .orElseThrow(() -> new HoodieMetadataException("Cannot bootstrap vector index without record key fields"))));
+    }
+    projectedFields.add(vectorColumn);
+    HoodieSchema projectedSchema = HoodieSchemaUtils.projectSchema(tableSchema, new ArrayList<>(projectedFields));
+    List<HoodieSchemaField> fields = projectedSchema.getFields().stream()
+        .map(field -> field.withName(field.name()))
+        .collect(Collectors.toCollection(ArrayList::new));
+    if (!projectedSchema.getField(ROW_INDEX_TEMPORARY_COLUMN_NAME).isPresent()) {
+      fields.add(HoodieSchemaField.of(
+          ROW_INDEX_TEMPORARY_COLUMN_NAME, HoodieSchema.create(HoodieSchemaType.LONG),
+          "Hudi metadata field: " + ROW_INDEX_TEMPORARY_COLUMN_NAME, -1L));
+    }
+    return HoodieSchema.createRecord(
+        projectedSchema.getName(),
+        projectedSchema.getDoc().orElse(null),
+        projectedSchema.getNamespace().orElse(null),
+        false,
+        fields);
   }
 }
