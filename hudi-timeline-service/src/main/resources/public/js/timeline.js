@@ -1178,7 +1178,8 @@
     var match = ts.match(pattern);
     if (match) {
       return match[1] + '-' + match[2] + '-' + match[3]
-        + ' ' + match[4] + ':' + match[5] + ':' + match[6];
+        + ' ' + match[4] + ':' + match[5] + ':' + match[6]
+        + '.' + match[7];
     }
     var legacyPattern = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/;
     var legacyMatch = ts.match(legacyPattern);
