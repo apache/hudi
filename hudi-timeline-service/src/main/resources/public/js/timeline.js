@@ -505,6 +505,9 @@
         return res.json();
       })
       .then(function (json) {
+        // Skip stale responses: the selection may have changed or been
+        // cleared while this fetch was in flight.
+        if (timeline.getSelection()[0] !== item.id) return;
         detailBody.innerHTML = '';
         renderjson.set_show_to_level(1);
         renderjson.set_icons('\u25B6', '\u25BC');
@@ -549,6 +552,7 @@
       })
       .catch(function (err) {
         console.error(err);
+        if (timeline.getSelection()[0] !== item.id) return;
         detailBody.innerHTML = '';
         var alertEl = document.createElement('div');
         alertEl.className = 'alert alert-danger mb-0';
