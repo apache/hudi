@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.config.HoodieStorageConfig
+import org.apache.hudi.common.config.{HoodieConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieFileGroupId, HoodieLogFile}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
@@ -30,6 +30,8 @@ import org.apache.spark.sql.execution.PartitionedFileUtil
 import org.apache.spark.sql.execution.datasources.FilePartition
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+
+import scala.collection.JavaConverters._
 
 class TestPartitionDirectoryConverter extends SparkAdapterSupport {
 
@@ -49,6 +51,7 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
     val options = Map(
       s"${HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION.key()}" -> logFraction.toString
     )
+    val config = new HoodieConfig(TypedProperties.fromMap(options.asJava))
     // There are 4 cases for file slices:
     // 1. base file only
     // 2. log files only
@@ -81,7 +84,7 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
     val partitionValues = Seq("2025-01-01")
 
     val partitionedFiles = slices.flatMap(slice => {
-      val dir = PartitionDirectoryConverter.convertFileSliceToPartitionDirectory(InternalRow.fromSeq(partitionValues), slice, options)
+      val dir = PartitionDirectoryConverter.convertFileSliceToPartitionDirectory(InternalRow.fromSeq(partitionValues), slice, config)
       sparkAdapter.splitFiles(spark, dir, false, maxSplitSize)
     })
 

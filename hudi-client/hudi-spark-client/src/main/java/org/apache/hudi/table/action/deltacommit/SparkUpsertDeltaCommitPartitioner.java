@@ -73,13 +73,13 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
       if (smallFileSlice.getBaseFile().isPresent()) {
         HoodieBaseFile baseFile = smallFileSlice.getBaseFile().get();
         sf.location = new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId());
-        sf.sizeBytes = smallFileSlice.getTotalFileSizeAsParquetFormat(config.getLogFileToParquetCompressionRatio());
+        sf.sizeBytes = smallFileSlice.getTotalFileSizeAsParquetFormat(config);
         smallFileLocations.add(sf);
       } else {
         HoodieLogFile logFile = smallFileSlice.getLogFiles().findFirst().get();
         sf.location = new HoodieRecordLocation(logFile.getDeltaCommitTime(),
             logFile.getFileId());
-        sf.sizeBytes = smallFileSlice.getTotalFileSizeAsParquetFormat(config.getLogFileToParquetCompressionRatio());
+        sf.sizeBytes = smallFileSlice.getTotalFileSizeAsParquetFormat(config);
         smallFileLocations.add(sf);
       }
     }
@@ -122,7 +122,7 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
   }
 
   private boolean isSmallFile(FileSlice fileSlice) {
-    long totalSize = fileSlice.getTotalFileSizeAsParquetFormat(config.getLogFileToParquetCompressionRatio());
+    long totalSize = fileSlice.getTotalFileSizeAsParquetFormat(config);
     return totalSize < config.getParquetMaxFileSize();
   }
 

@@ -18,7 +18,10 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.Option;
 
@@ -195,16 +198,17 @@ public class FileSlice implements Serializable {
   /**
    * Gets the estimated total size of a file slice in the base Parquet format.
    *
-   * <p>Inline log files need size calibration. Native log files use their physical sizes directly.</p>
+   * <p>Only inline Avro log files need size calibration. Native log files and inline non-Avro log files
+   * use their physical sizes directly.</p>
    *
-   * @param logFileFraction log-to-Parquet compression ratio
+   * @param writeConfig write config containing the log data block format and log-to-Parquet compression ratio
    */
-  public long getTotalFileSizeAsParquetFormat(double logFileFraction) {
-    long logFileSize = convertLogFilesSizeToExpectedParquetSize(logFileFraction);
+  public long getTotalFileSizeAsParquetFormat(HoodieConfig writeConfig) {
+    long logFileSize = convertLogFilesSizeToExpectedParquetSize(writeConfig);
     return getBaseFile().isPresent() ? getBaseFile().get().getFileSize() + logFileSize : logFileSize;
   }
 
-  private long convertLogFilesSizeToExpectedParquetSize(double logFileFraction) {
+  private long convertLogFilesSizeToExpectedParquetSize(HoodieConfig writeConfig) {
     long totalSizeOfInlineLogFiles =
         logFiles.stream()
             .filter(logFile -> !logFile.isNativeLogFile())
@@ -222,7 +226,14 @@ public class FileSlice implements Serializable {
     // Here we assume that if there is no base parquet file, all calibrated log files contain only inserts.
     // We can then just get the parquet equivalent size of these log files, compare that with
     // {@link config.getParquetMaxFileSize()} and decide if there is scope to insert more rows
-    long calibratedInlineLogFileSize = (long) (totalSizeOfInlineLogFiles * logFileFraction);
+    // The effective inline block type cannot be inferred from the log file name, and hudi-common does not have access
+    // to the table config fallback used by write clients. Legacy callers with no explicit block format default to Avro.
+    boolean isAvroDataBlocks = HoodieLogBlockType.fromId(writeConfig.getStringOrDefault(
+        HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT, "avro")) == HoodieLogBlockType.AVRO_DATA_BLOCK;
+    long calibratedInlineLogFileSize = isAvroDataBlocks
+        ? (long) (totalSizeOfInlineLogFiles
+            * writeConfig.getDoubleOrDefault(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION))
+        : totalSizeOfInlineLogFiles;
     return calibratedInlineLogFileSize + totalSizeOfNativeLogFiles;
   }
 }
