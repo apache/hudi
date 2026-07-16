@@ -130,6 +130,13 @@ for pattern in "${enginePatterns[@]}"; do
       echo "Neither 'jar' nor 'unzip' is available to inspect jars [ERROR]"
       exit 1
     fi
+    # Guard against a vacuous pass: a truncated or unreadable jar yields an empty
+    # listing, which trivially contains no public/ entries.
+    if ! echo "$entries" | grep -q '^META-INF/'; then
+      echo "EMPTY or unreadable jar listing (no META-INF/ entry) for $jar [ERROR]"
+      violations=$((violations + 1))
+      continue
+    fi
     offending=$(echo "$entries" | grep '^public/')
     if [ -n "$offending" ]; then
       echo "FORBIDDEN public/ entries found in $jar [ERROR]:"
