@@ -70,12 +70,17 @@ import static org.apache.hudi.utilities.streamer.BaseErrorTableWriter.ERROR_TABL
  * <p>The flattened column names are defined in {@link DebeziumConstants}; the matching
  * {@code DebeziumAvroPayload} implementations rely on these names for merge/ordering semantics.
  *
+ * <p>The layout and nullability behavior are configured through {@link DebeziumTransformerConfig}.
+ *
  * <p>Subclasses configure the database-specific behavior purely through the constructor; there is
  * no abstract method to implement.
  */
 public class AbstractDebeziumTransformer implements Transformer {
 
   private static final String DATA_FIELD = "__data";
+  // Bare name of the optional {@code schema} field inside the Debezium {@code source} struct
+  // (INCOMING_SOURCE_SCHEMA_FIELD is the fully-qualified {@code source.schema} path).
+  private static final String SOURCE_SCHEMA_FIELD_NAME = "schema";
 
   private static final List<Column> DEFAULT_ROOT_LEVEL_METADATA_COLUMNS = Arrays.asList(
       new Column(DebeziumConstants.INCOMING_OP_FIELD).alias(DebeziumConstants.FLATTENED_OP_COL_NAME));
@@ -99,10 +104,12 @@ public class AbstractDebeziumTransformer implements Transformer {
    * @param typeSpecificMetadataColumns database-specific metadata columns (already aliased to their
    *                                    flattened output names).
    * @param postProcessingOption        optional post-flatten transformation applied to the result.
-   * @param nestedFieldsEnabledByDefault default used for
-   *                                     {@link DebeziumTransformerConfig#ENABLE_NESTED_FIELDS} when
-   *                                     the property is not set explicitly. Lets a subclass (e.g.
-   *                                     Postgres) opt into nested metadata by default.
+   * @param nestedFieldsEnabledByDefault the subclass default for the metadata layout. Resolution
+   *                                     order at runtime: an explicitly set
+   *                                     {@code hoodie.streamer.transformer.debezium.nested.fields.enable}
+   *                                     ({@link DebeziumTransformerConfig#ENABLE_NESTED_FIELDS})
+   *                                     always wins; when the property is absent this default is
+   *                                     used. Lets a subclass opt into nested metadata by default.
    */
   protected AbstractDebeziumTransformer(
       List<Column> typeSpecificMetadataColumns,
@@ -118,77 +125,112 @@ public class AbstractDebeziumTransformer implements Transformer {
     if (rowDataset.columns().length == 0) {
       return rowDataset;
     }
-    // Pick selective debezium meta fields: pick the row values from before field for delete record
-    // and row values from after field for insert or update records.
-    rowDataset = rowDataset
+    Dataset<Row> withDataField = selectBeforeOrAfterImage(rowDataset);
+    List<Column> outputColumns = buildOutputColumns(withDataField, props);
+    Dataset<Row> withErrorCol = applyErrorTablePassthrough(withDataField, outputColumns, props);
+    Dataset<Row> flattened = withErrorCol.select(outputColumns.toArray(new Column[]{}));
+    Dataset<Row> postProcessed = postProcessingOption.map(postProcessing -> postProcessing.apply(flattened)).orElse(flattened);
+    return applyNullabilityRules(sparkSession, withDataField, postProcessed, props);
+  }
+
+  /**
+   * Selects the {@code before} image for deletes and the {@code after} image otherwise into a single
+   * {@code __data} struct column, then drops the original {@code before}/{@code after} columns.
+   */
+  private static Dataset<Row> selectBeforeOrAfterImage(Dataset<Row> rowDataset) {
+    return rowDataset
         .withColumn(DATA_FIELD,
             functions.when(new Column(DebeziumConstants.INCOMING_OP_FIELD).equalTo(DebeziumConstants.DELETE_OP),
                 new Column(DebeziumConstants.INCOMING_BEFORE_FIELD))
                 .otherwise(new Column(DebeziumConstants.INCOMING_AFTER_FIELD)))
         .drop(DebeziumConstants.INCOMING_AFTER_FIELD, DebeziumConstants.INCOMING_BEFORE_FIELD);
+  }
 
-    List<Column> allColumns = new ArrayList<>();
-    boolean enableNestedFields = isNestedFieldsEnabled(props);
-
-    // When nested fields are enabled, only _change_operation_type and root-level metadata columns should be at root level
-    if (enableNestedFields) {
-      Column lsnColumn = null;
-      List<Column> otherMetadata = new ArrayList<>();
-
-      // Extract LSN column to root level, keep other metadata nested
-      for (Column col : typeSpecificMetadataColumns) {
-        String colStr = col.toString();
-        if (colStr.contains(DebeziumConstants.FLATTENED_LSN_COL_NAME)) {
-          lsnColumn = col;
-        } else {
-          otherMetadata.add(col);
-        }
-      }
-
-      List<Column> nestedMetadataFields = new ArrayList<>();
-      nestedMetadataFields.addAll(DEFAULT_NESTED_METADATA_COLUMNS);
-      nestedMetadataFields.addAll(otherMetadata);
-
-      // Only add schema field if it exists in the source struct (not all databases have this field)
-      if (hasSchemaField(rowDataset)) {
-        nestedMetadataFields.add(new Column(DebeziumConstants.INCOMING_SOURCE_SCHEMA_FIELD).alias(DebeziumConstants.FLATTENED_SCHEMA_NAME));
-      }
-
-      rowDataset = rowDataset.withColumn(DebeziumConstants.DEBEZIUM_METADATA_FIELD,
-          functions.struct(nestedMetadataFields.toArray(new Column[]{})));
-      allColumns.add(new Column(DebeziumConstants.DEBEZIUM_METADATA_FIELD));
-
-      allColumns.addAll(DEFAULT_ROOT_LEVEL_METADATA_COLUMNS);
-      if (lsnColumn != null) {
-        // Add LSN column to root level
-        allColumns.add(lsnColumn);
-      }
+  /**
+   * Builds the flattened output column list: the metadata columns (flat at the root or grouped under
+   * the {@code _debezium_metadata} struct, per {@link DebeziumTransformerConfig#ENABLE_NESTED_FIELDS})
+   * followed by the exploded {@code __data} image.
+   */
+  private List<Column> buildOutputColumns(Dataset<Row> withDataField, TypedProperties props) {
+    List<Column> outputColumns = new ArrayList<>();
+    if (isNestedFieldsEnabled(props)) {
+      outputColumns.addAll(buildNestedMetadataColumns(withDataField));
     } else {
-      // When nested fields are disabled, all metadata fields are at root level
-      allColumns.addAll(DEFAULT_ROOT_LEVEL_METADATA_COLUMNS);
-      allColumns.addAll(DEFAULT_NESTED_METADATA_COLUMNS);
-      allColumns.addAll(typeSpecificMetadataColumns);
+      // When nested fields are disabled, all metadata fields are at the root level.
+      outputColumns.addAll(DEFAULT_ROOT_LEVEL_METADATA_COLUMNS);
+      outputColumns.addAll(DEFAULT_NESTED_METADATA_COLUMNS);
+      outputColumns.addAll(typeSpecificMetadataColumns);
     }
+    // Explode the selected before/after image to the row's top level.
+    outputColumns.add(new Column(String.format("%s.*", DATA_FIELD)));
+    return outputColumns;
+  }
 
-    allColumns.add(new Column(String.format("%s.*", DATA_FIELD)));
-
-    if (ConfigUtils.getBooleanWithAltKeys(props, ERROR_TABLE_ENABLED)) {
-      if (!Arrays.stream(rowDataset.columns()).collect(Collectors.toList())
-          .contains(ERROR_TABLE_CURRUPT_RECORD_COL_NAME)) {
-        rowDataset = rowDataset.withColumn(ERROR_TABLE_CURRUPT_RECORD_COL_NAME, functions.lit(null));
+  /**
+   * Assembles the metadata columns for the nested layout: the operation-type column and the
+   * log-position column (e.g. the Postgres LSN) stay at the root level so payload ordering keeps
+   * working, while every other metadata column is grouped under the {@code _debezium_metadata} struct.
+   */
+  private List<Column> buildNestedMetadataColumns(Dataset<Row> withDataField) {
+    Column lsnColumn = null;
+    List<Column> nestedMetadataFields = new ArrayList<>(DEFAULT_NESTED_METADATA_COLUMNS);
+    // Keep the log-position (LSN) column at the root level; nest the rest of the type-specific metadata.
+    for (Column col : typeSpecificMetadataColumns) {
+      if (col.toString().contains(DebeziumConstants.FLATTENED_LSN_COL_NAME)) {
+        lsnColumn = col;
+      } else {
+        nestedMetadataFields.add(col);
       }
-      allColumns.add(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME));
+    }
+    // Only add the schema field if it exists in the source struct (not all databases have this field).
+    if (hasSchemaField(withDataField)) {
+      nestedMetadataFields.add(new Column(DebeziumConstants.INCOMING_SOURCE_SCHEMA_FIELD).alias(DebeziumConstants.FLATTENED_SCHEMA_NAME));
     }
 
-    Dataset<Row> flattened = rowDataset.select(allColumns.toArray(new Column[]{}));
-    Dataset<Row> debeziumDataset = postProcessingOption.map(postProcessing -> postProcessing.apply(flattened)).orElse(flattened);
+    List<Column> outputColumns = new ArrayList<>();
+    outputColumns.add(functions.struct(nestedMetadataFields.toArray(new Column[]{}))
+        .alias(DebeziumConstants.DEBEZIUM_METADATA_FIELD));
+    outputColumns.addAll(DEFAULT_ROOT_LEVEL_METADATA_COLUMNS);
+    if (lsnColumn != null) {
+      outputColumns.add(lsnColumn);
+    }
+    return outputColumns;
+  }
 
+  /**
+   * When the error table is enabled, ensures the corrupt-record column is present (adding a null one
+   * if the input lacks it) and includes it in {@code outputColumns} so it is preserved downstream.
+   */
+  private static Dataset<Row> applyErrorTablePassthrough(Dataset<Row> dataset, List<Column> outputColumns, TypedProperties props) {
+    if (!ConfigUtils.getBooleanWithAltKeys(props, ERROR_TABLE_ENABLED)) {
+      return dataset;
+    }
+    Dataset<Row> withCorruptCol = dataset;
+    if (!Arrays.asList(dataset.columns()).contains(ERROR_TABLE_CURRUPT_RECORD_COL_NAME)) {
+      withCorruptCol = dataset.withColumn(ERROR_TABLE_CURRUPT_RECORD_COL_NAME, functions.lit(null));
+    }
+    outputColumns.add(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME));
+    return withCorruptCol;
+  }
+
+  /**
+   * Normalizes column nullability on the flattened dataset. When
+   * {@link DebeziumTransformerConfig#SCHEMA_AS_NULLABLE} is set every column is marked nullable;
+   * otherwise a column stays non-nullable only if Spark already infers it non-nullable or if it was a
+   * non-nullable source data column. This preserves the non-nullability of Debezium metadata columns
+   * (e.g. {@code _change_operation_type}) that Spark infers as non-nullable.
+   *
+   * @param withDataField the dataset carrying the {@code __data} struct, used to recover which source
+   *                      data columns were non-nullable before flattening.
+   */
+  private Dataset<Row> applyNullabilityRules(SparkSession sparkSession, Dataset<Row> withDataField,
+                                             Dataset<Row> debeziumDataset, TypedProperties props) {
     if (ConfigUtils.getBooleanWithAltKeys(props, DebeziumTransformerConfig.SCHEMA_AS_NULLABLE)) {
       return convertColumnsToNullable(sparkSession, debeziumDataset);
     }
 
     Set<String> nonNullableColumns = new HashSet<>();
-    for (StructField field : rowDataset.schema().fields()) {
+    for (StructField field : withDataField.schema().fields()) {
       if (field.dataType() instanceof StructType && DATA_FIELD.equals(field.name())) {
         nonNullableColumns.addAll(Arrays.stream(((StructType) field.dataType()).fields())
             .filter(dataField -> !dataField.nullable())
@@ -197,10 +239,6 @@ public class AbstractDebeziumTransformer implements Transformer {
       }
     }
 
-    // Apply nullability to the transformed schema: a column stays non-nullable if Spark already
-    // infers it non-nullable, or if it was a non-nullable source data column; every other column
-    // is nullable. This preserves the non-nullability of Debezium metadata columns (e.g.
-    // _change_operation_type) that Spark infers as non-nullable when schema.nullable.enable is off.
     StructField[] updatedStructFields = Arrays.stream(debeziumDataset.schema().fields())
         .map(field -> field.nullable() && !nonNullableColumns.contains(field.name())
           ? new StructField(field.name(), field.dataType(), true, field.metadata())
@@ -230,15 +268,24 @@ public class AbstractDebeziumTransformer implements Transformer {
     return sparkSession.createDataFrame(dataset.rdd(), new StructType(modifiedStructFields));
   }
 
+  /**
+   * Returns whether the source struct carries a {@code schema} field (present for Postgres, absent
+   * for MySQL).
+   */
   private static boolean hasSchemaField(Dataset<Row> rowDataset) {
-    return Arrays.stream(rowDataset.schema().fields())
-        .filter(field -> DebeziumConstants.INCOMING_SOURCE_FIELD.equals(field.name()) && field.dataType() instanceof StructType)
-        .findFirst()
-        .map(field -> {
-          StructType sourceType = (StructType) field.dataType();
-          return Arrays.stream(sourceType.fields())
-              .anyMatch(sourceField -> "schema".equals(sourceField.name()));
-        })
+    return getSourceStruct(rowDataset)
+        .map(source -> Arrays.stream(source.fields()).anyMatch(field -> SOURCE_SCHEMA_FIELD_NAME.equals(field.name())))
         .orElse(false);
+  }
+
+  /**
+   * Locates the Debezium {@code source} struct in the dataset schema, if present.
+   */
+  private static Option<StructType> getSourceStruct(Dataset<Row> rowDataset) {
+    return Option.ofNullable(Arrays.stream(rowDataset.schema().fields())
+        .filter(field -> DebeziumConstants.INCOMING_SOURCE_FIELD.equals(field.name()) && field.dataType() instanceof StructType)
+        .map(field -> (StructType) field.dataType())
+        .findFirst()
+        .orElse(null));
   }
 }

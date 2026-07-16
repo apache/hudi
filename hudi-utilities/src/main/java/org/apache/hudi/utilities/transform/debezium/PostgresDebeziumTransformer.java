@@ -43,14 +43,12 @@ import static org.apache.spark.sql.functions.when;
  * LSN is not populated for rows produced by Debezium incremental snapshots
  * (see <a href="https://debezium.io/blog/2021/10/07/incremental-snapshots/">incremental snapshots</a>).
  *
- * <p>Nested metadata is enabled by default for Postgres (the {@code _event_lsn} and operation-type
- * columns stay at the root level so payload ordering keeps working); set
- * {@code hoodie.streamer.transformer.debezium.nested.fields.enable=false} to flatten all metadata.
+ * <p>Metadata is flattened to the root level by default; set
+ * {@code hoodie.streamer.transformer.debezium.nested.fields.enable=true} to group it under a
+ * {@code _debezium_metadata} struct instead. When nested, the {@code _event_lsn} and operation-type
+ * columns stay at the root level so payload ordering keeps working.
  */
 public class PostgresDebeziumTransformer extends AbstractDebeziumTransformer {
-
-  // Snapshot operation type emitted by Debezium ("read").
-  private static final String SNAPSHOT_OP = "r";
 
   private static final List<Column> POSTGRES_METADATA = Arrays.asList(
       new Column(DebeziumConstants.INCOMING_SOURCE_TXID_FIELD).alias(DebeziumConstants.FLATTENED_TX_ID_COL_NAME),
@@ -58,7 +56,7 @@ public class PostgresDebeziumTransformer extends AbstractDebeziumTransformer {
       new Column(DebeziumConstants.INCOMING_SOURCE_XMIN_FIELD).alias(DebeziumConstants.FLATTENED_XMIN_COL_NAME));
 
   public PostgresDebeziumTransformer() {
-    super(POSTGRES_METADATA, Option.of(PostgresDebeziumTransformer::useDefaultValuesForLsnIfNull), true);
+    super(POSTGRES_METADATA, Option.of(PostgresDebeziumTransformer::useDefaultValuesForLsnIfNull));
   }
 
   /**
@@ -75,7 +73,7 @@ public class PostgresDebeziumTransformer extends AbstractDebeziumTransformer {
     }
 
     return dataset.withColumn(DebeziumConstants.FLATTENED_LSN_COL_NAME, when(
-        dataset.col(DebeziumConstants.FLATTENED_OP_COL_NAME).equalTo(SNAPSHOT_OP),
+        dataset.col(DebeziumConstants.FLATTENED_OP_COL_NAME).equalTo(DebeziumConstants.SNAPSHOT_OP),
         expr(String.format("coalesce(%s, cast(0 as long))", DebeziumConstants.FLATTENED_LSN_COL_NAME))
     ).otherwise(dataset.col(DebeziumConstants.FLATTENED_LSN_COL_NAME)));
   }

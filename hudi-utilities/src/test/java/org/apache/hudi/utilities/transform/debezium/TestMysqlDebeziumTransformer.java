@@ -31,6 +31,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -50,6 +51,16 @@ class TestMysqlDebeziumTransformer extends DebeziumTransformerTestBase {
         + "\"after\":" + row + ","
         + "\"source\":{\"name\":\"mysqldb\",\"ts_ms\":1700000000000,"
         + "\"file\":\"" + file + "\",\"pos\":" + pos + ",\"row\":0}}";
+  }
+
+  // A MySQL event with no binlog coordinates (file/pos null), e.g. a snapshot row.
+  private static String mysqlEventNullCoords(String op, long id) {
+    String row = "{\"id\":" + id + ",\"title\":\"t" + id + "\"}";
+    return "{\"op\":\"" + op + "\",\"ts_ms\":1700000000500,"
+        + "\"before\":" + row + ","
+        + "\"after\":" + row + ","
+        + "\"source\":{\"name\":\"mysqldb\",\"ts_ms\":1700000000000,"
+        + "\"file\":null,\"pos\":null,\"row\":0}}";
   }
 
   @Test
@@ -106,5 +117,24 @@ class TestMysqlDebeziumTransformer extends DebeziumTransformerTestBase {
     // _event_seq must still be computed correctly from the nested file/pos
     String seq = result.first().getAs(DebeziumConstants.ADDED_SEQ_COL_NAME);
     assertEquals("000001.100", seq);
+  }
+
+  @Test
+  void testSeqIsNullWhenBinlogCoordinatesAreNull() {
+    // With null binlog file/pos (e.g. a snapshot row), _event_seq propagates null rather than a
+    // fabricated value. _event_seq is the payload's ordering field, so surfacing null keeps the
+    // missing-coordinates case explicit instead of silently producing a bogus sequence.
+    TypedProperties props = new TypedProperties();
+    props.setProperty(DebeziumTransformerConfig.ENABLE_NESTED_FIELDS.key(), "false");
+
+    // Pair a real-coordinate row with the null-coordinate row so Spark still infers file/pos as
+    // (string, long) rather than a null type.
+    Dataset<Row> result = new MysqlDebeziumTransformer().apply(jsc, spark,
+        jsonToDataset(mysqlEvent("c", 1, "mysql-bin.000001", 100), mysqlEventNullCoords("c", 2)), props);
+
+    assertNull(result.where("id = 2").first().getAs(DebeziumConstants.ADDED_SEQ_COL_NAME),
+        "null binlog coordinates -> null _event_seq");
+    assertEquals("000001.100", result.where("id = 1").first().getAs(DebeziumConstants.ADDED_SEQ_COL_NAME),
+        "real binlog coordinates still produce the sequence");
   }
 }
