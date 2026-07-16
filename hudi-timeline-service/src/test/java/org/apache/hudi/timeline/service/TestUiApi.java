@@ -490,6 +490,25 @@ class TestUiApi extends HoodieCommonTestHarness {
   }
 
   @Test
+  void testGetInstantDetailsCompletedSavepoint() throws Exception {
+    HoodieTableMetaClient mc = initTable("instant-savepoint");
+    String base = mc.getBasePath().toString();
+    String ts = "20240101000028";
+    // Savepoint is the only arm that reads the instant itself without a requested twin (savepoint has
+    // no requested state). This pins the completed read: avro HoodieSavepointMetadata surfaced as a Map.
+    HoodieTestTable testTable = HoodieTestTable.of(mc);
+    testTable.addSavepointCommit(ts, Option.of("20240101000029"),
+        testTable.getSavepointMetadata(ts, Collections.singletonMap("par", Collections.singletonList("file-1"))));
+
+    JsonNode root = getJsonOk(UI_INSTANT_URL, params(BASEPATH_PARAM, base, INSTANT_PARAM, ts,
+        INSTANT_ACTION_PARAM, "savepoint", INSTANT_STATE_PARAM, "COMPLETED"));
+    // The avro metadata is converted to a Map with avro field names.
+    assertEquals("test", root.get("savepointedBy").asText(), root.toString());
+    assertEquals("file-1", root.get("partitionMetadata").get("par").get("savepointDataFile").get(0).asText(),
+        root.toString());
+  }
+
+  @Test
   void testGetInstantDetailsMalformedStateOrActionReturns400() throws Exception {
     HoodieTableMetaClient mc = initTable("instant-bad-state");
     String base = mc.getBasePath().toString();
