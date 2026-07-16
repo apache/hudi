@@ -106,7 +106,7 @@ case class HoodieFileIndex(spark: SparkSession,
 
   @transient protected var hasPushedDownPartitionPredicates: Boolean = false
 
-  private lazy val hoodieConfig =
+  @transient private lazy val hoodieConfig =
     new HoodieConfig(TypedProperties.fromMap(options.filter(_._2 != null).asJava))
 
   /** True when any partition column is a nested field path (e.g. "nested_record.level"). */

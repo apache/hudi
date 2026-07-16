@@ -28,6 +28,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.PartitionedFileUtil
 import org.apache.spark.sql.execution.datasources.FilePartition
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -91,6 +92,25 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
     val tasks = sparkAdapter.getFilePartitions(spark, partitionedFiles, maxSplitSize)
     verifyBalanceByNum(tasks, totalRecordNum, logFraction)
     spark.stop()
+  }
+
+  @Test
+  def testConvertNativeLogFileSliceToPartitionDirectory(): Unit = {
+    val logFraction = 0.1
+    val options = Map(
+      s"${HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION.key()}" -> logFraction.toString
+    )
+    val config = new HoodieConfig(TypedProperties.fromMap(options.asJava))
+    val fileId = "native-log-file"
+    val recordCount = 300
+    val nativeLogFile = buildNativeHoodieLogFile(fileId, recordCount)
+    val slice = new FileSlice(new HoodieFileGroupId(partitionPath, fileId), baseInstant)
+    slice.addLogFile(nativeLogFile)
+
+    assert(nativeLogFile.isNativeLogFile)
+    val directory = PartitionDirectoryConverter.convertFileSliceToPartitionDirectory(
+      InternalRow.fromSeq(Seq("2025-01-01")), slice, config)
+    assert(directory.files.head.getLen == recordCount * fixedSizePerRecordWithParquetFormat)
   }
 
   private def verifyBalanceByNum(tasks: Seq[FilePartition], totalRecordNum: Int, logFraction: Double): Unit = {
@@ -160,6 +180,13 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
   private def buildHoodieLogFile(fileId: String, recordsNum: Int, sizePerLogRecord: Long, index: Int): HoodieLogFile = {
     val path = new StoragePath(s".${fileId}_20250101010101.log.${index}_0-0-0")
     val fileLen = recordsNum * sizePerLogRecord
+    val info = new StoragePathInfo(path, fileLen, false, 1, blockSize, System.currentTimeMillis())
+    new HoodieLogFile(info)
+  }
+
+  private def buildNativeHoodieLogFile(fileId: String, recordsNum: Int): HoodieLogFile = {
+    val path = new StoragePath(s"${fileId}_0-0-0_${baseInstant}_1.log.parquet")
+    val fileLen = recordsNum * fixedSizePerRecordWithParquetFormat
     val info = new StoragePathInfo(path, fileLen, false, 1, blockSize, System.currentTimeMillis())
     new HoodieLogFile(info)
   }
