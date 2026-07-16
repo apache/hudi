@@ -17,18 +17,38 @@
 
 package org.apache.spark.sql.hudi.analysis
 
+import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.index.vector.{VectorDistanceMetric, VectorIndexArbiter, VectorIndexMdtSearchUtils, VectorIndexMetadataCache, VectorIndexOptions}
+import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.data.HoodieJavaRDD
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
 
-import org.apache.spark.sql.{AnalysisException, DataFrame, SparkSession}
-import org.apache.spark.sql.catalyst.parser.ParseException
+import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.plans.logical.HoodieVectorSearchTableValuedFunction.{DistanceMetric, SearchAlgorithm}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions.{broadcast, col, monotonically_increasing_id, row_number}
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
-import org.apache.spark.sql.types.{ArrayType, ByteType, DataType, DoubleType, FloatType}
+import org.apache.spark.sql.types.{ArrayType, ByteType, DataType, DoubleType, FloatType, Metadata, StructField, StructType}
+import org.apache.spark.util.LongAccumulator
+import org.slf4j.LoggerFactory
 
+import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
+
+case class VectorSearchTable(df: DataFrame, basePath: Option[String])
 
 /**
  * Extension point for vector search algorithms. Each implementation provides
@@ -60,46 +80,32 @@ trait VectorSearchAlgorithm {
    * Build a plan that finds the k nearest corpus rows to a single query vector.
    *
    * @param spark          active SparkSession
-   * @param corpusDf       resolved corpus DataFrame (may be Hudi, Parquet, or temp view)
+   * @param corpusTable    resolved corpus table (may be Hudi, Parquet, or temp view)
    * @param embeddingCol   name of the array-typed embedding column in corpusDf
    * @param queryVector    the query vector, normalized to Array[Double]
    * @param k              number of nearest neighbors to return
    * @param metric         distance metric (COSINE, L2, DOT_PRODUCT)
-   * @param filter         optional SQL predicate applied to the corpus before distance computation,
-   *                       String literals inside the predicate must use double quotes (e.g. {@code label = "z-axis"})
-   *                       because the filter is passed as a single-quoted TVF argument and
-   *                       Spark's lexer does not support {@code ''} as an escape sequence
-   *                       inside string literals.
-   * @param maxDistance    optional distance threshold; results exceeding this value are excluded
    * @return an analyzed LogicalPlan whose output matches the single-query schema contract
    */
   def buildSingleQueryPlan(
       spark: SparkSession,
-      corpusDf: DataFrame,
+      corpusTable: VectorSearchTable,
       embeddingCol: String,
       queryVector: Array[Double],
       k: Int,
       metric: DistanceMetric.Value,
-      filter: Option[String] = None,
-      maxDistance: Option[Double] = None): LogicalPlan
+      runtimeOptions: Map[String, String] = Map.empty): LogicalPlan
 
   /**
    * Build a plan that finds the k nearest corpus rows for each row in the query table.
    *
    * @param spark              active SparkSession
-   * @param corpusDf           resolved corpus DataFrame
+   * @param corpusTable        resolved corpus table
    * @param corpusEmbeddingCol name of the embedding column in corpusDf
    * @param queryDf            resolved query DataFrame
    * @param queryEmbeddingCol  name of the embedding column in queryDf
    * @param k                  number of nearest neighbors per query
    * @param metric             distance metric (COSINE, L2, DOT_PRODUCT)
-   * @param filter             optional SQL predicate applied to the corpus before distance
-   *                           computation, and shrinking cross-join cardinality. Applied to the
-   *                           corpus only — to restrict the query side, apply a projection or
-   *                           filter on the query table before invoking the TVF. See
-   *                           [[buildSingleQueryPlan]] for quoting requirements.
-   * @param maxDistance        optional distance threshold; results exceeding this value are
-   *                           excluded before per-query top-K selection, reducing shuffle volume.
    * @return an analyzed LogicalPlan whose output matches the batch-query schema contract
    * @note Batch mode broadcasts the query table to all executors via a cross-join.
    *       This is designed for small-to-medium query sets (tens to low hundreds of rows).
@@ -107,14 +113,13 @@ trait VectorSearchAlgorithm {
    */
   def buildBatchQueryPlan(
       spark: SparkSession,
-      corpusDf: DataFrame,
+      corpusTable: VectorSearchTable,
       corpusEmbeddingCol: String,
       queryDf: DataFrame,
       queryEmbeddingCol: String,
       k: Int,
       metric: DistanceMetric.Value,
-      filter: Option[String] = None,
-      maxDistance: Option[Double] = None): LogicalPlan
+      runtimeOptions: Map[String, String] = Map.empty): LogicalPlan
 }
 
 /**
@@ -123,15 +128,44 @@ trait VectorSearchAlgorithm {
  */
 object HoodieVectorSearchPlanBuilder {
 
+  private[analysis] val LOG = LoggerFactory.getLogger(getClass)
+
   val DISTANCE_COL = "_hudi_distance"
+  val FILE_GROUP_ID_COL = "_hudi_file_group_id"
+  val VECTOR_ONLY_PROJECTION_OPT = "vector.exact_fetch.vector_only_projection"
+  val VECTOR_ONLY_PROJECTION_SPARK_CONF = "spark.hudi.vector.exact_fetch.vector_only_projection"
   private[analysis] val QUERY_ID_COL = "_hudi_query_index"
   private[analysis] val QUERY_EMB_ALIAS = "_hudi_query_emb"
   private[analysis] val RANK_COL = "_hudi_rank"
   private[analysis] val QUERY_COL_PREFIX = "_hudi_query_"
 
+  private[analysis] def elapsedMs(startNs: Long): Long = (System.nanoTime() - startNs) / 1000000L
+
+  private[analysis] def summarizeInts(values: Seq[Int], limit: Int = 16): String = {
+    val preview = values.take(limit).mkString("[", ", ", "]")
+    if (values.length > limit) s"$preview...(${values.length} total)" else preview
+  }
+
+  private[analysis] def summarizeShardCounts(shardCounts: collection.Map[Int, Int], limit: Int = 16): String = {
+    val preview = shardCounts.toSeq.sortBy(_._1).take(limit).map { case (clusterId, count) =>
+      s"$clusterId->$count"
+    }.mkString("[", ", ", "]")
+    if (shardCounts.size > limit) s"$preview...(${shardCounts.size} total)" else preview
+  }
+
+  private[analysis] def logRddLineage(label: String, rdd: RDD[_]): Unit = {
+    Try(rdd.toDebugString) match {
+      case Success(debug) =>
+        LOG.info(s"[vector_search][$label] lineage:\n$debug")
+      case Failure(error) =>
+        LOG.warn(s"[vector_search][$label] unable to fetch RDD lineage", error)
+    }
+  }
+
   /** Resolve a [[SearchAlgorithm]] enum value to its implementation. */
   def resolveAlgorithm(algorithm: SearchAlgorithm.Value): VectorSearchAlgorithm = algorithm match {
     case SearchAlgorithm.BRUTE_FORCE => BruteForceSearchAlgorithm
+    case SearchAlgorithm.IVF_RABITQ_MDT => IvfRaBitQMdtSearchAlgorithm
     case other => throw new HoodieAnalysisException(
       s"Unsupported search algorithm: $other")
   }
@@ -157,7 +191,7 @@ object HoodieVectorSearchPlanBuilder {
    */
   private[analysis] def validateQueryVectorDimension(
       df: DataFrame, embeddingCol: String, queryDim: Int): Unit = {
-    extractVectorDimension(df, embeddingCol).foreach { corpusDim =>
+    extractVectorSchema(df, embeddingCol).map(_.getDimension).foreach { corpusDim =>
       if (corpusDim != queryDim) {
         throw new HoodieAnalysisException(
           s"Query vector dimension ($queryDim) does not match " +
@@ -195,7 +229,7 @@ object HoodieVectorSearchPlanBuilder {
   private[analysis] def validateBatchDimensions(
       corpusDf: DataFrame, corpusCol: String,
       queryDf: DataFrame, queryCol: String): Unit = {
-    (extractVectorDimension(corpusDf, corpusCol), extractVectorDimension(queryDf, queryCol)) match {
+    (extractVectorSchema(corpusDf, corpusCol).map(_.getDimension), extractVectorSchema(queryDf, queryCol).map(_.getDimension)) match {
       case (Some(corpusDim), Some(queryDim)) if corpusDim != queryDim =>
         throw new HoodieAnalysisException(
           s"Corpus embedding dimension ($corpusDim) does not match " +
@@ -217,14 +251,14 @@ object HoodieVectorSearchPlanBuilder {
     }
   }
 
-  /** Extracts VECTOR(dim) dimension from column metadata, if present. */
-  private def extractVectorDimension(df: DataFrame, colName: String): Option[Int] = {
+  /** Extracts VECTOR schema from column metadata, if present. */
+  private[analysis] def extractVectorSchema(df: DataFrame, colName: String): Option[HoodieSchema.Vector] = {
     df.schema.fields.find(_.name.equalsIgnoreCase(colName)).flatMap { field =>
       val meta = field.metadata
       if (meta.contains(HoodieSchema.TYPE_METADATA_FIELD)) {
         val typeDesc = meta.getString(HoodieSchema.TYPE_METADATA_FIELD)
         Try(HoodieSchema.parseTypeDescriptor(typeDesc)) match {
-          case Success(v: HoodieSchema.Vector) => Some(v.getDimension)
+          case Success(v: HoodieSchema.Vector) => Some(v)
           case Success(_) => throw new HoodieAnalysisException(
             s"Column '$colName' has type '$typeDesc' which is not a VECTOR type. " +
               "Only VECTOR columns are supported for vector search.")
@@ -234,6 +268,8 @@ object HoodieVectorSearchPlanBuilder {
       } else None
     }
   }
+
+  private[analysis] def quoteIdentifier(name: String): String = s"`${name.replace("`", "``")}`"
 }
 
 /**
@@ -250,10 +286,6 @@ object HoodieVectorSearchPlanBuilder {
  * and select top-K per query. The cross-join produces O(|corpus| * |queries|)
  * intermediate rows, so this is suitable for small-to-medium query sets
  * (tens to low hundreds of queries) against moderate corpora.
- *
- * <p>Both modes support an optional {@code filter} predicate (applied to the corpus before
- * distance computation), and an optional {@code maxDistance} threshold (results beyond this
- * distance are excluded before top-K selection, reducing shuffle and sort volume).
  */
 object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
 
@@ -261,39 +293,20 @@ object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
 
   override val name: String = "brute_force"
 
-  /**
-   * Applies a user-supplied SQL predicate to the corpus DataFrame, wrapping
-   * [[ParseException]] (predicate syntax error) and [[AnalysisException]]
-   * (unknown column, type mismatch, etc.) in a [[HoodieAnalysisException]] that
-   * echoes the offending expression. Other exception types are allowed to
-   * propagate untouched so they aren't misreported as a filter problem.
-   */
-  private def applyFilter(df: DataFrame, filterExpr: String): DataFrame = {
-    try {
-      df.filter(filterExpr)
-    } catch {
-      case e @ (_: ParseException | _: AnalysisException) =>
-        throw new HoodieAnalysisException(
-          s"Invalid pre-filter expression '$filterExpr': ${e.getMessage}")
-    }
-  }
-
   override def buildSingleQueryPlan(
       spark: SparkSession,
-      corpusDf: DataFrame,
+      corpusTable: VectorSearchTable,
       embeddingCol: String,
       queryVector: Array[Double],
       k: Int,
       metric: DistanceMetric.Value,
-      filter: Option[String],
-      maxDistance: Option[Double]): LogicalPlan = {
+      runtimeOptions: Map[String, String] = Map.empty): LogicalPlan = {
+    val corpusDf = corpusTable.df
     validateEmbeddingColumn(corpusDf, embeddingCol)
     validateQueryVectorDimension(corpusDf, embeddingCol, queryVector.length)
 
     val elemType = getElementType(corpusDf, embeddingCol)
-    // Apply pre-filter before distance computation to enable reducing the number of rows that need distance computation.
-    var filteredDf = corpusDf.filter(col(embeddingCol).isNotNull)
-    filter.foreach(f => filteredDf = applyFilter(filteredDf, f))
+    val filteredDf = corpusDf.filter(col(embeddingCol).isNotNull)
 
     // Validate byte corpus query vector values before creating the UDF.
     if (elemType == ByteType) {
@@ -312,26 +325,25 @@ object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
     // so only the corpus column is passed per row.
     val distanceUdf = VectorDistanceUtils.createSingleQueryDistanceUdf(metric, elemType, queryVector)
 
-    var scored = filteredDf
+    val result = filteredDf
       .withColumn(DISTANCE_COL, distanceUdf(col(embeddingCol)))
       .drop(embeddingCol)
-    // Apply max-distance threshold before ordering to shrink the sort input.
-    maxDistance.foreach(d => scored = scored.filter(col(DISTANCE_COL) <= d))
-    val result = scored.orderBy(col(DISTANCE_COL).asc).limit(k)
+      .orderBy(col(DISTANCE_COL).asc)
+      .limit(k)
 
     result.queryExecution.analyzed
   }
 
   override def buildBatchQueryPlan(
       spark: SparkSession,
-      corpusDf: DataFrame,
+      corpusTable: VectorSearchTable,
       corpusEmbeddingCol: String,
       queryDf: DataFrame,
       queryEmbeddingCol: String,
       k: Int,
       metric: DistanceMetric.Value,
-      filter: Option[String],
-      maxDistance: Option[Double]): LogicalPlan = {
+      runtimeOptions: Map[String, String] = Map.empty): LogicalPlan = {
+    val corpusDf = corpusTable.df
     validateEmbeddingColumn(corpusDf, corpusEmbeddingCol)
     validateEmbeddingColumn(queryDf, queryEmbeddingCol)
     validateElementTypeCompatibility(corpusDf, corpusEmbeddingCol, queryDf, queryEmbeddingCol)
@@ -339,10 +351,7 @@ object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
 
     val corpusElemType = getElementType(corpusDf, corpusEmbeddingCol)
     val distanceUdf = VectorDistanceUtils.createDistanceUdf(metric, corpusElemType)
-    // Apply pre-filter before the cross-join to enable Hudi partition pruning and
-    // data skipping, reducing the cross-join cardinality.
-    var filteredCorpus = corpusDf.filter(col(corpusEmbeddingCol).isNotNull)
-    filter.foreach(f => filteredCorpus = applyFilter(filteredCorpus, f))
+    val filteredCorpus = corpusDf.filter(col(corpusEmbeddingCol).isNotNull)
 
     // Prefix clashing query columns with "_hudi_query_" to avoid cross-join ambiguity when
     // corpus and query share column names (e.g. both have "id" or "embedding").
@@ -359,14 +368,11 @@ object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
     }: _*)
 
     // Cross join corpus with broadcast queries, compute distance, then rank
-    var scored = filteredCorpus.crossJoin(broadcast(renamedQuery))
+    val scored = filteredCorpus.crossJoin(broadcast(renamedQuery))
       .withColumn(DISTANCE_COL,
         distanceUdf(col(corpusEmbeddingCol), col(QUERY_EMB_ALIAS)))
       .drop(corpusEmbeddingCol)
       .drop(QUERY_EMB_ALIAS)
-
-    // Apply max-distance threshold before windowing to reduce shuffle volume.
-    maxDistance.foreach(d => scored = scored.filter(col(DISTANCE_COL) <= d))
 
     val window = Window.partitionBy(QUERY_ID_COL).orderBy(col(DISTANCE_COL).asc)
     val result = scored
@@ -378,4 +384,593 @@ object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
     result.queryExecution.analyzed
   }
 
+}
+
+/**
+ * IVF + RaBitQ vector search backed by native metadata-table posting prefix lookups.
+ *
+ * The algorithm keeps Spark SQL out of the posting scan: it probes centroids, converts
+ * the selected clusters to MDT posting prefixes, reads posting rows with HFile-friendly
+ * prefix lookups, reduces with RaBitQ approximate scores before record-location lookup,
+ * then exact-reranks the fetched Hudi rows.
+ */
+object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapterSupport {
+
+  import HoodieVectorSearchPlanBuilder._
+
+  override val name: String = "ivf_rabitq_mdt"
+
+  private case class VectorSearchPlanContext(
+      basePath: String,
+      metaClient: HoodieTableMetaClient,
+      timeline: HoodieTimeline,
+      latestInstantTime: String,
+      indexPartition: String,
+      indexDefinition: HoodieIndexDefinition,
+      metadataTable: HoodieTableMetadata,
+      cache: VectorIndexMetadataCache,
+      tuningOptions: Map[String, String],
+      metric: DistanceMetric.Value)
+
+  private val STRUCTURAL_OPTION_KEYS: Set[String] = Set(
+    VectorIndexOptions.DIMENSION,
+    VectorIndexOptions.METRIC,
+    VectorIndexOptions.RABITQ_BITS,
+    VectorIndexOptions.RABITQ_RANDOM_SEED,
+    VectorIndexOptions.RABITQ_RESIDUAL_ENCODING,
+    VectorIndexOptions.RABITQ_ASSUME_NORMALIZED)
+
+  private def resolvePlanContext(
+      spark: SparkSession,
+      basePath: String,
+      embeddingCol: String,
+      vectorSchema: HoodieSchema.Vector,
+      callerMetric: DistanceMetric.Value,
+      runtimeOptions: Map[String, String]): VectorSearchPlanContext = {
+    val illegal = runtimeOptions.keySet.intersect(STRUCTURAL_OPTION_KEYS)
+    if (illegal.nonEmpty) {
+      throw new HoodieAnalysisException(
+        s"Options ${illegal.toSeq.sorted.mkString(", ")} describe vector index structure and cannot be set at query time; " +
+          "they are read from the active index generation.")
+    }
+
+    val storageConf = HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf())
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(storageConf.newInstance())
+      .setBasePath(basePath)
+      .build()
+    val timeline = metaClient.getActiveTimeline.getCommitsAndCompactionTimeline.filterCompletedInstants()
+    val latestInstantTime = timeline.lastInstant().orElseThrow(() =>
+      new HoodieAnalysisException(s"No completed commits found for table '$basePath'.")).requestedTime()
+    val (indexPartition, indexDefinition) = resolveVectorIndexDefinition(metaClient, embeddingCol)
+    // Build the metadata-reader config from the active session properties instead of bare
+    // defaults. Prior to this, newBuilder().enable(true).build() silently dropped every
+    // hoodie.* metadata/hfile read-side conf set on the session (e.g. the HFile block-cache
+    // sizing), so the vector TVF always read on defaults. fromProperties restores operator
+    // control; enable(true) still forces MDT on for the search path regardless of session.
+    val metadataProps = TypedProperties.fromMap(spark.sessionState.conf.getAllConfs.asJava)
+    val metadataConfig = HoodieMetadataConfig.newBuilder()
+      .fromProperties(metadataProps)
+      .enable(true)
+      .build()
+    val engineContext = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext), spark.sqlContext)
+    val metadataTable = metaClient.getTableFormat.getMetadataFactory
+      .create(engineContext, metaClient.getStorage, metadataConfig, basePath)
+    val cache = getOrLoadMetadataCache(metaClient, metadataTable, indexPartition, vectorSchema, latestInstantTime)
+    if (cache == null || cache.getGenerationId < 0) {
+      throw new HoodieAnalysisException(
+        s"Vector index '$indexPartition' does not contain valid generation metadata.")
+    }
+
+    val indexOptions = Option(indexDefinition.getIndexOptions).map(_.asScala.toMap).getOrElse(Map.empty)
+    val indexMetric = toSqlMetric(VectorIndexOptions.getMetric(indexOptions.asJava))
+    val authoritativeMetric = validateMetricAuthority(callerMetric, indexMetric, cache)
+    val tuningOptions = indexOptions.filterNot { case (key, _) => STRUCTURAL_OPTION_KEYS.contains(key) } ++ runtimeOptions
+    VectorSearchPlanContext(
+      basePath, metaClient, timeline, latestInstantTime, indexPartition, indexDefinition,
+      metadataTable, cache, tuningOptions, authoritativeMetric)
+  }
+
+  private def validateMetricAuthority(
+      callerMetric: DistanceMetric.Value,
+      indexMetric: DistanceMetric.Value,
+      cache: VectorIndexMetadataCache): DistanceMetric.Value = {
+    if (callerMetric == indexMetric) {
+      callerMetric
+    } else {
+      val normalizedEquivalent = cache.isAssumeNormalized &&
+        Set(callerMetric, indexMetric) == Set(DistanceMetric.COSINE, DistanceMetric.DOT_PRODUCT)
+      if (normalizedEquivalent) {
+        callerMetric
+      } else {
+        throw new HoodieAnalysisException(
+          s"Query requests metric '$callerMetric' but the vector index generation was built for " +
+            s"'$indexMetric' (assumeNormalized=${cache.isAssumeNormalized}).")
+      }
+    }
+  }
+
+  private def toSqlMetric(metric: VectorDistanceMetric): DistanceMetric.Value = metric match {
+    case VectorDistanceMetric.COSINE => DistanceMetric.COSINE
+    case VectorDistanceMetric.L2 => DistanceMetric.L2
+    case VectorDistanceMetric.DOT_PRODUCT => DistanceMetric.DOT_PRODUCT
+  }
+
+  private def toVectorMetric(metric: DistanceMetric.Value): VectorDistanceMetric = metric match {
+    case DistanceMetric.COSINE => VectorDistanceMetric.COSINE
+    case DistanceMetric.L2 => VectorDistanceMetric.L2
+    case DistanceMetric.DOT_PRODUCT => VectorDistanceMetric.DOT_PRODUCT
+  }
+
+  override def buildSingleQueryPlan(
+      spark: SparkSession,
+      corpusTable: VectorSearchTable,
+      embeddingCol: String,
+      queryVector: Array[Double],
+      k: Int,
+      metric: DistanceMetric.Value,
+      runtimeOptions: Map[String, String] = Map.empty): LogicalPlan = {
+    val corpusDf = corpusTable.df
+    validateEmbeddingColumn(corpusDf, embeddingCol)
+    validateQueryVectorDimension(corpusDf, embeddingCol, queryVector.length)
+
+    val basePath = corpusTable.basePath.getOrElse {
+      throw new HoodieAnalysisException(
+        s"Search algorithm '$name' requires a Hudi table identifier or table path, not a temporary view.")
+    }
+    if (!corpusDf.columns.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
+      throw new HoodieAnalysisException(
+        s"Search algorithm '$name' requires Hudi meta fields, but '${HoodieRecord.RECORD_KEY_METADATA_FIELD}' is missing.")
+    }
+
+    val vectorSchema = extractVectorSchema(corpusDf, embeddingCol).getOrElse {
+      throw new HoodieAnalysisException(
+        s"Search algorithm '$name' requires '$embeddingCol' to carry VECTOR metadata.")
+    }
+    val queryFloat = queryVector.map(_.toFloat)
+
+    val ctx = resolvePlanContext(spark, basePath, embeddingCol, vectorSchema, metric, runtimeOptions)
+    if (ctx.cache.getDimension != vectorSchema.getDimension) {
+      throw new HoodieAnalysisException(
+        s"Vector index dimension (${ctx.cache.getDimension}) does not match column '$embeddingCol' dimension (${vectorSchema.getDimension}).")
+    }
+    val approxMode = VectorIndexOptions.isApproximateSearchMode(ctx.tuningOptions.asJava)
+
+    if (approxMode) {
+      buildApproximatePlan(spark, ctx, queryFloat, k)
+    } else {
+      val exactOutputSchema = StructType(
+        corpusDf.schema.fields.filterNot(_.name.equalsIgnoreCase(embeddingCol)) :+
+          StructField(DISTANCE_COL, DoubleType, nullable = false))
+      val candidateDf = buildRaBitQExactCandidateDf(
+        spark, ctx, exactOutputSchema, embeddingCol, vectorSchema, queryFloat, queryVector, k)
+
+      candidateDf
+        .orderBy(col(DISTANCE_COL).asc)
+        .limit(k)
+        .queryExecution.analyzed
+    }
+  }
+
+  override def buildBatchQueryPlan(
+      spark: SparkSession,
+      corpusTable: VectorSearchTable,
+      corpusEmbeddingCol: String,
+      queryDf: DataFrame,
+      queryEmbeddingCol: String,
+      k: Int,
+      metric: DistanceMetric.Value,
+      runtimeOptions: Map[String, String] = Map.empty): LogicalPlan = {
+    throw new HoodieAnalysisException(
+      s"Search algorithm '$name' currently supports single-query hudi_vector_search only.")
+  }
+
+  /**
+   * Approximate-only path: scores postings via RaBitQ and returns
+   * (record_key, partition_path, file_group_id, approx_distance) without
+   * reading the base table at all.
+   */
+  private def buildApproximatePlan(
+      spark: SparkSession,
+      ctx: VectorSearchPlanContext,
+      queryVector: Array[Float],
+      k: Int): LogicalPlan = {
+    import spark.implicits._
+    val planStartNs = System.nanoTime()
+    val cache = ctx.cache
+    val mergedOptions = ctx.tuningOptions
+    val metric = toVectorMetric(ctx.metric)
+    val residualEncoding = cache.isResidualEncoding
+    val numProbes = math.min(math.max(1, VectorIndexOptions.getNumProbes(mergedOptions.asJava)), cache.numClusters())
+    val topClusters = cache.findTopClusters(queryVector, numProbes, metric)
+    val shardCounts = cache.getShardCounts(topClusters)
+    val refineK = math.max(k, k * VectorIndexOptions.getRefineFactor(mergedOptions.asJava))
+    val topCandidates = VectorIndexMdtSearchUtils.scanPostingCandidates(
+      ctx.metadataTable, ctx.indexPartition, cache.getGenerationId, shardCounts,
+      queryVector, cache.getDimension, cache.getQuantizerSeed, cache.getRaBitQBits, cache.isAssumeNormalized,
+      metric, VectorIndexOptions.isRaBitQAsymmetricScoring(mergedOptions.asJava),
+      residualEncoding, if (residualEncoding) cache.getCentroids else null, refineK)
+    val resultSchema = new StructType(Array(
+      StructField(HoodieRecord.RECORD_KEY_METADATA_FIELD, org.apache.spark.sql.types.DataTypes.StringType, nullable = false, Metadata.empty),
+      StructField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, org.apache.spark.sql.types.DataTypes.StringType, nullable = true, Metadata.empty),
+      StructField(FILE_GROUP_ID_COL, org.apache.spark.sql.types.DataTypes.StringType, nullable = true, Metadata.empty),
+      StructField(DISTANCE_COL, org.apache.spark.sql.types.DataTypes.DoubleType, nullable = false, Metadata.empty)
+    ))
+    // RFC-104 RLI finalist arbiter (freshness gate). Default-off: dormant until the commit-time
+    // delta writer lands. When enabled, exclude STALE (rewritten/moved) and DELETED finalists so
+    // approx candidate-gen never serves a posting that no longer faithfully represents a live row.
+    val arbiterEnabled = VectorIndexOptions.isFinalistArbiterEnabled(mergedOptions.asJava)
+    val candidateRdd: RDD[VectorIndexMdtSearchUtils.ScoredPostingMatch] =
+      if (arbiterEnabled) {
+        val arbitrated = VectorIndexMdtSearchUtils.arbitrateFinalists(ctx.metadataTable, topCandidates)
+        val staleAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_arbiter_stale")
+        val deletedAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_arbiter_deleted")
+        HoodieJavaRDD.getJavaRDD(arbitrated).rdd.mapPartitions { it =>
+          var stale = 0L
+          var deleted = 0L
+          val kept = ArrayBuffer.empty[VectorIndexMdtSearchUtils.ScoredPostingMatch]
+          it.foreach { c =>
+            c.getArbiterDecision match {
+              case VectorIndexArbiter.Decision.SERVE => kept += c
+              case VectorIndexArbiter.Decision.STALE => stale += 1L
+              case _ => deleted += 1L
+            }
+          }
+          staleAcc.add(stale)
+          deletedAcc.add(deleted)
+          if (stale > 0L || deleted > 0L) {
+            LOG.info(s"[vector_search][approximate][arbiter] arbiterExclusions{stale=$stale, deleted=$deleted} kept=${kept.size}")
+          }
+          kept.iterator
+        }
+      } else {
+        HoodieJavaRDD.getJavaRDD(topCandidates).rdd
+      }
+    val resultRows = candidateRdd.map { c =>
+      Row(
+        c.getRecordKey,
+        Option(c.getPartitionPath).getOrElse(""),
+        Option(c.getFileGroupId).getOrElse(""),
+        c.getApproxDistance.toDouble
+      )
+    }
+    LOG.info(s"[vector_search][approximate] basePath=${ctx.basePath} probedClusters=${topClusters.length} residualEncoding=$residualEncoding arbiter=$arbiterEnabled planMs=${elapsedMs(planStartNs)}")
+    spark.createDataFrame(resultRows, resultSchema)
+      .orderBy(col(DISTANCE_COL).asc)
+      .limit(k)
+      .queryExecution.analyzed
+  }
+
+  private def buildRaBitQExactCandidateDf(
+      spark: SparkSession,
+      ctx: VectorSearchPlanContext,
+      outputSchema: StructType,
+      embeddingCol: String,
+      vectorSchema: HoodieSchema.Vector,
+      queryVector: Array[Float],
+      exactQueryVector: Array[Double],
+      k: Int): DataFrame = {
+    val planStartNs = System.nanoTime()
+    val storageConf = HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf())
+    val cacheLoadStartNs = System.nanoTime()
+    val cache = ctx.cache
+    val mergedOptions = ctx.tuningOptions
+    val metric = toVectorMetric(ctx.metric)
+    val residualEncoding = cache.isResidualEncoding
+    val numProbes = math.min(math.max(1, VectorIndexOptions.getNumProbes(mergedOptions.asJava)), cache.numClusters())
+    val topClusters = cache.findTopClusters(queryVector, numProbes, metric)
+    val topClusterSeq = topClusters.toSeq
+    val cacheLoadMs = elapsedMs(cacheLoadStartNs)
+
+    // Shard counts from cache — no extra MDT IO.
+    val shardCounts = cache.getShardCounts(topClusters)
+    val shardCountsScala = shardCounts.asScala.map { case (clusterId, count) =>
+      clusterId.intValue() -> count.intValue()
+    }.toMap
+    val postingPrefixCount = VectorIndexMdtSearchUtils.buildPostingPrefixes(cache.getGenerationId, shardCounts).size()
+    LOG.info(
+      s"[vector_search][plan] basePath=${ctx.basePath} indexPartition=${ctx.indexPartition} cacheLoadMs=$cacheLoadMs " +
+        s"generationId=${cache.getGenerationId} dimension=${cache.getDimension} numClusters=${cache.numClusters()} " +
+        s"numProbes=$numProbes refineFactor=${VectorIndexOptions.getRefineFactor(mergedOptions.asJava)} residualEncoding=$residualEncoding " +
+        s"topClusters=${summarizeInts(topClusterSeq)} shardCounts=${summarizeShardCounts(shardCountsScala)} " +
+        s"postingPrefixes=$postingPrefixCount")
+    if (shardCounts.isEmpty) {
+      sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(
+        spark, spark.sparkContext.emptyRDD[InternalRow], outputSchema)
+    } else {
+      val refineK = math.max(k, k * VectorIndexOptions.getRefineFactor(mergedOptions.asJava))
+      val emptyDf = sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(
+        spark, spark.sparkContext.emptyRDD[InternalRow], outputSchema)
+
+      val topCandidates = VectorIndexMdtSearchUtils.scanPostingCandidates(
+        ctx.metadataTable, ctx.indexPartition, cache.getGenerationId, shardCounts,
+        queryVector, cache.getDimension, cache.getQuantizerSeed, cache.getRaBitQBits, cache.isAssumeNormalized,
+        metric, VectorIndexOptions.isRaBitQAsymmetricScoring(mergedOptions.asJava),
+        residualEncoding, if (residualEncoding) cache.getCentroids else null, refineK)
+      val topCandidateMaterializeStartNs = System.nanoTime()
+      val materializedCandidates = try {
+        topCandidates.collectAsList().asScala.toSeq
+      } finally {
+        topCandidates.unpersistWithDependencies()
+      }
+      val topCandidateList = materializedCandidates
+        .filter(candidate => candidate.getFileGroupId != null && candidate.getFileGroupId.nonEmpty)
+      val candidatesWithoutLocator = materializedCandidates.size - topCandidateList.size
+      LOG.info(
+        s"[vector_search][stage][materialize_top_candidates] refineK=$refineK rerankCandidates=${materializedCandidates.size} " +
+          s"candidatesWithLocators=${topCandidateList.size} candidatesWithoutLocators=$candidatesWithoutLocator " +
+          s"distinctFileGroups=${topCandidateList.map(_.getFileGroupId).distinct.size} elapsedMs=${elapsedMs(topCandidateMaterializeStartNs)}")
+      if (candidatesWithoutLocator > 0) {
+        throw new HoodieAnalysisException(
+          s"Vector exact search found $candidatesWithoutLocator rerank candidates without file-group locators. " +
+            s"Exact rerank requires per-candidate posting locators.")
+      }
+
+      // RFC-104 RLI finalist arbiter (freshness gate). Default-off. Exact mode already materialized
+      // the finalists to the driver, so this is a single batched RLI lookup with no extra shuffle.
+      // SERVE -> positional fetch (below); DELETED -> excluded here; STALE -> key-based fallback
+      // fetch at the live location, which is the one remaining hook (see throw below).
+      val arbiterEnabled = VectorIndexOptions.isFinalistArbiterEnabled(mergedOptions.asJava)
+      val serveCandidates: Seq[VectorIndexMdtSearchUtils.ScoredPostingMatch] =
+        if (arbiterEnabled) {
+          val arb = VectorIndexMdtSearchUtils.arbitrateMaterializedFinalists(
+            ctx.metadataTable, topCandidateList.asJava)
+          val staleFailPolicy = VectorIndexOptions.isStalePolicyFail(mergedOptions.asJava)
+          LOG.info(
+            s"[vector_search][exact][arbiter] arbiterExclusions{stale=${arb.staleCount}, deleted=${arb.deletedCount}} " +
+              s"serve=${arb.serve.size} stalePolicy=${if (staleFailPolicy) "fail" else "fallback"}")
+          if (!arb.stale.isEmpty) {
+            // Stale finalists (row rewritten/moved but still live) cannot be served by positional
+            // fetch; they need a key-based fallback fetch at the live RLI location. That fetch is
+            // the one remaining piece of upsert/delete work-stream item 1. Until it lands, fail
+            // loudly under BOTH policies rather than silently dropping live rows (which would be a
+            // silent recall regression). DELETED exclusion above is already fully in effect.
+            throw new HoodieAnalysisException(
+              s"Vector exact search: ${arb.staleCount} stale finalist(s) need a key-based fallback fetch " +
+                s"at their live RLI location (stale.policy=${if (staleFailPolicy) "fail" else "fallback"}). " +
+                s"The RLI fallback fetch is not yet implemented; re-bootstrap the index or disable " +
+                s"'${VectorIndexOptions.READ_FINALIST_ARBITER}' until it lands.")
+          }
+          arb.serve.asScala.toSeq
+        } else {
+          topCandidateList
+        }
+
+      if (serveCandidates.isEmpty) {
+        emptyDf
+      } else {
+        val candidatesByPartition = serveCandidates
+          .groupBy(candidate => Option(candidate.getPartitionPath).getOrElse(""))
+          .map { case (partitionPath, candidates) => partitionPath -> candidates.map(_.getFileGroupId).toSet }
+        val fileSliceMap = preResolveFileSlices(
+          ctx.metadataTable, ctx.metaClient, ctx.timeline, ctx.latestInstantTime, candidatesByPartition)
+        if (fileSliceMap.isEmpty) {
+          throw new HoodieAnalysisException(
+            s"Vector exact search resolved zero file slices for ${serveCandidates.size} rerank candidates " +
+              s"across ${candidatesByPartition.values.map(_.size).sum} file groups. Candidate locators are present, so this indicates " +
+              s"a file-slice resolution bug or stale vector index.")
+        }
+        val bFileSliceMap = spark.sparkContext.broadcast(fileSliceMap)
+        val exactFetchParallelism = math.max(
+          1,
+          math.min(refineK, math.max(1, spark.sparkContext.defaultParallelism * 4)))
+        val groupedCandidates = serveCandidates.groupBy(_.getFileGroupId).toSeq.sortBy(_._1)
+        val targetBatchesPerGroup = math.max(1, exactFetchParallelism / math.max(1, groupedCandidates.size))
+        val fetchBatches = groupedCandidates.flatMap { case (fgId, candidates) =>
+          val sorted = candidates.sortBy(candidate => candidate.getLocation.getPosition)
+          val batchSize = math.max(1, math.ceil(sorted.size.toDouble / targetBatchesPerGroup).toInt)
+          sorted.grouped(batchSize).map(batch => (fgId, batch)).toSeq
+        }
+        val byFetchBatch: RDD[(String, Seq[VectorIndexMdtSearchUtils.ScoredPostingMatch])] =
+          spark.sparkContext.parallelize(fetchBatches, math.min(exactFetchParallelism, fetchBatches.size))
+        LOG.info(
+          s"[vector_search][stage][exact_read_plan] rerankCandidates=${serveCandidates.size} " +
+            s"candidateGroups=${groupedCandidates.size} resolvedSlices=${fileSliceMap.size} " +
+            s"fileGroupPartitions=${byFetchBatch.getNumPartitions} exactFetchParallelism=$exactFetchParallelism")
+
+        val vectorOnlyProjection = mergedOptions.get(VECTOR_ONLY_PROJECTION_OPT)
+          .orElse(spark.conf.getOption(VECTOR_ONLY_PROJECTION_SPARK_CONF))
+          .exists(_.equalsIgnoreCase("true"))
+        val staleFallbacksAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_stale_fallbacks")
+        val rowsMaterializedAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_rows_materialized")
+        val exactRows: RDD[InternalRow] = byFetchBatch.mapPartitions { batches =>
+          val startNs = System.nanoTime()
+          val rows = ArrayBuffer.empty[InternalRow]
+          var batchCount = 0
+          var resolvedSlices = 0
+          var missingSlices = 0
+          var candidateKeys = 0L
+          var baseFiles = 0
+          var logFiles = 0L
+          var totalSliceBytes = 0L
+          var staleCandidates = 0L
+          var metrics = PositionalParquetFetcher.FetchMetrics()
+          val fetcher = new PositionalParquetFetcher(
+            storageConf.newInstance().unwrap(),
+            embeddingCol,
+            vectorSchema,
+            exactQueryVector,
+            ctx.metric,
+            outputSchema,
+            mergedOptions.getOrElse("vector.exact_fetch.offset_index_missing_policy", "fallback").equalsIgnoreCase("fail"),
+            vectorOnlyProjection)
+          while (batches.hasNext) {
+            val (fgId, candidates) = batches.next()
+            batchCount += 1
+            val fileSliceOpt = bFileSliceMap.value.get(fgId)
+            if (fileSliceOpt.isEmpty) {
+              missingSlices += 1
+              throw new HoodieAnalysisException(
+                s"Vector exact search could not resolve file group '$fgId' for ${candidates.size} rerank candidates. " +
+                  s"No record-level-index fallback is active in this path.")
+            } else {
+              resolvedSlices += 1
+              val fileSlice = fileSliceOpt.get
+              var staleInGroup = 0L
+              val liveCandidates = candidates.filter { candidate =>
+                val baseInstantTime = candidate.getBaseInstantTime
+                val currentBaseInstantTime = fileSlice.getBaseInstantTime
+                val current = baseInstantTime == null || baseInstantTime.isEmpty || baseInstantTime == currentBaseInstantTime
+                if (!current) {
+                  staleInGroup += 1
+                  staleCandidates += 1
+                  staleFallbacksAcc.add(1)
+                }
+                current
+              }
+              if (staleInGroup > 0) {
+                throw new HoodieAnalysisException(
+                  s"Vector exact search found $staleInGroup stale candidate locators for file group '$fgId': " +
+                    s"candidate base instant does not match resolved slice ${fileSlice.getBaseInstantTime}. " +
+                    s"No record-level-index fallback is active in this path.")
+              }
+              val recordKeys = liveCandidates.map(_.getRecordKey).toSet
+              candidateKeys += recordKeys.size
+              if (fileSlice.getBaseFile.isEmpty) {
+                throw new HoodieAnalysisException(
+                  s"Vector exact positional fetch requires a base Parquet file for file group '$fgId'.")
+              }
+              val logFileCount = fileSlice.getLogFiles.count()
+              if (logFileCount > 0) {
+                throw new HoodieAnalysisException(
+                  s"Vector exact positional fetch does not support log files yet: fileGroup=$fgId logFiles=$logFileCount.")
+              }
+              baseFiles += 1
+              logFiles += logFileCount
+              totalSliceBytes += fileSlice.getTotalFileSize
+              if (liveCandidates.nonEmpty) {
+                val fetchResult = fetcher.fetch(fileSlice.getBaseFile.get.getPath, liveCandidates)
+                rows ++= fetchResult.rows
+                metrics = metrics.add(fetchResult.metrics)
+                rowsMaterializedAcc.add(fetchResult.metrics.rowsMaterialized)
+              }
+            }
+          }
+          LOG.info(
+            s"[vector_search][stage][exact_read] rerankCandidates=$candidateKeys candidateFileCount=$resolvedSlices " +
+              s"fetchBatches=$batchCount resolvedSlices=$resolvedSlices missingSlices=$missingSlices " +
+              s"rowsDecoded=${metrics.rowsDecoded} rowsMaterialized=${metrics.rowsMaterialized} " +
+              s"rowGroupsTotal=${metrics.rowGroupsTotal} rowGroupsSelected=${metrics.rowGroupsSelected} " +
+              s"pagesInSelectedRowGroups=${metrics.pagesInSelectedRowGroups} pagesSelected=${metrics.pagesSelected} " +
+              s"offsetIndexHits=${metrics.offsetIndexHits} offsetIndexMissing=${metrics.offsetIndexMissing} " +
+              s"rangedGets=${metrics.rangedGets} pageBytesFetched=${metrics.pageBytesFetched} " +
+              s"physicalBytesRead=${metrics.physicalBytesRead} footerReads=${metrics.footerReads} footerCacheHits=${metrics.footerCacheHits} " +
+              s"staleFallbacks=$staleCandidates staleCandidates=$staleCandidates " +
+              s"baseFiles=$baseFiles logFiles=$logFiles " +
+              s"sliceBytes=$totalSliceBytes footerMs=${metrics.footerMs} offsetIndexMs=${metrics.offsetIndexMs} " +
+              s"fetchWaitMs=${metrics.fetchWaitMs} decodeMs=${metrics.decodeMs} scoreMs=${metrics.scoreMs} elapsedMs=${elapsedMs(startNs)}")
+          rows.iterator
+        }
+        LOG.info(s"[vector_search][plan] exact candidate DF planned in ${elapsedMs(planStartNs)} ms")
+        sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(spark, exactRows, outputSchema)
+      }
+    }
+  }
+
+  private def preResolveFileSlices(
+      metadataTable: HoodieTableMetadata,
+      metaClient: HoodieTableMetaClient,
+      timeline: HoodieTimeline,
+      latestInstantTime: String,
+      candidatesByPartition: Map[String, Set[String]]): Map[String, FileSlice] = {
+    val startNs = System.nanoTime()
+    val fsView = new HoodieTableFileSystemView(metadataTable, metaClient, timeline)
+    try {
+      val result = scala.collection.mutable.Map.empty[String, FileSlice]
+      var baseFiles = 0
+      var logFiles = 0L
+      var totalSliceBytes = 0L
+      candidatesByPartition.foreach { case (partitionPath, candidateFgIds) =>
+        val sliceIter = fsView.getLatestFileSlicesBeforeOrOn(partitionPath, latestInstantTime, true).iterator()
+        while (sliceIter.hasNext) {
+          val slice = sliceIter.next()
+          val fgId = slice.getFileGroupId.getFileId
+          if (candidateFgIds.contains(fgId)) {
+            result(fgId) = slice
+            if (slice.getBaseFile.isPresent) {
+              baseFiles += 1
+            }
+            logFiles += slice.getLogFiles.count()
+            totalSliceBytes += slice.getTotalFileSize
+          }
+        }
+      }
+      LOG.info(
+        s"[vector_search][stage][resolve_file_slices] candidatePartitions=${candidatesByPartition.size} " +
+          s"candidateFileGroups=${candidatesByPartition.values.map(_.size).sum} resolvedSlices=${result.size} " +
+          s"baseFiles=$baseFiles logFiles=$logFiles sliceBytes=$totalSliceBytes elapsedMs=${elapsedMs(startNs)}")
+      result.toMap
+    } finally {
+      fsView.close()
+    }
+  }
+
+  private def resolveVectorIndexDefinition(
+      metaClient: HoodieTableMetaClient,
+      embeddingCol: String): (String, HoodieIndexDefinition) = {
+    if (!metaClient.getIndexMetadata.isPresent) {
+      throw new HoodieAnalysisException("No Hudi index metadata is available for the table.")
+    }
+    val matches = metaClient.getIndexMetadata.get.getIndexDefinitions.asScala
+      .filter { case (_, definition) =>
+        definition.getIndexType == HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX
+      }
+      .filter { case (_, definition) =>
+        Option(definition.getSourceFields).exists(_.asScala.exists(_.equalsIgnoreCase(embeddingCol)))
+      }
+      .toSeq
+      .sortBy(_._1)
+    matches match {
+      case Seq() =>
+        throw new HoodieAnalysisException(
+          s"No vector index found for embedding column '$embeddingCol'.")
+      case Seq(single) =>
+        single
+      case multiple =>
+        throw new HoodieAnalysisException(
+          s"Multiple vector indexes found for embedding column '$embeddingCol': ${multiple.map(_._1).mkString(", ")}. " +
+            "Specify the index explicitly or drop the stale index.")
+    }
+  }
+
+  private case class MetadataCacheKey(basePath: String, indexPartition: String)
+
+  @volatile private var metadataCaches: Map[MetadataCacheKey, VectorIndexMetadataCache] = Map.empty
+
+  private[analysis] def resetMetadataCaches(): Unit = {
+    metadataCaches = Map.empty
+  }
+
+  private[analysis] def metadataCacheSize: Int = metadataCaches.size
+
+  private def getOrLoadMetadataCache(
+      metaClient: HoodieTableMetaClient,
+      metadataTable: HoodieTableMetadata,
+      indexPartition: String,
+      vectorSchema: HoodieSchema.Vector,
+      currentInstant: String): VectorIndexMetadataCache = {
+    val cacheKey = MetadataCacheKey(metaClient.getBasePath.toString, indexPartition)
+
+    metadataCaches.synchronized {
+      metadataCaches.get(cacheKey) match {
+        case Some(existing) if !existing.isStaleFor(currentInstant) => existing
+        case existingOpt =>
+          // Query hot path only needs manifest, centroids, and quantizer. Loading all
+          // cluster-stat rows is expensive at 16K+ clusters on object storage; shard
+          // counts fall back to the active generation manifest.
+          val loaded = VectorIndexMetadataCache.load(metadataTable, indexPartition, vectorSchema, currentInstant, false)
+          if (loaded == null) {
+            existingOpt.orNull
+          } else {
+            existingOpt match {
+              case Some(existing) if Option(existing.getLoadInstant).exists(_.compareTo(loaded.getLoadInstant) > 0) =>
+                existing
+              case _ =>
+                metadataCaches = metadataCaches.updated(cacheKey, loaded)
+                loaded
+            }
+          }
+      }
+    }
+  }
 }

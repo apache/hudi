@@ -40,6 +40,10 @@ public class CachingHFileReaderImpl extends HFileReaderImpl {
   private static volatile Integer INITIAL_CACHE_TTL;
   private static final Object CACHE_LOCK = new Object();
 
+  // Per-thread physical (cache-miss) read attribution: [blocksLoaded, bytesLoaded].
+  // Scanners snapshot this around a unit of work to attribute cold storage reads per-task.
+  private static final ThreadLocal<long[]> PHYSICAL_READ = ThreadLocal.withInitial(() -> new long[2]);
+
   private final String filePath;
 
   public CachingHFileReaderImpl(SeekableDataInputStream stream, long fileSize, String filePath, int cacheSize, int cacheTtlMinutes) {
@@ -84,7 +88,14 @@ public class CachingHFileReaderImpl extends HFileReaderImpl {
         filePath, blockToRead.getOffset(), blockToRead.getSize());
 
     try {
-      HFileBlock block = GLOBAL_BLOCK_CACHE.getOrCompute(cacheKey, () -> super.instantiateHFileDataBlock(blockToRead));
+      // The supplier runs only on a cache miss, so incrementing here attributes
+      // exactly the physical (cold) block reads to the calling thread.
+      HFileBlock block = GLOBAL_BLOCK_CACHE.getOrCompute(cacheKey, () -> {
+        long[] pr = PHYSICAL_READ.get();
+        pr[0] += 1;
+        pr[1] += blockToRead.getSize();
+        return super.instantiateHFileDataBlock(blockToRead);
+      });
       return (HFileDataBlock) block;
     } catch (IOException | RuntimeException e) {
       throw e;
@@ -125,6 +136,27 @@ public class CachingHFileReaderImpl extends HFileReaderImpl {
    */
   public String getCacheStats() {
     return "HFileReader Cache Stats - Size: " + (GLOBAL_BLOCK_CACHE != null ? GLOBAL_BLOCK_CACHE.size() : 0);
+  }
+
+  /**
+   * Returns a copy of the current thread's physical-read counters [blocksLoaded, bytesLoaded].
+   * Take two snapshots around a unit of work to attribute cold storage reads to that unit.
+   *
+   * @return a copy of the current thread's [blocksLoaded, bytesLoaded].
+   */
+  public static long[] physicalReadSnapshot() {
+    long[] a = PHYSICAL_READ.get();
+    return new long[] {a[0], a[1]};
+  }
+
+  /**
+   * Global cache snapshot, or a sentinel when caching is inactive. Static so scanners
+   * can log it without holding a reader reference.
+   *
+   * @return formatted statistics string.
+   */
+  public static String globalCacheStatsString() {
+    return GLOBAL_BLOCK_CACHE != null ? "cache=size:" + GLOBAL_BLOCK_CACHE.size() : "cache=inactive";
   }
 
   /**
