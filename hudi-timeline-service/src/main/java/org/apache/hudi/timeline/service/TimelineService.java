@@ -197,6 +197,13 @@ public class TimelineService {
       throw new IllegalArgumentException(String.format("startPort should be between 1024 and 65535 (inclusive), "
           + "or 0 for a random free port. but now is %s.", port));
     }
+    if (timelineServerConf.enableUi && TimelineService.class.getResource("/public/index.html") == null) {
+      // Javalin.create resolves classpath static dirs eagerly, and the retry loop below swallows the
+      // resulting error on every attempt; check ahead of the loop so the actionable message fails fast
+      // instead of surfacing as a generic port-retry failure.
+      throw new IllegalStateException("UI assets not bundled in this jar. The Timeline UI requires the public/ "
+          + "resources (shipped in hudi-timeline-server-bundle); rebuild with UI assets or start without --enable-ui.");
+    }
     for (int attempt = 0; attempt < START_SERVICE_MAX_RETRIES; attempt++) {
       // Returns port to try when trying to bind a service. Handles wrapping and skipping privileged ports.
       int tryPort = port == 0 ? port : (port + attempt - 1024) % (65536 - 1024) + 1024;
@@ -237,13 +244,6 @@ public class TimelineService {
     final Server server = new Server(pool);
     ScheduledExecutorScheduler scheduler = new ScheduledExecutorScheduler("TimelineService-JettyScheduler", true, 8);
     server.addBean(scheduler);
-
-    if (timelineServerConf.enableUi && TimelineService.class.getResource("/public/index.html") == null) {
-      // Javalin.create resolves classpath static dirs eagerly; a missing dir otherwise surfaces as a
-      // misleading port-retry-x16 failure, so fail fast with an actionable message before creating the app.
-      throw new IllegalStateException("UI assets not bundled in this jar. The Timeline UI requires the public/ "
-          + "resources (shipped in hudi-timeline-server-bundle); rebuild with UI assets or start without --enable-ui.");
-    }
 
     app = Javalin.create(c -> {
       if (!timelineServerConf.compress) {
