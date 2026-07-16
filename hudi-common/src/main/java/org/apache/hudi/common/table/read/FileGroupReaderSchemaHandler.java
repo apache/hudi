@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -135,7 +136,33 @@ public class FileGroupReaderSchemaHandler<T> {
     if (internalSchema.isEmptySchema()) {
       return Pair.of(requiredSchema, Collections.emptyMap());
     }
-    long commitInstantTime = Long.parseLong(FSUtils.getCommitTime(path.getName()));
+    return getRequiredSchemaForInstantAndRenamedColumns(FSUtils.getCommitTime(path.getName()));
+  }
+
+  /**
+   * Creates the same writer-schema-to-evolved-schema transformer used for inline log blocks.
+   *
+   * <p>When schema evolution is enabled, log records must first be decoded with their writer
+   * schema and then rewritten to the schema applicable to that log instant. Both inline log blocks
+   * and native log files use this transformer so the evolution semantics stay aligned.
+   */
+  public Option<Pair<Function<T, T>, HoodieSchema>> getSchemaEvolutionTransformer(
+      HoodieSchema writerSchema, String instantTime) {
+    if (internalSchema.isEmptySchema()) {
+      return Option.empty();
+    }
+    Pair<HoodieSchema, Map<String, String>> requiredSchemaAndRenamedColumns =
+        getRequiredSchemaForInstantAndRenamedColumns(instantTime);
+    return Option.of(Pair.of(
+        readerContext.getRecordContext().projectRecord(
+            writerSchema,
+            requiredSchemaAndRenamedColumns.getLeft(),
+            requiredSchemaAndRenamedColumns.getRight()),
+        requiredSchemaAndRenamedColumns.getLeft()));
+  }
+
+  private Pair<HoodieSchema, Map<String, String>> getRequiredSchemaForInstantAndRenamedColumns(String instantTime) {
+    long commitInstantTime = Long.parseLong(instantTime);
     InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitInstantTime, metaClient);
     Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
         true, false, false).mergeSchemaGetRenamed();
@@ -168,11 +195,20 @@ public class FileGroupReaderSchemaHandler<T> {
     boolean hasInstantRange = readerContext.getInstantRange().isPresent();
     //might need to change this if other queries than mor have mandatory fields
     if (!readerContext.getHasLogFiles()) {
+      List<HoodieSchemaField> addedFields = new ArrayList<>();
       if (hasInstantRange && !findNestedField(requestedSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD).isPresent()) {
-        List<HoodieSchemaField> addedFields = Collections.singletonList(getField(this.tableSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD));
-        return appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
+        addedFields.add(getField(this.tableSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD));
       }
-      return requestedSchema;
+      // LSM readers merge sorted runs by key even when a file slice contains only a base file.
+      // Keep the physical has-log-files state intact and add only the key fields required by that merge.
+      if (hoodieTableConfig.isLSMTreeStorageLayout()) {
+        for (String field : getRecordKeyFields(hoodieTableConfig)) {
+          if (!findNestedField(requestedSchema, field).isPresent()) {
+            addedFields.add(getField(this.tableSchema, field));
+          }
+        }
+      }
+      return addedFields.isEmpty() ? requestedSchema : appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
     }
 
     RecordMergeMode mergeMode = hoodieTableConfig.getRecordMergeMode();
@@ -226,15 +262,7 @@ public class FileGroupReaderSchemaHandler<T> {
       requiredFields.add(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
     }
 
-    // Add record key fields.
-    if (cfg.populateMetaFields()) {
-      requiredFields.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);
-    } else {
-      Option<String[]> fields = cfg.getRecordKeyFields();
-      if (fields.isPresent()) {
-        requiredFields.addAll(Arrays.asList(fields.get()));
-      }
-    }
+    requiredFields.addAll(getRecordKeyFields(cfg));
     // Add precombine field for event time ordering merge mode.
     if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
       List<String> preCombineFields = cfg.getOrderingFields();
@@ -254,6 +282,14 @@ public class FileGroupReaderSchemaHandler<T> {
     }
 
     return requiredFields.toArray(new String[0]);
+  }
+
+  private static Set<String> getRecordKeyFields(HoodieTableConfig cfg) {
+    if (cfg.populateMetaFields()) {
+      return Collections.singleton(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    }
+    Option<String[]> fields = cfg.getRecordKeyFields();
+    return fields.isPresent() ? new HashSet<>(Arrays.asList(fields.get())) : Collections.emptySet();
   }
 
   protected HoodieSchema prepareRequiredSchema(DeleteContext deleteContext) {

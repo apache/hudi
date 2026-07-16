@@ -46,6 +46,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -74,6 +75,7 @@ public class TestFileGroupRecordBufferLoader extends BaseTestFileGroupRecordBuff
     when(fileGroupReaderSchemaHandler.getRequestedSchema()).thenReturn(SCHEMA);
     when(fileGroupReaderSchemaHandler.getSchemaForUpdates()).thenReturn(SCHEMA);
     when(fileGroupReaderSchemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
+    when(fileGroupReaderSchemaHandler.getSchemaEvolutionTransformer(any(), any())).thenReturn(Option.empty());
     DeleteContext deleteContext = mock(DeleteContext.class);
     when(deleteContext.getCustomDeleteMarkerKeyValue()).thenReturn(Option.empty());
     when(deleteContext.getHoodieOperationPos()).thenReturn(-1);

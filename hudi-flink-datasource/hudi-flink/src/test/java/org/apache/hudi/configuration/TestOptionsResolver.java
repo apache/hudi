@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -45,6 +46,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test for {@link OptionsResolver}
  */
 public class TestOptionsResolver {
+
+  @Test
+  void testTableStorageLayoutDefaultsByOperation() {
+    Configuration conf = new Configuration();
+    assertTrue(OptionsResolver.isLsmTreeStorageLayout(conf));
+
+    conf.set(FlinkOptions.OPERATION, "insert");
+    assertFalse(OptionsResolver.isLsmTreeStorageLayout(conf));
+
+    conf.set(FlinkOptions.OPERATION, WriteOperationType.BULK_INSERT.value());
+    assertFalse(OptionsResolver.isLsmTreeStorageLayout(conf));
+
+    conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
+    assertTrue(OptionsResolver.isLsmTreeStorageLayout(conf));
+
+    conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
+    assertFalse(OptionsResolver.isLsmTreeStorageLayout(conf));
+  }
+
   @TempDir
   File tempFile;
   

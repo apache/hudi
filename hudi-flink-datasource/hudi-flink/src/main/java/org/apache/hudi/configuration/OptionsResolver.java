@@ -164,12 +164,24 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns the configured table storage layout.
+   *
+   * <p>Insert and bulk insert operations preserve duplicate record keys and therefore default to
+   * the regular storage layout. Other operations use Flink's LSM tree default.
+   */
+  public static HoodieTableConfig.TableStorageLayout getTableStorageLayout(Configuration conf) {
+    return HoodieTableConfig.TableStorageLayout.fromConfigValue(conf.getString(
+        HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        (isInsertOperation(conf) || isBulkInsertOperation(conf))
+            ? HoodieTableConfig.TableStorageLayout.DEFAULT.configValue()
+            : HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue()));
+  }
+
+  /**
    * Returns whether the table uses LSM tree storage layout.
    */
   public static boolean isLsmTreeStorageLayout(Configuration conf) {
-    return HoodieTableConfig.TableStorageLayout.fromConfigValue(conf.getString(
-        HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
-        HoodieTableConfig.TABLE_STORAGE_LAYOUT.defaultValue())) == LSM_TREE;
+    return getTableStorageLayout(conf) == LSM_TREE;
   }
 
   /**

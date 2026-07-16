@@ -1005,6 +1005,8 @@ public class HoodieTableMetaClient implements Serializable {
     private String timelinePath;
     private String timelineHistoryPath;
     private String baseFileFormat;
+    private String logFileFormat;
+    private String tableStorageLayout;
     private String orderingFields;
     private String partitionFields;
     private Boolean cdcEnabled;
@@ -1123,6 +1125,16 @@ public class HoodieTableMetaClient implements Serializable {
 
     public TableBuilder setBaseFileFormat(String baseFileFormat) {
       this.baseFileFormat = baseFileFormat;
+      return this;
+    }
+
+    public TableBuilder setLogFileFormat(String logFileFormat) {
+      this.logFileFormat = logFileFormat;
+      return this;
+    }
+
+    public TableBuilder setTableStorageLayout(String tableStorageLayout) {
+      this.tableStorageLayout = tableStorageLayout;
       return this;
     }
 
@@ -1489,6 +1501,15 @@ public class HoodieTableMetaClient implements Serializable {
 
       if (null != baseFileFormat) {
         tableConfig.setValue(HoodieTableConfig.BASE_FILE_FORMAT, baseFileFormat.toUpperCase());
+      }
+
+      if (null != logFileFormat) {
+        tableConfig.setValue(HoodieTableConfig.LOG_FILE_FORMAT, logFileFormat.toUpperCase());
+      }
+
+      if (null != tableStorageLayout) {
+        tableConfig.setValue(HoodieTableConfig.TABLE_STORAGE_LAYOUT,
+            HoodieTableConfig.TableStorageLayout.fromConfigValue(tableStorageLayout).configValue());
       }
 
       if (null != bootstrapIndexClass) {

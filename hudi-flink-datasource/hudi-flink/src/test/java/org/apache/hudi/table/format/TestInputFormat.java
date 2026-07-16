@@ -37,6 +37,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -613,10 +614,10 @@ public class TestInputFormat {
 
   @Test
   void testReadSkipClustering() throws Exception {
-    beforeEach(HoodieTableType.COPY_ON_WRITE);
+    beforeEach(HoodieTableType.COPY_ON_WRITE, Collections.singletonMap(
+        FlinkOptions.OPERATION.key(), "insert"));
 
     // write base first with clustering
-    conf.set(FlinkOptions.OPERATION, "insert");
     conf.set(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
     conf.set(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true);
     conf.set(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
@@ -1502,6 +1503,8 @@ public class TestInputFormat {
   void testStreamWriteAndReadWithUpgrade(HoodieTableType tableType) throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.WRITE_TABLE_VERSION.key(), HoodieTableVersion.SIX.versionCode() + "");
+    options.put(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
     // init and write data with table version SIX
     beforeEach(tableType, options);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);

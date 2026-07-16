@@ -209,6 +209,10 @@ public class ITTestHoodieFlinkCompactor {
     options.put(FlinkOptions.RECORD_KEY_FIELD.key(), "uuid");
     options.put(FlinkOptions.ORDERING_FIELDS.key(), "ts");
     options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
+    // Table version SIX predates LSM storage layout. Keep this upgrade/downgrade compatibility
+    // test on the default layout so changing the table version does not create an invalid LSM + v6 table.
+    options.put(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
     tableEnv.executeSql(TestSQL.INSERT_T1).await();

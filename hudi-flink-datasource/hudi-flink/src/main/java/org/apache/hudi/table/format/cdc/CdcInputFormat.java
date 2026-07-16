@@ -26,7 +26,7 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
-import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -172,7 +172,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
   }
 
   /**
-   * Get a {@link HoodieRecord} iterator using {@link HoodieFileGroupReader}.
+   * Get a {@link HoodieRecord} iterator using a {@link HoodieRecordReader}.
    *
    * @param split input split
    *
@@ -181,9 +181,9 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
   private ClosableIterator<HoodieRecord<RowData>> getSplitRecordIterator(MergeOnReadInputSplit split) throws IOException {
     final HoodieSchema schema = HoodieSchemaCache.intern(
         HoodieSchema.parse(tableState.getTableSchema()));
-    HoodieFileGroupReader<RowData> fileGroupReader =
-        createFileGroupReader(split, schema, schema, FlinkOptions.REALTIME_PAYLOAD_COMBINE, true);
-    return fileGroupReader.getClosableHoodieRecordIterator();
+    HoodieRecordReader<RowData> recordReader =
+        createRecordReader(split, schema, schema, FlinkOptions.REALTIME_PAYLOAD_COMBINE, true);
+    return recordReader.getClosableHoodieRecordIterator();
   }
 
   /**

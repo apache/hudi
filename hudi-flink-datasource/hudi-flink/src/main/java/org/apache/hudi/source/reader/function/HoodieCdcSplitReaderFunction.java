@@ -31,7 +31,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
-import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -243,7 +243,7 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
     FileSlice fileSlice = buildFileSlice(split);
     final HoodieSchema tableSchema = HoodieSchemaCache.intern(HoodieSchema.parse(tableState.getTableSchema()));
     try {
-      HoodieFileGroupReader<RowData> reader = FormatUtils.createFileGroupReader(
+      HoodieRecordReader<RowData> reader = FormatUtils.createRecordReader(
           getMetaClient(), getWriteConfig(), internalSchemaManager, fileSlice,
           tableSchema, tableSchema, split.getLatestCommit(),
           FlinkOptions.REALTIME_PAYLOAD_COMBINE, false,
@@ -259,7 +259,7 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
     FileSlice fileSlice = buildFileSlice(split);
     final HoodieSchema tableSchema = HoodieSchemaCache.intern(HoodieSchema.parse(tableState.getTableSchema()));
     try {
-      HoodieFileGroupReader<RowData> reader = FormatUtils.createFileGroupReader(
+      HoodieRecordReader<RowData> reader = FormatUtils.createRecordReader(
           getMetaClient(), getWriteConfig(), internalSchemaManager, fileSlice,
           tableSchema, tableSchema, split.getLatestCommit(),
           FlinkOptions.REALTIME_PAYLOAD_COMBINE, true,

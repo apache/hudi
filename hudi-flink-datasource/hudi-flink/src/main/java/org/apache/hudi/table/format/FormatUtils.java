@@ -21,6 +21,7 @@ package org.apache.hudi.table.format;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -28,6 +29,8 @@ import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.HoodieRecordReader;
+import org.apache.hudi.common.table.read.lsm.HoodieLsmFileGroupReader;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -117,6 +120,68 @@ public class FormatUtils {
       throw new HoodieIOException(
           "IOException when creating ExternalSpillableMap at " + writeConfig.getSpillableMapBasePath(), e);
     }
+  }
+
+  /**
+   * Creates the record reader matching the physical layout of the file slice.
+   *
+   * <p>Pure native-log file slices in an LSM-tree table use the sorted LSM reader. Mixed file
+   * slices containing legacy inline logs continue to use the general file-group reader so table
+   * upgrades remain readable.</p>
+   */
+  public static HoodieRecordReader<RowData> createRecordReader(
+      HoodieTableMetaClient metaClient,
+      HoodieWriteConfig writeConfig,
+      InternalSchemaManager internalSchemaManager,
+      FileSlice fileSlice,
+      HoodieSchema tableSchema,
+      HoodieSchema requiredSchema,
+      String latestInstant,
+      String mergeType,
+      boolean emitDelete,
+      List<ExpressionPredicates.Predicate> predicates,
+      Option<InstantRange> instantRangeOption) {
+    if (!shouldUseLsmReader(metaClient, fileSlice, mergeType)) {
+      return createFileGroupReader(metaClient, writeConfig, internalSchemaManager, fileSlice,
+          tableSchema, requiredSchema, latestInstant, mergeType, emitDelete, predicates, instantRangeOption);
+    }
+
+    final FlinkRowDataReaderContext readerContext =
+        new FlinkRowDataReaderContext(
+            metaClient.getStorageConf(),
+            () -> internalSchemaManager,
+            predicates,
+            metaClient.getTableConfig(),
+            instantRangeOption);
+
+    final TypedProperties typedProps = FlinkClientUtil.getReadProps(metaClient.getTableConfig(), writeConfig);
+    typedProps.put(HoodieReaderConfig.MERGE_TYPE.key(), mergeType);
+
+    return HoodieLsmFileGroupReader.<RowData>builder()
+        .withReaderContext(readerContext)
+        .withHoodieTableMetaClient(metaClient)
+        .withLatestCommitTime(latestInstant)
+        .withBaseFileOption(fileSlice.getBaseFile())
+        .withLogFiles(fileSlice.getLogFiles())
+        .withPartitionPath(fileSlice.getPartitionPath())
+        .withDataSchema(tableSchema)
+        .withRequestedSchema(requiredSchema)
+        .withInternalSchemaOpt(Option.ofNullable(internalSchemaManager.getQuerySchema()))
+        .withProps(typedProps)
+        .withEmitDelete(emitDelete)
+        .build();
+  }
+
+  static boolean shouldUseLsmReader(HoodieTableMetaClient metaClient, FileSlice fileSlice) {
+    return metaClient.getTableConfig().isLSMTreeStorageLayout()
+        && fileSlice.getLogFiles().allMatch(logFile -> FSUtils.isNativeLogFile(logFile.getFileName()));
+  }
+
+  static boolean shouldUseLsmReader(HoodieTableMetaClient metaClient, FileSlice fileSlice, String mergeType) {
+    // The LSM reader collapses all sorted versions of a key. Skip-merge queries intentionally
+    // expose those versions independently, so retain the classic unmerged reader for that mode.
+    return !HoodieReaderConfig.REALTIME_SKIP_MERGE.equalsIgnoreCase(mergeType)
+        && shouldUseLsmReader(metaClient, fileSlice);
   }
 
   /**

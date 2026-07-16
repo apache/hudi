@@ -483,6 +483,9 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
           memorySegmentPool,
           recordKeyComputer.newInstance(classLoader),
           recordKeyComparator.newInstance(classLoader));
+    } catch (MemoryPagesExhaustedException e) {
+      // Let bufferRecord flush an existing bucket and retry when the shared pool is exhausted.
+      throw e;
     } catch (Exception e) {
       throw new HoodieException("Failed to create RowData record-key sort buffer for LSM storage layout.", e);
     }

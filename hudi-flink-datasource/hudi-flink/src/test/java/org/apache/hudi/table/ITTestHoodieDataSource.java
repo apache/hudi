@@ -3618,6 +3618,7 @@ public class ITTestHoodieDataSource {
         .options(getDefaultKeys())
         .option(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ)
         .option(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.SIX.versionCode() + "")
+        .option(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), HoodieTableConfig.TableStorageLayout.DEFAULT.configValue())
         .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
@@ -3631,6 +3632,7 @@ public class ITTestHoodieDataSource {
         .options(getDefaultKeys())
         .option(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ)
         .option(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.EIGHT.versionCode() + "")
+        .option(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), HoodieTableConfig.TableStorageLayout.DEFAULT.configValue())
         .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
         .end();
 

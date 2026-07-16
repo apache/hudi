@@ -62,6 +62,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -620,13 +621,9 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   }
 
   protected Map<String, String> getMiniBatchExpected() {
-    Map<String, String> expected = new HashMap<>();
-    // the last 2 lines are merged
-    expected.put("par1", "["
-        + "id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1" + "]");
-    return expected;
+    // For UPSERT, the classic layout may retain duplicate incoming records when pre-combine is disabled.
+    // In contrast, the LSM merge combines records with the same record key and emits only the winning record.
+    return Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,1,par1]");
   }
 
   protected Map<String, String> getUpsertWithDeleteExpected() {

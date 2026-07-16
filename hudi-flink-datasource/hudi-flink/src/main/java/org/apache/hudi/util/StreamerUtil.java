@@ -328,7 +328,10 @@ public class StreamerUtil {
       Configuration conf,
       org.apache.hadoop.conf.Configuration hadoopConf) throws IOException {
     final String basePath = conf.get(FlinkOptions.PATH);
-    if (!tableExists(basePath, hadoopConf)) {
+    final boolean tableExists = tableExists(basePath, hadoopConf);
+    if (!tableExists) {
+      HoodieTableConfig.TableStorageLayout storageLayout = OptionsResolver.getTableStorageLayout(conf);
+      validateInsertOperationStorageLayout(conf, storageLayout);
       HoodieTableMetaClient.newTableBuilder()
           .setTableCreateSchema(conf.get(FlinkOptions.SOURCE_AVRO_SCHEMA))
           .setTableType(conf.get(FlinkOptions.TABLE_TYPE))
@@ -336,6 +339,9 @@ public class StreamerUtil {
           .setTableVersion(conf.get(FlinkOptions.WRITE_TABLE_VERSION))
           .setTableFormat(conf.get(FlinkOptions.WRITE_TABLE_FORMAT))
           .setBaseFileFormat(conf.getString(HoodieTableConfig.BASE_FILE_FORMAT.key(), null))
+          .setLogFileFormat(HoodieTableVersion.fromVersionCode(conf.get(FlinkOptions.WRITE_TABLE_VERSION))
+              .greaterThanOrEquals(HoodieTableVersion.TEN) ? PARQUET.name() : HOODIE_LOG.name())
+          .setTableStorageLayout(storageLayout.configValue())
           .setRecordMergeMode(getMergeMode(conf))
           .setRecordMergeStrategyId(getMergeStrategyId(conf))
           .setPayloadClassName(getPayloadClass(conf))
@@ -359,10 +365,24 @@ public class StreamerUtil {
           basePath, conf.get(FlinkOptions.TABLE_NAME));
     }
 
-    return StreamerUtil.createMetaClient(conf, hadoopConf);
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf, hadoopConf);
+    validateInsertOperationStorageLayout(conf, metaClient.getTableConfig().getTableStorageLayout());
+    // The persisted layout is authoritative for existing tables. For newly created tables this
+    // also propagates Flink's LSM default to write-side components that read the runtime config.
+    conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        metaClient.getTableConfig().getTableStorageLayout().configValue());
+    return metaClient;
 
     // Do not close the filesystem in order to use the CACHE,
     // some filesystems release the handles in #close method.
+  }
+
+  private static void validateInsertOperationStorageLayout(
+      Configuration conf, HoodieTableConfig.TableStorageLayout storageLayout) {
+    ValidationUtils.checkArgument(
+        !(OptionsResolver.isInsertOperation(conf) || OptionsResolver.isBulkInsertOperation(conf))
+            || storageLayout != HoodieTableConfig.TableStorageLayout.LSM_TREE,
+        "The LSM tree storage layout does not support insert or bulk insert operations because they allow duplicate record keys.");
   }
 
   private static String getMergeStrategyId(Configuration conf) {

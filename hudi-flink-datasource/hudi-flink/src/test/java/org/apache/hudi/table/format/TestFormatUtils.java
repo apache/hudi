@@ -19,18 +19,58 @@
 
 package org.apache.hudi.table.format;
 
+import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.hudi.common.util.TestConfigUtils.TEST_BOOLEAN_CONFIG_PROPERTY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests {@link FormatUtils}
  */
 public class TestFormatUtils {
+  private static final String INLINE_LOG_PATH = "file:///tmp/.file-id_100.log.1_1-0-1";
+  private static final String NATIVE_LOG_PATH = "file:///tmp/file-id_1-0-1_100_1.log.parquet";
+
+  @Test
+  public void testLsmReaderSelection() {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+
+    when(tableConfig.isLSMTreeStorageLayout()).thenReturn(false);
+    assertFalse(FormatUtils.shouldUseLsmReader(metaClient, fileSlice(NATIVE_LOG_PATH)));
+
+    when(tableConfig.isLSMTreeStorageLayout()).thenReturn(true);
+    assertTrue(FormatUtils.shouldUseLsmReader(metaClient, fileSlice()));
+    assertTrue(FormatUtils.shouldUseLsmReader(metaClient, fileSlice(NATIVE_LOG_PATH)));
+    assertFalse(FormatUtils.shouldUseLsmReader(metaClient, fileSlice(INLINE_LOG_PATH, NATIVE_LOG_PATH)));
+    assertTrue(FormatUtils.shouldUseLsmReader(
+        metaClient, fileSlice(NATIVE_LOG_PATH), HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE));
+    assertFalse(FormatUtils.shouldUseLsmReader(
+        metaClient, fileSlice(NATIVE_LOG_PATH), HoodieReaderConfig.REALTIME_SKIP_MERGE));
+  }
+
+  private static FileSlice fileSlice(String... logPaths) {
+    FileSlice fileSlice = new FileSlice("partition", "100", "file-id");
+    for (String logPath : logPaths) {
+      fileSlice.addLogFile(new HoodieLogFile(new StoragePath(logPath)));
+    }
+    return fileSlice;
+  }
+
   @Test
   public void testGetRawValueWithAltKeys() {
     Configuration flinkConf = new Configuration();

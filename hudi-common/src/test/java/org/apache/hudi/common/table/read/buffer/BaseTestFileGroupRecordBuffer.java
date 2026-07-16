@@ -100,6 +100,12 @@ public class BaseTestFileGroupRecordBuffer {
     });
   }
 
+  protected static HoodieTableMetaClient createMockMetaClient(HoodieTableConfig tableConfig) {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    return metaClient;
+  }
+
   protected static List<HoodieRecord> convertToHoodieRecordsList(List<IndexedRecord> indexedRecords) {
     return indexedRecords.stream().map(rec -> new HoodieAvroIndexedRecord(new HoodieKey(rec.get(0).toString(), ""), rec)).collect(Collectors.toList());
   }
@@ -133,6 +139,7 @@ public class BaseTestFileGroupRecordBuffer {
     when(fileGroupReaderSchemaHandler.getRequiredSchema()).thenReturn(SCHEMA);
     when(fileGroupReaderSchemaHandler.getSchemaForUpdates()).thenReturn(SCHEMA);
     when(fileGroupReaderSchemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
+    when(fileGroupReaderSchemaHandler.getSchemaEvolutionTransformer(any(), any())).thenReturn(Option.empty());
     when(fileGroupReaderSchemaHandler.getDeleteContext()).thenReturn(new DeleteContext(props, SCHEMA));
     readerContext.setSchemaHandler(fileGroupReaderSchemaHandler);
     return buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, recordMerger, recordMergeMode, orderingFieldNames, props,
@@ -149,8 +156,7 @@ public class BaseTestFileGroupRecordBuffer {
                                                                                                  Option<Iterator<HoodieRecord>> fileGroupRecordBufferItrOpt) {
 
     readerContext.setRecordMerger(Option.ofNullable(recordMerger));
-    HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
-    when(mockMetaClient.getTableConfig()).thenReturn(tableConfig);
+    HoodieTableMetaClient mockMetaClient = createMockMetaClient(tableConfig);
     UpdateProcessor<IndexedRecord> updateProcessor = UpdateProcessor.create(readStats, readerContext, false, Option.empty(), props);
 
     if (fileGroupRecordBufferItrOpt.isEmpty()) {

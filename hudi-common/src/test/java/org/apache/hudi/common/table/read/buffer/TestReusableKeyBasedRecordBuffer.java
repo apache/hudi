@@ -72,6 +72,7 @@ class TestReusableKeyBasedRecordBuffer {
     when(mockReaderContext.getKeyFilterOpt()).thenReturn(Option.of(keyFilter));
     when(mockReaderContext.getSchemaHandler().getRequiredSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
     when(mockReaderContext.getSchemaHandler().getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
+    when(mockReaderContext.getSchemaHandler().getSchemaEvolutionTransformer(any(), any())).thenReturn(Option.empty());
     when(mockReaderContext.getRecordContext().getDeleteRow(any())).thenAnswer(invocation -> {
       String recordKey = invocation.getArgument(0);
       return new TestRecord(recordKey, 0);
