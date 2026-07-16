@@ -849,16 +849,6 @@ public class HoodieTableConfig extends HoodieConfig {
                                                                           String recordMergeStrategyId,
                                                                           String orderingFieldName,
                                                                           HoodieTableVersion tableVersion) {
-    return inferMergingConfigsForV9TableCreation(recordMergeMode, payloadClassName, recordMergeStrategyId,
-        orderingFieldName, tableVersion, false);
-  }
-
-  public static Map<String, String> inferMergingConfigsForV9TableCreation(RecordMergeMode recordMergeMode,
-                                                                          String payloadClassName,
-                                                                          String recordMergeStrategyId,
-                                                                          String orderingFieldName,
-                                                                          HoodieTableVersion tableVersion,
-                                                                          boolean nestedDebeziumMetadataEnabled) {
     Map<String, String> reconciledConfigs = new HashMap<>();
     if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
       throw new HoodieIOException("Unsupported flow for table versions less than 9");
@@ -901,10 +891,10 @@ public class HoodieTableConfig extends HoodieConfig {
         handleMergeModeConfigs(payloadClassName, reconciledConfigs);
         // Partial update mode config.
         handlePartialUpdateModeConfigs(payloadClassName, reconciledConfigs);
-        // Additional custom merge properties.s
+        // Additional custom merge properties.
         // Certain payloads are migrated to non payload way from 1.1 Hudi binary and the reader might need certain properties for the
         // merge to function as expected. Handing such special cases here.
-        handlePayloadAdhocConfigs(payloadClassName, reconciledConfigs, nestedDebeziumMetadataEnabled);
+        handlePayloadAdhocConfigs(payloadClassName, reconciledConfigs, orderingFieldName);
       }
     }
     return reconciledConfigs;
@@ -933,24 +923,18 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   private static void handlePayloadAdhocConfigs(String payloadClassName, Map<String, String> reconciledConfigs,
-                                                boolean nestedDebeziumMetadataEnabled) {
+                                                String orderingFieldName) {
     // Certain payloads are migrated to non payload way from 1.1 Hudi binary and the reader might need certain properties for the
     // merge to function as expected. Handing such special cases here.
     if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
       reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE, DEBEZIUM_UNAVAILABLE_VALUE);
       reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
       reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DebeziumConstants.DELETE_OP);
-      // The Postgres ordering field (_event_lsn) and the operation-type column are kept at the root level
-      // even when nested fields are enabled, so they need no _debezium_metadata prefix.
-      reconciledConfigs.put(ORDERING_FIELDS.key(), DebeziumConstants.FLATTENED_LSN_COL_NAME);
+      reconciledConfigs.put(ORDERING_FIELDS.key(), reconcileDebeziumOrderingFields(payloadClassName, orderingFieldName));
     } else if (payloadClassName.equals(MySqlDebeziumAvroPayload.class.getName())) {
       reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
       reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DebeziumConstants.DELETE_OP);
-      // The MySQL ordering fields (_event_bin_file, _event_pos) are moved into the _debezium_metadata struct
-      // when nested fields are enabled, so the ordering field config must reference the nested path.
-      reconciledConfigs.put(ORDERING_FIELDS.key(),
-          maybeNestColumn(DebeziumConstants.FLATTENED_FILE_COL_NAME, nestedDebeziumMetadataEnabled)
-              + "," + maybeNestColumn(DebeziumConstants.FLATTENED_POS_COL_NAME, nestedDebeziumMetadataEnabled));
+      reconciledConfigs.put(ORDERING_FIELDS.key(), reconcileDebeziumOrderingFields(payloadClassName, orderingFieldName));
     } else if (payloadClassName.equals(AWSDmsAvroPayload.class.getName())) {
       reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, OP_FIELD);
       reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DELETE_OPERATION_VALUE);
@@ -958,11 +942,19 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   /**
-   * Prefixes a flattened Debezium column with the {@link DebeziumConstants#DEBEZIUM_METADATA_FIELD} struct
-   * path when nested fields are enabled; returns the column unchanged otherwise.
+   * Forces a Debezium payload's ordering field to the canonical column(s) the payload merges on.
+   * The flat form ({@code _event_lsn}, or {@code _event_bin_file,_event_pos}) is used unless the
+   * caller already resolved the nested form — which only the Hudi Streamer does when its transformer
+   * groups the CDC metadata under the {@link DebeziumConstants#DEBEZIUM_METADATA_FIELD} struct — in
+   * which case the nested form is preserved so the payload orders against the nested columns.
+   * Keeping this here (rather than trusting {@code orderingFieldName} verbatim) preserves the
+   * long-standing auto-correction for every create path (Spark, Flink, Streamer).
    */
-  private static String maybeNestColumn(String column, boolean nestedDebeziumMetadataEnabled) {
-    return nestedDebeziumMetadataEnabled ? DebeziumConstants.DEBEZIUM_METADATA_FIELD + "." + column : column;
+  private static String reconcileDebeziumOrderingFields(String payloadClassName, String orderingFieldName) {
+    String nestedOrderingFields = DebeziumConstants.resolveOrderingFields(payloadClassName, true);
+    return nestedOrderingFields.equals(orderingFieldName)
+        ? nestedOrderingFields
+        : DebeziumConstants.resolveOrderingFields(payloadClassName, false);
   }
 
   /**
@@ -974,24 +966,9 @@ public class HoodieTableConfig extends HoodieConfig {
                                                                                      String recordMergeStrategyId,
                                                                                      String orderingFieldNamesAsString,
                                                                                      HoodieTableVersion tableVersion) {
-    return inferMergingConfigsForWrites(recordMergeMode, payloadClassName, recordMergeStrategyId,
-        orderingFieldNamesAsString, tableVersion, false);
-  }
-
-  /**
-   * @param nestedDebeziumMetadataEnabled when true, Debezium CDC metadata columns are nested under the
-   *     {@link DebeziumConstants#DEBEZIUM_METADATA_FIELD} struct, so the inferred ordering field(s) for
-   *     Debezium payloads must be resolved against that nested path.
-   */
-  public static Triple<RecordMergeMode, String, String> inferMergingConfigsForWrites(RecordMergeMode recordMergeMode,
-                                                                                     String payloadClassName,
-                                                                                     String recordMergeStrategyId,
-                                                                                     String orderingFieldNamesAsString,
-                                                                                     HoodieTableVersion tableVersion,
-                                                                                     boolean nestedDebeziumMetadataEnabled) {
     if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
       Map<String, String> inferredMergingConfigs = inferMergingConfigsForV9TableCreation(
-          recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldNamesAsString, tableVersion, nestedDebeziumMetadataEnabled);
+          recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldNamesAsString, tableVersion);
       checkArgument(inferredMergingConfigs.containsKey(HoodieTableConfig.RECORD_MERGE_MODE.key()));
       return Triple.of(
           RecordMergeMode.valueOf(inferredMergingConfigs.get(RECORD_MERGE_MODE.key())),

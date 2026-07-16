@@ -18,72 +18,68 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
-import org.apache.hudi.common.util.collection.Triple;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * Tests that {@link HoodieTableConfig#inferMergingConfigsForV9TableCreation} resolves the
- * Debezium ordering field against the {@code _debezium_metadata} struct path when nested metadata
- * is enabled. Kept in {@code hudi-common}'s own test source set (rather than alongside the larger
- * {@code TestHoodieTableConfig} suite in {@code hudi-hadoop-common}) so coverage for this
- * hudi-common-owned logic is attributed to the module that owns it.
+ * Tests that {@link HoodieTableConfig#inferMergingConfigsForV9TableCreation} reconciles a Debezium
+ * payload's ordering field to the canonical column(s) the payload merges on: the flat form by
+ * default (auto-correcting whatever the caller supplied), or the nested
+ * {@code _debezium_metadata.*} form when the caller already resolved it — which only the Hudi
+ * Streamer does when its transformer groups the CDC metadata under the nested struct.
  */
 class TestHoodieTableConfigDebeziumOrdering {
 
-  @Test
-  void mysqlOrderingFieldsAreNestedWhenDebeziumMetadataIsNested() {
-    Map<String, String> flat = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
-        null, MySqlDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE, false);
-    assertEquals(DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME,
-        flat.get(HoodieTableConfig.ORDERING_FIELDS.key()));
+  private static final String MYSQL_FLAT =
+      DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME;
+  private static final String MYSQL_NESTED =
+      DebeziumConstants.DEBEZIUM_METADATA_FIELD + "." + DebeziumConstants.FLATTENED_FILE_COL_NAME + ","
+          + DebeziumConstants.DEBEZIUM_METADATA_FIELD + "." + DebeziumConstants.FLATTENED_POS_COL_NAME;
 
-    Map<String, String> nested = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
-        null, MySqlDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE, true);
-    assertEquals(
-        DebeziumConstants.DEBEZIUM_METADATA_FIELD + "." + DebeziumConstants.FLATTENED_FILE_COL_NAME + ","
-            + DebeziumConstants.DEBEZIUM_METADATA_FIELD + "." + DebeziumConstants.FLATTENED_POS_COL_NAME,
-        nested.get(HoodieTableConfig.ORDERING_FIELDS.key()));
+  private static String inferredOrderingFields(String payloadClass, String callerOrderingFields) {
+    Map<String, String> configs = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+        null, payloadClass, null, callerOrderingFields, HoodieTableVersion.NINE);
+    return configs.get(HoodieTableConfig.ORDERING_FIELDS.key());
   }
 
   @Test
-  void postgresOrderingFieldStaysAtRootRegardlessOfNesting() {
-    Map<String, String> flat = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
-        null, PostgresDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE, false);
-    Map<String, String> nested = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
-        null, PostgresDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE, true);
-
-    assertEquals(DebeziumConstants.FLATTENED_LSN_COL_NAME, flat.get(HoodieTableConfig.ORDERING_FIELDS.key()));
-    assertEquals(DebeziumConstants.FLATTENED_LSN_COL_NAME, nested.get(HoodieTableConfig.ORDERING_FIELDS.key()));
+  void mysqlOrderingIsAutoCorrectedToFlatBinlogColumns() {
+    String mysql = MySqlDebeziumAvroPayload.class.getName();
+    // A non-canonical caller value (arbitrary field, or the legacy _event_seq) is corrected to the
+    // flat binlog coordinates the payload merges on.
+    assertEquals(MYSQL_FLAT, inferredOrderingFields(mysql, "ts"));
+    assertEquals(MYSQL_FLAT, inferredOrderingFields(mysql, DebeziumConstants.ADDED_SEQ_COL_NAME));
+    // Passing the flat form back through is idempotent.
+    assertEquals(MYSQL_FLAT, inferredOrderingFields(mysql, MYSQL_FLAT));
   }
 
   @Test
-  void fiveArgOverloadsDelegateToNestedFalse() {
-    // The pre-existing 5-arg inferMergingConfigsForV9TableCreation/inferMergingConfigsForWrites
-    // overloads must keep behaving exactly as if nestedDebeziumMetadataEnabled=false was passed,
-    // since existing callers (e.g. the reader path) are unaware of Debezium metadata nesting.
-    Map<String, String> viaFiveArg = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
-        null, MySqlDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE);
-    Map<String, String> viaSixArgFalse = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
-        null, MySqlDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE, false);
-    assertEquals(viaSixArgFalse.get(HoodieTableConfig.ORDERING_FIELDS.key()), viaFiveArg.get(HoodieTableConfig.ORDERING_FIELDS.key()));
+  void mysqlNestedOrderingIsPreservedWhenCallerResolvesIt() {
+    // The streamer passes the nested path when its transformer nests the CDC metadata; it must be
+    // preserved so the payload orders against the nested columns rather than the (absent) root ones.
+    assertEquals(MYSQL_NESTED, inferredOrderingFields(MySqlDebeziumAvroPayload.class.getName(), MYSQL_NESTED));
+  }
 
-    Triple<RecordMergeMode, String, String> writesViaFiveArg = HoodieTableConfig.inferMergingConfigsForWrites(
-        null, MySqlDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE);
-    Triple<RecordMergeMode, String, String> writesViaSixArgFalse = HoodieTableConfig.inferMergingConfigsForWrites(
-        null, MySqlDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE, false);
-    // Compare components individually: the payload class (middle) is legitimately null for V9
-    // tables, and Triple#equals NPEs on a null middle rather than short-circuiting.
-    assertEquals(writesViaSixArgFalse.getLeft(), writesViaFiveArg.getLeft());
-    assertEquals(writesViaSixArgFalse.getMiddle(), writesViaFiveArg.getMiddle());
-    assertEquals(writesViaSixArgFalse.getRight(), writesViaFiveArg.getRight());
+  @Test
+  void postgresOrderingIsAlwaysLsn() {
+    String postgres = PostgresDebeziumAvroPayload.class.getName();
+    // The Postgres LSN stays at the root level even when nested, so the ordering field is always _event_lsn.
+    assertEquals(DebeziumConstants.FLATTENED_LSN_COL_NAME, inferredOrderingFields(postgres, "ts"));
+    assertEquals(DebeziumConstants.FLATTENED_LSN_COL_NAME,
+        inferredOrderingFields(postgres, DebeziumConstants.FLATTENED_LSN_COL_NAME));
+  }
+
+  @Test
+  void resolveOrderingFieldsReturnsNullForNonDebeziumPayload() {
+    assertNull(DebeziumConstants.resolveOrderingFields("com.example.CustomPayload", false));
+    assertNull(DebeziumConstants.resolveOrderingFields(null, true));
   }
 }

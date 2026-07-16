@@ -74,19 +74,36 @@ class TestPostgresDebeziumTransformer extends DebeziumTransformerTestBase {
   }
 
   @Test
-  void testPostgresDefaultsToNestedMetadata() {
-    // No nested property set -> Postgres should nest by default, with op + LSN kept at root.
+  void testPostgresDefaultsToFlatMetadata() {
+    // No nested property set -> Postgres defaults to flat (consistent with MySQL), so every metadata
+    // column sits at the root and there is no _debezium_metadata struct.
     Dataset<Row> result = new PostgresDebeziumTransformer()
         .apply(jsc, spark, jsonToDataset(pgEvent("c", 1, 1001, false)), new TypedProperties());
 
     List<String> columns = Arrays.asList(result.columns());
-    assertTrue(columns.contains(DebeziumConstants.DEBEZIUM_METADATA_FIELD), "nested by default for Postgres");
+    assertFalse(columns.contains(DebeziumConstants.DEBEZIUM_METADATA_FIELD), "flat by default for Postgres");
     assertTrue(columns.contains(DebeziumConstants.FLATTENED_OP_COL_NAME), "op at root");
     assertTrue(columns.contains(DebeziumConstants.FLATTENED_LSN_COL_NAME), "LSN at root (payload ordering field)");
-    assertFalse(columns.contains(DebeziumConstants.FLATTENED_TX_ID_COL_NAME), "tx id is nested, not at root");
+    assertTrue(columns.contains(DebeziumConstants.FLATTENED_TX_ID_COL_NAME), "tx id at root when flat");
+  }
 
-    Row metadata = result.first().getAs(DebeziumConstants.DEBEZIUM_METADATA_FIELD);
-    assertTrue(Arrays.asList(metadata.schema().fieldNames()).contains(DebeziumConstants.FLATTENED_TX_ID_COL_NAME));
+  @Test
+  void testNullLsnDefaultedToZeroForSnapshotRowsWhenNested() {
+    // Snapshot LSN defaulting must also hold under the nested layout: the LSN stays at the root level
+    // even when nested, so the "null snapshot LSN -> 0" post-processing still applies.
+    Dataset<Row> input = jsonToDataset(
+        pgEvent("r", 1, 0, true),    // snapshot, null lsn -> expect 0
+        pgEvent("r", 2, 2002, false) // snapshot, real lsn -> unchanged
+    );
+    TypedProperties props = new TypedProperties();
+    props.setProperty(DebeziumTransformerConfig.ENABLE_NESTED_FIELDS.key(), "true");
+
+    Dataset<Row> result = new PostgresDebeziumTransformer().apply(jsc, spark, input, props);
+    assertTrue(Arrays.asList(result.columns()).contains(DebeziumConstants.DEBEZIUM_METADATA_FIELD), "nested layout");
+    List<Row> rows = result.orderBy("id").collectAsList();
+
+    assertEquals(0L, rows.get(0).<Long>getAs(DebeziumConstants.FLATTENED_LSN_COL_NAME), "null snapshot LSN defaulted to 0 (nested)");
+    assertEquals(2002L, rows.get(1).<Long>getAs(DebeziumConstants.FLATTENED_LSN_COL_NAME), "real LSN preserved (nested)");
   }
 
   @Test

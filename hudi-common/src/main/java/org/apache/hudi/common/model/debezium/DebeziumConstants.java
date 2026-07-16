@@ -68,6 +68,9 @@ public class DebeziumConstants {
 
   // Other Constants
   public static final String DELETE_OP = "d";
+  // Snapshot ("read") operation emitted by Debezium for rows captured during an initial or
+  // incremental snapshot rather than from the transaction log.
+  public static final String SNAPSHOT_OP = "r";
 
   // Struct column under which the Debezium metadata columns are grouped when nested fields are enabled.
   public static final String DEBEZIUM_METADATA_FIELD = "_debezium_metadata";
@@ -82,5 +85,32 @@ public class DebeziumConstants {
       FLATTENED_XMIN_COL_NAME,
       FLATTENED_SHARD_NAME
   ));
+
+  /**
+   * Resolves the canonical ordering field(s) for a Debezium payload, or {@code null} for any other
+   * payload (in which case the caller keeps its own ordering field). This is the single source of
+   * truth for the ordering field that the {@code *DebeziumAvroPayload} merge relies on, shared by
+   * every write path that creates a Debezium table (Hudi Streamer, Spark, Flink).
+   *
+   * <p>The Postgres LSN and the operation-type column stay at the root level even when the
+   * transformer groups the CDC metadata under the {@link #DEBEZIUM_METADATA_FIELD} struct, so the
+   * Postgres ordering field is always {@code _event_lsn}. The MySQL binlog coordinates move into that
+   * struct when nesting is enabled, so the MySQL ordering field is resolved against the nested path.
+   *
+   * @param payloadClassName fully-qualified payload class name (may be {@code null}).
+   * @param nestedMetadataEnabled whether the Debezium transformer nests the CDC metadata columns
+   *                              under the {@link #DEBEZIUM_METADATA_FIELD} struct.
+   * @return the ordering field(s) for a Debezium payload, or {@code null} for any other payload.
+   */
+  public static String resolveOrderingFields(String payloadClassName, boolean nestedMetadataEnabled) {
+    if (PostgresDebeziumAvroPayload.class.getName().equals(payloadClassName)) {
+      return FLATTENED_LSN_COL_NAME;
+    }
+    if (MySqlDebeziumAvroPayload.class.getName().equals(payloadClassName)) {
+      String prefix = nestedMetadataEnabled ? DEBEZIUM_METADATA_FIELD + "." : "";
+      return prefix + FLATTENED_FILE_COL_NAME + "," + prefix + FLATTENED_POS_COL_NAME;
+    }
+    return null;
+  }
 }
 

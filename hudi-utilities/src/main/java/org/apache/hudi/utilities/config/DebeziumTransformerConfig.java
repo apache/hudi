@@ -55,7 +55,7 @@ public class DebeziumTransformerConfig extends HoodieConfig {
           + "root level. The change-operation-type column and the log-position column (e.g. the "
           + "Postgres LSN) are kept at the root level so that payload ordering keeps working. When "
           + "this property is not set explicitly, the per-database transformer default is used "
-          + "(PostgresDebeziumTransformer defaults to true).");
+          + "(both the Postgres and MySQL transformers default to flat metadata).");
 
   public static final ConfigProperty<Boolean> SCHEMA_AS_NULLABLE = ConfigProperty
       .key(PREFIX + "schema.nullable.enable")
