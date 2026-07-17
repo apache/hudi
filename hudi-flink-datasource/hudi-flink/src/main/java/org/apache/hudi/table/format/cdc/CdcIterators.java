@@ -92,6 +92,11 @@ public final class CdcIterators {
   /**
    * Iterates over an ordered sequence of {@link HoodieCDCFileSplit}s, delegating
    * per-split record reading to a user-supplied factory function.
+   *
+   * <p>Not thread-safe by design: in the Source V2 read path this iterator is created, drained into a
+   * materialized minibatch, and closed entirely on the single split-fetcher thread (see
+   * {@code AbstractSplitReaderFunction}); the legacy {@link CdcInputFormat} path likewise reads and
+   * closes it on one thread. No method is ever invoked concurrently, so no synchronization is needed.
    */
   public static class CdcFileSplitsIterator implements ClosableIterator<RowData> {
     private CdcImageManager imageManager;

@@ -100,6 +100,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -3990,10 +3991,11 @@ public class ITTestHoodieDataSource {
    * the collected rows.
    *
    * <p>The streaming job is terminated by a forced {@link CollectSinkTableFactory.SuccessException} once
-   * {@code expectedNum} rows are collected. A benign teardown race (see {@link #isAcceptableTerminalFailure})
-   * can instead end the job before all rows are emitted, leaving a short result. Re-reading the already
-   * committed table is idempotent, so retry up to {@link #MAX_STREAM_READ_ATTEMPTS} times when the result
-   * is short; this keeps the race from surfacing as a confusing row-count assertion failure.
+   * {@code expectedNum} rows are collected. On a slow CI shard the {@code await} window can elapse before
+   * the sink reaches {@code expectedNum} (a bare timeout - see {@link #isAwaitTimeout}), leaving a short
+   * result. Re-reading the already committed table is idempotent, so retry up to
+   * {@link #MAX_STREAM_READ_ATTEMPTS} times when the result is short; this keeps a slow shard from
+   * surfacing as a confusing row-count (or "Unexpected job failure") assertion failure.
    */
   private List<Row> submitAndFetchWithRetry(TableEnvironment tEnv, String select, String sinkDDL, int expectedNum) {
     List<Row> rows = Collections.emptyList();
@@ -4031,46 +4033,35 @@ public class ITTestHoodieDataSource {
   private List<Row> fetchResultWithExpectedNum(TableEnvironment tEnv, TableResult tableResult) {
     try {
       // wait the continuous streaming query to be terminated by forced exception with expected row number
-      // and max waiting timeout is 30s
-      tableResult.await(30, TimeUnit.SECONDS);
+      // and max waiting timeout is 60s (kept generous so a slow CI shard does not time out before the
+      // sink collects its rows; a bare timeout is still handled as a retryable short read below)
+      tableResult.await(60, TimeUnit.SECONDS);
     } catch (Throwable e) {
-      // Acceptable terminal causes:
-      //   1. SuccessException: the sink reached its expected row count and intentionally
-      //      threw to terminate the streaming job. This is the happy path.
-      //   2. IOException("Stream is closed!") wrapped as HoodieIOException: a benign
-      //      error-attribution race between the source-side cascading-shutdown path and
-      //      the sink-side SuccessException terminator. When the sink throws
-      //      SuccessException to end the job, the chained source's SplitFetcher can close
-      //      the underlying Hadoop FSDataInputStream while the mailbox is still draining
-      //      a BatchRecords queued earlier; the next row-group read on the now-closed
-      //      stream surfaces an IOException("Stream is closed!"). With
-      //      restart-strategy.fixed-delay.attempts=0 (set in beforeEach to keep tests
-      //      deterministic) that IOException becomes the job's reported failure cause
-      //      instead of the sink's SuccessException, even though the sink has already
-      //      collected the expected rows by then - i.e. the functional outcome is
-      //      unchanged, only the error-attribution differs. Production paths correctly
-      //      fail the job on stream-closed-mid-read (the right behavior for real I/O
-      //      failures), so this tolerance is scoped to the SuccessException-based test
-      //      pattern below and is NOT mirrored in production code.
-      //   3. NullPointerException from ParquetColumnarRowSplitReader#readNextRowGroup: the
-      //      same benign teardown race as (2), observed with different timing. When the
-      //      SplitFetcher's close() fully completes first, ParquetColumnarRowSplitReader#close
-      //      nulls out its `reader` field, so the in-flight row-group read on the task thread
-      //      surfaces as a NullPointerException (reader.readNextRowGroup() on a null reader)
-      //      instead of an IOException("Stream is closed!"). Same functional outcome - the
-      //      sink has already collected the expected rows - only the error symptom differs.
-      //      Tolerated narrowly (an NPE originating from that exact frame) for the same
-      //      reason as (2), and likewise NOT mirrored in production code.
-      if (!isAcceptableTerminalFailure(e)) {
-        throw new AssertionError("Unexpected job failure", e);
-      }
-      // The races (2)/(3) usually fire after the sink has collected its expected rows, but can also fire
-      // before - ending the read with a short result. Log the tolerated cause so an incomplete read is
-      // diagnosable; submitAndFetchWithRetry re-reads when the collected count is below the expectation.
-      if (!isSuccessException(e)) {
-        LOG.warn("Streaming read terminated by a tolerated teardown race ({}); collected {} rows so far.",
-            describeTerminalCause(e),
+      // The only acceptable terminal cause is the sink reaching its expected row count and throwing
+      // SuccessException to terminate the streaming job (the happy path). The Source V2 read path now
+      // reads and closes each split's I/O on a single (split-fetcher) thread, so the former teardown
+      // races (a closed Parquet stream / a closed CDC iterator surfacing on the task thread) can no
+      // longer happen; any other terminal failure is a real error and fails the test.
+      //
+      // A bare await-window TimeoutException is not a terminal failure at all - the sink simply had not
+      // reached expectedNum yet (typically CI-load slowness), so the job is still running. Cancel it and
+      // let submitAndFetchWithRetry re-submit a fresh job, rather than treating a slow shard as a hard
+      // failure.
+      if (isAwaitTimeout(e)) {
+        // Cancel the still-running job (best-effort, bounded) so it cannot keep writing to the shared
+        // CollectSinkTableFactory.RESULT after the retry's re-submit clears it.
+        tableResult.getJobClient().ifPresent(jobClient -> {
+          try {
+            jobClient.cancel().get(30, TimeUnit.SECONDS);
+          } catch (Exception ignored) {
+            // best-effort cancel; the subsequent re-submit clears RESULT and starts a fresh job
+          }
+        });
+        LOG.warn("Streaming read did not reach the expected row count within the await window; "
+                + "cancelled the job and will retry. Collected {} rows so far.",
             CollectSinkTableFactory.RESULT.values().stream().mapToInt(List::size).sum());
+      } else if (!isSuccessException(e)) {
+        throw new AssertionError("Unexpected job failure", e);
       }
     }
     tEnv.executeSql("DROP TABLE IF EXISTS sink");
@@ -4080,56 +4071,20 @@ public class ITTestHoodieDataSource {
   }
 
   /**
-   * Whether {@code e} (or any of its causes) is one of the terminal failures that
-   * {@link #fetchResultWithExpectedNum} is allowed to swallow. See the comment at the call
-   * site for the rationale.
+   * Whether {@code e} is a bare {@link TimeoutException} thrown directly by
+   * {@link org.apache.flink.table.api.TableResult#await(long, TimeUnit)} - i.e. the await window elapsed
+   * before the sink reached its expected row count and threw
+   * {@link CollectSinkTableFactory.SuccessException}, leaving the job still running (never terminated),
+   * so the caller cancels it and retries the read rather than swallowing it.
+   *
+   * <p>Only the top-level exception is inspected, never the cause chain: {@code await} throws its own
+   * timeout bare, whereas a genuine job failure arrives wrapped in an {@link ExecutionException} that
+   * may itself embed a {@link TimeoutException} (checkpoint expiry, RPC timeout). Walking the chain
+   * would misclassify such a real failure as a slow shard - cancel it, retry, and finally report a
+   * row-count mismatch with the true cause discarded.
    */
-  private static boolean isAcceptableTerminalFailure(Throwable e) {
-    Throwable cur = e;
-    while (cur != null) {
-      if (cur instanceof CollectSinkTableFactory.SuccessException) {
-        return true;
-      }
-      String msg = cur.getMessage();
-      if (msg != null && msg.contains("Stream is closed")) {
-        return true;
-      }
-      // The NPE twin of the "Stream is closed!" teardown race (cause #3 at the call site):
-      // a NullPointerException whose own stack trace originates from
-      // ParquetColumnarRowSplitReader#readNextRowGroup, i.e. reader.readNextRowGroup() ran on a
-      // null `reader` that ParquetColumnarRowSplitReader#close had just nulled out. Scoped to
-      // that exact frame so genuine NPEs - and the legitimate IOException("expecting more
-      // rows...") thrown from the same method - still fail the test.
-      if (isNullPointerException(cur) && containsReadNextRowGroupFrame(cur)) {
-        return true;
-      }
-      cur = cur.getCause();
-    }
-    return false;
-  }
-
-  /**
-   * True for a real {@link NullPointerException} as well as one wrapped in Flink's
-   * {@code SerializedThrowable} when the failure is propagated back from the cluster (its
-   * {@code toString()} preserves the original {@code java.lang.NullPointerException} prefix).
-   */
-  private static boolean isNullPointerException(Throwable t) {
-    return t instanceof NullPointerException
-        || t.toString().startsWith(NullPointerException.class.getName());
-  }
-
-  /**
-   * Whether {@code t}'s stack trace (preserved even through {@code SerializedThrowable})
-   * contains a {@code ParquetColumnarRowSplitReader#readNextRowGroup} frame.
-   */
-  private static boolean containsReadNextRowGroupFrame(Throwable t) {
-    for (StackTraceElement frame : t.getStackTrace()) {
-      if (frame.getClassName().endsWith("ParquetColumnarRowSplitReader")
-          && "readNextRowGroup".equals(frame.getMethodName())) {
-        return true;
-      }
-    }
-    return false;
+  private static boolean isAwaitTimeout(Throwable e) {
+    return e instanceof TimeoutException;
   }
 
   /**
@@ -4143,16 +4098,5 @@ public class ITTestHoodieDataSource {
       }
     }
     return false;
-  }
-
-  /**
-   * Short description of {@code e}'s root cause, for logging which tolerated terminal failure fired.
-   */
-  private static String describeTerminalCause(Throwable e) {
-    Throwable root = e;
-    while (root.getCause() != null) {
-      root = root.getCause();
-    }
-    return root.getClass().getSimpleName() + ": " + root.getMessage();
   }
 }
