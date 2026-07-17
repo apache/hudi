@@ -49,7 +49,7 @@ public class TestAvroRecordSizeEstimator {
     Assertions.assertTrue(size < 400 && size > 0);
 
     // testing generated IndexedRecord
-    HoodieMetadataRecord metadataRecord = new HoodieMetadataRecord("__all_partitions__", 1, new HashMap<>(), null, null, null, null);
+    HoodieMetadataRecord metadataRecord = new HoodieMetadataRecord("__all_partitions__", 1, new HashMap<>(), null, null, null, null, null);
     bufferedRecord = new BufferedRecord<>("__all_partitions__", 0, metadataRecord, 1, null);
     size = estimator.sizeEstimate(bufferedRecord);
     // size can be various for different OS / JVM version
