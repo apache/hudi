@@ -75,14 +75,16 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
   }
 
   @Test
-  void testCorruptRecordReInjectedAfterTransformerDropsIt() {
-    // Regression for ENG-41958: a custom transformer (e.g. ColumnFilter with mode=include)
-    // that does dataset.select(userColumns) drops _corrupt_record. The chain re-injects it.
+  void testCorruptRecordPreservedAfterTransformerDropsIt() {
+    // Regression for ENG-41958: t1 populates _corrupt_record with "true", t2 drops the
+    // column via select("foo"). The chain must preserve the populated values, not re-inject
+    // as null — otherwise error rows silently flow into the main write path instead of the
+    // error table.
     Dataset<Row> original = getTestDataset();
 
     Transformer t1 = getErrorEventHandlerTransformer();
     Transformer t2 = getErrorRecordColumnDropTransformer();
-    Transformer t3 = (jsc, sparkSession, dataset, properties) -> dataset.withColumn("foo",
+    Transformer t3 = (jsc, sparkSession, dataset, props) -> dataset.withColumn("foo",
         dataset.col("foo").cast(IntegerType));
     TypedProperties properties = new TypedProperties();
     properties.setProperty(ERROR_TABLE_ENABLED.key(), "true");
@@ -91,6 +93,9 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
 
     assertArrayEquals(new String[]{"foo", ERROR_TABLE_CURRUPT_RECORD_COL_NAME}, transformed.columns());
     assertEquals(2, transformed.count());
+    // Values populated by t1 must survive t2 dropping the column
+    assertEquals(0, transformed.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNull()).count());
+    assertEquals(2, transformed.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).equalTo("true")).count());
   }
 
   @Test
@@ -115,7 +120,7 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
     // Transformer that keeps all columns — re-injection is a no-op.
     Dataset<Row> original = getTestDataset();
 
-    Transformer keepAll = (jsc, sparkSession, dataset, properties) -> dataset.withColumn("foo",
+    Transformer keepAll = (jsc, sparkSession, dataset, props) -> dataset.withColumn("foo",
         dataset.col("foo").cast(IntegerType));
     TypedProperties properties = new TypedProperties();
     properties.setProperty(ERROR_TABLE_ENABLED.key(), "true");
