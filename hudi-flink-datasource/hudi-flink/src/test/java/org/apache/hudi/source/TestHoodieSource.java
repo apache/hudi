@@ -465,18 +465,18 @@ public class TestHoodieSource {
         .build();
     HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
     HadoopStorageConfiguration hadoopConf = new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));
-    HoodieSplitReaderFunction splitReaderFunction = new HoodieSplitReaderFunction(
-        conf,
-        schema, // schema will be resolved from table
-        schema, // required schema
-        InternalSchemaManager.get(hadoopConf, this.metaClient),
-        conf.get(FlinkOptions.MERGE_TYPE),
-        Collections.emptyList(),
-            false);
+    InternalSchemaManager internalSchemaManager = InternalSchemaManager.get(hadoopConf, this.metaClient);
 
     return new HoodieSource<>(
         scanContext,
-        splitReaderFunction,
+        () -> new HoodieSplitReaderFunction(
+            conf,
+            schema, // schema will be resolved from table
+            schema, // required schema
+            internalSchemaManager,
+            conf.get(FlinkOptions.MERGE_TYPE),
+            Collections.emptyList(),
+            false),
         new HoodieSourceSplitComparator(),
         metaClient,
         new HoodieRecordEmitter<>());

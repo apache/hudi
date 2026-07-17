@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.reader;
 
+import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.source.HoodieScanContext;
 import org.apache.hudi.source.reader.function.SplitReaderFunction;
@@ -45,9 +46,9 @@ public class HoodieSourceReader<T> extends
           RecordEmitter<HoodieRecordWithPosition<T>, T, HoodieSourceSplit> recordEmitter,
           HoodieScanContext scanContext,
           SourceReaderContext context,
-          SplitReaderFunction<T> readerFunction,
+          SerializableSupplier<SplitReaderFunction<T>> readerFunctionSupplier,
           SerializableComparator<HoodieSourceSplit> splitComparator) {
-    super(() -> new HoodieSourceSplitReader<>(tableName, context, readerFunction, splitComparator,
+    super(() -> new HoodieSourceSplitReader<>(tableName, context, readerFunctionSupplier, splitComparator,
             scanContext.getLimit() == RecordLimiter.NO_LIMIT ? Option.empty() : Option.of(new RecordLimiter(scanContext.getLimit()))),
         recordEmitter, scanContext.getConf(), context);
   }

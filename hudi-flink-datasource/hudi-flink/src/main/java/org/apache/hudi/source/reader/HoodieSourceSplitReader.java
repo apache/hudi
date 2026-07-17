@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.reader;
 
+import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.source.reader.function.SplitReaderFunction;
@@ -74,12 +75,14 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
   public HoodieSourceSplitReader(
       String tableName,
       SourceReaderContext context,
-      SplitReaderFunction<T> readerFunction,
+      SerializableSupplier<SplitReaderFunction<T>> readerFunctionSupplier,
       SerializableComparator<HoodieSourceSplit> splitComparator,
       Option<RecordLimiter> recordLimiter) {
     this.splitComparator = splitComparator;
     this.splits = new ArrayDeque<>();
-    this.readerFunction = readerFunction;
+    // Flink can start a new fetcher before the previous idle fetcher finishes closing. Supply a
+    // fresh stateful cursor for each split reader so the old fetcher's close cannot affect the new one.
+    this.readerFunction = readerFunctionSupplier.get();
     this.recordLimiter = recordLimiter;
     this.readerMetrics = new FlinkStreamReadMetrics(context.metricGroup(), tableName);
     this.readerMetrics.registerMetrics();
