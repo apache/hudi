@@ -23,25 +23,27 @@ import org.junit.jupiter.api.Test
 class TestIvfRaBitQMdtSearchAlgorithm {
 
   @Test
-  def testBuildFileGroupFetchBatchesCoalescesCandidatesByFile(): Unit = {
+  def testBuildFileGroupFetchBatchesCreatesPositionLocalBatches(): Unit = {
     val candidates = Seq(
       Candidate("fg-b", 30L),
+      Candidate("fg-a", 30L),
+      Candidate("fg-b", 10L),
       Candidate("fg-a", 10L),
-      Candidate("fg-b", 40L),
+      Candidate("fg-b", 20L),
       Candidate("fg-a", 20L))
 
     val batches = IvfRaBitQMdtSearchAlgorithm
-      .buildFileGroupFetchBatches(candidates)(_.fileGroupId)
+      .buildFileGroupFetchBatches(candidates, targetBatchCount = 4)(_.fileGroupId, _.position)
 
-    assertEquals(Seq("fg-a", "fg-b"), batches.map(_._1))
-    assertEquals(Seq(10L, 20L), batches.head._2.map(_.position))
-    assertEquals(Seq(30L, 40L), batches(1)._2.map(_.position))
+    assertEquals(Seq("fg-a", "fg-a", "fg-b", "fg-b"), batches.map(_._1))
+    assertEquals(Seq(Seq(10L, 20L), Seq(30L), Seq(10L, 20L), Seq(30L)),
+      batches.map(_._2.map(_.position)))
   }
 
   @Test
   def testBuildFileGroupFetchBatchesHandlesNoCandidates(): Unit = {
     val batches = IvfRaBitQMdtSearchAlgorithm
-      .buildFileGroupFetchBatches(Seq.empty[Candidate])(_.fileGroupId)
+      .buildFileGroupFetchBatches(Seq.empty[Candidate], targetBatchCount = 4)(_.fileGroupId, _.position)
 
     assertEquals(Seq.empty, batches)
   }

@@ -421,9 +421,15 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
     VectorIndexOptions.RABITQ_ASSUME_NORMALIZED)
 
   private[analysis] def buildFileGroupFetchBatches[T](
-      candidates: Seq[T])(
-      fileGroupId: T => String): Seq[(String, Seq[T])] =
-    candidates.groupBy(fileGroupId).toSeq.sortBy(_._1)
+      candidates: Seq[T],
+      targetBatchCount: Int)(
+      fileGroupId: T => String,
+      rowPosition: T => Long): Seq[(String, Seq[T])] = {
+    val batchSize = math.max(1, math.ceil(candidates.size.toDouble / math.max(1, targetBatchCount)).toInt)
+    candidates.groupBy(fileGroupId).toSeq.sortBy(_._1).flatMap { case (fgId, fileCandidates) =>
+      fileCandidates.sortBy(rowPosition).grouped(batchSize).map(batch => (fgId, batch)).toSeq
+    }
+  }
 
   private def resolvePlanContext(
       spark: SparkSession,
@@ -756,20 +762,24 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
               s"a file-slice resolution bug or stale vector index.")
         }
         val bFileSliceMap = spark.sparkContext.broadcast(fileSliceMap)
-        val groupedCandidates = buildFileGroupFetchBatches(serveCandidates)(_.getFileGroupId)
-        // Keep every file group's finalists in one task. Splitting a file group across many
-        // tasks makes each task open the same Parquet file and independently fetch/decode
-        // overlapping pages. PositionalParquetFetcher already groups positions by row group and
-        // merges page ranges, so coalescing here eliminates that duplicate I/O and decode work.
-        val fetchPartitions = math.max(
+        val exactFetchParallelism = math.max(
           1,
-          math.min(groupedCandidates.size, math.max(1, spark.sparkContext.defaultParallelism)))
+          math.min(refineK, math.max(1, spark.sparkContext.defaultParallelism)))
+        // Use one executor wave of contiguous position batches. Tiny candidate-count batches
+        // repeatedly open the same file and fetch overlapping pages; one batch per file leaves
+        // most executor cores idle. Position-local batches balance page reuse and parallelism.
+        val candidateGroupCount = serveCandidates.iterator.map(_.getFileGroupId).toSet.size
+        val fetchBatches = buildFileGroupFetchBatches(serveCandidates, exactFetchParallelism)(
+          _.getFileGroupId,
+          _.getLocation.getPosition)
+        val fetchPartitions = math.min(exactFetchParallelism, fetchBatches.size)
         val byFetchBatch: RDD[(String, Seq[VectorIndexMdtSearchUtils.ScoredPostingMatch])] =
-          spark.sparkContext.parallelize(groupedCandidates, fetchPartitions)
+          spark.sparkContext.parallelize(fetchBatches, fetchPartitions)
         LOG.info(
           s"[vector_search][stage][exact_read_plan] rerankCandidates=${serveCandidates.size} " +
-            s"candidateGroups=${groupedCandidates.size} resolvedSlices=${fileSliceMap.size} " +
-            s"fileGroupPartitions=${byFetchBatch.getNumPartitions} exactFetchParallelism=$fetchPartitions")
+            s"candidateGroups=$candidateGroupCount resolvedSlices=${fileSliceMap.size} " +
+            s"fetchBatches=${fetchBatches.size} fileGroupPartitions=${byFetchBatch.getNumPartitions} " +
+            s"exactFetchParallelism=$exactFetchParallelism")
 
         val vectorOnlyProjection = mergedOptions.get(VECTOR_ONLY_PROJECTION_OPT)
           .orElse(spark.conf.getOption(VECTOR_ONLY_PROJECTION_SPARK_CONF))
