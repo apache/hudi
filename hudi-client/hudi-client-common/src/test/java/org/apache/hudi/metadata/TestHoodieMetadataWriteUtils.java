@@ -24,23 +24,41 @@ import org.apache.hudi.client.transaction.lock.ZookeeperBasedImplicitBasePathLoc
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.nio.file.Path;
+import java.util.Map;
 import java.util.Properties;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -49,6 +67,47 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMetadataWriteUtils {
+
+  @Test
+  void testCreateEmptyNativeLogFile(@TempDir Path tempDir) throws Exception {
+    String instantTime = "20260717120000000";
+    String fileId = "files-0000";
+    HoodieSchema writeSchema = HoodieSchema.parse(
+        "{\"type\":\"record\",\"name\":\"metadata\",\"fields\":[]}");
+    StoragePath parentPath = new StoragePath(tempDir.resolve("files").toString());
+    HoodieStorage storage = HoodieStorageUtils.getStorage(parentPath, getDefaultStorageConf());
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(tempDir.toString())
+        .withSchema(writeSchema.toString())
+        .withWriteTableVersion(HoodieTableVersion.TEN.versionCode())
+        .withPopulateMetaFields(false)
+        .build();
+    TaskContextSupplier taskContextSupplier =
+        new HoodieLocalEngineContext(getDefaultStorageConf()).getTaskContextSupplier();
+    StoragePath nativeLogPath = new StoragePath(parentPath, FSUtils.makeNativeLogFileName(
+        fileId,
+        HoodieLogFormat.DEFAULT_WRITE_TOKEN,
+        instantTime,
+        HoodieLogFile.LOGFILE_BASE_VERSION,
+        "log",
+        HoodieFileFormat.HFILE));
+
+    HoodieMetadataWriteUtils.createEmptyFileGroupLogFile(
+        storage, parentPath, fileId, instantTime, taskContextSupplier, writeConfig);
+
+    assertTrue(nativeLogPath.getName().endsWith(".log.hfile"));
+    assertTrue(FSUtils.isNativeLogFile(nativeLogPath.getName()));
+    assertTrue(storage.exists(nativeLogPath));
+    assertTrue(storage.getPathInfo(nativeLogPath).getLength() > 0);
+    Map<String, String> footer = HoodieIOFactory.getIOFactory(storage)
+        .getFileFormatUtils(HoodieFileFormat.HFILE)
+        .readFooter(storage, false, nativeLogPath, NativeLogFooterMetadata.FOOTER_METADATA_KEY);
+    Map<HeaderMetadataType, String> footerHeader = NativeLogFooterMetadata.fromFooterMetadata(footer);
+    assertEquals(instantTime, footerHeader.get(HeaderMetadataType.INSTANT_TIME));
+    assertEquals(HoodieSchemaUtils.createHoodieWriteSchema(writeConfig.getWriteSchema(), false).toString(),
+        footerHeader.get(HeaderMetadataType.SCHEMA));
+    assertEquals(String.valueOf(HoodieLogFormat.CURRENT_VERSION), footerHeader.get(HeaderMetadataType.VERSION));
+  }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})

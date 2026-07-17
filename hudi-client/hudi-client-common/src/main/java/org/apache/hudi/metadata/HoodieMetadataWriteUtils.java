@@ -32,21 +32,32 @@ import org.apache.hudi.common.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.common.config.metrics.HoodieMetricsM3Config;
 import org.apache.hudi.common.config.metrics.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
+import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
+import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
@@ -62,20 +73,26 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieFileWriter;
+import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
+import org.apache.hudi.util.CommonClientUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -88,6 +105,7 @@ import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ASYNC_CLEAN;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_CLEANER_COMMITS_RETAINED;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
+import static org.apache.hudi.common.model.LogExtensions.DATA_LOG_EXTENSION;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
@@ -113,6 +131,67 @@ public class HoodieMetadataWriteUtils {
   // ever. Hence, we use a very large basefile size in metadata table. The actual size of the HFiles created will
   // eventually depend on the number of file groups selected for each partition (See estimateFileGroupCount function)
   private static final long MDT_MAX_HFILE_SIZE_BYTES = 10 * 1024 * 1024 * 1024L; // 10GB
+
+  /**
+   * Creates the initial empty log file for a metadata table file group so that the file group can be discovered by
+   * the file-system view before any records are written to it. Native log format uses a zero-record HFile containing
+   * the instant time and writer schema in its footer, while legacy inline log format uses an empty delete block.
+   *
+   * @param storage storage used to create the log file
+   * @param parentPath metadata partition containing the file group
+   * @param fileGroupFileId file ID of the metadata table file group
+   * @param instantTime instant time used as the base commit time of the log file
+   * @param taskContextSupplier task context supplier used by the native file writer
+   * @param writeConfig metadata table write configuration
+   */
+  static void createEmptyFileGroupLogFile(HoodieStorage storage,
+                                          StoragePath parentPath,
+                                          String fileGroupFileId,
+                                          String instantTime,
+                                          TaskContextSupplier taskContextSupplier,
+                                          HoodieWriteConfig writeConfig) throws IOException, InterruptedException {
+    if (CommonClientUtils.shouldWriteNativeLogs(writeConfig)) {
+      HoodieSchema writeSchema = HoodieSchemaUtils.createHoodieWriteSchema(
+          writeConfig.getWriteSchema(), writeConfig.allowOperationMetadataField());
+      StoragePath nativeLogPath = new StoragePath(parentPath, FSUtils.makeNativeLogFileName(
+          fileGroupFileId,
+          HoodieLogFormat.DEFAULT_WRITE_TOKEN,
+          instantTime,
+          HoodieLogFile.LOGFILE_BASE_VERSION,
+          DATA_LOG_EXTENSION,
+          HoodieFileFormat.HFILE));
+      Map<HeaderMetadataType, String> footerHeader = new HashMap<>();
+      footerHeader.put(HeaderMetadataType.INSTANT_TIME, instantTime);
+      footerHeader.put(HeaderMetadataType.SCHEMA, writeSchema.toString());
+      try (HoodieFileWriter<?> writer = HoodieFileWriterFactory.getFileWriter(
+          instantTime,
+          nativeLogPath,
+          storage,
+          writeConfig,
+          writeSchema,
+          taskContextSupplier,
+          HoodieRecord.HoodieRecordType.AVRO)) {
+        writer.addFooterMetadata(NativeLogFooterMetadata.toFooterMetadata(footerHeader));
+      }
+    } else {
+      Map<HeaderMetadataType, String> blockHeader = Collections.singletonMap(HeaderMetadataType.INSTANT_TIME, instantTime);
+      HoodieDeleteBlock block = new HoodieDeleteBlock(Collections.emptyList(), blockHeader);
+      try (HoodieLogFormat.Writer writer = HoodieLogFormatWriter.builder()
+          .withParentPath(parentPath)
+          .withLogFileId(fileGroupFileId)
+          .withInstantTime(instantTime)
+          .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
+          .withFileSize(0L)
+          .withSizeThreshold(writeConfig.getLogFileMaxSize())
+          .withStorage(storage)
+          .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
+          .withTableVersion(writeConfig.getWriteVersion())
+          .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+          .build()) {
+        writer.appendBlock(block);
+      }
+    }
+  }
 
   /**
    * Create a {@code HoodieWriteConfig} to use for the Metadata Table.

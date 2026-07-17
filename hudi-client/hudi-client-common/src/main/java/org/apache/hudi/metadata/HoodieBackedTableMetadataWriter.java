@@ -31,6 +31,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
@@ -41,16 +42,11 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.HoodieLogFormat;
-import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
-import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
@@ -117,6 +113,7 @@ import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTE
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createEmptyFileGroupLogFile;
 import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createMetadataWriteConfig;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
@@ -692,27 +689,18 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         .collect(Collectors.toList());
     ValidationUtils.checkArgument(fileGroupFileIds.size() == fileGroupCount);
     engineContext.setJobStatus(this.getClass().getSimpleName(), msg);
+    final TaskContextSupplier taskContextSupplier = engineContext.getTaskContextSupplier();
     engineContext.foreach(fileGroupFileIds, fileGroupFileId -> {
       try {
-        final Map<HeaderMetadataType, String> blockHeader = Collections.singletonMap(HeaderMetadataType.INSTANT_TIME, instantTime);
-
-        final HoodieDeleteBlock block = new HoodieDeleteBlock(Collections.emptyList(), blockHeader);
-
-        try (HoodieLogFormat.Writer writer = HoodieLogFormatWriter.builder()
-            .withParentPath(FSUtils.constructAbsolutePath(metadataWriteConfig.getBasePath(), relativePartitionPath))
-            .withLogFileId(fileGroupFileId)
-            .withInstantTime(instantTime)
-            .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
-            .withFileSize(0L)
-            .withSizeThreshold(metadataWriteConfig.getLogFileMaxSize())
-            .withStorage(dataMetaClient.getStorage())
-            .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
-            .withTableVersion(metadataWriteConfig.getWriteVersion())
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build()) {
-          writer.appendBlock(block);
-        }
-      } catch (InterruptedException e) {
-        throw new HoodieException(String.format("Failed to created fileGroup %s for partition %s", fileGroupFileId, relativePartitionPath), e);
+        createEmptyFileGroupLogFile(
+            dataMetaClient.getStorage(),
+            FSUtils.constructAbsolutePath(metadataWriteConfig.getBasePath(), relativePartitionPath),
+            fileGroupFileId,
+            instantTime,
+            taskContextSupplier,
+            metadataWriteConfig);
+      } catch (IOException | InterruptedException e) {
+        throw new HoodieException(String.format("Failed to create file group %s for partition %s", fileGroupFileId, relativePartitionPath), e);
       }
     }, fileGroupFileIds.size());
   }
