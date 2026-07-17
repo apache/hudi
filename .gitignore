@@ -4,6 +4,7 @@ target/
 metastore_db/
 .metals/
 .mvn/
+.wibey-test/
 *.bloop/
 *.vscode/
 *.metals/

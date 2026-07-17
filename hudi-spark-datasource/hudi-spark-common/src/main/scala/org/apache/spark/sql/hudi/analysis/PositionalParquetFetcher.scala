@@ -23,7 +23,6 @@ import org.apache.hudi.common.schema.HoodieSchema
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.parquet.HadoopReadOptions
 import org.apache.parquet.column.page.PageReadStore
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.metadata.{BlockMetaData, ColumnChunkMetaData, ParquetMetadata}
@@ -120,8 +119,7 @@ private[analysis] final class PositionalParquetFetcher(
     var decodeMs = 0L
     scoreMs = 0L
 
-    val readerOptions = HadoopReadOptions.builder(conf, path).build()
-    val reader = new ParquetFileReader(conf, path, metadata, readerOptions)
+    val reader = new ParquetFileReader(conf, path, metadata)
     try {
       reader.setRequestedSchema(requestedParquetSchema)
       byRowGroup.toSeq.sortBy(_._1).foreach { case (rgOrdinal, rgCandidates) =>
