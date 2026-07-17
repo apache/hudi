@@ -420,17 +420,6 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
     VectorIndexOptions.RABITQ_RESIDUAL_ENCODING,
     VectorIndexOptions.RABITQ_ASSUME_NORMALIZED)
 
-  private[analysis] def buildFileGroupFetchBatches[T](
-      candidates: Seq[T],
-      targetBatchCount: Int)(
-      fileGroupId: T => String,
-      rowPosition: T => Long): Seq[(String, Seq[T])] = {
-    val batchSize = math.max(1, math.ceil(candidates.size.toDouble / math.max(1, targetBatchCount)).toInt)
-    candidates.groupBy(fileGroupId).toSeq.sortBy(_._1).flatMap { case (fgId, fileCandidates) =>
-      fileCandidates.sortBy(rowPosition).grouped(batchSize).map(batch => (fgId, batch)).toSeq
-    }
-  }
-
   private def resolvePlanContext(
       spark: SparkSession,
       basePath: String,
@@ -764,22 +753,20 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
         val bFileSliceMap = spark.sparkContext.broadcast(fileSliceMap)
         val exactFetchParallelism = math.max(
           1,
-          math.min(refineK, math.max(1, spark.sparkContext.defaultParallelism)))
-        // Use one executor wave of contiguous position batches. Tiny candidate-count batches
-        // repeatedly open the same file and fetch overlapping pages; one batch per file leaves
-        // most executor cores idle. Position-local batches balance page reuse and parallelism.
-        val candidateGroupCount = serveCandidates.iterator.map(_.getFileGroupId).toSet.size
-        val fetchBatches = buildFileGroupFetchBatches(serveCandidates, exactFetchParallelism)(
-          _.getFileGroupId,
-          _.getLocation.getPosition)
-        val fetchPartitions = math.min(exactFetchParallelism, fetchBatches.size)
+          math.min(refineK, math.max(1, spark.sparkContext.defaultParallelism * 4)))
+        val groupedCandidates = serveCandidates.groupBy(_.getFileGroupId).toSeq.sortBy(_._1)
+        val targetBatchesPerGroup = math.max(1, exactFetchParallelism / math.max(1, groupedCandidates.size))
+        val fetchBatches = groupedCandidates.flatMap { case (fgId, candidates) =>
+          val sorted = candidates.sortBy(candidate => candidate.getLocation.getPosition)
+          val batchSize = math.max(1, math.ceil(sorted.size.toDouble / targetBatchesPerGroup).toInt)
+          sorted.grouped(batchSize).map(batch => (fgId, batch)).toSeq
+        }
         val byFetchBatch: RDD[(String, Seq[VectorIndexMdtSearchUtils.ScoredPostingMatch])] =
-          spark.sparkContext.parallelize(fetchBatches, fetchPartitions)
+          spark.sparkContext.parallelize(fetchBatches, math.min(exactFetchParallelism, fetchBatches.size))
         LOG.info(
           s"[vector_search][stage][exact_read_plan] rerankCandidates=${serveCandidates.size} " +
-            s"candidateGroups=$candidateGroupCount resolvedSlices=${fileSliceMap.size} " +
-            s"fetchBatches=${fetchBatches.size} fileGroupPartitions=${byFetchBatch.getNumPartitions} " +
-            s"exactFetchParallelism=$exactFetchParallelism")
+            s"candidateGroups=${groupedCandidates.size} resolvedSlices=${fileSliceMap.size} " +
+            s"fileGroupPartitions=${byFetchBatch.getNumPartitions} exactFetchParallelism=$exactFetchParallelism")
 
         val vectorOnlyProjection = mergedOptions.get(VECTOR_ONLY_PROJECTION_OPT)
           .orElse(spark.conf.getOption(VECTOR_ONLY_PROJECTION_SPARK_CONF))
