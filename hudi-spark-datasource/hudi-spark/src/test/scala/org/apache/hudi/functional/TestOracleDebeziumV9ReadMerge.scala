@@ -109,4 +109,62 @@ class TestOracleDebeziumV9ReadMerge extends SparkClientFunctionalTestHarness {
       "name was changed only by update1 -> union of changed-columns preserves it through the base merge")
     assertEquals(200L, out.getAs[Long]("amount"), "amount was changed by update2")
   }
+
+  // --- delete: exercises the configured DELETE_KEY (_change_operation_type) / DELETE_MARKER ("d")
+  //     reader path (distinct from the update merge). ---
+  private val delCols =
+    Seq("id", "name", "amount", "_change_operation_type", "_changed_columns", "_hoodie_is_deleted", "_event_ordering")
+
+  private def delRow(id: Int, name: String, amount: Long, op: String, deleted: Boolean, ordering: String): DataFrame =
+    spark.createDataFrame(Seq((id, name, amount, op, null.asInstanceOf[String], deleted, ordering))).toDF(delCols: _*)
+
+  @Test
+  def v9OracleDeleteRemovesRow(): Unit = {
+    createV9Table(delRow(1, "alice", 100L, "c", false, ord(100)), "oracle_v9_del")
+    // A newer op='d' delete event must drop the row on read.
+    upsert(delRow(1, "alice", 100L, "d", true, ord(200)), "oracle_v9_del")
+
+    val count = spark.read.format("hudi").load(basePath).where("id = 1").count()
+    assertEquals(0L, count, "a newer op='d' delete event removes the row on a v9 MOR read")
+  }
+
+  @Test
+  def v9OracleUnchangedColumnPreservedAfterCompaction(): Unit = {
+    createV9Table(row(1, "alice", 100L, null, ord(100)), "oracle_v9_compact")
+    // Force inline compaction so the log update is merged into the base; the FILL_UNCHANGED merge must
+    // preserve the unchanged column in the compacted base, not only at snapshot-read time.
+    upsertCompacting(row(1, "bob", 0L, "name", ord(200)), "oracle_v9_compact")
+
+    val out = readRow(1)
+    assertEquals("bob", out.getAs[String]("name"), "changed name applied through compaction")
+    assertEquals(100L, out.getAs[Long]("amount"), "unchanged amount preserved in the compacted base")
+  }
+
+  private def upsertCompacting(frame: DataFrame, table: String): Unit =
+    baseWriter(frame, table)
+      .option(OPERATION.key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "true")
+      .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+  // --- nested metadata: scn/commit_scn grouped under a _debezium_metadata struct (a retain field);
+  //     the partial merge must still work with the struct column present. ---
+  private val nestedCols =
+    Seq("id", "name", "amount", "_changed_columns", "_hoodie_is_deleted", "_event_ordering", "_debezium_metadata")
+
+  private def nestedRow(id: Int, name: String, amount: Long, changed: String, ordering: String,
+                        scn: Long, commitScn: Long): DataFrame =
+    spark.createDataFrame(Seq((id, name, amount, changed, false, ordering, (scn, commitScn)))).toDF(nestedCols: _*)
+
+  @Test
+  def v9OracleMergeWorksWithNestedMetadataStruct(): Unit = {
+    createV9Table(nestedRow(1, "alice", 100L, null, ord(100), 100L, 200L), "oracle_v9_nested")
+    upsert(nestedRow(1, "bob", 0L, "name", ord(200), 101L, 201L), "oracle_v9_nested")
+
+    val out = readRow(1)
+    assertEquals("bob", out.getAs[String]("name"), "changed name applied with a nested metadata struct present")
+    assertEquals(100L, out.getAs[Long]("amount"),
+      "unchanged amount preserved (the _debezium_metadata struct retain field doesn't break the merge)")
+  }
 }

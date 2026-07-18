@@ -153,10 +153,24 @@ public class PartialUpdateHandler<T> implements Serializable {
     // a column changed solely by the lower record (disjoint updates), letting the base overwrite it with a placeholder.
     // Mirrors the payload's mergeChangedColumnsSets (which likewise does not trim).
     Object lowChangedRaw = recordContext.getValue(lowOrderRecord.getRecord(), lowOrderSchema, changedFieldsCol);
+    Set<String> lowChanged = splitToSet(lowChangedRaw == null ? null : recordContext.getTypeConverter().castToString(lowChangedRaw));
     Set<String> unionChanged = new HashSet<>(changedColumns);
-    unionChanged.addAll(splitToSet(lowChangedRaw == null ? null : recordContext.getTypeConverter().castToString(lowChangedRaw)));
-    Object mergedChangedValue = unionChanged.isEmpty()
-        ? null : recordContext.convertValueToEngineType(String.join(",", unionChanged));
+    unionChanged.addAll(lowChanged);
+    // Reuse an existing record's raw (engine-native) changed-columns value whenever it already equals
+    // the union, so the value stored back matches the engine's field storage type exactly. Only the
+    // genuinely-disjoint case needs a synthesized value; materialize it via
+    // convertPartitionValueToEngineType, which yields the unwrapped engine storage form (e.g. a plain
+    // Spark UTF8String) rather than the comparison wrapper convertValueToEngineType would return.
+    Object mergedChangedValue;
+    if (unionChanged.isEmpty()) {
+      mergedChangedValue = null;
+    } else if (unionChanged.equals(changedColumns)) {
+      mergedChangedValue = changedRaw;
+    } else if (unionChanged.equals(lowChanged)) {
+      mergedChangedValue = lowChangedRaw;
+    } else {
+      mergedChangedValue = recordContext.convertPartitionValueToEngineType(String.join(",", unionChanged));
+    }
 
     List<HoodieSchemaField> fields = newSchema.getFields();
     Object[] fieldVals = new Object[fields.size()];

@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.OracleDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
+import org.apache.hudi.common.util.collection.Triple;
 
 import org.junit.jupiter.api.Test;
 
@@ -116,5 +117,29 @@ class TestHoodieTableConfigDebeziumOrdering {
   void resolveOrderingFieldsReturnsNullForNonDebeziumPayload() {
     assertNull(DebeziumConstants.resolveOrderingFields("com.example.CustomPayload", false));
     assertNull(DebeziumConstants.resolveOrderingFields(null, true));
+  }
+
+  @Test
+  void oracleWritePathPersistsFillUnchangedThroughTwoStepInference() {
+    // Replicates the actual DataSource write path exactly:
+    //   1. HoodieSparkSqlWriter.deduceWriterConfigs -> inferMergingConfigsForWrites(null, Oracle, "", ord)
+    //   2. HoodieTableMetaClient.build() -> inferMergingConfigsForV9TableCreation(mode, payload, strategy, ord)
+    // feeding step 1's resolved (mode, payload, strategy) into step 2.
+    String oracle = OracleDebeziumAvroPayload.class.getName();
+    String ord = DebeziumConstants.FLATTENED_ORDERING_COL_NAME;
+
+    Triple<RecordMergeMode, String, String> writes =
+        HoodieTableConfig.inferMergingConfigsForWrites(null, oracle, "", ord, HoodieTableVersion.NINE);
+    // The writer keeps the user-supplied payload when inference returns null for PAYLOAD_CLASS_NAME.
+    String payloadForCreate = writes.getMiddle() != null ? writes.getMiddle() : oracle;
+    Map<String, String> created = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+        writes.getLeft(), payloadForCreate, writes.getRight(), ord, HoodieTableVersion.NINE);
+
+    assertEquals(PartialUpdateMode.FILL_UNCHANGED.name(),
+        created.get(HoodieTableConfig.PARTIAL_UPDATE_MODE.key()),
+        "the two-step write-path inference must still persist FILL_UNCHANGED");
+    assertEquals(DebeziumConstants.CHANGED_COLUMNS_FIELD,
+        created.get(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CHANGED_FIELDS),
+        "the changed-fields merge property must survive the two-step write-path inference");
   }
 }
