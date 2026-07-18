@@ -31,5 +31,14 @@ public enum PartialUpdateMode {
   @EnumFieldDescription(
       "For columns having unavailable values in the current record, pick value from previous version of the record during write. "
          + "Unavailable value can be defined using `hoodie.write.partial.update.unavailable.value` in the table property.")
-  FILL_UNAVAILABLE
+  FILL_UNAVAILABLE,
+
+  @EnumFieldDescription(
+      "For change-data-capture sources that emit only the columns that actually changed in an update event (e.g. Oracle "
+      + "Debezium under primary-key-only supplemental logging), pick the incoming value only for the columns listed in the "
+      + "record's changed-columns field and preserve the previous version's value for every other data column. The name of "
+      + "the changed-columns field is defined using `hoodie.write.partial.update.changed.fields` and the CDC metadata columns "
+      + "that must always be taken from the newer record are defined using `hoodie.write.partial.update.retain.fields` in the "
+      + "table property.")
+  FILL_UNCHANGED
 }

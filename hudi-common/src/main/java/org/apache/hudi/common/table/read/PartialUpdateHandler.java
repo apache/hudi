@@ -26,14 +26,23 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.PartialUpdateMode;
+import org.apache.hudi.common.util.VisibleForTesting;
 
 import java.io.Serializable;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CHANGED_FIELDS;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_RETAIN_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.util.ConfigUtils.extractWithPrefix;
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
  * This class implements the detailed partial update logic for different partial update modes,
@@ -88,9 +97,117 @@ public class PartialUpdateHandler<T> implements Serializable {
       case FILL_UNAVAILABLE:
         return reconcileMarkerValues(
             highOrderRecord, lowOrderRecord, highOrderSchema, lowOrderSchema, newSchema);
+      case FILL_UNCHANGED:
+        return reconcileChangedColumns(
+            highOrderRecord, lowOrderRecord, highOrderSchema, lowOrderSchema, newSchema);
       default:
         return highOrderRecord;
     }
+  }
+
+  /**
+   * Merge two records using an explicit changed-columns list emitted by the CDC source.
+   *
+   * <p>Unlike {@link #reconcileMarkerValues} (sentinel-driven, string/bytes columns only), this strategy consumes a
+   * comma-separated changed-columns field (e.g. Oracle Debezium's {@code _changed_columns}) carried on the higher-order
+   * record. Only columns listed there take the incoming value; every other data column preserves the previous version's
+   * value, for any column type. This restores partial-update correctness for CDC sources under primary-key-only
+   * supplemental logging, where unchanged columns arrive as null/zero placeholders rather than a marker value.
+   *
+   * <p>CDC metadata columns configured via {@code hoodie.write.partial.update.retain.fields} (ordering/SCN/op, etc.) are
+   * always taken from the higher-order record. When the changed-columns field is null or empty (insert / snapshot / full
+   * before-after image) the higher-order record is returned unchanged.
+   *
+   * @param highOrderRecord record with higher commit time or higher ordering value
+   * @param lowOrderRecord  record with lower commit time or lower ordering value
+   * @param highOrderSchema The schema of highOrderRecord
+   * @param lowOrderSchema  The schema of the older record
+   * @param newSchema       The schema of the new incoming record
+   * @return merged result preserving previous values for columns absent from the changed-columns list.
+   */
+  @VisibleForTesting
+  BufferedRecord<T> reconcileChangedColumns(BufferedRecord<T> highOrderRecord,
+                                            BufferedRecord<T> lowOrderRecord,
+                                            HoodieSchema highOrderSchema,
+                                            HoodieSchema lowOrderSchema,
+                                            HoodieSchema newSchema) {
+    String changedFieldsCol = mergeProperties.get(PARTIAL_UPDATE_CHANGED_FIELDS);
+    // Without a configured changed-columns field there is nothing to reconcile; keep the newer record.
+    if (isNullOrEmpty(changedFieldsCol)) {
+      return highOrderRecord;
+    }
+    Object changedRaw = recordContext.getValue(highOrderRecord.getRecord(), highOrderSchema, changedFieldsCol);
+    String changedStr = changedRaw == null ? null : recordContext.getTypeConverter().castToString(changedRaw);
+    // Null/empty changed-columns denotes an insert, snapshot or full before-after image: take the newer record as-is.
+    if (isNullOrEmpty(changedStr)) {
+      return highOrderRecord;
+    }
+
+    Set<String> changedColumns = splitToSet(changedStr);
+    Set<String> retainFromNewer = splitToSet(mergeProperties.get(PARTIAL_UPDATE_RETAIN_FIELDS));
+    String unavailableMarker = mergeProperties.get(PARTIAL_UPDATE_UNAVAILABLE_VALUE);
+
+    // The merged record's changed-columns field is the UNION of both records' changed sets, not just the higher
+    // record's. A log-vs-log deltaMerge produces an intermediate record later merged against the base, and that base
+    // merge uses this field to decide which columns are authoritative. Keeping only the higher record's set would drop
+    // a column changed solely by the lower record (disjoint updates), letting the base overwrite it with a placeholder.
+    // Mirrors the payload's mergeChangedColumnsSets (which likewise does not trim).
+    Object lowChangedRaw = recordContext.getValue(lowOrderRecord.getRecord(), lowOrderSchema, changedFieldsCol);
+    Set<String> unionChanged = new HashSet<>(changedColumns);
+    unionChanged.addAll(splitToSet(lowChangedRaw == null ? null : recordContext.getTypeConverter().castToString(lowChangedRaw)));
+    Object mergedChangedValue = unionChanged.isEmpty()
+        ? null : recordContext.convertValueToEngineType(String.join(",", unionChanged));
+
+    List<HoodieSchemaField> fields = newSchema.getFields();
+    Object[] fieldVals = new Object[fields.size()];
+    int idx = 0;
+    boolean updated = false;
+    for (HoodieSchemaField field : fields) {
+      String fieldName = field.name();
+      if (fieldName.equals(changedFieldsCol)) {
+        fieldVals[idx++] = mergedChangedValue;
+        updated = true;
+        continue;
+      }
+      boolean takeFromNewer = changedColumns.contains(fieldName) || retainFromNewer.contains(fieldName);
+      if (takeFromNewer) {
+        Object newValue = recordContext.getValue(highOrderRecord.getRecord(), highOrderSchema, fieldName);
+        // Toasted defense: a changed string/bytes column whose incoming value is the unavailable sentinel still falls
+        // back to the previous value (mirrors FILL_UNAVAILABLE).
+        if ((isStringTyped(field) || isBytesTyped(field))
+            && null != unavailableMarker
+            && unavailableMarker.equals(recordContext.getTypeConverter().castToString(newValue))) {
+          fieldVals[idx++] = recordContext.getValue(lowOrderRecord.getRecord(), lowOrderSchema, fieldName);
+          updated = true;
+        } else {
+          fieldVals[idx++] = newValue;
+        }
+      } else {
+        // An unchanged data column: preserve the previous version's value regardless of type.
+        fieldVals[idx++] = recordContext.getValue(lowOrderRecord.getRecord(), lowOrderSchema, fieldName);
+        updated = true;
+      }
+    }
+    if (!updated) {
+      return highOrderRecord;
+    }
+    T engineRecord = recordContext.constructEngineRecord(newSchema, fieldVals);
+    return new BufferedRecord<>(
+        highOrderRecord.getRecordKey(),
+        highOrderRecord.getOrderingValue(),
+        engineRecord,
+        newSchema == highOrderSchema ? highOrderRecord.getSchemaId() : lowOrderRecord.getSchemaId(),
+        highOrderRecord.getHoodieOperation());
+  }
+
+  private static Set<String> splitToSet(String csv) {
+    if (isNullOrEmpty(csv)) {
+      return Collections.emptySet();
+    }
+    return Arrays.stream(csv.split(","))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .collect(Collectors.toCollection(HashSet::new));
   }
 
   /**

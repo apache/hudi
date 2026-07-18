@@ -48,6 +48,10 @@ public class DebeziumConstants {
   public static final String INCOMING_SOURCE_LSN_FIELD = "source.lsn";
   public static final String INCOMING_SOURCE_XMIN_FIELD = "source.xmin";
 
+  // INPUT COLUMNS SPECIFIC TO ORACLE
+  public static final String INCOMING_SOURCE_SCN_FIELD = "source.scn";
+  public static final String INCOMING_SOURCE_COMMIT_SCN_FIELD = "source.commit_scn";
+
   // OUTPUT COLUMNS
   public static final String FLATTENED_OP_COL_NAME = "_change_operation_type";
   public static final String UPSTREAM_PROCESSING_TS_COL_NAME = "_upstream_event_processed_ts_ms";
@@ -65,6 +69,15 @@ public class DebeziumConstants {
   // OUTPUT COLUMNS SPECIFIC TO POSTGRES
   public static final String FLATTENED_LSN_COL_NAME = "_event_lsn";
   public static final String FLATTENED_XMIN_COL_NAME = "_event_xmin";
+
+  // OUTPUT COLUMNS SPECIFIC TO ORACLE
+  public static final String FLATTENED_SCN_COL_NAME = "_event_scn";
+  public static final String FLATTENED_COMMIT_SCN_COL_NAME = "_event_commit_scn";
+  // Composite event-time ordering column for Oracle: zero-padded "commit_scn.scn", materialized at
+  // the root level by the transformer (so it is not nested even when metadata nesting is enabled).
+  public static final String FLATTENED_ORDERING_COL_NAME = "_event_ordering";
+  // Comma-separated list of data columns that changed in an Oracle CDC update event.
+  public static final String CHANGED_COLUMNS_FIELD = "_changed_columns";
 
   // Other Constants
   public static final String DELETE_OP = "d";
@@ -109,6 +122,11 @@ public class DebeziumConstants {
     if (MySqlDebeziumAvroPayload.class.getName().equals(payloadClassName)) {
       String prefix = nestedMetadataEnabled ? DEBEZIUM_METADATA_FIELD + "." : "";
       return prefix + FLATTENED_FILE_COL_NAME + "," + prefix + FLATTENED_POS_COL_NAME;
+    }
+    if (OracleDebeziumAvroPayload.class.getName().equals(payloadClassName)) {
+      // The Oracle composite ordering column is materialized at the root level regardless of metadata
+      // nesting, so it needs no _debezium_metadata prefix.
+      return FLATTENED_ORDERING_COL_NAME;
     }
     return null;
   }

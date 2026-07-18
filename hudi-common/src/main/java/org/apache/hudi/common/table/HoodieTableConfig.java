@@ -44,6 +44,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
+import org.apache.hudi.common.model.debezium.OracleDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -137,6 +138,12 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
   public static final String PARTIAL_UPDATE_UNAVAILABLE_VALUE = "hoodie.write.partial.update.unavailable.value";
   public static final String DEBEZIUM_UNAVAILABLE_VALUE = "__debezium_unavailable_value";
+  // For the FILL_UNCHANGED partial update mode: the name of the record field holding the comma-separated list of data
+  // columns that actually changed in the incoming CDC update event (e.g. Oracle Debezium's `_changed_columns`).
+  public static final String PARTIAL_UPDATE_CHANGED_FIELDS = "hoodie.write.partial.update.changed.fields";
+  // For the FILL_UNCHANGED partial update mode: the comma-separated list of CDC metadata columns that must always be
+  // taken from the newer record (ordering/SCN/op columns) and are never overwritten by the previous version.
+  public static final String PARTIAL_UPDATE_RETAIN_FIELDS = "hoodie.write.partial.update.retain.fields";
   // This prefix is used to set merging related properties.
   // A reader might need to read some writer properties to function as expected,
   // and Hudi stores properties with this prefix so the reader parses these properties to fetch any custom property.
@@ -920,6 +927,10 @@ public class HoodieTableConfig extends HoodieConfig {
       reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.IGNORE_DEFAULTS.name());
     } else if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
       reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.FILL_UNAVAILABLE.name());
+    } else if (payloadClassName.equals(OracleDebeziumAvroPayload.class.getName())) {
+      // Oracle CDC carries a positive changed-columns list (_changed_columns), so it uses the
+      // changed-columns-driven partial update instead of the sentinel-driven FILL_UNAVAILABLE.
+      reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.FILL_UNCHANGED.name());
     }
   }
 
@@ -935,6 +946,28 @@ public class HoodieTableConfig extends HoodieConfig {
     } else if (payloadClassName.equals(MySqlDebeziumAvroPayload.class.getName())) {
       reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
       reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DebeziumConstants.DELETE_OP);
+      reconciledConfigs.put(ORDERING_FIELDS.key(), reconcileDebeziumOrderingFields(payloadClassName, orderingFieldName));
+    } else if (payloadClassName.equals(OracleDebeziumAvroPayload.class.getName())) {
+      reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
+      reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DebeziumConstants.DELETE_OP);
+      // Oracle uses the FILL_UNCHANGED partial update mode driven by the positive changed-columns list. Surface the
+      // changed-columns field and the toasted/unavailable sentinel (a changed string/bytes column carrying the
+      // sentinel falls back to the previous value) to the reader.
+      reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE, DEBEZIUM_UNAVAILABLE_VALUE);
+      reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_CHANGED_FIELDS, DebeziumConstants.CHANGED_COLUMNS_FIELD);
+      // CDC metadata columns always taken from the newer record during a partial merge (both flat and nested-mode
+      // names are listed; names absent from the schema simply never match).
+      reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_RETAIN_FIELDS,
+          String.join(",",
+              DebeziumConstants.FLATTENED_SCN_COL_NAME,
+              DebeziumConstants.FLATTENED_COMMIT_SCN_COL_NAME,
+              DebeziumConstants.FLATTENED_ORDERING_COL_NAME,
+              DebeziumConstants.DEBEZIUM_METADATA_FIELD,
+              DebeziumConstants.FLATTENED_OP_COL_NAME,
+              DebeziumConstants.UPSTREAM_PROCESSING_TS_COL_NAME,
+              DebeziumConstants.FLATTENED_SHARD_NAME,
+              DebeziumConstants.FLATTENED_TS_COL_NAME,
+              HoodieRecord.HOODIE_IS_DELETED_FIELD));
       reconciledConfigs.put(ORDERING_FIELDS.key(), reconcileDebeziumOrderingFields(payloadClassName, orderingFieldName));
     } else if (payloadClassName.equals(AWSDmsAvroPayload.class.getName())) {
       reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, OP_FIELD);
@@ -1574,6 +1607,7 @@ public class HoodieTableConfig extends HoodieConfig {
             DefaultHoodieRecordPayload.class.getName(),
             EventTimeAvroPayload.class.getName(),
             MySqlDebeziumAvroPayload.class.getName(),
+            OracleDebeziumAvroPayload.class.getName(),
             OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
             OverwriteWithLatestAvroPayload.class.getName(),
             PartialUpdateAvroPayload.class.getName(),
@@ -1584,6 +1618,7 @@ public class HoodieTableConfig extends HoodieConfig {
             DefaultHoodieRecordPayload.class.getName(),
             EventTimeAvroPayload.class.getName(),
             MySqlDebeziumAvroPayload.class.getName(),
+            OracleDebeziumAvroPayload.class.getName(),
             PartialUpdateAvroPayload.class.getName(),
             PostgresDebeziumAvroPayload.class.getName())));
 
