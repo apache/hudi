@@ -162,6 +162,7 @@ class TestStreamerUtil {
     assertArrayEquals(metaClient1.getTableConfig().getPartitionFields().get(), new String[] {"p0", "p1"});
     assertNotNull(metaClient1.getTableConfig().getKeyGeneratorClassName());
     assertEquals(HoodieTableVersion.SIX, metaClient1.getTableConfig().getTableVersion());
+    assertEquals(HoodieFileFormat.HOODIE_LOG, metaClient1.getTableConfig().getLogFileFormat());
     assertEquals(HoodieTableConfig.TableStorageLayout.DEFAULT.configValue(),
         conf.getString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), null));
   }
@@ -181,6 +182,20 @@ class TestStreamerUtil {
 
     conf.set(FlinkOptions.OPERATION, "insert");
     assertThrows(IllegalArgumentException.class, () -> StreamerUtil.initTableIfNotExists(conf));
+  }
+
+  @Test
+  void testInitLsmTreeTableUsesBaseFileFormatForNativeLogs() throws IOException {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.TEN.versionCode());
+    conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
+    conf.setString(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.ORC.name());
+
+    HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
+
+    assertEquals(HoodieFileFormat.ORC, metaClient.getTableConfig().getBaseFileFormat());
+    assertEquals(HoodieFileFormat.ORC, metaClient.getTableConfig().getLogFileFormat());
   }
 
   @Test

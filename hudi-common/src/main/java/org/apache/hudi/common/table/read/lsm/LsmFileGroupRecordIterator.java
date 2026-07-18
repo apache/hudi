@@ -303,7 +303,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
   }
 
   /**
-   * Creates a sorted-run iterator for a parquet data file or a native parquet log file.
+   * Creates a sorted-run iterator for a base file or a native log file.
    *
    * <p>Native delete logs use a specialized schema and are routed through
    * {@link #createNativeDeleteLogIterator(StoragePathInfo, StoragePath, long)}.

@@ -331,6 +331,9 @@ public class StreamerUtil {
     final boolean tableExists = tableExists(basePath, hadoopConf);
     if (!tableExists) {
       HoodieTableConfig.TableStorageLayout storageLayout = OptionsResolver.getTableStorageLayout(conf);
+      String baseFileFormat = conf.getString(
+          HoodieTableConfig.BASE_FILE_FORMAT.key(),
+          HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().name());
       validateInsertOperationStorageLayout(conf, storageLayout);
       HoodieTableMetaClient.newTableBuilder()
           .setTableCreateSchema(conf.get(FlinkOptions.SOURCE_AVRO_SCHEMA))
@@ -340,7 +343,7 @@ public class StreamerUtil {
           .setTableFormat(conf.get(FlinkOptions.WRITE_TABLE_FORMAT))
           .setBaseFileFormat(conf.getString(HoodieTableConfig.BASE_FILE_FORMAT.key(), null))
           .setLogFileFormat(HoodieTableVersion.fromVersionCode(conf.get(FlinkOptions.WRITE_TABLE_VERSION))
-              .greaterThanOrEquals(HoodieTableVersion.TEN) ? PARQUET.name() : HOODIE_LOG.name())
+              .greaterThanOrEquals(HoodieTableVersion.TEN) ? baseFileFormat : HOODIE_LOG.name())
           .setTableStorageLayout(storageLayout.configValue())
           .setRecordMergeMode(getMergeMode(conf))
           .setRecordMergeStrategyId(getMergeStrategyId(conf))

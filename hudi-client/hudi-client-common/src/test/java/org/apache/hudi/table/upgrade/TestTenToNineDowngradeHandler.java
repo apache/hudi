@@ -29,13 +29,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestTenToNineDowngradeHandler {
 
   @Test
-  void testDowngradeRemovesStorageLayoutOnly() {
+  void testDowngradeRemovesVersionTenTableProperties() {
     UpgradeDowngrade.TableConfigChangeSet changeSet =
         new TenToNineDowngradeHandler().downgrade(null, null, null, null);
 
     assertTrue(changeSet.propertiesToUpdate().isEmpty());
-    assertEquals(1, changeSet.propertiesToDelete().size());
+    assertEquals(2, changeSet.propertiesToDelete().size());
     assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.TABLE_STORAGE_LAYOUT));
+    assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.LOG_FILE_FORMAT));
   }
 
   @Test
@@ -44,7 +45,8 @@ class TestTenToNineDowngradeHandler {
         new UpgradeDowngrade(null, null, null, null)
             .downgrade(HoodieTableVersion.TEN, HoodieTableVersion.NINE, "001");
 
-    assertEquals(1, changeSet.propertiesToDelete().size());
+    assertEquals(2, changeSet.propertiesToDelete().size());
     assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.TABLE_STORAGE_LAYOUT));
+    assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.LOG_FILE_FORMAT));
   }
 }
