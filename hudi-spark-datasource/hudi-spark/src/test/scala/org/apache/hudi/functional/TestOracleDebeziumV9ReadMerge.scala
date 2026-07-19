@@ -260,4 +260,83 @@ class TestOracleDebeziumV9ReadMerge extends SparkClientFunctionalTestHarness {
     assertEquals(100L, out.getAs[Long]("amount"),
       "unchanged amount preserved (the _debezium_metadata struct retain field doesn't break the merge)")
   }
+
+  // ---------------------------------------------------------------------------------------------
+  // Property / differential harness: generate random Oracle-CDC event sequences (an insert followed
+  // by updates that change random, often disjoint, column subsets), run each through three merge
+  // paths -- MOR snapshot (log-vs-log deltaMerge), MOR with inline compaction, and COW write-time
+  // merge -- and diff all three against a tiny reference merge model. The reference applies
+  // FILL_UNCHANGED semantics directly: changed columns take the incoming value, unchanged columns
+  // keep the prior value, in _event_ordering order. Any path disagreeing with the reference (or with
+  // each other) is a real merge bug. This would have caught the union bug (a column changed only by
+  // an earlier update dropped by the base merge) and any COW/MOR path divergence by construction.
+  // ---------------------------------------------------------------------------------------------
+  private val propCols = Seq("id", "v1", "v2", "v3", "_changed_columns", "_hoodie_is_deleted", "_event_ordering")
+  private val propDataCols = Seq("v1", "v2", "v3")
+  private val propPlaceholder = -999L // an unchanged column's incoming value; must never win over the prior value
+
+  private def propRow(v1: Long, v2: Long, v3: Long, changed: String, ordering: String): DataFrame =
+    spark.createDataFrame(Seq((1, v1, v2, v3, changed, false, ordering))).toDF(propCols: _*)
+
+  private def propBaseWriter(frame: DataFrame, tableType: String) =
+    frame.write.format("hudi")
+      .option(RECORDKEY_FIELD.key(), "id")
+      .option(ORDERING_FIELDS.key(), "_event_ordering")
+      .option(TABLE_TYPE.key(), tableType)
+      .option(DataSourceWriteOptions.TABLE_NAME.key(), "prop")
+
+  private def writeSequence(path: String, tableType: String, compact: Boolean,
+                            base: Map[String, Long], updates: Seq[(Set[String], Map[String, Long], String)]): Unit = {
+    propBaseWriter(propRow(base("v1"), base("v2"), base("v3"), null, ord(100)), tableType)
+      .option(OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9")
+      .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), classOf[OracleDebeziumAvroPayload].getName)
+      .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false")
+      .mode(SaveMode.Overwrite)
+      .save(path)
+    updates.foreach { case (subset, newVals, ordering) =>
+      def cell(c: String): Long = if (subset.contains(c)) newVals(c) else propPlaceholder
+      var w = propBaseWriter(propRow(cell("v1"), cell("v2"), cell("v3"), subset.toSeq.sorted.mkString(","), ordering), tableType)
+        .option(OPERATION.key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+        .option(HoodieCompactionConfig.INLINE_COMPACT.key(), String.valueOf(compact))
+      if (compact) {
+        w = w.option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
+      }
+      w.mode(SaveMode.Append).save(path)
+    }
+  }
+
+  @Test
+  def v9OracleDifferentialRandomSequencesAcrossMergePaths(): Unit = {
+    val rnd = new scala.util.Random(20260719L) // fixed seed -> reproducible
+    val numSeqs = 8
+    for (i <- 0 until numSeqs) {
+      val base = propDataCols.map(c => c -> (1L + rnd.nextInt(1000))).toMap
+      val k = 2 + rnd.nextInt(3) // 2..4 updates
+      var ordN = 100
+      val updates = (0 until k).map { _ =>
+        var subset = propDataCols.filter(_ => rnd.nextBoolean()).toSet
+        if (subset.isEmpty) subset = Set(propDataCols(rnd.nextInt(propDataCols.size)))
+        val newVals = subset.map(c => c -> (2000L + rnd.nextInt(1000))).toMap
+        ordN += 100
+        (subset, newVals, ord(ordN))
+      }
+      // reference model: apply changed columns in ordering order, keep prior otherwise.
+      var expected = base
+      updates.foreach { case (subset, nv, _) =>
+        expected = expected.map { case (c, v) => if (subset.contains(c)) (c, nv(c)) else (c, v) }
+      }
+      val desc = s"seq$i base=$base updates=${updates.map(u => (u._1.toSeq.sorted.mkString("+"), u._2)).mkString("; ")}"
+      Seq(("mor", DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL, false),
+        ("morCompacted", DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL, true),
+        ("cow", DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, false)).foreach { case (tag, tableType, compact) =>
+        val path = s"$basePath/prop_${i}_$tag"
+        writeSequence(path, tableType, compact, base, updates)
+        val out = spark.read.format("hudi").load(path).select("v1", "v2", "v3").where("id = 1").collect()(0)
+        propDataCols.foreach { c =>
+          assertEquals(expected(c), out.getAs[Long](c), s"[$tag] column $c mismatch vs reference model; $desc")
+        }
+      }
+    }
+  }
 }
