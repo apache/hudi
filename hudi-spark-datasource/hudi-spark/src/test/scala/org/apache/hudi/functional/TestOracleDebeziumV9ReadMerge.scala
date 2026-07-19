@@ -25,14 +25,16 @@ import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.spark.sql.{DataFrame, Row, SaveMode}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNull}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 
 /**
  * End-to-end validation that an Oracle Debezium CDC table created on table version 9 merges via the
  * built-in EVENT_TIME_ORDERING + FILL_UNCHANGED partial-update strategy (driven by the
- * _changed_columns list) rather than the payload, and that unchanged columns are preserved through a
- * MOR snapshot read. _event_ordering is the ordering field.
+ * _changed_columns list) rather than the payload, and that unchanged columns are preserved. Covers
+ * MOR snapshot read (asserting log files are actually created), MOR inline compaction, COW write-time
+ * merge, deletes, nested metadata, the disjoint-update union, and the guard that rejects incompatible
+ * partial-update (schema-partial) writes against a FILL_UNCHANGED table. _event_ordering is the ordering field.
  */
 class TestOracleDebeziumV9ReadMerge extends SparkClientFunctionalTestHarness {
 
@@ -41,27 +43,30 @@ class TestOracleDebeziumV9ReadMerge extends SparkClientFunctionalTestHarness {
   private def row(id: Int, name: String, amount: Long, changed: String, ordering: String): DataFrame =
     spark.createDataFrame(Seq((id, name, amount, changed, false, ordering))).toDF(cols: _*)
 
-  /** Create the v9 MOR table with the Oracle payload (which the v9 config inference maps to
-   * EVENT_TIME_ORDERING + FILL_UNCHANGED). */
-  private def createV9Table(frame: DataFrame, table: String): Unit =
-    baseWriter(frame, table)
+  /** Create the v9 table with the Oracle payload (which the v9 config inference maps to
+   * EVENT_TIME_ORDERING + FILL_UNCHANGED). Defaults to MOR; pass COW to exercise the write-time merge. */
+  private def createV9Table(frame: DataFrame, table: String,
+                            tableType: String = DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL): Unit =
+    baseWriter(frame, table, tableType)
       .option(OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9")
       .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), classOf[OracleDebeziumAvroPayload].getName)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-  private def upsert(frame: DataFrame, table: String): Unit =
-    baseWriter(frame, table)
+  private def upsert(frame: DataFrame, table: String,
+                     tableType: String = DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL): Unit =
+    baseWriter(frame, table, tableType)
       .option(OPERATION.key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
-  private def baseWriter(frame: DataFrame, table: String) =
+  private def baseWriter(frame: DataFrame, table: String,
+                         tableType: String = DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL) =
     frame.write.format("hudi")
       .option(RECORDKEY_FIELD.key(), "id")
       .option(ORDERING_FIELDS.key(), "_event_ordering")
-      .option(TABLE_TYPE.key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .option(TABLE_TYPE.key(), tableType)
       .option(DataSourceWriteOptions.TABLE_NAME.key(), table)
       .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false")
 
@@ -70,16 +75,44 @@ class TestOracleDebeziumV9ReadMerge extends SparkClientFunctionalTestHarness {
 
   private def ord(n: Int): String = "00000000000000000000." + "%020d".format(n)
 
+  /** Count MOR delta-commit log files under the (non-partitioned) table base path. Used to prove a
+   * test actually exercised the merge-on-read path rather than passing vacuously on a base-only read. */
+  private def logFileCount(): Int = {
+    val storage = org.apache.hudi.common.table.HoodieTableMetaClient.builder()
+      .setConf(org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(basePath).build().getStorage
+    import scala.collection.JavaConverters._
+    storage.listDirectEntries(new org.apache.hudi.storage.StoragePath(basePath)).asScala
+      .count(_.getPath.getName.contains(".log."))
+  }
+
   @Test
   def v9OracleChangedColumnsPreservesUnchangedColumns(): Unit = {
     createV9Table(row(1, "alice", 100L, null, ord(100)), "oracle_v9_test")
     // Only `name` changed; amount carries a zero-value placeholder that must NOT win.
     upsert(row(1, "bob", 0L, "name", ord(200)), "oracle_v9_test")
 
+    // The upsert must land as a log file so this exercises the merge-on-read path (not a base-only read).
+    assertTrue(logFileCount() >= 1, "MOR upsert must create at least one log file")
     val out = readRow(1)
     assertEquals("bob", out.getAs[String]("name"), "name is in _changed_columns -> takes the update")
     assertEquals(100L, out.getAs[Long]("amount"),
       "amount is NOT in _changed_columns -> preserves the prior value, not the placeholder 0")
+  }
+
+  @Test
+  def v9OracleChangedColumnsPreservesUnchangedColumnsCow(): Unit = {
+    // COW applies the partial merge at WRITE time (no log files); verify FILL_UNCHANGED still preserves
+    // the unchanged column when the merge runs on the write path rather than the read path.
+    val cow = DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL
+    createV9Table(row(1, "alice", 100L, null, ord(100)), "oracle_v9_cow", cow)
+    upsert(row(1, "bob", 0L, "name", ord(200)), "oracle_v9_cow", cow)
+
+    assertEquals(0, logFileCount(), "COW must not create log files (merge happens on the write path)")
+    val out = readRow(1)
+    assertEquals("bob", out.getAs[String]("name"), "name is in _changed_columns -> takes the update (COW)")
+    assertEquals(100L, out.getAs[Long]("amount"),
+      "amount is NOT in _changed_columns -> preserves the prior value through the COW write-time merge")
   }
 
   @Test
@@ -104,10 +137,34 @@ class TestOracleDebeziumV9ReadMerge extends SparkClientFunctionalTestHarness {
     upsert(row(1, "bob", 0L, "name", ord(200)), "oracle_v9_test3") // only name changed
     upsert(row(1, "placeholder", 200L, "amount", ord(300)), "oracle_v9_test3") // only amount changed
 
+    // Two uncompacted log files are required for the log-vs-log deltaMerge this test targets; without
+    // them (e.g. if the 2nd upsert compacted) the union path would never be exercised.
+    assertTrue(logFileCount() >= 2, "the disjoint-update test needs >=2 uncompacted log files")
     val out = readRow(1)
     assertEquals("bob", out.getAs[String]("name"),
       "name was changed only by update1 -> union of changed-columns preserves it through the base merge")
     assertEquals(200L, out.getAs[Long]("amount"), "amount was changed by update2")
+  }
+
+  @Test
+  def v9OraclePartialUpdateWriteRejectedOnFillUnchangedTable(): Unit = {
+    // Guard: a FILL_UNCHANGED table requires full-schema writes. A partial-update write
+    // (WRITE_PARTIAL_UPDATE_SCHEMA, as Spark MERGE INTO with a partial UPDATE SET would emit) writes a
+    // schema-partial IS_PARTIAL log block, which would flip the reader to KEEP_VALUES and silently drop
+    // the changed-columns merge. The write must be rejected up front instead.
+    createV9Table(row(1, "alice", 100L, null, ord(100)), "oracle_v9_guard")
+    val partialSchema =
+      "{\"type\":\"record\",\"name\":\"p\",\"fields\":[{\"name\":\"id\",\"type\":\"int\"}," +
+        "{\"name\":\"name\",\"type\":[\"null\",\"string\"],\"default\":null}]}"
+    val ex = assertThrows(classOf[Throwable], () =>
+      baseWriter(row(1, "bob", 0L, "name", ord(200)), "oracle_v9_guard")
+        .option(OPERATION.key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+        .option(HoodieWriteConfig.WRITE_PARTIAL_UPDATE_SCHEMA.key(), partialSchema)
+        .mode(SaveMode.Append)
+        .save(basePath))
+    val flattened = Iterator.iterate[Throwable](ex)(_.getCause).takeWhile(_ != null).map(_.getMessage).mkString(" | ")
+    assertTrue(flattened != null && flattened.contains("FILL_UNCHANGED"),
+      s"expected a FILL_UNCHANGED-incompatibility error, got: $flattened")
   }
 
   // --- delete: exercises the configured DELETE_KEY (_change_operation_type) / DELETE_MARKER ("d")

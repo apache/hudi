@@ -40,5 +40,17 @@ public enum PartialUpdateMode {
       + "the changed-columns field is defined using `hoodie.write.partial.update.changed.fields` and the CDC metadata columns "
       + "that must always be taken from the newer record are defined using `hoodie.write.partial.update.retain.fields` in the "
       + "table property.")
+  // Contract and constraints:
+  //  - Records are FULL-SCHEMA, value-level partial: every data column is present, and columns not in the
+  //    changed-columns list carry a placeholder (null/zero) that must NOT win. This is distinct from a
+  //    schema-partial record (fewer columns), which is the IGNORE_DEFAULTS/schema-partial (IS_PARTIAL) path.
+  //  - Because the merge iterates the incoming record's schema, all columns exist in the merged output only
+  //    if the incoming record carries the full table schema. The Oracle Debezium transformer guarantees this
+  //    (it rebuilds the row with every column + the changed-columns list); do not feed genuinely schema-partial
+  //    records to a FILL_UNCHANGED table.
+  //  - INCOMPATIBLE with partial-update writes (`hoodie.write.partial.update.schema`, e.g. Spark MERGE INTO with a
+  //    partial UPDATE SET): a schema-partial IS_PARTIAL log block flips the reader to the KEEP_VALUES merger and
+  //    silently drops this changed-columns logic for the whole file group, letting placeholders win. This
+  //    combination is rejected at write time in HoodieAppendHandle. Write FILL_UNCHANGED tables full-schema only.
   FILL_UNCHANGED
 }
