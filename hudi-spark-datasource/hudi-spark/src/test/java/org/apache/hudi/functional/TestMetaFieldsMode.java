@@ -547,6 +547,51 @@ class TestMetaFieldsMode extends SparkClientFunctionalTestHarness {
             + "commit — a count of 0 or 1 indicates the append handle dropped the commit_time column.");
   }
 
+  /**
+   * MoR incremental query must fail fast when _hoodie_commit_time is not populated by the write-side
+   * mode. FILE_NAME_ONLY and NONE leave commit_time null on both base and log files, so the
+   * incremental range filter (which projects _hoodie_commit_time) has nothing to filter on. The
+   * error must clearly point the user at hoodie.meta.fields.mode rather than surface as a silent
+   * zero-row read.
+   */
+  private void assertMorIncrementalRejects(MetaFieldsMode mode) {
+    String path = basePath();
+    Map<String, String> options = baseMorOptions();
+    options.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    if (mode != MetaFieldsMode.NONE) {
+      options.put(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
+    }
+    Map<String, String> bulkInsertOptions = new HashMap<>(options);
+    bulkInsertOptions.put(DataSourceWriteOptions.OPERATION().key(),
+        DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+    writeRows(Arrays.asList(
+            RowFactory.create("k1", "p1", "v1"),
+            RowFactory.create("k2", "p1", "v2")),
+        simpleSchema(), bulkInsertOptions, path, SaveMode.Overwrite);
+
+    Throwable thrown = assertThrows(Throwable.class, () ->
+        spark().read().format("hudi")
+            .option("hoodie.datasource.query.type", "incremental")
+            .option("hoodie.datasource.read.begin.instanttime", "0")
+            .load(path)
+            .collect(),
+        "Expected incremental read to be rejected under mode " + mode);
+    String rootMessage = rootMessageOf(thrown);
+    assertTrue(rootMessage.contains("_hoodie_commit_time")
+            || rootMessage.contains(HoodieTableConfig.META_FIELDS_MODE.key()),
+        "Expected error to mention _hoodie_commit_time or the mode key; got: " + rootMessage);
+  }
+
+  @Test
+  void morIncrementalQueryRejectedUnderFileNameOnly() {
+    assertMorIncrementalRejects(MetaFieldsMode.FILE_NAME_ONLY);
+  }
+
+  @Test
+  void morIncrementalQueryRejectedUnderNone() {
+    assertMorIncrementalRejects(MetaFieldsMode.NONE);
+  }
+
   private static String rootMessageOf(Throwable thrown) {
     Throwable root = thrown;
     while (root.getCause() != null) {

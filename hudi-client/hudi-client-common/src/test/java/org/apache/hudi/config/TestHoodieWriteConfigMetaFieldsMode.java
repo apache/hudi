@@ -18,10 +18,13 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -126,5 +129,60 @@ class TestHoodieWriteConfigMetaFieldsMode {
     assertEquals(MetaFieldsMode.NONE, cfg.getMetaFieldsMode());
     assertFalse(cfg.isCommitTimePopulated());
     assertFalse(cfg.isFileNamePopulated());
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = MetaFieldsMode.class, names = {"NONE", "COMMIT_TIME_ONLY", "FILE_NAME_ONLY", "COMMIT_TIME_AND_FILE_NAME"})
+  void rejectsRecordLevelIndexWhenRecordKeyIsNotPopulated(MetaFieldsMode mode) {
+    HoodieMetadataConfig mdt = HoodieMetadataConfig.newBuilder()
+        .enable(true)
+        .withEnableRecordLevelIndex(true)
+        .build();
+    HoodieWriteConfig.Builder builder = baseBuilder()
+        .withPopulateMetaFields(false)
+        .withMetaFieldsMode(mode)
+        .withMetadataConfig(mdt);
+    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, builder::build,
+        "expected RLI + mode=" + mode + " to be rejected");
+    assertTrue(ex.getMessage().contains("Record-level index"),
+        "message must name RLI: " + ex.getMessage());
+    assertTrue(ex.getMessage().contains(mode.name()),
+        "message must include current mode: " + ex.getMessage());
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = MetaFieldsMode.class, names = {"NONE", "COMMIT_TIME_ONLY", "FILE_NAME_ONLY", "COMMIT_TIME_AND_FILE_NAME"})
+  void rejectsSecondaryIndexWhenRecordKeyIsNotPopulated(MetaFieldsMode mode) {
+    HoodieMetadataConfig mdt = HoodieMetadataConfig.newBuilder()
+        .enable(true)
+        .withEnableGlobalRecordLevelIndex(true)
+        .withSecondaryIndexEnabled(true)
+        .withSecondaryIndexForColumn("some_col")
+        .build();
+    HoodieWriteConfig.Builder builder = baseBuilder()
+        .withPopulateMetaFields(false)
+        .withMetaFieldsMode(mode)
+        .withMetadataConfig(mdt);
+    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, builder::build,
+        "expected secondary index + mode=" + mode + " to be rejected");
+    // The RLI guard fires first (SI depends on global RLI). Both messages are acceptable;
+    // just verify the failure clearly ties back to the mode.
+    assertTrue(ex.getMessage().contains(mode.name()),
+        "message must include current mode: " + ex.getMessage());
+  }
+
+  @Test
+  void allowsRecordLevelIndexUnderAllMode() {
+    HoodieMetadataConfig mdt = HoodieMetadataConfig.newBuilder()
+        .enable(true)
+        .withEnableRecordLevelIndex(true)
+        .build();
+    // populateMetaFields=true → ALL mode, record key populated, RLI allowed.
+    HoodieWriteConfig cfg = baseBuilder()
+        .withPopulateMetaFields(true)
+        .withMetadataConfig(mdt)
+        .build();
+    assertEquals(MetaFieldsMode.ALL, cfg.getMetaFieldsMode());
+    assertTrue(cfg.isRecordLevelIndexEnabled());
   }
 }

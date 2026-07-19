@@ -3939,6 +3939,36 @@ public class HoodieWriteConfig extends HoodieConfig {
                   + "Either keep %s=true or use NONE mode.",
               HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode, engineType,
               HoodieTableConfig.POPULATE_META_FIELDS.key()));
+      // RLI and secondary indexes both look up rows by _hoodie_record_key. Only ALL mode populates
+      // the record-key column; every other mode leaves it null on the base file, which would
+      // silently corrupt index maintenance (RLI would key on nulls, SI updates would target
+      // phantom rows). Reject the combination up-front so the failure surfaces at write-config
+      // build time rather than as a mysterious query-time miss.
+      //
+      // Predicates mirror HoodieMetadataConfig.isRecordLevelIndexEnabled / isSecondaryIndexEnabled
+      // — including the metadata-enabled and (for SI) column-non-empty gates. We inline them here
+      // rather than calling writeConfig.isRecordLevelIndexEnabled() because validate() runs before
+      // the HoodieWriteConfig instance is materialized — the metadataConfig field is only wired in
+      // the private constructor invoked by build(). SECONDARY_INDEX_ENABLE_PROP defaults to true,
+      // so we must combine it with the column-set gate to avoid firing on default configs.
+      if (!metaFieldsMode.isRecordKeyPopulated()) {
+        boolean mdtEnabled = writeConfig.getBooleanOrDefault(HoodieMetadataConfig.ENABLE);
+        boolean rliEnabled = mdtEnabled
+            && (writeConfig.getBooleanOrDefault(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP)
+                || writeConfig.getBooleanOrDefault(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP));
+        checkArgument(!rliEnabled,
+            String.format("Record-level index requires %s=ALL (which populates _hoodie_record_key). "
+                    + "Current mode=%s does not populate the record key. Either disable RLI or set the mode to ALL.",
+                HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode));
+        boolean siEnabled = mdtEnabled
+            && writeConfig.getBooleanOrDefault(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP)
+            && writeConfig.getBooleanOrDefault(HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP)
+            && StringUtils.nonEmpty(writeConfig.getString(HoodieMetadataConfig.SECONDARY_INDEX_COLUMN));
+        checkArgument(!siEnabled,
+            String.format("Secondary index requires %s=ALL (which populates _hoodie_record_key). "
+                    + "Current mode=%s does not populate the record key. Either disable the secondary index or set the mode to ALL.",
+                HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode));
+      }
     }
 
     public HoodieWriteConfig build() {
