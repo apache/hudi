@@ -19,7 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.avro.AvroRecordContext;
+import org.apache.hudi.common.avro.AvroRecordContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.schema.HoodieSchema;

@@ -158,9 +158,9 @@ public class PartialUpdateHandler<T> implements Serializable {
     unionChanged.addAll(lowChanged);
     // Reuse an existing record's raw (engine-native) changed-columns value whenever it already equals
     // the union, so the value stored back matches the engine's field storage type exactly. Only the
-    // genuinely-disjoint case needs a synthesized value; materialize it via
-    // convertPartitionValueToEngineType, which yields the unwrapped engine storage form (e.g. a plain
-    // Spark UTF8String) rather than the comparison wrapper convertValueToEngineType would return.
+    // genuinely-disjoint case needs a synthesized value; materialize it via convertValueToEngineType,
+    // which returns the engine-native storage form (e.g. a plain Spark UTF8String) suitable for storing
+    // directly as a field value.
     Object mergedChangedValue;
     if (unionChanged.isEmpty()) {
       mergedChangedValue = null;
@@ -169,7 +169,7 @@ public class PartialUpdateHandler<T> implements Serializable {
     } else if (unionChanged.equals(lowChanged)) {
       mergedChangedValue = lowChangedRaw;
     } else {
-      mergedChangedValue = recordContext.convertPartitionValueToEngineType(String.join(",", unionChanged));
+      mergedChangedValue = recordContext.convertValueToEngineType(String.join(",", unionChanged));
     }
 
     List<HoodieSchemaField> fields = newSchema.getFields();
