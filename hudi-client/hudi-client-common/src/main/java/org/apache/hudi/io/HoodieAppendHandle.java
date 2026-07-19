@@ -35,7 +35,6 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
@@ -128,21 +127,6 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
             : Option.empty(),
         taskContextSupplier,
         preserveMetadata);
-    // A table whose read-side merge is driven by the changed-columns list (FILL_UNCHANGED) requires
-    // every log block to carry the full schema. A schema-partial log block (written when
-    // WRITE_PARTIAL_UPDATE_SCHEMA is set) flips the reader to the KEEP_VALUES partial merger, which
-    // drops the FILL_UNCHANGED changed-columns logic for the whole file group — letting CDC
-    // placeholder values silently win over the base. Reject that combination up front rather than
-    // corrupt data on read.
-    if (config.shouldWritePartialUpdates()
-        && hoodieTable.getMetaClient().getTableConfig().getPartialUpdateMode()
-            .map(mode -> mode == PartialUpdateMode.FILL_UNCHANGED).orElse(false)) {
-      throw new HoodieException(String.format(
-          "Partial-update writes (%s) are incompatible with a table configured for FILL_UNCHANGED "
-              + "partial-update merge (changed-columns based); such tables require full-schema writes. "
-              + "Remove the partial-update-schema write config or use a full-schema writer.",
-          HoodieWriteConfig.WRITE_PARTIAL_UPDATE_SCHEMA.key()));
-    }
     this.recordItr = recordItr;
     this.isLogCompaction = preserveMetadata;
     this.useWriterSchema = preserveMetadata;
