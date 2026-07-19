@@ -431,7 +431,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     } else {
       // if auto initialization is enabled, then we need to list all partitions from the file system
       if (dataWriteConfig.getMetadataConfig().shouldAutoInitialize()) {
-        partitionInfoList = listAllPartitionsFromFilesystem(dataTableInstantTime, pendingDataInstants);
+        partitionInfoList = listAllPartitionsFromFilesystem(dataTableInstantTime, pendingDataInstants,
+            dataWriteConfig.getMetadataConfig().shouldSkipZeroSizeFilesOnInitialize());
       } else {
         // if auto initialization is disabled, we can return an empty list
         partitionInfoList = Collections.emptyList();
@@ -1089,9 +1090,12 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    *
    * @param initializationTime  Files which have a timestamp after this are neglected
    * @param pendingDataInstants Pending instants on data set
+   * @param skipZeroSizeFiles   Whether zero-size data files should be skipped during listing. This should only be
+   *                            enabled on the initialize path; other callers (e.g. restore) must pass false so that
+   *                            files already tracked in the metadata table are not spuriously deleted.
    * @return List consisting of {@code DirectoryInfo} for each partition found.
    */
-  private List<DirectoryInfo> listAllPartitionsFromFilesystem(String initializationTime, Set<String> pendingDataInstants) {
+  private List<DirectoryInfo> listAllPartitionsFromFilesystem(String initializationTime, Set<String> pendingDataInstants, boolean skipZeroSizeFiles) {
     if (dataMetaClient.getActiveTimeline().countInstants() == 0) {
       return Collections.emptyList();
     }
@@ -1103,6 +1107,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     StorageConfiguration<?> storageConf = dataMetaClient.getStorageConf();
     final String dirFilterRegex = dataWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
     StoragePath storageBasePath = dataMetaClient.getBasePath();
+    long totalZeroSizeFiles = 0;
 
     while (!pathsToList.isEmpty()) {
       // In each round we will list a section of directories
@@ -1116,12 +1121,13 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       List<DirectoryInfo> processedDirectories = engineContext.map(pathsToProcess, path -> {
         HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConf);
         String relativeDirPath = FSUtils.getRelativePartitionPath(storageBasePath, path);
-        return new DirectoryInfo(relativeDirPath, storage.listDirectEntries(path), initializationTime, pendingDataInstants);
+        return new DirectoryInfo(relativeDirPath, storage.listDirectEntries(path), initializationTime, pendingDataInstants, true, skipZeroSizeFiles);
       }, numDirsToList);
 
       // If the listing reveals a directory, add it to queue. If the listing reveals a hoodie partition, add it to
       // the results.
       for (DirectoryInfo dirInfo : processedDirectories) {
+        totalZeroSizeFiles += dirInfo.getZeroSizeFileCount();
         if (!dirFilterRegex.isEmpty()) {
           final String relativePath = dirInfo.getRelativePath();
           if (!relativePath.isEmpty() && relativePath.matches(dirFilterRegex)) {
@@ -1140,6 +1146,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       }
     }
 
+    final long zeroSizeCount = totalZeroSizeFiles;
+    metrics.ifPresent(m -> m.incrementMetric("skipped_zero_size_files_on_initialize", zeroSizeCount));
     return partitionsToBootstrap;
   }
 
@@ -1772,7 +1780,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     // Restore requires the existing pipelines to be shutdown. So we can safely scan the dataset to find the current
     // list of files in the filesystem.
-    List<DirectoryInfo> dirInfoList = listAllPartitionsFromFilesystem(instantTime, Collections.emptySet());
+    List<DirectoryInfo> dirInfoList = listAllPartitionsFromFilesystem(instantTime, Collections.emptySet(), false);
     Map<String, DirectoryInfo> dirInfoMap = dirInfoList.stream().collect(Collectors.toMap(DirectoryInfo::getRelativePath, Function.identity()));
     dirInfoList.clear();
 
