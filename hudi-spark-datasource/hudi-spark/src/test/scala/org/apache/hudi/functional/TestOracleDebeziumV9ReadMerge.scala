@@ -339,4 +339,53 @@ class TestOracleDebeziumV9ReadMerge extends SparkClientFunctionalTestHarness {
       }
     }
   }
+
+
+  // --- Fault-injection: ingestion/commit-layer invariants (INV7 duplicate delivery, INV8 crash mid-commit).
+  //     These cover the tier the differential harness intentionally skips. ---
+
+  @Test
+  def v9OracleDuplicateAndStaleRedeliveryIsIdempotent(): Unit = {
+    // INV7: at-least-once delivery can redeliver an event (same _event_ordering). A duplicate, or a
+    // STALE re-delivery of an older event arriving after a newer one, must never change the merged
+    // result -- FILL_UNCHANGED on EVENT_TIME_ORDERING must be idempotent.
+    createV9Table(row(1, "alice", 100L, null, ord(100)), "oracle_v9_inv7")
+    upsert(row(1, "bob", 0L, "name", ord(200)), "oracle_v9_inv7")           // update1: name -> bob
+    upsert(row(1, "placeholder", 200L, "amount", ord(300)), "oracle_v9_inv7") // update2: amount -> 200
+    val pre = readRow(1)
+    assertEquals("bob", pre.getAs[String]("name"))
+    assertEquals(200L, pre.getAs[Long]("amount"))
+
+    // exact duplicate of the latest event, then a stale re-delivery of the older update1.
+    upsert(row(1, "placeholder", 200L, "amount", ord(300)), "oracle_v9_inv7")
+    upsert(row(1, "bob", 0L, "name", ord(200)), "oracle_v9_inv7")
+
+    val post = readRow(1)
+    assertEquals("bob", post.getAs[String]("name"), "duplicate/stale re-delivery must not change name")
+    assertEquals(200L, post.getAs[Long]("amount"),
+      "stale re-delivery of an older (ord=200) event must not revert amount set by the newer (ord=300) event")
+  }
+
+  @Test
+  def v9OracleUncommittedMergeNotVisible(): Unit = {
+    // INV8: a writer crash mid-commit must never leave a half-applied merge visible. Simulate the
+    // worst-case window -- data fully written but the completion marker not -- by reverting the last
+    // completed delta-commit back to inflight via the timeline API, then assert the reader ignores it.
+    // (A real process SIGKILL isn't possible in a single-JVM harness; revertToInflight is the standard
+    // faithful stand-in for the data-on-disk-but-uncommitted window.)
+    createV9Table(row(1, "alice", 100L, null, ord(100)), "oracle_v9_inv8")
+    upsert(row(1, "bob", 0L, "name", ord(200)), "oracle_v9_inv8")     // completed
+    upsert(row(1, "carol", 0L, "name", ord(300)), "oracle_v9_inv8")   // update2: name -> carol (to be "crashed")
+
+    val mc = org.apache.hudi.common.table.HoodieTableMetaClient.builder()
+      .setConf(org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(basePath).build()
+    val lastCompleted = mc.getActiveTimeline.getCommitsTimeline.filterCompletedInstants.lastInstant.get
+    mc.getActiveTimeline.revertToInflight(lastCompleted) // crash after data write, before completion
+
+    val out = readRow(1)
+    assertEquals("bob", out.getAs[String]("name"),
+      "an uncommitted (inflight) merge must never be visible on read; the crashed update2 (carol) must be invisible")
+    assertEquals(100L, out.getAs[Long]("amount"), "unchanged amount from the last committed state")
+  }
 }
