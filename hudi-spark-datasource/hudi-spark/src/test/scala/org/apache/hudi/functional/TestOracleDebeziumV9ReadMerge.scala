@@ -167,6 +167,42 @@ class TestOracleDebeziumV9ReadMerge extends SparkClientFunctionalTestHarness {
       s"expected a FILL_UNCHANGED-incompatibility error, got: $flattened")
   }
 
+  @Test
+  def v9OracleSchemaEvolutionAddColumnPreservesUnchanged(): Unit = {
+    // Schema evolution x FILL_UNCHANGED: the base has no `email` column; an evolved update adds it and
+    // changes only email. The pre-existing unchanged columns (name, amount) must still be preserved from
+    // the base (not overwritten by the update's placeholders), and the newly added changed column must
+    // take the incoming value. reconcileChangedColumns iterates the incoming schema and reads unchanged
+    // cols from the (older) base schema, so this exercises a base != incoming schema merge.
+    val schemaOnRead = "hoodie.schema.on.read.enable"
+    baseWriter(row(1, "alice", 100L, null, ord(100)), "oracle_v9_evolve")
+      .option(OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9")
+      .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), classOf[OracleDebeziumAvroPayload].getName)
+      .option(schemaOnRead, "true")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val evolvedCols =
+      Seq("id", "name", "amount", "_changed_columns", "_hoodie_is_deleted", "_event_ordering", "email")
+    val evolved = spark.createDataFrame(Seq((1, "placeholder", 0L, "email", false, ord(200), "new@x")))
+      .toDF(evolvedCols: _*)
+    baseWriter(evolved, "oracle_v9_evolve")
+      .option(OPERATION.key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(schemaOnRead, "true")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val out = spark.read.format("hudi").load(basePath)
+      .select("id", "name", "amount", "email").where("id = 1").collect()(0)
+    assertEquals("alice", out.getAs[String]("name"),
+      "unchanged name preserved across an add-column schema evolution (not the update's placeholder)")
+    assertEquals(100L, out.getAs[Long]("amount"),
+      "unchanged amount preserved across an add-column schema evolution")
+    assertEquals("new@x", out.getAs[String]("email"),
+      "the newly added column, listed in _changed_columns, takes the incoming value")
+  }
+
   // --- delete: exercises the configured DELETE_KEY (_change_operation_type) / DELETE_MARKER ("d")
   //     reader path (distinct from the update merge). ---
   private val delCols =
