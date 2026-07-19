@@ -705,7 +705,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "MDT file groups on disk. Out-of-the-box values: "
           + "(1) unset / org.apache.hudi.metadata.FlatMDTLayout (default) — every file group lives directly under its "
           + "metadata partition directory; this is the layout used by every MDT created before this config existed. "
-          + "(2) org.apache.hudi.metadata.SubDirBucketedMDTLayout — distributes file groups into 4-digit bucket "
+          + "(2) org.apache.hudi.metadata.SubDirBucketedMDTLayout — distributes file groups into 6-digit bucket "
           + "sub-directories so a single MDT partition does not exceed per-directory file-count limits on HDFS-like "
           + "filesystems. Custom implementations can be plugged in by providing the FQCN here. "
           + "Applies only at MDT initialization; an MDT already on disk keeps its existing layout.");

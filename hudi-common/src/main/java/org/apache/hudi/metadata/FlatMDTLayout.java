@@ -41,12 +41,12 @@ public final class FlatMDTLayout implements HoodieMetadataTableLayout {
   }
 
   @Override
-  public String getFileGroupRelativePath(LayoutContext ctx) {
+  public String getFileGroupRelativePath(HoodieMetadataLayoutContext ctx) {
     return ctx.getRelativePartitionPath();
   }
 
   @Override
-  public String getFileId(LayoutContext ctx) {
+  public String getFileId(HoodieMetadataLayoutContext ctx) {
     return HoodieTableMetadataUtil.getFileIDForFileGroup(
         ctx.getPartitionType(),
         ctx.getFileGroupIndex(),
@@ -55,9 +55,9 @@ public final class FlatMDTLayout implements HoodieMetadataTableLayout {
   }
 
   @Override
-  public FileIdInfo parseFileId(MetadataPartitionType partitionType, String fileId) {
+  public HoodieMetadataFileIdInfo parseFileId(MetadataPartitionType partitionType, String fileId) {
     int idx = HoodieTableMetadataUtil.getFileGroupIndexFromFileId(fileId);
-    return new FileIdInfo(idx, Option.empty());
+    return new HoodieMetadataFileIdInfo(idx, Option.empty());
   }
 
   @Override

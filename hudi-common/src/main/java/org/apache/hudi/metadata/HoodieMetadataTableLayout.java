@@ -60,7 +60,7 @@ public interface HoodieMetadataTableLayout extends Serializable {
    * <p>For the flat layout this is always the partition's path. For
    * sub-directory bucketing this includes the bucket sub-directory.
    */
-  String getFileGroupRelativePath(LayoutContext ctx);
+  String getFileGroupRelativePath(HoodieMetadataLayoutContext ctx);
 
   /**
    * Return the fileId to use for the file group described by {@code ctx}.
@@ -69,14 +69,14 @@ public interface HoodieMetadataTableLayout extends Serializable {
    * {@link HoodieTableMetadataUtil#getFileIDForFileGroup} since the fileId
    * scheme is independent of the on-disk directory layout.
    */
-  String getFileId(LayoutContext ctx);
+  String getFileId(HoodieMetadataLayoutContext ctx);
 
   /**
    * Inverse of {@link #getFileId}: given a fileId observed on disk, recover
    * its global file-group index and (for partitioned RLI) its data-partition
    * name.
    */
-  FileIdInfo parseFileId(MetadataPartitionType partitionType, String fileId);
+  HoodieMetadataFileIdInfo parseFileId(MetadataPartitionType partitionType, String fileId);
 
   /**
    * Given a logical MDT partition name and the total number of file groups

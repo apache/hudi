@@ -34,7 +34,7 @@ import java.io.Serializable;
  * number of file groups in that partition, and the data-table partition name
  * (set only for partitioned RLI).
  */
-public final class LayoutContext implements Serializable {
+public final class HoodieMetadataLayoutContext implements Serializable {
 
   private final MetadataPartitionType partitionType;
   private final String relativePartitionPath;
@@ -42,7 +42,7 @@ public final class LayoutContext implements Serializable {
   private final int fileGroupCount;
   private final Option<String> dataPartitionName;
 
-  public LayoutContext(MetadataPartitionType partitionType,
+  public HoodieMetadataLayoutContext(MetadataPartitionType partitionType,
                        String relativePartitionPath,
                        int fileGroupIndex,
                        int fileGroupCount,

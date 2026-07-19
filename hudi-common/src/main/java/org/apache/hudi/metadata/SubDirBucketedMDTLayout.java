@@ -38,13 +38,13 @@ import java.util.List;
  * <pre>
  *   .hoodie/metadata/record_index/
  *   ├── .hoodie_partition_metadata               ← single marker at the partition root
- *   ├── 0000/
+ *   ├── 000000/
  *   │   ├── .record-index-0000-0_&lt;instant&gt;.log
  *   │   ├── ...
  *   │   └── .record-index-0999-0_&lt;instant&gt;.log
- *   ├── 0001/
+ *   ├── 000001/
  *   │   └── ...
- *   └── 0002/
+ *   └── 000002/
  *       └── ... (partial)
  * </pre>
  *
@@ -99,7 +99,7 @@ public final class SubDirBucketedMDTLayout implements HoodieMetadataTableLayout 
   }
 
   @Override
-  public String getFileGroupRelativePath(LayoutContext ctx) {
+  public String getFileGroupRelativePath(HoodieMetadataLayoutContext ctx) {
     if (ctx.getDataPartitionName().isPresent()) {
       throw new HoodieMetadataException(
           "SubDirBucketedMDTLayout does not support partitioned RLI. The MDT was opened with "
@@ -113,7 +113,7 @@ public final class SubDirBucketedMDTLayout implements HoodieMetadataTableLayout 
   }
 
   @Override
-  public String getFileId(LayoutContext ctx) {
+  public String getFileId(HoodieMetadataLayoutContext ctx) {
     // FileId scheme is bucket-independent. The bucket is recoverable from the
     // file-group index, which is encoded in the fileId itself.
     return HoodieTableMetadataUtil.getFileIDForFileGroup(
@@ -124,9 +124,9 @@ public final class SubDirBucketedMDTLayout implements HoodieMetadataTableLayout 
   }
 
   @Override
-  public FileIdInfo parseFileId(MetadataPartitionType partitionType, String fileId) {
+  public HoodieMetadataFileIdInfo parseFileId(MetadataPartitionType partitionType, String fileId) {
     int idx = HoodieTableMetadataUtil.getFileGroupIndexFromFileId(fileId);
-    return new FileIdInfo(idx, Option.empty());
+    return new HoodieMetadataFileIdInfo(idx, Option.empty());
   }
 
   @Override
@@ -154,7 +154,21 @@ public final class SubDirBucketedMDTLayout implements HoodieMetadataTableLayout 
     return Collections.singletonList(logicalPartition);
   }
 
+  /**
+   * Bucket sub-directory naming uses a fixed-width zero-padded index (e.g.
+   * {@code record_index/000042} with {@link #BUCKET_INDEX_WIDTH} = 6). The width is a
+   * hard ceiling that also drives the {@link HoodieTableMetadataUtil#isMDTBucketSubPath}
+   * heuristic used to distinguish a bucket sub-path from a real data-table partition value
+   * that happens to be all-digit. Changing this width is a storage-format change: any
+   * pre-existing bucketed MDT is pinned to the width in use at initialization time.
+   */
+  static final int BUCKET_INDEX_WIDTH = 6;
+  static final int MAX_BUCKETS = 1_000_000;
+
   private static String bucketRelativePath(String partitionRelativePath, int bucketIndex) {
-    return String.format("%s%s%04d", partitionRelativePath, StoragePath.SEPARATOR, bucketIndex);
+    ValidationUtils.checkArgument(bucketIndex >= 0 && bucketIndex < MAX_BUCKETS,
+        "bucketIndex out of range [0, " + MAX_BUCKETS + "): " + bucketIndex);
+    return String.format("%s%s%0" + BUCKET_INDEX_WIDTH + "d",
+        partitionRelativePath, StoragePath.SEPARATOR, bucketIndex);
   }
 }

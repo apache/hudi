@@ -43,7 +43,7 @@ class TestHoodieMetadataTableLayout {
   @Test
   void flatLayout_returnsPartitionRootAsRelativePath() {
     HoodieMetadataTableLayout layout = new FlatMDTLayout();
-    LayoutContext ctx = new LayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 1500, 2500, Option.empty());
+    HoodieMetadataLayoutContext ctx = new HoodieMetadataLayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 1500, 2500, Option.empty());
     assertEquals("record_index", layout.getFileGroupRelativePath(ctx));
     assertEquals("record-index-1500-0", layout.getFileId(ctx));
   }
@@ -72,16 +72,16 @@ class TestHoodieMetadataTableLayout {
   @Test
   void bucketedLayout_pathDerivedFromFileGroupIndex() {
     HoodieMetadataTableLayout layout = new SubDirBucketedMDTLayout(1000);
-    assertEquals("record_index/0000",
-        layout.getFileGroupRelativePath(new LayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 0, 2500, Option.empty())));
-    assertEquals("record_index/0000",
-        layout.getFileGroupRelativePath(new LayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 999, 2500, Option.empty())));
-    assertEquals("record_index/0001",
-        layout.getFileGroupRelativePath(new LayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 1000, 2500, Option.empty())));
-    assertEquals("record_index/0001",
-        layout.getFileGroupRelativePath(new LayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 1500, 2500, Option.empty())));
-    assertEquals("record_index/0002",
-        layout.getFileGroupRelativePath(new LayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 2499, 2500, Option.empty())));
+    assertEquals("record_index/000000",
+        layout.getFileGroupRelativePath(new HoodieMetadataLayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 0, 2500, Option.empty())));
+    assertEquals("record_index/000000",
+        layout.getFileGroupRelativePath(new HoodieMetadataLayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 999, 2500, Option.empty())));
+    assertEquals("record_index/000001",
+        layout.getFileGroupRelativePath(new HoodieMetadataLayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 1000, 2500, Option.empty())));
+    assertEquals("record_index/000001",
+        layout.getFileGroupRelativePath(new HoodieMetadataLayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 1500, 2500, Option.empty())));
+    assertEquals("record_index/000002",
+        layout.getFileGroupRelativePath(new HoodieMetadataLayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 2499, 2500, Option.empty())));
   }
 
   @Test
@@ -90,11 +90,11 @@ class TestHoodieMetadataTableLayout {
     // FileId encoding must be bucket-independent so that bucket = fileGroupIndex / bucketSize is
     // recoverable from the fileId itself.
     assertEquals("record-index-0000-0",
-        layout.getFileId(new LayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 0, 2500, Option.empty())));
+        layout.getFileId(new HoodieMetadataLayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 0, 2500, Option.empty())));
     assertEquals("record-index-1500-0",
-        layout.getFileId(new LayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 1500, 2500, Option.empty())));
+        layout.getFileId(new HoodieMetadataLayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 1500, 2500, Option.empty())));
     assertEquals("record-index-2499-0",
-        layout.getFileId(new LayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 2499, 2500, Option.empty())));
+        layout.getFileId(new HoodieMetadataLayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 2499, 2500, Option.empty())));
   }
 
   @ParameterizedTest
@@ -104,14 +104,14 @@ class TestHoodieMetadataTableLayout {
     // Exactly N full buckets.
     List<String> exact = layout.getPhysicalPartitions("record_index", bucketSize * 3);
     assertEquals(3, exact.size());
-    assertEquals("record_index/0000", exact.get(0));
-    assertEquals("record_index/0001", exact.get(1));
-    assertEquals("record_index/0002", exact.get(2));
+    assertEquals("record_index/000000", exact.get(0));
+    assertEquals("record_index/000001", exact.get(1));
+    assertEquals("record_index/000002", exact.get(2));
 
     // N+1 file groups → N+1 buckets (partial last).
     List<String> partial = layout.getPhysicalPartitions("record_index", bucketSize * 3 + 1);
     assertEquals(4, partial.size());
-    assertEquals("record_index/0003", partial.get(3));
+    assertEquals("record_index/000003", partial.get(3));
 
     // Fewer than bucketSize → one bucket.
     List<String> small = layout.getPhysicalPartitions("record_index", Math.max(1, bucketSize / 2));
@@ -142,7 +142,7 @@ class TestHoodieMetadataTableLayout {
     // with a data partition present must fail loudly rather than silently produce a flat path; the
     // partitioned-RLI growth model needs a distinct strategy that lands in a follow-up patch / RFC.
     HoodieMetadataTableLayout layout = new SubDirBucketedMDTLayout(1000);
-    LayoutContext ctx = new LayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 3, 4, Option.of("p2"));
+    HoodieMetadataLayoutContext ctx = new HoodieMetadataLayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", 3, 4, Option.of("p2"));
     org.apache.hudi.exception.HoodieMetadataException ex = assertThrows(
         org.apache.hudi.exception.HoodieMetadataException.class,
         () -> layout.getFileGroupRelativePath(ctx));
@@ -160,9 +160,9 @@ class TestHoodieMetadataTableLayout {
   void bucketedLayout_parseFileIdRoundTrip() {
     HoodieMetadataTableLayout layout = new SubDirBucketedMDTLayout(1000);
     for (int idx : new int[] {0, 1, 999, 1000, 1500, 2499}) {
-      LayoutContext ctx = new LayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", idx, 2500, Option.empty());
+      HoodieMetadataLayoutContext ctx = new HoodieMetadataLayoutContext(MetadataPartitionType.RECORD_INDEX, "record_index", idx, 2500, Option.empty());
       String fileId = layout.getFileId(ctx);
-      FileIdInfo info = layout.parseFileId(MetadataPartitionType.RECORD_INDEX, fileId);
+      HoodieMetadataFileIdInfo info = layout.parseFileId(MetadataPartitionType.RECORD_INDEX, fileId);
       assertEquals(idx, info.getFileGroupIndex(), "round-trip fileId for index " + idx);
     }
   }
@@ -181,32 +181,32 @@ class TestHoodieMetadataTableLayout {
     cfg.setValue(org.apache.hudi.common.table.HoodieTableConfig.METADATA_LAYOUT_CLASS,
         SubDirBucketedMDTLayout.class.getName());
     // Non-MDT tables short-circuit regardless of any layout config.
-    assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, false, "record_index/0001"));
+    assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, false, "record_index/000001"));
   }
 
   @Test
   void isMDTBucketSubPath_falseForFlatLayoutMDT() {
     // The flat default (no layout class set) must short-circuit so the heuristic never reads a
-    // 4-digit data-table partition value as a bucket sub-path on existing tables.
+    // same-width all-digit data-table partition value as a bucket sub-path on existing tables.
     org.apache.hudi.common.table.HoodieTableConfig cfg =
         new org.apache.hudi.common.table.HoodieTableConfig();
-    assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/0001"));
+    assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/000001"));
 
     // Explicit FlatMDTLayout class also short-circuits.
     cfg.setValue(org.apache.hudi.common.table.HoodieTableConfig.METADATA_LAYOUT_CLASS,
         FlatMDTLayout.class.getName());
-    assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/0001"));
+    assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/000001"));
   }
 
   @Test
-  void isMDTBucketSubPath_trueForBucketedMDTWithFourDigitSuffix() {
+  void isMDTBucketSubPath_trueForBucketedMDTWithSixDigitSuffix() {
     org.apache.hudi.common.table.HoodieTableConfig cfg =
         new org.apache.hudi.common.table.HoodieTableConfig();
     cfg.setValue(org.apache.hudi.common.table.HoodieTableConfig.METADATA_LAYOUT_CLASS,
         SubDirBucketedMDTLayout.class.getName());
-    assertTrue(HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/0000"));
-    assertTrue(HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/0042"));
-    assertTrue(HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "secondary_index_idx0/0099"));
+    assertTrue(HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/000000"));
+    assertTrue(HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/000042"));
+    assertTrue(HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "secondary_index_idx0/000099"));
   }
 
   @Test
@@ -222,14 +222,16 @@ class TestHoodieMetadataTableLayout {
   }
 
   @Test
-  void isMDTBucketSubPath_falseForNonFourDigitSuffix() {
+  void isMDTBucketSubPath_falseForNonSixDigitSuffix() {
     org.apache.hudi.common.table.HoodieTableConfig cfg =
         new org.apache.hudi.common.table.HoodieTableConfig();
     cfg.setValue(org.apache.hudi.common.table.HoodieTableConfig.METADATA_LAYOUT_CLASS,
         SubDirBucketedMDTLayout.class.getName());
-    // 3-digit, 5-digit, non-digit suffixes all return false.
+    // 3-digit, 5-digit, 7-digit, and non-digit suffixes all return false so that same-width
+    // data-table partition values do not get misread as bucket sub-paths.
     assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/000"));
     assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/00000"));
-    assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/abcd"));
+    assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/0000000"));
+    assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/abcdef"));
   }
 }

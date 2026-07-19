@@ -391,7 +391,7 @@ public class HoodieTableConfig extends HoodieConfig {
           + "MDT file groups on disk. Out-of-the-box values: "
           + "(1) unset / org.apache.hudi.metadata.FlatMDTLayout (default) — every file group lives directly under its "
           + "metadata partition directory; this is the layout used by every MDT created before this config existed. "
-          + "(2) org.apache.hudi.metadata.SubDirBucketedMDTLayout — distributes file groups into 4-digit bucket "
+          + "(2) org.apache.hudi.metadata.SubDirBucketedMDTLayout — distributes file groups into 6-digit bucket "
           + "sub-directories. Custom implementations can be plugged in via FQCN. "
           + "Set once at MDT initialization; immutable thereafter.");
 

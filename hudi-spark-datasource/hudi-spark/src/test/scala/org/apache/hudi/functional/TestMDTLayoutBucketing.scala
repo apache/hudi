@@ -108,8 +108,8 @@ class TestMDTLayoutBucketing extends RecordLevelIndexTestBase {
       s"MDT must expose files partition; got: $mdtPartitions")
     assertTrue(mdtPartitions.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath),
       s"MDT must expose record_index partition; got: $mdtPartitions")
-    // None of the returned partitions should look like a bucket sub-path (4 digits at the end).
-    val bucketLike = mdtPartitions.filter(p => p.matches(".*/[0-9]{4}$"))
+    // None of the returned partitions should look like a bucket sub-path (6 digits at the end).
+    val bucketLike = mdtPartitions.filter(p => p.matches(".*/[0-9]{6}$"))
     assertTrue(bucketLike.isEmpty,
       s"MDT partition discovery must not expose bucket sub-paths as logical partitions; got bucket-like: $bucketLike")
 
@@ -120,11 +120,11 @@ class TestMDTLayoutBucketing extends RecordLevelIndexTestBase {
       val bucketDirs = children.filter(_.isDirectory)
       assertTrue(bucketDirs.nonEmpty,
         s"bucketed layout must produce at least one bucket sub-directory under record_index; got children=${children.map(_.getPath.getName)}")
-      // Each bucket dir must be %04d-formatted.
+      // Each bucket dir must be %06d-formatted.
       bucketDirs.foreach { d =>
         val name = d.getPath.getName
-        assertTrue(name.matches("[0-9]{4}"),
-          s"bucket sub-directory name must be %04d-formatted, got: $name")
+        assertTrue(name.matches("[0-9]{6}"),
+          s"bucket sub-directory name must be %06d-formatted, got: $name")
       }
       // Marker must NOT live inside a bucket dir — it must live at the partition root.
       bucketDirs.foreach { d =>
@@ -209,8 +209,8 @@ class TestMDTLayoutBucketing extends RecordLevelIndexTestBase {
       "bucket sub-directories under record_index must still exist after compaction + cleaning")
     bucketDirs.foreach { d =>
       val name = d.getPath.getName
-      assertTrue(name.matches("[0-9]{4}"),
-        s"bucket sub-directory name must be %04d-formatted, got: $name")
+      assertTrue(name.matches("[0-9]{6}"),
+        s"bucket sub-directory name must be %06d-formatted, got: $name")
       // After compaction, each bucket should contain at least one base file (HFile) — otherwise
       // compaction silently skipped this bucket, which is the regression cshuo / hudi-agent flagged.
       val bucketEntries = mdtMetaClient.getStorage.listDirectEntries(d.getPath).asScala

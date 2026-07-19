@@ -1570,9 +1570,10 @@ public class HoodieTableMetadataUtil {
    * {@code .hoodie_partition_metadata} marker should be created there.
    *
    * <p>Returns false for: non-MDT tables, MDTs on the flat layout (the default that every
-   * pre-existing MDT uses), and any path that does not end in a {@code /NNNN} 4-digit suffix. The
-   * non-flat-layout gate is what keeps a 4-digit data-table partition value (e.g. {@code price=1000})
-   * from being misread as a bucket directory.
+   * pre-existing MDT uses), and any path that does not end in a fixed-width all-digit suffix of
+   * {@link SubDirBucketedMDTLayout#BUCKET_INDEX_WIDTH} characters. The non-flat-layout gate is what
+   * keeps a same-width data-table partition value (e.g. {@code price=100000}) from being misread as
+   * a bucket directory.
    *
    * @param mdtTableConfig     the MDT's persisted table config (typically reached via
    *                           {@code hoodieTable.getMetaClient().getTableConfig()} when the table
@@ -1598,10 +1599,10 @@ public class HoodieTableMetadataUtil {
       return false;
     }
     String last = physicalPartitionPath.substring(slash + 1);
-    if (last.length() != 4) {
+    if (last.length() != SubDirBucketedMDTLayout.BUCKET_INDEX_WIDTH) {
       return false;
     }
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < SubDirBucketedMDTLayout.BUCKET_INDEX_WIDTH; i++) {
       if (!Character.isDigit(last.charAt(i))) {
         return false;
       }
