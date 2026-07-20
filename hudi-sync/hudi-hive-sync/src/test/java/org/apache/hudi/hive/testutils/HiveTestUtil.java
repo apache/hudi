@@ -395,6 +395,11 @@ public class HiveTestUtil {
 
   public static void createCOWTableWithSchema(String instantTime, String schemaFileName)
       throws IOException, URISyntaxException {
+    createCOWTableWithSchema(instantTime, SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, schemaFileName));
+  }
+
+  public static void createCOWTableWithSchema(String instantTime, HoodieSchema schema)
+      throws IOException, URISyntaxException {
     Path path = new Path(basePath);
     FileIOUtils.deleteDirectory(new File(basePath));
     HoodieTableMetaClient.newTableBuilder()
@@ -417,7 +422,6 @@ public class HiveTestUtil {
     String fileId = UUID.randomUUID().toString();
     Path filePath = new Path(partPath.toString() + "/"
         + FSUtils.makeBaseFileName(instantTime, "1-0-1", fileId, HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
-    HoodieSchema schema = SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, schemaFileName);
     generateParquetDataWithSchema(filePath, schema);
     HoodieWriteStat writeStat = new HoodieWriteStat();
     writeStat.setFileId(fileId);

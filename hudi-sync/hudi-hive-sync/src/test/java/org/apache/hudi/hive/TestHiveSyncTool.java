@@ -1032,6 +1032,186 @@ public class TestHiveSyncTool {
     assertEquals(2, commentCnt, "hive schema field comment numbers should match the avro schema field doc numbers");
   }
 
+  private static final String STANDARD_COLUMNS =
+      "{\"name\": \"name\", \"type\": \"string\", \"doc\": \"name_comment\"},"
+          + "{\"name\": \"favorite_number\", \"type\": \"int\", \"doc\": \"favorite_number_comment\"},"
+          + "{\"name\": \"favorite_color\", \"type\": \"string\", \"doc\": \"the person's favorite color\\\\\"}";
+
+  private static final String COMPLEX_COLUMNS =
+      "{\"name\": \"address\", \"type\": {\"type\": \"record\", \"name\": \"Address\", \"fields\": ["
+          + "{\"name\": \"city\", \"type\": \"string\", \"doc\": \"city_comment\"},"
+          + "{\"name\": \"zip\", \"type\": \"string\"}]}, \"doc\": \"address_comment\"},"
+          + "{\"name\": \"tags\", \"type\": {\"type\": \"array\", \"items\": \"string\"}, \"doc\": \"tags_comment\"},"
+          + "{\"name\": \"scores\", \"type\": {\"type\": \"map\", \"values\": \"int\"}}";
+
+  private static final String SINGLE_PARTITION_COLUMN =
+      "{\"name\": \"datestr\", \"type\": \"string\", \"doc\": \"partition_datestr_comment\"}";
+
+  private static final String MULTI_PARTITION_COLUMNS =
+      "{\"name\": \"year\", \"type\": \"string\", \"doc\": \"partition_year_comment\"},"
+          + "{\"name\": \"month\", \"type\": \"string\"},"
+          + "{\"name\": \"day\", \"type\": \"string\", \"doc\": \"partition_day_comment\"}";
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  public void testSyncCommentsForStandardColumnsWithSinglePartitionColumn(String syncMode) throws Exception {
+    Map<String, String> commentsByField = syncTableWithCommentedSchema(syncMode, STANDARD_COLUMNS, SINGLE_PARTITION_COLUMN);
+    assertStandardColumnComments(commentsByField);
+    assertEquals("partition_datestr_comment", commentsByField.get("datestr"),
+        "comment of the partition column should be synced on table creation");
+    assertSparkSchemaPropertyContainsComments("\"comment\":\"name_comment\"", "\"comment\":\"partition_datestr_comment\"");
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  public void testSyncCommentsForComplexColumnsWithSinglePartitionColumn(String syncMode) throws Exception {
+    Map<String, String> commentsByField = syncTableWithCommentedSchema(syncMode, STANDARD_COLUMNS, COMPLEX_COLUMNS, SINGLE_PARTITION_COLUMN);
+    assertStandardColumnComments(commentsByField);
+    assertComplexColumnComments(commentsByField);
+    assertEquals("partition_datestr_comment", commentsByField.get("datestr"),
+        "comment of the partition column should be synced on table creation");
+    // docs of nested fields are only representable in the spark schema
+    assertSparkSchemaPropertyContainsComments("\"comment\":\"address_comment\"", "\"comment\":\"city_comment\"");
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  public void testSyncCommentsForStandardColumnsWithMultiplePartitionColumns(String syncMode) throws Exception {
+    setMultiPartitionFields();
+    Map<String, String> commentsByField = syncTableWithCommentedSchema(syncMode, STANDARD_COLUMNS, MULTI_PARTITION_COLUMNS);
+    assertStandardColumnComments(commentsByField);
+    assertMultiPartitionColumnComments(commentsByField);
+    assertSparkSchemaPropertyContainsComments("\"comment\":\"name_comment\"", "\"comment\":\"partition_year_comment\"");
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  public void testSyncCommentsForComplexColumnsWithMultiplePartitionColumns(String syncMode) throws Exception {
+    setMultiPartitionFields();
+    Map<String, String> commentsByField = syncTableWithCommentedSchema(syncMode, STANDARD_COLUMNS, COMPLEX_COLUMNS, MULTI_PARTITION_COLUMNS);
+    assertStandardColumnComments(commentsByField);
+    assertComplexColumnComments(commentsByField);
+    assertMultiPartitionColumnComments(commentsByField);
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  public void testSyncCommentsWithSpecialCharacters(String syncMode) throws Exception {
+    String specialColumns =
+        "{\"name\": \"c_quote\", \"type\": \"string\", \"doc\": \"it's the person's 'favorite'\"},"
+            + "{\"name\": \"c_backslash\", \"type\": \"string\", \"doc\": \"back\\\\slash ending\\\\\"},"
+            + "{\"name\": \"c_double_quote\", \"type\": \"string\", \"doc\": \"he said \\\"hello\\\"\"},"
+            + "{\"name\": \"c_mixed\", \"type\": \"string\", \"doc\": \"semi;colon, comma=equals %percent _underscore\"},"
+            + "{\"name\": \"c_unicode\", \"type\": \"string\", \"doc\": \"unicode héllo 你好\"}";
+    Map<String, String> commentsByField = syncTableWithCommentedSchema(syncMode, specialColumns, SINGLE_PARTITION_COLUMN);
+    assertEquals("it's the person's 'favorite'", commentsByField.get("c_quote"),
+        "comment with single quotes should be synced unchanged");
+    assertEquals("back\\slash ending\\", commentsByField.get("c_backslash"),
+        "comment with backslashes should be synced unchanged");
+    assertEquals("he said \"hello\"", commentsByField.get("c_double_quote"),
+        "comment with double quotes should be synced unchanged");
+    assertEquals("semi;colon, comma=equals %percent _underscore", commentsByField.get("c_mixed"),
+        "comment with SQL separator characters should be synced unchanged");
+    assertEquals("unicode héllo 你好", commentsByField.get("c_unicode"),
+        "comment with non-ascii characters should be synced unchanged");
+    assertEquals("partition_datestr_comment", commentsByField.get("datestr"),
+        "comment of the partition column should be synced on table creation");
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  public void testUpdateCommentsForPartitionColumns(String syncMode) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_COMMENT.key(), "false");
+    setMultiPartitionFields();
+    String commitTime = "100";
+    HiveTestUtil.createCOWTableWithSchema(commitTime, commentedSchema(STANDARD_COLUMNS, MULTI_PARTITION_COLUMNS));
+
+    // table is created without comments, they are applied by the second sync
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    hiveSyncProps.setProperty(HIVE_SYNC_COMMENT.key(), "true");
+    hiveSyncProps.setProperty(META_SYNC_INCREMENTAL.key(), "false");
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+
+    Map<String, String> commentsByField = metastoreFieldComments(HiveTestUtil.TABLE_NAME);
+    assertStandardColumnComments(commentsByField);
+    if (syncMode.equals(HiveSyncMode.HMS.name().toLowerCase())) {
+      assertMultiPartitionColumnComments(commentsByField);
+    } else {
+      assertEquals("", commentsByField.get("year"),
+          "comment of a partition column cannot be updated in query based sync modes");
+      assertEquals("", commentsByField.get("day"),
+          "comment of a partition column cannot be updated in query based sync modes");
+    }
+  }
+
+  private Map<String, String> syncTableWithCommentedSchema(String syncMode, String... fieldJsons) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_COMMENT.key(), "true");
+    HiveTestUtil.createCOWTableWithSchema("100", commentedSchema(fieldJsons));
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    return metastoreFieldComments(HiveTestUtil.TABLE_NAME);
+  }
+
+  private static HoodieSchema commentedSchema(String... fieldJsons) {
+    return HoodieSchema.parse("{\"type\": \"record\", \"name\": \"User\", \"namespace\": \"example.avro\", \"fields\": ["
+        + String.join(",", fieldJsons) + "]}");
+  }
+
+  private void setMultiPartitionFields() {
+    hiveSyncProps.setProperty(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), MultiPartKeysValueExtractor.class.getCanonicalName());
+    hiveSyncProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "year,month,day");
+  }
+
+  private void assertStandardColumnComments(Map<String, String> commentsByField) {
+    assertEquals("name_comment", commentsByField.get("name"),
+        "comment of a regular column should be synced");
+    assertEquals("favorite_number_comment", commentsByField.get("favorite_number"),
+        "comment of a regular column should be synced");
+    assertEquals("the person's favorite color\\", commentsByField.get("favorite_color"),
+        "comment with a single quote and trailing backslash should be synced unchanged");
+  }
+
+  private void assertComplexColumnComments(Map<String, String> commentsByField) {
+    assertEquals("address_comment", commentsByField.get("address"),
+        "comment of a struct column should be synced");
+    assertEquals("tags_comment", commentsByField.get("tags"),
+        "comment of an array column should be synced");
+    assertEquals("", commentsByField.get("scores"),
+        "map column without a doc should have no comment");
+  }
+
+  private void assertMultiPartitionColumnComments(Map<String, String> commentsByField) {
+    assertEquals("partition_year_comment", commentsByField.get("year"),
+        "comment of the first partition column should be synced");
+    assertEquals("", commentsByField.get("month"),
+        "partition column without a doc should have no comment");
+    assertEquals("partition_day_comment", commentsByField.get("day"),
+        "comment of the last partition column should be synced");
+  }
+
+  private void assertSparkSchemaPropertyContainsComments(String... expectedComments) throws Exception {
+    SessionState.start(HiveTestUtil.getHiveConf());
+    Driver hiveDriver = new Driver(HiveTestUtil.getHiveConf());
+    hiveDriver.run(String.format("SHOW TBLPROPERTIES %s.%s", HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME));
+    List<String> results = new ArrayList<>();
+    hiveDriver.getResults(results);
+    String tableProperties = String.join("\n", results);
+    for (String expectedComment : expectedComments) {
+      assertTrue(tableProperties.contains(expectedComment),
+          "spark schema table property should contain " + expectedComment);
+    }
+  }
+
+  private Map<String, String> metastoreFieldComments(String tableName) {
+    return hiveClient.getMetastoreFieldSchemas(tableName)
+        .stream()
+        .collect(Collectors.toMap(FieldSchema::getName, FieldSchema::getCommentOrEmpty));
+  }
+
   @ParameterizedTest
   @MethodSource("syncModeAndSchemaFromCommitMetadata")
   public void testSyncMergeOnRead(boolean useSchemaFromCommitMetadata, String syncMode, String enablePushDown) throws Exception {
