@@ -31,9 +31,7 @@ Traditional database systems answered this question decades ago. They establishe
 
 The first generation of lakehouse table formats emerged under a different set of assumptions. They were designed during a period when most analytical datasets were largely append-only, refreshed through scheduled batch pipelines, and stored as immutable Parquet files on object storage. Snapshot isolation and file replacement naturally became the dominant architectural primitives, providing a simple and robust foundation for managing analytical data at scale.
 
-Today's workloads are fundamentally different. Change Data Capture (CDC), streaming ingestion, operational analytics, feature stores, and AI pipelines have transformed lakehouses into continuously mutating systems. Storage optimization is no longer an occasional maintenance task performed after nightly ETL jobs — it must coexist with thousands of ongoing updates without delaying ingestion or compromising data freshness.
-
-This raises an architectural question that modern databases answered decades ago, but that is becoming increasingly relevant for lakehouses:
+Today's workloads have moved on, and we'll return to what that shift looks like shortly. But the architectural question it raises is one modern databases answered decades ago:
 
 **Should storage optimization compete with writes, or should it evolve independently?**
 
@@ -59,7 +57,7 @@ This distinction gave rise to one of the most important architectural ideas in m
 
 This philosophy appears across nearly every mature storage engine, although the implementation differs.
 
-PostgreSQL periodically runs **VACUUM** to reclaim obsolete row versions created by MVCC. LSM-tree based systems such as [RocksDB](https://github.com/facebook/rocksdb/wiki/Universal-Compaction), [LevelDB](https://github.com/facebook/rocksdb/wiki/Leveled-Compaction), Cassandra, and ScyllaDB continuously compact SSTables to reduce read amplification and reclaim space. SQL Server and Oracle rebuild indexes online, while checkpointing mechanisms asynchronously persist in-memory state without delaying foreground transactions.
+PostgreSQL periodically runs **VACUUM** to reclaim obsolete row versions created by MVCC. LSM-tree based systems such as [RocksDB](https://github.com/facebook/rocksdb/wiki/Universal-Compaction), [LevelDB](https://github.com/google/leveldb/blob/main/doc/impl.md#compactions), Cassandra, and ScyllaDB continuously compact SSTables to reduce read amplification and reclaim space. SQL Server and Oracle rebuild indexes online, while checkpointing mechanisms asynchronously persist in-memory state without delaying foreground transactions.
 
 Although these systems differ substantially in implementation, they all share a common architectural principle:
 
@@ -83,7 +81,7 @@ When transactional lakehouse formats began to emerge, they shared a common objec
 
 The architectural paths they took, however, were not identical.
 
-One school of thought naturally extended the strengths of immutable data lakes. Immutable files, snapshot isolation, and file replacement became the primary mechanisms for coordinating updates while preserving compatibility with cloud object storage. This approach provided a simple and elegant foundation for analytical workloads that were predominantly batch-oriented, append-heavy, and slow-moving.
+Apache Iceberg and Delta Lake naturally extended the strengths of immutable data lakes. Immutable files, snapshot isolation, and file replacement became the primary mechanisms for coordinating updates while preserving compatibility with cloud object storage. This approach provided a simple and elegant foundation for the analytical workloads of the time.
 
 Apache Hudi approached the problem from a different perspective.
 
@@ -91,19 +89,11 @@ Rather than asking how immutable files could support transactions, it asked a di
 
 **How can a data lake behave more like a database while retaining the openness of object storage?**
 
-That seemingly small shift in perspective led to a different set of architectural primitives.
+That seemingly small shift in perspective led to a different set of architectural primitives. Merge-On-Read established append-first mutation as the primary write path. Asynchronous compaction separated storage optimization from transactional correctness, allowing physical layout optimization to proceed independently of ingestion.
 
-Merge-On-Read, introduced in 2017, established append-first mutation as the primary write path. Asynchronous compaction, introduced in 2019, separated storage optimization from transactional correctness by allowing physical layout optimization to proceed independently of ingestion.
-
-At the time, these capabilities were often viewed primarily as performance optimizations. The dominant workloads across many lakehouses were still batch-oriented, and continuously mutating datasets had not yet become commonplace.
-
-In retrospect, they represented something much more fundamental.
-
-They embodied the same architectural principle that had long existed in database storage engines:
+They embodied the same principle that had long existed in database storage engines:
 
 **Correctness should be established immediately. Optimization should happen independently.**
-
-Only in recent years, with the widespread adoption of CDC pipelines, streaming ingestion, feature stores, and AI applications, has the significance of that separation become much easier to appreciate.
 
 ---
 
@@ -127,11 +117,9 @@ This is precisely the challenge that background maintenance was designed to solv
 
 Rather than requiring every mutation to produce an optimal physical layout, a mutable storage engine can establish correctness first and improve efficiency later. The storage engine continues accepting writes while independent background services gradually reconcile the physical representation of the table.
 
-This architectural principle is not unique to databases, nor is it unique to Apache Hudi. What is noteworthy is that Merge-On-Read adopted this philosophy several years before continuously mutating lakehouse workloads became commonplace. Introduced in 2017, with asynchronous compaction following in 2019, it treated storage optimization as work that could evolve independently from ingestion rather than as a prerequisite for every successful write.
+This architectural principle is not unique to databases, nor is it unique to Apache Hudi. What is noteworthy is that Merge-On-Read adopted this philosophy several years before continuously mutating lakehouse workloads became commonplace — it treated storage optimization as work that could evolve independently from ingestion rather than as a prerequisite for every successful write.
 
-At the time, this distinction was easy to overlook.
-
-Today, it is becoming one of the defining characteristics of modern mutable lakehouse architectures.
+At the time, this distinction was easy to overlook. Today, it is becoming one of the defining characteristics of modern mutable lakehouse architectures.
 
 ---
 
@@ -175,13 +163,9 @@ That question naturally leads us from architectural principles to experimental v
 
 ## From Architectural Principle to Experimental Validation
 
-Architectural ideas are ultimately valuable only if they change how a system behaves under real workloads.
-
-Up to this point, we've argued that separating correctness from optimization allows foreground writes and background maintenance to evolve independently. The natural question is whether that architectural separation produces a measurable difference once storage engines begin handling continuously mutating data.
-
 Answering that question requires a different kind of benchmark.
 
-Traditional storage benchmarks typically compare write latency, read performance, or throughput. While those metrics are useful, they don't fully capture the architectural property we've been discussing throughout this article. The more fundamental question is **whether a storage engine can continue making steady forward progress while background maintenance executes concurrently.**
+Traditional storage benchmarks typically compare write latency, read performance, or throughput. While those metrics are useful, they don't fully capture the architectural property we've been discussing. The more fundamental question is **whether a storage engine can continue making steady forward progress while background maintenance executes concurrently.**
 
 The benchmark is intentionally simple in concept. Foreground ingestion continuously mutates the table while background services optimize its physical layout. Rather than measuring the latency of an individual write, we observe whether ingestion continues progressing as maintenance runs in parallel.
 
@@ -190,7 +174,7 @@ The benchmark is intentionally simple in concept. Foreground ingestion continuou
 </div>
 
 <div style={{ textAlign: 'center', fontStyle: 'italic', fontSize: '0.95rem', marginTop: '-1rem', marginBottom: '1.5rem' }}>
-  Conceptual illustration of the experimental setup. The detailed benchmark methodology and interpretation are presented in the companion article.
+  The outcomes the benchmark is designed to distinguish — from an engine that sustains continuous forward progress under concurrent maintenance, to one that regresses to intermittent stalls. Which real engines land where, and why, is the subject of the companion article.
 </div>
 
 The remainder of this series explores this question through a detailed benchmark of Apache Hudi, Apache Iceberg, and Delta Lake under identical continuous-ingestion workloads. Rather than focusing solely on throughput or latency, the study examines how different architectural choices influence a storage engine's ability to sustain forward progress while background maintenance is active.
@@ -211,7 +195,7 @@ Seen through this lens, asynchronous compaction is not an isolated feature. It i
 
 This observation also explains a common theme across the previous articles in this series.
 
-The Merge-On-Read architecture is often introduced through individual capabilities: [Metadata Table](/blog/2026/06/05/why-metadata-has-to-be-mutation-friendly), [asynchronous indexing](/blog/2026/06/25/building-indexes-on-a-moving-target), compaction, or Non-Blocking Concurrency Control. While each solves a different problem, they all emerge from the same architectural philosophy.
+The Merge-On-Read architecture is often introduced through individual capabilities: [Metadata Table](/blog/2026/06/05/why-metadata-has-to-be-mutation-friendly), [asynchronous indexing](/blog/2026/06/25/building-indexes-on-a-moving-target), compaction, or [Non-Blocking Concurrency Control](https://hudi.apache.org/docs/concurrency_control#non-blocking-concurrency-control). While each solves a different problem, they all emerge from the same architectural philosophy.
 
 The critical write path should establish correctness and little else.
 
@@ -219,13 +203,7 @@ Everything that improves the storage engine without affecting correctness should
 
 This is precisely the philosophy that mature database systems have followed for decades. As lakehouses increasingly become continuously mutating data platforms rather than repositories of mostly immutable analytical datasets, the same architectural principles are becoming increasingly relevant.
 
-Merge-On-Read and asynchronous compaction were introduced into Apache Hudi years before today's CDC pipelines, streaming applications, and AI workloads became commonplace. At the time, these capabilities were often viewed primarily as implementation techniques for improving ingestion performance. Looking back, they represented something much more fundamental: the adoption of a storage-engine philosophy that separates correctness from optimization.
-
 As the industry continues to move toward continuously evolving datasets, the question is no longer whether background maintenance belongs in a lakehouse. The question is how completely the storage engine embraces it.
-
-That architectural principle is the central idea of this article. But architectural principles ultimately matter only if they change how a system behaves under real workloads. Does separating correctness from optimization actually allow a storage engine to sustain continuous forward progress while background maintenance is running, or does maintenance inevitably interfere with foreground ingestion?
-
-In the next article, we'll explore that question through a detailed benchmarking study. Rather than focusing on traditional throughput or latency metrics, we'll examine how different lakehouse architectures behave when continuous ingestion and background maintenance execute concurrently, and why measuring continuous forward progress reveals an important dimension of mutable storage systems.
 
 ---
 
@@ -235,6 +213,6 @@ _Series so far:_
 1. [MOR Isn't a Storage Optimization. It's an Architectural Shift](/blog/2026/05/14/mor-isnt-a-storage-optimization-its-an-architectural-shift)
 2. [Why Metadata Has to Be Mutation-Friendly](/blog/2026/06/05/why-metadata-has-to-be-mutation-friendly)
 3. [Building Indexes on a Moving Target](/blog/2026/06/25/building-indexes-on-a-moving-target)
-4. **Async Compaction: Background Maintenance as an Architectural Primitive** (this post)
+4. **Can a Lakehouse Really Run Maintenance Without Blocking Writes?** (this post)
 
 </div>
