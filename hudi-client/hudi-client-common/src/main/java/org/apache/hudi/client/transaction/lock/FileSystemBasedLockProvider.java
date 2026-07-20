@@ -176,10 +176,8 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
 
   private void acquireLock() {
     try (OutputStream os = storage.create(this.lockFile, false)) {
-      if (!storage.exists(this.lockFile)) {
-        initLockInfo();
-        os.write(StringUtils.getUTF8Bytes(lockInfo.toString()));
-      }
+      initLockInfo();
+      os.write(StringUtils.getUTF8Bytes(lockInfo.toString()));
     } catch (IOException e) {
       throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
     }
