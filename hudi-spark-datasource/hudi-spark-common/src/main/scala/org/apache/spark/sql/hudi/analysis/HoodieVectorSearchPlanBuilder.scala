@@ -812,6 +812,7 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
           .exists(_.equalsIgnoreCase("true"))
         val staleFallbacksAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_stale_fallbacks")
         val rowsMaterializedAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_rows_materialized")
+        val activeTasksPerExecutor = spark.sparkContext.getConf.getInt("spark.executor.cores", 1).toString
         val exactRows: RDD[InternalRow] = byFetchBatch.mapPartitions { batches =>
           val startNs = System.nanoTime()
           val rows = ArrayBuffer.empty[InternalRow]
@@ -832,7 +833,7 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
           }
           fetchConf.setIfUnset(
             ParquetRangePrefetch.ACTIVE_TASKS_PER_EXECUTOR,
-            spark.sparkContext.getConf.getInt("spark.executor.cores", 1).toString)
+            activeTasksPerExecutor)
           val fetcher = new PositionalParquetFetcher(
             fetchConf,
             embeddingCol,
@@ -909,6 +910,7 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
               s"fetchWaitMs=${metrics.fetchWaitMs} rangeOpenMs=${metrics.rangeOpenMs} rangeReadMs=${metrics.rangeReadMs} " +
               s"rangeRetries=${metrics.rangeRetries} rangesInFlightMax=${metrics.rangesInFlightMax} " +
               s"plannedRanges=${metrics.plannedRanges} plannedRangeBytes=${metrics.plannedRangeBytes} " +
+              s"prefetchReaderOpenMs=${metrics.prefetchReaderOpenMs} prefetchElapsedMs=${metrics.prefetchElapsedMs} " +
               s"prefetchHitBytes=${metrics.prefetchHitBytes} prefetchPartialOverlapBytes=${metrics.prefetchPartialOverlapBytes} " +
               s"prefetchMetadataMissBytes=${metrics.prefetchMetadataMissBytes} " +
               s"prefetchDictionaryMissBytes=${metrics.prefetchDictionaryMissBytes} " +

@@ -94,4 +94,34 @@ class TestHoodiePrefetchedParquetInputFile {
     assertEquals(4, metrics.getMetadataMissBytes());
     assertEquals(4, metrics.getDictionaryMissBytes());
   }
+
+  @Test
+  void stitchesReadsAcrossAdjacentPrefetchedRanges() throws Exception {
+    byte[] file = new byte[40];
+    for (int i = 0; i < file.length; i++) {
+      file[i] = (byte) i;
+    }
+    HoodieStorage storage = mock(HoodieStorage.class);
+    when(storage.getDefaultBufferSize()).thenReturn(4096);
+
+    HoodiePrefetchedParquetInputFile inputFile = new HoodiePrefetchedParquetInputFile(
+        storage,
+        new StoragePath("file:///vectors.parquet"),
+        file.length,
+        Arrays.asList(
+            new RangeReadResult(new ByteRange(10, 10), ByteBuffer.wrap(Arrays.copyOfRange(file, 10, 20))),
+            new RangeReadResult(new ByteRange(20, 10), ByteBuffer.wrap(Arrays.copyOfRange(file, 20, 30)))),
+        Collections.singletonList(new HoodiePrefetchedParquetInputFile.ReadRegion(10, 20, PAGE)));
+
+    byte[] actual = new byte[10];
+    try (SeekableInputStream stream = inputFile.newStream()) {
+      stream.seek(15);
+      stream.readFully(actual);
+    }
+
+    assertArrayEquals(Arrays.copyOfRange(file, 15, 25), actual);
+    assertEquals(10, inputFile.getMetrics().getPrefetchHitBytes());
+    assertEquals(0, inputFile.getMetrics().getPartialOverlapBytes());
+    assertEquals(0, inputFile.getMetrics().getUncoveredPageMissBytes());
+  }
 }

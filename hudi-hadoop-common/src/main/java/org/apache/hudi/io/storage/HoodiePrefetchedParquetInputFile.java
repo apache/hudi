@@ -37,8 +37,8 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Parquet {@link InputFile} serving reads contained by prefetched ranges from memory. Reads that do
- * not fit entirely inside one cached range use a normal seekable stream and are classified so a
+ * Parquet {@link InputFile} serving reads covered by one or more adjacent prefetched ranges from
+ * memory. Reads with uncovered bytes use a normal seekable stream and are classified so a
  * range-alignment bug cannot masquerade as successful prefetching.
  */
 public final class HoodiePrefetchedParquetInputFile implements InputFile {
@@ -114,8 +114,8 @@ public final class HoodiePrefetchedParquetInputFile implements InputFile {
       }
     }
 
-    private boolean contains(long readStart, long readEnd) {
-      return offset <= readStart && readEnd <= end;
+    private boolean containsPosition(long position) {
+      return offset <= position && position < end;
     }
 
     private boolean overlaps(long readStart, long readEnd) {
@@ -185,8 +185,7 @@ public final class HoodiePrefetchedParquetInputFile implements InputFile {
     }
   }
 
-  private CachedRange containingRange(long offset, int requestedLength) {
-    long end = checkedEnd(offset, requestedLength);
+  private int containingRangeIndex(long offset) {
     int low = 0;
     int high = cachedRanges.size() - 1;
     int candidate = -1;
@@ -199,8 +198,52 @@ public final class HoodiePrefetchedParquetInputFile implements InputFile {
         high = mid - 1;
       }
     }
-    return candidate >= 0 && cachedRanges.get(candidate).contains(offset, end)
-        ? cachedRanges.get(candidate) : null;
+    return candidate >= 0 && cachedRanges.get(candidate).containsPosition(offset) ? candidate : -1;
+  }
+
+  private boolean cachedRangesContain(long offset, int requestedLength) {
+    long readEnd = checkedEnd(offset, requestedLength);
+    int rangeIndex = containingRangeIndex(offset);
+    if (rangeIndex < 0) {
+      return false;
+    }
+    long coveredThrough = offset;
+    while (coveredThrough < readEnd && rangeIndex < cachedRanges.size()) {
+      CachedRange range = cachedRanges.get(rangeIndex++);
+      if (range.offset > coveredThrough || range.end <= coveredThrough) {
+        return false;
+      }
+      coveredThrough = Math.min(readEnd, range.end);
+    }
+    return coveredThrough == readEnd;
+  }
+
+  private void copyCached(long offset, byte[] target, int targetOffset, int requestedLength) {
+    long position = offset;
+    int outputOffset = targetOffset;
+    int remaining = requestedLength;
+    int rangeIndex = containingRangeIndex(offset);
+    while (remaining > 0) {
+      CachedRange range = cachedRanges.get(rangeIndex++);
+      int chunkLength = Math.toIntExact(Math.min((long) remaining, range.end - position));
+      range.copy(position, target, outputOffset, chunkLength);
+      position += chunkLength;
+      outputOffset += chunkLength;
+      remaining -= chunkLength;
+    }
+  }
+
+  private void copyCached(long offset, ByteBuffer target, int requestedLength) {
+    long position = offset;
+    int remaining = requestedLength;
+    int rangeIndex = containingRangeIndex(offset);
+    while (remaining > 0) {
+      CachedRange range = cachedRanges.get(rangeIndex++);
+      int chunkLength = Math.toIntExact(Math.min((long) remaining, range.end - position));
+      range.copy(position, target, chunkLength);
+      position += chunkLength;
+      remaining -= chunkLength;
+    }
   }
 
   private boolean partiallyOverlaps(long offset, int requestedLength) {
@@ -287,9 +330,8 @@ public final class HoodiePrefetchedParquetInputFile implements InputFile {
         return -1;
       }
       int available = Math.toIntExact(Math.min(requestedLength, length - position));
-      CachedRange cached = containingRange(position, available);
-      if (cached != null) {
-        cached.copy(position, target, offset, available);
+      if (cachedRangesContain(position, available)) {
+        copyCached(position, target, offset, available);
         metrics.prefetchHitBytes.addAndGet(available);
       } else {
         recordMiss(position, available);
@@ -338,9 +380,8 @@ public final class HoodiePrefetchedParquetInputFile implements InputFile {
         return -1;
       }
       int available = Math.toIntExact(Math.min(target.remaining(), length - position));
-      CachedRange cached = containingRange(position, available);
-      if (cached != null) {
-        cached.copy(position, target, available);
+      if (cachedRangesContain(position, available)) {
+        copyCached(position, target, available);
         metrics.prefetchHitBytes.addAndGet(available);
         position += available;
         return available;
