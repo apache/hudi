@@ -331,9 +331,6 @@ public class StreamerUtil {
     final boolean tableExists = tableExists(basePath, hadoopConf);
     if (!tableExists) {
       HoodieTableConfig.TableStorageLayout storageLayout = OptionsResolver.getTableStorageLayout(conf);
-      String baseFileFormat = conf.getString(
-          HoodieTableConfig.BASE_FILE_FORMAT.key(),
-          HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().name());
       validateInsertOperationStorageLayout(conf, storageLayout);
       HoodieTableMetaClient.newTableBuilder()
           .setTableCreateSchema(conf.get(FlinkOptions.SOURCE_AVRO_SCHEMA))
@@ -342,8 +339,6 @@ public class StreamerUtil {
           .setTableVersion(conf.get(FlinkOptions.WRITE_TABLE_VERSION))
           .setTableFormat(conf.get(FlinkOptions.WRITE_TABLE_FORMAT))
           .setBaseFileFormat(conf.getString(HoodieTableConfig.BASE_FILE_FORMAT.key(), null))
-          .setLogFileFormat(HoodieTableVersion.fromVersionCode(conf.get(FlinkOptions.WRITE_TABLE_VERSION))
-              .greaterThanOrEquals(HoodieTableVersion.TEN) ? baseFileFormat : HOODIE_LOG.name())
           .setTableStorageLayout(storageLayout.configValue())
           .setRecordMergeMode(getMergeMode(conf))
           .setRecordMergeStrategyId(getMergeStrategyId(conf))
@@ -370,10 +365,6 @@ public class StreamerUtil {
 
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf, hadoopConf);
     validateInsertOperationStorageLayout(conf, metaClient.getTableConfig().getTableStorageLayout());
-    // The persisted layout is authoritative for existing tables. For newly created tables this
-    // also propagates Flink's LSM default to write-side components that read the runtime config.
-    conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
-        metaClient.getTableConfig().getTableStorageLayout().configValue());
     return metaClient;
 
     // Do not close the filesystem in order to use the CACHE,

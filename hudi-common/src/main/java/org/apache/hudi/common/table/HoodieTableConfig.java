@@ -238,7 +238,8 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.table.log.file.format")
       .defaultValue(HoodieFileFormat.HOODIE_LOG)
       .withAlternatives("hoodie.table.rt.file.format")
-      .withDocumentation("Log format used for the delta logs.");
+      .withDocumentation("Log format used for legacy inline log files. This setting does not apply to native log files, "
+          + "which always use the effective base file format.");
 
   public static final ConfigProperty<String> TABLE_STORAGE_LAYOUT = ConfigProperty
       .key("hoodie.table.storage.layout")

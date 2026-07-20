@@ -20,7 +20,6 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.Collections;
@@ -38,8 +37,6 @@ public class TenToNineDowngradeHandler implements DowngradeHandler {
       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     return new UpgradeDowngrade.TableConfigChangeSet(
         Collections.emptyMap(),
-        CollectionUtils.createImmutableSet(
-            HoodieTableConfig.TABLE_STORAGE_LAYOUT,
-            HoodieTableConfig.LOG_FILE_FORMAT));
+        Collections.singleton(HoodieTableConfig.TABLE_STORAGE_LAYOUT));
   }
 }
