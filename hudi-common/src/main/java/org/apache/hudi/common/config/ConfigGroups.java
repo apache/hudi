@@ -130,6 +130,10 @@ public class ConfigGroups {
             + "write schema, cleaning etc. Although Hudi provides sane defaults, from time-time "
             + "these configs may need to be tweaked to optimize for specific workloads.";
         break;
+      case READER:
+        description = "These set of configs control the behavior of reading Hudi tables, "
+            + "such as file group reading.";
+        break;
       case META_SYNC:
         description = "Configurations used by the Hudi to sync metadata to external metastores and catalogs.";
         break;
