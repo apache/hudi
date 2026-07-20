@@ -42,7 +42,7 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
                                            HoodieInstant commitInstant,
                                            boolean deleteInstants,
                                            boolean skipLocking) {
-    super(context, config, table, instantTime, commitInstant, deleteInstants, skipLocking);
+    super(context, config, table, instantTime, commitInstant, deleteInstants, skipLocking, false);
   }
 
   public MergeOnReadRollbackActionExecutor(HoodieEngineContext context,
@@ -53,7 +53,7 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
                                            boolean deleteInstants,
                                            boolean skipTimelinePublish,
                                            boolean skipLocking) {
-    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, skipLocking);
+    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, skipLocking, false);
   }
 
   @Override
@@ -78,7 +78,8 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
     // NOTE {@link HoodieCompactionConfig#withCompactionLazyBlockReadEnabled} needs to be set to TRUE. This is
     // required to avoid OOM when merging multiple LogBlocks performed during nested rollbacks.
 
-    // Requested write instants only require timeline cleanup.
+    // For Requested State (like failure during index lookup), there is nothing to do rollback other than
+    // deleting the timeline file
     if (!resolvedInstant.isRequested()) {
       log.info("Unpublished {}", resolvedInstant);
       allRollbackStats = executeRollback(instantToRollback, hoodieRollbackPlan);

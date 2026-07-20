@@ -76,8 +76,9 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
                                     String instantTime,
                                     HoodieInstant instantToRollback,
                                     boolean deleteInstants,
-                                    boolean skipLocking) {
-    this(context, config, table, instantTime, instantToRollback, deleteInstants, false, skipLocking);
+                                    boolean skipLocking,
+                                    boolean isRestore) {
+    this(context, config, table, instantTime, instantToRollback, deleteInstants, false, skipLocking, isRestore);
   }
 
   public BaseRollbackActionExecutor(HoodieEngineContext context,
@@ -87,7 +88,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
       HoodieInstant instantToRollback,
       boolean deleteInstants,
       boolean skipTimelinePublish,
-      boolean skipLocking) {
+      boolean skipLocking, boolean isRestore) {
     super(context, config, table, instantTime);
     this.instantToRollback = instantToRollback;
     this.resolvedInstant = instantToRollback;

@@ -63,7 +63,7 @@ public class MergeOnReadRestoreActionExecutor<T, I, K, O>
       }
     }
     table.getMetaClient().reloadActiveTimeline();
-    MergeOnReadRollbackActionExecutor<T, I, K, O> rollbackActionExecutor = new MergeOnReadRollbackActionExecutor<>(
+    MergeOnReadRollbackActionExecutor rollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context,
         config,
         table,

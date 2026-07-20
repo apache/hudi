@@ -28,7 +28,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -38,7 +37,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -380,17 +378,17 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   }
 
   @Test
-  void testRollbackCompactionCleansFilesAfterHigherInflightDeltaRollback() throws Exception {
+  void testRollbackCompactionCleansFilesAfterLaterDeltaRemoved() throws Exception {
     HoodieWriteConfig cfg = getTableVersionSixRollbackConfig();
     HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, getTableVersionSixProperties(cfg));
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 
     String firstCommitTime = "000000001";
     String secondCommitTime = "000000002";
-    String compactionCommitTime = "000000003";
-    String inflightDeltaCommitTime = "000000004";
+    String compactionInstantTime = "000000003";
+    String laterDeltaInstantTime = "000000004";
+    String rollbackInstantTime = "000000005";
     int numRecords = 20;
-    List<HoodieRecord> secondCommitRecords = new ArrayList<>();
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
       WriteClientTestUtils.startCommitWithTime(client, firstCommitTime);
@@ -400,137 +398,57 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       client.commit(firstCommitTime, jsc().parallelize(statuses));
 
       WriteClientTestUtils.startCommitWithTime(client, secondCommitTime);
-      secondCommitRecords = dataGen.generateUpdates(secondCommitTime, firstCommitRecords);
-      secondCommitRecords.addAll(dataGen.generateInserts(secondCommitTime, numRecords));
+      List<HoodieRecord> secondCommitRecords = dataGen.generateUpdates(secondCommitTime, firstCommitRecords);
       statuses = client.upsert(jsc().parallelize(secondCommitRecords, 1), secondCommitTime).collect();
       assertNoWriteErrors(statuses);
       client.commit(secondCommitTime, jsc().parallelize(statuses));
 
-      assertTrue(client.scheduleCompactionAtInstant(compactionCommitTime, Option.empty()));
-      HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(compactionCommitTime);
+      assertTrue(client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty()));
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(compactionInstantTime);
       List<WriteStatus> compactionStatuses = compactionMetadata.getWriteStatuses().collect();
       assertNoWriteErrors(compactionStatuses);
       compactionMetadata.setWriteStatuses(jsc().parallelize(compactionStatuses));
-      client.commitCompaction(compactionCommitTime, compactionMetadata, Option.empty());
+      client.commitCompaction(compactionInstantTime, compactionMetadata, Option.empty());
 
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
-      assertFilesForInstant(hoodieTable, compactionCommitTime, false);
-
-      WriteClientTestUtils.startCommitWithTime(client, inflightDeltaCommitTime);
-      List<HoodieRecord> inflightUpdates = dataGen.generateUpdates(inflightDeltaCommitTime, secondCommitRecords);
-      statuses = client.upsert(jsc().parallelize(inflightUpdates, 1), inflightDeltaCommitTime).collect();
+      WriteClientTestUtils.startCommitWithTime(client, laterDeltaInstantTime);
+      statuses = client.upsert(
+          jsc().parallelize(dataGen.generateUpdates(laterDeltaInstantTime, secondCommitRecords), 1), laterDeltaInstantTime).collect();
       assertNoWriteErrors(statuses);
     }
 
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
-      client.rollback(inflightDeltaCommitTime);
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
-      assertTrue(metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().containsInstant(compactionCommitTime));
-      assertFilesForInstant(hoodieTable, compactionCommitTime, false);
-
-      client.rollback(compactionCommitTime);
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-      hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
-      assertFalse(metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().containsInstant(compactionCommitTime));
-      assertFilesForInstant(hoodieTable, compactionCommitTime, true);
-    }
-  }
-
-  @Test
-  void testRestoreRollbackRequestedCompactionOnlyDeletesTimelineInstant() throws Exception {
-    HoodieWriteConfig cfg = getTableVersionSixRollbackConfig();
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, getTableVersionSixProperties(cfg));
-
-    String partition = "partition_0";
-    String fileId = "file-0";
-    String compactionInstantTime = "000000003";
-    String rollbackInstantTime = "000000004";
-
-    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
-    testTable.addRequestedCompaction(compactionInstantTime, new FileSlice(partition, compactionInstantTime, fileId));
-    testTable.withPartitionMetaFiles(partition);
-
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
-    HoodieInstant requestedCompaction = metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().get();
-    assertTrue(requestedCompaction.isRequested());
+    HoodieInstant compactionInstant = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
+        .filter(instant -> instant.requestedTime().equals(compactionInstantTime)).firstInstant().get();
+    List<String> filesForCompaction = getFilesForInstant(hoodieTable, compactionInstantTime);
+    assertTrue(filesForCompaction.stream().anyMatch(path -> path.contains(".log.")));
 
-    Option<HoodieRollbackPlan> rollbackPlan = hoodieTable.scheduleRollback(
-        context(), rollbackInstantTime, requestedCompaction, false, false, true);
-    assertTrue(rollbackPlan.isPresent());
-    assertTrue(rollbackPlan.get().getRollbackRequests().isEmpty());
-
-    HoodieRollbackMetadata rollbackMetadata = new MergeOnReadRollbackActionExecutor<>(
-        context(), cfg, hoodieTable, rollbackInstantTime, requestedCompaction, true, true, false).execute();
-    assertEquals(1, rollbackMetadata.getCommitsRollback().size());
-    assertEquals(compactionInstantTime, rollbackMetadata.getCommitsRollback().get(0));
-
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    assertFalse(metaClient.getActiveTimeline().filterPendingCompactionTimeline().containsInstant(compactionInstantTime));
-  }
-
-  @Test
-  void testRollbackPlanningPrunesPartitionsFromCompletedCommitMetadata() throws Exception {
-    HoodieWriteConfig cfg = getTableVersionSixRollbackConfig();
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, getTableVersionSixProperties(cfg));
-
-    String instantTime = "000000001";
-    String rollbackInstantTime = "000000002";
-    String writtenPartition = "partition_0";
-    String unrelatedPartition = "partition_1";
-    String writtenFileId = "file-0";
-    String unrelatedFileId = "file-1";
-
-    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
-    testTable.addInflightDeltaCommit(instantTime);
-    List<String> writtenFiles = testTable.withBaseFilesInPartition(writtenPartition, writtenFileId).getValue();
-    testTable.withBaseFilesInPartition(unrelatedPartition, unrelatedFileId);
-    HoodieCommitMetadata commitMetadata = createCommitMetadata(
-        instantTime, WriteOperationType.UPSERT, writtenPartition, writtenFileId, writtenFiles.get(0));
-    testTable.moveInflightCommitToComplete(instantTime, commitMetadata);
-
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
-    HoodieInstant instantToRollback = metaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant().get();
-    Option<HoodieRollbackPlan> rollbackPlan = hoodieTable.scheduleRollback(
-        context(), rollbackInstantTime, instantToRollback, true, false, false);
-
-    assertTrue(rollbackPlan.isPresent());
-    List<String> rollbackPartitions = rollbackPlan.get().getRollbackRequests().stream()
-        .map(request -> request.getPartitionPath())
-        .distinct()
+    Option<HoodieRollbackPlan> planWithLaterDelta = hoodieTable.scheduleRollback(
+        context(), rollbackInstantTime, compactionInstant, false, true, false);
+    assertTrue(planWithLaterDelta.isPresent());
+    List<String> plannedFilesWithLaterDelta = planWithLaterDelta.get().getRollbackRequests().stream()
+        .flatMap(request -> request.getFilesToBeDeleted().stream())
         .collect(Collectors.toList());
-    assertEquals(1, rollbackPartitions.size());
-    assertEquals(writtenPartition, rollbackPartitions.get(0));
-  }
+    assertFalse(plannedFilesWithLaterDelta.isEmpty());
+    assertTrue(plannedFilesWithLaterDelta.stream().noneMatch(path -> path.contains(".log.")),
+        "Compaction rollback must preserve log files while a later delta commit exists");
 
-  @Test
-  void testRollbackPlanningToleratesMissingPartitionPath() throws Exception {
-    HoodieWriteConfig cfg = getTableVersionSixRollbackConfig();
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, getTableVersionSixProperties(cfg));
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    activeTimeline.deletePending(INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, rollbackInstantTime));
+    activeTimeline.deletePending(INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, laterDeltaInstantTime));
+    activeTimeline.deletePending(INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, laterDeltaInstantTime));
 
-    String compactionInstantTime = "000000003";
-    String rollbackInstantTime = "000000004";
-    String missingPartition = "missing_partition";
-    String fileId = "missing-file";
-    HoodieCommitMetadata compactionMetadata = createCommitMetadata(
-        compactionInstantTime, WriteOperationType.COMPACT, missingPartition, fileId,
-        baseFilePath(missingPartition, compactionInstantTime, fileId));
-
-    HoodieTestTable.of(metaClient).addCompaction(compactionInstantTime, compactionMetadata);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      assertTrue(client.rollback(compactionInstantTime));
+    }
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
-    HoodieInstant compactionInstant = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline()
-        .filterCompletedInstants().lastInstant().get();
-
-    Option<HoodieRollbackPlan> rollbackPlan = hoodieTable.scheduleRollback(
-        context(), rollbackInstantTime, compactionInstant, true, false, false);
-
-    assertTrue(rollbackPlan.isPresent());
-    assertTrue(rollbackPlan.get().getRollbackRequests().isEmpty());
+    hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+    List<String> remainingFiles = getFilesForInstant(hoodieTable, compactionInstantTime);
+    assertTrue(remainingFiles.isEmpty(), "Compaction rollback left orphan files: " + remainingFiles);
   }
 
   @ParameterizedTest
@@ -1016,16 +934,11 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
     assertRecords(expectedRecords, recordsRead);
   }
 
-  private void assertFilesForInstant(HoodieTable hoodieTable, String instantTime, boolean shouldBeEmpty) throws IOException {
-    List<String> remainingFiles = HoodieTestTable.of(hoodieTable.getMetaClient()).listAllBaseAndLogFiles().stream()
+  private List<String> getFilesForInstant(HoodieTable hoodieTable, String instantTime) throws IOException {
+    return HoodieTestTable.of(hoodieTable.getMetaClient()).listAllBaseAndLogFiles().stream()
         .filter(file -> file.getPath().getName().contains("_" + instantTime))
         .map(file -> file.getPath().toString())
         .collect(Collectors.toList());
-    if (shouldBeEmpty) {
-      assertTrue(remainingFiles.isEmpty(), "Files for instant " + instantTime + " should have been rolled back: " + remainingFiles);
-    } else {
-      assertFalse(remainingFiles.isEmpty(), "Files for instant " + instantTime + " should exist");
-    }
   }
 
   private HoodieWriteConfig getTableVersionSixRollbackConfig() {
@@ -1047,35 +960,6 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
     properties.setProperty(HoodieTableConfig.TIMELINE_LAYOUT_VERSION.key(),
         Integer.toString(TimelineLayoutVersion.LAYOUT_VERSION_1.getVersion()));
     return properties;
-  }
-
-  private HoodieCommitMetadata createCommitMetadata(String instantTime,
-                                                    WriteOperationType operationType,
-                                                    String partition,
-                                                    String fileId,
-                                                    String filePath) {
-    HoodieWriteStat writeStat = new HoodieWriteStat();
-    writeStat.setPartitionPath(partition);
-    writeStat.setPath(toRelativePartitionPath(partition, filePath));
-    writeStat.setFileId(fileId);
-    writeStat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
-    writeStat.setTotalWriteBytes(1);
-    writeStat.setFileSizeInBytes(1);
-
-    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, TRIP_EXAMPLE_SCHEMA);
-    metadata.setOperationType(operationType);
-    metadata.addWriteStat(partition, writeStat);
-    return metadata;
-  }
-
-  private String toRelativePartitionPath(String partition, String filePath) {
-    return partition + "/" + new File(filePath).getName();
-  }
-
-  private String baseFilePath(String partition, String instantTime, String fileId) {
-    return partition + "/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", fileId,
-        HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension());
   }
 
   private void assertRecords(List<HoodieRecord> inputRecords, List<GenericRecord> recordsRead) {
