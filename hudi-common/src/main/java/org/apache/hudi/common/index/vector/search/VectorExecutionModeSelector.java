@@ -21,7 +21,7 @@ package org.apache.hudi.common.index.vector.search;
 import java.io.Serializable;
 
 /**
- * Chooses LOCAL vs DISTRIBUTED execution for a vector search (RFC-104 v3 §11A).
+ * Chooses LOCAL vs DISTRIBUTED execution for a vector search (RFC-109 v3 §11A).
  *
  * <p>The default rule is normative and fixed for selector version {@code candidate-threshold-v1}:
  * an explicit {@code LOCAL}/{@code DISTRIBUTED} request is honored verbatim, and {@code AUTO}

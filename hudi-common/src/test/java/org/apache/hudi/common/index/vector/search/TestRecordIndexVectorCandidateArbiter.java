@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * Verifies {@link RecordIndexVectorCandidateArbiter} (RFC-104 v3 §7): SERVE when the current RLI
+ * Verifies {@link RecordIndexVectorCandidateArbiter} (RFC-109 v3 §7): SERVE when the current RLI
  * location matches the posting locator, STALE (preserved) when it differs, DELETED (dropped) on an
  * RLI miss, using a fake snapshot-pinned {@link RecordIndexLookup}.
  */

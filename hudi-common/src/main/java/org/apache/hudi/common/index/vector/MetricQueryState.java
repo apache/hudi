@@ -8,7 +8,7 @@ package org.apache.hudi.common.index.vector;
 import java.io.Serializable;
 
 /**
- * Per-metric query state using residual-query estimation in rotated space (RFC-104 v3 §2, §16).
+ * Per-metric query state using residual-query estimation in rotated space (RFC-109 v3 §2, §16).
  *
  * <p>The MDT stores metric-neutral residual factors. The padded query is rotated <em>exactly
  * once</em> in the constructor to {@code qRot = P(qPad)}. For each probed IVF cluster the scorer
@@ -40,7 +40,7 @@ public abstract class MetricQueryState implements Serializable {
    * Apply the shared rotation {@code P} to a raw padded centroid, yielding {@code cRot = P(c)}.
    * Callers should invoke this at most once per distinct probed cluster (cached) — never per
    * {@code q - c} — and pass the result to {@link #forRotatedCentroid(float[])}. Prefer feeding
-   * pre-rotated centroids from the index cache (RFC-104 v3 §13) where available.
+   * pre-rotated centroids from the index cache (RFC-109 v3 §13) where available.
    */
   public final float[] rotateCentroid(float[] paddedCentroid) {
     return rotation.apply(paddedCentroid);

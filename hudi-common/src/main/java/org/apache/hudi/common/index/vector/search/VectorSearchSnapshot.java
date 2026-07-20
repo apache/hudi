@@ -24,7 +24,7 @@ import java.util.Objects;
 /**
  * The single pinned snapshot used for an entire vector search: one table instant shared by the MDT
  * index read, the RLI finalist lookup, file-slice resolution, and the base-table exact fetch, plus
- * the resolved {@link VectorIndexSnapshot} generation identity (RFC-104 v3 §7). Using one instant
+ * the resolved {@link VectorIndexSnapshot} generation identity (RFC-109 v3 §7). Using one instant
  * across all reads is what makes freshness arbitration correct.
  */
 public final class VectorSearchSnapshot implements Serializable {

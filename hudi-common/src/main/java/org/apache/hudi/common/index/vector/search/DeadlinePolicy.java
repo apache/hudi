@@ -22,7 +22,7 @@ package org.apache.hudi.common.index.vector.search;
  * What to do when a vector search cannot assemble K live exact results before the request deadline.
  * {@code FAIL} surfaces a deadline error; {@code RETURN_PARTIAL} returns the live results gathered
  * so far with a {@link VectorSearchStatus#DEADLINE_EXCEEDED} / {@link VectorSearchStatus#PARTIAL}
- * status. Returning fewer than K silently is never allowed (RFC-104 v3 §10).
+ * status. Returning fewer than K silently is never allowed (RFC-109 v3 §10).
  */
 public enum DeadlinePolicy {
   FAIL,

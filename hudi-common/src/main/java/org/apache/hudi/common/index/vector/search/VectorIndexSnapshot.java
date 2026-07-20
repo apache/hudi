@@ -21,7 +21,7 @@ package org.apache.hudi.common.index.vector.search;
 import java.io.Serializable;
 
 /**
- * Immutable identity of the active vector-index generation used to serve a query (RFC-104 v3 §1).
+ * Immutable identity of the active vector-index generation used to serve a query (RFC-109 v3 §1).
  * Every field is versioned through the manifest so readers can reject unsupported or mismatched
  * encodings rather than silently mis-scoring. Pinned for the whole request alongside the table
  * instant in {@link VectorSearchSnapshot}.

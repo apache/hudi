@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import java.io.Serializable;
 
 /**
- * A candidate after RLI freshness arbitration (RFC-104 v3 §7): the original candidate, its
+ * A candidate after RLI freshness arbitration (RFC-109 v3 §7): the original candidate, its
  * {@link VectorCandidateState} verdict, and the live location resolved from the RLI (present for
  * {@code SERVE} and {@code STALE}, null for {@code DELETED}).
  *

@@ -8,7 +8,7 @@ package org.apache.hudi.common.index.vector;
 import java.io.Serializable;
 
 /**
- * Generation-scoped configuration for RaBitQ neutral-factor computation (RFC-104 v3 §3).
+ * Generation-scoped configuration for RaBitQ neutral-factor computation (RFC-109 v3 §3).
  *
  * <p>Replaces the previously static constants ({@code ERR_KAPPA}, absolute {@code EPS_IP}) with
  * versioned, generation-configured thresholds so factor semantics evolve through the manifest
@@ -55,7 +55,7 @@ public final class RaBitQFactorConfig implements Serializable {
     this.epsNRel = epsNRel;
   }
 
-  /** The normative factor-version-2 defaults (RFC-104 v3 §3). */
+  /** The normative factor-version-2 defaults (RFC-109 v3 §3). */
   public static RaBitQFactorConfig defaultsV2() {
     return new RaBitQFactorConfig(
         FACTOR_VERSION_V2, DEFAULT_KAPPA, DEFAULT_GMIN, DEFAULT_EPS1_MAX, DEFAULT_EPS_N_REL);

@@ -32,7 +32,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Snapshot-aware RLI candidate arbiter (RFC-104 v3 §7). Wraps the pure decision core
+ * Snapshot-aware RLI candidate arbiter (RFC-109 v3 §7). Wraps the pure decision core
  * {@link VectorIndexArbiter#classify} with a batched, snapshot-pinned {@link RecordIndexLookup}:
  * per partition it collects candidate keys, performs a single batched RLI lookup, and classifies
  * each candidate against its current live location.

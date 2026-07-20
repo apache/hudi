@@ -19,7 +19,7 @@
 package org.apache.hudi.common.index.vector.search;
 
 /**
- * Freshness verdict for a finalist candidate, produced by RLI arbitration (RFC-104 v3 §7).
+ * Freshness verdict for a finalist candidate, produced by RLI arbitration (RFC-109 v3 §7).
  * Engine-neutral successor to the internal arbiter decision enum.
  *
  * <ul>

@@ -26,7 +26,7 @@ import java.util.Objects;
  * The RLI finalist arbiter: resolves whether a vector-index posting still faithfully represents
  * a live record, using the record-level index as the table's global version authority.
  *
- * <p>This is the pure classification core of RFC-104 "Upsert and Delete Support". It has no
+ * <p>This is the pure classification core of RFC-109 "Upsert and Delete Support". It has no
  * Spark or metadata-table dependency: callers resolve the current RLI location for a finalist
  * key (a batched {@code readRecordIndexLocationsWithKeys} in the plan builder), then call
  * {@link #classify} with the posting locator and that current location. The action taken per

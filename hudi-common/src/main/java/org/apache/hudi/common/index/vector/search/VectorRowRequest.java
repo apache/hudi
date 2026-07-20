@@ -21,7 +21,7 @@ package org.apache.hudi.common.index.vector.search;
 import java.io.Serializable;
 
 /**
- * One row to fetch within a {@link VectorFetchTask} (RFC-104 v3 §8). For {@link VectorCandidateState#SERVE}
+ * One row to fetch within a {@link VectorFetchTask} (RFC-109 v3 §8). For {@link VectorCandidateState#SERVE}
  * the {@link #rowPosition} is authoritative for a positional read; for {@link VectorCandidateState#STALE}
  * the position is ignored and the read handle falls back to a key-based lookup.
  */

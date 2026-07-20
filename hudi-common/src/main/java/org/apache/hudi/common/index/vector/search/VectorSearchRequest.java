@@ -24,7 +24,7 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * Engine-neutral vector search request (RFC-104 v3 §1). Carries only the query intent and budget;
+ * Engine-neutral vector search request (RFC-109 v3 §1). Carries only the query intent and budget;
  * no engine, storage, or SQL types. Adapters (Spark/Flink/Java) translate their inputs into this.
  *
  * <p>{@code queryInstant} pins the table snapshot for the entire request; when null the executor

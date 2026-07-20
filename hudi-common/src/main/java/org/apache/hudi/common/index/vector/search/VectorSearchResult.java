@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import java.io.Serializable;
 
 /**
- * One engine-neutral final result row from a vector search (RFC-104 v3 §1): the logical record key,
+ * One engine-neutral final result row from a vector search (RFC-109 v3 §1): the logical record key,
  * the exact metric distance (squared L2 kept internally, surfaced per the requested metric), and
  * the live record location the value was read from.
  */

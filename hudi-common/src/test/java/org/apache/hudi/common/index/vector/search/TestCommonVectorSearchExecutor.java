@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * End-to-end wiring test for {@link CommonVectorSearchExecutor} (RFC-104 v3 §11): drives the full
+ * End-to-end wiring test for {@link CommonVectorSearchExecutor} (RFC-109 v3 §11): drives the full
  * stage pipeline with a fake candidate source and reranker but the real
  * {@link RecordIndexVectorCandidateArbiter} and {@link DefaultVectorFetchPlanner}, asserting the
  * snapshot is resolved once, DELETED candidates are dropped end-to-end, and results flow through.

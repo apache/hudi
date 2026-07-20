@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Verifies the rotate-once query-math contract (RFC-104 v3 §2): the padded query is rotated exactly
+ * Verifies the rotate-once query-math contract (RFC-109 v3 §2): the padded query is rotated exactly
  * once, {@code forRotatedCentroid} forms {@code wRot = qRot - cRot} by subtraction (never rotating
  * {@code q - c} per cluster), and exact terms are computed in rotated space with inner-product
  * invariance under an orthogonal rotation.

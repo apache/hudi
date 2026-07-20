@@ -6,7 +6,7 @@
 package org.apache.hudi.common.index.vector;
 
 /**
- * Metric-NEUTRAL factor computation for residual RaBitQ encoding (RFC-104 v3 §3, §16).
+ * Metric-NEUTRAL factor computation for residual RaBitQ encoding (RFC-109 v3 §3, §16).
  *
  * <p>The stored factors commit to NO metric; L2 / DOT / COSINE are composed at query time by
  * {@link MetricQueryState}. Factor layout (version 2):
@@ -88,7 +88,7 @@ public final class RaBitQNeutralFactors {
     float vectorNorm = (float) Math.sqrt(vSq);
     int version = config.getFactorVersion();
 
-    // Residual-norm tiers (RFC-104 v3 §2/§3).
+    // Residual-norm tiers (RFC-109 v3 §2/§3).
     if (n == 0.0) {
       // Vector coincides with centroid exactly: composition is exact; ERR_1 = 0 is legitimate.
       return new Factors(version, (float) centerRip, 0f, 0f, 0f, 0f, vectorNorm);

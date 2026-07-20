@@ -32,7 +32,7 @@ import java.util.Random;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * RFC-104 cheap validation experiment (pure JVM, no Spark / no cluster).
+ * RFC-109 cheap validation experiment (pure JVM, no Spark / no cluster).
  *
  * <p>Goal: prove that approximate-only RaBitQ recall on <b>L2 / large-norm</b> data
  * (BigANN/SIFT-like) is broken when we quantize the <b>full unit vector</b> (current
@@ -156,7 +156,7 @@ public class TestRaBitQResidualHypothesis {
     recallResSym /= NUM_QUERIES;
     recallResAsym /= NUM_QUERIES;
 
-    System.out.println("================ RFC-104 RESIDUAL HYPOTHESIS ================");
+    System.out.println("================ RFC-109 RESIDUAL HYPOTHESIS ================");
     System.out.printf("Data: N=%d D=%d clusters=%d queries=%d (SIFT-like, L2, non-negative)%n",
         N, DIM, NUM_CLUSTERS, NUM_QUERIES);
     System.out.printf("FULL-vector  recall@%d : symmetric=%.3f  asymmetric=%.3f%n", K, recallFullSym, recallFullAsym);

@@ -21,7 +21,7 @@ package org.apache.hudi.common.index.vector;
 import java.nio.ByteBuffer;
 
 /**
- * Byte-lookup-table posting scorer (RFC-104 v3 §5A, fixes 1 and 2).
+ * Byte-lookup-table posting scorer (RFC-109 v3 §5A, fixes 1 and 2).
  *
  * <p><b>Exact float-query semantics.</b> This scorer scores the same float rotated (residual)
  * query used by {@link RaBitQEncoder#dotPackedBinary} and {@link RaBitQEncoder#multibitDotTerm}.

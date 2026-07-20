@@ -21,7 +21,7 @@ package org.apache.hudi.common.index.vector.search;
 import java.io.Serializable;
 
 /**
- * The recorded outcome of execution-locality selection (RFC-104 v3 §11A). Carries both the
+ * The recorded outcome of execution-locality selection (RFC-109 v3 §11A). Carries both the
  * requested and selected mode plus the inputs to the decision so it can be emitted verbatim into
  * query metrics and workload-profile results.
  */

@@ -24,7 +24,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import java.io.Serializable;
 
 /**
- * Validates candidate freshness against the Record-Level Index at the pinned snapshot (RFC-104 v3 §7).
+ * Validates candidate freshness against the Record-Level Index at the pinned snapshot (RFC-109 v3 §7).
  * Treats posting locations as hints until arbitration, preserves STALE candidates for exact-mode key
  * fallback, drops DELETED candidates, and uses the same table instant as the MDT/file-slice/base reads.
  * The pure decision core stays in {@code VectorIndexArbiter.classify}; implementations add the

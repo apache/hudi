@@ -24,7 +24,7 @@ import java.io.Serializable;
 
 /**
  * Computes the exact metric distance between a query and a full-precision candidate vector
- * (RFC-104 v3 §10). Accumulates in float64 and keeps squared L2 internally; the surfaced value
+ * (RFC-109 v3 §10). Accumulates in float64 and keeps squared L2 internally; the surfaced value
  * follows the requested {@link VectorDistanceMetric}.
  */
 public interface ExactVectorScorer extends Serializable {

@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Accumulates the top-K live exact results during rerank/continuation (RFC-104 v3 §10). Deduplicates
+ * Accumulates the top-K live exact results during rerank/continuation (RFC-109 v3 §10). Deduplicates
  * by logical record key (keeping the smaller distance) so a record surfaced by both its posting and
  * a key-fallback fetch is counted once, and reports how many live results are held so the
  * continuation loop knows whether it still needs more candidates.

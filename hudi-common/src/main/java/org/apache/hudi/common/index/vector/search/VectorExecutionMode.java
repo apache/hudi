@@ -22,7 +22,7 @@ package org.apache.hudi.common.index.vector.search;
  * Requested/selected execution locality for a vector search. Engine-neutral: {@code LOCAL} means
  * the common executor runs the bounded fetch/score tasks through a local task runner (e.g. over
  * {@code HoodieListData}); {@code DISTRIBUTED} means it schedules them on the engine's cluster.
- * {@code AUTO} defers to the normative selection rule (RFC-104 v3 §11A).
+ * {@code AUTO} defers to the normative selection rule (RFC-109 v3 §11A).
  */
 public enum VectorExecutionMode {
   AUTO,

@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Verifies the corrected RaBitQ neutral-factor semantics (RFC-104 v3 §3): factor-version tagging,
+ * Verifies the corrected RaBitQ neutral-factor semantics (RFC-109 v3 §3): factor-version tagging,
  * removal of the invalid {@code min(1, eps1)} cap, the normalized {@code gMin} quality gate, and
  * the exact-zero vs small-nonzero residual split. These are the degenerate cases the previous
  * implementation handled incorrectly.

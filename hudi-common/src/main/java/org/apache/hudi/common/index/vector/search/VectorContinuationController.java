@@ -22,7 +22,7 @@ import java.util.List;
 
 /**
  * Windows a single retained, distance-ordered candidate pool into continuation batches
- * (RFC-104 v3 §10). The candidate scan retains one ordered pool of at most
+ * (RFC-109 v3 §10). The candidate scan retains one ordered pool of at most
  * {@code maxRerankCandidates} in a single MDT scan; this controller draws successive batches
  * <em>from that retained pool</em> — it never rescans MDT postings.
  *

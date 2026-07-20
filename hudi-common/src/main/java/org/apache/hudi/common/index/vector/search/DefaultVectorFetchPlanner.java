@@ -29,7 +29,7 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Default engine-neutral fetch planner (RFC-104 v3 §8). Groups arbitrated candidates by their live
+ * Default engine-neutral fetch planner (RFC-109 v3 §8). Groups arbitrated candidates by their live
  * file (partition + fileId, resolved by the arbiter against the pinned snapshot) into one
  * {@link VectorFetchTask} per file, so the read handle can coalesce positions within a file.
  *

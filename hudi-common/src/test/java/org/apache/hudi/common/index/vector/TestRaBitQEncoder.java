@@ -161,7 +161,7 @@ class TestRaBitQEncoder {
     assertEquals(0f, RaBitQEncoder.norm(new float[]{0f, 0f}), 1e-5f);
   }
 
-  // ---- metric-aware reconstruction (RFC-104 L2 fix) ----------------------
+  // ---- metric-aware reconstruction (RFC-109 L2 fix) ----------------------
 
   @Test
   void reconstructDistanceL2CollinearRanksByMagnitude() {

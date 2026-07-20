@@ -9,7 +9,7 @@ import java.io.Serializable;
 
 /**
  * The probed-cluster query quantized to {@code Bq} bit-planes for direct popcount scoring
- * (RFC-104 v3 §5). The selected cluster query {@code wRot} is uniformly scalar-quantized to
+ * (RFC-109 v3 §5). The selected cluster query {@code wRot} is uniformly scalar-quantized to
  * {@code Bq}-bit levels once per probed cluster; each bit position is stored as a {@code long[]}
  * plane so the scan kernel can score with {@code Long.bitCount(dataWord & queryWord)} instead of
  * per-dimension float multiply-add.
@@ -50,7 +50,7 @@ public final class VectorQueryPlanes implements Serializable {
    * Quantize the (rotated) selected cluster query to {@code bq} bit-planes.
    *
    * @param selectedQuery the rotated residual query {@code wRot} (length = dimPadded)
-   * @param bq            query bit width (RFC-104 default {@code Bq = 4})
+   * @param bq            query bit width (RFC-109 default {@code Bq = 4})
    */
   public static VectorQueryPlanes quantize(float[] selectedQuery, int bq) {
     if (bq <= 0 || bq > 16) {
@@ -158,7 +158,7 @@ public final class VectorQueryPlanes implements Serializable {
   }
 
   /**
-   * Plane error bound (RFC-104 v3 §5):
+   * Plane error bound (RFC-109 v3 §5):
    * {@code errAbs = err1 * ||qPrime|| + residualNorm * ||selectedQuery - qPrime||}.
    */
   public double planeErrorBound(double err1, double residualNorm) {

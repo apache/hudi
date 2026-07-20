@@ -285,7 +285,7 @@ public final class VectorIndexMdtSearchUtils {
   }
 
   /**
-   * Metric-aware approximate scoring of posting matches (RFC-104 L2 fix).
+   * Metric-aware approximate scoring of posting matches (RFC-109 L2 fix).
    *
    * <p>The binary code captures direction only; magnitude lives in the posting {@code scalar}.
    * We recover a cosine estimate (binary-symmetric Hamming or, when {@code asymmetric}, the
@@ -717,7 +717,7 @@ public final class VectorIndexMdtSearchUtils {
             centroids,
             clusterQueryCache,
             keyComponents[0]);
-        // Byte-LUT scorer built once per probed cluster (RFC-104 v3 §5A fixes 1-2): preserves
+        // Byte-LUT scorer built once per probed cluster (RFC-109 v3 §5A fixes 1-2): preserves
         // exact float-query semantics, replaces the per-dimension sign loop and the per-survivor
         // repack/allocate pass-2 path with table lookups and zero scoring-loop allocation.
         RaBitQByteLutScorer scorer = lutScorer(
@@ -824,7 +824,7 @@ public final class VectorIndexMdtSearchUtils {
       scored.add(new ScoredPostingMatch(match, entry.score, match.toLocation().orElse(null)));
     }
     long partitionElapsedMs = System.currentTimeMillis() - partitionStartMs;
-    // RFC-104 v3 §5A fix 5: task-normalized throughput so the next investigation needs no log
+    // RFC-109 v3 §5A fix 5: task-normalized throughput so the next investigation needs no log
     // archaeology. vectorsPerMs exposes per-partition scan speed; survivorsPerVector exposes
     // pass-1 selectivity (skew shows up as low vectorsPerMs on a high-vectors partition).
     double vectorsPerMs = partitionElapsedMs > 0 ? (double) vectorsSeen / partitionElapsedMs : (double) vectorsSeen;
@@ -1072,7 +1072,7 @@ public final class VectorIndexMdtSearchUtils {
   }
 
   /**
-   * The RFC-104 RLI finalist arbiter. Resolves each finalist's current location from the
+   * The RFC-109 RLI finalist arbiter. Resolves each finalist's current location from the
    * record-level index (one batched {@code readRecordIndexLocationsWithKeys} over the distinct
    * finalist keys) and tags it with a {@link VectorIndexArbiter.Decision} plus the resolved
    * location.
@@ -1171,7 +1171,7 @@ public final class VectorIndexMdtSearchUtils {
    * Pure and Spark-free so it is directly unit-testable; the {@link HoodieTableMetadata} overload
    * performs the batched RLI lookup and delegates here.
    *
-   * <p>Implements the RFC-104 arbiter output contract (see {@link VectorIndexArbiter}):
+   * <p>Implements the RFC-109 arbiter output contract (see {@link VectorIndexArbiter}):
    * hit+match -> SERVE (positional trust preserved via the posting's own location when present),
    * hit+differ -> STALE (resolved to the live RLI location), miss -> DELETED (dropped).
    */

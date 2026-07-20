@@ -23,7 +23,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * A batch of rows to read from a single snapshot-resolved base file slice (RFC-104 v3 §8). Produced
+ * A batch of rows to read from a single snapshot-resolved base file slice (RFC-109 v3 §8). Produced
  * by the {@link VectorFetchPlanner} by grouping arbitrated candidates by file slice, so the read
  * handle can coalesce positions within one file/row-group/page. Compact and serializable — carries
  * only paths and row requests, never engine or SQL types.

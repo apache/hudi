@@ -237,14 +237,14 @@ public final class VectorIndexOptions {
    * Read-side policy for stale finalists — a posting whose locator no longer matches the record's
    * current RLI location (rewritten by compaction/clustering/upsert on the base table):
    * {@code fallback} (default) routes the candidate to a key-based fallback fetch at its live
-   * location; {@code fail} retains the hard throw. See RFC-104 "Upsert and Delete Support".
+   * location; {@code fail} retains the hard throw. See RFC-109 "Upsert and Delete Support".
    */
   public static final String STALE_POLICY = "vector.read.stale.policy";
   public static final String STALE_POLICY_FALLBACK = "fallback";
   public static final String STALE_POLICY_FAIL = "fail";
 
   /**
-   * Enables the RFC-104 RLI finalist arbiter (freshness gate) on the read path. When {@code true},
+   * Enables the RFC-109 RLI finalist arbiter (freshness gate) on the read path. When {@code true},
    * finalists are classified against the record-level index so stale (rewritten/moved) and deleted
    * postings are excluded (approx mode) or key-fallback-fetched (exact mode). Default {@code false}:
    * dormant until the commit-time delta writer (upsert/delete work-stream item 2) lands, at which

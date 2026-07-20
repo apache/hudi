@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Unit tests for {@link VectorIndexArbiter} — the RFC-104 finalist arbiter decision table.
+ * Unit tests for {@link VectorIndexArbiter} — the RFC-109 finalist arbiter decision table.
  */
 class TestVectorIndexArbiter {
 

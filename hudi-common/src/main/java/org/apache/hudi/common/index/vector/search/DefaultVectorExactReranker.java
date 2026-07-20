@@ -27,7 +27,7 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Default engine-neutral exact reranker (RFC-104 v3 §10). For each fetch task it reads the
+ * Default engine-neutral exact reranker (RFC-109 v3 §10). For each fetch task it reads the
  * candidate rows through an injected {@link HoodieVectorBatchReadHandle} (created per partition via
  * {@link HoodieVectorBatchReadHandleSupplier}), scores them with an {@link ExactVectorScorer}
  * (float64, squared-L2 internal), and keeps a per-partition top-K via {@link VectorTopKAccumulator}.

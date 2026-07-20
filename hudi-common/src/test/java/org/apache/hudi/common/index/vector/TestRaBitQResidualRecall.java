@@ -17,7 +17,7 @@ import java.util.Random;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * End-to-end recall validation of the corrected math path (RFC-104 v3 §2 + §3), simulating a
+ * End-to-end recall validation of the corrected math path (RFC-109 v3 §2 + §3), simulating a
  * re-bootstrap: encodes an IVF-residual multibit index with the new {@link RaBitQNeutralFactors}
  * (factor-version 2), scores queries through the rotate-once {@link MetricQueryState} +
  * {@link RaBitQEncoder#multibitDotTerm} estimator, and measures recall@10 against brute-force exact
@@ -105,7 +105,7 @@ public class TestRaBitQResidualRecall {
       recallSum += recall(topKByDist(approx, K), truth);
     }
     double recall = recallSum / NUM_QUERIES;
-    System.out.printf("[rfc-104 v3] corrected residual multibit recall@%d (B=%d) = %.3f%n", K, BITS, recall);
+    System.out.printf("[rfc-109 v3] corrected residual multibit recall@%d (B=%d) = %.3f%n", K, BITS, recall);
 
     // Floor for 4-bit residual multibit on this easy synthetic corpus (all clusters probed).
     assertTrue(recall >= 0.85,

@@ -24,7 +24,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import java.io.Serializable;
 
 /**
- * Produces ANN candidates for a plan (RFC-104 v3 §4). The MDT implementation owns posting decoding,
+ * Produces ANN candidates for a plan (RFC-109 v3 §4). The MDT implementation owns posting decoding,
  * overlay resolution, pass-1 filtering, pass-2 scoring, and bounded candidate retention — and it
  * MUST NOT invoke Spark SQL, file-format readers, or exact-read code. It decodes record keys and
  * locators only for retained candidates and returns at most {@code maxRerankCandidates} ordered by

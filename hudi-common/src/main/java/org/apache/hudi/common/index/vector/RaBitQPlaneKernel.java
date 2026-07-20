@@ -6,7 +6,7 @@
 package org.apache.hudi.common.index.vector;
 
 /**
- * Direct plane popcount kernel (RFC-104 v3 §5). Scores a quantized query ({@link VectorQueryPlanes})
+ * Direct plane popcount kernel (RFC-109 v3 §5). Scores a quantized query ({@link VectorQueryPlanes})
  * against a data code stored as bit-planes (one sign plane + {@code exBits} extended planes, each a
  * {@code long[]}), computing the inner product {@code <qPrime, dataCode>} purely with
  * {@code Long.bitCount(queryWord & dataWord)} — no per-dimension unpacking, sign-row copies, or

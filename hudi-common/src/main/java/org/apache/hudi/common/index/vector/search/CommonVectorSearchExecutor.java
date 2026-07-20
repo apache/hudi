@@ -24,7 +24,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import java.util.Objects;
 
 /**
- * The engine-neutral vector-search orchestrator (RFC-104 v3 §11). Pins one snapshot, chooses the
+ * The engine-neutral vector-search orchestrator (RFC-109 v3 §11). Pins one snapshot, chooses the
  * execution mode, and drives the stages in order — candidate scan, RLI arbitration, fetch planning,
  * exact rerank — returning the top-K results. It never invokes {@code spark.sql(...)} and never
  * reconstructs SQL/DataFrames; each stage is an injected engine-neutral implementation.

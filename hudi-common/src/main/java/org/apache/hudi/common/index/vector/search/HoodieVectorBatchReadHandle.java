@@ -21,7 +21,7 @@ package org.apache.hudi.common.index.vector.search;
 import java.util.Iterator;
 
 /**
- * A Hudi read handle for projected, position-based base-file reads (RFC-104 v3 §9). Given a
+ * A Hudi read handle for projected, position-based base-file reads (RFC-109 v3 §9). Given a
  * {@link VectorFetchTask}, returns only the record-key and vector columns as {@link VectorRecord}s
  * — no full-row materialization. SERVE rows are read by row position (page-index skipping); STALE
  * rows fall back to a key-based lookup within the same file.

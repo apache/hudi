@@ -57,7 +57,7 @@ public final class RaBitQEncoder implements VectorQuantizer {
 
   private static final long serialVersionUID = 1L;
   private static final Map<RotationKey, float[][]> ROTATION_MATRIX_CACHE = new ConcurrentHashMap<>();
-  /** Factor-version-2 configuration used for neutral-factor computation (RFC-104 v3 §3). */
+  /** Factor-version-2 configuration used for neutral-factor computation (RFC-109 v3 §3). */
   private static final RaBitQFactorConfig FACTOR_CONFIG = RaBitQFactorConfig.defaultsV2();
   private final int dimension;
   private final int bits;
@@ -249,7 +249,7 @@ public final class RaBitQEncoder implements VectorQuantizer {
     return scalar * (1.0f - cosineSim);
   }
 
-  // ---- metric-aware estimation (RFC-104 L2 fix) --------------------------
+  // ---- metric-aware estimation (RFC-109 L2 fix) --------------------------
 
   /**
    * Metric-aware approximate distance.

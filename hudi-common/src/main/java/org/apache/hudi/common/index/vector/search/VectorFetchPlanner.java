@@ -24,7 +24,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import java.io.Serializable;
 
 /**
- * Groups arbitrated candidates into per-file-slice fetch tasks (RFC-104 v3 §8). Resolves file slices
+ * Groups arbitrated candidates into per-file-slice fetch tasks (RFC-109 v3 §8). Resolves file slices
  * against the pinned snapshot, preserves row positions for {@code SERVE}, plans key-based fallback
  * for {@code STALE}, and never builds SQL strings or temporary DataFrames.
  */

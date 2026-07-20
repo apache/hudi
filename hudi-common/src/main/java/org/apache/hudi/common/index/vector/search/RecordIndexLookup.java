@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A snapshot-pinned batched Record-Level Index lookup (RFC-104 v3 §7). Given a batch of record keys,
+ * A snapshot-pinned batched Record-Level Index lookup (RFC-109 v3 §7). Given a batch of record keys,
  * returns the current live location for each key that exists at the pinned table instant; keys with
  * no entry (absent from the map) are treated as deleted.
  *
