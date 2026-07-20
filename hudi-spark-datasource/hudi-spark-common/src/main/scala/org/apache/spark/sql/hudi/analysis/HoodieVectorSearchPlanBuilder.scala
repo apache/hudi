@@ -395,6 +395,10 @@ object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
  * then exact-reranks the fetched Hudi rows.
  */
 object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapterSupport {
+  private val APPROXIMATE_CANDIDATE_FLOOR = 32
+
+  private[analysis] def approximateCandidateHeapSize(k: Int): Int =
+    math.max(k, APPROXIMATE_CANDIDATE_FLOOR)
 
   import HoodieVectorSearchPlanBuilder._
 
@@ -584,12 +588,16 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
     val numProbes = math.min(math.max(1, VectorIndexOptions.getNumProbes(mergedOptions.asJava)), cache.numClusters())
     val topClusters = cache.findTopClusters(queryVector, numProbes, metric)
     val shardCounts = cache.getShardCounts(topClusters)
-    val refineK = math.max(k, k * VectorIndexOptions.getRefineFactor(mergedOptions.asJava))
+    // Approximate-only search does not exact-rerank, so applying refine_factor here only bloats
+    // every task-local heap and both global reductions. Keep a small floor because local pruning
+    // precedes record-key overlay and tombstone removal; retaining exactly k could underfill results
+    // when duplicate versions occupy the local winners.
+    val candidateHeapSize = approximateCandidateHeapSize(k)
     val topCandidates = VectorIndexMdtSearchUtils.scanPostingCandidates(
       ctx.metadataTable, ctx.indexPartition, cache.getGenerationId, shardCounts,
       queryVector, cache.getDimension, cache.getQuantizerSeed, cache.getRaBitQBits, cache.isAssumeNormalized,
       metric, VectorIndexOptions.isRaBitQAsymmetricScoring(mergedOptions.asJava),
-      residualEncoding, if (residualEncoding) cache.getCentroids else null, refineK)
+      residualEncoding, if (residualEncoding) cache.getCentroids else null, candidateHeapSize)
     val resultSchema = new StructType(Array(
       StructField(HoodieRecord.RECORD_KEY_METADATA_FIELD, org.apache.spark.sql.types.DataTypes.StringType, nullable = false, Metadata.empty),
       StructField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, org.apache.spark.sql.types.DataTypes.StringType, nullable = true, Metadata.empty),
@@ -634,7 +642,10 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
         c.getApproxDistance.toDouble
       )
     }
-    LOG.info(s"[vector_search][approximate] basePath=${ctx.basePath} probedClusters=${topClusters.length} residualEncoding=$residualEncoding arbiter=$arbiterEnabled planMs=${elapsedMs(planStartNs)}")
+    LOG.info(
+      s"[vector_search][approximate] basePath=${ctx.basePath} probedClusters=${topClusters.length} " +
+        s"candidateHeapSize=$candidateHeapSize residualEncoding=$residualEncoding arbiter=$arbiterEnabled " +
+        s"planMs=${elapsedMs(planStartNs)}")
     spark.createDataFrame(resultRows, resultSchema)
       .orderBy(col(DISTANCE_COL).asc)
       .limit(k)
