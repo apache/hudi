@@ -586,18 +586,25 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
     val metric = toVectorMetric(ctx.metric)
     val residualEncoding = cache.isResidualEncoding
     val numProbes = math.min(math.max(1, VectorIndexOptions.getNumProbes(mergedOptions.asJava)), cache.numClusters())
+    val centroidProbeStartNs = System.nanoTime()
     val topClusters = cache.findTopClusters(queryVector, numProbes, metric)
+    val centroidProbeMs = elapsedMs(centroidProbeStartNs)
+    val shardLookupStartNs = System.nanoTime()
     val shardCounts = cache.getShardCounts(topClusters)
+    val shardLookupMs = elapsedMs(shardLookupStartNs)
     // Approximate-only search does not exact-rerank, so applying refine_factor here only bloats
     // every task-local heap and both global reductions. Keep a small floor because local pruning
     // precedes record-key overlay and tombstone removal; retaining exactly k could underfill results
     // when duplicate versions occupy the local winners.
     val candidateHeapSize = approximateCandidateHeapSize(k)
+    val postingPlanStartNs = System.nanoTime()
     val topCandidates = VectorIndexMdtSearchUtils.scanPostingCandidates(
       ctx.metadataTable, ctx.indexPartition, cache.getGenerationId, shardCounts,
       queryVector, cache.getDimension, cache.getQuantizerSeed, cache.getRaBitQBits, cache.isAssumeNormalized,
       metric, VectorIndexOptions.isRaBitQAsymmetricScoring(mergedOptions.asJava),
       residualEncoding, if (residualEncoding) cache.getCentroids else null, candidateHeapSize)
+    val postingPlanMs = elapsedMs(postingPlanStartNs)
+    val resultRddPlanStartNs = System.nanoTime()
     val resultSchema = new StructType(Array(
       StructField(HoodieRecord.RECORD_KEY_METADATA_FIELD, org.apache.spark.sql.types.DataTypes.StringType, nullable = false, Metadata.empty),
       StructField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, org.apache.spark.sql.types.DataTypes.StringType, nullable = true, Metadata.empty),
@@ -642,14 +649,19 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
         c.getApproxDistance.toDouble
       )
     }
-    LOG.info(
-      s"[vector_search][approximate] basePath=${ctx.basePath} probedClusters=${topClusters.length} " +
-        s"candidateHeapSize=$candidateHeapSize residualEncoding=$residualEncoding arbiter=$arbiterEnabled " +
-        s"planMs=${elapsedMs(planStartNs)}")
-    spark.createDataFrame(resultRows, resultSchema)
+    val resultRddPlanMs = elapsedMs(resultRddPlanStartNs)
+    val sparkAnalysisStartNs = System.nanoTime()
+    val analyzedPlan = spark.createDataFrame(resultRows, resultSchema)
       .orderBy(col(DISTANCE_COL).asc)
       .limit(k)
       .queryExecution.analyzed
+    val sparkAnalysisMs = elapsedMs(sparkAnalysisStartNs)
+    LOG.info(
+      s"[vector_search][approximate] basePath=${ctx.basePath} probedClusters=${topClusters.length} " +
+        s"candidateHeapSize=$candidateHeapSize residualEncoding=$residualEncoding arbiter=$arbiterEnabled " +
+        s"centroidProbeMs=$centroidProbeMs shardLookupMs=$shardLookupMs postingPlanMs=$postingPlanMs " +
+        s"resultRddPlanMs=$resultRddPlanMs sparkAnalysisMs=$sparkAnalysisMs planMs=${elapsedMs(planStartNs)}")
+    analyzedPlan
   }
 
   private def buildRaBitQExactCandidateDf(
