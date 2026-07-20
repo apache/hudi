@@ -18,23 +18,10 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hudi.metadata.HoodieTableMetadata
-
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertSame}
-import org.mockito.Mockito.{mock, times, verify}
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
 class TestIvfRaBitQMdtSearchAlgorithm {
-
-  @BeforeEach
-  def resetCachesBeforeTest(): Unit = {
-    IvfRaBitQMdtSearchAlgorithm.resetMetadataCaches()
-  }
-
-  @AfterEach
-  def resetCachesAfterTest(): Unit = {
-    IvfRaBitQMdtSearchAlgorithm.resetMetadataCaches()
-  }
 
   @Test
   def testApproximateCandidateHeapUsesSmallSafetyFloor(): Unit = {
@@ -44,42 +31,5 @@ class TestIvfRaBitQMdtSearchAlgorithm {
   @Test
   def testApproximateCandidateHeapDoesNotCapLargeTopK(): Unit = {
     assertEquals(50, IvfRaBitQMdtSearchAlgorithm.approximateCandidateHeapSize(50))
-  }
-
-  @Test
-  def testMetadataTableIsReusedForSameSnapshot(): Unit = {
-    val metadataTable = mock(classOf[HoodieTableMetadata])
-    var loads = 0
-
-    val first = IvfRaBitQMdtSearchAlgorithm.getOrCreateMetadataTable(
-      "table", "application", 1, "001") {
-      loads += 1
-      metadataTable
-    }
-    val second = IvfRaBitQMdtSearchAlgorithm.getOrCreateMetadataTable(
-      "table", "application", 1, "001") {
-      loads += 1
-      mock(classOf[HoodieTableMetadata])
-    }
-
-    assertSame(metadataTable, first)
-    assertSame(first, second)
-    assertEquals(1, loads)
-    assertEquals(1, IvfRaBitQMdtSearchAlgorithm.metadataTableCacheSize)
-  }
-
-  @Test
-  def testMetadataTableIsReplacedWhenSnapshotAdvances(): Unit = {
-    val oldMetadataTable = mock(classOf[HoodieTableMetadata])
-    val newMetadataTable = mock(classOf[HoodieTableMetadata])
-    IvfRaBitQMdtSearchAlgorithm.getOrCreateMetadataTable(
-      "table", "application", 1, "001")(oldMetadataTable)
-
-    val refreshed = IvfRaBitQMdtSearchAlgorithm.getOrCreateMetadataTable(
-      "table", "application", 1, "002")(newMetadataTable)
-
-    assertSame(newMetadataTable, refreshed)
-    assertEquals(1, IvfRaBitQMdtSearchAlgorithm.metadataTableCacheSize)
-    verify(oldMetadataTable, times(1)).close()
   }
 }
