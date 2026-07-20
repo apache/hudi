@@ -406,7 +406,7 @@ class TestCleanerUtils {
   }
 
   private HoodieTimeline createMockTimelineWithTimestamps(List<String> timestamps, List<String> pendingTimestamps) {
-    return createMockTimelineWithTimestamps(timestamps, Collections.nCopies(timestamps.size(), null), pendingTimestamps);
+    return createMockTimelineWithTimestamps(timestamps, timestamps, pendingTimestamps);
   }
 
   private HoodieTimeline createMockTimelineWithCompletionTimestamps(List<String> timestamps, List<String> completionTimestamps) {

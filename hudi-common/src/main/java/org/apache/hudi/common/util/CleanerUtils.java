@@ -153,7 +153,7 @@ public class CleanerUtils {
       ZonedDateTime latestDateTime = ZonedDateTime.ofInstant(latestInstant, timeZone.getZoneId());
       String earliestTimeToRetain = TimelineUtils.formatDate(Date.from(latestDateTime.minusHours(hoursRetained).toInstant()));
       earliestCommitToRetain = Option.fromJavaOptional(completedCommitsTimeline.getInstantsAsStream()
-          .filter(i -> compareTimestamps(getCompletionTimeOrRequestedTime(i), GREATER_THAN_OR_EQUALS, earliestTimeToRetain))
+          .filter(i -> compareTimestamps(i.getCompletionTime(), GREATER_THAN_OR_EQUALS, earliestTimeToRetain))
           // ECTR remains a requested-time boundary, so choose the earliest requested instant still in the completion-time window.
           .min(Comparator.comparing(HoodieInstant::requestedTime)));
     }
@@ -168,10 +168,6 @@ public class CleanerUtils {
     }
 
     return earliestCommitToRetain;
-  }
-
-  private static String getCompletionTimeOrRequestedTime(HoodieInstant instant) {
-    return StringUtils.isNullOrEmpty(instant.getCompletionTime()) ? instant.requestedTime() : instant.getCompletionTime();
   }
 
   /**
