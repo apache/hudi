@@ -452,14 +452,21 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
     // hoodie.* metadata/hfile read-side conf set on the session (e.g. the HFile block-cache
     // sizing), so the vector TVF always read on defaults. fromProperties restores operator
     // control; enable(true) still forces MDT on for the search path regardless of session.
-    val metadataProps = TypedProperties.fromMap(spark.sessionState.conf.getAllConfs.asJava)
+    val sessionConfs = spark.sessionState.conf.getAllConfs
+    val metadataConfs = sessionConfs.filter { case (key, _) =>
+      key.startsWith("hoodie.") || key.startsWith("spark.hadoop.")
+    }
+    val metadataProps = TypedProperties.fromMap(sessionConfs.asJava)
     val metadataConfig = HoodieMetadataConfig.newBuilder()
       .fromProperties(metadataProps)
       .enable(true)
       .build()
-    val engineContext = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext), spark.sqlContext)
-    val metadataTable = metaClient.getTableFormat.getMetadataFactory
-      .create(engineContext, metaClient.getStorage, metadataConfig, basePath)
+    val metadataTable = getOrCreateMetadataTable(
+      basePath, spark.sparkContext.applicationId, metadataConfs.hashCode(), latestInstantTime) {
+      val engineContext = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext), spark.sqlContext)
+      metaClient.getTableFormat.getMetadataFactory
+        .create(engineContext, metaClient.getStorage, metadataConfig, basePath)
+    }
     val cache = getOrLoadMetadataCache(metaClient, metadataTable, indexPartition, vectorSchema, latestInstantTime)
     if (cache == null || cache.getGenerationId < 0) {
       throw new HoodieAnalysisException(
@@ -533,7 +540,11 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
     }
     val queryFloat = queryVector.map(_.toFloat)
 
+    val contextStartNs = System.nanoTime()
     val ctx = resolvePlanContext(spark, basePath, embeddingCol, vectorSchema, metric, runtimeOptions)
+    LOG.info(
+      s"[vector_search][plan_context] basePath=$basePath latestInstant=${ctx.latestInstantTime} " +
+        s"elapsedMs=${elapsedMs(contextStartNs)}")
     if (ctx.cache.getDimension != vectorSchema.getDimension) {
       throw new HoodieAnalysisException(
         s"Vector index dimension (${ctx.cache.getDimension}) does not match column '$embeddingCol' dimension (${vectorSchema.getDimension}).")
@@ -986,13 +997,53 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
 
   private case class MetadataCacheKey(basePath: String, indexPartition: String)
 
-  @volatile private var metadataCaches: Map[MetadataCacheKey, VectorIndexMetadataCache] = Map.empty
+  private case class MetadataTableCacheKey(
+      basePath: String,
+      applicationId: String,
+      configFingerprint: Int)
 
-  private[analysis] def resetMetadataCaches(): Unit = {
+  private case class MetadataTableCacheEntry(
+      validForInstant: String,
+      metadataTable: HoodieTableMetadata)
+
+  private val cacheLock = new Object
+  @volatile private var metadataCaches: Map[MetadataCacheKey, VectorIndexMetadataCache] = Map.empty
+  @volatile private var metadataTables: Map[MetadataTableCacheKey, MetadataTableCacheEntry] = Map.empty
+
+  private[analysis] def resetMetadataCaches(): Unit = cacheLock.synchronized {
     metadataCaches = Map.empty
+    metadataTables.values.foreach(entry => closeMetadataTable(entry.metadataTable))
+    metadataTables = Map.empty
   }
 
   private[analysis] def metadataCacheSize: Int = metadataCaches.size
+
+  private[analysis] def metadataTableCacheSize: Int = metadataTables.size
+
+  private[analysis] def getOrCreateMetadataTable(
+      basePath: String,
+      applicationId: String,
+      configFingerprint: Int,
+      currentInstant: String)(create: => HoodieTableMetadata): HoodieTableMetadata = cacheLock.synchronized {
+    val cacheKey = MetadataTableCacheKey(basePath, applicationId, configFingerprint)
+    metadataTables.get(cacheKey) match {
+      case Some(existing) if existing.validForInstant == currentInstant =>
+        existing.metadataTable
+      case existingOpt =>
+        val loaded = create
+        metadataTables = metadataTables.updated(
+          cacheKey, MetadataTableCacheEntry(currentInstant, loaded))
+        existingOpt.foreach(entry => closeMetadataTable(entry.metadataTable))
+        loaded
+    }
+  }
+
+  private def closeMetadataTable(metadataTable: HoodieTableMetadata): Unit = {
+    Try(metadataTable.close()) match {
+      case Failure(error) => LOG.warn("Failed to close cached metadata table reader", error)
+      case Success(_) =>
+    }
+  }
 
   private def getOrLoadMetadataCache(
       metaClient: HoodieTableMetaClient,
@@ -1002,7 +1053,7 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
       currentInstant: String): VectorIndexMetadataCache = {
     val cacheKey = MetadataCacheKey(metaClient.getBasePath.toString, indexPartition)
 
-    metadataCaches.synchronized {
+    cacheLock.synchronized {
       metadataCaches.get(cacheKey) match {
         case Some(existing) if !existing.isStaleFor(currentInstant) => existing
         case existingOpt =>
