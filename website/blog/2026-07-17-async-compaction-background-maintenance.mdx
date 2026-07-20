@@ -1,0 +1,218 @@
+---
+title: "Can a Lakehouse Really Run Maintenance Without Blocking Writes?"
+excerpt: "Async compaction in Hudi is not a performance tweak layered onto ingestion — it is the natural consequence of a storage engine that separates correctness from optimization, a principle mature databases have followed for decades."
+description: "Async compaction in Hudi is not a performance tweak layered onto ingestion — it is the natural consequence of a storage engine that separates correctness from optimization, a principle mature databases have followed for decades."
+authors: [sivabalan]
+category: deep-dive
+image: /assets/images/blog/2026-07-17-async-compaction-background-maintenance/mor-separates-correctness-from-optimization.png
+tags:
+- mor
+- merge on read
+- compaction
+- architecture
+- data lakehouse
+- metadata
+- clustering
+---
+
+---
+
+_This is the fourth post in a series on Merge-On-Read as an architectural shift in Apache Hudi. The [first post](/blog/2026/05/14/mor-isnt-a-storage-optimization-its-an-architectural-shift) made the broad case; the [second](/blog/2026/06/05/why-metadata-has-to-be-mutation-friendly) showed how the metadata table inherits the same append-first model; the [third](/blog/2026/06/25/building-indexes-on-a-moving-target) traced how async indexing extends the pattern to live index construction. This one follows the pattern one step further — into how storage optimization itself becomes an independent concern._
+
+---
+
+<div style={{ fontSize: '1.15rem', lineHeight: '1.75' }}>
+
+Every storage system eventually accumulates technical debt. As data is continuously written, small files begin to appear, updates scatter across existing layouts, indexes drift away from the latest state, and storage gradually becomes less efficient for analytical queries. Left unattended, write performance deteriorates, read latency increases, and operational costs steadily rise. Storage optimization is therefore not an optional feature — it is an unavoidable consequence of maintaining a long-lived data system.
+
+The question is **not whether maintenance should happen, but when it should happen.**
+
+Traditional database systems answered this question decades ago. They established a simple but profound principle: user transactions are responsible for correctness, while background maintenance is responsible for efficiency. Operations such as [VACUUM](https://www.postgresql.org/docs/current/sql-vacuum.html) in PostgreSQL, [compaction](https://en.wikipedia.org/wiki/Log-structured_merge-tree) in LSM-based databases, online index builds, and checkpointing continuously improve the storage engine without becoming part of the critical transaction path. Applications continue writing data while the storage engine quietly reorganizes itself in the background.
+
+The first generation of lakehouse table formats emerged under a different set of assumptions. They were designed during a period when most analytical datasets were largely append-only, refreshed through scheduled batch pipelines, and stored as immutable Parquet files on object storage. Snapshot isolation and file replacement naturally became the dominant architectural primitives, providing a simple and robust foundation for managing analytical data at scale.
+
+Today's workloads have moved on, and we'll return to what that shift looks like shortly. But the architectural question it raises is one modern databases answered decades ago:
+
+**Should storage optimization compete with writes, or should it evolve independently?**
+
+Apache Hudi's Merge-On-Read architecture approached this question differently from the beginning. Introduced in 2017, with asynchronous compaction following in 2019, it treated background maintenance not as an optimization layered onto the write path, but as a foundational architectural primitive. At the time, these capabilities were often viewed as implementation details that improved write performance. Looking back, they represented something much deeper: a different philosophy for organizing work inside a mutable storage engine.
+
+---
+
+## The Evolution of Background Maintenance
+
+Every long-running storage system eventually converges on the same realization: maintaining correctness is only half the problem. The other half is maintaining efficiency.
+
+Every storage engine continuously makes local decisions. A newly inserted row is written wherever space is available. An updated record is appended to a write-optimized structure. An index is modified just enough to preserve correctness. Each individual operation is intentionally optimized for low latency.
+
+Over time, however, thousands or millions of these local decisions accumulate. Data becomes fragmented. Small files proliferate. Obsolete versions remain on disk. Physical layouts drift away from what analytical queries would ideally prefer.
+
+Left unattended, the storage engine gradually becomes less efficient — not because anything is incorrect, but because correctness alone does not guarantee an optimal physical layout.
+
+This distinction gave rise to one of the most important architectural ideas in modern databases: **background maintenance**.
+
+<div style={{ textAlign: 'center' }}>
+  <img src="/assets/images/blog/2026-07-17-async-compaction-background-maintenance/background-maintenance-across-storage-engines.png" alt="Background maintenance across storage engines" width="800"/>
+</div>
+
+This philosophy appears across nearly every mature storage engine, although the implementation differs.
+
+PostgreSQL periodically runs **VACUUM** to reclaim obsolete row versions created by MVCC. LSM-tree based systems such as [RocksDB](https://github.com/facebook/rocksdb/wiki/Universal-Compaction), [LevelDB](https://github.com/google/leveldb/blob/main/doc/impl.md#compactions), Cassandra, and ScyllaDB continuously compact SSTables to reduce read amplification and reclaim space. SQL Server and Oracle rebuild indexes online, while checkpointing mechanisms asynchronously persist in-memory state without delaying foreground transactions.
+
+Although these systems differ substantially in implementation, they all share a common architectural principle:
+
+**Foreground operations establish correctness. Background operations restore efficiency.**
+
+This separation is remarkably powerful.
+
+A user inserting a row into PostgreSQL does not wait for VACUUM to complete. A write into RocksDB is not blocked until multiple SSTables have been compacted into a larger one. An online index rebuild does not require applications to stop modifying the underlying table.
+
+Instead, user transactions continue making forward progress while the storage engine quietly reorganizes itself in the background.
+
+This distinction is easy to overlook because modern databases have made it feel ordinary. Yet it represents one of the most important architectural lessons learned over decades of storage engine evolution: **maintenance should improve the system without becoming part of the critical write path.**
+
+An important consequence of this separation is that maintenance becomes schedulable. Storage optimization can run opportunistically when resources are available, be throttled during peak ingestion, prioritized for frequently accessed data, or even paused temporarily without affecting transactional correctness. Once maintenance is decoupled from writes, it becomes another independently managed service within the storage engine rather than a prerequisite for every mutation.
+
+---
+
+## Two Architectural Philosophies
+
+When transactional lakehouse formats began to emerge, they shared a common objective: bringing ACID guarantees to open data lakes.
+
+The architectural paths they took, however, were not identical.
+
+One school of thought naturally extended the strengths of immutable data lakes. Immutable files, snapshot isolation, and file replacement became the primary mechanisms for coordinating updates while preserving compatibility with cloud object storage. This approach provided a simple and elegant foundation for the analytical workloads of the time.
+
+Apache Hudi approached the problem from a different perspective.
+
+Rather than asking how immutable files could support transactions, it asked a different question:
+
+**How can a data lake behave more like a database while retaining the openness of object storage?**
+
+That seemingly small shift in perspective led to a different set of architectural primitives. Merge-On-Read established append-first mutation as the primary write path. Asynchronous compaction separated storage optimization from transactional correctness, allowing physical layout optimization to proceed independently of ingestion.
+
+They embodied the same principle that had long existed in database storage engines:
+
+**Correctness should be established immediately. Optimization should happen independently.**
+
+---
+
+## The Workloads Changed
+
+For many years, the dominant workloads in data lakes were largely append-oriented. Data was periodically ingested through scheduled ETL pipelines, analytical reports were refreshed in batches, and updates to existing records were relatively infrequent. Under these conditions, the primary challenge was bringing transactional guarantees to immutable data stored on object stores. The architectural primitives adopted by early lakehouse systems reflected these priorities.
+
+Over the past decade, however, the role of the lakehouse has steadily expanded.
+
+Instead of serving primarily as the final destination for analytical data, it has increasingly become the operational data platform itself. Change Data Capture (CDC) pipelines continuously synchronize operational databases into the lakehouse. Streaming applications produce an uninterrupted flow of events. Feature stores constantly update machine learning features. AI systems continuously generate embeddings, observations, and feedback signals that evolve throughout the lifecycle of a model. Rather than being refreshed periodically, datasets have become living systems that are expected to evolve continuously.
+
+This shift fundamentally changes what the storage engine must optimize for.
+
+The challenge is no longer simply storing immutable files efficiently. It is sustaining a continuous stream of mutations while simultaneously preserving the physical organization required for efficient analytics.
+
+Those two objectives often pull the storage engine in opposite directions.
+
+Applications want every update to become durable immediately. Analytical queries prefer well-organized, compacted, and clustered data layouts. Indexes need to reflect the latest state of the table. Metadata must remain synchronized. Statistics need to be refreshed. None of these activities can be ignored indefinitely, yet forcing them to occur as part of every write steadily increases ingestion latency and makes maintenance compete directly with foreground work.
+
+This is precisely the challenge that background maintenance was designed to solve.
+
+Rather than requiring every mutation to produce an optimal physical layout, a mutable storage engine can establish correctness first and improve efficiency later. The storage engine continues accepting writes while independent background services gradually reconcile the physical representation of the table.
+
+This architectural principle is not unique to databases, nor is it unique to Apache Hudi. What is noteworthy is that Merge-On-Read adopted this philosophy several years before continuously mutating lakehouse workloads became commonplace — it treated storage optimization as work that could evolve independently from ingestion rather than as a prerequisite for every successful write.
+
+At the time, this distinction was easy to overlook. Today, it is becoming one of the defining characteristics of modern mutable lakehouse architectures.
+
+---
+
+## Separating Correctness from Optimization
+
+One of the most important consequences of continuously mutating data is that correctness and optimization no longer need to happen at the same time.
+
+For many years, storage engines largely treated these two objectives as inseparable. A successful write not only had to make new data visible, but also leave the physical representation of the table in a state suitable for future reads. As long as mutations were relatively infrequent, this coupling was a perfectly reasonable tradeoff. Every successful write incrementally moved the table toward its next optimized state.
+
+As mutation frequency increases, however, this coupling becomes increasingly expensive.
+
+Every write now carries two responsibilities. First, it must establish the correctness of the new state. Second, it must participate in maintaining an efficient physical layout for future reads. These responsibilities serve different goals, compete for the same resources, and often operate on the same physical data.
+
+Modern database systems solved this tension decades ago by recognizing that these responsibilities need not be coupled. User transactions establish correctness immediately. Storage optimization becomes an independent concern that can be performed later, when resources permit, without affecting the visibility or correctness of committed data.
+
+Apache Hudi's Merge-On-Read architecture adopts the same principle.
+
+<div style={{ textAlign: 'center' }}>
+  <img src="/assets/images/blog/2026-07-17-async-compaction-background-maintenance/mor-separates-correctness-from-optimization.png" alt="Merge-On-Read separates correctness from optimization" width="800"/>
+</div>
+
+Instead of treating every write as both a mutation and a storage optimization event, Merge-On-Read separates them into two independent stages. Incoming updates are durably recorded first, making them immediately visible through the transactional timeline. Physical layout optimization is deferred to independent background services that reorganize storage without becoming part of the critical write path.
+
+This distinction is subtle, but profound.
+
+Merge-On-Read is often described as a storage format consisting of base files and log files. While technically accurate, that description misses the architectural motivation behind the design. Log files are not merely a different physical representation of data; they are the mechanism that allows correctness and optimization to evolve independently. They provide a place where new mutations can accumulate while background services gradually reconcile them into optimized storage layouts.
+
+Once this separation exists, an entirely different storage architecture becomes possible.
+
+Compaction is no longer required before new writes can proceed. Clustering can reorganize layouts independently of ingestion. Secondary indexes can evolve without delaying mutations. Each service becomes responsible for improving one aspect of the storage engine while leaving the critical write path focused on a single objective: making new data correct and visible as quickly as possible.
+
+Background maintenance is therefore not a feature layered on top of Merge-On-Read. It is a direct consequence of the architectural separation between correctness and optimization.
+
+This architectural distinction is more than an implementation detail. It fundamentally changes how work is organized inside the storage engine. Foreground writes focus exclusively on establishing new transactional state, while background services continuously improve the physical representation of the table without becoming part of the critical write path.
+
+Architectural principles are ultimately judged not by their elegance, but by the behavior they produce under real workloads. Does separating correctness from optimization simply produce a cleaner design, or does it fundamentally change the behavior of a storage engine under continuous mutation?
+
+That question naturally leads us from architectural principles to experimental validation.
+
+---
+
+## From Architectural Principle to Experimental Validation
+
+Answering that question requires a different kind of benchmark.
+
+Traditional storage benchmarks typically compare write latency, read performance, or throughput. While those metrics are useful, they don't fully capture the architectural property we've been discussing. The more fundamental question is **whether a storage engine can continue making steady forward progress while background maintenance executes concurrently.**
+
+The benchmark is intentionally simple in concept. Foreground ingestion continuously mutates the table while background services optimize its physical layout. Rather than measuring the latency of an individual write, we observe whether ingestion continues progressing as maintenance runs in parallel.
+
+<div style={{ textAlign: 'center' }}>
+  <img src="/assets/images/blog/2026-07-17-async-compaction-background-maintenance/benchmark-conceptual-setup.png" alt="Conceptual illustration of the experimental setup" width="800"/>
+</div>
+
+<div style={{ textAlign: 'center', fontStyle: 'italic', fontSize: '0.95rem', marginTop: '-1rem', marginBottom: '1.5rem' }}>
+  The outcomes the benchmark is designed to distinguish — from an engine that sustains continuous forward progress under concurrent maintenance, to one that regresses to intermittent stalls. Which real engines land where, and why, is the subject of the companion article.
+</div>
+
+The remainder of this series explores this question through a detailed benchmark of Apache Hudi, Apache Iceberg, and Delta Lake under identical continuous-ingestion workloads. Rather than focusing solely on throughput or latency, the study examines how different architectural choices influence a storage engine's ability to sustain forward progress while background maintenance is active.
+
+We'll cover the benchmark design, workload, methodology, and analysis in the next article.
+
+---
+
+## Background Maintenance Is Bigger Than Compaction
+
+The benchmark will answer an important question about asynchronous compaction. But compaction itself is only one manifestation of a much broader architectural idea. Once a storage engine separates correctness from optimization, storage optimization itself becomes an independent concern rather than an extension of every write. The architecture no longer asks every mutation to leave the table in its ideal physical state. Instead, it allows specialized background services to continuously improve different aspects of the system over time.
+
+Compaction is one such service.
+
+Clustering is another, reorganizing data layouts to improve query locality without interrupting foreground ingestion. Metadata maintenance can evolve independently as new commits arrive rather than requiring expensive reconstruction during reads.
+
+Seen through this lens, asynchronous compaction is not an isolated feature. It is one manifestation of a storage engine that has embraced background maintenance as a first-class primitive.
+
+This observation also explains a common theme across the previous articles in this series.
+
+The Merge-On-Read architecture is often introduced through individual capabilities: [Metadata Table](/blog/2026/06/05/why-metadata-has-to-be-mutation-friendly), [asynchronous indexing](/blog/2026/06/25/building-indexes-on-a-moving-target), compaction, or [Non-Blocking Concurrency Control](https://hudi.apache.org/docs/concurrency_control#non-blocking-concurrency-control). While each solves a different problem, they all emerge from the same architectural philosophy.
+
+The critical write path should establish correctness and little else.
+
+Everything that improves the storage engine without affecting correctness should evolve independently whenever possible.
+
+This is precisely the philosophy that mature database systems have followed for decades. As lakehouses increasingly become continuously mutating data platforms rather than repositories of mostly immutable analytical datasets, the same architectural principles are becoming increasingly relevant.
+
+As the industry continues to move toward continuously evolving datasets, the question is no longer whether background maintenance belongs in a lakehouse. The question is how completely the storage engine embraces it.
+
+---
+
+_**Coming next in the series:** a benchmark study comparing Apache Hudi, Apache Iceberg, and Delta Lake under identical continuous-ingestion workloads, focused on how each format sustains forward progress while background maintenance runs concurrently._
+
+_Series so far:_
+1. [MOR Isn't a Storage Optimization. It's an Architectural Shift](/blog/2026/05/14/mor-isnt-a-storage-optimization-its-an-architectural-shift)
+2. [Why Metadata Has to Be Mutation-Friendly](/blog/2026/06/05/why-metadata-has-to-be-mutation-friendly)
+3. [Building Indexes on a Moving Target](/blog/2026/06/25/building-indexes-on-a-moving-target)
+4. **Can a Lakehouse Really Run Maintenance Without Blocking Writes?** (this post)
+
+</div>
