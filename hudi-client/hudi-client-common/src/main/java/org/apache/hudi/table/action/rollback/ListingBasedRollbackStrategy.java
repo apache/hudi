@@ -148,26 +148,15 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
               hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
               break;
             case HoodieTimeline.COMPACTION_ACTION:
-              // Depending on whether we are rolling back compaction as part of restore or a regular rollback, logic differs/
-              // as part of regular rollback(on re-attempting a failed compaction), we might have to delete/rollback only the base file that could have
-              // potentially been created. Even if there are log files added to the file slice of interest, we should not touch them.
-              // but if its part of a restore operation, rolling back a compaction should rollback entire file slice, i.e base file and all log files.
-              if (isRestore) {
-                // if this is part of a restore operation, we should rollback/delete entire file slice.
-                // For table version 6, the files can be directly fetched from the instant to rollback
-                // For table version 8, the log files are not directly associated with the base file.
-                // The rollback will iterate in reverse order based on completion time so the log files completed
-                // after the compaction will already be queued for removal and therefore, only the files from the compaction commit must be deleted.
-                hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
-              } else if (hasLaterDeltaCommits(metaClient.getActiveTimeline(), instantToRollback)) {
+              if (!isRestore && hasLaterDeltaCommits(metaClient.getActiveTimeline(), instantToRollback)) {
                 // Later delta commits may have written log files on top of this compaction base commit, so do not
                 // delete log files with the same base commit while rolling back the compaction itself.
                 hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath,
                     listBaseFilesToBeDeleted(
                         instantToRollback.requestedTime(), baseFileExtension, partitionPath, metaClient.getStorage())));
               } else {
-                // Once later delta commits have been removed, delete the full compaction file slice to avoid
-                // leaving log files whose base commit no longer exists.
+                // Restore, or regular rollback after later delta commits have been removed, should delete the
+                // full compaction file slice to avoid leaving log files whose base commit no longer exists.
                 hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
               }
               break;
