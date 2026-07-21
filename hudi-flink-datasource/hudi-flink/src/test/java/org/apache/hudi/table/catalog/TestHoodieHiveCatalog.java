@@ -444,14 +444,24 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
   public void testRenameTable() throws Exception {
     Map<String, String> originOptions = new HashMap<>();
     originOptions.put(FactoryUtil.CONNECTOR.key(), "hudi");
+    originOptions.put(FlinkOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+    originOptions.put(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
     CatalogTable originTable = CatalogUtils.createCatalogTable(schema, partitions, originOptions, "hudi table");
     hoodieCatalog.createTable(tablePath, originTable, false);
 
     hoodieCatalog.renameTable(tablePath, "test1", false);
 
-    assertEquals(hoodieCatalog.getHiveTable(new ObjectPath("default", "test1")).getTableName(), "test1");
+    ObjectPath renamedTablePath = new ObjectPath("default", "test1");
+    Table renamedHiveTable = hoodieCatalog.getHiveTable(renamedTablePath);
+    assertEquals("test1", renamedHiveTable.getTableName());
 
-    hoodieCatalog.renameTable(new ObjectPath("default", "test1"), "test", false);
+    HoodieTableMetaClient renamedMetaClient = HoodieTestUtils.createMetaClient(
+        createStorageConf(), renamedHiveTable.getSd().getLocation());
+    assertEquals(HoodieTableConfig.TableStorageLayout.LSM_TREE,
+        renamedMetaClient.getTableConfig().getTableStorageLayout());
+
+    hoodieCatalog.renameTable(renamedTablePath, "test", false);
   }
 
   @Test

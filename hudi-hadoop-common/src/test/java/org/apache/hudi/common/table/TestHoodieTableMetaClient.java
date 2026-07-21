@@ -183,6 +183,25 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
+  void testTableStorageLayoutFromMetaClient() throws IOException {
+    final String basePath1 = tempDir.toAbsolutePath().toString() + Path.SEPARATOR + "lsm1";
+    final String basePath2 = tempDir.toAbsolutePath().toString() + Path.SEPARATOR + "lsm2";
+
+    HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.MERGE_ON_READ)
+        .setTableName("lsm-table")
+        .setTableStorageLayout(HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue())
+        .initTable(this.metaClient.getStorageConf(), basePath1);
+
+    HoodieTableMetaClient metaClient2 = HoodieTableMetaClient.newTableBuilder()
+        .fromMetaClient(metaClient1)
+        .initTable(this.metaClient.getStorageConf(), basePath2);
+
+    assertEquals(HoodieTableConfig.TableStorageLayout.LSM_TREE,
+        metaClient2.getTableConfig().getTableStorageLayout());
+  }
+
+  @Test
   void testTableBuilderRequiresTableNameAndType() {
     assertThrows(IllegalArgumentException.class, () -> {
       HoodieTableMetaClient.builder()
@@ -208,6 +227,8 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     props.setProperty(HoodieTableConfig.NAME.key(), "test-table");
     props.setProperty(HoodieTableConfig.TYPE.key(), HoodieTableType.COPY_ON_WRITE.name());
     props.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
+    props.setProperty(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
 
     HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
         .fromProperties(props)
@@ -222,6 +243,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertEquals(metaClient1.getTableConfig().getTableName(), metaClient2.getTableConfig().getTableName());
     assertEquals(metaClient1.getTableConfig().getTableType(), metaClient2.getTableConfig().getTableType());
     assertEquals(metaClient1.getTableConfig().getOrderingFields(), metaClient2.getTableConfig().getOrderingFields());
+    assertEquals(HoodieTableConfig.TableStorageLayout.LSM_TREE, metaClient2.getTableConfig().getTableStorageLayout());
     // default table version should be current version
     assertEquals(HoodieTableVersion.current(), metaClient2.getTableConfig().getTableVersion());
   }

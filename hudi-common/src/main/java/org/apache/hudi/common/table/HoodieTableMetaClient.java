@@ -1283,6 +1283,8 @@ public class HoodieTableMetaClient implements Serializable {
           .setTableName(metaClient.getTableConfig().getTableName())
           .setTableVersion(metaClient.getTableConfig().getTableVersion())
           .setTableFormat(metaClient.getTableConfig().getTableFormat(metaClient.getTimelineLayoutVersion()).getName())
+          .setTableStorageLayout(metaClient.getTableConfig().getProps()
+              .getProperty(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key()))
           .setTimelinePath(metaClient.getTableConfig().getTimelinePath())
           .setArchiveLogFolder(metaClient.getTableConfig().getTimelineHistoryPath())
           .setRecordMergeMode(metaClient.getTableConfig().getRecordMergeMode())
@@ -1349,6 +1351,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.BASE_FILE_FORMAT)) {
         setBaseFileFormat(
             hoodieConfig.getString(HoodieTableConfig.BASE_FILE_FORMAT));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.TABLE_STORAGE_LAYOUT)) {
+        setTableStorageLayout(hoodieConfig.getString(HoodieTableConfig.TABLE_STORAGE_LAYOUT));
       }
       if (hoodieConfig.contains(HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME)) {
         setBootstrapIndexClass(
