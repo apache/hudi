@@ -38,9 +38,9 @@ import java.util.List;
 /**
  * Shared iterator helpers for reading RFC-103 LSM file groups.
  */
-final class LsmFileGroupReaderUtils {
+final class LsmFileIterators {
 
-  private LsmFileGroupReaderUtils() {
+  private LsmFileIterators() {
   }
 
   /**
@@ -58,14 +58,14 @@ final class LsmFileGroupReaderUtils {
       long length,
       List<String> orderingFieldNames,
       boolean isBaseFileOnly) throws IOException {
-    ClosableIterator<T> baseFileIterator = createBaseEngineRecordIterator(
+    ClosableIterator<T> baseFileIterator = createBaseFileEngineIterator(
         readerContext, storage, baseFile, start, length);
     return toBufferedRecordIterator(
         readerContext, baseFileIterator, readerContext.getSchemaHandler().getRequiredSchema(),
         orderingFieldNames, isBaseFileOnly);
   }
 
-  private static <T> ClosableIterator<T> createBaseEngineRecordIterator(
+  private static <T> ClosableIterator<T> createBaseFileEngineIterator(
       HoodieReaderContext<T> readerContext,
       HoodieStorage storage,
       HoodieBaseFile baseFile,

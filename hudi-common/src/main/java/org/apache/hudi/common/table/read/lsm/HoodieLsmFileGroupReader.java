@@ -189,7 +189,7 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
       bufferedRecordIterator.close();
     }
     if (includeBaseFile && inputSplit.getBaseFileOption().isPresent() && inputSplit.hasNoRecordsToMerge()) {
-      this.bufferedRecordIterator = LsmFileGroupReaderUtils.createBaseFileIterator(
+      this.bufferedRecordIterator = LsmFileIterators.createBaseFileIterator(
           readerContext, storage, inputSplit.getBaseFileOption().get(),
           inputSplit.getStart(), inputSplit.getLength(), orderingFieldNames, true);
     } else {

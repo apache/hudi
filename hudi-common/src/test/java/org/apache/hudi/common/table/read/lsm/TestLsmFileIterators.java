@@ -50,7 +50,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class TestLsmFileGroupReaderUtils {
+class TestLsmFileIterators {
 
   @Test
   void testCreateBaseFileIteratorUsesIteratorMode() throws Exception {
@@ -76,7 +76,7 @@ class TestLsmFileGroupReaderUtils {
     when(schemaHandler.getTableSchema()).thenReturn(schema);
     when(recordContext.seal(schema, "record1")).thenReturn("record1");
 
-    ClosableIterator<BufferedRecord<String>> iterator = LsmFileGroupReaderUtils.createBaseFileIterator(
+    ClosableIterator<BufferedRecord<String>> iterator = LsmFileIterators.createBaseFileIterator(
         readerContext, storage, baseFile, 0, 10, Collections.emptyList(), true);
 
     assertTrue(iterator.hasNext());
@@ -116,7 +116,7 @@ class TestLsmFileGroupReaderUtils {
     when(recordContext.seal(schema, "record1")).thenReturn("record1");
     when(recordContext.getRecordKey("record1", schema)).thenReturn("key1");
 
-    ClosableIterator<BufferedRecord<String>> iterator = LsmFileGroupReaderUtils.createBaseFileIterator(
+    ClosableIterator<BufferedRecord<String>> iterator = LsmFileIterators.createBaseFileIterator(
         readerContext, storage, baseFile, 0, 10, Collections.emptyList(), false);
 
     assertTrue(iterator.hasNext());

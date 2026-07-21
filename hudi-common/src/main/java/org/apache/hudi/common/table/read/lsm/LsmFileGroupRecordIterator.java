@@ -160,7 +160,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
     List<SortedRunReader<T>> sortedRunReaders = new ArrayList<>();
     int mergeOrder = 0;
     if (readBaseFile) {
-      addReader(sortedRunReaders, mergeOrder++, LsmFileGroupReaderUtils.createBaseFileIterator(
+      addReader(sortedRunReaders, mergeOrder++, LsmFileIterators.createBaseFileIterator(
           readerContext, storage, inputSplit.getBaseFileOption().get(),
           inputSplit.getStart(), inputSplit.getLength(), orderingFieldNames, false));
     }
@@ -323,7 +323,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
           fileSize,
           readerContext.getSchemaHandler().getTableSchema(),
           readerSchema);
-      return LsmFileGroupReaderUtils.toBufferedRecordIterator(
+      return LsmFileIterators.toBufferedRecordIterator(
           readerContext, recordIterator, readerSchema, orderingFieldNames, false);
     }
 
@@ -336,7 +336,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
     ClosableIterator<T> recordIterator = getFileRecordIterator(
         pathInfo, storagePath, fileSize, writerSchema, writerSchema);
     recordIterator = new CloseableMappingIterator<>(recordIterator, schemaEvolutionTransformer.getLeft());
-    return LsmFileGroupReaderUtils.toBufferedRecordIterator(
+    return LsmFileIterators.toBufferedRecordIterator(
         readerContext, recordIterator, schemaEvolutionTransformer.getRight(), orderingFieldNames, false);
   }
 

@@ -178,6 +178,9 @@ public class FlinkRecordContext extends RecordContext<RowData> {
     if (rowData instanceof GenericRowData) {
       return rowData;
     }
+    if (rowData instanceof BinaryRowData) {
+      return ((BinaryRowData) rowData).copy();
+    }
     RowDataSerializer rowDataSerializer = RowDataQueryContexts.getRowDataSerializer(schema);
     return rowDataSerializer.copy(rowData);
   }
