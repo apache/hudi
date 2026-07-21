@@ -374,4 +374,36 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test time travel validation errors") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+           | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+      // VERSION AS OF (a version with no timestamp) is rejected by the Hudi analysis rule, which
+      // does not support version-based time travel.
+      checkExceptionContain(s"select * from $tableName VERSION AS OF 1")(
+        "Version expression is not supported for time travel")
+
+      // A timestamp expression containing a subquery is rejected by Spark's native time-travel
+      // parser (time travel needs a constant instant), before it reaches the Hudi analysis rule.
+      checkExceptionContain(
+        s"select * from $tableName TIMESTAMP AS OF (select max(ts) from $tableName)")(
+        "cannot contain subqueries")
+    }
+  }
 }
