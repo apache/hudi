@@ -97,11 +97,6 @@
                   <include>org.jetbrains.kotlin:*</include>
                   <include>org.rocksdb:rocksdbjni</include>
                   <include>org.antlr:stringtemplate</include>
-                  <!-- ANTLR runtime needed by Hive DDL parsing (Driver.compile); hive-exec
-                       does not embed it. Only bundled when a shade-hive profile is active. -->
-                  <include>org.antlr:antlr-runtime</include>
-                  <include>org.antlr:ST4</include>
-                  <include>org.antlr:antlr4-runtime</include>
                   <!-- Parquet -->
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>org.apache.parquet:parquet-hadoop</include>
@@ -233,88 +228,6 @@
                   <pattern>com.uber.m3.</pattern>
                   <shadedPattern>org.apache.hudi.com.uber.m3.</shadedPattern>
                 </relocation>
-
-                <!-- hive-exec is a fat jar that embeds these deps un-relocated; under Flink
-                     child-first classloading they shadow the versions Hudi/Flink need. No-op
-                     for the default bundle (classes only present when a shade-hive profile
-                     pulls hive-exec into compile scope). -->
-                <relocation>
-                  <pattern>com.google.common.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}com.google.common.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.google.protobuf.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}com.google.protobuf.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.commons.lang3.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.commons.lang3.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.commons.lang.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.commons.lang.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.thrift.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.thrift.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.orc.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.orc.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.json.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.json.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>io.airlift.compress.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}io.airlift.compress.</shadedPattern>
-                </relocation>
-                <!-- Relocate parquet-format-structures embedded in hive-exec, but keep
-                     org.apache.parquet.format.converter.** (provided by parquet-hadoop) at its
-                     original name: it is used with the un-relocated ParquetFileReader.readFooter,
-                     so relocating it causes a NoSuchMethodError. -->
-                <relocation>
-                  <pattern>org.apache.parquet.format.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.parquet.format.</shadedPattern>
-                  <excludes>
-                    <exclude>org.apache.parquet.format.converter.**</exclude>
-                  </excludes>
-                </relocation>
-                <relocation>
-                  <pattern>org.codehaus.jackson.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.codehaus.jackson.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.facebook.fb303.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}com.facebook.fb303.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.iq80.snappy.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.iq80.snappy.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>au.com.bytecode.opencsv.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}au.com.bytecode.opencsv.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>javaewah.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}javaewah.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>javolution.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}javolution.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>jodd.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}jodd.</shadedPattern>
-                </relocation>
-                <!-- DataNucleus (JDO impl behind HMS); its META-INF/services entries are
-                     rewritten by the ServicesResourceTransformer above. -->
-                <relocation>
-                  <pattern>org.datanucleus.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.datanucleus.</shadedPattern>
-                </relocation>
               </relocations>
               <filters>
                 <filter>
@@ -325,15 +238,6 @@
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
                     <exclude>**/*.proto</exclude>
-                  </excludes>
-                </filter>
-                <!-- hive-exec embeds a stale Avro 1.7.7 (no LogicalType); strip it so the
-                     relocated org.apache.avro.* namespace is populated only by the modern
-                     Avro artifact bundled here. -->
-                <filter>
-                  <artifact>org.apache.hive:hive-exec</artifact>
-                  <excludes>
-                    <exclude>org/apache/avro/**</exclude>
                   </excludes>
                 </filter>
               </filters>
@@ -747,6 +651,118 @@
           <scope>${flink.bundle.hive.scope}</scope>
         </dependency>
       </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>${maven-shade-plugin.version}</version>
+            <executions>
+              <execution>
+                <configuration>
+                  <artifactSet>
+                    <!-- hive-exec needs the ANTLR runtime for Hive DDL parsing
+                         (Driver.compile) but does not embed it. -->
+                    <includes combine.children="append">
+                      <include>org.antlr:antlr-runtime</include>
+                      <include>org.antlr:ST4</include>
+                      <include>org.antlr:antlr4-runtime</include>
+                    </includes>
+                  </artifactSet>
+                  <!-- hive-exec is a fat jar that embeds these deps un-relocated; under Flink
+                       child-first classloading they would shadow the versions Hudi/Flink need.
+                       Scoped to this profile so the default (no-Hive) bundle's ABI is unchanged. -->
+                  <relocations combine.children="append">
+                    <relocation>
+                      <pattern>com.google.common.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}com.google.common.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>com.google.protobuf.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}com.google.protobuf.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.apache.commons.lang3.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.commons.lang3.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.apache.commons.lang.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.commons.lang.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.apache.thrift.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.thrift.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.apache.orc.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.orc.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.json.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.json.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>io.airlift.compress.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}io.airlift.compress.</shadedPattern>
+                    </relocation>
+                    <!-- Relocate parquet-format-structures embedded in hive-exec, but keep
+                         org.apache.parquet.format.converter.** (provided by parquet-hadoop) at
+                         its original name: it is used with the un-relocated
+                         ParquetFileReader.readFooter, so relocating it causes a NoSuchMethodError. -->
+                    <relocation>
+                      <pattern>org.apache.parquet.format.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.parquet.format.</shadedPattern>
+                      <excludes>
+                        <exclude>org.apache.parquet.format.converter.**</exclude>
+                      </excludes>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.codehaus.jackson.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.codehaus.jackson.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>com.facebook.fb303.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}com.facebook.fb303.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.iq80.snappy.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.iq80.snappy.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>au.com.bytecode.opencsv.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}au.com.bytecode.opencsv.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>javaewah.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}javaewah.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>javolution.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}javolution.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>jodd.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}jodd.</shadedPattern>
+                    </relocation>
+                  </relocations>
+                  <!-- Strip hive-exec's stale embedded Avro (no LogicalType) and ORC so the
+                       relocated org.apache.avro.* / org.apache.orc.* namespaces are populated
+                       only by the declared modern avro / orc-core artifacts. -->
+                  <filters combine.children="append">
+                    <filter>
+                      <artifact>org.apache.hive:hive-exec</artifact>
+                      <excludes>
+                        <exclude>org/apache/avro/**</exclude>
+                        <exclude>org/apache/orc/**</exclude>
+                      </excludes>
+                    </filter>
+                  </filters>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
     </profile>
     <profile>
       <id>flink-bundle-shade-hive3</id>
@@ -768,6 +784,118 @@
           <scope>${flink.bundle.hive.scope}</scope>
         </dependency>
       </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>${maven-shade-plugin.version}</version>
+            <executions>
+              <execution>
+                <configuration>
+                  <artifactSet>
+                    <!-- hive-exec needs the ANTLR runtime for Hive DDL parsing
+                         (Driver.compile) but does not embed it. -->
+                    <includes combine.children="append">
+                      <include>org.antlr:antlr-runtime</include>
+                      <include>org.antlr:ST4</include>
+                      <include>org.antlr:antlr4-runtime</include>
+                    </includes>
+                  </artifactSet>
+                  <!-- hive-exec is a fat jar that embeds these deps un-relocated; under Flink
+                       child-first classloading they would shadow the versions Hudi/Flink need.
+                       Scoped to this profile so the default (no-Hive) bundle's ABI is unchanged. -->
+                  <relocations combine.children="append">
+                    <relocation>
+                      <pattern>com.google.common.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}com.google.common.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>com.google.protobuf.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}com.google.protobuf.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.apache.commons.lang3.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.commons.lang3.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.apache.commons.lang.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.commons.lang.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.apache.thrift.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.thrift.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.apache.orc.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.orc.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.json.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.json.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>io.airlift.compress.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}io.airlift.compress.</shadedPattern>
+                    </relocation>
+                    <!-- Relocate parquet-format-structures embedded in hive-exec, but keep
+                         org.apache.parquet.format.converter.** (provided by parquet-hadoop) at
+                         its original name: it is used with the un-relocated
+                         ParquetFileReader.readFooter, so relocating it causes a NoSuchMethodError. -->
+                    <relocation>
+                      <pattern>org.apache.parquet.format.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.parquet.format.</shadedPattern>
+                      <excludes>
+                        <exclude>org.apache.parquet.format.converter.**</exclude>
+                      </excludes>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.codehaus.jackson.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.codehaus.jackson.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>com.facebook.fb303.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}com.facebook.fb303.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.iq80.snappy.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.iq80.snappy.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>au.com.bytecode.opencsv.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}au.com.bytecode.opencsv.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>javaewah.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}javaewah.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>javolution.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}javolution.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>jodd.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}jodd.</shadedPattern>
+                    </relocation>
+                  </relocations>
+                  <!-- Strip hive-exec's stale embedded Avro (no LogicalType) and ORC so the
+                       relocated org.apache.avro.* / org.apache.orc.* namespaces are populated
+                       only by the declared modern avro / orc-core artifacts. -->
+                  <filters combine.children="append">
+                    <filter>
+                      <artifact>org.apache.hive:hive-exec</artifact>
+                      <excludes>
+                        <exclude>org/apache/avro/**</exclude>
+                        <exclude>org/apache/orc/**</exclude>
+                      </excludes>
+                    </filter>
+                  </filters>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
     </profile>
     <profile>
       <id>hudi-platform-service</id>
